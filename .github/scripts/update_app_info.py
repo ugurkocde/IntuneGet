@@ -31,31 +31,6 @@ MAX_RETRIES = 3
 RETRY_DELAY = 10  # seconds
 
 
-def check_github_token():
-    """Check if a GitHub token is available and provide instructions if not."""
-    if os.environ.get("GITHUB_TOKEN"):
-        return True
-    
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        # In GitHub Actions, the token should be automatically available
-        print("WARNING: GITHUB_TOKEN not found in GitHub Actions environment.")
-        print("Make sure the workflow has permissions to access the token.")
-        return False
-    else:
-        # For local development, provide instructions
-        print("\n" + "="*80)
-        print("No GitHub token found. To avoid rate limits, create a personal access token:")
-        print("1. Go to https://github.com/settings/tokens")
-        print("2. Click 'Generate new token' (classic)")
-        print("3. Give it a name and select the 'public_repo' scope")
-        print("4. Copy the token and set it as an environment variable:")
-        print("   - Windows (CMD): set GITHUB_TOKEN=your_token_here")
-        print("   - Windows (PowerShell): $env:GITHUB_TOKEN = 'your_token_here'")
-        print("   - Linux/macOS: export GITHUB_TOKEN=your_token_here")
-        print("="*80 + "\n")
-        return False
-
-
 def load_supported_apps():
     """Load the list of supported apps from the JSON file."""
     try:
@@ -406,9 +381,13 @@ def process_app(app):
     if not installer_data:
         return False
     
-    # Process each architecture
+    # Process only arm64 and x64 architectures
     updated = False
     architectures = set(inst.get('Architecture') for inst in installer_data.get('Installers', []))
+    
+    # Filter to only include arm64 and x64
+    target_architectures = {'arm64', 'x64'}
+    architectures = architectures.intersection(target_architectures)
     
     for arch in architectures:
         if save_app_info(app_id, app_name, installer_data, arch):
@@ -420,9 +399,6 @@ def process_app(app):
 def main():
     """Main function to update app information."""
     print(f"Starting app information update at {datetime.now().isoformat()}")
-    
-    # Check for GitHub token
-    check_github_token()
     
     # Load supported apps
     apps = load_supported_apps()

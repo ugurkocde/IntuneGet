@@ -13,6 +13,7 @@
     - PowerShell 7.0 or later
     - Microsoft.Graph.Authentication module
     - Winget CLI installed and configured
+    - IntuneWinAppUtil.exe available in same directory
     - Required Graph API Permissions:
         * DeviceManagementApps.ReadWrite.All
 #>
