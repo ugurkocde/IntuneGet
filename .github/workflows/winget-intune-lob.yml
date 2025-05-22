@@ -11,19 +11,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Winget CLI (if not present)
+      - name: Install Winget CLI (if not present) and Refresh Environment
         shell: pwsh
         run: |
-          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-              Write-Host "Winget not found, installing via Chocolatey..."
+          # Check if Winget is already in a known path or callable
+          try {
+              $wingetVersion = (winget --version | Out-String).Trim()
+              Write-Host "Winget is already installed. Version: $wingetVersion"
+          } catch {
+              Write-Host "Winget not found, attempting Chocolatey install..."
+              # Ensure Chocolatey is available
+              if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+                  Write-Host "Chocolatey not found, installing Chocolatey..."
+                  Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+              }
               choco install winget -y
-          } else {
-              Write-Host "Winget is already installed."
+              # Refresh environment variables after Chocolatey install
+              refreshenv
+              Write-Host "Winget installation attempted and environment refreshed."
           }
 
-      - name: Read supportedapps.json and process apps
+      - name: Verify Winget and process apps
         shell: pwsh
         run: |
+          # Verify winget is now in PATH
+          try {
+              $wingetVersion = (winget --version | Out-String).Trim()
+              Write-Host "Winget is now available. Version: $wingetVersion"
+          } catch {
+              Write-Error "Winget is still not recognized after installation and refresh. Exiting."
+              exit 1
+          }
+
           $supportedApps = Get-Content -Path supportedapps.json | ConvertFrom-Json
 
           # Create Apps directory if it doesn't exist
@@ -39,10 +58,6 @@ jobs:
 
               Write-Host "Processing app: $($appName) (ID: $($appId))"
 
-              # Attempt to install the app to get some metadata (e.g., install path)
-              # This is a best effort to get some info, actual detection rules might need manual refinement
-              # For a real scenario, you might need to run winget show --id $appId and parse its output
-              # or rely on common installation paths.
               $wingetShowOutput = (winget show --id $appId | Out-String)
 
               $installerUrl = ($wingetShowOutput | Select-String -Pattern "Installer Url:\s*(.*)" | ForEach-Object {$_.Matches.Groups[1].Value.Trim()})
