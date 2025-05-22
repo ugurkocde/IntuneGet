@@ -1,0 +1,110 @@
+name: Generate Intune LOB App Metadata from Winget
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-metadata:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read supportedapps.json and process apps
+        shell: pwsh
+        run: |
+          $supportedApps = Get-Content -Path supportedapps.json | ConvertFrom-Json
+
+          # Create Apps directory if it doesn't exist
+          $appsDir = "Apps"
+          if (-not (Test-Path $appsDir)) {
+              New-Item -ItemType Directory -Path $appsDir
+          }
+
+          foreach ($app in $supportedApps) {
+              $appId = $app.id
+              $appName = $app.name
+              $outputFileName = "$($appsDir)/$($appName.ToLower().Replace(' ', '')).json"
+
+              Write-Host "Processing app: $($appName) (ID: $($appId))"
+
+              # Attempt to install the app to get some metadata (e.g., install path)
+              # This is a best effort to get some info, actual detection rules might need manual refinement
+              # For a real scenario, you might need to run winget show --id $appId and parse its output
+              # or rely on common installation paths.
+              $wingetShowOutput = (winget show --id $appId | Out-String)
+
+              $installerUrl = ($wingetShowOutput | Select-String -Pattern "Installer Url:\s*(.*)" | ForEach-Object {$_.Matches.Groups[1].Value.Trim()})
+              $installerType = ($wingetShowOutput | Select-String -Pattern "Installer Type:\s*(.*)" | ForEach-Object {$_.Matches.Groups[1].Value.Trim()})
+              $productCode = ($wingetShowOutput | Select-String -Pattern "ProductCode:\s*(.*)" | ForEach-Object {$_.Matches.Groups[1].Value.Trim()})
+
+              $silentInstallSwitch = ""
+              if ($wingetShowOutput -match "Silent:\s*(\S+)") {
+                  $silentInstallSwitch = $Matches[1]
+              } elseif ($wingetShowOutput -match "SilentWithProgress:\s*(\S+)") {
+                  $silentInstallSwitch = $Matches[1]
+              }
+
+              $installCommand = ""
+              $uninstallCommand = ""
+              $installerFileName = ""
+
+              if ($installerUrl) {
+                  $uri = New-Object System.Uri($installerUrl)
+                  $installerFileName = [System.IO.Path]::GetFileName($uri.LocalPath)
+              }
+
+              if ($installerType -eq "msi") {
+                  $installCommand = "msiexec.exe /i `"$installerFileName`" /qn"
+                  if ($productCode) {
+                      $uninstallCommand = "msiexec.exe /x `"$productCode`" /qn"
+                  } else {
+                      $uninstallCommand = "winget uninstall --id $($appId) --silent" # Fallback if ProductCode not found
+                  }
+              } elseif ($installerType -eq "exe" -or $installerType -eq "inno" -or $installerType -eq "nullsoft" -or $installerType -eq "burn") {
+                  if (-not [string]::IsNullOrEmpty($silentInstallSwitch)) {
+                      $installCommand = "`"$installerFileName`" $($silentInstallSwitch)"
+                  } else {
+                      # Fallback to common silent switches if winget doesn't provide specific ones
+                      $installCommand = "`"$installerFileName`" /S" # Most common for EXEs
+                  }
+                  $uninstallCommand = "winget uninstall --id $($appId) --silent" # EXE uninstall is highly variable, fallback to winget
+              } else {
+                  # Fallback for unknown types or if parsing fails
+                  $installCommand = "winget install --id $($appId) --silent --accept-package-agreements --accept-source-agreements"
+                  $uninstallCommand = "winget uninstall --id $($appId) --silent"
+              }
+
+              # Placeholder for detection rule. This will likely need manual adjustment per app.
+              # A common approach is to check for the main executable in Program Files.
+              # This assumes the app name is part of the install path.
+              $detectionRulePath = "C:\Program Files\$($appName)\$($appName).exe"
+              $detectionRule = @{
+                  "type" = "File";
+                  "path" = $detectionRulePath;
+                  "fileOrFolderName" = "$($appName).exe";
+                  "checkType" = "exists";
+                  "operator" = "notConfigured"; # This might need to be 'greaterThanOrEqual' for version checks
+                  "value" = "";
+                  "versionComparison" = "notConfigured"
+              }
+
+              $intuneMetadata = @{
+                  "displayName" = $appName;
+                  "publisher" = "Determined by Winget"; # Placeholder
+                  "description" = "Installed via Winget"; # Placeholder
+                  "installCommand" = $installCommand;
+                  "uninstallCommand" = $uninstallCommand;
+                  "detectionRules" = @($detectionRule);
+                  "minimumSupportedOS" = "windows10"; # Placeholder
+                  "architecture" = "x64"; # Placeholder, might need to be dynamic
+                  "version" = "1.0.0"; # Placeholder, might need to be dynamic
+                  "packageId" = $appId;
+                  "source" = "Winget"
+              }
+
+              $intuneMetadata | ConvertTo-Json -Depth 10 | Set-Content -Path $outputFileName
+
+              Write-Host "Generated metadata for $($appName) at $($outputFileName)"
+          }
