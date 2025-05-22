@@ -1,0 +1,17 @@
+{
+  "PackageIdentifier": "Spotify.Spotify",
+  "PackageVersion": "1.2.64.408.g0a9b557c",
+  "InstallerType": "exe",
+  "Scope": "user",
+  "InstallModes": [
+    "silent"
+  ],
+  "InstallerSwitches": {
+    "Silent": "/silent /skip-app-launch",
+    "SilentWithProgress": "/silent /skip-app-launch",
+    "Log": "/log-file \"<LOGPATH>\""
+  },
+  "InstallerUrl": "https://upgrade.scdn.co/upgrade/client/win32-x86_64/spotify_installer-1.2.64.408.g0a9b557c-184.exe",
+  "InstallerSha256": "13F92295ABF1C5BE86891C5396BF8E328EE4F3B55BDF89D213D6E4D5CBDADBE4",
+  "Architecture": "x64"
+}

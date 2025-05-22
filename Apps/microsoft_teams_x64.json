@@ -1,0 +1,11 @@
+{
+  "PackageIdentifier": "Microsoft.Teams",
+  "PackageVersion": "25094.310.3616.953",
+  "InstallerType": "msix",
+  "Scope": "user",
+  "InstallModes": [],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://installer.teams.static.microsoft/production-windows-x64/25094.310.3616.953/MSTeams-x64.msix",
+  "InstallerSha256": "0A3F7C1FB04B96E17BC5944A511F7A092D366AA67748F1065F186C5FBD9EEE6C",
+  "Architecture": "x64"
+}

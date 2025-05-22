@@ -1,0 +1,12 @@
+{
+  "PackageIdentifier": "Microsoft.VisualStudioCode",
+  "PackageVersion": "1.100.2",
+  "InstallerType": "inno",
+  "InstallModes": [],
+  "InstallerSwitches": {
+    "Custom": "/mergetasks=!runcode"
+  },
+  "InstallerUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/848b80aeb52026648a8ff9f7c45a9b0a80641e2e/VSCodeSetup-x64-1.100.2.exe",
+  "InstallerSha256": "8249A4A4A9E73F34B6F4F4D51481D1A7D547C2C55560E45482D7D8B23017C646",
+  "Architecture": "x64"
+}

@@ -1,0 +1,14 @@
+{
+  "PackageIdentifier": "Notepad++.Notepad++",
+  "PackageVersion": "8.8.1",
+  "InstallerType": "nullsoft",
+  "Scope": "machine",
+  "InstallModes": [
+    "interactive",
+    "silent"
+  ],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.1/npp.8.8.1.Installer.x64.exe",
+  "InstallerSha256": "605C68624939BA55AC9BBBA4EA3B7B3A602A91D8103862D232A14ADC0176EFCA",
+  "Architecture": "x64"
+}

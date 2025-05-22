@@ -1,0 +1,10 @@
+{
+  "PackageIdentifier": "7zip.7zip",
+  "PackageVersion": "24.09",
+  "Scope": "machine",
+  "InstallModes": [],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://7-zip.org/a/7z2409-x64.exe",
+  "InstallerSha256": "BDD1A33DE78618D16EE4CE148B849932C05D0015491C34887846D431D29F308E",
+  "Architecture": "x64"
+}
