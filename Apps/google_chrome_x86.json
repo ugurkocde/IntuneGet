@@ -1,0 +1,11 @@
+{
+  "PackageIdentifier": "Google.Chrome",
+  "PackageVersion": "137.0.7151.41",
+  "InstallerType": "wix",
+  "Scope": "machine",
+  "InstallModes": [],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise.msi",
+  "InstallerSha256": "B5CF22AAA8DC7D14FF23821C93876236CDCEB22562296F5C939715279E9EE974",
+  "Architecture": "x86"
+}

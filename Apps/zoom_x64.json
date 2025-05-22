@@ -1,0 +1,11 @@
+{
+  "PackageIdentifier": "Zoom.Zoom",
+  "PackageVersion": "6.4.64378",
+  "InstallerType": "msi",
+  "Scope": "machine",
+  "InstallModes": [],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://zoom.us/client/6.4.10.64378/ZoomInstallerFull.msi?archType=x64",
+  "InstallerSha256": "C8F6DA1429B60CE5C71B84FD76C5073D424A06F836394A4970324E8E6D48A2D1",
+  "Architecture": "x64"
+}

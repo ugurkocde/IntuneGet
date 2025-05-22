@@ -1,0 +1,15 @@
+{
+  "PackageIdentifier": "Mozilla.Firefox",
+  "PackageVersion": "138.0.4",
+  "InstallerType": "nullsoft",
+  "Scope": "machine",
+  "InstallModes": [],
+  "InstallerSwitches": {
+    "Silent": "/S /PreventRebootRequired=true",
+    "SilentWithProgress": "/S /PreventRebootRequired=true",
+    "InstallLocation": "/InstallDirectoryPath=\"<INSTALLPATH>\""
+  },
+  "InstallerUrl": "https://download-installer.cdn.mozilla.net/pub/firefox/releases/138.0.4/win32/en-US/Firefox%20Setup%20138.0.4.exe",
+  "InstallerSha256": "8B9F6F17DA471160B376606829A68835A419FFCB05D406631499D8AA2DA0065D",
+  "Architecture": "x86"
+}

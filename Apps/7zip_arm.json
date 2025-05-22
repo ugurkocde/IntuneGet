@@ -1,0 +1,10 @@
+{
+  "PackageIdentifier": "7zip.7zip",
+  "PackageVersion": "24.09",
+  "Scope": "machine",
+  "InstallModes": [],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://7-zip.org/a/7z2409-arm.exe",
+  "InstallerSha256": "9E6F5FF0EE6DE272A1D969C7FC7A53C353E93EF428CE4ADF7E6E069056C585F4",
+  "Architecture": "arm"
+}
