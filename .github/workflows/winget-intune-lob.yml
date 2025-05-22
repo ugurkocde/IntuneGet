@@ -11,6 +11,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Winget CLI (if not present)
+        shell: pwsh
+        run: |
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+              Write-Host "Winget not found, installing via Chocolatey..."
+              choco install winget -y
+          } else {
+              Write-Host "Winget is already installed."
+          }
+
       - name: Read supportedapps.json and process apps
         shell: pwsh
         run: |
