@@ -1,0 +1,14 @@
+{
+  "PackageIdentifier": "Discord.Discord",
+  "PackageVersion": "1.0.9192",
+  "InstallerType": "exe",
+  "Scope": "user",
+  "InstallModes": [
+    "interactive",
+    "silent"
+  ],
+  "InstallerSwitches": {},
+  "InstallerUrl": "https://stable.dl2.discordapp.net/distro/app/stable/win/x64/1.0.9192/DiscordSetup.exe",
+  "InstallerSha256": "CD96737CB91B9406DD45522F4F9DFFD7D82744FFFD885D0AEFB129B548413086",
+  "Architecture": "x64"
+}
