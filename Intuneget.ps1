@@ -39,45 +39,33 @@ function Write-Log {
         [Parameter(Mandatory = $true)]
         [string]$Message,
         [Parameter(Mandatory = $false)]
-        [string]$Type = "Info"  # Info, Warning, Error, Verbose
+        [string]$Type = "Info"  # Info, Warning, Error, Verbose, Success
     )
     
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logMessage = "[$timestamp] [$Type] $Message"
+    $prefix = ""
+    $color = "White"
+
+    switch ($Type) {
+        "Info" { $prefix = "ℹ️ [INFO]"; $color = "Cyan" }
+        "Warning" { $prefix = "⚠️ [WARN]"; $color = "Yellow" }
+        "Error" { $prefix = "❌ [ERROR]"; $color = "Red" }
+        "Verbose" { $prefix = "💬 [DEBUG]"; $color = "DarkGray" }
+        "Success" { $prefix = "✅ [SUCCESS]"; $color = "Green" }
+        default { $prefix = "[LOG]"; $color = "White" }
+    }
+
+    $logMessage = "$prefix [$timestamp] $Message"
+    
     if ($Type -eq "Verbose") {
-        # Enable verbose output only when we really need it
-        $VerbosePreference = "Continue"
         Write-Verbose $logMessage
-        $VerbosePreference = "SilentlyContinue"
     }
     else {
-        Write-Output $logMessage
+        Write-Host $logMessage -ForegroundColor $color
     }
 }
 
 
-
-# Function to write logs that will be visible in Azure Automation
-function Write-Log {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-        [Parameter(Mandatory = $false)]
-        [string]$Type = "Info"  # Info, Warning, Error, Verbose
-    )
-    
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logMessage = "[$timestamp] [$Type] $Message"
-    if ($Type -eq "Verbose") {
-        # Enable verbose output only when we really need it
-        $VerbosePreference = "Continue"
-        Write-Verbose $logMessage
-        $VerbosePreference = "SilentlyContinue"
-    }
-    else {
-        Write-Output $logMessage
-    }
-}
 
 Write-Log "Starting Intuneget - Version 0.1"
 
@@ -126,11 +114,11 @@ function Connect-WithCertificate {
     
     try {
         Connect-MgGraph -ClientId $config.appId -TenantId $config.tenantId -CertificateThumbprint $config.certificateThumbprint -NoWelcome -ErrorAction Stop
-        Write-Log "Successfully connected to Microsoft Graph using certificate-based authentication." -Type "Info"
+        Write-Log "Successfully connected to Microsoft Graph using certificate-based authentication." -Type "Success"
         return $true
     }
     catch {
-        Write-Log "Failed to connect to Microsoft Graph using certificate. Error: $_" -Type "Error"
+        Write-Log "Failed to connect to Microsoft Graph using certificate. Error: $($_.Exception.Message)" -Type "Error"
         return $false
     }
 }
@@ -155,11 +143,11 @@ function Connect-WithClientSecret {
         $SecureClientSecret = ConvertTo-SecureString -String $config.clientSecret -AsPlainText -Force
         $ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $config.appId, $SecureClientSecret
         Connect-MgGraph -TenantId $config.tenantId -ClientSecretCredential $ClientSecretCredential -NoWelcome -ErrorAction Stop
-        Write-Log "Successfully connected to Microsoft Graph using client secret authentication." -Type "Info"
+        Write-Log "Successfully connected to Microsoft Graph using client secret authentication." -Type "Success"
         return $true
     }
     catch {
-        Write-Log "Failed to connect to Microsoft Graph using client secret. Error: $_" -Type "Error"
+        Write-Log "Failed to connect to Microsoft Graph using client secret. Error: $($_.Exception.Message)" -Type "Error"
         return $false
     }
 }
@@ -169,11 +157,11 @@ function Connect-Interactive {
     try {
         $permissionsList = $requiredPermissions -join ','
         Connect-MgGraph -Scopes $permissionsList -NoWelcome -ErrorAction Stop
-        Write-Log "Successfully connected to Microsoft Graph using interactive sign-in." -Type "Info"
+        Write-Log "Successfully connected to Microsoft Graph using interactive sign-in." -Type "Success"
         return $true
     }
     catch {
-        Write-Log "Failed to connect to Microsoft Graph via interactive sign-in. Error: $_" -Type "Error"
+        Write-Log "Failed to connect to Microsoft Graph via interactive sign-in. Error: $($_.Exception.Message)" -Type "Error"
         return $false
     }
 }
@@ -218,24 +206,24 @@ function Show-FilePickerDialog {
 }
 
 # Display authentication options
-Write-Log "`nChoose authentication method:" -Type "Info"
-Write-Log "1. App Registration with Certificate" -Type "Info"
-Write-Log "2. App Registration with Secret" -Type "Info"
-Write-Log "3. Interactive Session with Admin Account" -Type "Info"
+Write-Host "`nChoose authentication method:" -ForegroundColor Cyan
+Write-Host "1. App Registration with Certificate" -ForegroundColor Cyan
+Write-Host "2. App Registration with Secret" -ForegroundColor Cyan
+Write-Host "3. Interactive Session with Admin Account" -ForegroundColor Cyan
 $authChoice = Read-Host "`nEnter your choice (1-3)"
 
 $authenticated = $false
 
 switch ($authChoice) {
     "1" {
-        Write-Log "`nPlease select the certificate configuration JSON file..." -Type "Info"
+        Write-Log "Please select the certificate configuration JSON file..." -Type "Info"
         $configPath = Show-FilePickerDialog -Title "Select Certificate Configuration JSON File"
         if ($configPath -and (Test-AuthConfig $configPath)) {
             $authenticated = Connect-WithCertificate $configPath
         }
     }
     "2" {
-        Write-Log "`nPlease select the client secret configuration JSON file..." -Type "Info"
+        Write-Log "Please select the client secret configuration JSON file..." -Type "Info"
         $configPath = Show-FilePickerDialog -Title "Select Client Secret Configuration JSON File"
         if ($configPath -and (Test-AuthConfig $configPath)) {
             $authenticated = Connect-WithClientSecret $configPath
@@ -284,7 +272,7 @@ if ($missingPermissions.Count -gt 0) {
     }
 }
 else {
-    Write-Log "All required permissions are present." -Type "Info"
+    Write-Log "All required permissions are present." -Type "Success"
 }
 
 # Authentication END
@@ -343,9 +331,9 @@ function EncryptFile($sourceFile) {
 # Handles chunked upload of large files to Azure Storage
 function UploadFileToAzureStorage($sasUri, $filepath) {
     try {
-        Write-Log "Starting file upload to Azure Storage"
+        Write-Log "☁️  Starting file upload to Azure Storage" -Type "Info"
         $fileSize = [Math]::Round((Get-Item $filepath).Length / 1MB, 2)
-        Write-Log "File size: $fileSize MB"
+        Write-Log "📦 File size: $fileSize MB" -Type "Info"
         
         $blockSize = 8 * 1024 * 1024  # 8 MB block size
         $fileSize = (Get-Item $filepath).Length
@@ -395,7 +383,7 @@ function UploadFileToAzureStorage($sasUri, $filepath) {
                                 Start-Sleep -Seconds 2
                             }
                             else {
-                                Write-Log "Failed to upload block. Error: $_" -Type "Error"
+                                Write-Log "Failed to upload block. Error: $($_.Exception.Message)" -Type "Error"
                             }
                         }
                     }
@@ -407,7 +395,7 @@ function UploadFileToAzureStorage($sasUri, $filepath) {
                     $percentComplete = [Math]::Round(($blockId + 1) / $totalBlocks * 100, 1)
                     # Only log progress at 10% intervals
                     if ($percentComplete - $lastProgressReport -ge 10) {
-                        Write-Log "Upload progress: $percentComplete%"
+                        Write-Log "Upload progress: $percentComplete%" -Type "Info"
                         $lastProgressReport = [Math]::Floor($percentComplete / 10) * 10
                     }
                     
@@ -416,15 +404,15 @@ function UploadFileToAzureStorage($sasUri, $filepath) {
                 
                 $fileStream.Close()
 
-                Write-Log "Finalizing upload..."
+                Write-Log "Finalizing upload..." -Type "Info"
                 Invoke-RestMethod -Method Put "$sasUri&comp=blocklist" -Body $blockList | Out-Null
-                Write-Log "Upload completed successfully"
+                Write-Log "Upload completed successfully" -Type "Success"
                 
                 $uploadSuccess = $true
             }
             catch {
                 $retryCount++
-                Write-Log "Upload attempt failed: $_" -Type "Error"
+                Write-Log "Upload attempt failed: $($_.Exception.Message)" -Type "Error"
                 if ($retryCount -lt $maxRetries) {
                     Write-Log "Retrying upload..." -Type "Warning"
                     Start-Sleep -Seconds 5
@@ -442,7 +430,7 @@ function UploadFileToAzureStorage($sasUri, $filepath) {
         }
     }
     catch {
-        Write-Log "Critical error during upload: $_" -Type "Error"
+        Write-Log "Critical error during upload: $($_.Exception.Message)" -Type "Error"
         throw
     }
 }
@@ -559,7 +547,7 @@ function Set-IntuneAppAssignments {
         }
         catch {
             $failedCount++
-            Write-Log "❌ Error applying assignment for target $targetDescription : $_" -Type "Error"
+            Write-Log "❌ Error applying assignment for target $targetDescription : $($_.Exception.Message)" -Type "Error"
             # Log the failed assignment body for debugging if needed
             # Write-Host "Failed assignment body: $assignmentJson" -ForegroundColor DarkGray
         }
@@ -567,7 +555,7 @@ function Set-IntuneAppAssignments {
     
     Write-Log "---------------------------------------------------" -Type "Info"
     if ($appliedCount -gt 0) {
-        Write-Log "✅ Successfully applied $appliedCount assignment(s)." -Type "Info"
+        Write-Log "✅ Successfully applied $appliedCount assignment(s)." -Type "Success"
     }
     if ($failedCount -gt 0) {
         Write-Log "❌ Failed to apply $failedCount assignment(s)." -Type "Error"
@@ -622,13 +610,13 @@ function Remove-IntuneAppAssignments {
         }
         catch {
             $failedCount++
-            Write-Log "❌ Error removing assignment for target $targetDescription : $_" -Type "Error"
+            Write-Log "❌ Error removing assignment for target $targetDescription : $($_.Exception.Message)" -Type "Error"
         }
     }
 
     Write-Log "---------------------------------------------------" -Type "Info"
     if ($removedCount -gt 0) {
-        Write-Log "✅ Successfully removed $removedCount assignment(s) from old app." -Type "Info"
+        Write-Log "✅ Successfully removed $removedCount assignment(s) from old app." -Type "Success"
     }
     if ($failedCount -gt 0) {
         Write-Log "❌ Failed to remove $failedCount assignment(s) from old app." -Type "Error"
@@ -642,7 +630,7 @@ function Remove-IntuneAppAssignments {
 function Add-IntuneAppLogo {
     param (
         [string]$appId,
-        [string]$appName,
+        [string]$packageId, # Changed from appName to packageId
         [string]$appType,
         [string]$localLogoPath = $null
     )
@@ -658,20 +646,18 @@ function Add-IntuneAppLogo {
             Write-Log "Using local logo file: $localLogoPath" -Type "Info"
         }
         else {
-            # Try to download from repository (placeholder for Winget logos)
-            # For Winget, we might need a different strategy to get logos,
-            # or rely on a local collection. For now, this will likely fail.
-            $logoFileName = $appName.ToLower().Replace(" ", "_") + ".png"
-            $logoUrl = "https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/Logos/$logoFileName" # This is for macOS apps
-            Write-Log "Attempting to download logo from: $logoUrl (This might not work for Winget apps)" -Type "Info"
+            # Construct logo file name using PackageId as per feedback
+            $logoFileName = "$packageId.png" # Example: "7zip.7zip.png"
+            $logoUrl = "https://raw.githubusercontent.com/ugurkocde/IntuneGet/main/Logos/$logoFileName" # Updated repository path
+            Write-Log "Attempting to download logo from: $logoUrl" -Type "Info"
             
             # Download the logo
             $tempLogoPath = Join-Path $PWD "temp_logo.png"
             try {
-                Invoke-WebRequest -Uri $logoUrl -OutFile $tempLogoPath
+                Invoke-WebRequest -Uri $logoUrl -OutFile $tempLogoPath -ErrorAction Stop
             }
             catch {
-                Write-Log "⚠️ Could not download logo from repository. Error: $_" -Type "Warning"
+                Write-Log "⚠️  Could not download logo from repository. Error: $($_.Exception.Message)" -Type "Warning"
                 return
             }
         }
@@ -698,8 +684,8 @@ function Add-IntuneAppLogo {
             "largeIcon"   = $logoBody
         }
 
-        Invoke-MgGraphRequest -Method PATCH -Uri $logoUri -Body ($updateBody | ConvertTo-Json -Depth 10)
-        Write-Log "✅ Logo added successfully" -Type "Info"
+        Invoke-MgGraphRequest -Method PATCH -Uri $logoUri -Body ($updateBody | ConvertTo-Json -Depth 10) -ErrorAction Stop
+        Write-Log "✅ Logo added successfully" -Type "Success"
 
         # Cleanup
         if (Test-Path $tempLogoPath) {
@@ -707,14 +693,14 @@ function Add-IntuneAppLogo {
         }
     }
     catch {
-        Write-Log "⚠️ Warning: Could not add app logo. Error: $_" -Type "Warning"
+        Write-Log "⚠️ Warning: Could not add app logo. Error: $($_.Exception.Message)" -Type "Warning"
     }
 }
 
 # Ensure Winget is installed
 try {
     winget --version | Out-Null
-    Write-Log "Winget CLI is installed." -Type "Info"
+    Write-Log "Winget CLI is installed." -Type "Success"
 }
 catch {
     Write-Log "Winget CLI is not found. Please install Winget to use this script." -Type "Error"
@@ -957,12 +943,12 @@ try {
         exit 1
     }
 
-    Write-Log "Found Winget app: $appDisplayName (Version: $appVersion)" -Type "Info"
+    Write-Log "Found Winget app: $appDisplayName (Version: $appVersion)" -Type "Success"
     Write-Log "Installer URL: $installerUrl" -Type "Info"
     Write-Log "Installer Type: $installerType" -Type "Info"
 }
 catch {
-    Write-Log "Error getting Winget app details: $_" -Type "Error"
+    Write-Log "Error getting Winget app details: $($_.Exception.Message)" -Type "Error"
     exit 1
 }
 
@@ -982,7 +968,7 @@ $appFilePath = Join-Path $tempDir $installerFileName
 Write-Log "Downloading installer to $appFilePath..." -Type "Info"
 try {
     Invoke-WebRequest -Uri $installerUrl -OutFile $appFilePath -ErrorAction Stop
-    Write-Log "Installer downloaded successfully." -Type "Info"
+    Write-Log "Installer downloaded successfully." -Type "Success"
 
     # Validate hash (optional, but good practice)
     $downloadedHash = (Get-FileHash -Path $appFilePath -Algorithm SHA256).Hash
@@ -991,7 +977,7 @@ try {
     }
 }
 catch {
-    Write-Log "Error downloading installer: $_" -Type "Error"
+    Write-Log "Error downloading installer: $($_.Exception.Message)" -Type "Error"
     exit 1
 }
 
@@ -1024,7 +1010,7 @@ try {
         
         # Verify the file exists after running IntuneWinAppUtil
         if (Test-Path $outputIntunewinPath) {
-            Write-Log "IntuneWin package created: $outputIntunewinPath" -Type "Info"
+            Write-Log "IntuneWin package created: $outputIntunewinPath" -Type "Success"
         }
         else {
             # If the expected file doesn't exist, try to find what was actually created
@@ -1032,7 +1018,7 @@ try {
             if ($createdFiles.Count -gt 0) {
                 # Use the first .intunewin file found
                 $outputIntunewinPath = $createdFiles[0].FullName
-                Write-Log "IntuneWin package created with different name: $outputIntunewinPath" -Type "Info"
+                Write-Log "IntuneWin package created with different name: $outputIntunewinPath" -Type "Success"
             }
             else {
                 throw "IntuneWinAppUtil did not create any .intunewin files in $tempDir"
@@ -1044,7 +1030,7 @@ try {
     }
 }
 catch {
-    Write-Log "Error creating IntuneWin package. Make sure IntuneWinAppUtil.exe is available and in PATH. Error: $_" -Type "Error"
+    Write-Log "Error creating IntuneWin package. Make sure IntuneWinAppUtil.exe is available and in PATH. Error: $($_.Exception.Message)" -Type "Error"
     exit 1
 }
 
@@ -1161,12 +1147,12 @@ $newAppPayload = @{
 
 $createAppUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
 $newApp = Invoke-MgGraphRequest -Method POST -Uri $createAppUri -Body ($newAppPayload | ConvertTo-Json -Depth 10)
-Write-Log "Win32 App created successfully (ID: $($newApp.id))" -Type "Info"
+Write-Log "Win32 App created successfully (ID: $($newApp.id))" -Type "Success"
 
 Write-Log "🔒 Processing content version..." -Type "Info"
 $contentVersionUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($newApp.id)/microsoft.graph.win32LobApp/contentVersions"
 $contentVersion = Invoke-MgGraphRequest -Method POST -Uri $contentVersionUri -Body "{}"
-Write-Log "Content version created (ID: $($contentVersion.id))" -Type "Info"
+Write-Log "Content version created (ID: $($contentVersion.id))" -Type "Success"
 
 Write-Log "🔐 Encrypting application file..." -Type "Info"
 $encryptedFilePath = "$outputIntunewinPath.bin"
@@ -1174,10 +1160,10 @@ if (Test-Path $encryptedFilePath) {
     Remove-Item $encryptedFilePath -Force
 }
 $fileEncryptionInfo = EncryptFile $outputIntunewinPath
-Write-Log "File encryption complete" -Type "Info"
+Write-Log "File encryption complete" -Type "Success"
 
 try {
-    Write-Log "⬆️ Uploading to Azure Storage..." -Type "Info"
+    Write-Log "⬆️  Uploading to Azure Storage..." -Type "Info"
     $fileContent = @{
         "@odata.type" = "#microsoft.graph.mobileAppContentFile"
         name          = [System.IO.Path]::GetFileName($outputIntunewinPath)
@@ -1189,7 +1175,7 @@ try {
     Write-Log "Creating content file entry in Intune..." -Type "Info"
     $contentFileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($newApp.id)/microsoft.graph.win32LobApp/contentVersions/$($contentVersion.id)/files"  
     $contentFile = Invoke-MgGraphRequest -Method POST -Uri $contentFileUri -Body ($fileContent | ConvertTo-Json)
-    Write-Log "Content file entry created successfully" -Type "Info"
+    Write-Log "Content file entry created successfully" -Type "Success"
 
     Write-Log "Waiting for Azure Storage URI..." -Type "Info"
     $maxWaitAttempts = 12  # 1 minute total (5 seconds * 12)
@@ -1209,10 +1195,10 @@ try {
 
     Write-Log "Received Azure Storage URI, starting upload..." -Type "Info"
     UploadFileToAzureStorage $fileStatus.azureStorageUri "$outputIntunewinPath.bin"
-    Write-Log "Upload to Azure Storage complete" -Type "Info"
+    Write-Log "Upload to Azure Storage complete" -Type "Success"
 }
 catch {
-    Write-Log "Failed during upload process: $_" -Type "Error"
+    Write-Log "Failed during upload process: $($_.Exception.Message)" -Type "Error"
     throw
 }
 
@@ -1236,7 +1222,7 @@ do {
 } while ($fileStatus.uploadState -ne "commitFileSuccess" -and $retryCount -lt $maxRetries)
 
 if ($fileStatus.uploadState -eq "commitFileSuccess") {
-    Write-Log "✅ File committed successfully" -Type "Info"
+    Write-Log "✅ File committed successfully" -Type "Success"
 }
 else {
     Write-Log "Failed to commit file after $maxRetries attempts." -Type "Error"
@@ -1258,22 +1244,22 @@ if ($CopyAssignments) {
     # For now, it's a placeholder.
 }
 
-# Add logo (placeholder, Winget doesn't directly provide logos in this format)
-Add-IntuneAppLogo -appId $newApp.id -appName $appDisplayName -appType "win32LobApp" -localLogoPath $null
+# Add logo
+Add-IntuneAppLogo -appId $newApp.id -packageId $PackageId -appType "win32LobApp" -localLogoPath $null
 
 Write-Log "🧹 Cleaning up temporary files..." -Type "Info"
 try {
     Remove-Item $tempDir -Recurse -Force -ErrorAction Stop
-    Write-Log "Cleaned up temporary directory: $tempDir" -Type "Info"
+    Write-Log "Cleaned up temporary directory: $tempDir" -Type "Success"
 }
 catch {
-    Write-Log "Warning: Could not remove temporary directory $tempDir. Error: $_" -Type "Warning"
+    Write-Log "Warning: Could not remove temporary directory $tempDir. Error: $($_.Exception.Message)" -Type "Warning"
 }
 
-Write-Log "Successfully processed $appDisplayName" -Type "Info"
+Write-Log "Successfully processed $appDisplayName" -Type "Success"
 Write-Log "App is now available in Intune Portal: https://intune.microsoft.com/#view/Microsoft_Intune_Apps/SettingsMenu/~/0/appId/$($newApp.id)" -Type "Info"
 Write-Log " " -Type "Info"
 
-Write-Log "All operations completed successfully!" -Type "Info"
+Write-Log "All operations completed successfully!" -Type "Success"
 Write-Log "Disconnecting from Microsoft Graph" -Type "Info"
 Disconnect-MgGraph > $null 2>&1
