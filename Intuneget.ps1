@@ -1003,7 +1003,9 @@ if (-not (Test-Path $intunewinAppUtilPath)) {
     $intunewinAppUtilPath = "IntuneWinAppUtil.exe"
     Write-Log "IntuneWinAppUtil.exe not found in script directory, will try to use from PATH" -Type "Verbose"
 }
-$outputIntunewinPath = Join-Path $tempDir "DiscordSetup.intunewin"
+# IntuneWinAppUtil creates the .intunewin file with a name based on the input file
+$intunewinFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($installerFileName)).intunewin"
+$outputIntunewinPath = Join-Path $tempDir $intunewinFileName
 
 Write-Log "Creating IntuneWin package using $intunewinAppUtilPath..." -Type "Info"
 try {
@@ -1019,7 +1021,23 @@ try {
         }
         Write-Log "Executing command: $command" -Type "Verbose"
         Invoke-Expression $command | Out-Null
-        Write-Log "IntuneWin package created: $outputIntunewinPath" -Type "Info"
+        
+        # Verify the file exists after running IntuneWinAppUtil
+        if (Test-Path $outputIntunewinPath) {
+            Write-Log "IntuneWin package created: $outputIntunewinPath" -Type "Info"
+        }
+        else {
+            # If the expected file doesn't exist, try to find what was actually created
+            $createdFiles = Get-ChildItem -Path $tempDir -Filter "*.intunewin"
+            if ($createdFiles.Count -gt 0) {
+                # Use the first .intunewin file found
+                $outputIntunewinPath = $createdFiles[0].FullName
+                Write-Log "IntuneWin package created with different name: $outputIntunewinPath" -Type "Info"
+            }
+            else {
+                throw "IntuneWinAppUtil did not create any .intunewin files in $tempDir"
+            }
+        }
     }
     else {
         throw "IntuneWinAppUtil.exe not found. Please ensure it's in the script directory or in your PATH."
