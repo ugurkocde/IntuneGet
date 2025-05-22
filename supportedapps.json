@@ -1,4 +1,12 @@
 [
   { "id": "Discord.Discord", "name": "Discord" },
-  { "id": "Microsoft.Teams", "name": "Microsoft Teams" }
+  { "id": "Microsoft.Teams", "name": "Microsoft Teams" },
+  { "id": "Notion.Notion", "name": "Notion" },
+  { "id": "Zoom.Zoom", "name": "Zoom" },
+  { "id": "Microsoft.VisualStudioCode", "name": "Visual Studio Code" },
+  { "id": "Spotify.Spotify", "name": "Spotify" },
+  { "id": "Mozilla.Firefox", "name": "Mozilla Firefox" },
+  { "id": "Google.Chrome", "name": "Google Chrome" },
+  { "id": "7zip.7zip", "name": "7zip" },
+  { "id": "Notepad++.Notepad++", "name": "Notepad++" }
 ]
