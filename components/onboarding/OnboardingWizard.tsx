@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WelcomeStep } from './WelcomeStep';
 import { ConsentStep } from './ConsentStep';
 import { SuccessStep } from './SuccessStep';
@@ -9,6 +9,7 @@ import {
   getOnboardingStep,
   setOnboardingStep,
 } from '@/lib/onboarding-utils';
+import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 
 interface OnboardingWizardProps {
   userName: string | null | undefined;
@@ -19,24 +20,69 @@ export function OnboardingWizard({
   userName,
   initialStep,
 }: OnboardingWizardProps) {
+  const { getAccessToken } = useMicrosoftAuth();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(
     initialStep || 1
   );
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load persisted step on mount (client-side only)
-  useEffect(() => {
-    if (initialStep) {
-      // If initial step provided (e.g., from URL), use that
-      setCurrentStep(initialStep);
-      setOnboardingStep(initialStep);
-    } else {
-      // Otherwise load from localStorage
-      const savedStep = getOnboardingStep();
-      setCurrentStep(savedStep);
+  /**
+   * Verify consent via API before allowing step 3
+   * This prevents users from bypassing consent by bookmarking ?step=3
+   */
+  const verifyConsentForStep = useCallback(async (): Promise<boolean> => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return false;
+
+      const response = await fetch('/api/auth/verify-consent', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) return false;
+
+      const result = await response.json();
+      return result.verified === true;
+    } catch {
+      return false;
     }
-    setIsInitialized(true);
-  }, [initialStep]);
+  }, [getAccessToken]);
+
+  // Load persisted step on mount (client-side only)
+  // When initialStep=3 is provided via URL, verify consent first
+  useEffect(() => {
+    const initStep = async () => {
+      if (initialStep === 3) {
+        // Verify consent before allowing direct access to step 3
+        // This prevents bypassing consent via URL parameter
+        const verified = await verifyConsentForStep();
+        if (!verified) {
+          // Force back to consent step
+          setCurrentStep(2);
+          setOnboardingStep(2);
+          setIsInitialized(true);
+          return;
+        }
+        setCurrentStep(3);
+        setOnboardingStep(3);
+      } else if (initialStep) {
+        // Use the provided initial step (e.g., from URL)
+        setCurrentStep(initialStep);
+        setOnboardingStep(initialStep);
+      } else {
+        // Load from localStorage
+        const savedStep = getOnboardingStep();
+        setCurrentStep(savedStep);
+      }
+      setIsInitialized(true);
+    };
+
+    initStep();
+  }, [initialStep, verifyConsentForStep]);
 
   // Persist step changes
   const goToStep = (step: OnboardingStep) => {

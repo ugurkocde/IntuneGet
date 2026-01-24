@@ -2,24 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: "Geist";
-  src: url("/fonts/GeistVF.woff") format("woff");
-  font-weight: 100 900;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Geist Mono";
-  src: url("/fonts/GeistMonoVF.woff") format("woff");
-  font-weight: 100 900;
-  font-style: normal;
-}
-
-body {
-  font-family: "Geist", sans-serif;
-}
-
 /* ===== REDUCED MOTION SUPPORT ===== */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -323,7 +305,7 @@ body {
   }
 
   .text-mono {
-    font-family: "Geist Mono", monospace;
+    font-family: var(--font-geist-mono), monospace;
     font-size: 0.75rem;
     letter-spacing: 0.02em;
   }

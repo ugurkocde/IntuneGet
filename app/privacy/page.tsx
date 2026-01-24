@@ -1,0 +1,208 @@
+import { Metadata } from "next";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy | IntuneGet",
+  description:
+    "Privacy Policy for IntuneGet - learn how we handle your data when using the Winget to Intune deployment tool.",
+};
+
+export default function PrivacyPage() {
+  return (
+    <div className="min-h-screen bg-bg-deepest">
+      {/* Header */}
+      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-bg-deepest/80 backdrop-blur-xl">
+        <div className="flex h-14 items-center px-4 lg:px-6 max-w-4xl mx-auto">
+          <Link href="/" className="flex items-center gap-2 group">
+            <Image
+              src="/favicon.svg"
+              alt="IntuneGet"
+              width={24}
+              height={24}
+              className="h-6 w-6"
+            />
+            <span className="font-semibold text-white">IntuneGet</span>
+          </Link>
+
+          <div className="ml-auto">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back to Home</span>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16">
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white sm:text-4xl">
+              Privacy Policy
+            </h1>
+            <p className="mt-2 text-sm text-zinc-500">
+              Effective: January 24, 2026
+            </p>
+          </div>
+
+          <p className="text-zinc-400 leading-relaxed">
+            This Privacy Policy explains how IntuneGet (&quot;we&quot;,
+            &quot;our&quot;, or &quot;the Service&quot;) handles information
+            when you use the app to package and deploy applications from Winget
+            to Microsoft Intune. We designed the Service to minimize data
+            collection and focus on privacy by default.
+          </p>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">What We Access</h2>
+            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+              <li>
+                <strong className="text-zinc-300">
+                  Authentication via Microsoft OAuth 2.0 (Azure AD).
+                </strong>{" "}
+                We request Microsoft Graph permissions necessary to upload
+                applications to your Intune environment.
+              </li>
+              <li>
+                <strong className="text-zinc-300">
+                  Intune application data.
+                </strong>{" "}
+                We access the permissions required to upload Win32 applications
+                to your Intune tenant.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">
+              How We Process Data
+            </h2>
+            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+              <li>
+                We do not persist your Intune configuration data beyond what is
+                necessary for the application upload process.
+              </li>
+              <li>
+                Access tokens are managed by your browser session to call
+                Microsoft Graph; we do not persist them server-side.
+              </li>
+              <li>
+                Package metadata and upload history may be stored locally in
+                your self-hosted database.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">
+              Analytics & Cookies
+            </h2>
+            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+              <li>
+                We use privacy-friendly analytics (Plausible) to understand
+                aggregate usage without cookies or personal identifiers.
+              </li>
+              <li>
+                Plausible Analytics is 100% cookieless and does not track
+                personal data or use browser fingerprinting.
+              </li>
+              <li>
+                We collect only aggregated, anonymous metrics such as page
+                views, referrers, and device types.
+              </li>
+              <li>
+                Your consent preference for analytics is stored in localStorage
+                (not a cookie) and remains on your device only.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">Data Sharing</h2>
+            <p className="text-zinc-400 leading-relaxed">
+              We do not sell or share your configuration data with third
+              parties. Data accessed from Microsoft Graph is used solely to
+              facilitate application deployment to your Intune environment.
+            </p>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">Security</h2>
+            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+              <li>
+                Authentication is handled via Microsoft OAuth 2.0 (Azure AD).
+              </li>
+              <li>
+                Only the required Graph permissions are requested for Intune
+                operations.
+              </li>
+              <li>
+                For self-hosted deployments, you maintain full control over your
+                data and infrastructure.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">Data Retention</h2>
+            <p className="text-zinc-400 leading-relaxed">
+              We do not retain your Intune configuration data beyond the active
+              session. Operational logs may exist temporarily within hosting
+              provider systems as part of standard logging.
+            </p>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">Your Choices</h2>
+            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+              <li>
+                You can disconnect at any time by signing out of the app.
+              </li>
+              <li>
+                You can revoke the app&apos;s permissions from your Microsoft
+                account/tenant to prevent future access.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">
+              Children&apos;s Privacy
+            </h2>
+            <p className="text-zinc-400 leading-relaxed">
+              The Service is intended for professional/enterprise use and is not
+              directed to children.
+            </p>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">Changes</h2>
+            <p className="text-zinc-400 leading-relaxed">
+              We may update this policy to reflect improvements or operational
+              changes. If we make material changes, we will update the effective
+              date above.
+            </p>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white">Contact</h2>
+            <p className="text-zinc-400 leading-relaxed">
+              Questions about this policy? Contact us at:{" "}
+              <a
+                href="mailto:support@ugurlabs.com"
+                className="text-accent-cyan hover:text-accent-cyan-bright transition-colors"
+              >
+                support@ugurlabs.com
+              </a>
+            </p>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}

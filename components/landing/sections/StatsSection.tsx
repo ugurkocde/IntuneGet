@@ -12,12 +12,6 @@ const stats = [
     description: "In Winget repository",
   },
   {
-    value: 500,
-    suffix: "+",
-    label: "Early Adopters",
-    description: "On our waitlist",
-  },
-  {
     value: 99.9,
     suffix: "%",
     decimals: 1,
@@ -52,7 +46,7 @@ export function StatsSection() {
 
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
         <StaggerContainer
-          className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid gap-8 sm:grid-cols-3"
           staggerDelay={0.1}
         >
           {stats.map((stat, index) => (

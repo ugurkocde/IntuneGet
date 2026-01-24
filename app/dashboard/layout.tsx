@@ -17,6 +17,9 @@ import {
   Server,
   BarChart3,
   Building2,
+  AlertTriangle,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/stores/cart-store';
@@ -49,12 +52,19 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { isAuthenticated, user, signOut } = useMicrosoftAuth();
-  const { isOnboardingComplete, isChecking: isCheckingOnboarding } = useOnboardingStatus();
+  const {
+    isOnboardingComplete,
+    isChecking: isCheckingOnboarding,
+    errorType,
+    retryVerification,
+  } = useOnboardingStatus();
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [showRetryBanner, setShowRetryBanner] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const cartItemCount = useCartStore((state) => state.getItemCount());
   const toggleCart = useCartStore((state) => state.toggleCart);
 
@@ -76,11 +86,34 @@ export default function DashboardLayout({
     }
   }, [isLoading, isAuthenticated, router]);
 
+  // Handle onboarding check results
   useEffect(() => {
-    if (!isLoading && isAuthenticated && !isCheckingOnboarding && !isOnboardingComplete) {
-      router.push('/onboarding');
+    if (!isLoading && isAuthenticated && !isCheckingOnboarding) {
+      if (!isOnboardingComplete) {
+        if (errorType === 'network_error' || errorType === 'missing_credentials') {
+          // Show retry banner for network/config errors - don't redirect
+          setShowRetryBanner(true);
+        } else if (errorType === 'consent_not_granted') {
+          // Consent actually not granted - redirect to onboarding
+          router.push('/onboarding');
+        } else {
+          // Unknown state - redirect to be safe
+          router.push('/onboarding');
+        }
+      } else {
+        // Onboarding complete - hide any retry banner
+        setShowRetryBanner(false);
+      }
     }
-  }, [isLoading, isAuthenticated, isCheckingOnboarding, isOnboardingComplete, router]);
+  }, [isLoading, isAuthenticated, isCheckingOnboarding, isOnboardingComplete, errorType, router]);
+
+  // Handle retry
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    await retryVerification();
+    setIsRetrying(false);
+    // Banner visibility will update via useEffect when isOnboardingComplete changes
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -97,7 +130,10 @@ export default function DashboardLayout({
     );
   }
 
-  if (!isAuthenticated || !isOnboardingComplete) {
+  // Allow dashboard to render if:
+  // 1. User is authenticated AND onboarding is complete, OR
+  // 2. User is authenticated AND we're showing the retry banner (network error)
+  if (!isAuthenticated || (!isOnboardingComplete && !showRetryBanner)) {
     return null;
   }
 
@@ -256,6 +292,45 @@ export default function DashboardLayout({
             </div>
           </div>
         </header>
+
+        {/* Consent Verification Retry Banner */}
+        {showRetryBanner && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 lg:px-6 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-200">
+                    Unable to verify organization setup
+                  </p>
+                  <p className="text-xs text-amber-200/70">
+                    {errorType === 'missing_credentials'
+                      ? 'Server configuration issue. Contact your administrator.'
+                      : 'Please check your connection and try again.'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handleRetry}
+                disabled={isRetrying}
+                size="sm"
+                className="bg-amber-500 hover:bg-amber-600 text-black font-medium flex-shrink-0"
+              >
+                {isRetrying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Page content */}
         <main className="p-4 lg:p-6 relative">

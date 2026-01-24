@@ -30,9 +30,9 @@ const faqs = [
       "Security is our top priority. IntuneGet uses Microsoft's official APIs and follows enterprise security best practices. All communications are encrypted, and we never store your credentials. The tool integrates seamlessly with Entra ID authentication.",
   },
   {
-    question: "When will IntuneGet be available?",
+    question: "Can I self-host IntuneGet?",
     answer:
-      "We're currently in the final development phase and expect to release IntuneGet in early 2024. Join our waitlist to be among the first to know when it's ready and get early access to the tool.",
+      "Yes! IntuneGet is fully open source and can be self-hosted on your own infrastructure. Check out our documentation for detailed setup instructions, or use our hosted service for a hassle-free experience.",
   },
 ];
 

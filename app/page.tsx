@@ -3,7 +3,6 @@ import {
   HeroSection,
   FeaturesSection,
   HowItWorksSection,
-  StatsSection,
   FAQSectionAnimated,
   CTASection,
   Footer,
@@ -18,7 +17,6 @@ export default function LandingPage() {
         <HeroSection />
         <FeaturesSection />
         <HowItWorksSection />
-        <StatsSection />
         <FAQSectionAnimated />
         <CTASection />
       </main>

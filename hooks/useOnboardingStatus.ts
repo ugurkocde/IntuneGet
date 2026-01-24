@@ -5,14 +5,24 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import {
   isOnboardingCacheValid,
   markOnboardingComplete,
+  clearOnboardingCache,
 } from '@/lib/onboarding-utils';
+
+export type OnboardingErrorType = 'network_error' | 'consent_not_granted' | 'missing_credentials' | null;
+
+interface ConsentVerifyResult {
+  verified: boolean;
+  error?: OnboardingErrorType;
+}
 
 interface OnboardingStatus {
   isOnboardingComplete: boolean;
   isChecking: boolean;
   tenantId: string | null;
   error: string | null;
-  verifyConsent: () => Promise<boolean>;
+  errorType: OnboardingErrorType;
+  verifyConsent: () => Promise<ConsentVerifyResult>;
+  retryVerification: () => Promise<void>;
 }
 
 /**
@@ -27,16 +37,19 @@ export function useOnboardingStatus(): OnboardingStatus {
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<OnboardingErrorType>(null);
 
   /**
    * Verify consent via API (authoritative check)
+   * Returns structured result with error type for proper handling
    */
-  const verifyConsent = useCallback(async (): Promise<boolean> => {
+  const verifyConsent = useCallback(async (): Promise<ConsentVerifyResult> => {
     try {
       const token = await getAccessToken();
       if (!token) {
         setError('Unable to get access token');
-        return false;
+        setErrorType('network_error');
+        return { verified: false, error: 'network_error' };
       }
 
       const response = await fetch('/api/auth/verify-consent', {
@@ -47,17 +60,57 @@ export function useOnboardingStatus(): OnboardingStatus {
         },
       });
 
-      if (!response.ok) {
-        return false;
+      // Network-level error
+      if (!response.ok && response.status >= 500) {
+        setError('Unable to verify consent. Please try again.');
+        setErrorType('network_error');
+        return { verified: false, error: 'network_error' };
       }
 
       const result = await response.json();
-      return result.verified === true;
+
+      if (result.verified === true) {
+        setError(null);
+        setErrorType(null);
+        return { verified: true };
+      }
+
+      // Return the specific error type from the API
+      const apiErrorType = result.error as OnboardingErrorType || 'consent_not_granted';
+      setError(result.message || 'Consent not granted');
+      setErrorType(apiErrorType);
+      return { verified: false, error: apiErrorType };
     } catch (err) {
       console.error('Error verifying consent:', err);
-      return false;
+      setError('Network error. Please check your connection.');
+      setErrorType('network_error');
+      return { verified: false, error: 'network_error' };
     }
   }, [getAccessToken]);
+
+  /**
+   * Retry verification (used by dashboard retry banner)
+   */
+  const retryVerification = useCallback(async (): Promise<void> => {
+    setIsChecking(true);
+    setError(null);
+    setErrorType(null);
+
+    const result = await verifyConsent();
+
+    if (result.verified) {
+      markOnboardingComplete();
+      setIsOnboardingComplete(true);
+    } else {
+      // On consent revocation, clear the cache
+      if (result.error === 'consent_not_granted') {
+        clearOnboardingCache();
+      }
+      setIsOnboardingComplete(false);
+    }
+
+    setIsChecking(false);
+  }, [verifyConsent]);
 
   /**
    * Check onboarding status on mount
@@ -72,6 +125,7 @@ export function useOnboardingStatus(): OnboardingStatus {
     const checkOnboarding = async () => {
       setIsChecking(true);
       setError(null);
+      setErrorType(null);
 
       // Quick check: is localStorage cache valid?
       if (isOnboardingCacheValid()) {
@@ -81,13 +135,17 @@ export function useOnboardingStatus(): OnboardingStatus {
       }
 
       // Authoritative check via API
-      const verified = await verifyConsent();
+      const result = await verifyConsent();
 
-      if (verified) {
+      if (result.verified) {
         // Mark onboarding as complete in cache
         markOnboardingComplete();
         setIsOnboardingComplete(true);
       } else {
+        // On consent revocation, clear the cache
+        if (result.error === 'consent_not_granted') {
+          clearOnboardingCache();
+        }
         setIsOnboardingComplete(false);
       }
 
@@ -102,6 +160,8 @@ export function useOnboardingStatus(): OnboardingStatus {
     isChecking,
     tenantId: user?.tenantId || null,
     error,
+    errorType,
     verifyConsent,
+    retryVerification,
   };
 }

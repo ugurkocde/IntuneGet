@@ -24,6 +24,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://intuneget.com"),
   title: "IntuneGet | Deploy Winget Apps to Intune",
   description:
     "Streamline your Microsoft Intune app deployment process with Winget integration. Package and upload applications effortlessly with automated deployment and cloud-native features.",

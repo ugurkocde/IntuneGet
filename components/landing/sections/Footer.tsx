@@ -32,7 +32,15 @@ export function Footer() {
               <p className="text-sm text-zinc-500 text-center md:text-left">
                 {currentYear} | Made with care by Ugur Koc
                 <br />
-                Open-source project under MIT License
+                Part of{" "}
+                <a
+                  href="https://ugurlabs.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-cyan hover:text-accent-cyan/80 transition-colors"
+                >
+                  UgurLabs.com
+                </a>
               </p>
             </div>
 
@@ -51,12 +59,16 @@ export function Footer() {
                 How It Works
               </Link>
               <Link
-                href="https://ugurkoc.de/privacy-policy/"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/privacy"
                 className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"
               >
                 Privacy
+              </Link>
+              <Link
+                href="/terms"
+                className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"
+              >
+                Terms
               </Link>
               <Link
                 href="https://github.com/ugurkocde/IntuneGet"

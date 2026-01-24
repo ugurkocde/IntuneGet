@@ -83,6 +83,17 @@ export function clearOnboardingState(): void {
 }
 
 /**
+ * Clear only the onboarding cache (for consent revocation)
+ * Keeps the step tracking so user goes back to consent step
+ */
+export function clearOnboardingCache(): void {
+  if (typeof window === 'undefined') return;
+
+  localStorage.removeItem(ONBOARDING_COMPLETE_KEY);
+  localStorage.removeItem(ONBOARDING_CACHE_KEY);
+}
+
+/**
  * Get shareable admin consent URL for non-admin users
  */
 export function getShareableConsentUrl(tenantId?: string): string {

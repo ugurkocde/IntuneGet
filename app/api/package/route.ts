@@ -35,6 +35,41 @@ interface PackagingJobRecord {
   created_at: string;
 }
 
+/**
+ * Verify that admin consent has been granted for the tenant
+ * Uses client credentials grant to test if the service principal exists
+ */
+async function verifyTenantConsent(tenantId: string): Promise<boolean> {
+  const clientId = process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  // If credentials not configured, skip check (allows local/dev mode)
+  if (!clientId || !clientSecret) {
+    console.warn('Consent verification skipped: credentials not configured');
+    return true;
+  }
+
+  try {
+    const response = await fetch(
+      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          scope: 'https://graph.microsoft.com/.default',
+          grant_type: 'client_credentials',
+        }).toString(),
+      }
+    );
+    return response.ok;
+  } catch (error) {
+    console.error('Error verifying tenant consent:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get the authorization header (Microsoft access token from MSAL)
@@ -123,6 +158,20 @@ export async function POST(request: NextRequest) {
 
       // Use the MSP-specified tenant
       tenantId = mspTenantId;
+    }
+
+    // Verify admin consent for the target tenant before accepting jobs
+    // This prevents jobs from being queued when uploads will ultimately fail
+    const consentVerified = await verifyTenantConsent(tenantId);
+    if (!consentVerified) {
+      return NextResponse.json(
+        {
+          error: 'Admin consent required',
+          message: 'Admin consent has not been granted for your organization. Please complete the onboarding process.',
+          consentRequired: true,
+        },
+        { status: 403 }
+      );
     }
 
     // Parse request body

@@ -12,6 +12,8 @@ interface FadeInProps {
   distance?: number;
   once?: boolean;
   amount?: number;
+  /** If true, animate on mount instead of on scroll into view */
+  animateOnMount?: boolean;
 }
 
 export function FadeIn({
@@ -23,6 +25,7 @@ export function FadeIn({
   distance = 24,
   once = true,
   amount = 0.3,
+  animateOnMount = false,
 }: FadeInProps) {
   const shouldReduceMotion = useReducedMotion();
 
@@ -58,6 +61,20 @@ export function FadeIn({
       },
     },
   };
+
+  // For above-the-fold content, use animate instead of whileInView
+  if (animateOnMount) {
+    return (
+      <motion.div
+        className={className}
+        initial="hidden"
+        animate="visible"
+        variants={variants}
+      >
+        {children}
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

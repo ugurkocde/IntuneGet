@@ -1,10 +1,10 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Server } from "lucide-react";
+import Link from "next/link";
 import { FadeIn } from "../animations/FadeIn";
 import { GradientOrb } from "../ui/GradientOrb";
-import { WaitlistFormDark } from "@/components/WaitlistFormDark";
 
 export function CTASection() {
   const shouldReduceMotion = useReducedMotion();
@@ -69,26 +69,36 @@ export function CTASection() {
 
           <FadeIn delay={0.1}>
             <h2 className="text-display-md text-white">
-              Be the First to Know
+              Ready to Streamline Your App Deployment?
             </h2>
           </FadeIn>
 
           <FadeIn delay={0.2}>
             <p className="text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Join our waitlist to be notified when IntuneGet is ready. Get
-              early access and start streamlining your Intune app deployment.
+              Start deploying applications from Winget to Intune in minutes.
+              Free to use, open source, and enterprise-ready.
             </p>
           </FadeIn>
 
           <FadeIn delay={0.3}>
-            <div className="max-w-xl mx-auto">
-              {/* Glowing border wrapper */}
-              <div className="relative p-[1px] rounded-2xl bg-gradient-to-r from-accent-cyan/50 via-accent-violet/50 to-accent-cyan/50">
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-accent-cyan/20 via-accent-violet/20 to-accent-cyan/20 blur-xl" />
-                <div className="relative bg-bg-surface rounded-2xl p-6 md:p-8">
-                  <WaitlistFormDark />
-                </div>
-              </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+              {/* Primary CTA */}
+              <Link
+                href="/auth/signin"
+                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-bg-deepest bg-accent-cyan rounded-xl hover:bg-accent-cyan-bright transition-all duration-300 shadow-lg shadow-accent-cyan/25 hover:shadow-accent-cyan/40 hover:scale-[1.02]"
+              >
+                Get Started Free
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Link>
+
+              {/* Secondary CTA */}
+              <Link
+                href="/docs/getting-started"
+                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-zinc-300 bg-zinc-800/50 border border-zinc-700 rounded-xl hover:bg-zinc-800 hover:border-zinc-600 hover:text-white transition-all duration-300"
+              >
+                <Server className="h-5 w-5" />
+                Self-Host
+              </Link>
             </div>
           </FadeIn>
 
@@ -96,15 +106,11 @@ export function CTASection() {
             <div className="flex items-center justify-center gap-6 text-sm text-zinc-500 pt-4">
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                No spam, ever
+                No credit card required
               </span>
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Unsubscribe anytime
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Early access
+                Open source
               </span>
             </div>
           </FadeIn>

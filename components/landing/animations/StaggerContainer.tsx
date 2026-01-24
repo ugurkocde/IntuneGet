@@ -10,6 +10,8 @@ interface StaggerContainerProps {
   delayStart?: number;
   once?: boolean;
   amount?: number;
+  /** If true, animate on mount instead of on scroll into view */
+  animateOnMount?: boolean;
 }
 
 export function StaggerContainer({
@@ -19,6 +21,7 @@ export function StaggerContainer({
   delayStart = 0,
   once = true,
   amount = 0.2,
+  animateOnMount = false,
 }: StaggerContainerProps) {
   const shouldReduceMotion = useReducedMotion();
 
@@ -31,6 +34,20 @@ export function StaggerContainer({
       },
     },
   };
+
+  // For above-the-fold content, use animate instead of whileInView
+  if (animateOnMount) {
+    return (
+      <motion.div
+        className={className}
+        initial="hidden"
+        animate="visible"
+        variants={containerVariants}
+      >
+        {children}
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

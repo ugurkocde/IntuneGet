@@ -7,6 +7,8 @@ import { Shield, Zap, Cloud, CheckCircle2, Loader2, Package, ChevronDown, Copy, 
 import { Button } from '@/components/ui/button';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { getAdminConsentUrl } from '@/lib/msal-config';
+import { isOnboardingCacheValid } from '@/lib/onboarding-utils';
+import { trackSigninClick } from '@/hooks/useLandingStats';
 
 // Microsoft logo SVG component
 function MicrosoftLogo({ className }: { className?: string }) {
@@ -65,14 +67,25 @@ function SignInContent() {
     }
   };
 
-  // Redirect to dashboard if already signed in
+  // Redirect based on onboarding status if already signed in
+  // First-time users go to /onboarding, returning users go to dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      router.push(callbackUrl);
+      // Check if user has completed onboarding (valid cache)
+      const onboardingComplete = isOnboardingCacheValid();
+      if (onboardingComplete) {
+        router.push(callbackUrl);
+      } else {
+        // First-time user or cache expired - go to onboarding
+        router.push('/onboarding');
+      }
     }
   }, [isAuthenticated, router, callbackUrl]);
 
   const handleSignIn = async () => {
+    // Track signin click (fire-and-forget)
+    trackSigninClick();
+
     setIsSigningIn(true);
     setError(null);
     try {

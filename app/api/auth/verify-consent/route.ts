@@ -13,26 +13,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 
+type ConsentErrorType = 'missing_credentials' | 'network_error' | 'consent_not_granted' | null;
+
 interface ConsentVerificationResult {
   verified: boolean;
   tenantId: string;
   message: string;
   cachedResult?: boolean;
+  error?: ConsentErrorType;
+}
+
+interface GraphVerificationResult {
+  verified: boolean;
+  error?: ConsentErrorType;
 }
 
 /**
  * Try to get a client credentials token for a specific tenant
  * If successful, it means admin consent has been granted
+ *
+ * FAIL-CLOSED: Returns { verified: false, error } on any error condition.
+ * This prevents users from bypassing consent verification.
  */
-async function verifyConsentWithGraph(tenantId: string): Promise<boolean> {
+async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificationResult> {
   const clientId = process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    console.warn('Entra ID credentials not configured for consent verification');
-    // If no server credentials, we can't verify - allow user to proceed
-    // (they'll get an error later if consent wasn't actually granted)
-    return true;
+    console.error('AZURE_CLIENT_SECRET not configured for consent verification');
+    // FAIL-CLOSED: Cannot verify without credentials
+    return { verified: false, error: 'missing_credentials' };
   }
 
   try {
@@ -55,32 +65,43 @@ async function verifyConsentWithGraph(tenantId: string): Promise<boolean> {
 
     if (response.ok) {
       // We got a token - consent has been granted
-      return true;
+      return { verified: true };
     }
 
     // Check the error
     const errorData = await response.json().catch(() => ({}));
     const errorCode = errorData.error;
+    const errorDescription = errorData.error_description || '';
+
+    // Invalid client credentials (wrong secret, expired secret)
+    // AADSTS7000215: Invalid client secret provided
+    // AADSTS7000222: Client secret is expired
+    if (errorCode === 'invalid_client' ||
+        errorDescription.includes('AADSTS7000215') ||
+        errorDescription.includes('AADSTS7000222')) {
+      console.error('Invalid client credentials:', errorData);
+      return { verified: false, error: 'missing_credentials' };
+    }
 
     // AADSTS700016: Application not found in the directory
     // AADSTS65001: User or admin has not consented
     // These mean consent was NOT granted
     if (errorCode === 'invalid_grant' ||
         errorCode === 'unauthorized_client' ||
-        errorData.error_description?.includes('AADSTS700016') ||
-        errorData.error_description?.includes('AADSTS65001')) {
-      return false;
+        errorDescription.includes('AADSTS700016') ||
+        errorDescription.includes('AADSTS65001')) {
+      return { verified: false, error: 'consent_not_granted' };
     }
 
-    // Other errors (network, temporary issues) - we can't be sure
+    // Other errors (network, temporary issues)
     console.error('Consent verification error:', errorData);
-    // Return true to not block the user on transient errors
-    return true;
+    // FAIL-CLOSED: Return false with network_error on unknown errors
+    return { verified: false, error: 'network_error' };
 
   } catch (error) {
     console.error('Error verifying consent:', error);
-    // Network error - don't block the user
-    return true;
+    // FAIL-CLOSED: Network error
+    return { verified: false, error: 'network_error' };
   }
 }
 
@@ -143,6 +164,27 @@ async function checkStoredConsent(tenantId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Clear stored consent record (for when consent is revoked)
+ */
+async function clearStoredConsent(tenantId: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
+  try {
+    const supabase = createServerClient();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('tenant_consent')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('tenant_id', tenantId);
+  } catch (error) {
+    console.error('Error clearing consent record:', error);
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse<ConsentVerificationResult>> {
   try {
     // Get the authorization header
@@ -184,6 +226,23 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
     // First, check if we have a cached consent record in the database
     const hasStoredConsent = await checkStoredConsent(tenantId);
     if (hasStoredConsent) {
+      // Re-verify to ensure consent is still valid (handles revocation)
+      const reVerifyResult = await verifyConsentWithGraph(tenantId);
+      if (!reVerifyResult.verified) {
+        // Clear stale cache
+        await clearStoredConsent(tenantId);
+        return NextResponse.json({
+          verified: false,
+          tenantId,
+          message: reVerifyResult.error === 'consent_not_granted'
+            ? 'Admin consent has been revoked or expired.'
+            : reVerifyResult.error === 'missing_credentials'
+              ? 'Server configuration error. Contact administrator.'
+              : 'Unable to verify consent. Please check your connection and try again.',
+          cachedResult: false,
+          error: reVerifyResult.error,
+        });
+      }
       return NextResponse.json({
         verified: true,
         tenantId,
@@ -193,20 +252,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
     }
 
     // No cached record - verify by trying to get a token
-    const verified = await verifyConsentWithGraph(tenantId);
+    const verifyResult = await verifyConsentWithGraph(tenantId);
 
-    if (verified) {
+    if (verifyResult.verified) {
       // Store the consent record for future checks
       await storeConsentRecord(tenantId, userId, userEmail);
     }
 
     return NextResponse.json({
-      verified,
+      verified: verifyResult.verified,
       tenantId,
-      message: verified
+      message: verifyResult.verified
         ? 'Admin consent verified'
-        : 'Admin consent not granted. A Global Administrator must grant consent.',
+        : verifyResult.error === 'consent_not_granted'
+          ? 'Admin consent not granted. A Global Administrator must grant consent.'
+          : verifyResult.error === 'missing_credentials'
+            ? 'Server configuration error. Contact administrator.'
+            : 'Unable to verify consent. Please check your connection and try again.',
       cachedResult: false,
+      error: verifyResult.error,
     });
 
   } catch (error) {

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -91,8 +91,17 @@ export function Header() {
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full" />
               </Link>
             ))}
+            <a
+              href="https://github.com/ugurkocde/IntuneGet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors duration-200"
+            >
+              <Github className="h-5 w-5" />
+              <span>GitHub</span>
+            </a>
             <Link
-              href="#get-started"
+              href="/auth/signin"
               className={cn(
                 "inline-flex items-center justify-center px-4 py-2 rounded-lg",
                 "text-sm font-medium text-bg-deepest bg-accent-cyan",
@@ -100,7 +109,7 @@ export function Header() {
                 "hover:bg-accent-cyan-bright hover:shadow-glow-cyan"
               )}
             >
-              Join Waitlist
+              Get Started
             </Link>
           </nav>
 
@@ -145,8 +154,18 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <a
+            href="https://github.com/ugurkocde/IntuneGet"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsMenuOpen(false)}
+            className="inline-flex items-center gap-2 text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-2"
+          >
+            <Github className="h-5 w-5" />
+            <span>GitHub</span>
+          </a>
           <Link
-            href="#get-started"
+            href="/auth/signin"
             onClick={() => setIsMenuOpen(false)}
             className={cn(
               "inline-flex items-center justify-center px-4 py-3 rounded-lg mt-2",
@@ -155,7 +174,7 @@ export function Header() {
               "hover:bg-accent-cyan-bright"
             )}
           >
-            Join Waitlist
+            Get Started
           </Link>
         </nav>
       </motion.div>

@@ -20,7 +20,13 @@ interface ConsentStepProps {
   onBack: () => void;
 }
 
-type ConsentStatus = 'checking' | 'not_granted' | 'granted' | 'error';
+type ConsentStatus = 'checking' | 'not_granted' | 'granted' | 'network_error' | 'config_error';
+type ConsentErrorType = 'missing_credentials' | 'network_error' | 'consent_not_granted' | null;
+
+interface ConsentVerifyResult {
+  verified: boolean;
+  error?: ConsentErrorType;
+}
 
 export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
   const { user, getAccessToken, requestAdminConsent } = useMicrosoftAuth();
@@ -32,12 +38,14 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
   const shareableUrl = getShareableConsentUrl(user?.tenantId);
 
   /**
-   * Verify consent via API
+   * Verify consent via API - returns structured result with error type
    */
-  const verifyConsent = useCallback(async (): Promise<boolean> => {
+  const verifyConsent = useCallback(async (): Promise<ConsentVerifyResult> => {
     try {
       const token = await getAccessToken();
-      if (!token) return false;
+      if (!token) {
+        return { verified: false, error: 'network_error' };
+      }
 
       const response = await fetch('/api/auth/verify-consent', {
         method: 'POST',
@@ -47,13 +55,25 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
         },
       });
 
-      if (!response.ok) return false;
+      // Handle network-level errors
+      if (!response.ok && response.status >= 500) {
+        return { verified: false, error: 'network_error' };
+      }
 
       const result = await response.json();
-      return result.verified === true;
+
+      if (result.verified === true) {
+        return { verified: true };
+      }
+
+      // Return the specific error type from API
+      return {
+        verified: false,
+        error: result.error as ConsentErrorType || 'consent_not_granted',
+      };
     } catch (error) {
       console.error('Error verifying consent:', error);
-      return false;
+      return { verified: false, error: 'network_error' };
     }
   }, [getAccessToken]);
 
@@ -63,11 +83,15 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
   useEffect(() => {
     const checkConsent = async () => {
       setStatus('checking');
-      const verified = await verifyConsent();
-      if (verified) {
+      const result = await verifyConsent();
+      if (result.verified) {
         setStatus('granted');
         // Auto-advance after short delay
         setTimeout(() => onNext(), 1500);
+      } else if (result.error === 'missing_credentials') {
+        setStatus('config_error');
+      } else if (result.error === 'network_error') {
+        setStatus('network_error');
       } else {
         setStatus('not_granted');
       }
@@ -99,12 +123,16 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
    */
   const handleVerify = async () => {
     setIsVerifying(true);
-    const verified = await verifyConsent();
+    const result = await verifyConsent();
     setIsVerifying(false);
 
-    if (verified) {
+    if (result.verified) {
       setStatus('granted');
       setTimeout(() => onNext(), 1500);
+    } else if (result.error === 'missing_credentials') {
+      setStatus('config_error');
+    } else if (result.error === 'network_error') {
+      setStatus('network_error');
     } else {
       setStatus('not_granted');
     }
@@ -144,6 +172,86 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
         <p className="text-slate-400">
           Your organization is set up. Continuing to next step...
         </p>
+      </div>
+    );
+  }
+
+  // Server configuration error state
+  if (status === 'config_error') {
+    return (
+      <div className="text-center max-w-2xl mx-auto">
+        <div className="mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500/10 rounded-2xl">
+            <AlertTriangle className="w-10 h-10 text-red-500" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-4">
+          Configuration Error
+        </h1>
+        <p className="text-slate-400 mb-6">
+          The server is not properly configured to verify admin consent.
+          Please contact your administrator.
+        </p>
+        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-6">
+          <p className="text-sm text-slate-500">
+            Technical details: AZURE_AD_CLIENT_SECRET environment variable is missing.
+          </p>
+        </div>
+        <Button
+          onClick={onBack}
+          variant="ghost"
+          className="text-slate-400 hover:text-white"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to welcome
+        </Button>
+      </div>
+    );
+  }
+
+  // Network error state
+  if (status === 'network_error') {
+    return (
+      <div className="text-center max-w-2xl mx-auto">
+        <div className="mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-amber-500/10 rounded-2xl">
+            <AlertTriangle className="w-10 h-10 text-amber-500" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-4">
+          Connection Error
+        </h1>
+        <p className="text-slate-400 mb-6">
+          Unable to verify organization setup. Please check your internet
+          connection and try again.
+        </p>
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            onClick={onBack}
+            variant="ghost"
+            className="text-slate-400 hover:text-white"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <Button
+            onClick={handleVerify}
+            disabled={isVerifying}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {isVerifying ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Retrying...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Try Again
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     );
   }

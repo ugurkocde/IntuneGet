@@ -10,8 +10,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Geist", "system-ui", "sans-serif"],
-        mono: ["Geist Mono", "monospace"],
+        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "monospace"],
       },
       animation: {
         "fade-up": "fade-up 0.5s ease-out forwards",

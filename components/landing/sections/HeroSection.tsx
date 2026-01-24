@@ -1,18 +1,28 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Github, Shield, Package, ArrowRight, Server } from "lucide-react";
+import { Github, Shield, ArrowRight, Server } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "../ui/Badge";
 import { GradientOrb } from "../ui/GradientOrb";
 import { GridBackground } from "../ui/GridBackground";
 import { FadeIn } from "../animations/FadeIn";
 import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
-import { TextReveal } from "../animations/TextReveal";
+import { PackageJourney } from "../animations/PackageJourney";
 import { CountUp } from "../animations/CountUp";
+import { useLandingStats } from "@/hooks/useLandingStats";
+
+const APP_ICONS = [
+  { src: "/icons/Discord.Discord/icon-64.png", alt: "Discord" },
+  { src: "/icons/SlackTechnologies.Slack/icon-64.png", alt: "Slack" },
+  { src: "/icons/Microsoft.VisualStudioCode/icon-64.png", alt: "VS Code" },
+  { src: "/icons/Notion.Notion/icon-64.png", alt: "Notion" },
+  { src: "/icons/Docker.DockerDesktop/icon-64.png", alt: "Docker" },
+];
 
 export function HeroSection() {
   const shouldReduceMotion = useReducedMotion();
+  const { signinClicks, appsDeployed, appsSupported, isLoading } = useLandingStats();
 
   return (
     <section className="relative w-full min-h-screen flex items-center justify-center py-20 md:py-32 overflow-hidden">
@@ -55,6 +65,7 @@ export function HeroSection() {
           <StaggerContainer
             className="flex flex-wrap items-center justify-center gap-3"
             staggerDelay={0.1}
+            animateOnMount
           >
             <StaggerItem>
               <Badge icon={<Github className="h-3.5 w-3.5" />} variant="success">
@@ -68,33 +79,44 @@ export function HeroSection() {
             </StaggerItem>
           </StaggerContainer>
 
-          {/* Headline */}
-          <div className="space-y-4 md:space-y-6 max-w-4xl">
-            <FadeIn delay={0.3}>
-              <h1 className="text-display-lg md:text-5xl lg:text-6xl xl:text-7xl">
-                <span className="block text-white mb-2">Simplify Your</span>
-                <TextReveal
-                  text="Intune App Deployment"
-                  className="gradient-text-cyan"
-                  delay={0.5}
-                />
-              </h1>
+          {/* Winget to Intune Flow Visualization */}
+          <div className="space-y-6 md:space-y-8 max-w-4xl">
+            <FadeIn delay={0.3} animateOnMount>
+              <div className="relative flex items-center justify-center gap-2 md:gap-4 lg:gap-6">
+                {/* Winget - monospace to emphasize CLI origin */}
+                <motion.span
+                  className="text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white font-mono tracking-tight"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4, duration: 0.5 }}
+                >
+                  Winget
+                </motion.span>
+
+                {/* Animated Package Journey */}
+                <PackageJourney appIcons={APP_ICONS} />
+
+                {/* Intune - gradient to emphasize cloud destination */}
+                <motion.span
+                  className="text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold gradient-text-cyan"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4, duration: 0.5 }}
+                >
+                  Intune
+                </motion.span>
+              </div>
             </FadeIn>
 
-            <FadeIn delay={0.5}>
-              <p className="mx-auto max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed">
-                Package and upload your applications to Intune with{" "}
-                <span className="text-accent-cyan font-medium">
-                  Winget integration
-                </span>
-                . Streamline your workflow with automated deployment and
-                enterprise-grade security.
+            <FadeIn delay={0.6} animateOnMount>
+              <p className="mx-auto max-w-xl text-xl md:text-2xl text-zinc-400 leading-relaxed">
+                One-click <span className="text-accent-cyan font-medium">automated</span> app packaging.
               </p>
             </FadeIn>
           </div>
 
           {/* CTA Buttons */}
-          <FadeIn delay={0.7} className="w-full max-w-2xl">
+          <FadeIn delay={0.7} className="w-full max-w-2xl" animateOnMount>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               {/* Primary CTA - Use Web Portal */}
               <Link
@@ -119,69 +141,69 @@ export function HeroSection() {
             </p>
           </FadeIn>
 
-          {/* Stats */}
-          <FadeIn delay={0.9}>
-            <div className="flex flex-wrap items-center justify-center gap-8 pt-8">
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Github className="h-4 w-4 text-accent-cyan" />
-                <span className="text-white font-medium">100% Open Source</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Package className="h-4 w-4 text-accent-cyan" />
-                <span>
-                  <CountUp end={10000} suffix="+" className="text-white font-medium" />{" "}
-                  apps supported
+          {/* Stats - inline with content */}
+          <FadeIn delay={0.9} animateOnMount>
+            <div className="flex items-center justify-center gap-8 md:gap-12 pt-4">
+              <div className="flex flex-col items-center">
+                <span className="text-2xl md:text-3xl font-bold text-white">
+                  {isLoading ? "..." : <CountUp end={appsSupported} />}
                 </span>
+                <span className="text-xs md:text-sm text-zinc-500">Apps Available</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Shield className="h-4 w-4 text-accent-cyan" />
-                <span className="text-white font-medium">Enterprise security</span>
+              <div className="w-px h-10 bg-zinc-700/50" />
+              <div className="flex flex-col items-center">
+                <span className="text-2xl md:text-3xl font-bold text-accent-cyan">
+                  {isLoading ? "..." : <CountUp end={appsDeployed} />}
+                </span>
+                <span className="text-xs md:text-sm text-zinc-500">Deployed</span>
               </div>
+              <div className="w-px h-10 bg-zinc-700/50" />
             </div>
           </FadeIn>
 
-          {/* Scroll indicator */}
-          <motion.div
-            className="absolute bottom-8 left-1/2 -translate-x-1/2"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.2, duration: 0.5 }}
-          >
-            <motion.div
-              className="w-6 h-10 rounded-full border-2 border-zinc-700 flex items-start justify-center p-1"
-              animate={
-                shouldReduceMotion
-                  ? {}
-                  : {
-                      borderColor: [
-                        "rgba(113, 113, 122, 1)",
-                        "rgba(6, 182, 212, 0.5)",
-                        "rgba(113, 113, 122, 1)",
-                      ],
-                    }
-              }
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <motion.div
-                className="w-1.5 h-3 bg-zinc-500 rounded-full"
-                animate={
-                  shouldReduceMotion
-                    ? {}
-                    : {
-                        y: [0, 12, 0],
-                        backgroundColor: [
-                          "rgba(113, 113, 122, 1)",
-                          "rgba(6, 182, 212, 1)",
-                          "rgba(113, 113, 122, 1)",
-                        ],
-                      }
-                }
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            </motion.div>
-          </motion.div>
         </div>
       </div>
+
+      {/* Scroll indicator - fixed at bottom of viewport */}
+      <motion.div
+        className="absolute bottom-6 left-1/2 -translate-x-1/2"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.2, duration: 0.5 }}
+      >
+        <motion.div
+          className="w-6 h-10 rounded-full border-2 border-zinc-700 flex items-start justify-center p-1"
+          animate={
+            shouldReduceMotion
+              ? {}
+              : {
+                  borderColor: [
+                    "rgba(113, 113, 122, 1)",
+                    "rgba(6, 182, 212, 0.5)",
+                    "rgba(113, 113, 122, 1)",
+                  ],
+                }
+          }
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <motion.div
+            className="w-1.5 h-3 bg-zinc-500 rounded-full"
+            animate={
+              shouldReduceMotion
+                ? {}
+                : {
+                    y: [0, 12, 0],
+                    backgroundColor: [
+                      "rgba(113, 113, 122, 1)",
+                      "rgba(6, 182, 212, 1)",
+                      "rgba(113, 113, 122, 1)",
+                    ],
+                  }
+            }
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+        </motion.div>
+      </motion.div>
     </section>
   );
 }
