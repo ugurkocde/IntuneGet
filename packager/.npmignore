@@ -1,0 +1,26 @@
+# Source files (dist is published instead)
+src/
+
+# TypeScript config
+tsconfig.json
+
+# Development files
+*.log
+.env
+.env.*
+
+# Working directories (created at runtime)
+work/
+tools/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+*.test.ts
+__tests__/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,57 @@
+{
+  "name": "@ugurkocde/intuneget-packager",
+  "version": "1.1.0",
+  "description": "Local Windows packager service for IntuneGet - enables true self-hosting without GitHub Actions dependency",
+  "main": "dist/index.js",
+  "bin": {
+    "intuneget-packager": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "intune",
+    "intunewin",
+    "packaging",
+    "winget",
+    "microsoft",
+    "endpoint-manager",
+    "mdm",
+    "psadt"
+  ],
+  "author": "Ugur Koc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ugurkocde/IntuneGet-Website.git",
+    "directory": "packager"
+  },
+  "homepage": "https://github.com/ugurkocde/IntuneGet-Website/tree/main/packager#readme",
+  "bugs": {
+    "url": "https://github.com/ugurkocde/IntuneGet-Website/issues"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "@azure/identity": "^4.0.0",
+    "@azure/msal-node": "^2.6.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.2"
+  }
+}

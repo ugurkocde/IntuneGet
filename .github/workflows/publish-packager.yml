@@ -1,0 +1,61 @@
+name: Publish Packager to npm
+
+on:
+  push:
+    tags:
+      - 'packager-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packager
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Update version (if manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: npm version ${{ inputs.version }} --no-git-tag-version
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          name: IntuneGet Packager ${{ github.ref_name }}
+          body: |
+            ## IntuneGet Packager Release
+
+            Install or update:
+            ```bash
+            npm install -g @intuneget/packager
+            ```
+
+            See [packager/README.md](https://github.com/${{ github.repository }}/blob/main/packager/README.md) for documentation.
+          draft: false
+          prerelease: false

@@ -1,0 +1,830 @@
+name: Create and Deploy IntuneWin Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobId:
+        description: 'Unique job identifier'
+        required: true
+        type: string
+      tenantId:
+        description: 'Target Intune tenant ID'
+        required: true
+        type: string
+      wingetId:
+        description: 'Winget package ID'
+        required: true
+        type: string
+      displayName:
+        description: 'Application display name'
+        required: true
+        type: string
+      publisher:
+        description: 'Publisher name'
+        required: true
+        type: string
+      version:
+        description: 'Application version'
+        required: true
+        type: string
+      installerUrl:
+        description: 'Installer download URL'
+        required: true
+        type: string
+      installerSha256:
+        description: 'Expected SHA256 hash'
+        required: false
+        type: string
+      installerType:
+        description: 'Installer type (exe, msi, etc.)'
+        required: true
+        type: string
+      silentSwitches:
+        description: 'Silent install switches'
+        required: true
+        type: string
+      uninstallCommand:
+        description: 'Uninstall command'
+        required: true
+        type: string
+      callbackUrl:
+        description: 'Webhook URL for results'
+        required: true
+        type: string
+      psadtConfig:
+        description: 'PSADT configuration JSON'
+        required: false
+        type: string
+        default: '{}'
+      detectionRules:
+        description: 'Detection rules JSON array'
+        required: false
+        type: string
+        default: '[]'
+      assignments:
+        description: 'App assignments JSON array'
+        required: false
+        type: string
+        default: '[]'
+      installScope:
+        description: 'Install scope (machine or user)'
+        required: false
+        type: string
+        default: 'machine'
+
+jobs:
+  package-and-deploy:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup callback helper function
+        run: |
+          # Define a reusable callback function with retry logic
+          $callbackFunction = @'
+          function Send-Callback {
+            param(
+              [Parameter(Mandatory=$true)]
+              [hashtable]$Body,
+              [Parameter(Mandatory=$true)]
+              [string]$CallbackUrl,
+              [Parameter(Mandatory=$true)]
+              [string]$CallbackSecret,
+              [int]$MaxRetries = 3,
+              [int]$InitialDelaySeconds = 2
+            )
+
+            $json = $Body | ConvertTo-Json -Depth 5 -Compress
+            $hmac = [System.Security.Cryptography.HMACSHA256]::new([System.Text.Encoding]::UTF8.GetBytes($CallbackSecret))
+            $signature = [Convert]::ToBase64String($hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($json)))
+
+            $headers = @{
+              "Content-Type" = "application/json"
+              "X-Signature" = $signature
+            }
+
+            $attempt = 0
+            $success = $false
+            $lastError = $null
+
+            while (-not $success -and $attempt -lt $MaxRetries) {
+              $attempt++
+              try {
+                $response = Invoke-RestMethod -Uri $CallbackUrl -Method POST -Headers $headers -Body $json -TimeoutSec 30
+                $success = $true
+                Write-Host "Callback sent successfully (attempt $attempt)"
+                return $response
+              } catch {
+                $lastError = $_
+                Write-Host "Callback failed (attempt $attempt/$MaxRetries): $($_.Exception.Message)"
+                if ($attempt -lt $MaxRetries) {
+                  $delay = $InitialDelaySeconds * [Math]::Pow(2, $attempt - 1)
+                  Write-Host "Retrying in $delay seconds..."
+                  Start-Sleep -Seconds $delay
+                }
+              }
+            }
+
+            if (-not $success) {
+              Write-Warning "All callback attempts failed. Last error: $($lastError.Exception.Message)"
+              # Don't throw - allow workflow to continue even if callback fails
+            }
+          }
+          '@
+
+          # Save the function to a file that can be dot-sourced in subsequent steps
+          Set-Content -Path "$env:GITHUB_WORKSPACE\Send-Callback.ps1" -Value $callbackFunction
+          Write-Host "Callback helper function created"
+
+      - name: Check disk space
+        run: |
+          $drive = Get-Volume -DriveLetter C
+          $freeGB = [math]::Round($drive.SizeRemaining / 1GB, 2)
+          Write-Host "Free disk space: $freeGB GB"
+          if ($freeGB -lt 10) {
+            throw "Insufficient disk space: $freeGB GB available, need 10GB minimum"
+          }
+
+      - name: Send initial status callback
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          Write-Host "========================================"
+          Write-Host "Packaging: ${{ inputs.displayName }} v${{ inputs.version }}"
+          Write-Host "Publisher: ${{ inputs.publisher }}"
+          Write-Host "Winget ID: ${{ inputs.wingetId }}"
+          Write-Host "========================================"
+
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "packaging"
+            message = "Starting packaging pipeline..."
+            progress = 5
+            runId = "${{ github.run_id }}"
+            runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+      - name: Download tools
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "packaging"
+            message = "Downloading packaging tools..."
+            progress = 10
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+          $toolsDir = ".\tools"
+          New-Item -ItemType Directory -Path $toolsDir -Force
+          Invoke-WebRequest -Uri "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe" -OutFile "$toolsDir\IntuneWinAppUtil.exe"
+          Invoke-WebRequest -Uri "https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip" -OutFile "psadt.zip"
+          Expand-Archive -Path "psadt.zip" -DestinationPath ".\psadt"
+
+      - name: Download and verify installer
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "packaging"
+            message = "Downloading installer..."
+            progress = 20
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+          $installerDir = ".\installer"
+          New-Item -ItemType Directory -Path $installerDir -Force
+
+          $url = "${{ inputs.installerUrl }}"
+          $fileName = [System.IO.Path]::GetFileName([System.Uri]::new($url).LocalPath)
+          if ([string]::IsNullOrEmpty($fileName)) { $fileName = "installer.${{ inputs.installerType }}" }
+
+          Invoke-WebRequest -Uri $url -OutFile "$installerDir\$fileName" -UseBasicParsing
+
+          $expectedHash = "${{ inputs.installerSha256 }}"
+          if ($expectedHash -and $expectedHash -ne "") {
+            $actualHash = (Get-FileHash "$installerDir\$fileName" -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash) {
+              throw "SHA256 mismatch! Expected: $expectedHash, Got: $actualHash"
+            }
+            Write-Host "SHA256 verified successfully"
+          }
+
+          echo "INSTALLER_PATH=$installerDir\$fileName" >> $env:GITHUB_ENV
+          echo "INSTALLER_FILENAME=$fileName" >> $env:GITHUB_ENV
+
+      - name: Create PSADT package
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+          PSADT_CONFIG: ${{ inputs.psadtConfig }}
+          INPUT_JOB_ID: ${{ inputs.jobId }}
+          INPUT_CALLBACK_URL: ${{ inputs.callbackUrl }}
+          INPUT_SILENT_SWITCHES: ${{ inputs.silentSwitches }}
+          INPUT_UNINSTALL_COMMAND: ${{ inputs.uninstallCommand }}
+          INPUT_DISPLAY_NAME: ${{ inputs.displayName }}
+          INPUT_PUBLISHER: ${{ inputs.publisher }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_WINGET_ID: ${{ inputs.wingetId }}
+          INPUT_INSTALLER_TYPE: ${{ inputs.installerType }}
+          INPUT_INSTALL_SCOPE: ${{ inputs.installScope }}
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\scripts\Create-PSADTPackage.ps1"
+
+      - name: Create IntuneWin package
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "packaging"
+            message = "Creating .intunewin package..."
+            progress = 50
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+          $outputDir = ".\output"
+          New-Item -ItemType Directory -Path $outputDir -Force
+
+          & .\tools\IntuneWinAppUtil.exe -c ".\package" -s "Invoke-AppDeployToolkit.exe" -o $outputDir -q
+
+          $intunewinFile = Get-ChildItem $outputDir -Filter "*.intunewin" | Select-Object -First 1
+          if (-not $intunewinFile) {
+            throw "IntuneWin package was not created"
+          }
+
+          # Rename package to use display name for better identification in Intune
+          $displayName = '${{ inputs.displayName }}'
+          $safeDisplayName = $displayName -replace '[\\/:*?"<>|]', '_'
+          $packageFileName = "$safeDisplayName.intunewin"
+          $newPath = Join-Path $outputDir $packageFileName
+
+          if ($intunewinFile.Name -ne $packageFileName) {
+            Move-Item $intunewinFile.FullName $newPath -Force
+            $intunewinFile = Get-Item $newPath
+          }
+
+          echo "INTUNEWIN_PATH=$($intunewinFile.FullName)" >> $env:GITHUB_ENV
+          echo "INTUNEWIN_SIZE=$($intunewinFile.Length)" >> $env:GITHUB_ENV
+          echo "PACKAGE_FILENAME=$packageFileName" >> $env:GITHUB_ENV
+          Write-Host "Created package: $($intunewinFile.Name) ($([math]::Round($intunewinFile.Length/1MB, 2)) MB)"
+
+      - name: Extract encryption info and encrypted content file
+        run: |
+          $tempDir = ".\intunewin-extract"
+          Expand-Archive -Path "$env:INTUNEWIN_PATH" -DestinationPath $tempDir -Force
+
+          $detectionXml = Get-ChildItem $tempDir -Filter "Detection.xml" -Recurse | Select-Object -First 1
+          if ($detectionXml) {
+            [xml]$xml = Get-Content $detectionXml.FullName
+            $encInfo = @{
+              encryptionKey = $xml.ApplicationInfo.EncryptionInfo.EncryptionKey
+              macKey = $xml.ApplicationInfo.EncryptionInfo.macKey
+              initializationVector = $xml.ApplicationInfo.EncryptionInfo.initializationVector
+              mac = $xml.ApplicationInfo.EncryptionInfo.mac
+              profileIdentifier = "ProfileVersion1"
+              fileDigest = $xml.ApplicationInfo.EncryptionInfo.fileDigest
+              fileDigestAlgorithm = $xml.ApplicationInfo.EncryptionInfo.fileDigestAlgorithm
+            }
+            $encJson = $encInfo | ConvertTo-Json -Compress
+            echo "ENCRYPTION_INFO=$encJson" >> $env:GITHUB_ENV
+            echo "UNENCRYPTED_SIZE=$($xml.ApplicationInfo.UnencryptedContentSize)" >> $env:GITHUB_ENV
+
+            # Extract the encrypted content file name from metadata
+            $encryptedFileName = $xml.ApplicationInfo.FileName
+            Write-Host "Encrypted content file name from metadata: $encryptedFileName"
+
+            # Find the encrypted content file in the extracted archive
+            $encryptedFile = Get-ChildItem $tempDir -Filter $encryptedFileName -Recurse | Select-Object -First 1
+            if ($encryptedFile) {
+              $encryptedFilePath = $encryptedFile.FullName
+              $encryptedFileSize = $encryptedFile.Length
+              Write-Host "Found encrypted file: $encryptedFilePath ($([math]::Round($encryptedFileSize/1MB, 2)) MB)"
+              echo "ENCRYPTED_FILE_PATH=$encryptedFilePath" >> $env:GITHUB_ENV
+              echo "ENCRYPTED_FILE_SIZE=$encryptedFileSize" >> $env:GITHUB_ENV
+            } else {
+              Write-Host "WARNING: Could not find encrypted file '$encryptedFileName', falling back to .intunewin"
+              echo "ENCRYPTED_FILE_PATH=$env:INTUNEWIN_PATH" >> $env:GITHUB_ENV
+              echo "ENCRYPTED_FILE_SIZE=$env:INTUNEWIN_SIZE" >> $env:GITHUB_ENV
+            }
+          }
+
+      - name: Clean up temp files
+        run: |
+          Remove-Item -Path ".\installer" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path ".\psadt" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path ".\package" -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: Authenticate to Microsoft Graph
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          $tenantId = "${{ inputs.tenantId }}"
+          Write-Host "::add-mask::$tenantId"
+          $body = @{
+            client_id = $env:AZURE_CLIENT_ID
+            client_secret = $env:AZURE_CLIENT_SECRET
+            scope = "https://graph.microsoft.com/.default"
+            grant_type = "client_credentials"
+          }
+
+          $tokenResponse = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Method POST -Body $body -ContentType "application/x-www-form-urlencoded"
+
+          $token = $tokenResponse.access_token
+          Write-Host "::add-mask::$token"
+          echo "GRAPH_TOKEN=$token" >> $env:GITHUB_ENV
+
+      - name: Upload to Intune
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+          DETECTION_RULES: ${{ inputs.detectionRules }}
+          PSADT_CONFIG: ${{ inputs.psadtConfig }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "uploading"
+            message = "Uploading to Microsoft Intune..."
+            progress = 70
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+          $headers = @{
+            "Authorization" = "Bearer $env:GRAPH_TOKEN"
+            "Content-Type" = "application/json"
+          }
+
+          # Parse PSADT config for restart behavior
+          $restartBehavior = "suppress"  # Default
+          if ($env:PSADT_CONFIG -and $env:PSADT_CONFIG -ne '{}') {
+            try {
+              $psadtConfig = $env:PSADT_CONFIG | ConvertFrom-Json -AsHashtable
+              if ($psadtConfig.restartBehavior) {
+                # Map frontend values to Intune API values
+                $restartBehavior = switch ($psadtConfig.restartBehavior) {
+                  'Suppress' { 'suppress' }
+                  'Force' { 'force' }
+                  'Prompt' { 'basedOnReturnCode' }
+                  'Defer' { 'basedOnReturnCode' }
+                  default { 'suppress' }
+                }
+                Write-Host "Restart behavior set to: $restartBehavior"
+              }
+            } catch {
+              Write-Host "Warning: Could not parse PSADT config for restart behavior, using default"
+            }
+          }
+
+          # Parse and convert detection rules to Graph API format
+          $graphRules = @()
+          $detectionRulesJson = $env:DETECTION_RULES
+          if ($detectionRulesJson -and $detectionRulesJson -ne '[]') {
+            try {
+              $rules = $detectionRulesJson | ConvertFrom-Json
+              foreach ($rule in $rules) {
+                $graphRule = $null
+                switch ($rule.type) {
+                  'file' {
+                    $graphRule = @{
+                      '@odata.type' = '#microsoft.graph.win32LobAppFileSystemRule'
+                      ruleType = 'detection'
+                      path = $rule.path
+                      fileOrFolderName = $rule.fileOrFolderName
+                      check32BitOn64System = if ($rule.check32BitOn64System) { $true } else { $false }
+                      operationType = switch ($rule.detectionType) {
+                        'exists' { 'exists' }
+                        'notExists' { 'notExists' }
+                        'version' { 'version' }
+                        'dateModified' { 'modifiedDate' }
+                        'dateCreated' { 'createdDate' }
+                        'string' { 'string' }
+                        'sizeInMB' { 'sizeInMB' }
+                        default { 'exists' }
+                      }
+                      operator = if ($rule.operator) { $rule.operator } else { 'notConfigured' }
+                      comparisonValue = $rule.detectionValue
+                    }
+                  }
+                  'registry' {
+                    $graphRule = @{
+                      '@odata.type' = '#microsoft.graph.win32LobAppRegistryRule'
+                      ruleType = 'detection'
+                      keyPath = $rule.keyPath
+                      valueName = $rule.valueName
+                      check32BitOn64System = if ($rule.check32BitOn64System) { $true } else { $false }
+                      operationType = switch ($rule.detectionType) {
+                        'exists' { 'exists' }
+                        'notExists' { 'notExists' }
+                        'string' { 'string' }
+                        'integer' { 'integer' }
+                        'version' { 'version' }
+                        default { 'exists' }
+                      }
+                      operator = if ($rule.operator) { $rule.operator } else { 'notConfigured' }
+                      comparisonValue = $rule.detectionValue
+                    }
+                  }
+                  'msi' {
+                    $graphRule = @{
+                      '@odata.type' = '#microsoft.graph.win32LobAppProductCodeRule'
+                      ruleType = 'detection'
+                      productCode = $rule.productCode
+                      productVersionOperator = if ($rule.productVersionOperator) { $rule.productVersionOperator } else { 'notConfigured' }
+                      productVersion = $rule.productVersion
+                    }
+                  }
+                  'script' {
+                    $graphRule = @{
+                      '@odata.type' = '#microsoft.graph.win32LobAppPowerShellScriptRule'
+                      ruleType = 'detection'
+                      scriptContent = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($rule.scriptContent))
+                      enforceSignatureCheck = if ($rule.enforceSignatureCheck) { $true } else { $false }
+                      runAs32Bit = if ($rule.runAs32Bit) { $true } else { $false }
+                      displayName = 'Detection Script'
+                    }
+                  }
+                }
+                if ($graphRule) {
+                  $graphRules += $graphRule
+                }
+              }
+            } catch {
+              Write-Host "Warning: Could not parse detection rules: $_"
+            }
+          }
+
+          # If no detection rules provided, create a default script-based detection
+          if ($graphRules.Count -eq 0) {
+            Write-Host "No detection rules provided, using default registry-based detection script"
+            $displayName = '${{ inputs.displayName }}'
+            $wingetId = '${{ inputs.wingetId }}'
+            $scriptLines = @(
+              "# Auto-generated detection script for $displayName"
+              "`$ErrorActionPreference = 'SilentlyContinue'"
+              "`$AppName = `"$displayName`""
+              "`$WingetId = `"$wingetId`""
+              "`$SanitizedWingetId = `$WingetId -replace '[\.\-]', '_'"
+              ""
+              "# Check 1: IntuneGet registry marker (HKLM for machine-scope, HKCU for user-scope)"
+              "`$intuneGetPaths = @("
+              "    `"HKLM:\SOFTWARE\IntuneGet\Apps\`$SanitizedWingetId`","
+              "    `"HKCU:\SOFTWARE\IntuneGet\Apps\`$SanitizedWingetId`""
+              ")"
+              "foreach (`$intuneGetPath in `$intuneGetPaths) {"
+              "    if (Test-Path `$intuneGetPath) {"
+              "        `$marker = Get-ItemProperty `$intuneGetPath -ErrorAction SilentlyContinue"
+              "        if (`$marker.DisplayName) {"
+              "            Write-Output `"Detected via IntuneGet marker: `$(`$marker.DisplayName) v`$(`$marker.Version)`""
+              "            exit 0"
+              "        }"
+              "    }"
+              "}"
+              ""
+              "# Check 2: Traditional uninstall registry (HKLM for machine-scope, HKCU for user-scope)"
+              "`$uninstallPaths = @("
+              "    `"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*`","
+              "    `"HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*`","
+              "    `"HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*`""
+              ")"
+              ""
+              "foreach (`$path in `$uninstallPaths) {"
+              "    `$apps = Get-ItemProperty `$path -ErrorAction SilentlyContinue |"
+              "        Where-Object { `$_.DisplayName -like `"*`$AppName*`" }"
+              "    if (`$apps) {"
+              "        Write-Output `"Detected: `$(`$apps[0].DisplayName)`""
+              "        exit 0"
+              "    }"
+              "}"
+              ""
+              "exit 1"
+            )
+            $detectionScript = $scriptLines -join "`r`n"
+            $graphRules = @(
+              @{
+                '@odata.type' = '#microsoft.graph.win32LobAppPowerShellScriptRule'
+                ruleType = 'detection'
+                scriptContent = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($detectionScript))
+                enforceSignatureCheck = $false
+                runAs32Bit = $false
+                displayName = 'Detection Script'
+              }
+            )
+          }
+
+          Write-Host "Detection rules configured: $($graphRules.Count) rule(s)"
+
+          # Load app icon if available
+          $largeIcon = $null
+          $iconPath = "icons/${{ inputs.wingetId }}/icon-128.png"
+          if (Test-Path $iconPath) {
+            $iconBytes = [System.IO.File]::ReadAllBytes($iconPath)
+            $iconBase64 = [System.Convert]::ToBase64String($iconBytes)
+            $largeIcon = @{
+              type = "image/png"
+              value = $iconBase64
+            }
+            Write-Host "Loaded app icon from $iconPath"
+          } else {
+            Write-Host "No icon found at $iconPath, deploying without icon"
+          }
+
+          # 1. Create the Win32 app in Intune
+          $appBody = @{
+            "@odata.type" = "#microsoft.graph.win32LobApp"
+            displayName = "${{ inputs.displayName }}"
+            publisher = "${{ inputs.publisher }}"
+            description = "Deployed via IntuneGet from Winget: ${{ inputs.wingetId }}"
+            largeIcon = $largeIcon
+            fileName = "$env:PACKAGE_FILENAME"
+            installCommandLine = "Invoke-AppDeployToolkit.exe"
+            uninstallCommandLine = "Invoke-AppDeployToolkit.exe -DeploymentType Uninstall"
+            installExperience = @{
+              runAsAccount = if ("${{ inputs.installScope }}" -eq "user") { "user" } else { "system" }
+              deviceRestartBehavior = $restartBehavior
+            }
+            returnCodes = @(
+              @{ returnCode = 0; type = "success" }
+              @{ returnCode = 1707; type = "success" }
+              @{ returnCode = 3010; type = "softReboot" }
+              @{ returnCode = 1641; type = "hardReboot" }
+              @{ returnCode = 1618; type = "retry" }
+              @{ returnCode = 60012; type = "retry" }  # No user logged in - retry later for per-user installs
+            )
+            rules = $graphRules
+            msiInformation = $null
+            setupFilePath = "Invoke-AppDeployToolkit.exe"
+            minimumSupportedWindowsRelease = "1903"
+          } | ConvertTo-Json -Depth 10
+
+          $app = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps" -Method POST -Headers $headers -Body $appBody
+          $appId = $app.id
+          Write-Host "Created Intune app: $appId"
+          echo "INTUNE_APP_ID=$appId" >> $env:GITHUB_ENV
+
+          # 2. Create content version
+          $contentVersion = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions" -Method POST -Headers $headers -Body "{}"
+          $contentVersionId = $contentVersion.id
+
+          # 3. Create file entry - use the extracted encrypted file size
+          $encryptedFileSize = [long]$env:ENCRYPTED_FILE_SIZE
+          $unencryptedSize = [long]$env:UNENCRYPTED_SIZE
+          $encInfo = $env:ENCRYPTION_INFO | ConvertFrom-Json
+
+          Write-Host "Creating file entry: size=$unencryptedSize, sizeEncrypted=$encryptedFileSize"
+
+          $fileBody = @{
+            "@odata.type" = "#microsoft.graph.mobileAppContentFile"
+            name = "$env:PACKAGE_FILENAME"
+            size = $unencryptedSize
+            sizeEncrypted = $encryptedFileSize
+            manifest = $null
+            isDependency = $false
+          } | ConvertTo-Json
+
+          $file = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId/files" -Method POST -Headers $headers -Body $fileBody
+          $fileId = $file.id
+
+          # 4. Wait for Azure Storage URI
+          $maxWait = 60
+          $waited = 0
+          do {
+            Start-Sleep -Seconds 2
+            $waited += 2
+            $fileStatus = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId/files/$fileId" -Headers $headers
+          } while ($fileStatus.uploadState -eq "azureStorageUriRequestPending" -and $waited -lt $maxWait)
+
+          if ($fileStatus.uploadState -ne "azureStorageUriRequestSuccess") {
+            throw "Failed to get Azure Storage URI. State: $($fileStatus.uploadState)"
+          }
+
+          $azureStorageUri = $fileStatus.azureStorageUri
+          Write-Host "Got Azure Storage URI for upload"
+
+          # Send progress update
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "uploading"
+            message = "Uploading package content..."
+            progress = 80
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+          # 5. Upload encrypted content file in chunks (6MB blocks) - using ISO-8859-1 encoding per MS reference
+          $chunkSize = 6MB
+          $uploadFilePath = $env:ENCRYPTED_FILE_PATH
+          Write-Host "Uploading file: $uploadFilePath"
+          $fileStream = [System.IO.File]::OpenRead($uploadFilePath)
+          $buffer = New-Object byte[] $chunkSize
+          $blockIds = @()
+          $blockNum = 0
+          $iso = [System.Text.Encoding]::GetEncoding("iso-8859-1")
+
+          while (($bytesRead = $fileStream.Read($buffer, 0, $chunkSize)) -gt 0) {
+            # Block ID format must match reference: ASCII bytes of 4-digit padded number
+            $blockId = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($blockNum.ToString("0000")))
+            $blockIds += $blockId
+
+            $chunkData = $buffer[0..($bytesRead-1)]
+            $chunkBody = $iso.GetString($chunkData)
+            $blockUri = "$azureStorageUri&comp=block&blockid=$([System.Uri]::EscapeDataString($blockId))"
+
+            $chunkHeaders = @{
+              "x-ms-blob-type" = "BlockBlob"
+            }
+            Invoke-WebRequest -Uri $blockUri -Method PUT -Headers $chunkHeaders -Body $chunkBody -ContentType "text/plain; charset=iso-8859-1" -UseBasicParsing | Out-Null
+            if ($blockNum % 5 -eq 0 -or $blockNum -eq 0) {
+              Write-Host "Upload progress: chunk $blockNum"
+            }
+            $blockNum++
+          }
+          $fileStream.Close()
+          Write-Host "Upload complete: $blockNum chunks uploaded"
+
+          # 6. Commit blocks to Azure Storage
+          $blockListXml = '<?xml version="1.0" encoding="utf-8"?><BlockList>'
+          foreach ($id in $blockIds) {
+            $blockListXml += "<Latest>$id</Latest>"
+          }
+          $blockListXml += '</BlockList>'
+
+          $commitUri = "$azureStorageUri&comp=blocklist"
+          Invoke-WebRequest -Uri $commitUri -Method PUT -Body $blockListXml -ContentType "text/plain; charset=UTF-8" -UseBasicParsing | Out-Null
+          Write-Host "Block list committed to Azure Storage"
+
+          # 7. Commit file with encryption info
+          $commitBody = @{
+            fileEncryptionInfo = @{
+              encryptionKey = $encInfo.encryptionKey
+              macKey = $encInfo.macKey
+              initializationVector = $encInfo.initializationVector
+              mac = $encInfo.mac
+              profileIdentifier = $encInfo.profileIdentifier
+              fileDigest = $encInfo.fileDigest
+              fileDigestAlgorithm = $encInfo.fileDigestAlgorithm
+            }
+          } | ConvertTo-Json -Depth 5
+
+          Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId/files/$fileId/commit" -Method POST -Headers $headers -Body $commitBody
+
+          # 8. Wait for commit to complete
+          $maxWait = 120
+          $waited = 0
+          do {
+            Start-Sleep -Seconds 3
+            $waited += 3
+            $fileStatus = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId/files/$fileId" -Headers $headers
+          } while ($fileStatus.uploadState -eq "commitFilePending" -and $waited -lt $maxWait)
+
+          if ($fileStatus.uploadState -ne "commitFileSuccess") {
+            throw "File commit failed. State: $($fileStatus.uploadState)"
+          }
+
+          # 9. Update app with committed content version
+          $updateBody = @{
+            "@odata.type" = "#microsoft.graph.win32LobApp"
+            committedContentVersion = $contentVersionId
+          } | ConvertTo-Json
+
+          Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId" -Method PATCH -Headers $headers -Body $updateBody
+
+          $intuneUrl = "https://intune.microsoft.com/#view/Microsoft_Intune_Apps/SettingsMenu/~/0/appId/$appId"
+          echo "INTUNE_APP_URL=$intuneUrl" >> $env:GITHUB_ENV
+
+          Write-Host "========================================"
+          Write-Host "SUCCESS: Package deployed to Intune"
+          Write-Host "App ID: $appId"
+          Write-Host "URL: $intuneUrl"
+          Write-Host "========================================"
+
+      - name: Apply assignments
+        if: success()
+        env:
+          ASSIGNMENTS: ${{ inputs.assignments }}
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          $assignmentsJson = $env:ASSIGNMENTS
+          if (-not $assignmentsJson -or $assignmentsJson -eq '[]') {
+            Write-Host "No assignments configured, skipping..."
+            exit 0
+          }
+
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "uploading"
+            message = "Applying assignments..."
+            progress = 90
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+          $headers = @{
+            "Authorization" = "Bearer $env:GRAPH_TOKEN"
+            "Content-Type" = "application/json"
+          }
+
+          $assignments = $assignmentsJson | ConvertFrom-Json
+          $graphAssignments = @()
+
+          foreach ($assignment in $assignments) {
+            $target = switch ($assignment.type) {
+              'allUsers' {
+                @{ '@odata.type' = '#microsoft.graph.allLicensedUsersAssignmentTarget' }
+              }
+              'allDevices' {
+                @{ '@odata.type' = '#microsoft.graph.allDevicesAssignmentTarget' }
+              }
+              'group' {
+                @{
+                  '@odata.type' = '#microsoft.graph.groupAssignmentTarget'
+                  groupId = $assignment.groupId
+                }
+              }
+            }
+
+            $graphAssignments += @{
+              '@odata.type' = '#microsoft.graph.mobileAppAssignment'
+              intent = $assignment.intent
+              target = $target
+              settings = @{
+                '@odata.type' = '#microsoft.graph.win32LobAppAssignmentSettings'
+                notifications = 'showAll'
+                deliveryOptimizationPriority = 'notConfigured'
+              }
+            }
+          }
+
+          $body = @{
+            mobileAppAssignments = $graphAssignments
+          } | ConvertTo-Json -Depth 10
+
+          Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$env:INTUNE_APP_ID/assign" -Method POST -Headers $headers -Body $body
+          Write-Host "Applied $($graphAssignments.Count) assignment(s) to app"
+
+      - name: Send success callback
+        if: success()
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "deployed"
+            message = "Successfully deployed to Intune"
+            progress = 100
+            intuneAppId = "$env:INTUNE_APP_ID"
+            intuneAppUrl = "$env:INTUNE_APP_URL"
+            runId = "${{ github.run_id }}"
+            runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET -MaxRetries 5 | Out-Null
+
+          # Write GitHub Job Summary
+          $packageSizeMB = [math]::Round([long]$env:INTUNEWIN_SIZE / 1MB, 2)
+          $summary = @(
+            "## Intune Package Deployed",
+            "",
+            "| Property | Value |",
+            "|----------|-------|",
+            "| **App Name** | ${{ inputs.displayName }} |",
+            "| **Version** | ${{ inputs.version }} |",
+            "| **Publisher** | ${{ inputs.publisher }} |",
+            "| **Package ID** | ${{ inputs.wingetId }} |",
+            "| **Intune App ID** | $env:INTUNE_APP_ID |",
+            "| **Package Size** | $packageSizeMB MB |",
+            "",
+            "[View in Intune]($env:INTUNE_APP_URL)"
+          ) -join "`n"
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Send failure callback
+        if: failure()
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          Send-Callback -Body @{
+            jobId = "${{ inputs.jobId }}"
+            status = "failed"
+            message = "Pipeline failed - check run logs"
+            progress = 0
+            runId = "${{ github.run_id }}"
+            runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } -CallbackUrl "${{ inputs.callbackUrl }}" -CallbackSecret $env:CALLBACK_SECRET -MaxRetries 5 | Out-Null
+
+          # Write GitHub Job Summary for failure
+          $summary = @(
+            "## Intune Package Deployment Failed",
+            "",
+            "| Property | Value |",
+            "|----------|-------|",
+            "| **App Name** | ${{ inputs.displayName }} |",
+            "| **Version** | ${{ inputs.version }} |",
+            "| **Publisher** | ${{ inputs.publisher }} |",
+            "| **Package ID** | ${{ inputs.wingetId }} |",
+            "| **Status** | Failed |",
+            "",
+            "Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          ) -join "`n"
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append

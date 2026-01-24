@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# Secret detection patterns
+echo "Checking for potential secrets..."
+
+# Check staged files for common secret patterns
+PATTERNS="PRIVATE[_-]KEY|SECRET[_-]KEY|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]+|sk-[a-zA-Z0-9]{48}"
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -n "$STAGED_FILES" ]; then
+  MATCHES=$(echo "$STAGED_FILES" | xargs grep -lE "$PATTERNS" 2>/dev/null | grep -v '.env.example' | grep -v '.husky/pre-commit' || true)
+
+  if [ -n "$MATCHES" ]; then
+    echo ""
+    echo "WARNING: Potential secrets detected in:"
+    echo "$MATCHES"
+    echo ""
+    echo "Please review these files and remove any secrets before committing."
+    echo "If these are false positives, you can skip this check with: git commit --no-verify"
+    exit 1
+  fi
+fi
+
+echo "No secrets detected."
+
+# Run lint
+npm run lint

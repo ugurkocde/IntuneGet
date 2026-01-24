@@ -1,0 +1,462 @@
+name: Sync Winget Manifests
+
+on:
+  # Automatically run after Build Curated App List completes
+  workflow_run:
+    workflows: ["Build Curated App List"]
+    types: [completed]
+    branches: [master]
+  schedule:
+    # Run daily at 02:00 UTC (fallback if app list hasn't changed)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      app_ids:
+        description: 'Specific app IDs to sync (comma-separated, or "all")'
+        required: false
+        default: 'all'
+      limit:
+        description: 'Maximum number of apps to process (for testing)'
+        required: false
+        default: '0'
+        type: string
+      force_refresh:
+        description: 'Force refresh even if version unchanged'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Prevent concurrent runs - wait for build-app-list to fully complete
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  GITHUB_RAW_BASE: 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests'
+  APP_LIMIT: ${{ github.event.inputs.limit || '0' }}
+
+jobs:
+  sync-manifests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Only run if triggered manually, by schedule, or if the upstream workflow succeeded
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch the latest commit (important when triggered by workflow_run)
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync manifests
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
+          APP_LIMIT: ${{ github.event.inputs.limit || '0' }}
+          FORCE_REFRESH: ${{ github.event.inputs.force_refresh || 'false' }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const https = require('https');
+          const { createClient } = require('@supabase/supabase-js');
+          const yaml = require('yaml');
+
+          const supabaseUrl = process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+          if (!supabaseUrl || !supabaseKey) {
+            console.error('Supabase credentials not configured');
+            process.exit(1);
+          }
+
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          const GITHUB_RAW_BASE = process.env.GITHUB_RAW_BASE;
+
+          // Helper to fetch URL
+          function fetchUrl(url) {
+            return new Promise((resolve, reject) => {
+              https.get(url, {
+                headers: { 'User-Agent': 'IntuneGet-Manifest-Sync' }
+              }, (res) => {
+                if (res.statusCode === 404) {
+                  resolve(null);
+                  return;
+                }
+                if (res.statusCode !== 200) {
+                  reject(new Error(`HTTP ${res.statusCode}`));
+                  return;
+                }
+
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => resolve(data));
+              }).on('error', reject);
+            });
+          }
+
+          // Build manifest URL
+          function buildManifestUrl(wingetId, version, type = 'installer') {
+            const parts = wingetId.split('.');
+            if (parts.length < 2) return null;
+
+            const publisher = parts[0];
+            // Join remaining parts with '/' for folder path
+            const namePath = parts.slice(1).join('/');
+            const firstLetter = publisher.charAt(0).toLowerCase();
+
+            return `${GITHUB_RAW_BASE}/${firstLetter}/${publisher}/${namePath}/${version}/${wingetId}.${type}.yaml`;
+          }
+
+          // Build version list URL
+          function buildVersionListUrl(wingetId) {
+            const parts = wingetId.split('.');
+            if (parts.length < 2) return null;
+
+            const publisher = parts[0];
+            // Join remaining parts with '/' for folder path, URL-encode special chars
+            const namePath = parts.slice(1).map(p => encodeURIComponent(p)).join('/');
+            const firstLetter = publisher.charAt(0).toLowerCase();
+
+            // GitHub API to list directories
+            return `https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/${firstLetter}/${encodeURIComponent(publisher)}/${namePath}`;
+          }
+
+          // Fetch available versions for a package
+          async function fetchVersions(wingetId) {
+            const url = buildVersionListUrl(wingetId);
+            if (!url) return [];
+
+            try {
+              const response = await fetchUrl(url);
+              if (!response) return [];
+
+              const dirs = JSON.parse(response);
+
+              // Filter to only version-like directories (contain digits, dots, etc.)
+              // Exclude variant folders like 'EXE', 'Dev', 'zh-TW', 'Host', 'VDI', 'Free'
+              const versionPattern = /^\d+[\d._-]*\d*$/;
+
+              return dirs
+                .filter(d => d.type === 'dir')
+                .map(d => d.name)
+                .filter(name => versionPattern.test(name) || name.includes('.'))
+                .filter(name => {
+                  // Additional filter: must start with a digit
+                  return /^\d/.test(name);
+                })
+                .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+            } catch (e) {
+              console.error(`Failed to fetch versions for ${wingetId}:`, e.message);
+              return [];
+            }
+          }
+
+          // Fetch and parse installer manifest
+          async function fetchInstallerManifest(wingetId, version) {
+            const url = buildManifestUrl(wingetId, version, 'installer');
+            if (!url) return null;
+
+            try {
+              const content = await fetchUrl(url);
+              if (!content) return null;
+
+              return yaml.parse(content);
+            } catch (e) {
+              console.error(`Failed to fetch manifest for ${wingetId}@${version}:`, e.message);
+              return null;
+            }
+          }
+
+          // Fetch locale manifest for description
+          async function fetchLocaleManifest(wingetId, version) {
+            // Try en-US first, then default locale
+            const locales = ['locale.en-US', 'locale'];
+
+            for (const locale of locales) {
+              const url = buildManifestUrl(wingetId, version, locale);
+              if (!url) continue;
+
+              try {
+                const content = await fetchUrl(url);
+                if (content) {
+                  return yaml.parse(content);
+                }
+              } catch (e) {
+                // Continue to next locale
+              }
+            }
+            return null;
+          }
+
+          // Main sync function
+          async function syncManifests() {
+            const appIds = process.env.APP_IDS;
+            const appLimit = parseInt(process.env.APP_LIMIT || '0', 10);
+            const forceRefresh = process.env.FORCE_REFRESH === 'true';
+
+            // Update sync status
+            await supabase.from('curated_sync_status').upsert({
+              id: 'sync-manifests',
+              last_run_started_at: new Date().toISOString(),
+              last_run_status: 'running',
+              updated_at: new Date().toISOString()
+            });
+
+            let apps = [];
+
+            if (appIds === 'all') {
+              // Fetch all curated apps from database
+              const { data, error } = await supabase
+                .from('curated_apps')
+                .select('winget_id, latest_version')
+                .eq('is_verified', true)
+                .order('popularity_rank', { ascending: true });
+
+              if (error) {
+                throw error;
+              }
+              apps = data || [];
+            } else {
+              // Parse specific app IDs
+              apps = appIds.split(',').map(id => ({ winget_id: id.trim() }));
+            }
+
+            // Apply limit if specified (for testing)
+            if (appLimit > 0 && apps.length > appLimit) {
+              console.log(`Limiting to ${appLimit} apps (from ${apps.length} total)`);
+              apps = apps.slice(0, appLimit);
+            }
+
+            console.log(`Syncing manifests for ${apps.length} apps...`);
+
+            let synced = 0;
+            let failed = 0;
+            let skipped = 0;
+            let newVersions = [];
+
+            // Process in batches
+            const batchSize = 10;
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+
+            for (let i = 0; i < apps.length; i += batchSize) {
+              const batch = apps.slice(i, i + batchSize);
+
+              await Promise.all(batch.map(async (app) => {
+                try {
+                  // Fetch available versions
+                  const versions = await fetchVersions(app.winget_id);
+
+                  if (versions.length === 0) {
+                    console.log(`No versions found for ${app.winget_id}`);
+                    skipped++;
+                    return;
+                  }
+
+                  const latestVersion = versions[0];
+
+                  // Check if we already have this version
+                  if (!forceRefresh) {
+                    const { data: existing } = await supabase
+                      .from('version_history')
+                      .select('version')
+                      .eq('winget_id', app.winget_id)
+                      .eq('version', latestVersion)
+                      .single();
+
+                    if (existing) {
+                      skipped++;
+                      return;
+                    }
+                  }
+
+                  // Fetch installer manifest
+                  const installerManifest = await fetchInstallerManifest(app.winget_id, latestVersion);
+
+                  if (!installerManifest) {
+                    console.log(`No installer manifest for ${app.winget_id}@${latestVersion}`);
+                    failed++;
+                    return;
+                  }
+
+                  // Fetch locale manifest for metadata
+                  const localeManifest = await fetchLocaleManifest(app.winget_id, latestVersion);
+
+                  // Extract installer data
+                  const installers = installerManifest.Installers || [];
+                  const defaultInstaller = installers[0] || {};
+
+                  // Prepare version history record
+                  const versionRecord = {
+                    winget_id: app.winget_id,
+                    version: latestVersion,
+                    installer_url: defaultInstaller.InstallerUrl || null,
+                    installer_sha256: defaultInstaller.InstallerSha256 || null,
+                    installer_type: defaultInstaller.InstallerType ||
+                                    installerManifest.InstallerType || null,
+                    installer_scope: defaultInstaller.Scope ||
+                                     installerManifest.Scope || null,
+                    silent_args: defaultInstaller.InstallerSwitches?.Silent ||
+                                 installerManifest.InstallerSwitches?.Silent ||
+                                 defaultInstaller.InstallerSwitches?.SilentWithProgress ||
+                                 installerManifest.InstallerSwitches?.SilentWithProgress || null,
+                    installers: JSON.stringify(installers),
+                    minimum_os_version: installerManifest.MinimumOSVersion || null,
+                    platform: installerManifest.Platform || null,
+                    upgrade_behavior: installerManifest.UpgradeBehavior || null,
+                    release_notes: localeManifest?.ReleaseNotes || null,
+                    manifest_yaml: yaml.stringify(installerManifest),
+                    manifest_fetched_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  };
+
+                  // Upsert version history
+                  const { error: vhError } = await supabase
+                    .from('version_history')
+                    .upsert(versionRecord, {
+                      onConflict: 'winget_id,version'
+                    });
+
+                  if (vhError) {
+                    console.error(`Failed to upsert version for ${app.winget_id}:`, vhError.message);
+                    failed++;
+                    return;
+                  }
+
+                  // Update curated_apps with latest version
+                  const { error: caError } = await supabase
+                    .from('curated_apps')
+                    .update({
+                      latest_version: latestVersion,
+                      description: localeManifest?.ShortDescription ||
+                                   localeManifest?.Description || null,
+                      homepage: localeManifest?.PackageUrl ||
+                                localeManifest?.PublisherUrl || null,
+                      license: localeManifest?.License || null,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('winget_id', app.winget_id);
+
+                  if (caError) {
+                    console.error(`Failed to update curated_apps for ${app.winget_id}:`, caError.message);
+                  }
+
+                  // Track new versions
+                  if (app.latest_version && app.latest_version !== latestVersion) {
+                    newVersions.push({
+                      winget_id: app.winget_id,
+                      old_version: app.latest_version,
+                      new_version: latestVersion
+                    });
+                  }
+
+                  synced++;
+                  console.log(`Synced ${app.winget_id}@${latestVersion}`);
+                } catch (e) {
+                  console.error(`Error syncing ${app.winget_id}:`, e.message);
+                  failed++;
+                }
+              }));
+
+              // Rate limiting for GitHub API
+              if (i + batchSize < apps.length) {
+                await delay(2000);
+              }
+
+              console.log(`Progress: ${Math.min(i + batchSize, apps.length)}/${apps.length}`);
+            }
+
+            // Update sync status
+            await supabase.from('curated_sync_status').upsert({
+              id: 'sync-manifests',
+              last_run_completed_at: new Date().toISOString(),
+              last_run_status: failed > 0 && synced === 0 ? 'failed' : 'success',
+              items_processed: synced,
+              error_message: failed > 0 ? `${failed} apps failed to sync` : null,
+              metadata: {
+                synced,
+                failed,
+                skipped,
+                new_versions: newVersions.length
+              },
+              updated_at: new Date().toISOString()
+            });
+
+            console.log(`\nSync complete: ${synced} synced, ${failed} failed, ${skipped} skipped`);
+
+            if (newVersions.length > 0) {
+              console.log('\nNew versions detected:');
+              for (const v of newVersions) {
+                console.log(`  ${v.winget_id}: ${v.old_version} -> ${v.new_version}`);
+              }
+            }
+
+            // Output for workflow
+            fs.writeFileSync('./sync-results.json', JSON.stringify({
+              synced, failed, skipped, newVersions
+            }));
+          }
+
+          syncManifests().catch(err => {
+            console.error('Sync failed:', err);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Create summary
+        run: |
+          if [ -f sync-results.json ]; then
+            SYNCED=$(jq -r '.synced' sync-results.json)
+            FAILED=$(jq -r '.failed' sync-results.json)
+            SKIPPED=$(jq -r '.skipped' sync-results.json)
+            NEW_VERSIONS=$(jq -r '.newVersions | length' sync-results.json)
+
+            echo "## Manifest Sync Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Synced:** $SYNCED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Skipped (up-to-date):** $SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "- **New versions detected:** $NEW_VERSIONS" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$NEW_VERSIONS" -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### New Versions" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              jq -r '.newVersions[] | "- **\(.winget_id):** \(.old_version) -> \(.new_version)"' sync-results.json >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      - name: Trigger scan workflow for new versions
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f sync-results.json ]; then
+            NEW_VERSIONS=$(jq -r '.newVersions | length' sync-results.json)
+
+            if [ "$NEW_VERSIONS" -gt 0 ]; then
+              # Get list of app IDs with new versions
+              APP_IDS=$(jq -r '[.newVersions[].winget_id] | join(",")' sync-results.json)
+
+              echo "Triggering scan workflow for: $APP_IDS"
+
+              # Trigger scan-apps workflow (if it exists)
+              gh workflow run scan-apps.yml \
+                -f app_ids="$APP_IDS" \
+                -f trigger_source="sync-manifests" || echo "Scan workflow not available or failed to trigger"
+            fi
+          fi

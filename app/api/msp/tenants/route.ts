@@ -1,0 +1,322 @@
+/**
+ * MSP Tenants API Routes
+ * GET - List managed tenants for user's MSP organization
+ * POST - Add a new customer tenant (returns consent URL)
+ * DELETE - Remove a managed tenant
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
+import { getMspCustomerConsentUrl } from '@/lib/msal-config';
+import { parseAccessToken, signConsentState, getBaseUrl } from '@/lib/auth-utils';
+import type {
+  MspManagedTenant,
+  MspManagedTenantWithStats,
+  GetTenantsResponse,
+  AddTenantRequest,
+  AddTenantResponse,
+} from '@/types/msp';
+
+/**
+ * Get the user's MSP organization ID (only for active organizations)
+ */
+async function getUserMspOrgId(userId: string): Promise<string | null> {
+  const supabase = createServerClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: membership } = await (supabase as any)
+    .from('msp_user_memberships')
+    .select('msp_organization_id, msp_organizations!inner(is_active)')
+    .eq('user_id', userId)
+    .eq('msp_organizations.is_active', true)
+    .single();
+
+  return membership?.msp_organization_id || null;
+}
+
+/**
+ * GET /api/msp/tenants
+ * List all managed tenants for the user's MSP organization
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const user = parseAccessToken(request.headers.get('Authorization'));
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const mspOrgId = await getUserMspOrgId(user.userId);
+    if (!mspOrgId) {
+      return NextResponse.json(
+        { error: 'Not a member of any MSP organization' },
+        { status: 403 }
+      );
+    }
+
+    const supabase = createServerClient();
+
+    // Get all managed tenants for this MSP
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: tenants, error: tenantsError } = await (supabase as any)
+      .from('msp_managed_tenants')
+      .select('*')
+      .eq('msp_organization_id', mspOrgId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (tenantsError) {
+      console.error('Error fetching tenants:', tenantsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch tenants' },
+        { status: 500 }
+      );
+    }
+
+    // Collect all tenant IDs for batch query
+    const tenantIds = (tenants || [])
+      .filter((t: MspManagedTenant) => t.tenant_id)
+      .map((t: MspManagedTenant) => t.tenant_id);
+
+    // Fetch job stats for all tenants in a single query
+    type JobRow = { tenant_id: string; status: string; created_at: string };
+    let jobsByTenant: Record<string, JobRow[]> = {};
+
+    if (tenantIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: allJobs } = await (supabase as any)
+        .from('packaging_jobs')
+        .select('tenant_id, status, created_at')
+        .in('tenant_id', tenantIds)
+        .order('created_at', { ascending: false });
+
+      // Group jobs by tenant ID
+      jobsByTenant = (allJobs || []).reduce((acc: Record<string, JobRow[]>, job: JobRow) => {
+        if (!acc[job.tenant_id]) {
+          acc[job.tenant_id] = [];
+        }
+        acc[job.tenant_id].push(job);
+        return acc;
+      }, {});
+    }
+
+    // Enrich tenants with job stats
+    const tenantsWithStats: MspManagedTenantWithStats[] = (tenants || []).map((tenant: MspManagedTenant) => {
+      if (!tenant.tenant_id) {
+        return {
+          ...tenant,
+          total_jobs: 0,
+          completed_jobs: 0,
+          failed_jobs: 0,
+          last_job_at: null,
+        };
+      }
+
+      const jobList = jobsByTenant[tenant.tenant_id] || [];
+      const completedJobs = jobList.filter((j) => j.status === 'completed').length;
+      const failedJobs = jobList.filter((j) => j.status === 'failed').length;
+      const lastJob = jobList[0];
+
+      return {
+        ...tenant,
+        total_jobs: jobList.length,
+        completed_jobs: completedJobs,
+        failed_jobs: failedJobs,
+        last_job_at: lastJob?.created_at || null,
+      };
+    });
+
+    const response: GetTenantsResponse = {
+      tenants: tenantsWithStats,
+    };
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('MSP tenants GET error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/msp/tenants
+ * Add a new customer tenant (creates pending record, returns consent URL)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const user = parseAccessToken(request.headers.get('Authorization'));
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const mspOrgId = await getUserMspOrgId(user.userId);
+    if (!mspOrgId) {
+      return NextResponse.json(
+        { error: 'Not a member of any MSP organization' },
+        { status: 403 }
+      );
+    }
+
+    // Parse request body
+    const body: AddTenantRequest = await request.json();
+    const { display_name, notes } = body;
+
+    if (!display_name || display_name.trim().length < 2) {
+      return NextResponse.json(
+        { error: 'Display name must be at least 2 characters' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServerClient();
+
+    // Create a pending tenant record
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: tenant, error: insertError } = await (supabase as any)
+      .from('msp_managed_tenants')
+      .insert({
+        msp_organization_id: mspOrgId,
+        display_name: display_name.trim(),
+        consent_status: 'pending',
+        added_by_user_id: user.userId,
+        notes: notes?.trim() || null,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Error creating tenant record:', insertError);
+      return NextResponse.json(
+        { error: 'Failed to create tenant record' },
+        { status: 500 }
+      );
+    }
+
+    // Generate the consent URL with signed state for security
+    const baseUrl = getBaseUrl();
+    const signedState = signConsentState(mspOrgId, tenant.id);
+    const consentUrl = getMspCustomerConsentUrl(mspOrgId, tenant.id, baseUrl, signedState);
+
+    const response: AddTenantResponse = {
+      tenant: tenant as MspManagedTenant,
+      consentUrl,
+    };
+
+    return NextResponse.json(response, { status: 201 });
+  } catch (error) {
+    console.error('MSP tenants POST error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/msp/tenants
+ * Remove a managed tenant (soft delete)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = parseAccessToken(request.headers.get('Authorization'));
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const mspOrgId = await getUserMspOrgId(user.userId);
+    if (!mspOrgId) {
+      return NextResponse.json(
+        { error: 'Not a member of any MSP organization' },
+        { status: 403 }
+      );
+    }
+
+    // Get tenant record ID from query params
+    const { searchParams } = new URL(request.url);
+    const tenantRecordId = searchParams.get('id');
+
+    if (!tenantRecordId) {
+      return NextResponse.json(
+        { error: 'Tenant record ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServerClient();
+
+    // Verify the tenant belongs to this MSP organization
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: tenant } = await (supabase as any)
+      .from('msp_managed_tenants')
+      .select('id, msp_organization_id, tenant_id')
+      .eq('id', tenantRecordId)
+      .single();
+
+    if (!tenant) {
+      return NextResponse.json(
+        { error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
+    if (tenant.msp_organization_id !== mspOrgId) {
+      return NextResponse.json(
+        { error: 'Unauthorized to remove this tenant' },
+        { status: 403 }
+      );
+    }
+
+    // Get MSP org info to check if this is the primary tenant
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: mspOrg } = await (supabase as any)
+      .from('msp_organizations')
+      .select('primary_tenant_id')
+      .eq('id', mspOrgId)
+      .single();
+
+    // Don't allow removing the primary MSP tenant
+    if (mspOrg && tenant.tenant_id === mspOrg.primary_tenant_id) {
+      return NextResponse.json(
+        { error: 'Cannot remove your primary MSP tenant' },
+        { status: 400 }
+      );
+    }
+
+    // Soft delete the tenant record
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
+      .from('msp_managed_tenants')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', tenantRecordId);
+
+    if (updateError) {
+      console.error('Error removing tenant:', updateError);
+      return NextResponse.json(
+        { error: 'Failed to remove tenant' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('MSP tenants DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

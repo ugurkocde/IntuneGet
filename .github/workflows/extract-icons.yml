@@ -1,0 +1,407 @@
+name: Extract App Icons
+
+on:
+  # Automatically run after Build Curated App List completes
+  workflow_run:
+    workflows: ["Build Curated App List"]
+    types: [completed]
+    branches: [master]
+  schedule:
+    # Run weekly on Saturdays at 04:00 UTC (fallback)
+    - cron: '0 4 * * 6'
+  workflow_dispatch:
+    inputs:
+      app_ids:
+        description: 'Specific app IDs to extract icons for (comma-separated, or "all")'
+        required: false
+        default: 'all'
+      max_apps:
+        description: 'Maximum number of apps to process'
+        required: false
+        default: '100'
+      force_refresh:
+        description: 'Re-extract icons even if they exist'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Prevent concurrent runs that could cause git conflicts
+# Use same group as build-app-list and sync-manifests to ensure sequential execution
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+env:
+  MAX_APPS: ${{ github.event.inputs.max_apps || '100' }}
+
+permissions:
+  contents: write
+
+jobs:
+  extract-icons:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    # Only run if triggered manually, by schedule, or if the upstream workflow succeeded
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: master
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ImageMagick and 7-Zip
+        run: |
+          choco install imagemagick.app 7zip -y --no-progress
+          refreshenv
+          # Verify 7-Zip installation
+          if (Test-Path "C:\Program Files\7-Zip\7z.exe") {
+            Write-Host "7-Zip installed successfully"
+          } else {
+            Write-Host "7-Zip not found at expected path, checking alternatives..."
+            Get-Command 7z -ErrorAction SilentlyContinue
+          }
+        shell: pwsh
+
+      - name: Get apps to process
+        id: get-apps
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
+          FORCE_REFRESH: ${{ github.event.inputs.force_refresh || 'false' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Load curated app list
+          $listPath = "curated-apps/list.json"
+          if (Test-Path $listPath) {
+            $list = Get-Content $listPath | ConvertFrom-Json
+            $apps = $list.apps
+          } else {
+            Write-Error "Curated app list not found"
+            exit 1
+          }
+
+          # Filter apps
+          $appIds = $env:APP_IDS
+          $forceRefresh = $env:FORCE_REFRESH -eq 'true'
+          $maxApps = [int]$env:MAX_APPS
+
+          if ($appIds -ne 'all') {
+            $targetIds = $appIds -split ',' | ForEach-Object { $_.Trim() }
+            $apps = $apps | Where-Object { $targetIds -contains $_.winget_id }
+          }
+
+          # Filter out apps that already have icons (unless force refresh)
+          if (-not $forceRefresh) {
+            $apps = $apps | Where-Object {
+              $iconDir = "public/icons/$($_.winget_id)"
+              -not (Test-Path "$iconDir/icon-64.png")
+            }
+          }
+
+          # Limit number of apps
+          $apps = $apps | Select-Object -First $maxApps
+
+          Write-Host "Processing $($apps.Count) apps for icon extraction"
+
+          # Save apps to process
+          $apps | ConvertTo-Json -Depth 10 | Out-File "apps-to-process.json" -Encoding UTF8
+
+          echo "app_count=$($apps.Count)" >> $env:GITHUB_OUTPUT
+
+      - name: Extract icons
+        if: steps.get-apps.outputs.app_count != '0'
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          # Load apps to process
+          $apps = Get-Content "apps-to-process.json" | ConvertFrom-Json
+
+          $extracted = 0
+          $failed = 0
+          $results = @()
+
+          foreach ($app in $apps) {
+            $wingetId = $app.winget_id
+            Write-Host "`n=== Processing $wingetId ===" -ForegroundColor Cyan
+
+            try {
+              # Create icon directory
+              $iconDir = "public/icons/$wingetId"
+              New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
+
+              # Get installer URL from version_history or download directly
+              $installerUrl = $null
+              $installerPath = $null
+
+              # Try to get installer info from Winget manifest
+              $parts = $wingetId.Split('.')
+              $publisher = $parts[0]
+              # Join remaining parts with '/' for folder path structure
+              $namePath = ($parts[1..($parts.Length-1)] | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+              $firstLetter = $publisher.Substring(0,1).ToLower()
+              $encodedPublisher = [uri]::EscapeDataString($publisher)
+
+              # Fetch manifest to get installer URL
+              $manifestUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/$firstLetter/$encodedPublisher/$namePath"
+
+              # Get latest version
+              try {
+                $versionsUrl = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$firstLetter/$encodedPublisher/$namePath"
+                $versions = Invoke-RestMethod -Uri $versionsUrl -Headers @{ 'User-Agent' = 'IntuneGet' }
+                # Filter to only version-like directories (must start with a digit)
+                $versionDirs = $versions | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' }
+                $latestVersion = ($versionDirs | Sort-Object { [version]($_.name -replace '[^\d.]', '.') } -Descending -ErrorAction SilentlyContinue | Select-Object -First 1).name
+                if (-not $latestVersion) {
+                  $latestVersion = ($versionDirs | Sort-Object name -Descending | Select-Object -First 1).name
+                }
+
+                if ($latestVersion) {
+                  $installerYamlUrl = "$manifestUrl/$latestVersion/$wingetId.installer.yaml"
+                  $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing
+
+                  # Parse YAML to get installer URL
+                  $lines = $yamlContent.Content -split "`n"
+                  foreach ($line in $lines) {
+                    if ($line -match 'InstallerUrl:\s*(.+)') {
+                      $installerUrl = $matches[1].Trim()
+                      break
+                    }
+                  }
+                }
+              } catch {
+                Write-Warning "Could not fetch manifest for $wingetId : $_"
+              }
+
+              if (-not $installerUrl) {
+                Write-Warning "No installer URL found for $wingetId"
+                $failed++
+                continue
+              }
+
+              # Download installer
+              $extension = if ($installerUrl -match '\.msi$') { '.msi' }
+                          elseif ($installerUrl -match '\.msix$') { '.msix' }
+                          else { '.exe' }
+
+              $installerPath = "$env:TEMP\installer_$([System.IO.Path]::GetRandomFileName())$extension"
+
+              Write-Host "Downloading installer from $installerUrl"
+              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing -MaximumRedirection 5
+
+              if (-not (Test-Path $installerPath)) {
+                Write-Warning "Failed to download installer for $wingetId"
+                $failed++
+                continue
+              }
+
+              # Extract icon using PowerShell script (capture exit code, don't fail on error)
+              $extractResult = & "$env:GITHUB_WORKSPACE\.github\scripts\extract-icon.ps1" `
+                -InstallerPath $installerPath `
+                -OutputDir $iconDir `
+                -AppId $wingetId 2>&1
+              $extractExitCode = $LASTEXITCODE
+
+              if ($extractExitCode -ne 0) {
+                Write-Host "Icon extraction script returned exit code: $extractExitCode"
+                Write-Host $extractResult
+              }
+
+              # Check if icon was extracted
+              if (Test-Path "$iconDir/icon-64.png") {
+                Write-Host "Successfully extracted icon for $wingetId" -ForegroundColor Green
+                $extracted++
+                $results += @{
+                  winget_id = $wingetId
+                  status = 'success'
+                  icon_path = "/icons/$wingetId/"
+                }
+              } else {
+                Write-Warning "No icon extracted for $wingetId"
+                $failed++
+                $results += @{
+                  winget_id = $wingetId
+                  status = 'failed'
+                  error = 'No icon extracted'
+                }
+              }
+            } catch {
+              Write-Warning "Error processing $wingetId : $_"
+              $failed++
+              $results += @{
+                winget_id = $wingetId
+                status = 'failed'
+                error = $_.ToString()
+              }
+            } finally {
+              # Cleanup
+              if ($installerPath -and (Test-Path $installerPath)) {
+                Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+              }
+            }
+
+            # Brief pause between apps
+            Start-Sleep -Seconds 1
+          }
+
+          Write-Host "`n=== Icon Extraction Summary ===" -ForegroundColor Cyan
+          Write-Host "Extracted: $extracted"
+          Write-Host "Failed: $failed"
+
+          # Save results
+          $results | ConvertTo-Json -Depth 10 | Out-File "icon-results.json" -Encoding UTF8
+
+          echo "extracted=$extracted" >> $env:GITHUB_OUTPUT
+          echo "failed=$failed" >> $env:GITHUB_OUTPUT
+
+          # Don't fail the workflow even if some icons failed to extract
+          # This allows partial success and prevents blocking other steps
+          exit 0
+
+      - name: Update database
+        if: steps.get-apps.outputs.app_count != '0'
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabaseUrl = process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+          if (!supabaseUrl || !supabaseKey) {
+            console.log('Supabase credentials not configured, skipping database update');
+            process.exit(0);
+          }
+
+          const supabase = createClient(supabaseUrl, supabaseKey);
+
+          async function updateDatabase() {
+            const results = JSON.parse(fs.readFileSync('icon-results.json', 'utf8'));
+
+            const successful = results.filter(r => r.status === 'success');
+
+            for (const result of successful) {
+              const { error } = await supabase
+                .from('curated_apps')
+                .update({
+                  icon_path: result.icon_path,
+                  has_icon: true,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('winget_id', result.winget_id);
+
+              if (error) {
+                console.error(`Failed to update ${result.winget_id}:`, error.message);
+              }
+            }
+
+            // Update sync status
+            await supabase.from('curated_sync_status').upsert({
+              id: 'extract-icons',
+              last_run_completed_at: new Date().toISOString(),
+              last_run_status: 'success',
+              items_processed: successful.length,
+              metadata: {
+                total: results.length,
+                successful: successful.length,
+                failed: results.filter(r => r.status === 'failed').length
+              },
+              updated_at: new Date().toISOString()
+            });
+
+            console.log(`Updated ${successful.length} apps with icon paths`);
+          }
+
+          updateDatabase()
+            .then(() => {
+              console.log('Database update complete');
+              process.exit(0);
+            })
+            .catch(err => {
+              console.error('Database update failed:', err);
+              process.exit(1);
+            });
+          EOF
+
+      - name: Commit icons
+        if: steps.get-apps.outputs.app_count != '0'
+        shell: bash
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Stage the new icons first
+          git add public/icons/ || true
+
+          if git diff --staged --quiet; then
+            echo "No new icons to commit"
+          else
+            ICON_COUNT=$(git diff --staged --name-only | grep -c "icon-64.png" || echo "0")
+            git commit -m "chore: add icons for $ICON_COUNT apps"
+
+            # Pull and rebase, then push (retry up to 3 times for race conditions)
+            for i in 1 2 3; do
+              git pull --rebase origin master && git push origin master && break
+              echo "Retry $i: pull/push failed, retrying..."
+              sleep 5
+            done
+          fi
+
+      - name: Create summary
+        run: |
+          if (Test-Path icon-results.json) {
+            $results = Get-Content icon-results.json | ConvertFrom-Json
+            $success = ($results | Where-Object { $_.status -eq 'success' }).Count
+            $failed = ($results | Where-Object { $_.status -eq 'failed' }).Count
+
+            @"
+          ## Icon Extraction Summary
+
+          - **Successfully extracted:** $success
+          - **Failed:** $failed
+          - **Total processed:** $($results.Count)
+
+          ### Extracted Icons
+          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+            foreach ($r in ($results | Where-Object { $_.status -eq 'success' } | Select-Object -First 20)) {
+              "- $($r.winget_id)" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            }
+
+            if ($failed -gt 0) {
+              @"
+
+          ### Failed Extractions
+          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+              foreach ($r in ($results | Where-Object { $_.status -eq 'failed' } | Select-Object -First 10)) {
+                "- $($r.winget_id): $($r.error)" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+              }
+            }
+          }
+        shell: pwsh

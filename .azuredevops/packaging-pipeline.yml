@@ -1,0 +1,605 @@
+# IntuneGet Packaging Pipeline
+# This pipeline creates .intunewin packages from Winget installers
+# Triggered via REST API from the IntuneGet web app
+
+trigger: none  # Manual/API trigger only
+
+# Pipeline parameters (passed from web app via REST API)
+parameters:
+  - name: jobId
+    type: string
+    displayName: 'Unique Job ID'
+  - name: callbackUrl
+    type: string
+    displayName: 'Callback URL for results'
+  - name: wingetId
+    type: string
+    displayName: 'Winget Package ID'
+  - name: displayName
+    type: string
+    displayName: 'Application Display Name'
+  - name: publisher
+    type: string
+    displayName: 'Publisher Name'
+  - name: version
+    type: string
+    displayName: 'Application Version'
+  - name: installerUrl
+    type: string
+    displayName: 'Installer Download URL'
+  - name: installerSha256
+    type: string
+    displayName: 'Expected SHA256 Hash'
+  - name: installerType
+    type: string
+    displayName: 'Installer Type (exe, msi, msix)'
+    values:
+      - exe
+      - msi
+      - msix
+      - inno
+      - nullsoft
+      - wix
+      - burn
+  - name: silentSwitches
+    type: string
+    displayName: 'Silent Install Switches'
+  - name: uninstallCommand
+    type: string
+    displayName: 'Uninstall Command'
+  - name: installScope
+    type: string
+    displayName: 'Install Scope'
+    default: 'machine'
+    values:
+      - machine
+      - user
+
+# Variables from Azure DevOps Library or Pipeline Settings
+variables:
+  - name: AZURE_STORAGE_ACCOUNT
+    value: $(AzureStorageAccount)  # Set in pipeline variables
+  - name: AZURE_STORAGE_CONTAINER
+    value: 'intunewin-packages'
+  - name: PSADT_VERSION
+    value: '4.0.4'
+  - name: INTUNE_CONTENT_PREP_TOOL_URL
+    value: 'https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe'
+
+pool:
+  vmImage: 'windows-latest'
+
+stages:
+  - stage: Package
+    displayName: 'Create IntuneWin Package'
+    jobs:
+      - job: CreatePackage
+        displayName: 'Download, Wrap with PSADT, Create IntuneWin'
+        timeoutInMinutes: 30
+        steps:
+          # Step 1: Send initial status
+          - task: PowerShell@2
+            displayName: 'Send Status: Started'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $body = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'packaging'
+                  message = 'Pipeline started, preparing environment...'
+                  progress = 5
+                } | ConvertTo-Json
+
+                try {
+                  Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30
+                } catch {
+                  Write-Warning "Failed to send status update: $_"
+                }
+
+          # Step 2: Download IntuneWinAppUtil.exe
+          - task: PowerShell@2
+            displayName: 'Download IntuneWinAppUtil.exe'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $toolsDir = "$(Build.SourcesDirectory)\tools"
+                New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+
+                Write-Host "Downloading IntuneWinAppUtil.exe..."
+                Invoke-WebRequest -Uri "$(INTUNE_CONTENT_PREP_TOOL_URL)" -OutFile "$toolsDir\IntuneWinAppUtil.exe"
+
+                if (Test-Path "$toolsDir\IntuneWinAppUtil.exe") {
+                  Write-Host "IntuneWinAppUtil.exe downloaded successfully"
+                } else {
+                  throw "Failed to download IntuneWinAppUtil.exe"
+                }
+
+          # Step 3: Download and extract PSADT
+          - task: PowerShell@2
+            displayName: 'Download PSADT'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $psadtDir = "$(Build.SourcesDirectory)\psadt"
+                $psadtZip = "$(Build.SourcesDirectory)\psadt.zip"
+
+                Write-Host "Downloading PSADT v$(PSADT_VERSION)..."
+                $psadtUrl = "https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/v$(PSADT_VERSION)/PSAppDeployToolkit.$(PSADT_VERSION).zip"
+                Invoke-WebRequest -Uri $psadtUrl -OutFile $psadtZip
+
+                Write-Host "Extracting PSADT..."
+                Expand-Archive -Path $psadtZip -DestinationPath $psadtDir -Force
+
+                Write-Host "PSADT extracted to: $psadtDir"
+                Get-ChildItem $psadtDir -Recurse | Select-Object -First 20
+
+          # Step 4: Download the installer
+          - task: PowerShell@2
+            displayName: 'Download Installer'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Send progress update
+                $body = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'packaging'
+                  message = 'Downloading installer...'
+                  progress = 20
+                } | ConvertTo-Json
+                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+
+                $installerDir = "$(Build.SourcesDirectory)\installer"
+                New-Item -ItemType Directory -Path $installerDir -Force | Out-Null
+
+                # Extract filename from URL
+                $installerUrl = '${{ parameters.installerUrl }}'
+                $fileName = [System.IO.Path]::GetFileName([System.Uri]::new($installerUrl).LocalPath)
+                if ([string]::IsNullOrEmpty($fileName) -or $fileName -eq '/') {
+                  $fileName = "installer.${{ parameters.installerType }}"
+                }
+
+                $installerPath = "$installerDir\$fileName"
+
+                Write-Host "Downloading installer from: $installerUrl"
+                Write-Host "Saving to: $installerPath"
+
+                # Download with retry
+                $maxRetries = 3
+                for ($i = 1; $i -le $maxRetries; $i++) {
+                  try {
+                    Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
+                    break
+                  } catch {
+                    if ($i -eq $maxRetries) { throw }
+                    Write-Warning "Download attempt $i failed, retrying..."
+                    Start-Sleep -Seconds 5
+                  }
+                }
+
+                # Verify SHA256
+                $expectedHash = '${{ parameters.installerSha256 }}'
+                if (-not [string]::IsNullOrEmpty($expectedHash)) {
+                  Write-Host "Verifying SHA256 hash..."
+                  $actualHash = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash
+
+                  if ($actualHash -ne $expectedHash) {
+                    throw "SHA256 mismatch! Expected: $expectedHash, Got: $actualHash"
+                  }
+                  Write-Host "SHA256 verified successfully"
+                }
+
+                # Store for later steps
+                Write-Host "##vso[task.setvariable variable=InstallerPath]$installerPath"
+                Write-Host "##vso[task.setvariable variable=InstallerFileName]$fileName"
+
+                $fileSize = (Get-Item $installerPath).Length
+                Write-Host "Installer downloaded: $fileName ($([math]::Round($fileSize/1MB, 2)) MB)"
+
+          # Step 5: Create PSADT package structure
+          - task: PowerShell@2
+            displayName: 'Create PSADT Package'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Send progress update
+                $body = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'packaging'
+                  message = 'Creating PSADT package structure...'
+                  progress = 40
+                } | ConvertTo-Json
+                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+
+                $packageDir = "$(Build.SourcesDirectory)\package"
+                $psadtToolkit = "$(Build.SourcesDirectory)\psadt\Toolkit"
+
+                # Copy PSADT toolkit structure
+                Write-Host "Creating package structure..."
+                Copy-Item -Path $psadtToolkit -Destination $packageDir -Recurse -Force
+
+                # Copy installer to Files folder
+                $filesDir = "$packageDir\Files"
+                New-Item -ItemType Directory -Path $filesDir -Force | Out-Null
+                Copy-Item -Path "$(InstallerPath)" -Destination $filesDir
+
+                Write-Host "Package structure created at: $packageDir"
+                Get-ChildItem $packageDir
+
+          # Step 6: Generate Deploy-Application.ps1
+          - task: PowerShell@2
+            displayName: 'Generate Deploy-Application.ps1'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $packageDir = "$(Build.SourcesDirectory)\package"
+                $deployScript = "$packageDir\Deploy-Application.ps1"
+
+                # Escape special characters for PowerShell string
+                $displayName = '${{ parameters.displayName }}' -replace "'", "''"
+                $publisher = '${{ parameters.publisher }}' -replace "'", "''"
+                $version = '${{ parameters.version }}'
+                $installerFileName = '$(InstallerFileName)'
+                $silentSwitches = '${{ parameters.silentSwitches }}' -replace "'", "''"
+                $uninstallCommand = '${{ parameters.uninstallCommand }}' -replace "'", "''"
+                $installScope = '${{ parameters.installScope }}'
+                $installerType = '${{ parameters.installerType }}'
+
+                # Determine install method based on installer type
+                $installMethod = switch ($installerType) {
+                  'msi' { "Execute-MSI -Action 'Install' -Path `"`$dirFiles\$installerFileName`"" }
+                  'msix' { "Add-AppxPackage -Path `"`$dirFiles\$installerFileName`"" }
+                  default { "Execute-Process -Path `"`$dirFiles\$installerFileName`" -Parameters '$silentSwitches' -WindowStyle 'Hidden' -WaitForMsiExec" }
+                }
+
+                $scriptContent = @"
+<#
+.SYNOPSIS
+    PSADT deployment script for $displayName
+    Generated by IntuneGet Packaging Pipeline
+.DESCRIPTION
+    Package ID: ${{ parameters.wingetId }}
+    Version: $version
+    Publisher: $publisher
+#>
+
+[CmdletBinding()]
+Param (
+    [Parameter(Mandatory = `$false)]
+    [ValidateSet('Install', 'Uninstall', 'Repair')]
+    [String]`$DeploymentType = 'Install',
+    [Parameter(Mandatory = `$false)]
+    [ValidateSet('Interactive', 'Silent', 'NonInteractive')]
+    [String]`$DeployMode = 'Silent',
+    [Parameter(Mandatory = `$false)]
+    [switch]`$AllowRebootPassThru = `$false,
+    [Parameter(Mandatory = `$false)]
+    [switch]`$TerminalServerMode = `$false,
+    [Parameter(Mandatory = `$false)]
+    [switch]`$DisableLogging = `$false
+)
+
+Try {
+    ## Set the script execution policy for this process
+    Try { Set-ExecutionPolicy -ExecutionPolicy 'ByPass' -Scope 'Process' -Force -ErrorAction 'Stop' } Catch {}
+
+    ##*===============================================
+    ##* VARIABLE DECLARATION
+    ##*===============================================
+    [String]`$appVendor = '$publisher'
+    [String]`$appName = '$displayName'
+    [String]`$appVersion = '$version'
+    [String]`$appArch = ''
+    [String]`$appLang = 'EN'
+    [String]`$appRevision = '01'
+    [String]`$appScriptVersion = '1.0.0'
+    [String]`$appScriptDate = '$(Get-Date -Format "yyyy-MM-dd")'
+    [String]`$appScriptAuthor = 'IntuneGet'
+    ##*===============================================
+    ## Variables: Install Titles (Only set here to override defaults set by the toolkit)
+    [String]`$installName = ''
+    [String]`$installTitle = '$displayName $version'
+
+    ##* Do not modify section below
+    #region DoNotModify
+    [String]`$moduleAppDeployToolkitMain = "`$PSScriptRoot\AppDeployToolkit\AppDeployToolkitMain.ps1"
+    If (-not (Test-Path -LiteralPath `$moduleAppDeployToolkitMain -PathType 'Leaf')) { Throw "Module does not exist at the expected path [`$moduleAppDeployToolkitMain]." }
+    If (`$DisableLogging) { . `$moduleAppDeployToolkitMain -DisableLogging } Else { . `$moduleAppDeployToolkitMain }
+    #endregion
+    ##* Do not modify section above
+    ##*===============================================
+    ##* END VARIABLE DECLARATION
+    ##*===============================================
+
+    If (`$deploymentType -ine 'Uninstall' -and `$deploymentType -ine 'Repair') {
+        ##*===============================================
+        ##* PRE-INSTALLATION
+        ##*===============================================
+        [String]`$installPhase = 'Pre-Installation'
+
+        ## Show Welcome Message, close apps if required
+        Show-InstallationWelcome -CloseApps '' -AllowDefer -DeferTimes 3 -CheckDiskSpace -PersistPrompt
+
+        ## Show Progress Message
+        Show-InstallationProgress
+
+        ##*===============================================
+        ##* INSTALLATION
+        ##*===============================================
+        [String]`$installPhase = 'Installation'
+
+        ## Install the application
+        $installMethod
+
+        ##*===============================================
+        ##* POST-INSTALLATION
+        ##*===============================================
+        [String]`$installPhase = 'Post-Installation'
+
+    }
+    ElseIf (`$deploymentType -ieq 'Uninstall') {
+        ##*===============================================
+        ##* PRE-UNINSTALLATION
+        ##*===============================================
+        [String]`$installPhase = 'Pre-Uninstallation'
+
+        ## Show Welcome Message
+        Show-InstallationWelcome -CloseApps '' -AllowDefer -DeferTimes 3
+
+        ## Show Progress Message
+        Show-InstallationProgress -StatusMessage "Uninstalling `$installTitle..."
+
+        ##*===============================================
+        ##* UNINSTALLATION
+        ##*===============================================
+        [String]`$installPhase = 'Uninstallation'
+
+        ## Uninstall the application
+        `$uninstallCmd = '$uninstallCommand'
+        If (-not [string]::IsNullOrEmpty(`$uninstallCmd)) {
+            Execute-Process -Path 'cmd.exe' -Parameters "/c `$uninstallCmd" -WindowStyle 'Hidden'
+        }
+
+        ##*===============================================
+        ##* POST-UNINSTALLATION
+        ##*===============================================
+        [String]`$installPhase = 'Post-Uninstallation'
+
+    }
+    ElseIf (`$deploymentType -ieq 'Repair') {
+        ##*===============================================
+        ##* PRE-REPAIR
+        ##*===============================================
+        [String]`$installPhase = 'Pre-Repair'
+
+        ##*===============================================
+        ##* REPAIR
+        ##*===============================================
+        [String]`$installPhase = 'Repair'
+
+        ##*===============================================
+        ##* POST-REPAIR
+        ##*===============================================
+        [String]`$installPhase = 'Post-Repair'
+    }
+
+    ## Call the Exit-Script function to perform final cleanup operations
+    Exit-Script -ExitCode `$mainExitCode
+
+}
+Catch {
+    [Int32]`$mainExitCode = 60001
+    [String]`$mainErrorMessage = "`$(Resolve-Error)"
+    Write-Log -Message `$mainErrorMessage -Severity 3 -Source `$deployAppScriptFriendlyName
+    Show-DialogBox -Text `$mainErrorMessage -Icon 'Stop'
+    Exit-Script -ExitCode `$mainExitCode
+}
+"@
+
+                Set-Content -Path $deployScript -Value $scriptContent -Encoding UTF8
+                Write-Host "Deploy-Application.ps1 generated successfully"
+
+          # Step 7: Create .intunewin package
+          - task: PowerShell@2
+            displayName: 'Create IntuneWin Package'
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Send progress update
+                $body = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'packaging'
+                  message = 'Creating .intunewin package...'
+                  progress = 60
+                } | ConvertTo-Json
+                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+
+                $packageDir = "$(Build.SourcesDirectory)\package"
+                $outputDir = "$(Build.SourcesDirectory)\output"
+                $intunewinTool = "$(Build.SourcesDirectory)\tools\IntuneWinAppUtil.exe"
+
+                New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+
+                Write-Host "Creating .intunewin package..."
+                Write-Host "Source: $packageDir"
+                Write-Host "Setup file: Deploy-Application.ps1"
+                Write-Host "Output: $outputDir"
+
+                # Run IntuneWinAppUtil.exe
+                $process = Start-Process -FilePath $intunewinTool -ArgumentList @(
+                  "-c", $packageDir,
+                  "-s", "Deploy-Application.ps1",
+                  "-o", $outputDir,
+                  "-q"
+                ) -Wait -PassThru -NoNewWindow
+
+                if ($process.ExitCode -ne 0) {
+                  throw "IntuneWinAppUtil.exe failed with exit code: $($process.ExitCode)"
+                }
+
+                # Find the generated .intunewin file
+                $intunewinFile = Get-ChildItem -Path $outputDir -Filter "*.intunewin" | Select-Object -First 1
+
+                if (-not $intunewinFile) {
+                  throw "No .intunewin file was generated"
+                }
+
+                Write-Host "IntuneWin package created: $($intunewinFile.FullName)"
+                Write-Host "Size: $([math]::Round($intunewinFile.Length/1MB, 2)) MB"
+
+                # Store path for upload
+                Write-Host "##vso[task.setvariable variable=IntunewinPath]$($intunewinFile.FullName)"
+                Write-Host "##vso[task.setvariable variable=IntunewinFileName]$($intunewinFile.Name)"
+                Write-Host "##vso[task.setvariable variable=IntunewinSizeBytes]$($intunewinFile.Length)"
+
+          # Step 8: Extract encryption info from .intunewin
+          - task: PowerShell@2
+            displayName: 'Extract Encryption Info'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $intunewinPath = "$(IntunewinPath)"
+
+                Write-Host "Extracting encryption info from: $intunewinPath"
+
+                # .intunewin is a ZIP file containing Detection.xml with encryption info
+                $tempExtract = "$(Build.SourcesDirectory)\intunewin-extract"
+                New-Item -ItemType Directory -Path $tempExtract -Force | Out-Null
+
+                # Extract the .intunewin (it's a ZIP)
+                Expand-Archive -Path $intunewinPath -DestinationPath $tempExtract -Force
+
+                # Find and parse Detection.xml
+                $detectionXml = Get-ChildItem -Path $tempExtract -Filter "Detection.xml" -Recurse | Select-Object -First 1
+
+                if ($detectionXml) {
+                  [xml]$xml = Get-Content $detectionXml.FullName
+
+                  $encryptionInfo = @{
+                    encryptionKey = $xml.ApplicationInfo.EncryptionInfo.EncryptionKey
+                    macKey = $xml.ApplicationInfo.EncryptionInfo.macKey
+                    initializationVector = $xml.ApplicationInfo.EncryptionInfo.initializationVector
+                    mac = $xml.ApplicationInfo.EncryptionInfo.mac
+                    profileIdentifier = $xml.ApplicationInfo.EncryptionInfo.profileIdentifier
+                    fileDigest = $xml.ApplicationInfo.EncryptionInfo.fileDigest
+                    fileDigestAlgorithm = $xml.ApplicationInfo.EncryptionInfo.fileDigestAlgorithm
+                  }
+
+                  $encryptionJson = $encryptionInfo | ConvertTo-Json -Compress
+                  Write-Host "##vso[task.setvariable variable=EncryptionInfo]$encryptionJson"
+                  Write-Host "Encryption info extracted successfully"
+
+                  # Also get unencrypted content size
+                  $unencryptedSize = $xml.ApplicationInfo.UnencryptedContentSize
+                  Write-Host "##vso[task.setvariable variable=UnencryptedContentSize]$unencryptedSize"
+                } else {
+                  Write-Warning "Detection.xml not found in .intunewin package"
+                  Write-Host "##vso[task.setvariable variable=EncryptionInfo]{}"
+                }
+
+                # Cleanup
+                Remove-Item -Path $tempExtract -Recurse -Force
+
+          # Step 9: Upload to Azure Blob Storage
+          - task: AzureCLI@2
+            displayName: 'Upload to Azure Blob Storage'
+            inputs:
+              azureSubscription: '$(AzureServiceConnection)'  # Set in pipeline variables
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Send progress update
+                $body = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'packaging'
+                  message = 'Uploading package to storage...'
+                  progress = 80
+                } | ConvertTo-Json
+                try { Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 30 } catch {}
+
+                $intunewinPath = "$(IntunewinPath)"
+                $blobName = "${{ parameters.jobId }}/${{ parameters.wingetId }}_${{ parameters.version }}.intunewin"
+
+                Write-Host "Uploading to blob: $blobName"
+
+                # Upload using Azure CLI
+                az storage blob upload `
+                  --account-name "$(AZURE_STORAGE_ACCOUNT)" `
+                  --container-name "$(AZURE_STORAGE_CONTAINER)" `
+                  --name $blobName `
+                  --file $intunewinPath `
+                  --auth-mode login `
+                  --overwrite
+
+                # Generate SAS URL (valid for 24 hours)
+                $expiry = (Get-Date).AddHours(24).ToString("yyyy-MM-ddTHH:mm:ssZ")
+                $sasUrl = az storage blob generate-sas `
+                  --account-name "$(AZURE_STORAGE_ACCOUNT)" `
+                  --container-name "$(AZURE_STORAGE_CONTAINER)" `
+                  --name $blobName `
+                  --permissions r `
+                  --expiry $expiry `
+                  --auth-mode login `
+                  --as-user `
+                  --full-uri `
+                  --output tsv
+
+                Write-Host "##vso[task.setvariable variable=BlobSasUrl]$sasUrl"
+                Write-Host "Package uploaded successfully"
+
+          # Step 10: Send success callback
+          - task: PowerShell@2
+            displayName: 'Send Success Callback'
+            condition: succeeded()
+            inputs:
+              targetType: 'inline'
+              script: |
+                $encryptionInfo = '$(EncryptionInfo)' | ConvertFrom-Json -AsHashtable
+
+                $result = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'completed'
+                  message = 'Package created successfully'
+                  progress = 100
+                  intunewinUrl = '$(BlobSasUrl)'
+                  intunewinSizeBytes = [long]'$(IntunewinSizeBytes)'
+                  unencryptedContentSize = [long]'$(UnencryptedContentSize)'
+                  encryptionInfo = $encryptionInfo
+                  pipelineRunId = '$(Build.BuildId)'
+                  pipelineRunUrl = '$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)'
+                } | ConvertTo-Json -Depth 5
+
+                Write-Host "Sending success callback..."
+                Write-Host $result
+
+                try {
+                  Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $result -ContentType 'application/json' -TimeoutSec 60
+                  Write-Host "Callback sent successfully"
+                } catch {
+                  Write-Error "Failed to send callback: $_"
+                  throw
+                }
+
+          # Step 11: Send failure callback (only runs on failure)
+          - task: PowerShell@2
+            displayName: 'Send Failure Callback'
+            condition: failed()
+            inputs:
+              targetType: 'inline'
+              script: |
+                $result = @{
+                  jobId = '${{ parameters.jobId }}'
+                  status = 'failed'
+                  message = 'Pipeline failed - check Azure DevOps for details'
+                  progress = 0
+                  error = 'Pipeline execution failed'
+                  pipelineRunId = '$(Build.BuildId)'
+                  pipelineRunUrl = '$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)'
+                } | ConvertTo-Json
+
+                Write-Host "Sending failure callback..."
+
+                try {
+                  Invoke-RestMethod -Uri '${{ parameters.callbackUrl }}' -Method POST -Body $result -ContentType 'application/json' -TimeoutSec 60
+                } catch {
+                  Write-Warning "Failed to send failure callback: $_"
+                }

@@ -1,0 +1,183 @@
+/**
+ * Package Callback API Route
+ * Receives results from GitHub Actions packaging workflow
+ * Protected by HMAC-SHA256 signature verification
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getDatabase } from '@/lib/db';
+import { verifyCallbackSignature } from '@/lib/callback-signature';
+
+interface PackageCallbackBody {
+  jobId: string;
+  status: 'packaging' | 'uploading' | 'deployed' | 'failed';
+  message?: string;
+  progress?: number;
+
+  // Success fields (deployed status)
+  intuneAppId?: string;
+  intuneAppUrl?: string;
+
+  // GitHub Actions run info
+  runId?: string;
+  runUrl?: string;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Read the raw body for signature verification
+    const body = await request.text();
+    const signature = request.headers.get('X-Signature');
+    const callbackSecret = process.env.CALLBACK_SECRET;
+
+    // Verify HMAC signature
+    if (callbackSecret) {
+      if (!verifyCallbackSignature(body, signature, callbackSecret)) {
+        console.error('Invalid callback signature');
+        return NextResponse.json(
+          { error: 'Invalid signature' },
+          { status: 401 }
+        );
+      }
+    } else {
+      console.warn('CALLBACK_SECRET not configured - signature verification disabled');
+    }
+
+    // Parse the verified body
+    const data: PackageCallbackBody = JSON.parse(body);
+
+    // Validate required fields
+    if (!data.jobId) {
+      return NextResponse.json(
+        { error: 'jobId is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!data.status) {
+      return NextResponse.json(
+        { error: 'status is required' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`Received callback for job ${data.jobId}: ${data.status}`);
+
+    const db = getDatabase();
+
+    // Build update object based on status
+    const updateData: Record<string, unknown> = {
+      status: data.status,
+      status_message: data.message,
+    };
+
+    if (data.progress !== undefined) {
+      updateData.progress_percent = data.progress;
+    }
+
+    // Add GitHub run info if provided
+    if (data.runId) {
+      updateData.github_run_id = data.runId;
+    }
+    if (data.runUrl) {
+      updateData.github_run_url = data.runUrl;
+    }
+
+    // Handle deployed status
+    if (data.status === 'deployed') {
+      updateData.intune_app_id = data.intuneAppId;
+      updateData.intune_app_url = data.intuneAppUrl;
+      updateData.completed_at = new Date().toISOString();
+      updateData.progress_percent = 100;
+
+      console.log(`Job ${data.jobId} deployed successfully to Intune: ${data.intuneAppId}`);
+
+      // Get job details for upload history
+      const job = await db.jobs.getById(data.jobId);
+
+      if (job && data.intuneAppId) {
+        // Add to upload history
+        await db.uploadHistory.create({
+          packaging_job_id: data.jobId,
+          user_id: job.user_id,
+          winget_id: job.winget_id,
+          version: job.version,
+          display_name: job.display_name,
+          publisher: job.publisher,
+          intune_app_id: data.intuneAppId,
+          intune_app_url: data.intuneAppUrl,
+          intune_tenant_id: job.tenant_id,
+        });
+      }
+    }
+
+    // Handle failure
+    if (data.status === 'failed') {
+      updateData.error_message = data.message || 'Unknown error';
+      updateData.completed_at = new Date().toISOString();
+      updateData.progress_percent = 0;
+
+      console.error(`Job ${data.jobId} failed: ${data.message}`);
+    }
+
+    // Update the job in database
+    const updatedJob = await db.jobs.update(data.jobId, updateData);
+
+    if (!updatedJob) {
+      console.error('Failed to update job');
+      return NextResponse.json(
+        { error: 'Failed to update job status' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      job: updatedJob,
+    });
+  } catch (error) {
+    console.error('Callback API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET handler for health check / verification
+ */
+export async function GET() {
+  const databaseMode = process.env.DATABASE_MODE || 'supabase';
+
+  const healthInfo: Record<string, unknown> = {
+    status: 'ok',
+    message: 'Package callback endpoint is active',
+    signatureRequired: Boolean(process.env.CALLBACK_SECRET),
+    databaseMode,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Check configuration status
+  const configStatus = {
+    callbackSecret: Boolean(process.env.CALLBACK_SECRET),
+    databaseMode,
+    supabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    packagerApiKey: Boolean(process.env.PACKAGER_API_KEY),
+    publicUrl: process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL || 'not configured',
+  };
+  healthInfo.configuration = configStatus;
+
+  // Try to get job stats from database
+  try {
+    const db = getDatabase();
+    const stats = await db.jobs.getStats();
+
+    healthInfo.jobStats = stats;
+    healthInfo.databaseConnected = true;
+  } catch {
+    healthInfo.databaseConnected = false;
+  }
+
+  return NextResponse.json(healthInfo);
+}

@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # ===========================================
+      # Database Mode (for true self-hosting)
+      # ===========================================
+      # "sqlite" - Uses local SQLite database (no external dependencies)
+      # "supabase" - Uses Supabase (default, requires Supabase credentials)
+      - DATABASE_MODE=${DATABASE_MODE:-supabase}
+      - DATABASE_PATH=/data/intuneget.db
+
+      # ===========================================
+      # Packager Authentication (for SQLite mode)
+      # ===========================================
+      # API key for packager authentication when using SQLite mode
+      # Generate with: openssl rand -hex 32
+      - PACKAGER_API_KEY=${PACKAGER_API_KEY:-}
+
+      # ===========================================
+      # Supabase Configuration (optional in SQLite mode)
+      # ===========================================
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+
+      # ===========================================
+      # Microsoft Entra ID (Required)
+      # ===========================================
+      - NEXT_PUBLIC_AZURE_AD_CLIENT_ID=${NEXT_PUBLIC_AZURE_AD_CLIENT_ID}
+      - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
+
+      # ===========================================
+      # Packager Mode
+      # ===========================================
+      # "local" - Use local Windows packager (recommended for self-hosting)
+      # "github" - Use GitHub Actions (requires GitHub credentials)
+      - PACKAGER_MODE=${PACKAGER_MODE:-local}
+
+      # ===========================================
+      # GitHub Actions Pipeline (optional, for github mode)
+      # ===========================================
+      - GITHUB_PAT=${GITHUB_PAT:-}
+      - GITHUB_OWNER=${GITHUB_OWNER:-}
+      - GITHUB_REPO=${GITHUB_REPO:-}
+
+      # ===========================================
+      # Callback Security (for GitHub mode)
+      # ===========================================
+      - CALLBACK_SECRET=${CALLBACK_SECRET:-}
+
+      # ===========================================
+      # Application URL
+      # ===========================================
+      - NEXT_PUBLIC_URL=${NEXT_PUBLIC_URL:-http://localhost:3000}
+
+      # ===========================================
+      # Optional Features
+      # ===========================================
+      - SITE_PASSWORD=${SITE_PASSWORD:-}
+      - NEXT_PUBLIC_PLAUSIBLE_DOMAIN=${NEXT_PUBLIC_PLAUSIBLE_DOMAIN:-}
+      - NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL=${NEXT_PUBLIC_PLAUSIBLE_SCRIPT_URL:-}
+      - BEEHIIV_API_KEY=${BEEHIIV_API_KEY:-}
+
+    volumes:
+      # Persist SQLite database
+      - intuneget-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  intuneget-data:
+    driver: local

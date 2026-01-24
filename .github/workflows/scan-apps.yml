@@ -1,0 +1,451 @@
+name: Scan App Installations
+
+on:
+  schedule:
+    # Run weekly on Wednesdays at 03:00 UTC
+    - cron: '0 3 * * 3'
+  workflow_dispatch:
+    inputs:
+      app_ids:
+        description: 'Specific app IDs to scan (comma-separated, or "all")'
+        required: false
+        default: 'all'
+      max_apps:
+        description: 'Maximum number of apps to scan'
+        required: false
+        default: '20'
+      trigger_source:
+        description: 'Source that triggered this workflow'
+        required: false
+        default: 'manual'
+
+# Prevent concurrent scans - only one scan at a time
+concurrency:
+  group: scan-apps
+  cancel-in-progress: false
+
+env:
+  MAX_APPS: ${{ github.event.inputs.max_apps || '10' }}
+  # Per-app timeout in seconds (15 minutes max per app)
+  APP_TIMEOUT_SECONDS: 900
+
+jobs:
+  scan-apps:
+    runs-on: windows-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install WinGet
+        shell: pwsh
+        run: |
+          # Check if winget is available
+          $winget = Get-Command winget -ErrorAction SilentlyContinue
+
+          if (-not $winget) {
+            Write-Host "Installing WinGet..."
+
+            # Download and install App Installer (includes WinGet)
+            $progressPreference = 'SilentlyContinue'
+            $url = "https://aka.ms/getwinget"
+            $installerPath = "$env:TEMP\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+
+            Invoke-WebRequest -Uri $url -OutFile $installerPath
+            Add-AppxPackage -Path $installerPath
+
+            # Refresh path
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          }
+
+          winget --version
+
+      - name: Get apps to scan
+        id: get-apps
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Load curated app list
+          $listPath = "curated-apps/list.json"
+          if (Test-Path $listPath) {
+            $list = Get-Content $listPath | ConvertFrom-Json
+            $apps = $list.apps
+          } else {
+            Write-Error "Curated app list not found"
+            exit 1
+          }
+
+          # Filter apps
+          $appIds = $env:APP_IDS
+          $maxApps = [int]$env:MAX_APPS
+
+          if ($appIds -ne 'all') {
+            $targetIds = $appIds -split ',' | ForEach-Object { $_.Trim() }
+            $apps = $apps | Where-Object { $targetIds -contains $_.winget_id }
+          }
+
+          # Prioritize apps without snapshots (would need DB check, using rank for now)
+          $apps = $apps | Sort-Object rank | Select-Object -First $maxApps
+
+          Write-Host "Selected $($apps.Count) apps for scanning"
+
+          # Save apps to process
+          $apps | ConvertTo-Json -Depth 10 | Out-File "apps-to-scan.json" -Encoding UTF8
+
+          echo "app_count=$($apps.Count)" >> $env:GITHUB_OUTPUT
+
+      - name: Scan apps
+        if: steps.get-apps.outputs.app_count != '0'
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          # Load apps to scan
+          $apps = Get-Content "apps-to-scan.json" | ConvertFrom-Json
+
+          $scanned = 0
+          $failed = 0
+          $skipped = 0
+          $results = @()
+
+          # Per-app timeout (default 15 minutes)
+          $appTimeoutSeconds = [int]($env:APP_TIMEOUT_SECONDS ?? 900)
+
+          # Known problematic apps that tend to hang or cause issues
+          $problematicApps = @(
+            # Add any apps that consistently cause problems here
+          )
+
+          foreach ($app in $apps) {
+            $wingetId = $app.winget_id
+            Write-Host "`n========================================" -ForegroundColor Cyan
+            Write-Host "Scanning: $wingetId" -ForegroundColor Cyan
+            Write-Host "========================================" -ForegroundColor Cyan
+
+            # Skip known problematic apps
+            if ($wingetId -in $problematicApps) {
+              Write-Host "Skipping known problematic app: $wingetId" -ForegroundColor Yellow
+              $skipped++
+              continue
+            }
+
+            # Log memory usage before each app
+            $memInfo = Get-Process -Id $PID | Select-Object WorkingSet64
+            Write-Host "Memory before scan: $('{0:N0}' -f ($memInfo.WorkingSet64 / 1MB)) MB"
+
+            $startTime = Get-Date
+            $scanResult = @{
+              winget_id = $wingetId
+              version = $null
+              status = 'pending'
+              error = $null
+              registry_changes = @{ added = @(); app_registry_entry = $null }
+              file_changes = @{ added = @(); file_count = 0 }
+              shortcuts_created = @()
+              services_created = @()
+              install_path = $null
+              uninstall_string = $null
+              quiet_uninstall_string = $null
+              installed_size_bytes = 0
+            }
+
+            try {
+              # Take baseline (lightweight - just counts existing keys/services/shortcuts)
+              Write-Host "Capturing baseline..."
+              $baseline = & "$env:GITHUB_WORKSPACE\.github\scripts\snapshot.ps1" -Mode "baseline"
+
+              # Install the app with timeout
+              Write-Host "Installing $wingetId (timeout: $appTimeoutSeconds seconds)..."
+
+              $installJob = Start-Job -ScriptBlock {
+                param($id)
+                winget install --id $id --silent --accept-package-agreements --accept-source-agreements 2>&1
+              } -ArgumentList $wingetId
+
+              $installCompleted = Wait-Job -Job $installJob -Timeout $appTimeoutSeconds
+
+              if (-not $installCompleted) {
+                Write-Warning "Installation timed out after $appTimeoutSeconds seconds"
+                Stop-Job -Job $installJob
+                Remove-Job -Job $installJob -Force
+
+                # Try to kill any hanging winget processes
+                Get-Process -Name "winget*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+                throw "Installation timed out after $appTimeoutSeconds seconds"
+              }
+
+              $installOutput = Receive-Job -Job $installJob
+              $installExitCode = $installJob.ChildJobs[0].JobStateInfo.Reason.ExitCode
+              Remove-Job -Job $installJob -Force
+
+              Write-Host "Installation output: $installOutput"
+
+              # Check if install succeeded (winget returns 0 on success, or -1978335189 for already installed)
+              if ($installExitCode -ne 0 -and $installExitCode -ne $null) {
+                # Check if it's just "already installed" error
+                if ($installOutput -match "already installed" -or $installExitCode -eq -1978335189) {
+                  Write-Host "App already installed, continuing with analysis..."
+                } else {
+                  throw "WinGet install failed with exit code $installExitCode"
+                }
+              }
+
+              # Wait for installation to settle
+              Start-Sleep -Seconds 5
+
+              # Analyze changes (lightweight - finds new uninstall entry, scans only that directory)
+              Write-Host "Analyzing installation changes..."
+              $appNameHint = $wingetId.Split('.')[-1]  # Use last part of ID as hint
+              $changes = & "$env:GITHUB_WORKSPACE\.github\scripts\snapshot.ps1" -Mode "analyze" -Baseline $baseline -AppName $appNameHint
+
+              # Populate scan result from analysis
+              $scanResult.version = $changes.version ?? "unknown"
+              $scanResult.install_path = $changes.install_path
+              $scanResult.uninstall_string = $changes.uninstall_string
+              $scanResult.quiet_uninstall_string = $changes.quiet_uninstall_string
+              $scanResult.file_changes = @{
+                added = $changes.files
+                file_count = $changes.file_count
+              }
+              $scanResult.shortcuts_created = $changes.shortcuts_created
+              $scanResult.services_created = $changes.services_created
+              $scanResult.installed_size_bytes = $changes.total_size_bytes
+              $scanResult.registry_changes = @{
+                added = $changes.all_new_entries
+                app_registry_entry = $changes.app_registry_entry
+              }
+              $scanResult.status = 'completed'
+
+              # Debug: Show what was detected
+              Write-Host "Detection summary:"
+              Write-Host "  - Version: $($scanResult.version)"
+              Write-Host "  - Install path: $($scanResult.install_path)"
+              Write-Host "  - Files: $($changes.file_count)"
+              Write-Host "  - Shortcuts: $($changes.shortcuts_created.Count)"
+              Write-Host "  - Services: $($changes.services_created.Count)"
+              Write-Host "  - Registry detection: $($changes.app_registry_entry.detection_method ?? 'none')"
+
+              $scanned++
+              Write-Host "Successfully scanned $wingetId" -ForegroundColor Green
+
+              # Uninstall the app with timeout
+              Write-Host "Uninstalling $wingetId..."
+              $uninstallJob = Start-Job -ScriptBlock {
+                param($id)
+                winget uninstall --id $id --silent 2>&1
+              } -ArgumentList $wingetId
+
+              $uninstallCompleted = Wait-Job -Job $uninstallJob -Timeout 300  # 5 min timeout for uninstall
+              if (-not $uninstallCompleted) {
+                Write-Warning "Uninstall timed out, forcing cleanup..."
+                Stop-Job -Job $uninstallJob
+              }
+              Remove-Job -Job $uninstallJob -Force -ErrorAction SilentlyContinue
+
+              Start-Sleep -Seconds 3
+
+            } catch {
+              $scanResult.status = 'failed'
+              $scanResult.error = $_.ToString()
+              Write-Warning "Failed to scan $wingetId : $_"
+              $failed++
+
+              # Try to uninstall anyway
+              try {
+                $cleanupJob = Start-Job -ScriptBlock {
+                  param($id)
+                  winget uninstall --id $id --silent 2>&1
+                } -ArgumentList $wingetId
+                Wait-Job -Job $cleanupJob -Timeout 120 | Out-Null
+                Remove-Job -Job $cleanupJob -Force -ErrorAction SilentlyContinue
+              } catch {}
+            }
+
+            $endTime = Get-Date
+            $scanResult.scan_duration_seconds = [int]($endTime - $startTime).TotalSeconds
+
+            $results += $scanResult
+
+            # Force garbage collection to free memory between apps
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+
+            # Log memory usage after cleanup
+            $memInfo = Get-Process -Id $PID | Select-Object WorkingSet64
+            Write-Host "Memory after cleanup: $('{0:N0}' -f ($memInfo.WorkingSet64 / 1MB)) MB"
+
+            # Small delay between apps
+            Start-Sleep -Seconds 5
+          }
+
+          Write-Host "`n=== Scan Summary ===" -ForegroundColor Cyan
+          Write-Host "Scanned: $scanned"
+          Write-Host "Failed: $failed"
+          Write-Host "Skipped: $skipped"
+          Write-Host "Results count: $($results.Count)"
+
+          # Debug: Show what we're about to write
+          if ($results.Count -eq 0) {
+            Write-Host "Warning: No results to save, creating empty array"
+            $results = @()
+          }
+
+          # Save results (ensure it's always an array, even with single item)
+          # Use explicit array wrapping and avoid BOM issues
+          $resultsArray = @($results)
+          Write-Host "Saving $($resultsArray.Count) results as JSON array"
+          $jsonContent = ConvertTo-Json -InputObject $resultsArray -Depth 20 -Compress:$false
+          [System.IO.File]::WriteAllText("$PWD\scan-results.json", $jsonContent, (New-Object System.Text.UTF8Encoding $false))
+
+          # Verify file was written
+          if (Test-Path "scan-results.json") {
+            $fileContent = Get-Content "scan-results.json" -Raw
+            Write-Host "Saved scan-results.json ($($fileContent.Length) chars)"
+            Write-Host "First 200 chars: $($fileContent.Substring(0, [Math]::Min(200, $fileContent.Length)))"
+          }
+
+          echo "scanned=$scanned" >> $env:GITHUB_OUTPUT
+          echo "failed=$failed" >> $env:GITHUB_OUTPUT
+
+      - name: Upload results to Supabase
+        if: steps.get-apps.outputs.app_count != '0'
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabaseUrl = process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+          if (!supabaseUrl || !supabaseKey) {
+            console.log('Supabase credentials not configured');
+            process.exit(0);
+          }
+
+          const supabase = createClient(supabaseUrl, supabaseKey);
+
+          async function uploadResults() {
+            const results = JSON.parse(fs.readFileSync('scan-results.json', 'utf8'));
+
+            let uploaded = 0;
+            let failed = 0;
+
+            for (const result of results) {
+              if (result.status !== 'completed') {
+                failed++;
+                continue;
+              }
+
+              const record = {
+                winget_id: result.winget_id,
+                version: result.version,
+                scanned_at: new Date().toISOString(),
+                scan_duration_seconds: result.scan_duration_seconds,
+                scan_status: result.status,
+                scan_error: result.error,
+                registry_changes: result.registry_changes,
+                file_changes: result.file_changes,
+                shortcuts_created: result.shortcuts_created,
+                services_created: result.services_created,
+                install_path: result.install_path,
+                uninstall_string: result.uninstall_string,
+                quiet_uninstall_string: result.quiet_uninstall_string,
+                installed_size_bytes: result.installed_size_bytes,
+                os_version: process.env.OS || 'Windows',
+                architecture: 'x64',
+                updated_at: new Date().toISOString()
+              };
+
+              const { error } = await supabase
+                .from('installation_snapshots')
+                .upsert(record, { onConflict: 'winget_id,version' });
+
+              if (error) {
+                console.error(`Failed to upload ${result.winget_id}:`, error.message);
+                failed++;
+              } else {
+                uploaded++;
+              }
+            }
+
+            // Update sync status
+            await supabase.from('curated_sync_status').upsert({
+              id: 'scan-apps',
+              last_run_completed_at: new Date().toISOString(),
+              last_run_status: failed > 0 && uploaded === 0 ? 'failed' : 'success',
+              items_processed: uploaded,
+              error_message: failed > 0 ? `${failed} scans failed` : null,
+              metadata: {
+                total: results.length,
+                uploaded,
+                failed
+              },
+              updated_at: new Date().toISOString()
+            });
+
+            console.log(`Uploaded ${uploaded} scan results, ${failed} failed`);
+          }
+
+          uploadResults()
+            .then(() => {
+              console.log('Upload complete');
+              process.exit(0);
+            })
+            .catch(err => {
+              console.error('Upload failed:', err);
+              process.exit(1);
+            });
+          EOF
+
+      - name: Create summary
+        run: |
+          if (Test-Path scan-results.json) {
+            $results = Get-Content scan-results.json | ConvertFrom-Json
+            $completed = ($results | Where-Object { $_.status -eq 'completed' }).Count
+            $failed = ($results | Where-Object { $_.status -eq 'failed' }).Count
+
+            @"
+          ## App Scan Summary
+
+          - **Successfully scanned:** $completed
+          - **Failed:** $failed
+          - **Total processed:** $($results.Count)
+
+          ### Scan Details
+          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+            foreach ($r in $results | Select-Object -First 20) {
+              $icon = if ($r.status -eq 'completed') { ':white_check_mark:' } else { ':x:' }
+              $registryCount = ($r.registry_changes.added).Count
+              $fileCount = ($r.file_changes.added).Count
+              $shortcutCount = ($r.shortcuts_created).Count
+
+              @"
+          | $icon | $($r.winget_id) | $($r.version ?? 'N/A') | $registryCount registry | $fileCount files | $shortcutCount shortcuts |
+          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            }
+          }
+        shell: pwsh

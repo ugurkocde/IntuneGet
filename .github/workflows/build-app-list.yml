@@ -1,0 +1,533 @@
+name: Build Curated App List
+
+on:
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      max_apps:
+        description: 'Maximum number of apps to include'
+        required: false
+        default: '1000'
+      force_refresh:
+        description: 'Force refresh all apps (ignore cache)'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Prevent concurrent runs that could cause git conflicts
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  MAX_APPS: ${{ github.event.inputs.max_apps || '1000' }}
+
+permissions:
+  contents: write
+
+jobs:
+  build-app-list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch Chocolatey top packages
+        id: chocolatey
+        run: |
+          echo "Fetching top packages from Chocolatey (XML format)..."
+
+          # Chocolatey API only supports XML, returns max 40 entries per page
+          # Fetch 50 pages = up to 2000 packages
+          total_entries=0
+
+          for page in $(seq 0 49); do
+            skip=$((page * 40))
+            echo "Fetching page $((page + 1))/50 (skip=$skip)..."
+
+            curl -s "https://community.chocolatey.org/api/v2/Packages()?\$orderby=DownloadCount%20desc&\$top=40&\$skip=$skip&\$filter=IsLatestVersion" \
+              -H "Accept: application/atom+xml" \
+              -o "page-$page.xml"
+
+            # Check if we got valid XML with entries
+            if grep -q "<entry>" "page-$page.xml"; then
+              count=$(grep -c "<entry>" "page-$page.xml")
+              total_entries=$((total_entries + count))
+              echo "  Got $count entries (total: $total_entries)"
+            else
+              echo "  No entries, stopping pagination"
+              rm -f "page-$page.xml"
+              break
+            fi
+
+            # Small delay to avoid rate limiting
+            sleep 0.2
+          done
+
+          echo "Total entries fetched: $total_entries"
+          echo "chocolatey_fetched=true" >> $GITHUB_OUTPUT
+
+      - name: Build curated app list
+        id: build
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          // Load Chocolatey mapping
+          const mappingPath = './curated-apps/chocolatey-mapping.json';
+          const mapping = JSON.parse(fs.readFileSync(mappingPath, 'utf8'));
+          const chocoToWinget = mapping.mappings;
+          const excludedPackages = new Set(mapping.excluded || []);
+          const categories = mapping.categories || {};
+
+          // Build reverse category lookup
+          const packageToCategory = {};
+          for (const [category, packages] of Object.entries(categories)) {
+            for (const pkg of packages) {
+              packageToCategory[pkg] = category;
+            }
+          }
+
+          // Parse Chocolatey XML responses
+          let chocolateyPackages = [];
+
+          try {
+            // Find all page XML files
+            const xmlFiles = fs.readdirSync('.').filter(f => f.match(/^page-\d+\.xml$/)).sort((a, b) => {
+              const numA = parseInt(a.match(/\d+/)[0]);
+              const numB = parseInt(b.match(/\d+/)[0]);
+              return numA - numB;
+            });
+
+            console.log(`Found ${xmlFiles.length} XML page files`);
+
+            for (const xmlFile of xmlFiles) {
+              const xml = fs.readFileSync(xmlFile, 'utf8');
+
+              // Parse entries using regex (simple approach for OData Atom format)
+              const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+              let match;
+
+              while ((match = entryRegex.exec(xml)) !== null) {
+                const entry = match[1];
+
+                // Extract fields using regex
+                const getId = (tag) => {
+                  const regex = new RegExp(`<d:${tag}[^>]*>([^<]*)<\/d:${tag}>`);
+                  const m = entry.match(regex);
+                  return m ? m[1] : null;
+                };
+
+                const getIntId = (tag) => {
+                  const val = getId(tag);
+                  return val ? parseInt(val, 10) : 0;
+                };
+
+                const id = entry.match(/<title[^>]*>([^<]*)<\/title>/)?.[1];
+                const title = getId('Title') || id;
+                const downloadCount = getIntId('DownloadCount');
+                const tags = getId('Tags');
+                const summary = entry.match(/<summary[^>]*>([^<]*)<\/summary>/)?.[1];
+                const projectUrl = getId('ProjectUrl');
+                const iconUrl = getId('IconUrl');
+
+                if (id) {
+                  chocolateyPackages.push({
+                    Id: id,
+                    Title: title,
+                    DownloadCount: downloadCount,
+                    Tags: tags,
+                    Summary: summary,
+                    ProjectUrl: projectUrl,
+                    IconUrl: iconUrl
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing Chocolatey data:', e.message);
+            process.exit(1);
+          }
+
+          console.log(`Loaded ${chocolateyPackages.length} packages from Chocolatey`);
+
+          // Map Chocolatey packages to Winget IDs
+          const maxApps = parseInt(process.env.MAX_APPS || '1000', 10);
+          const apps = [];
+          const seenWingetIds = new Set();
+
+          for (const pkg of chocolateyPackages) {
+            if (apps.length >= maxApps) break;
+
+            const chocoId = pkg.Id || pkg.id;
+            const chocoIdLower = chocoId?.toLowerCase();
+
+            // Skip excluded packages
+            if (!chocoIdLower || excludedPackages.has(chocoIdLower)) {
+              continue;
+            }
+
+            // Try to map to Winget ID - only use explicit mappings
+            let wingetId = chocoToWinget[chocoIdLower];
+
+            // Skip packages without explicit mapping
+            // Guessing IDs leads to many incorrect entries
+            if (!wingetId) {
+              continue;
+            }
+
+            // Skip if we've already added this Winget ID
+            if (seenWingetIds.has(wingetId)) {
+              continue;
+            }
+            seenWingetIds.add(wingetId);
+
+            // Determine category
+            let category = packageToCategory[chocoIdLower] || null;
+
+            // Try to infer category from tags
+            if (!category && pkg.Tags) {
+              const tags = pkg.Tags.toLowerCase();
+              if (tags.includes('browser')) category = 'browser';
+              else if (tags.includes('ide') || tags.includes('editor')) category = 'developer-tools';
+              else if (tags.includes('game') || tags.includes('gaming')) category = 'gaming';
+              else if (tags.includes('media') || tags.includes('video') || tags.includes('audio')) category = 'media';
+              else if (tags.includes('security') || tags.includes('antivirus')) category = 'security';
+              else if (tags.includes('utility') || tags.includes('tool')) category = 'utilities';
+            }
+
+            apps.push({
+              rank: apps.length + 1,
+              winget_id: wingetId,
+              chocolatey_id: chocoId,
+              download_count: pkg.DownloadCount || 0,
+              category: category,
+              name: pkg.Title || chocoId,
+              summary: pkg.Summary || '',
+              homepage: pkg.ProjectUrl || null,
+              is_mapped: true
+            });
+          }
+
+          console.log(`Mapped ${apps.length} apps to Winget IDs`);
+
+          // Generate output file
+          const output = {
+            generated_at: new Date().toISOString(),
+            source: 'chocolatey',
+            total_apps: apps.length,
+            apps: apps
+          };
+
+          // Ensure output directory exists
+          const outputDir = './curated-apps';
+          if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+          }
+
+          fs.writeFileSync(
+            path.join(outputDir, 'list.json'),
+            JSON.stringify(output, null, 2)
+          );
+
+          console.log(`Generated curated-apps/list.json with ${apps.length} apps`);
+
+          // Output stats for workflow
+          const stats = {
+            total: apps.length,
+            mapped: apps.filter(a => a.is_mapped).length,
+            with_category: apps.filter(a => a.category).length
+          };
+
+          console.log('Stats:', JSON.stringify(stats));
+          fs.writeFileSync('./build-stats.json', JSON.stringify(stats));
+          EOF
+
+          echo "build_complete=true" >> $GITHUB_OUTPUT
+
+          # Read stats
+          TOTAL=$(jq -r '.total' build-stats.json)
+          echo "total_apps=$TOTAL" >> $GITHUB_OUTPUT
+
+      - name: Verify Winget manifests exist
+        id: verify
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const https = require('https');
+
+          const listPath = './curated-apps/list.json';
+          const list = JSON.parse(fs.readFileSync(listPath, 'utf8'));
+
+          // Verify manifests exist in winget-pkgs repo
+          const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
+
+          async function checkManifestExists(wingetId) {
+            return new Promise((resolve) => {
+              const parts = wingetId.split('.');
+              if (parts.length < 2) {
+                resolve(false);
+                return;
+              }
+
+              const publisher = parts[0];
+              const firstLetter = publisher.charAt(0).toLowerCase();
+              const pathParts = parts.join('/');
+
+              // Use GitHub API to list directory contents
+              const url = `${GITHUB_API_BASE}/${firstLetter}/${pathParts}`;
+
+              https.get(url, { headers: { 'User-Agent': 'IntuneGet' } }, (res) => {
+                if (res.statusCode !== 200) {
+                  resolve(false);
+                  return;
+                }
+
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  try {
+                    const contents = JSON.parse(data);
+                    // Check if there's at least one directory (version folder)
+                    const hasVersionDir = contents.some(item => item.type === 'dir');
+                    resolve(hasVersionDir);
+                  } catch {
+                    resolve(false);
+                  }
+                });
+              }).on('error', () => {
+                resolve(false);
+              });
+            });
+          }
+
+          async function verifyApps() {
+            const verifiedApps = [];
+            const unverifiedApps = [];
+
+            // Process in batches to avoid rate limiting
+            const batchSize = 50;
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+
+            for (let i = 0; i < list.apps.length; i += batchSize) {
+              const batch = list.apps.slice(i, i + batchSize);
+
+              const results = await Promise.all(
+                batch.map(async (app) => {
+                  const exists = await checkManifestExists(app.winget_id);
+                  return { app, exists };
+                })
+              );
+
+              for (const { app, exists } of results) {
+                if (exists) {
+                  app.is_verified = true;
+                  verifiedApps.push(app);
+                } else {
+                  app.is_verified = false;
+                  unverifiedApps.push(app);
+                }
+              }
+
+              console.log(`Verified ${Math.min(i + batchSize, list.apps.length)}/${list.apps.length} apps...`);
+
+              // Rate limiting
+              if (i + batchSize < list.apps.length) {
+                await delay(1000);
+              }
+            }
+
+            // Update list with only verified apps
+            list.apps = verifiedApps;
+            list.total_apps = verifiedApps.length;
+            list.unverified_count = unverifiedApps.length;
+
+            // Re-rank verified apps
+            list.apps.forEach((app, idx) => {
+              app.rank = idx + 1;
+            });
+
+            fs.writeFileSync(listPath, JSON.stringify(list, null, 2));
+
+            // Save unverified apps for review
+            fs.writeFileSync(
+              './curated-apps/unverified.json',
+              JSON.stringify({ apps: unverifiedApps }, null, 2)
+            );
+
+            console.log(`Verified: ${verifiedApps.length}, Unverified: ${unverifiedApps.length}`);
+          }
+
+          verifyApps().then(() => {
+            console.log('Verification complete');
+            process.exit(0);
+          }).catch((err) => {
+            console.error('Verification failed:', err);
+            process.exit(1);
+          });
+          EOF
+
+          echo "verification_complete=true" >> $GITHUB_OUTPUT
+
+      - name: Sync to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabaseUrl = process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+          if (!supabaseUrl || !supabaseKey) {
+            console.log('Supabase credentials not configured, skipping sync');
+            process.exit(0);
+          }
+
+          const supabase = createClient(supabaseUrl, supabaseKey);
+
+          async function syncToSupabase() {
+            const list = JSON.parse(fs.readFileSync('./curated-apps/list.json', 'utf8'));
+
+            // Update sync status to running
+            await supabase.from('curated_sync_status').upsert({
+              id: 'build-app-list',
+              last_run_started_at: new Date().toISOString(),
+              last_run_status: 'running',
+              updated_at: new Date().toISOString()
+            });
+
+            try {
+              // Prepare data for upsert
+              const appsToUpsert = list.apps.map(app => ({
+                winget_id: app.winget_id,
+                chocolatey_id: app.chocolatey_id,
+                name: app.name,
+                publisher: app.winget_id.split('.')[0] || 'Unknown',
+                description: app.summary || null,
+                homepage: app.homepage || null,
+                chocolatey_downloads: app.download_count,
+                popularity_rank: app.rank,
+                category: app.category,
+                is_verified: app.is_verified || false,
+                updated_at: new Date().toISOString()
+              }));
+
+              // Upsert in batches
+              const batchSize = 100;
+              let totalUpserted = 0;
+
+              for (let i = 0; i < appsToUpsert.length; i += batchSize) {
+                const batch = appsToUpsert.slice(i, i + batchSize);
+
+                const { error } = await supabase
+                  .from('curated_apps')
+                  .upsert(batch, {
+                    onConflict: 'winget_id',
+                    ignoreDuplicates: false
+                  });
+
+                if (error) {
+                  throw error;
+                }
+
+                totalUpserted += batch.length;
+                console.log(`Upserted ${totalUpserted}/${appsToUpsert.length} apps`);
+              }
+
+              // Update sync status to success
+              await supabase.from('curated_sync_status').upsert({
+                id: 'build-app-list',
+                last_run_completed_at: new Date().toISOString(),
+                last_run_status: 'success',
+                items_processed: totalUpserted,
+                error_message: null,
+                metadata: {
+                  source: 'chocolatey',
+                  generated_at: list.generated_at
+                },
+                updated_at: new Date().toISOString()
+              });
+
+              console.log(`Successfully synced ${totalUpserted} apps to Supabase`);
+            } catch (error) {
+              // Update sync status to failed
+              await supabase.from('curated_sync_status').upsert({
+                id: 'build-app-list',
+                last_run_status: 'failed',
+                error_message: error.message,
+                updated_at: new Date().toISOString()
+              });
+
+              console.error('Sync failed:', error.message);
+              process.exit(1);
+            }
+          }
+
+          syncToSupabase().then(() => {
+            process.exit(0);
+          }).catch((err) => {
+            console.error('Unexpected error:', err);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Stage files first
+          git add curated-apps/list.json curated-apps/unverified.json || true
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            TOTAL=$(jq -r '.total_apps' curated-apps/list.json)
+            git commit -m "chore: update curated app list ($TOTAL apps)"
+
+            # Pull and rebase, then push (retry up to 3 times for race conditions)
+            for i in 1 2 3; do
+              git pull --rebase origin master && git push origin master && break
+              echo "Retry $i: pull/push failed, retrying..."
+              sleep 5
+            done
+          fi
+
+      - name: Create summary
+        run: |
+          TOTAL=$(jq -r '.total_apps' curated-apps/list.json)
+          UNVERIFIED=$(jq -r '.unverified_count // 0' curated-apps/list.json)
+
+          echo "## Curated App List Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total verified apps:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unverified apps:** $UNVERIFIED" >> $GITHUB_STEP_SUMMARY
+          echo "- **Generated at:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Top 10 Apps by Popularity" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          jq -r '.apps[:10] | .[] | "| \(.rank) | \(.winget_id) | \(.download_count | tostring | gsub("(?<=[0-9])(?=(?:[0-9]{3})+$)"; ",")) |"' curated-apps/list.json | \
+            { echo "| Rank | Winget ID | Chocolatey Downloads |"; echo "|------|-----------|---------------------|"; cat; } >> $GITHUB_STEP_SUMMARY
