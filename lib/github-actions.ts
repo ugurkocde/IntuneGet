@@ -97,25 +97,35 @@ export async function triggerPackagingWorkflow(
       'Content-Type': 'application/json',
       'X-GitHub-Api-Version': '2022-11-28',
     },
+    // GitHub repository_dispatch allows max 10 top-level properties in client_payload
+    // We consolidate into 4 groups: job, app, installer, config
     body: JSON.stringify({
       event_type: 'package-app',
       client_payload: {
-        jobId: inputs.jobId,
-        tenantId: inputs.tenantId,
-        wingetId: inputs.wingetId,
-        displayName: inputs.displayName,
-        publisher: inputs.publisher,
-        version: inputs.version,
-        installerUrl: inputs.installerUrl,
-        installerSha256: inputs.installerSha256,
-        installerType: inputs.installerType,
-        silentSwitches: inputs.silentSwitches,
-        uninstallCommand: inputs.uninstallCommand,
-        callbackUrl: inputs.callbackUrl,
-        psadtConfig: inputs.psadtConfig || '{}',
-        detectionRules: inputs.detectionRules || '[]',
-        assignments: inputs.assignments || '[]',
-        installScope: inputs.installScope || 'machine',
+        job: {
+          jobId: inputs.jobId,
+          tenantId: inputs.tenantId,
+          callbackUrl: inputs.callbackUrl,
+        },
+        app: {
+          wingetId: inputs.wingetId,
+          displayName: inputs.displayName,
+          publisher: inputs.publisher,
+          version: inputs.version,
+        },
+        installer: {
+          url: inputs.installerUrl,
+          sha256: inputs.installerSha256,
+          type: inputs.installerType,
+          silentSwitches: inputs.silentSwitches,
+          uninstallCommand: inputs.uninstallCommand,
+        },
+        config: {
+          psadtConfig: inputs.psadtConfig || '{}',
+          detectionRules: inputs.detectionRules || '[]',
+          assignments: inputs.assignments || '[]',
+          installScope: inputs.installScope || 'machine',
+        },
       },
     }),
   });
