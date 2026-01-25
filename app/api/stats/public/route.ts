@@ -6,14 +6,13 @@ let cache: { data: { signinClicks: number; appsDeployed: number; appsSupported: 
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
 export async function GET() {
-  console.log('[stats/public] Function invoked at', new Date().toISOString());
   try {
     // Check cache first
     if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
       console.log('[stats/public] Returning cached data:', cache.data);
       return NextResponse.json(cache.data, {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
         },
       });
     }
@@ -31,7 +30,7 @@ export async function GET() {
         { signinClicks: 0, appsDeployed: 0, appsSupported: 0 },
         {
           headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
           },
         }
       );
@@ -69,7 +68,7 @@ export async function GET() {
         cache?.data ?? { signinClicks: 0, appsDeployed: 0, appsSupported: 0 },
         {
           headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
           },
         }
       );
@@ -92,7 +91,7 @@ export async function GET() {
 
     return NextResponse.json(stats, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
       },
     });
   } catch (error) {
@@ -101,7 +100,7 @@ export async function GET() {
       { signinClicks: 0, appsDeployed: 0, appsSupported: 0 },
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
         },
       }
     );
