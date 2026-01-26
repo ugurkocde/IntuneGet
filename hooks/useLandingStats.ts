@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface LandingStats {
   signinClicks: number;
@@ -36,6 +38,50 @@ export function useLandingStats(): LandingStats {
     }
 
     fetchStats();
+  }, []);
+
+  // Subscribe to realtime updates for site_counters
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      return;
+    }
+
+    let channel: RealtimeChannel | null = null;
+
+    try {
+      const supabase = getSupabaseClient();
+      channel = supabase
+        .channel('site_counters_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'site_counters',
+          },
+          (payload) => {
+            const { id, value } = payload.new as { id: string; value: number };
+            setStats((prev) => {
+              if (id === 'apps_deployed') {
+                return { ...prev, appsDeployed: value };
+              }
+              if (id === 'signin_clicks') {
+                return { ...prev, signinClicks: value };
+              }
+              return prev;
+            });
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.error('Failed to subscribe to realtime updates:', err);
+    }
+
+    return () => {
+      if (channel) {
+        channel.unsubscribe();
+      }
+    };
   }, []);
 
   return {
