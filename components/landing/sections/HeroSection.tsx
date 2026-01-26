@@ -157,6 +157,13 @@ export function HeroSection() {
                 </span>
                 <span className="text-xs md:text-sm text-zinc-500">Deployed</span>
               </div>
+              <div className="hidden sm:block w-px h-10 bg-zinc-700/50" />
+              <div className="flex flex-col items-center">
+                <span className="text-2xl md:text-3xl font-bold text-white">
+                  {isLoading ? "..." : <CountUp end={signinClicks} />}
+                </span>
+                <span className="text-xs md:text-sm text-zinc-500">Active Users</span>
+              </div>
             </div>
           </FadeIn>
 
