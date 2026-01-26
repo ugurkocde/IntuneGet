@@ -388,7 +388,7 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
                 Share this link with your Global Administrator. They need to click it and approve the permissions:
               </p>
 
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
                 <code className="flex-1 bg-slate-950 px-3 py-2 rounded-lg text-xs text-slate-400 overflow-hidden text-ellipsis whitespace-nowrap">
                   {shareableUrl}
                 </code>
@@ -421,7 +421,7 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center justify-center gap-3 mt-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mt-4">
               <Button
                 onClick={() => setShowShareOption(false)}
                 variant="ghost"

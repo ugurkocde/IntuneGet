@@ -227,10 +227,14 @@ export default function DashboardLayout({
 
           {/* User section */}
           <div className="p-4 border-t border-white/5">
-            <div className="flex items-center gap-3 mb-4">
+            <Link
+              href="/dashboard/account"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 mb-4 group rounded-lg p-2 -m-2 hover:bg-white/5 transition-colors"
+            >
               {/* Avatar with gradient ring */}
               <div className="relative">
-                <div className="absolute -inset-0.5 bg-gradient-to-br from-accent-cyan to-accent-violet rounded-full opacity-75" />
+                <div className="absolute -inset-0.5 bg-gradient-to-br from-accent-cyan to-accent-violet rounded-full opacity-75 group-hover:opacity-100 transition-opacity" />
                 <div className="relative w-10 h-10 rounded-full bg-bg-elevated flex items-center justify-center">
                   <span className="text-sm font-semibold text-white">
                     {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
@@ -238,14 +242,15 @@ export default function DashboardLayout({
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
+                <p className="text-sm font-medium text-white truncate group-hover:text-accent-cyan-bright transition-colors">
                   {user?.name || 'User'}
                 </p>
                 <p className="text-xs text-zinc-500 truncate">
                   {user?.email}
                 </p>
               </div>
-            </div>
+              <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-accent-cyan transition-colors opacity-0 group-hover:opacity-100" />
+            </Link>
             <Button
               variant="ghost"
               onClick={handleSignOut}
@@ -296,10 +301,10 @@ export default function DashboardLayout({
         {/* Consent Verification Retry Banner */}
         {showRetryBanner && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 lg:px-6 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                <div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-start sm:items-center gap-3 min-w-0">
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5 sm:mt-0" />
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-amber-200">
                     Unable to verify organization setup
                   </p>
@@ -314,7 +319,7 @@ export default function DashboardLayout({
                 onClick={handleRetry}
                 disabled={isRetrying}
                 size="sm"
-                className="bg-amber-500 hover:bg-amber-600 text-black font-medium flex-shrink-0"
+                className="bg-amber-500 hover:bg-amber-600 text-black font-medium flex-shrink-0 w-full sm:w-auto"
               >
                 {isRetrying ? (
                   <>

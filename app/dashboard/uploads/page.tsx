@@ -285,7 +285,7 @@ export default function UploadsPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="flex gap-2"
+        className="flex flex-wrap gap-2"
       >
         {filterButtons.map((f) => (
           <button

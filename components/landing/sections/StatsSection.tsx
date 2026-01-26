@@ -46,7 +46,7 @@ export function StatsSection() {
 
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
         <StaggerContainer
-          className="grid gap-8 sm:grid-cols-3"
+          className="grid gap-6 sm:gap-8 sm:grid-cols-3"
           staggerDelay={0.1}
         >
           {stats.map((stat, index) => (

@@ -103,7 +103,7 @@ export function CTASection() {
           </FadeIn>
 
           <FadeIn delay={0.4}>
-            <div className="flex items-center justify-center gap-6 text-sm text-zinc-500 pt-4">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-sm text-zinc-500 pt-4">
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 No credit card required

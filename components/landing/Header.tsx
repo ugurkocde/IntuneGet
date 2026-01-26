@@ -116,7 +116,7 @@ export function Header() {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden relative z-10 p-2 text-zinc-400 hover:text-white transition-colors"
+            className="md:hidden relative z-10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
             aria-label="Toggle menu"
           >
             {isMenuOpen ? (
@@ -149,7 +149,7 @@ export function Header() {
               key={link.href}
               href={link.href}
               onClick={() => setIsMenuOpen(false)}
-              className="text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-2"
+              className="text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-3"
             >
               {link.label}
             </Link>
@@ -159,7 +159,7 @@ export function Header() {
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setIsMenuOpen(false)}
-            className="inline-flex items-center gap-2 text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-2"
+            className="inline-flex items-center gap-2 text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-3"
           >
             <Github className="h-5 w-5" />
             <span>GitHub</span>

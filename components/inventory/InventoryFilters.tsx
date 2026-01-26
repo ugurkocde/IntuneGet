@@ -74,11 +74,11 @@ export function InventoryFilters({
       </div>
 
       {/* Sort controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-zinc-400">
           {filteredCount} of {totalCount} apps
         </span>
-        <div className="flex items-center gap-1 ml-4">
+        <div className="flex flex-wrap items-center gap-1 sm:ml-4">
           <span className="text-sm text-zinc-500">Sort:</span>
           {sortOptions.map((option) => (
             <Button

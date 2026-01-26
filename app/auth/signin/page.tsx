@@ -201,7 +201,7 @@ function SignInContent() {
           </div>
 
           {/* Sign in card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-8 space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold tracking-tight text-white">Welcome</h2>
               <p className="text-slate-400">
@@ -275,7 +275,7 @@ function SignInContent() {
                     <label className="text-xs text-slate-400 font-medium">
                       Share this link with your Global Administrator:
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         readOnly

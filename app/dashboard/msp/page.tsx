@@ -111,7 +111,7 @@ export default function MspDashboardPage() {
       </motion.div>
 
       {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Tenants Section */}
         <motion.div variants={itemVariants} className="lg:col-span-1 space-y-4">
           <div className="flex items-center justify-between">

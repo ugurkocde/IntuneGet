@@ -212,7 +212,7 @@ export default function SettingsPage() {
           variants={itemVariants}
           className="glass-dark rounded-xl p-6 border border-white/5 hover:border-accent-cyan/20 transition-colors"
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center">
                 <Shield className="w-5 h-5 text-accent-cyan" />
@@ -224,7 +224,7 @@ export default function SettingsPage() {
               disabled={isChecking}
               variant="outline"
               size="sm"
-              className="border-white/10 hover:border-accent-cyan/50"
+              className="border-white/10 hover:border-accent-cyan/50 w-full sm:w-auto"
             >
               {isChecking ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

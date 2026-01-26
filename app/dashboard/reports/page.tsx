@@ -104,7 +104,7 @@ export default function ReportsPage() {
         gradient
         gradientColors="mixed"
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Button
               variant="ghost"
               size="sm"
@@ -136,7 +136,7 @@ export default function ReportsPage() {
         variants={itemVariants}
         initial="hidden"
         animate="visible"
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0"
       >
         <DateRangePicker value={days} onChange={setDays} />
         <p className="text-sm text-zinc-500">

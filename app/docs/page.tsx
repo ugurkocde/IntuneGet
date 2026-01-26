@@ -351,8 +351,8 @@ export default function DocsPage() {
           Self-hosted IntuneGet runs entirely on your infrastructure with zero external dependencies:
         </p>
 
-        <div className="rounded-lg border border-white/10 bg-bg-surface p-6 font-mono text-sm">
-          <pre className="text-zinc-400 overflow-x-auto">
+        <div className="rounded-lg border border-white/10 bg-bg-surface p-4 sm:p-6 font-mono">
+          <pre className="text-zinc-400 overflow-x-auto text-[10px] sm:text-xs md:text-sm">
 {`+----------------------------------+       +--------------------------------+
 |         DOCKER CONTAINER         |       |      WINDOWS MACHINE           |
 +----------------------------------+       +--------------------------------+

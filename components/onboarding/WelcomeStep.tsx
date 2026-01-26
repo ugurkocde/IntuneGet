@@ -21,7 +21,7 @@ export function WelcomeStep({ userName, onNext }: WelcomeStepProps) {
       </div>
 
       {/* Heading */}
-      <h1 className="text-3xl font-bold text-white mb-4">
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">
         Welcome, {firstName}!
       </h1>
 

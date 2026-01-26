@@ -178,7 +178,7 @@ export function PackageConfig({ package: pkg, installers, onClose }: PackageConf
         <div className="flex-1 overflow-y-auto">
           <div className="p-6 space-y-6">
             {/* Version & Architecture Selection */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Version */}
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-2">Version</label>
@@ -215,7 +215,7 @@ export function PackageConfig({ package: pkg, installers, onClose }: PackageConf
               {/* Architecture */}
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-2">Architecture</label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(['x64', 'x86', 'arm64'] as WingetArchitecture[]).map((arch) => {
                     const available = availableArchitectures.includes(arch);
                     return (
@@ -301,7 +301,7 @@ export function PackageConfig({ package: pkg, installers, onClose }: PackageConf
                         <p className="text-slate-500 text-sm italic">No processes configured</p>
                       ) : (
                         config.processesToClose.map((process, index) => (
-                          <div key={index} className="flex items-center gap-2">
+                          <div key={index} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <input
                               type="text"
                               value={process.name}

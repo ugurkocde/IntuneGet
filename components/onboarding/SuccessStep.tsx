@@ -52,7 +52,7 @@ export function SuccessStep({ userName }: SuccessStepProps) {
       </div>
 
       {/* Heading */}
-      <h1 className="text-3xl font-bold text-white mb-4">
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">
         You're All Set, {firstName}!
       </h1>
 

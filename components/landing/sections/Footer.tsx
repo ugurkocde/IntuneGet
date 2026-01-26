@@ -45,7 +45,7 @@ export function Footer() {
             </div>
 
             {/* Navigation */}
-            <nav className="flex flex-wrap items-center justify-center gap-6 md:gap-8">
+            <nav className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-4 sm:gap-6">
               <Link
                 href="#features"
                 className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"

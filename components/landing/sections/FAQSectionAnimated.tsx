@@ -112,7 +112,7 @@ export function FAQSectionAnimated() {
                   onClick={() => toggleFAQ(index)}
                   className="w-full px-6 py-5 text-left flex items-center justify-between gap-4"
                 >
-                  <h3 className="text-lg font-semibold text-white pr-4">
+                  <h3 className="text-base sm:text-lg font-semibold text-white pr-4">
                     {faq.question}
                   </h3>
                   <motion.div

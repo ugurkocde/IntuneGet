@@ -100,7 +100,7 @@ export default function MspSetupPage() {
       </div>
 
       {/* Features */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
           <Users className="w-6 h-6 text-accent-cyan mx-auto mb-2" />
           <p className="text-sm font-medium text-white">Multi-Tenant</p>

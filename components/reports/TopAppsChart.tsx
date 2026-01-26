@@ -45,7 +45,7 @@ export function TopAppsChart({ data }: TopAppsChartProps) {
         <BarChart
           data={formattedData}
           layout="vertical"
-          margin={{ top: 5, right: 20, left: 100, bottom: 5 }}
+          margin={{ top: 5, right: 10, left: 80, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
           <XAxis
@@ -59,9 +59,9 @@ export function TopAppsChart({ data }: TopAppsChartProps) {
             type="category"
             dataKey="shortName"
             stroke="#94a3b8"
-            fontSize={12}
+            fontSize={11}
             tickLine={false}
-            width={100}
+            width={80}
           />
           <Tooltip
             contentStyle={{

@@ -143,21 +143,20 @@ export function HeroSection() {
 
           {/* Stats - inline with content */}
           <FadeIn delay={0.9} animateOnMount>
-            <div className="flex items-center justify-center gap-8 md:gap-12 pt-4">
+            <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 md:gap-12 pt-4">
               <div className="flex flex-col items-center">
                 <span className="text-2xl md:text-3xl font-bold text-white">
                   {isLoading ? "..." : <CountUp end={appsSupported} />}
                 </span>
                 <span className="text-xs md:text-sm text-zinc-500">Apps Available</span>
               </div>
-              <div className="w-px h-10 bg-zinc-700/50" />
+              <div className="hidden sm:block w-px h-10 bg-zinc-700/50" />
               <div className="flex flex-col items-center">
                 <span className="text-2xl md:text-3xl font-bold text-accent-cyan">
                   {isLoading ? "..." : <CountUp end={appsDeployed} />}
                 </span>
                 <span className="text-xs md:text-sm text-zinc-500">Deployed</span>
               </div>
-              <div className="w-px h-10 bg-zinc-700/50" />
             </div>
           </FadeIn>
 

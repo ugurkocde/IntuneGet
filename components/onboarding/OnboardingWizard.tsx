@@ -110,12 +110,12 @@ export function OnboardingWizard({
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Progress indicator */}
-      <div className="flex justify-center py-8">
+      <div className="flex justify-center py-6 sm:py-8">
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-colors ${
                   step === currentStep
                     ? 'bg-blue-600 text-white'
                     : step < currentStep
@@ -125,7 +125,7 @@ export function OnboardingWizard({
               >
                 {step < currentStep ? (
                   <svg
-                    className="w-4 h-4"
+                    className="w-3 h-3 sm:w-4 sm:h-4"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -143,7 +143,7 @@ export function OnboardingWizard({
               </div>
               {step < 3 && (
                 <div
-                  className={`w-12 h-0.5 ${
+                  className={`w-8 sm:w-12 h-0.5 ${
                     step < currentStep ? 'bg-green-600' : 'bg-slate-800'
                   }`}
                 />
@@ -154,8 +154,8 @@ export function OnboardingWizard({
       </div>
 
       {/* Step labels */}
-      <div className="flex justify-center mb-8">
-        <div className="flex items-center gap-12 text-xs text-slate-500">
+      <div className="flex justify-center mb-6 sm:mb-8">
+        <div className="flex items-center gap-4 sm:gap-8 md:gap-12 text-xs text-slate-500">
           <span className={currentStep === 1 ? 'text-blue-400' : ''}>
             Welcome
           </span>
