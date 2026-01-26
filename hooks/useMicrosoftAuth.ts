@@ -1,15 +1,37 @@
 "use client";
 
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
+import { InteractionRequiredAuthError, AccountInfo } from "@azure/msal-browser";
 import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
 
 /**
  * Hook to manage Microsoft authentication and access tokens
  * Provides sign-in, sign-out, and token management functionality
  */
+// Track sign-in to server for logging
+async function trackSignInToServer(
+  account: AccountInfo,
+  authMethod: 'popup' | 'redirect' | 'silent'
+): Promise<void> {
+  try {
+    await fetch('/api/auth/track-signin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: account.localAccountId,
+        email: account.username,
+        name: account.name || null,
+        tenantId: account.tenantId,
+        authMethod,
+      }),
+    });
+  } catch {
+    // Silently fail - tracking shouldn't break auth flow
+  }
+}
+
 export function useMicrosoftAuth() {
   const { instance, accounts } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -17,6 +39,9 @@ export function useMicrosoftAuth() {
   // Cache the current token to check expiry
   const cachedTokenRef = useRef<string | null>(null);
   const tokenExpiryRef = useRef<number | null>(null);
+
+  // Track if we've already tracked this session's sign-in
+  const hasTrackedSignInRef = useRef<string | null>(null);
 
   /**
    * Force refresh the token, bypassing cache
@@ -123,12 +148,27 @@ export function useMicrosoftAuth() {
     return getTokenExpiryMinutes(cachedTokenRef.current);
   }, []);
 
+  // Track sign-in for redirect flows (when user returns to app after redirect)
+  useEffect(() => {
+    const account = accounts[0];
+    if (account && hasTrackedSignInRef.current !== account.localAccountId) {
+      // Mark as tracked to prevent duplicate tracking
+      hasTrackedSignInRef.current = account.localAccountId;
+      // Track as redirect/silent since we're detecting an existing session
+      trackSignInToServer(account, 'silent');
+    }
+  }, [accounts]);
+
   /**
    * Sign in with Microsoft popup
    */
   const signIn = useCallback(async () => {
     try {
       const result = await instance.loginPopup({ scopes: graphScopes });
+      if (result?.account) {
+        hasTrackedSignInRef.current = result.account.localAccountId;
+        await trackSignInToServer(result.account, 'popup');
+      }
       return !!result;
     } catch {
       return false;

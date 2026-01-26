@@ -18,10 +18,10 @@ export interface PermissionLogContext {
 
 const REQUIRED_INTUNE_PERMISSIONS = [
   'DeviceManagementApps.ReadWrite.All',
+  'Group.Read.All',
 ];
 
 const OPTIONAL_PERMISSIONS = [
-  'Group.Read.All',
   'User.Read.All',
 ];
 
