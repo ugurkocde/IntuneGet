@@ -1,6 +1,7 @@
 /**
  * Intune Apps Updates API Route
  * Identifies apps with available Winget updates
+ * Uses cached Winget package data from Supabase for fast lookups
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,36 +11,9 @@ import { hasUpdate, normalizeVersion } from '@/lib/version-compare';
 import type { IntuneWin32App, AppUpdateInfo } from '@/types/inventory';
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
-const WINGET_API_BASE = 'https://api.winget.run/v2';
 
-// Rate limiting configuration
-const BATCH_SIZE = 5; // Process 5 apps concurrently
-const BATCH_DELAY_MS = 500; // Wait 500ms between batches
-
-/**
- * Process items in batches with delays to avoid rate limiting
- */
-async function processBatches<T, R>(
-  items: T[],
-  processor: (item: T) => Promise<R>,
-  batchSize: number,
-  delayMs: number
-): Promise<R[]> {
-  const results: R[] = [];
-
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(processor));
-    results.push(...batchResults);
-
-    // Add delay between batches (except after the last batch)
-    if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
-
-  return results;
-}
+// Extend timeout for Vercel (Pro plan: up to 60s)
+export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
   try {
@@ -127,17 +101,12 @@ export async function GET(request: NextRequest) {
     const graphData = await graphResponse.json();
     const apps: IntuneWin32App[] = graphData.value || [];
 
-    // Match apps and check for updates with rate limiting
+    // Match apps to Winget IDs
     const updates: AppUpdateInfo[] = [];
     const checked: { app: string; wingetId: string | null; result: string }[] = [];
 
-    // Prepare apps with their matches for batch processing
-    interface AppCheckTask {
-      app: IntuneWin32App;
-      match: ReturnType<typeof matchAppToWinget>;
-    }
-
-    const tasksToProcess: AppCheckTask[] = [];
+    const appsToCheck: { app: IntuneWin32App; match: NonNullable<ReturnType<typeof matchAppToWinget>> }[] = [];
+    const wingetIdsToLookup: string[] = [];
 
     for (const app of apps) {
       const match = matchAppToWinget(app);
@@ -161,67 +130,38 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      tasksToProcess.push({ app, match });
+      appsToCheck.push({ app, match });
+      wingetIdsToLookup.push(match.wingetId);
     }
 
-    // Process Winget API calls in batches to avoid rate limiting
-    const checkResults = await processBatches(
-      tasksToProcess,
-      async ({ app, match }) => {
-        try {
-          // Fetch latest version from Winget API
-          const wingetResponse = await fetch(
-            `${WINGET_API_BASE}/packages/${encodeURIComponent(match!.wingetId)}`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            }
-          );
+    // Batch lookup all Winget versions from cache (single DB query)
+    const versionMap = new Map<string, string>();
 
-          if (!wingetResponse.ok) {
-            return {
-              app,
-              match: match!,
-              result: 'Winget package not found' as const,
-              latestVersion: null,
-            };
-          }
+    if (wingetIdsToLookup.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: cachedPackages, error: cacheError } = await (supabase as any)
+        .from('winget_packages')
+        .select('id, latest_version')
+        .in('id', wingetIdsToLookup);
 
-          const wingetData = await wingetResponse.json();
-          const latestVersion = wingetData.Versions?.[0]?.Version ||
-                                wingetData.latestVersion ||
-                                null;
-
-          return {
-            app,
-            match: match!,
-            result: latestVersion ? ('success' as const) : ('No version info from Winget' as const),
-            latestVersion,
-          };
-        } catch (error) {
-          console.error(`Error checking updates for ${app.displayName}:`, error);
-          return {
-            app,
-            match: match!,
-            result: 'Error checking Winget' as const,
-            latestVersion: null,
-          };
+      if (cacheError) {
+        console.error('Error fetching cached Winget packages:', cacheError);
+      } else if (cachedPackages) {
+        for (const pkg of cachedPackages) {
+          versionMap.set(pkg.id, pkg.latest_version);
         }
-      },
-      BATCH_SIZE,
-      BATCH_DELAY_MS
-    );
+      }
+    }
 
-    // Process results
-    for (const checkResult of checkResults) {
-      const { app, match, result, latestVersion } = checkResult;
+    // Process results using cached data
+    for (const { app, match } of appsToCheck) {
+      const latestVersion = versionMap.get(match.wingetId);
 
-      if (result !== 'success') {
+      if (!latestVersion) {
         checked.push({
           app: app.displayName,
           wingetId: match.wingetId,
-          result,
+          result: 'Package not in cache',
         });
         continue;
       }
