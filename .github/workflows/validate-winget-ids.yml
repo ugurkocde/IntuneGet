@@ -399,16 +399,29 @@ jobs:
                 -Body $body `
                 -TimeoutSec 300
 
-              # Responses API returns text property for the final text response
+              # Extract text from response - handle both string and object types
               $answer = $null
-              if ($response.text) {
-                $answer = $response.text.Trim()
-              } elseif ($response.output_text) {
-                $answer = $response.output_text.Trim()
+
+              # Try different response properties
+              $textValue = $response.text
+              if (-not $textValue) { $textValue = $response.output_text }
+
+              if ($textValue) {
+                # Handle if it's a string
+                if ($textValue -is [string]) {
+                  $answer = $textValue.Trim()
+                }
+                # Handle if it's an object - convert to string
+                else {
+                  $answer = [string]$textValue
+                  if ($answer) { $answer = $answer.Trim() }
+                }
               }
 
               if (-not $answer) {
                 Write-Host "    Could not extract text from API response" -ForegroundColor Yellow
+                Write-Host "    Response text type: $($response.text.GetType().Name)" -ForegroundColor Gray
+                Write-Host "    Response: $($response | ConvertTo-Json -Depth 2 -Compress)" -ForegroundColor Gray
                 return @{ Status = "UNKNOWN"; Id = $null }
               }
 
