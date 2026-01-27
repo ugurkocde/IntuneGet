@@ -359,17 +359,26 @@ jobs:
             }
 
             try {
-              $prompt = "Find the correct winget package ID for this Windows application:`n" +
-                "- App Name: $AppName`n" +
-                "- Publisher: $Publisher`n" +
-                "- Current/Expected ID: $ExistingWingetId`n`n" +
-                "Search the web for the correct winget ID. The ID format is Publisher.AppName (e.g., Microsoft.VisualStudioCode, Google.Chrome).`n`n" +
-                "IMPORTANT:`n" +
-                "- Only return a winget ID if you are confident it exists in the winget repository`n" +
-                "- The ID must be in the format Publisher.AppName`n" +
-                "- If the app is not available in winget, respond with NOT_AVAILABLE`n" +
-                "- If you cannot determine the correct ID, respond with UNKNOWN`n`n" +
-                "Respond with ONLY the winget ID (e.g., Microsoft.VisualStudioCode) or NOT_AVAILABLE or UNKNOWN. No explanation."
+              $prompt = "Search the web to find the winget package ID for this Windows application:`n`n" +
+                "App: $AppName`n" +
+                "Publisher: $Publisher`n" +
+                "Expected ID pattern: $ExistingWingetId`n`n" +
+                "SEARCH STRATEGY:`n" +
+                "1. Search for `"$AppName winget id`" or `"$AppName winget install`"`n" +
+                "2. Check these reliable sources:`n" +
+                "   - winget.run (package database)`n" +
+                "   - winstall.app (package search)`n" +
+                "   - learn.microsoft.com (official docs)`n" +
+                "   - github.com/microsoft/winget-pkgs (official repository)`n`n" +
+                "RULES:`n" +
+                "- Winget IDs follow the format: Publisher.AppName (e.g., Microsoft.VisualStudioCode)`n" +
+                "- If multiple editions exist (Community/Pro/Enterprise), prefer the free/Community edition`n" +
+                "- If the existing ID pattern suggests a publisher (e.g., `"Microsoft.`"), prioritize matches from that publisher`n" +
+                "- Return the MOST LIKELY correct ID even if not 100% certain`n`n" +
+                "RESPONSE FORMAT:`n" +
+                "- Return ONLY the winget ID (e.g., Microsoft.VisualStudio.2022.Community)`n" +
+                "- Return NOT_AVAILABLE only if you confirm the app is definitely not in winget`n" +
+                "- Return UNKNOWN only as a last resort if no information found at all"
 
               $body = @{
                 model = "gpt-5-nano"
