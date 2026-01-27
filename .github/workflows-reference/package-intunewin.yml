@@ -160,7 +160,7 @@ jobs:
           $fileName = [System.IO.Path]::GetFileName([System.Uri]::new($url).LocalPath)
           if ([string]::IsNullOrEmpty($fileName)) { $fileName = "installer.$env:INSTALLER_TYPE" }
 
-          Invoke-WebRequest -Uri $url -OutFile "$installerDir\$fileName" -UseBasicParsing
+          Invoke-WebRequest -Uri $url -OutFile "$installerDir\$fileName" -UseBasicParsing -AllowInsecureRedirect
 
           $expectedHash = $env:INSTALLER_SHA256
           if ($expectedHash -and $expectedHash -ne "") {
