@@ -151,6 +151,43 @@ jobs:
           $ErrorActionPreference = 'Continue'
           $mode = $env:MODE
 
+          # Helper function to clean app names for better search results
+          function Clean-AppName {
+            param([string]$Name)
+
+            $cleaned = $Name
+            # Remove parenthetical content: (remove only), (formerly X), etc.
+            $cleaned = $cleaned -replace '\s*\([^)]*\)\s*', ' '
+            # Remove brackets: [Deprecated], [Preview], etc.
+            $cleaned = $cleaned -replace '\s*\[[^\]]*\]\s*', ' '
+            # Remove version patterns at end: v1.0, 2019, 2022, etc.
+            $cleaned = $cleaned -replace '\s+v?\d+\.?\d*\.?\d*\s*$', ''
+            # Remove common suffixes that don't help with search
+            $cleaned = $cleaned -replace '\s+(for Windows|Desktop|Client|Edition|Installer|Setup)\s*$', ''
+            # Remove workload/component descriptors
+            $cleaned = $cleaned -replace '\s+workload\s+for\s+.*$', ''
+            # Collapse multiple whitespace
+            $cleaned = $cleaned -replace '\s+', ' '
+
+            return $cleaned.Trim()
+          }
+
+          # Helper function to extract publisher and app name from existing winget ID
+          function Get-IdComponents {
+            param([string]$WingetId)
+
+            if (-not $WingetId) { return $null }
+
+            $parts = $WingetId -split '\.'
+            if ($parts.Count -ge 2) {
+              return @{
+                Publisher = $parts[0]
+                AppName = ($parts[1..($parts.Count-1)] -join ' ')
+              }
+            }
+            return $null
+          }
+
           # Helper function to parse winget search output
           function Parse-WingetSearch {
             param([string]$Output)
@@ -225,11 +262,18 @@ jobs:
             param(
               [string]$AppName,
               [string]$Publisher,
+              [string]$ExistingWingetId,
               [array]$SearchResults
             )
 
             $bestScore = 0
             $bestMatch = $null
+
+            # Extract publisher from existing winget ID for matching
+            $existingPublisher = $null
+            if ($ExistingWingetId -match '^([A-Za-z0-9]+)\.') {
+              $existingPublisher = $Matches[1]
+            }
 
             foreach ($result in $SearchResults) {
               $score = 0
@@ -238,29 +282,38 @@ jobs:
               $searchName = $AppName.ToLower()
               $searchPublisher = if ($Publisher) { $Publisher.ToLower() } else { "" }
 
-              # 1. Exact name match (highest priority)
+              # CRITICAL: Publisher match from existing winget ID (highest priority)
+              if ($existingPublisher) {
+                if ($result.Id -like "$existingPublisher.*") {
+                  $score += 100  # Same publisher as existing ID - very high confidence
+                } else {
+                  $score -= 50   # Different publisher - big penalty to avoid wrong matches
+                }
+              }
+
+              # 1. Exact name match
               if ($resultName -eq $searchName) {
-                $score += 100
+                $score += 80
               }
               # 2. Name starts with search term
               elseif ($resultName.StartsWith($searchName)) {
-                $score += 70
+                $score += 60
               }
               # 3. Name contains search term
               elseif ($resultName -like "*$searchName*") {
-                $score += 50
+                $score += 40
               }
 
               # 4. ID contains name (normalized)
               $normalizedName = $searchName -replace '[^a-z0-9]', ''
               $normalizedId = $resultId -replace '[^a-z0-9]', ''
               if ($normalizedId -like "*$normalizedName*") {
-                $score += 30
+                $score += 25
               }
 
-              # 5. Publisher match in ID
+              # 5. Publisher match in ID (from database publisher field)
               if ($searchPublisher -and $resultId -like "$searchPublisher.*") {
-                $score += 40
+                $score += 30
               }
 
               # 6. Prefer 'winget' source
@@ -319,7 +372,8 @@ jobs:
             try {
               # Step 1: Validate existing ID (if mode includes validation)
               if ($mode -eq 'validate' -or $mode -eq 'both') {
-                $showOutput = winget show --id $wingetId --accept-source-agreements 2>&1 | Out-String
+                # Use --exact flag to ensure precise ID matching
+                $showOutput = winget show --id $wingetId --exact --accept-source-agreements 2>&1 | Out-String
 
                 if ($LASTEXITCODE -eq 0 -and $showOutput -notmatch 'No package found') {
                   $result.is_valid = $true
@@ -332,14 +386,34 @@ jobs:
 
               # Step 2: Search for correct ID (if mode includes discovery and ID is invalid)
               if ((-not $result.is_valid) -and ($mode -eq 'discover' -or $mode -eq 'both')) {
-                Write-Host "  Searching for '$($app.name)'..."
+                # Extract components from existing winget ID for smarter searching
+                $idParts = Get-IdComponents $wingetId
+                $searchResults = @()
 
-                # Try searching by name
-                $searchOutput = winget search --name "$($app.name)" --accept-source-agreements 2>&1 | Out-String
+                # Stage 1: Search with cleaned app name
+                $cleanedName = Clean-AppName $app.name
+                Write-Host "  Stage 1: Searching for cleaned name '$cleanedName'..."
+                $searchOutput = winget search --name "$cleanedName" --accept-source-agreements 2>&1 | Out-String
                 $searchResults = Parse-WingetSearch $searchOutput
 
+                # Stage 2: If no results, try app name extracted from existing winget ID
+                if ($searchResults.Count -eq 0 -and $idParts) {
+                  Write-Host "  Stage 2: Searching for ID component '$($idParts.AppName)'..."
+                  $searchOutput = winget search --name "$($idParts.AppName)" --accept-source-agreements 2>&1 | Out-String
+                  $searchResults = Parse-WingetSearch $searchOutput
+                }
+
+                # Stage 3: If still no results, try "Publisher AppName" combined search
+                if ($searchResults.Count -eq 0 -and $idParts) {
+                  $combinedSearch = "$($idParts.Publisher) $($idParts.AppName)"
+                  Write-Host "  Stage 3: Searching for '$combinedSearch'..."
+                  $searchOutput = winget search "$combinedSearch" --accept-source-agreements 2>&1 | Out-String
+                  $searchResults = Parse-WingetSearch $searchOutput
+                }
+
+                # Stage 4: Last resort - broader search with original name
                 if ($searchResults.Count -eq 0) {
-                  # Try broader search
+                  Write-Host "  Stage 4: Broader search for '$($app.name)'..."
                   $searchOutput = winget search "$($app.name)" --accept-source-agreements 2>&1 | Out-String
                   $searchResults = Parse-WingetSearch $searchOutput
                 }
@@ -347,7 +421,7 @@ jobs:
                 if ($searchResults.Count -gt 0) {
                   Write-Host "  Found $($searchResults.Count) potential matches"
 
-                  $match = Get-BestMatch -AppName $app.name -Publisher $app.publisher -SearchResults $searchResults
+                  $match = Get-BestMatch -AppName $app.name -Publisher $app.publisher -ExistingWingetId $wingetId -SearchResults $searchResults
 
                   if ($match) {
                     $result.discovered_id = $match.Id
@@ -359,7 +433,7 @@ jobs:
                     $failed++
                   }
                 } else {
-                  Write-Host "  No search results found" -ForegroundColor Yellow
+                  Write-Host "  No search results found after all stages" -ForegroundColor Yellow
                   $failed++
                 }
               }
