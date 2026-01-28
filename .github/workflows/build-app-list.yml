@@ -109,16 +109,18 @@ jobs:
             }
 
             // Transform packages to our schema
+            // Index format: { Name, PackageId, Version }
             const appsToUpsert = packages.map(pkg => {
-              // Extract publisher from package identifier (first part before .)
-              const parts = (pkg.PackageIdentifier || pkg.Id || '').split('.');
+              // Extract publisher from PackageId (first part before .)
+              const packageId = pkg.PackageId || pkg.PackageIdentifier || '';
+              const parts = packageId.split('.');
               const publisher = parts[0] || 'Unknown';
 
               return {
-                winget_id: pkg.PackageIdentifier || pkg.Id,
-                name: pkg.PackageName || pkg.Name || pkg.PackageIdentifier || pkg.Id,
-                publisher: pkg.Publisher || publisher,
-                latest_version: pkg.Version || pkg.Latest || null,
+                winget_id: packageId,
+                name: pkg.Name || pkg.PackageName || packageId,
+                publisher: publisher,
+                latest_version: pkg.Version || null,
                 is_verified: true, // Source is authoritative (winget-pkgs)
                 is_winget_verified: true,
                 updated_at: new Date().toISOString()
