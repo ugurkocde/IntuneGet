@@ -484,9 +484,24 @@ jobs:
               # Step 1: Validate existing ID (if mode includes validation)
               if ($mode -eq 'validate' -or $mode -eq 'both') {
                 # Use --exact flag to ensure precise ID matching
-                $showOutput = winget show --id $wingetId --exact --source winget --accept-source-agreements 2>&1 | Out-String
+                # Retry up to 3 times to handle transient failures
+                $retryCount = 0
+                $maxRetries = 3
+                $isValid = $false
 
-                if ($LASTEXITCODE -eq 0 -and $showOutput -notmatch 'No package found') {
+                while ($retryCount -lt $maxRetries -and -not $isValid) {
+                  $retryCount++
+                  $showOutput = winget show --id $wingetId --exact --source winget --accept-source-agreements 2>&1 | Out-String
+
+                  if ($LASTEXITCODE -eq 0 -and $showOutput -notmatch 'No package found') {
+                    $isValid = $true
+                  } elseif ($retryCount -lt $maxRetries) {
+                    Write-Host "  Retry $retryCount/$maxRetries..." -ForegroundColor Gray
+                    Start-Sleep -Milliseconds 1000
+                  }
+                }
+
+                if ($isValid) {
                   $result.is_valid = $true
                   $validated++
                   Write-Host "  VALID" -ForegroundColor Green
@@ -500,6 +515,20 @@ jobs:
                 # Extract components from existing winget ID for smarter searching
                 $idParts = Get-IdComponents $wingetId
                 $searchResults = @()
+
+                # Stage 0: Try searching by exact ID first (winget show may have failed but search works)
+                Write-Host "  Stage 0: Verifying existing ID via search..."
+                $idSearchOutput = winget search --id $wingetId --exact --source winget --accept-source-agreements 2>&1 | Out-String
+                $idSearchResults = Parse-WingetSearch $idSearchOutput
+                if ($idSearchResults.Count -gt 0) {
+                  # The existing ID is actually valid - mark it as such
+                  $result.is_valid = $true
+                  $validated++
+                  Write-Host "  VALID (confirmed via search)" -ForegroundColor Green
+                  $results += $result
+                  Start-Sleep -Milliseconds 500
+                  continue
+                }
 
                 # Stage 1: Search with cleaned app name
                 $cleanedName = Clean-AppName $app.name
@@ -527,6 +556,17 @@ jobs:
                   Write-Host "  Stage 4: Broader search for '$($app.name)'..."
                   $searchOutput = winget search "$($app.name)" --accept-source-agreements 2>&1 | Out-String
                   $searchResults = Parse-WingetSearch $searchOutput
+                }
+
+                # Stage 4.5: Search by ID pattern to find similar IDs (e.g., Microsoft.Skype when searching by name fails)
+                if ($searchResults.Count -eq 0 -and $idParts) {
+                  Write-Host "  Stage 4.5: Searching by ID pattern '$($idParts.Publisher).*'..."
+                  $searchOutput = winget search --id "$($idParts.Publisher)." --source winget --accept-source-agreements 2>&1 | Out-String
+                  $idPatternResults = Parse-WingetSearch $searchOutput
+                  # Filter to results that might match our app
+                  $searchResults = $idPatternResults | Where-Object {
+                    $_.Id -like "*$($idParts.AppName)*" -or $_.Name -like "*$($app.name)*"
+                  }
                 }
 
                 $match = $null
