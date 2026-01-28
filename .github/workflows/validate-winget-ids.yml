@@ -699,7 +699,8 @@ jobs:
                     $result.discovery_method = "openai_websearch"
                     $aiDiscovered++
                     Write-Host "  DISCOVERED (AI): $($aiResult.Id)" -ForegroundColor Cyan
-                  } elseif ($aiResult -and $aiResult.Status -eq "NOT_AVAILABLE") {
+                  } elseif ($aiResult -and ($aiResult.Status -eq "NOT_AVAILABLE" -or $aiResult.Status -eq "INVALID")) {
+                    # INVALID means AI suggested an ID but it doesn't exist in winget - treat as not available
                     $result.error = "App not available in winget repository"
                     $result.not_in_winget = $true
                     $notInWinget++
