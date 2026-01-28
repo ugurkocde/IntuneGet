@@ -56,15 +56,14 @@ jobs:
         run: npm ci
 
       - name: Setup Winget
-        uses: Cyberboss/install-winget@v1
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure Winget Sources
         shell: pwsh
         run: |
           Write-Host "Winget version:"
           winget --version
+
+          # Upgrade winget if needed (windows-latest comes with winget preinstalled)
+          Write-Host "`nUpgrading winget..."
+          winget upgrade winget --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | Out-Null
 
           # List current sources
           Write-Host "`nCurrent winget sources:"
@@ -93,10 +92,8 @@ jobs:
           if ($searchResult -match 'Microsoft\.Skype') {
             Write-Host "`nWinget verification PASSED" -ForegroundColor Green
           } else {
-            Write-Host "`nWinget verification WARNING - trying alternate setup" -ForegroundColor Yellow
-
-            # Try using winget configure to ensure proper setup
-            Write-Host "`nListing all available packages matching 'Skype'..."
+            Write-Host "`nWinget verification WARNING - Microsoft.Skype not found" -ForegroundColor Yellow
+            Write-Host "Listing all Skype packages..."
             winget search Skype --accept-source-agreements
           }
 
