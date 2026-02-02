@@ -23,6 +23,10 @@ import {
   ArrowUpCircle,
   Radar,
   FolderSync,
+  Users,
+  ScrollText,
+  Layers,
+  Webhook,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/stores/cart-store';
@@ -31,7 +35,9 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { UpdateBadge } from '@/components/inventory';
 import { TenantSwitcher } from '@/components/msp';
+import { useMspOptional } from '@/hooks/useMspOptional';
 import { UploadCart } from '@/components/UploadCart';
+import { NotificationBell } from '@/components/notifications';
 
 type NavItem = {
   name: string;
@@ -49,8 +55,17 @@ const navigation: NavItem[] = [
   { name: 'Updates', href: '/dashboard/updates', icon: ArrowUpCircle },
   { name: 'Uploads', href: '/dashboard/uploads', icon: Upload },
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3 },
-  { name: 'MSP', href: '/dashboard/msp', icon: Building2 },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+];
+
+// MSP-specific navigation items
+const mspNavigation: NavItem[] = [
+  { name: 'MSP Dashboard', href: '/dashboard/msp', icon: Building2 },
+  { name: 'Batch Deploy', href: '/dashboard/msp/batch', icon: Layers },
+  { name: 'Team', href: '/dashboard/msp/team', icon: Users },
+  { name: 'MSP Reports', href: '/dashboard/msp/reports', icon: BarChart3 },
+  { name: 'Webhooks', href: '/dashboard/msp/webhooks', icon: Webhook },
+  { name: 'Audit Logs', href: '/dashboard/msp/audit', icon: ScrollText },
 ];
 
 export default function DashboardLayout({
@@ -59,6 +74,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { isAuthenticated, user, signOut } = useMicrosoftAuth();
+  const { isMspUser } = useMspOptional();
   const {
     isOnboardingComplete,
     isChecking: isCheckingOnboarding,
@@ -230,6 +246,48 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
+
+            {/* MSP Section - only shown for MSP users */}
+            {isMspUser && (
+              <>
+                <div className="pt-4 pb-2 px-3">
+                  <span className="text-xs font-medium text-text-muted uppercase tracking-wider">MSP</span>
+                </div>
+                {mspNavigation.map((item, index) => {
+                  const isActive = pathname === item.href || (item.href !== '/dashboard/msp' && pathname.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        'group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                        isActive
+                          ? 'text-text-primary'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-black/5'
+                      )}
+                      style={mounted ? { animationDelay: `${(navigation.length + index) * 50}ms` } : undefined}
+                    >
+                      {isActive && (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan/15 to-accent-violet/10 rounded-lg" />
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-accent-cyan rounded-r-full shadow-glow-cyan" />
+                        </>
+                      )}
+
+                      <item.icon className={cn(
+                        'w-5 h-5 relative z-10 transition-colors',
+                        isActive ? 'text-accent-cyan' : 'group-hover:text-accent-cyan-bright'
+                      )} />
+                      <span className="font-medium relative z-10">{item.name}</span>
+                      {isActive && (
+                        <ChevronRight className="w-4 h-4 ml-auto relative z-10 text-accent-cyan" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </nav>
 
           {/* User section */}
@@ -287,6 +345,9 @@ export default function DashboardLayout({
             <div className="flex items-center gap-3">
               {/* Tenant Switcher (for MSP users) */}
               <TenantSwitcher />
+
+              {/* Notifications */}
+              <NotificationBell />
 
               {/* Cart button */}
               <Button
