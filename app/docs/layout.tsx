@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, ArrowLeft, Github } from "lucide-react";
-import { DocsSidebar, MobileDocsSidebar } from "@/components/docs";
+import { DocsSidebar, MobileDocsSidebar, DocsBreadcrumbJsonLd } from "@/components/docs";
 import { cn } from "@/lib/utils";
 
 export default function DocsLayout({
@@ -16,6 +16,7 @@ export default function DocsLayout({
 
   return (
     <div className="min-h-screen bg-bg-deepest">
+      <DocsBreadcrumbJsonLd />
       {/* Header */}
       <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-bg-deepest/80 backdrop-blur-xl">
         <div className="flex h-14 items-center px-4 lg:px-6">

@@ -96,6 +96,18 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+// Organization JSON-LD structured data
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "IntuneGet",
+  url: "https://intuneget.com",
+  logo: "https://intuneget.com/logo-512.png",
+  description:
+    "IntuneGet streamlines Microsoft Intune app deployment with Winget integration. Package and upload applications effortlessly.",
+  sameAs: ["https://github.com/ugurkocde/IntuneGet"],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -115,6 +127,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
         {ANALYTICS_ENABLED && PLAUSIBLE_DOMAIN && (
           <Script
             defer
