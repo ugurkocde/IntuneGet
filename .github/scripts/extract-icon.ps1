@@ -129,11 +129,13 @@ function Extract-IconFromExe {
         if ($icon) {
             $bitmap = $icon.ToBitmap()
             $tempIconPath = Join-Path $OutputDir "icon-original.png"
+            $w = $bitmap.Width
+            $h = $bitmap.Height
             $bitmap.Save($tempIconPath, [System.Drawing.Imaging.ImageFormat]::Png)
             $bitmap.Dispose()
             $icon.Dispose()
 
-            Write-Host "Extracted fallback icon to $tempIconPath (size: $($bitmap.Width)x$($bitmap.Height))"
+            Write-Host "Extracted fallback icon to $tempIconPath (size: ${w}x${h})"
             return $tempIconPath
         }
     } catch {
@@ -312,22 +314,49 @@ function Extract-IconFromMsiResource {
 
         $record = $view.Fetch()
         while ($record) {
-            $iconName = $record.StringData(1)
-            Write-Host "Found embedded icon: $iconName"
+            try {
+                $iconName = $record.StringData(1)
+                Write-Host "Found embedded icon: $iconName"
 
-            # Save the icon data
-            $iconPath = Join-Path $OutputDir "icon-original.ico"
-            $record.SetStream(2, $iconPath)
+                $iconPath = Join-Path $OutputDir "icon-original.ico"
+                $size = $record.DataSize(2)
 
-            if (Test-Path $iconPath) {
-                Write-Host "Extracted embedded icon from MSI"
-                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($record) | Out-Null
-                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($view) | Out-Null
-                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($database) | Out-Null
-                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($installer) | Out-Null
-                return $iconPath
+                if ($size -gt 0) {
+                    # Read binary stream from MSI record
+                    # Try 3-arg form first (msiReadStreamBytes), fall back to 2-arg with encoding
+                    try {
+                        $data = $record.ReadStream(2, $size, 2)
+                        [System.IO.File]::WriteAllBytes($iconPath, [byte[]]$data)
+                    } catch {
+                        Write-Host "ReadStream 3-arg failed, trying 2-arg with encoding..."
+                        $data = $record.ReadStream(2, $size)
+                        $bytes = [System.Text.Encoding]::GetEncoding(28591).GetBytes($data)
+                        [System.IO.File]::WriteAllBytes($iconPath, $bytes)
+                    }
+                    $written = (Get-Item $iconPath).Length
+                    Write-Host "Extracted embedded icon from MSI ($written bytes)"
+                    if ($written -lt 6) {
+                        Write-Warning "Icon file is suspiciously small ($written bytes), skipping"
+                        Remove-Item $iconPath -Force -ErrorAction SilentlyContinue
+                        $record = $view.Fetch()
+                        continue
+                    }
+                } else {
+                    Write-Host "Icon entry '$iconName' has empty data, trying next..."
+                    $record = $view.Fetch()
+                    continue
+                }
+
+                if (Test-Path $iconPath) {
+                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($record) | Out-Null
+                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($view) | Out-Null
+                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($database) | Out-Null
+                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($installer) | Out-Null
+                    return $iconPath
+                }
+            } catch {
+                Write-Warning "Failed to read icon data: $_"
             }
-
             $record = $view.Fetch()
         }
 
@@ -422,22 +451,32 @@ function Convert-ToMultipleSizes {
 
     $generatedFiles = @()
 
+    # Determine if source is a multi-frame format (ICO, TIFF)
+    $sourceExt = [System.IO.Path]::GetExtension($SourcePath).ToLower()
+    $isMultiFrame = $sourceExt -in @('.ico', '.tif', '.tiff')
+
     foreach ($size in $Sizes) {
         $outputPath = Join-Path $OutputDir "icon-$size.png"
+        $conversionSucceeded = $false
 
+        # Try ImageMagick first (if available)
         if ($magick) {
-            # Use ImageMagick for high-quality conversion
             try {
-                & magick $SourcePath -resize "${size}x${size}" -background none -gravity center -extent "${size}x${size}" $outputPath 2>$null
-                if (Test-Path $outputPath) {
+                # Use [0] frame index for multi-frame formats to select the first frame
+                $sourceArg = if ($isMultiFrame) { "${SourcePath}[0]" } else { $SourcePath }
+                & magick $sourceArg -resize "${size}x${size}" -background none -gravity center -extent "${size}x${size}" $outputPath 2>$null
+                if ($LASTEXITCODE -eq 0 -and (Test-Path $outputPath)) {
                     $generatedFiles += $outputPath
-                    Write-Host "Generated $outputPath"
+                    $conversionSucceeded = $true
+                    Write-Host "Generated $outputPath (ImageMagick)"
                 }
             } catch {
-                Write-Warning "ImageMagick conversion failed for size $size"
+                Write-Host "ImageMagick failed for size ${size}, trying .NET fallback..."
             }
-        } else {
-            # Fallback to .NET
+        }
+
+        # Fall back to .NET if ImageMagick was unavailable or failed
+        if (-not $conversionSucceeded) {
             try {
                 Add-Type -AssemblyName System.Drawing
 
@@ -458,7 +497,7 @@ function Convert-ToMultipleSizes {
                 $sourceImage.Dispose()
 
                 $generatedFiles += $outputPath
-                Write-Host "Generated $outputPath (using .NET)"
+                Write-Host "Generated $outputPath (using .NET fallback)"
             } catch {
                 Write-Warning ".NET conversion failed for size $size : $_"
             }
