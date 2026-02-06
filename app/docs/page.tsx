@@ -13,6 +13,9 @@ import {
   DollarSign,
   Shield,
   Server,
+  SearchX,
+  Building2,
+  Settings,
 } from "lucide-react";
 import {
   Callout,
@@ -38,7 +41,7 @@ const quickLinks = [
     description: "Complete setup walkthrough from zero to deployment",
   },
   {
-    title: "Azure AD Setup",
+    title: "Entra ID Setup",
     href: "/docs/azure-setup",
     icon: Cloud,
     description: "Configure Microsoft Entra ID app registration",
@@ -62,6 +65,24 @@ const quickLinks = [
     description: "Deploy with Docker and Docker Compose",
   },
   {
+    title: "Unmanaged Apps",
+    href: "/docs/unmanaged-apps",
+    icon: SearchX,
+    description: "Detect and manage discovered applications",
+  },
+  {
+    title: "MSP Features",
+    href: "/docs/msp",
+    icon: Building2,
+    description: "Multi-tenant management and batch deployments",
+  },
+  {
+    title: "Settings & Webhooks",
+    href: "/docs/settings",
+    icon: Settings,
+    description: "Notifications, exports, and data management",
+  },
+  {
     title: "Troubleshooting",
     href: "/docs/troubleshooting",
     icon: HelpCircle,
@@ -74,10 +95,10 @@ export default function DocsPage() {
     <div className="space-y-12">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white sm:text-4xl">
+        <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">
           Self-Hosting Documentation
         </h1>
-        <p className="mt-4 text-lg text-zinc-400 leading-relaxed">
+        <p className="mt-4 text-lg text-text-secondary leading-relaxed">
           IntuneGet is 100% open source and designed to be self-hosted. This
           documentation will guide you through deploying your own instance,
           giving you full control over your data and infrastructure.
@@ -86,16 +107,16 @@ export default function DocsPage() {
 
       {/* What is IntuneGet */}
       <section>
-        <h2 className="text-2xl font-semibold text-white mb-4">
+        <h2 className="text-2xl font-semibold text-text-primary mb-4">
           What is IntuneGet?
         </h2>
-        <p className="text-zinc-400 leading-relaxed mb-4">
+        <p className="text-text-secondary leading-relaxed mb-4">
           IntuneGet bridges the gap between Winget and Microsoft Intune. It
           automatically packages applications from the Winget repository and
           uploads them to your Intune environment, streamlining app deployment
           with just a few clicks.
         </p>
-        <p className="text-zinc-400 leading-relaxed">
+        <p className="text-text-secondary leading-relaxed">
           The self-hosted version gives you complete control over your
           deployment pipeline, data storage, and authentication - perfect for
           organizations with specific security or compliance requirements.
@@ -104,10 +125,10 @@ export default function DocsPage() {
 
       {/* Hosted vs Self-Hosted */}
       <section>
-        <h2 className="text-2xl font-semibold text-white mb-4">
+        <h2 className="text-2xl font-semibold text-text-primary mb-4">
           Hosted vs Self-Hosted
         </h2>
-        <p className="text-zinc-400 leading-relaxed mb-6">
+        <p className="text-text-secondary leading-relaxed mb-6">
           Compare the two deployment options to decide which is right for you:
         </p>
 
@@ -121,7 +142,7 @@ export default function DocsPage() {
           </TableHead>
           <TableBody>
             <TableRow>
-              <TableCell className="font-medium text-white">Setup Time</TableCell>
+              <TableCell className="font-medium text-text-primary">Setup Time</TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-1.5 text-status-success">
                   <Clock className="h-4 w-4" />
@@ -136,12 +157,12 @@ export default function DocsPage() {
               </TableCell>
             </TableRow>
             <TableRow>
-              <TableCell className="font-medium text-white">Cost</TableCell>
+              <TableCell className="font-medium text-text-primary">Cost</TableCell>
               <TableCell>Free (hosted by maintainer)</TableCell>
               <TableCell>Free tier services available</TableCell>
             </TableRow>
             <TableRow>
-              <TableCell className="font-medium text-white">Data Control</TableCell>
+              <TableCell className="font-medium text-text-primary">Data Control</TableCell>
               <TableCell>Shared infrastructure</TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-1.5 text-status-success">
@@ -151,7 +172,7 @@ export default function DocsPage() {
               </TableCell>
             </TableRow>
             <TableRow>
-              <TableCell className="font-medium text-white">Customization</TableCell>
+              <TableCell className="font-medium text-text-primary">Customization</TableCell>
               <TableCell>Limited</TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-1.5 text-status-success">
@@ -161,7 +182,7 @@ export default function DocsPage() {
               </TableCell>
             </TableRow>
             <TableRow>
-              <TableCell className="font-medium text-white">Maintenance</TableCell>
+              <TableCell className="font-medium text-text-primary">Maintenance</TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-1.5 text-status-success">
                   <CheckCircle className="h-4 w-4" />
@@ -171,7 +192,7 @@ export default function DocsPage() {
               <TableCell>Self-managed</TableCell>
             </TableRow>
             <TableRow>
-              <TableCell className="font-medium text-white">Updates</TableCell>
+              <TableCell className="font-medium text-text-primary">Updates</TableCell>
               <TableCell>Automatic</TableCell>
               <TableCell>Manual (git pull)</TableCell>
             </TableRow>
@@ -181,7 +202,7 @@ export default function DocsPage() {
 
       {/* Is Self-Hosting Right for You */}
       <section>
-        <h2 className="text-2xl font-semibold text-white mb-4">
+        <h2 className="text-2xl font-semibold text-text-primary mb-4">
           Is Self-Hosting Right for You?
         </h2>
 
@@ -192,7 +213,7 @@ export default function DocsPage() {
               <CheckCircle className="h-5 w-5" />
               Self-hosting is great if you:
             </h3>
-            <ul className="space-y-2 text-sm text-zinc-300">
+            <ul className="space-y-2 text-sm text-text-secondary">
               <li className="flex items-start gap-2">
                 <span className="text-status-success mt-1">-</span>
                 Need full control over your data
@@ -222,7 +243,7 @@ export default function DocsPage() {
               <XCircle className="h-5 w-5" />
               Consider hosted if you:
             </h3>
-            <ul className="space-y-2 text-sm text-zinc-300">
+            <ul className="space-y-2 text-sm text-text-secondary">
               <li className="flex items-start gap-2">
                 <span className="text-status-warning mt-1">-</span>
                 Want to get started immediately
@@ -250,45 +271,46 @@ export default function DocsPage() {
 
       {/* Requirements */}
       <section>
-        <h2 className="text-2xl font-semibold text-white mb-4">Requirements</h2>
+        <h2 className="text-2xl font-semibold text-text-primary mb-4">Requirements</h2>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-lg border border-white/10 bg-bg-surface p-4">
+          <div className="rounded-lg border border-black/10 bg-white p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="rounded-lg bg-accent-cyan/10 p-2">
                 <Clock className="h-5 w-5 text-accent-cyan" />
               </div>
-              <h3 className="font-semibold text-white">Time</h3>
+              <h3 className="font-semibold text-text-primary">Time</h3>
             </div>
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-text-secondary">
               Initial setup takes 1-2 hours. Occasional updates may take 15-30
               minutes.
             </p>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-bg-surface p-4">
+          <div className="rounded-lg border border-black/10 bg-white p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="rounded-lg bg-accent-cyan/10 p-2">
                 <DollarSign className="h-5 w-5 text-accent-cyan" />
               </div>
-              <h3 className="font-semibold text-white">Cost</h3>
+              <h3 className="font-semibold text-text-primary">Cost</h3>
             </div>
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-text-secondary">
               Completely free. SQLite database included. Optional GitHub Actions
               (2000 min/month for private repos).
             </p>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-bg-surface p-4">
+          <div className="rounded-lg border border-black/10 bg-white p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="rounded-lg bg-accent-cyan/10 p-2">
                 <Shield className="h-5 w-5 text-accent-cyan" />
               </div>
-              <h3 className="font-semibold text-white">Access</h3>
+              <h3 className="font-semibold text-text-primary">Access</h3>
             </div>
-            <p className="text-sm text-zinc-400">
-              Azure AD permissions to create app registrations (admin access
-              helpful but not required).
+            <p className="text-sm text-text-secondary">
+              Entra ID permissions to create app registrations (admin access
+              helpful but not required). The Unmanaged Apps feature requires the
+              additional DeviceManagementManagedDevices.Read.All permission.
             </p>
           </div>
         </div>
@@ -311,7 +333,7 @@ export default function DocsPage() {
 
       {/* Quick Links */}
       <section>
-        <h2 className="text-2xl font-semibold text-white mb-6">
+        <h2 className="text-2xl font-semibold text-text-primary mb-6">
           Documentation Sections
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -321,17 +343,17 @@ export default function DocsPage() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="group rounded-lg border border-white/10 bg-bg-surface p-5 transition-all duration-200 hover:border-accent-cyan/30 hover:bg-bg-elevated"
+                className="group rounded-lg border border-black/10 bg-white p-5 transition-all duration-200 hover:border-accent-cyan/30 hover:bg-stone-50"
               >
                 <div className="flex items-start gap-4">
                   <div className="rounded-lg bg-accent-cyan/10 p-2.5 transition-colors group-hover:bg-accent-cyan/20">
                     <Icon className="h-5 w-5 text-accent-cyan" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-white group-hover:text-accent-cyan transition-colors">
+                    <h3 className="font-semibold text-text-primary group-hover:text-accent-cyan transition-colors">
                       {link.title}
                     </h3>
-                    <p className="mt-1 text-sm text-zinc-500">
+                    <p className="mt-1 text-sm text-text-muted">
                       {link.description}
                     </p>
                   </div>
@@ -344,22 +366,23 @@ export default function DocsPage() {
 
       {/* Architecture Overview */}
       <section>
-        <h2 className="text-2xl font-semibold text-white mb-4">
+        <h2 className="text-2xl font-semibold text-text-primary mb-4">
           Architecture Overview
         </h2>
-        <p className="text-zinc-400 leading-relaxed mb-6">
+        <p className="text-text-secondary leading-relaxed mb-6">
           Self-hosted IntuneGet runs entirely on your infrastructure with zero external dependencies:
         </p>
 
-        <div className="rounded-lg border border-white/10 bg-bg-surface p-4 sm:p-6 font-mono">
-          <pre className="text-zinc-400 overflow-x-auto text-[10px] sm:text-xs md:text-sm">
+        <div className="rounded-lg border border-black/10 bg-white p-4 sm:p-6 font-mono">
+          <pre className="text-text-secondary overflow-x-auto text-[10px] sm:text-xs md:text-sm">
 {`+----------------------------------+       +--------------------------------+
 |         DOCKER CONTAINER         |       |      WINDOWS MACHINE           |
 +----------------------------------+       +--------------------------------+
 |  Next.js Web App                 |       |  Packager Service              |
 |  - Embedded SQLite database      |       |  - Uses HTTP API only          |
 |  - /api/packager/jobs endpoints  |<------|  - No database credentials     |
-|  - All data stored locally       |       |  - Simple API key auth         |
+|  - Unmanaged apps detection      |       |  - Simple API key auth         |
+|  - MSP multi-tenant management   |       |                                |
 +----------------------------------+       +--------------------------------+
          |                                           |
          v                                           v
@@ -371,22 +394,22 @@ export default function DocsPage() {
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="text-center p-4">
             <Server className="h-8 w-8 text-accent-cyan mx-auto mb-2" />
-            <h4 className="font-medium text-white mb-1">Web Application</h4>
-            <p className="text-xs text-zinc-500">
+            <h4 className="font-medium text-text-primary mb-1">Web Application</h4>
+            <p className="text-xs text-text-muted">
               Next.js app with embedded SQLite database
             </p>
           </div>
           <div className="text-center p-4">
             <Container className="h-8 w-8 text-accent-cyan mx-auto mb-2" />
-            <h4 className="font-medium text-white mb-1">Local Packager</h4>
-            <p className="text-xs text-zinc-500">
+            <h4 className="font-medium text-text-primary mb-1">Local Packager</h4>
+            <p className="text-xs text-text-muted">
               Windows service for .intunewin packaging
             </p>
           </div>
           <div className="text-center p-4">
             <Database className="h-8 w-8 text-accent-cyan mx-auto mb-2" />
-            <h4 className="font-medium text-white mb-1">SQLite Database</h4>
-            <p className="text-xs text-zinc-500">
+            <h4 className="font-medium text-text-primary mb-1">SQLite Database</h4>
+            <p className="text-xs text-text-muted">
               Local file-based storage, easy backup
             </p>
           </div>
@@ -395,10 +418,10 @@ export default function DocsPage() {
 
       {/* Get Started CTA */}
       <section className="rounded-lg border border-accent-cyan/20 bg-gradient-to-br from-accent-cyan/5 to-transparent p-8 text-center">
-        <h2 className="text-2xl font-semibold text-white mb-3">
+        <h2 className="text-2xl font-semibold text-text-primary mb-3">
           Ready to Get Started?
         </h2>
-        <p className="text-zinc-400 mb-6 max-w-lg mx-auto">
+        <p className="text-text-secondary mb-6 max-w-lg mx-auto">
           Follow our step-by-step guide to deploy your own IntuneGet instance.
           The complete setup takes about 1-2 hours.
         </p>

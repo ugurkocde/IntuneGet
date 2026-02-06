@@ -28,7 +28,7 @@ const WEBHOOK_TYPE_LABELS: Record<WebhookType, { label: string; color: string }>
   slack: { label: 'Slack', color: 'text-[#4A154B] bg-[#4A154B]/10' },
   teams: { label: 'Teams', color: 'text-[#6264A7] bg-[#6264A7]/10' },
   discord: { label: 'Discord', color: 'text-[#5865F2] bg-[#5865F2]/10' },
-  custom: { label: 'Custom', color: 'text-zinc-400 bg-zinc-500/10' },
+  custom: { label: 'Custom', color: 'text-text-secondary bg-black/5' },
 };
 
 export function WebhookManager({ className }: WebhookManagerProps) {
@@ -242,24 +242,24 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
   if (isLoading) {
     return (
-      <div className={cn('glass-dark rounded-xl p-6 border border-white/5', className)}>
+      <div className={cn('glass-light rounded-xl p-6 border border-black/5', className)}>
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+          <Loader2 className="w-6 h-6 text-text-muted animate-spin" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn('glass-dark rounded-xl p-6 border border-white/5 hover:border-accent-violet/20 transition-colors', className)}>
+    <div className={cn('glass-light rounded-xl p-6 border border-black/5 hover:border-accent-violet/20 transition-colors', className)}>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-accent-violet/10 flex items-center justify-center">
             <Webhook className="w-5 h-5 text-accent-violet" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">Webhook Notifications</h2>
-            <p className="text-sm text-zinc-500">Send updates to Slack, Teams, or Discord</p>
+            <h2 className="text-lg font-semibold text-text-primary">Webhook Notifications</h2>
+            <p className="text-sm text-text-secondary">Send updates to Slack, Teams, or Discord</p>
           </div>
         </div>
 
@@ -276,11 +276,11 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
       {webhooks.length === 0 ? (
         <div className="text-center py-8">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-            <Webhook className="w-6 h-6 text-zinc-500" />
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-black/5 flex items-center justify-center">
+            <Webhook className="w-6 h-6 text-text-muted" />
           </div>
-          <p className="text-zinc-400 mb-2">No webhooks configured</p>
-          <p className="text-sm text-zinc-500">
+          <p className="text-text-secondary mb-2">No webhooks configured</p>
+          <p className="text-sm text-text-muted">
             Add a webhook to receive notifications in Slack, Teams, or Discord
           </p>
         </div>
@@ -292,14 +292,14 @@ export function WebhookManager({ className }: WebhookManagerProps) {
               className={cn(
                 'p-4 rounded-lg border transition-colors',
                 webhook.is_enabled
-                  ? 'bg-white/5 border-white/10'
-                  : 'bg-white/[0.02] border-white/5 opacity-60'
+                  ? 'bg-bg-elevated border-black/5'
+                  : 'bg-bg-surface border-black/5 opacity-60'
               )}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-medium text-white truncate">{webhook.name}</h3>
+                    <h3 className="font-medium text-text-primary truncate">{webhook.name}</h3>
                     <span
                       className={cn(
                         'px-2 py-0.5 rounded text-xs font-medium',
@@ -315,9 +315,9 @@ export function WebhookManager({ className }: WebhookManagerProps) {
                     )}
                   </div>
 
-                  <p className="text-sm text-zinc-500 truncate mb-2">{webhook.url}</p>
+                  <p className="text-sm text-text-muted font-mono truncate mb-2">{webhook.url}</p>
 
-                  <div className="flex items-center gap-4 text-xs text-zinc-500">
+                  <div className="flex items-center gap-4 text-xs text-text-muted">
                     {webhook.last_success_at && (
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3 text-status-success" />
@@ -325,7 +325,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
                       </span>
                     )}
                     {webhook.failure_count > 0 && (
-                      <span className="flex items-center gap-1 text-amber-400">
+                      <span className="flex items-center gap-1 text-status-warning">
                         <AlertTriangle className="w-3 h-3" />
                         {webhook.failure_count} failures
                       </span>
@@ -357,7 +357,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
                   <button
                     onClick={() => handleTestWebhook(webhook.id)}
                     disabled={testingId === webhook.id || !webhook.is_enabled}
-                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                    className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-black/5 transition-colors disabled:opacity-50"
                     title="Send test"
                   >
                     {testingId === webhook.id ? (
@@ -370,7 +370,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
                   {/* Edit button */}
                   <button
                     onClick={() => openEditModal(webhook)}
-                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                    className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-black/5 transition-colors"
                     title="Edit"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -380,7 +380,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
                   <button
                     onClick={() => handleToggleWebhook(webhook)}
                     disabled={togglingId === webhook.id}
-                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                    className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-black/5 transition-colors disabled:opacity-50"
                     title={webhook.is_enabled ? 'Disable' : 'Enable'}
                   >
                     {togglingId === webhook.id ? (
@@ -396,7 +396,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
                   <button
                     onClick={() => handleDeleteWebhook(webhook.id)}
                     disabled={deletingId === webhook.id}
-                    className="p-2 rounded-lg text-zinc-400 hover:text-status-error hover:bg-status-error/10 transition-colors disabled:opacity-50"
+                    className="p-2 rounded-lg text-text-muted hover:text-status-error hover:bg-status-error/10 transition-colors disabled:opacity-50"
                     title="Delete"
                   >
                     {deletingId === webhook.id ? (
@@ -413,7 +413,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       )}
 
       {webhooks.length >= 10 && (
-        <p className="text-xs text-zinc-500 mt-4 text-center">
+        <p className="text-xs text-text-muted mt-4 text-center">
           Maximum of 10 webhooks reached
         </p>
       )}

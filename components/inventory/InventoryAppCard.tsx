@@ -2,7 +2,7 @@
 
 import { memo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Package, Calendar, User } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { IntuneWin32App } from '@/types/inventory';
 
@@ -18,12 +18,7 @@ export const InventoryAppCard = memo(function InventoryAppCard({
   isSelected,
 }: InventoryAppCardProps) {
   const prefersReducedMotion = useReducedMotion();
-  // Track if the icon failed to load
   const [iconError, setIconError] = useState(false);
-
-  const handleIconError = () => {
-    setIconError(true);
-  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -43,65 +38,63 @@ export const InventoryAppCard = memo(function InventoryAppCard({
   return (
     <motion.div
       onClick={onClick}
-      whileHover={prefersReducedMotion ? {} : { scale: 1.02, y: -2 }}
+      whileHover={prefersReducedMotion ? {} : { scale: 1.015, y: -2 }}
       whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        'glass-dark border rounded-xl p-4 cursor-pointer transition-all contain-layout',
+        'bg-bg-elevated rounded-xl border p-5 cursor-pointer transition-all shadow-soft',
         isSelected
-          ? 'border-accent-cyan/50 bg-accent-cyan/5 shadow-glow-cyan'
-          : 'border-white/5 hover:border-accent-cyan/30 hover:shadow-glow-cyan/30'
+          ? 'border-accent-cyan/40 shadow-glow-cyan bg-accent-cyan/[0.02]'
+          : 'border-black/5 hover:border-black/10 hover:shadow-soft-md'
       )}
     >
       <div className="flex items-start gap-4">
         {/* App Icon */}
-        <div className="w-12 h-12 rounded-lg bg-bg-elevated flex items-center justify-center flex-shrink-0 border border-white/5">
+        <div className="w-11 h-11 rounded-lg bg-bg-surface border border-black/5 flex items-center justify-center flex-shrink-0">
           {app.largeIcon?.value && !iconError ? (
             <img
               src={`data:${app.largeIcon.type || 'image/png'};base64,${app.largeIcon.value}`}
               alt={app.displayName}
-              className="w-10 h-10 rounded"
-              onError={handleIconError}
+              className="w-9 h-9 rounded"
+              onError={() => setIconError(true)}
             />
           ) : (
-            <Package className="w-6 h-6 text-zinc-400" />
+            <Package className="w-5 h-5 text-text-muted" />
           )}
         </div>
 
         {/* App Info */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-white font-medium truncate">{app.displayName}</h3>
+          <h3 className="text-text-primary font-semibold text-[15px] leading-snug truncate">
+            {app.displayName}
+          </h3>
           <div className="flex items-center gap-2 mt-1">
             {app.publisher && (
-              <span className="text-sm text-zinc-400 truncate">
+              <span className="text-sm text-text-secondary truncate">
                 {app.publisher}
               </span>
             )}
             {app.displayVersion && (
-              <>
-                <span className="text-zinc-600">|</span>
-                <span className="text-sm text-zinc-500">v{app.displayVersion}</span>
-              </>
+              <span className="text-xs bg-black/5 text-text-muted px-1.5 py-0.5 rounded">
+                v{app.displayVersion}
+              </span>
             )}
           </div>
 
           {/* Metadata */}
-          <div className="flex items-center gap-4 mt-3 text-xs text-zinc-500">
-            <div className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              <span>{formatDate(app.createdDateTime)}</span>
-            </div>
+          <div className="flex items-center gap-3 mt-3 text-xs text-text-muted">
+            <span>{formatDate(app.createdDateTime)}</span>
             {app.size && (
-              <div className="flex items-center gap-1">
-                <Package className="w-3 h-3" />
+              <>
+                <span className="text-black/20">&#183;</span>
                 <span>{formatSize(app.size)}</span>
-              </div>
+              </>
             )}
             {app.installExperience?.runAsAccount && (
-              <div className="flex items-center gap-1">
-                <User className="w-3 h-3" />
+              <>
+                <span className="text-black/20">&#183;</span>
                 <span className="capitalize">{app.installExperience.runAsAccount}</span>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -109,7 +102,9 @@ export const InventoryAppCard = memo(function InventoryAppCard({
 
       {/* Description preview */}
       {app.description && (
-        <p className="text-sm text-zinc-500 mt-3 line-clamp-2">{app.description}</p>
+        <p className="text-sm text-text-secondary mt-3 line-clamp-2 leading-relaxed">
+          {app.description}
+        </p>
       )}
     </motion.div>
   );

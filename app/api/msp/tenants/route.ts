@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
       }
 
       const jobList = jobsByTenant[tenant.tenant_id] || [];
-      const completedJobs = jobList.filter((j) => j.status === 'completed').length;
+      const completedJobs = jobList.filter((j) => j.status === 'completed' || j.status === 'deployed').length;
       const failedJobs = jobList.filter((j) => j.status === 'failed').length;
       const lastJob = jobList[0];
 
@@ -213,14 +213,14 @@ export async function POST(request: NextRequest) {
       consentUrl = getMspCustomerConsentUrl(mspOrgId, tenant.id, baseUrl, signedState);
     } catch (signError) {
       // The tenant was created but we couldn't generate the consent URL
-      // Return the tenant info with an error message so the user knows to retry
+      // Return 500 so the frontend treats this as an error, not a success
       return NextResponse.json(
         {
           error: 'Failed to generate consent URL',
           message: 'The tenant was created but the consent URL could not be generated. Please use the "Get Consent URL" option from the tenant menu to retrieve it.',
           tenant: tenant as MspManagedTenant,
         },
-        { status: 201 }
+        { status: 500 }
       );
     }
 

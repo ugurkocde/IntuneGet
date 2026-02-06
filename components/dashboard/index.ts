@@ -14,3 +14,6 @@ export {
 } from './SkeletonCard';
 export { PageHeader, SectionHeader, CardHeader } from './PageHeader';
 export { RecentActivityList } from './RecentActivityList';
+
+// Sidebar
+export { Sidebar } from './Sidebar';

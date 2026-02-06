@@ -77,7 +77,7 @@ function getStateSecret(): string {
   }
 
   // Fall back to deriving from client secret
-  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
   if (clientSecret) {
     return crypto.createHash('sha256').update(clientSecret + '_msp_state').digest('hex');
   }
@@ -87,7 +87,7 @@ function getStateSecret(): string {
     return 'dev-state-secret-not-for-production';
   }
 
-  throw new Error('MSP_STATE_SECRET or AZURE_AD_CLIENT_SECRET must be set');
+  throw new Error('MSP_STATE_SECRET or AZURE_CLIENT_SECRET/AZURE_AD_CLIENT_SECRET must be set');
 }
 
 /**

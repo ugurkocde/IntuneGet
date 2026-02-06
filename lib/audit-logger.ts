@@ -33,6 +33,7 @@ export type AuditAction =
   // Batch operations
   | 'batch.deployment_started'
   | 'batch.deployment_completed'
+  | 'batch.deployment_failed'
   | 'batch.deployment_cancelled'
   // Webhook actions
   | 'webhook.created'
@@ -339,6 +340,50 @@ export async function logBatchDeploymentStarted(
     resource_type: 'batch',
     resource_id: batchId,
     details: { winget_id: wingetId, tenant_count: tenantCount },
+  });
+}
+
+/**
+ * Log batch deployment completed
+ */
+export async function logBatchDeploymentCompleted(
+  ctx: AuditContext,
+  batchId: string,
+  wingetId: string,
+  completedTenants: number,
+  failedTenants: number
+): Promise<void> {
+  await createAuditLog({
+    ...ctx,
+    action: 'batch.deployment_completed',
+    resource_type: 'batch_deployment',
+    resource_id: batchId,
+    details: {
+      winget_id: wingetId,
+      completed_tenants: completedTenants,
+      failed_tenants: failedTenants,
+    },
+  });
+}
+
+/**
+ * Log batch deployment failed (all items failed)
+ */
+export async function logBatchDeploymentFailed(
+  ctx: AuditContext,
+  batchId: string,
+  wingetId: string,
+  failedTenants: number
+): Promise<void> {
+  await createAuditLog({
+    ...ctx,
+    action: 'batch.deployment_failed',
+    resource_type: 'batch_deployment',
+    resource_id: batchId,
+    details: {
+      winget_id: wingetId,
+      failed_tenants: failedTenants,
+    },
   });
 }
 

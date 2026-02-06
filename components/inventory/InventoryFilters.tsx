@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, SortAsc, SortDesc } from 'lucide-react';
+import { Search, SortAsc, SortDesc, LayoutGrid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -16,6 +16,8 @@ interface InventoryFiltersProps {
   onSortOrderToggle: () => void;
   totalCount: number;
   filteredCount: number;
+  viewMode: 'grid' | 'list';
+  onViewModeChange: (mode: 'grid' | 'list') => void;
 }
 
 const sortOptions = [
@@ -36,6 +38,8 @@ export function InventoryFilters({
   onSortOrderToggle,
   totalCount,
   filteredCount,
+  viewMode,
+  onViewModeChange,
 }: InventoryFiltersProps) {
   // Local state for immediate input feedback
   const [localSearch, setLocalSearch] = useState(search);
@@ -60,54 +64,84 @@ export function InventoryFilters({
   }, [debouncedSearch]);
 
   return (
-    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-      {/* Search */}
-      <div className="relative w-full sm:w-80">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <Input
-          type="text"
-          placeholder="Search apps..."
-          value={localSearch}
-          onChange={(e) => setLocalSearch(e.target.value)}
-          className="pl-10 bg-bg-surface border-white/10 text-white placeholder:text-zinc-500 focus:border-accent-cyan/50 focus:ring-accent-cyan/20"
-        />
-      </div>
+    <div className="glass-light rounded-xl p-4 border border-black/5">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        {/* Search */}
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <Input
+            type="text"
+            placeholder="Search apps..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-10 bg-bg-elevated border-black/10 text-text-primary placeholder:text-text-muted focus:border-accent-cyan/50 focus:ring-accent-cyan/20"
+          />
+        </div>
 
-      {/* Sort controls */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-zinc-400">
-          {filteredCount} of {totalCount} apps
-        </span>
-        <div className="flex flex-wrap items-center gap-1 sm:ml-4">
-          <span className="text-sm text-zinc-500">Sort:</span>
-          {sortOptions.map((option) => (
+        {/* Sort controls + View toggle */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-text-muted">
+            {filteredCount} of {totalCount} apps
+          </span>
+          <div className="flex flex-wrap items-center gap-1 sm:ml-4">
+            <span className="text-sm text-text-muted">Sort:</span>
+            {sortOptions.map((option) => (
+              <Button
+                key={option.value}
+                variant="ghost"
+                size="sm"
+                onClick={() => onSortChange(option.value)}
+                className={cn(
+                  'text-sm transition-colors',
+                  sortBy === option.value
+                    ? 'text-accent-cyan bg-accent-cyan/10'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-black/5'
+                )}
+              >
+                {option.label}
+              </Button>
+            ))}
             <Button
-              key={option.value}
               variant="ghost"
               size="sm"
-              onClick={() => onSortChange(option.value)}
-              className={cn(
-                'text-sm transition-colors',
-                sortBy === option.value
-                  ? 'text-accent-cyan bg-accent-cyan/10'
-                  : 'text-zinc-400 hover:text-white hover:bg-white/5'
-              )}
+              onClick={onSortOrderToggle}
+              className="text-text-secondary hover:text-text-primary hover:bg-black/5"
             >
-              {option.label}
+              {sortOrder === 'asc' ? (
+                <SortAsc className="w-4 h-4" />
+              ) : (
+                <SortDesc className="w-4 h-4" />
+              )}
             </Button>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onSortOrderToggle}
-            className="text-zinc-400 hover:text-white hover:bg-white/5"
-          >
-            {sortOrder === 'asc' ? (
-              <SortAsc className="w-4 h-4" />
-            ) : (
-              <SortDesc className="w-4 h-4" />
-            )}
-          </Button>
+          </div>
+
+          {/* View Toggle */}
+          <div className="flex items-center gap-0.5 ml-2 border border-black/5 rounded-lg p-0.5">
+            <button
+              onClick={() => onViewModeChange('grid')}
+              className={cn(
+                'p-1.5 rounded-md transition-colors',
+                viewMode === 'grid'
+                  ? 'bg-accent-cyan/10 text-accent-cyan'
+                  : 'text-text-muted hover:text-text-primary'
+              )}
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onViewModeChange('list')}
+              className={cn(
+                'p-1.5 rounded-md transition-colors',
+                viewMode === 'list'
+                  ? 'bg-accent-cyan/10 text-accent-cyan'
+                  : 'text-text-muted hover:text-text-primary'
+              )}
+              aria-label="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

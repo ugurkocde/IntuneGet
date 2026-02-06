@@ -77,6 +77,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Validate tenant_id belongs to this MSP organization if specified
+    if (tenantId) {
+      const isManagedByOrg = tenants.some(t => t.tenant_id === tenantId);
+      if (!isManagedByOrg) {
+        return NextResponse.json(
+          { error: 'Tenant not managed by your organization' },
+          { status: 403 }
+        );
+      }
+    }
+
     const tenantIds = tenantId
       ? [tenantId]
       : tenants.filter(t => t.tenant_id !== null).map(t => t.tenant_id as string);

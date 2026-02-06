@@ -9,7 +9,7 @@ interface TableProps {
 
 export function Table({ children, className }: TableProps) {
   return (
-    <div className="my-6 overflow-x-auto rounded-lg border border-white/10">
+    <div className="my-6 overflow-x-auto rounded-lg border border-black/10">
       <table className={cn("w-full text-sm", className)}>{children}</table>
     </div>
   );
@@ -17,12 +17,12 @@ export function Table({ children, className }: TableProps) {
 
 export function TableHead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-bg-elevated border-b border-white/5">{children}</thead>
+    <thead className="bg-stone-50 border-b border-black/5">{children}</thead>
   );
 }
 
 export function TableBody({ children }: { children: React.ReactNode }) {
-  return <tbody className="divide-y divide-white/5">{children}</tbody>;
+  return <tbody className="divide-y divide-black/5">{children}</tbody>;
 }
 
 export function TableRow({
@@ -33,7 +33,7 @@ export function TableRow({
   className?: string;
 }) {
   return (
-    <tr className={cn("hover:bg-white/[0.02] transition-colors", className)}>
+    <tr className={cn("hover:bg-black/[0.02] transition-colors", className)}>
       {children}
     </tr>
   );
@@ -49,7 +49,7 @@ export function TableHeader({
   return (
     <th
       className={cn(
-        "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400",
+        "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted",
         className
       )}
     >
@@ -66,6 +66,6 @@ export function TableCell({
   className?: string;
 }) {
   return (
-    <td className={cn("px-4 py-3 text-zinc-300", className)}>{children}</td>
+    <td className={cn("px-4 py-3 text-text-secondary", className)}>{children}</td>
   );
 }

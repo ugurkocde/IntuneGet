@@ -12,12 +12,12 @@ export const faqData: FAQ[] = [
   {
     question: "Is IntuneGet really 100% free?",
     answer:
-      "Yes! IntuneGet is completely free and open source. There are no hidden fees, no premium tiers, and no credit card required. You can use all features without any cost, modify it to fit your needs, and contribute to its development.",
+      "Yes! IntuneGet is completely free and open source under the AGPL-3.0 license. There are no hidden fees, no premium tiers, and no credit card required. You can use all features without any cost, modify it to fit your needs, and contribute to its development.",
   },
   {
     question: "Why is IntuneGet free?",
     answer:
-      "IntuneGet is free with no seat limits because we believe every IT team deserves access to great deployment tools. IntuneGet gives you access to 10,000+ Winget packages, is fully open source, and supports self-hosting. No vendor lock-in, no surprise bills.",
+      "IntuneGet is free with no seat limits because we believe every IT team deserves access to great deployment tools. IntuneGet gives you access to 10,000+ Winget packages, is fully open source under the AGPL-3.0 license, and supports self-hosting. No vendor lock-in, no surprise bills.",
   },
   {
     question: "How long does setup take?",
@@ -47,7 +47,7 @@ export const faqData: FAQ[] = [
   {
     question: "Can I self-host IntuneGet?",
     answer:
-      "Yes! IntuneGet is fully open source and can be self-hosted on your own infrastructure using Docker. Check out our documentation for detailed setup instructions, or use our hosted service for a hassle-free experience.",
+      "Yes! IntuneGet is fully open source under the AGPL-3.0 license and can be self-hosted on your own infrastructure using Docker. It uses an embedded SQLite database with zero external dependencies. Check out our documentation for detailed setup instructions, or use our hosted service for a hassle-free experience.",
   },
   {
     question: "What is the best free tool to deploy apps to Intune?",
@@ -72,7 +72,7 @@ export const faqData: FAQ[] = [
   {
     question: "Is there a free open-source Intune app deployment tool?",
     answer:
-      "Yes, IntuneGet is a free, open-source Intune app deployment tool. It deploys 10,000+ Winget applications to Microsoft Intune with no cost, no seat limits, and full self-hosting support. The source code is available on GitHub and actively maintained.",
+      "Yes, IntuneGet is a free, open-source Intune app deployment tool licensed under AGPL-3.0. It deploys 10,000+ Winget applications to Microsoft Intune with no cost, no seat limits, and full self-hosting support. The source code is available on GitHub and actively maintained.",
   },
   {
     question: "How to deploy apps to Intune without IntuneWin packaging?",

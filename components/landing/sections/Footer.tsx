@@ -11,9 +11,6 @@ const footerLinks = {
     { label: "How It Works", href: "/#how-it-works" },
     { label: "Documentation", href: "/docs" },
   ],
-  community: [
-    { label: "App Requests", href: "/dashboard/app-requests" },
-  ],
   company: [
     { label: "About", href: "/about" },
     { label: "Changelog", href: "/changelog" },
@@ -42,7 +39,7 @@ export function Footer() {
       {/* Main footer content */}
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl py-12 md:py-16">
         <FadeIn>
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-8 md:gap-10">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 md:gap-10">
             {/* Brand column */}
             <div className="col-span-2">
               <Link href="/" className="flex items-center gap-2 group mb-4">
@@ -90,35 +87,6 @@ export function Footer() {
                     >
                       {link.label}
                     </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Community links */}
-            <div>
-              <h4 className="text-sm font-semibold text-stone-900 mb-4">Community</h4>
-              <ul className="space-y-3">
-                {footerLinks.community.map((link) => (
-                  <li key={link.label}>
-                    {link.href.startsWith("http") ? (
-                      <a
-                        href={link.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-stone-500 hover:text-stone-900 transition-colors inline-flex items-center gap-1"
-                      >
-                        {link.label}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    ) : (
-                      <Link
-                        href={link.href}
-                        className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
-                      >
-                        {link.label}
-                      </Link>
-                    )}
                   </li>
                 ))}
               </ul>

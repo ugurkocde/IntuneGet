@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 const navItemsMap: Record<string, string> = {
   "/docs": "Documentation",
   "/docs/getting-started": "Getting Started",
-  "/docs/azure-setup": "Azure AD Setup",
+  "/docs/azure-setup": "Entra ID Setup",
   "/docs/database-setup": "Database Setup",
   "/docs/github-setup": "GitHub Setup",
   "/docs/docker": "Docker",

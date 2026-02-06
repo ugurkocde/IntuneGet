@@ -264,6 +264,39 @@ export function AddTenantFlow({ onComplete, onCancel }: AddTenantFlowProps) {
           </div>
         </div>
       )}
+
+      {step === 'consent' && !consentUrl && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-xl bg-black/5 border border-black/10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-text-primary">Consent URL Unavailable</h3>
+                <p className="text-sm text-text-muted">The tenant was created but the consent link could not be generated</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-sm text-text-secondary">
+                The server could not generate a consent URL. This is usually caused by a missing server configuration.
+                You can retrieve the consent URL later by selecting &quot;Get Consent URL&quot; from the tenant menu on the tenants page.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 justify-end">
+            <Button
+              type="button"
+              onClick={handleComplete}
+              className="bg-gradient-to-r from-accent-cyan to-accent-violet text-white"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { verifyCallbackSignature } from '@/lib/callback-signature';
+import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 
 interface PackageCallbackBody {
   jobId: string;
@@ -119,6 +120,15 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to update job status' },
         { status: 500 }
       );
+    }
+
+    // Check if this job belongs to a batch deployment item
+    if (data.status === 'deployed' || data.status === 'failed') {
+      const jobStatus = data.status === 'deployed' ? 'completed' : 'failed';
+      // Fire and forget - don't block the callback response
+      onJobCompleted(data.jobId, jobStatus, data.message).catch((err) => {
+        console.error('[Callback] Batch orchestrator error:', err);
+      });
     }
 
     return NextResponse.json({

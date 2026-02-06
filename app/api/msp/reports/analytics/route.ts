@@ -145,6 +145,17 @@ export async function GET(request: NextRequest) {
       } as AnalyticsResponse);
     }
 
+    // Validate tenant_id belongs to this MSP organization if specified
+    if (tenantId) {
+      const isManagedByOrg = tenants.some((t: ManagedTenantQueryResult) => t.tenant_id === tenantId);
+      if (!isManagedByOrg) {
+        return NextResponse.json(
+          { error: 'Tenant not managed by your organization' },
+          { status: 403 }
+        );
+      }
+    }
+
     const tenantIds = tenantId
       ? [tenantId]
       : tenants.map((t: ManagedTenantQueryResult) => t.tenant_id);
@@ -173,7 +184,7 @@ export async function GET(request: NextRequest) {
       ).length,
       success_rate: 0,
       total_tenants: tenants.length,
-      active_tenants: new Set(jobsList.map((j: JobQueryResult) => j.tenant_id)).size,
+      active_tenants: new Set(jobsList.filter((j: JobQueryResult) => j.tenant_id).map((j: JobQueryResult) => j.tenant_id)).size,
     };
 
     const finishedJobs = summary.completed_deployments + summary.failed_deployments;

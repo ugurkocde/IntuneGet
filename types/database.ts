@@ -33,6 +33,7 @@ export interface Database {
           token_expires_at: string | null;
           intune_tenant_id: string | null;
           tenant_name: string | null;
+          profile_image: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -45,6 +46,7 @@ export interface Database {
           token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
+          profile_image?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -57,6 +59,7 @@ export interface Database {
           token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
+          profile_image?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -972,7 +975,9 @@ export interface Database {
           completed_tenants: number;
           failed_tenants: number;
           concurrency_limit: number;
-          status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+          status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+          started_at: string | null;
+          completed_at: string | null;
           cancelled_at: string | null;
           cancelled_by_email: string | null;
           created_at: string;
@@ -990,7 +995,9 @@ export interface Database {
           completed_tenants?: number;
           failed_tenants?: number;
           concurrency_limit?: number;
-          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+          started_at?: string | null;
+          completed_at?: string | null;
           cancelled_at?: string | null;
           cancelled_by_email?: string | null;
           created_at?: string;
@@ -1008,7 +1015,9 @@ export interface Database {
           completed_tenants?: number;
           failed_tenants?: number;
           concurrency_limit?: number;
-          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+          started_at?: string | null;
+          completed_at?: string | null;
           cancelled_at?: string | null;
           cancelled_by_email?: string | null;
           created_at?: string;

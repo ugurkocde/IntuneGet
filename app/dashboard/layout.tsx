@@ -1,82 +1,32 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
-  LayoutDashboard,
-  Package,
-  Upload,
-  Settings,
-  LogOut,
   ShoppingCart,
-  Menu,
-  X,
-  ChevronRight,
-  Server,
-  BarChart3,
-  Building2,
   AlertTriangle,
   RefreshCw,
   Loader2,
-  ArrowUpCircle,
-  Radar,
-  FolderSync,
-  Users,
-  ScrollText,
-  Layers,
-  Webhook,
-  Lightbulb,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/stores/cart-store';
-import { cn } from '@/lib/utils';
+import { useSidebarStore } from '@/stores/sidebar-store';
+import { useProfileStore } from '@/stores/profile-store';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
-import { UpdateBadge } from '@/components/inventory';
 import { TenantSwitcher } from '@/components/msp';
-import { useMspOptional } from '@/hooks/useMspOptional';
 import { UploadCart } from '@/components/UploadCart';
 import { NotificationBell } from '@/components/notifications';
-
-type NavItem = {
-  name: string;
-  href: string;
-  icon: typeof LayoutDashboard;
-  badge?: string;
-};
-
-const navigation: NavItem[] = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'App Catalog', href: '/dashboard/apps', icon: Package },
-  { name: 'Unmanaged', href: '/dashboard/unmanaged', icon: Radar },
-  { name: 'SCCM Migration', href: '/dashboard/sccm', icon: FolderSync },
-  { name: 'Inventory', href: '/dashboard/inventory', icon: Server, badge: 'update' },
-  { name: 'Updates', href: '/dashboard/updates', icon: ArrowUpCircle },
-  { name: 'Uploads', href: '/dashboard/uploads', icon: Upload },
-  { name: 'Reports', href: '/dashboard/reports', icon: BarChart3 },
-  { name: 'App Requests', href: '/dashboard/app-requests', icon: Lightbulb },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-];
-
-// MSP-specific navigation items
-const mspNavigation: NavItem[] = [
-  { name: 'MSP Dashboard', href: '/dashboard/msp', icon: Building2 },
-  { name: 'Batch Deploy', href: '/dashboard/msp/batch', icon: Layers },
-  { name: 'Team', href: '/dashboard/msp/team', icon: Users },
-  { name: 'MSP Reports', href: '/dashboard/msp/reports', icon: BarChart3 },
-  { name: 'Webhooks', href: '/dashboard/msp/webhooks', icon: Webhook },
-  { name: 'Audit Logs', href: '/dashboard/msp/audit', icon: ScrollText },
-];
+import { Sidebar } from '@/components/dashboard';
+import { springPresets } from '@/lib/animations/variants';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isSigningOut, user, signOut } = useMicrosoftAuth();
-  const { isMspUser } = useMspOptional();
+  const { isAuthenticated, isSigningOut, user, signOut, getAccessToken } = useMicrosoftAuth();
   const {
     isOnboardingComplete,
     isChecking: isCheckingOnboarding,
@@ -84,18 +34,14 @@ export default function DashboardLayout({
     retryVerification,
   } = useOnboardingStatus();
   const router = useRouter();
-  const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isCollapsed = useSidebarStore((state) => state.isCollapsed);
+  const fetchProfileImage = useProfileStore((state) => state.fetchProfileImage);
+  const prefersReducedMotion = useReducedMotion();
   const [isLoading, setIsLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
   const [showRetryBanner, setShowRetryBanner] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const cartItemCount = useCartStore((state) => state.getItemCount());
   const toggleCart = useCartStore((state) => state.toggleCart);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -111,33 +57,36 @@ export default function DashboardLayout({
     }
   }, [isLoading, isAuthenticated, isSigningOut, router]);
 
-  // Handle onboarding check results
   useEffect(() => {
     if (!isLoading && isAuthenticated && !isCheckingOnboarding) {
       if (!isOnboardingComplete) {
         if (errorType === 'network_error' || errorType === 'missing_credentials') {
-          // Show retry banner for network/config errors - don't redirect
           setShowRetryBanner(true);
         } else if (errorType === 'consent_not_granted') {
-          // Consent actually not granted - redirect to onboarding
           router.push('/onboarding');
         } else {
-          // Unknown state - redirect to be safe
           router.push('/onboarding');
         }
       } else {
-        // Onboarding complete - hide any retry banner
         setShowRetryBanner(false);
       }
     }
   }, [isLoading, isAuthenticated, isCheckingOnboarding, isOnboardingComplete, errorType, router]);
 
-  // Handle retry
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      getAccessToken().then((token) => {
+        if (token) {
+          fetchProfileImage(token);
+        }
+      });
+    }
+  }, [isAuthenticated, isLoading, getAccessToken, fetchProfileImage]);
+
   const handleRetry = async () => {
     setIsRetrying(true);
     await retryVerification();
     setIsRetrying(false);
-    // Banner visibility will update via useEffect when isOnboardingComplete changes
   };
 
   const handleSignOut = async () => {
@@ -155,9 +104,6 @@ export default function DashboardLayout({
     );
   }
 
-  // Allow dashboard to render if:
-  // 1. User is authenticated AND onboarding is complete, OR
-  // 2. User is authenticated AND we're showing the retry banner (network error)
   if (!isAuthenticated || (!isOnboardingComplete && !showRetryBanner)) {
     return null;
   }
@@ -170,188 +116,26 @@ export default function DashboardLayout({
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-accent-violet/8 rounded-full blur-3xl" />
       </div>
 
-      {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       {/* Sidebar */}
-      <aside
-        className={cn(
-          'fixed top-0 left-0 z-50 h-full w-64 bg-bg-surface/95 backdrop-blur-xl transform transition-transform duration-300 ease-spring lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        )}
-      >
-        {/* Gradient border on right edge */}
-        <div className="absolute top-0 right-0 bottom-0 w-px bg-gradient-to-b from-accent-cyan/30 via-accent-violet/20 to-transparent" />
-
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-4 border-b border-black/5">
-            <Link href="/dashboard" className="group flex items-center gap-3">
-              <div className="relative w-9 h-9 rounded-lg overflow-hidden shadow-glow-cyan transition-shadow duration-300 group-hover:shadow-glow-cyan-lg">
-                <Image
-                  src="/favicon.svg"
-                  alt="IntuneGet Logo"
-                  width={36}
-                  height={36}
-                  className="w-full h-full"
-                />
-              </div>
-              <span className="text-xl font-bold text-text-primary tracking-tight">IntuneGet</span>
-            </Link>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-text-secondary hover:text-text-primary transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navigation.map((item, index) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    'group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-                    isActive
-                      ? 'text-text-primary'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-black/5'
-                  )}
-                  style={mounted ? { animationDelay: `${index * 50}ms` } : undefined}
-                >
-                  {/* Active indicator - gradient pill with glow */}
-                  {isActive && (
-                    <>
-                      <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan/15 to-accent-violet/10 rounded-lg" />
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-accent-cyan rounded-r-full shadow-glow-cyan" />
-                    </>
-                  )}
-
-                  <item.icon className={cn(
-                    'w-5 h-5 relative z-10 transition-colors',
-                    isActive ? 'text-accent-cyan' : 'group-hover:text-accent-cyan-bright'
-                  )} />
-                  <span className="font-medium relative z-10">{item.name}</span>
-                  {item.badge === 'update' && <UpdateBadge />}
-                  {isActive && !item.badge && (
-                    <ChevronRight className="w-4 h-4 ml-auto relative z-10 text-accent-cyan" />
-                  )}
-                </Link>
-              );
-            })}
-
-            {/* MSP Section - only shown for MSP users */}
-            {isMspUser && (
-              <>
-                <div className="pt-4 pb-2 px-3">
-                  <span className="text-xs font-medium text-text-muted uppercase tracking-wider">MSP</span>
-                </div>
-                {mspNavigation.map((item, index) => {
-                  const isActive = pathname === item.href || (item.href !== '/dashboard/msp' && pathname.startsWith(item.href));
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        'group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-                        isActive
-                          ? 'text-text-primary'
-                          : 'text-text-secondary hover:text-text-primary hover:bg-black/5'
-                      )}
-                      style={mounted ? { animationDelay: `${(navigation.length + index) * 50}ms` } : undefined}
-                    >
-                      {isActive && (
-                        <>
-                          <div className="absolute inset-0 bg-gradient-to-r from-accent-cyan/15 to-accent-violet/10 rounded-lg" />
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-accent-cyan rounded-r-full shadow-glow-cyan" />
-                        </>
-                      )}
-
-                      <item.icon className={cn(
-                        'w-5 h-5 relative z-10 transition-colors',
-                        isActive ? 'text-accent-cyan' : 'group-hover:text-accent-cyan-bright'
-                      )} />
-                      <span className="font-medium relative z-10">{item.name}</span>
-                      {isActive && (
-                        <ChevronRight className="w-4 h-4 ml-auto relative z-10 text-accent-cyan" />
-                      )}
-                    </Link>
-                  );
-                })}
-              </>
-            )}
-          </nav>
-
-          {/* User section */}
-          <div className="p-4 border-t border-black/5">
-            <Link
-              href="/dashboard/account"
-              onClick={() => setSidebarOpen(false)}
-              className="flex items-center gap-3 mb-4 group rounded-lg p-2 -m-2 hover:bg-black/5 transition-colors"
-            >
-              {/* Avatar with gradient ring */}
-              <div className="relative">
-                <div className="absolute -inset-0.5 bg-gradient-to-br from-accent-cyan to-accent-violet rounded-full opacity-75 group-hover:opacity-100 transition-opacity" />
-                <div className="relative w-10 h-10 rounded-full bg-bg-elevated flex items-center justify-center">
-                  <span className="text-sm font-semibold text-text-primary">
-                    {user?.name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary truncate group-hover:text-accent-cyan-bright transition-colors">
-                  {user?.name || 'User'}
-                </p>
-                <p className="text-xs text-text-muted truncate">
-                  {user?.email}
-                </p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-text-muted group-hover:text-accent-cyan transition-colors opacity-0 group-hover:opacity-100" />
-            </Link>
-            <Button
-              variant="ghost"
-              onClick={handleSignOut}
-              className="w-full justify-start text-text-secondary hover:text-text-primary hover:bg-black/5"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </aside>
+      <Sidebar user={user} onSignOut={handleSignOut} />
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <motion.div
+        initial={false}
+        animate={{
+          paddingLeft: isCollapsed ? 72 : 256,
+        }}
+        transition={prefersReducedMotion ? { duration: 0 } : springPresets.snappy}
+        className="max-lg:!pl-0"
+      >
         {/* Top bar */}
         <header className="sticky top-0 z-30 h-16 glass-light">
           <div className="flex items-center justify-between h-full px-4 lg:px-6">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-text-secondary hover:text-text-primary transition-colors"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-
             <div className="flex-1 lg:flex-none" />
 
             <div className="flex items-center gap-3">
-              {/* Tenant Switcher (for MSP users) */}
               <TenantSwitcher />
-
-              {/* Notifications */}
               <NotificationBell />
-
-              {/* Cart button */}
               <Button
                 variant="ghost"
                 onClick={toggleCart}
@@ -411,7 +195,7 @@ export default function DashboardLayout({
         <main className="p-4 lg:p-6 relative">
           {children}
         </main>
-      </div>
+      </motion.div>
 
       {/* Upload Cart Sidebar */}
       <UploadCart />
