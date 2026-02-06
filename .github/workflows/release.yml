@@ -27,7 +27,21 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Check if release already exists
+        id: check_release
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          if gh release view "$TAG_NAME" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $TAG_NAME already exists, skipping creation to preserve manual notes."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate changelog
+        if: steps.check_release.outputs.exists == 'false'
         id: changelog
         run: |
           # Get previous tag
@@ -42,6 +56,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
           name: Release ${{ steps.version.outputs.version }}
