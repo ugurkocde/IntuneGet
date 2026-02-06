@@ -78,7 +78,7 @@ export function Callout({ type = "info", title, children }: CalloutProps) {
               {title}
             </p>
           )}
-          <div className="text-sm text-zinc-300 leading-relaxed [&>p]:mb-2 [&>p:last-child]:mb-0">
+          <div className="text-sm text-text-secondary leading-relaxed [&>p]:mb-2 [&>p:last-child]:mb-0">
             {children}
           </div>
         </div>

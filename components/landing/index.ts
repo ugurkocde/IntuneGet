@@ -5,11 +5,16 @@ export { Header } from "./Header";
 export {
   HeroSection,
   FeaturesSection,
+  AdvancedCapabilitiesSection,
   HowItWorksSection,
-  StatsSection,
   FAQSectionAnimated,
   CTASection,
   Footer,
+  TrustSection,
+  ProblemOutcomeSection,
+  ComparisonSection,
+  MissionSection,
+  QuickFactsSection,
 } from "./sections";
 
 // Animation primitives
@@ -20,7 +25,19 @@ export {
   SlideIn,
   CountUp,
   TextReveal,
+  ConnectorLine,
 } from "./animations";
 
 // UI components
-export { Badge, FeatureCard, GridBackground, GradientOrb } from "./ui";
+export {
+  Badge,
+  FeatureCard,
+  GridBackground,
+  GradientOrb,
+  CapabilityCard,
+  CategoryHeader,
+  CategoryRow,
+  CategoryRowItem,
+  LogoBar,
+  GitHubStatsBar,
+} from "./ui";

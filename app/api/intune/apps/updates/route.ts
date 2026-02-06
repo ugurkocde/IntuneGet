@@ -52,8 +52,7 @@ export async function GET(request: NextRequest) {
     // Verify admin consent
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: consentData, error: consentError } = await (supabase as any)
+    const { data: consentData, error: consentError } = await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
@@ -91,7 +90,6 @@ export async function GET(request: NextRequest) {
 
     if (!graphResponse.ok) {
       const errorText = await graphResponse.text();
-      console.error('Graph API error:', graphResponse.status, errorText);
       return NextResponse.json(
         { error: 'Failed to fetch apps from Intune', details: errorText },
         { status: graphResponse.status }
@@ -138,15 +136,12 @@ export async function GET(request: NextRequest) {
     const versionMap = new Map<string, string>();
 
     if (wingetIdsToLookup.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: cachedPackages, error: cacheError } = await (supabase as any)
+      const { data: cachedPackages, error: cacheError } = await supabase
         .from('curated_apps')
         .select('winget_id, latest_version')
         .in('winget_id', wingetIdsToLookup);
 
-      if (cacheError) {
-        console.error('Error fetching curated apps:', cacheError);
-      } else if (cachedPackages) {
+      if (!cacheError && cachedPackages) {
         for (const pkg of cachedPackages) {
           if (pkg.latest_version) {
             versionMap.set(pkg.winget_id, pkg.latest_version);
@@ -202,8 +197,7 @@ export async function GET(request: NextRequest) {
       totalApps: apps.length,
       checkedApps: checked,
     });
-  } catch (error) {
-    console.error('Updates API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to check for updates' },
       { status: 500 }
@@ -240,15 +234,12 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
     );
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('Azure AD token request failed:', tokenResponse.status, errorText);
       return null;
     }
 
     const tokenData = await tokenResponse.json();
     return tokenData.access_token;
-  } catch (error) {
-    console.error('Failed to get service principal token:', error);
+  } catch {
     return null;
   }
 }

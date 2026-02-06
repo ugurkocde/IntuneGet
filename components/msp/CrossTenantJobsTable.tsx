@@ -79,7 +79,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       case 'uploading':
         return <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />;
       default:
-        return <Clock className="w-4 h-4 text-zinc-500" />;
+        return <Clock className="w-4 h-4 text-text-muted" />;
     }
   };
 
@@ -134,19 +134,19 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
   const loading = isLoading || externalLoading;
 
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
+    <div className="rounded-xl bg-black/5 border border-black/10 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-white/5">
+      <div className="flex items-center justify-between p-4 border-b border-black/5">
         <div className="flex items-center gap-2">
           <Package className="w-5 h-5 text-accent-cyan" />
-          <h3 className="font-medium text-white">Recent Jobs Across All Tenants</h3>
+          <h3 className="font-medium text-text-primary">Recent Jobs Across All Tenants</h3>
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={handleRefresh}
           disabled={loading}
-          className="text-zinc-400 hover:text-white"
+          className="text-text-secondary hover:text-text-primary"
         >
           <RefreshCw className={cn('w-4 h-4 mr-2', loading && 'animate-spin')} />
           Refresh
@@ -164,16 +164,16 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       {loading && jobs.length === 0 && (
         <div className="p-8 text-center">
           <Loader2 className="w-8 h-8 text-accent-cyan animate-spin mx-auto mb-3" />
-          <p className="text-sm text-zinc-500">Loading jobs...</p>
+          <p className="text-sm text-text-muted">Loading jobs...</p>
         </div>
       )}
 
       {/* Empty state */}
       {!loading && jobs.length === 0 && !error && (
         <div className="p-8 text-center">
-          <Package className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-400 mb-1">No jobs found</p>
-          <p className="text-sm text-zinc-600">
+          <Package className="w-10 h-10 text-text-muted mx-auto mb-3" />
+          <p className="text-text-secondary mb-1">No jobs found</p>
+          <p className="text-sm text-text-muted">
             Jobs will appear here after you deploy packages to managed tenants.
           </p>
         </div>
@@ -182,39 +182,39 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       {/* Jobs table */}
       {jobs.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-[640px] md:min-w-0">
             <thead>
-              <tr className="border-b border-white/5">
-                <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider px-4 py-3">
+              <tr className="border-b border-black/5">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
                   Package
                 </th>
-                <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
                   Tenant
                 </th>
-                <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
                   Status
                 </th>
-                <th className="text-left text-xs font-medium text-zinc-500 uppercase tracking-wider px-4 py-3">
+                <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
                   Time
                 </th>
-                <th className="text-right text-xs font-medium text-zinc-500 uppercase tracking-wider px-4 py-3">
+                <th className="text-right text-xs font-medium text-text-muted uppercase tracking-wider px-4 py-3">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-black/5">
               {jobs.map((job) => (
-                <tr key={job.id} className="hover:bg-white/5 transition-colors">
+                <tr key={job.id} className="hover:bg-black/5 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-accent-cyan/20 flex items-center justify-center flex-shrink-0">
                         <Package className="w-4 h-4 text-accent-cyan" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
+                        <p className="text-sm font-medium text-text-primary truncate">
                           {job.display_name}
                         </p>
-                        <p className="text-xs text-zinc-500 truncate">
+                        <p className="text-xs text-text-muted truncate">
                           {job.winget_id} v{job.version}
                         </p>
                       </div>
@@ -222,8 +222,8 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-zinc-500" />
-                      <span className="text-sm text-zinc-300">
+                      <Building2 className="w-4 h-4 text-text-muted" />
+                      <span className="text-sm text-text-secondary">
                         {job.tenant_display_name}
                       </span>
                     </div>
@@ -236,7 +236,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                         job.status === 'completed' && 'text-green-500',
                         job.status === 'failed' && 'text-red-500',
                         (job.status === 'packaging' || job.status === 'uploading') && 'text-accent-cyan',
-                        job.status === 'queued' && 'text-zinc-500'
+                        job.status === 'queued' && 'text-text-muted'
                       )}>
                         {getStatusText(job.status)}
                       </span>
@@ -248,7 +248,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-sm text-zinc-500">
+                    <span className="text-sm text-text-muted">
                       {formatDate(job.created_at)}
                     </span>
                   </td>
@@ -274,17 +274,17 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between p-4 border-t border-white/5">
+        <div className="flex items-center justify-between p-4 border-t border-black/5">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => fetchJobs(page - 1)}
             disabled={page <= 1 || loading}
-            className="text-zinc-400 hover:text-white"
+            className="text-text-secondary hover:text-text-primary"
           >
             Previous
           </Button>
-          <span className="text-sm text-zinc-500">
+          <span className="text-sm text-text-muted">
             Page {page} of {totalPages}
           </span>
           <Button
@@ -292,7 +292,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
             size="sm"
             onClick={() => fetchJobs(page + 1)}
             disabled={page >= totalPages || loading}
-            className="text-zinc-400 hover:text-white"
+            className="text-text-secondary hover:text-text-primary"
           >
             Next
           </Button>

@@ -3,12 +3,11 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Loader2, AlertCircle, RefreshCw, Package } from 'lucide-react';
+import { AlertCircle, RefreshCw, Package, Server, Building2, Clock, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useInventoryApps } from '@/hooks/use-inventory';
-import { InventoryAppCard, InventoryAppDetails, InventoryFilters } from '@/components/inventory';
-import { PageHeader, AnimatedEmptyState, SkeletonGrid } from '@/components/dashboard';
-import type { IntuneWin32App } from '@/types/inventory';
+import { InventoryAppCard, InventoryAppDetails, InventoryFilters, InventoryListRow } from '@/components/inventory';
+import { PageHeader, AnimatedEmptyState, SkeletonGrid, AnimatedStatCard, StatCardGrid } from '@/components/dashboard';
 
 type SortBy = 'name' | 'publisher' | 'created' | 'modified';
 type SortOrder = 'asc' | 'desc';
@@ -20,9 +19,31 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const prefersReducedMotion = useReducedMotion();
 
   const apps = data?.apps || [];
+
+  // Compute stats
+  const stats = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const publishers = new Set(apps.map((app) => app.publisher).filter(Boolean));
+    const recentlyModified = apps.filter(
+      (app) => new Date(app.lastModifiedDateTime) >= thirtyDaysAgo
+    );
+    const systemInstall = apps.filter(
+      (app) => app.installExperience?.runAsAccount === 'system'
+    );
+
+    return {
+      total: apps.length,
+      publishers: publishers.size,
+      recentlyModified: recentlyModified.length,
+      systemInstall: systemInstall.length,
+    };
+  }, [apps]);
 
   // Filter and sort apps
   const filteredApps = useMemo(() => {
@@ -149,13 +170,48 @@ export default function InventoryPage() {
             variant="ghost"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="text-zinc-400 hover:text-white"
+            className="text-text-secondary hover:text-text-primary"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         }
       />
+
+      {/* Stats Row */}
+      {apps.length > 0 && (
+        <StatCardGrid columns={4}>
+          <AnimatedStatCard
+            title="Total Apps"
+            value={stats.total}
+            icon={Server}
+            color="cyan"
+            delay={0}
+          />
+          <AnimatedStatCard
+            title="Publishers"
+            value={stats.publishers}
+            icon={Building2}
+            color="neutral"
+            delay={0.1}
+          />
+          <AnimatedStatCard
+            title="Recently Modified"
+            value={stats.recentlyModified}
+            icon={Clock}
+            color="violet"
+            delay={0.2}
+            description="Last 30 days"
+          />
+          <AnimatedStatCard
+            title="System Install"
+            value={stats.systemInstall}
+            icon={Shield}
+            color="neutral"
+            delay={0.3}
+          />
+        </StatCardGrid>
+      )}
 
       {/* Filters */}
       <motion.div
@@ -172,27 +228,48 @@ export default function InventoryPage() {
           onSortOrderToggle={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
           totalCount={apps.length}
           filteredCount={filteredApps.length}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
         />
       </motion.div>
 
-      {/* Apps Grid */}
+      {/* Apps Grid / List */}
       {filteredApps.length > 0 ? (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
-        >
-          {filteredApps.map((app) => (
-            <motion.div key={app.id} variants={itemVariants}>
-              <InventoryAppCard
-                app={app}
-                onClick={() => setSelectedAppId(app.id)}
-                isSelected={selectedAppId === app.id}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
+        viewMode === 'grid' ? (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+          >
+            {filteredApps.map((app) => (
+              <motion.div key={app.id} variants={itemVariants}>
+                <InventoryAppCard
+                  app={app}
+                  onClick={() => setSelectedAppId(app.id)}
+                  isSelected={selectedAppId === app.id}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-2"
+          >
+            {filteredApps.map((app) => (
+              <motion.div key={app.id} variants={itemVariants}>
+                <InventoryListRow
+                  app={app}
+                  onClick={() => setSelectedAppId(app.id)}
+                  isSelected={selectedAppId === app.id}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        )
       ) : apps.length > 0 ? (
         <AnimatedEmptyState
           icon={Package}
@@ -220,13 +297,11 @@ export default function InventoryPage() {
       )}
 
       {/* App Details Panel */}
-      {selectedAppId && (
-        <InventoryAppDetails
-          appId={selectedAppId}
-          onClose={() => setSelectedAppId(null)}
-          onUpdate={handleUpdate}
-        />
-      )}
+      <InventoryAppDetails
+        appId={selectedAppId}
+        onClose={() => setSelectedAppId(null)}
+        onUpdate={handleUpdate}
+      />
     </div>
   );
 }

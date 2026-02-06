@@ -1,216 +1,146 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-import { Github, Shield, ArrowRight, Server } from "lucide-react";
+import { useRef } from "react";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { Github, ArrowRight, Star, Users, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "../ui/Badge";
 import { GradientOrb } from "../ui/GradientOrb";
-import { GridBackground } from "../ui/GridBackground";
+import { DeploymentFeed } from "../ui/DeploymentFeed";
 import { FadeIn } from "../animations/FadeIn";
-import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
-import { PackageJourney } from "../animations/PackageJourney";
-import { CountUp } from "../animations/CountUp";
+import { TextReveal } from "../animations/TextReveal";
+import { useGitHubStats } from "@/hooks/useGitHubStats";
 import { useLandingStats } from "@/hooks/useLandingStats";
+import { springPresets } from "@/lib/animations/variants";
 
-const APP_ICONS = [
-  { src: "/icons/Discord.Discord/icon-64.png", alt: "Discord" },
-  { src: "/icons/SlackTechnologies.Slack/icon-64.png", alt: "Slack" },
-  { src: "/icons/Microsoft.VisualStudioCode/icon-64.png", alt: "VS Code" },
-  { src: "/icons/Notion.Notion/icon-64.png", alt: "Notion" },
-  { src: "/icons/Docker.DockerDesktop/icon-64.png", alt: "Docker" },
-];
+const MotionLink = motion.create(Link);
 
 export function HeroSection() {
+  const { stars } = useGitHubStats();
+  const { signinClicks } = useLandingStats();
   const shouldReduceMotion = useReducedMotion();
-  const { signinClicks, appsDeployed, appsSupported, isLoading } = useLandingStats();
+  const sectionRef = useRef<HTMLElement>(null);
+
+  // 3B: Parallax for gradient orbs
+  const { scrollY } = useScroll();
+  const orbY1 = useTransform(scrollY, [0, 500], [0, -30]);
+  const orbY2 = useTransform(scrollY, [0, 500], [0, -20]);
 
   return (
-    <section className="relative w-full min-h-screen flex items-center justify-center py-20 md:py-32 overflow-hidden">
-      {/* Background layers */}
-      <GridBackground variant="dots" opacity={0.3} className="absolute inset-0" />
+    <section ref={sectionRef} className="relative w-full min-h-[100dvh] flex items-center overflow-hidden">
+      {/* Background gradient orbs with parallax */}
+      <motion.div style={{ y: shouldReduceMotion ? 0 : orbY1 }}>
+        <GradientOrb
+          color="cyan"
+          size="xl"
+          intensity="low"
+          className="top-0 right-0 -translate-y-1/4 translate-x-1/4"
+        />
+      </motion.div>
+      <motion.div style={{ y: shouldReduceMotion ? 0 : orbY2 }}>
+        <GradientOrb
+          color="violet"
+          size="xl"
+          intensity="low"
+          className="bottom-0 left-0 translate-y-1/4 -translate-x-1/4"
+        />
+      </motion.div>
 
-      {/* Gradient orbs */}
-      <GradientOrb
-        color="cyan"
-        size="xl"
-        className="left-1/4 top-1/4 -translate-x-1/2 -translate-y-1/2"
-        intensity="medium"
-      />
-      <GradientOrb
-        color="violet"
-        size="lg"
-        className="right-1/4 bottom-1/4 translate-x-1/2 translate-y-1/2"
-        intensity="low"
-        animate={!shouldReduceMotion}
-      />
-      <GradientOrb
-        color="mixed"
-        size="md"
-        className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        intensity="low"
-      />
-
-      {/* Radial gradient overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(6, 182, 212, 0.15), transparent)",
-        }}
-      />
-
-      <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
-        <div className="flex flex-col items-center space-y-8 md:space-y-12 text-center">
-          {/* Badges */}
-          <StaggerContainer
-            className="flex flex-wrap items-center justify-center gap-3"
-            staggerDelay={0.1}
-            animateOnMount
-          >
-            <StaggerItem>
-              <Badge icon={<Github className="h-3.5 w-3.5" />} variant="success">
-                Open Source
+      <div className="container px-4 md:px-6 mx-auto max-w-6xl py-16 md:py-24 relative z-10">
+        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
+          {/* Left column: text content */}
+          <div className="flex flex-col items-center text-center md:items-start md:text-left space-y-5 md:space-y-6">
+            {/* Badge - 1B: Spring-based entrance */}
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -15, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={shouldReduceMotion ? { duration: 0 } : springPresets.bouncy}
+            >
+              <Badge icon={<Github className="h-4 w-4" />} variant="dark">
+                100% Free & Open Source
               </Badge>
-            </StaggerItem>
-            <StaggerItem>
-              <Badge icon={<Shield className="h-3.5 w-3.5" />} variant="violet">
-                Enterprise Ready
-              </Badge>
-            </StaggerItem>
-          </StaggerContainer>
+            </motion.div>
 
-          {/* Winget to Intune Flow Visualization */}
-          <div className="space-y-6 md:space-y-8 max-w-4xl">
-            <FadeIn delay={0.3} animateOnMount>
-              <div className="relative flex items-center justify-center gap-2 md:gap-4 lg:gap-6">
-                {/* Winget */}
-                <motion.span
-                  className="text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white tracking-tight"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
+            {/* Headline - 1A: TextReveal with word-by-word blur effect */}
+            <TextReveal
+              as="h1"
+              text="Deploy 10,000+ Winget Apps to Intune - Free & Open Source"
+              className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-stone-900 tracking-tight"
+              animateOnMount
+              delay={0.05}
+              staggerDelay={0.04}
+            />
+
+            {/* Subheadline with authoritative statement */}
+            <FadeIn delay={0.1} animateOnMount duration={0.4} direction="up">
+              <p className="max-w-lg text-lg md:text-xl text-stone-600 leading-relaxed">
+                IntuneGet is the leading free, open-source tool for deploying Winget
+                applications to Microsoft Intune. No scripting, no IntuneWin
+                packaging. Search apps and deploy in minutes.
+              </p>
+            </FadeIn>
+
+            {/* CTA buttons - 1C: whileTap feedback */}
+            <FadeIn delay={0.15} animateOnMount duration={0.4} direction="up">
+              <div className="flex flex-col items-center md:items-start gap-4 pt-2">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3">
+                  <MotionLink
+                    href="/auth/signin"
+                    className="group relative inline-flex items-center justify-center gap-2.5 px-8 py-4 text-base font-semibold text-white bg-accent-cyan rounded-xl hover:bg-accent-cyan-dim transition-all duration-300 shadow-glow-cyan hover:shadow-glow-cyan-lg"
+                    whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
+                    whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
+                    transition={springPresets.snappy}
+                  >
+                    Start Deploying — It&apos;s Free
+                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </MotionLink>
+                  <motion.a
+                    href="https://github.com/ugurkocde/IntuneGet"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-4 text-base font-semibold text-stone-700 bg-white border border-stone-200 rounded-xl hover:border-stone-300 hover:bg-stone-50 transition-all duration-300"
+                    whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
+                    whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
+                    transition={springPresets.snappy}
+                  >
+                    <Github className="h-5 w-5" />
+                    View on GitHub
+                  </motion.a>
+                </div>
+                <Link
+                  href="/docs/docker"
+                  className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
                 >
-                  Winget
-                </motion.span>
-
-                {/* Animated Package Journey */}
-                <PackageJourney appIcons={APP_ICONS} />
-
-                {/* Intune - gradient to emphasize cloud destination */}
-                <motion.span
-                  className="text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold gradient-text-cyan tracking-tight"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                >
-                  Intune
-                </motion.span>
+                  or self-host it
+                </Link>
               </div>
             </FadeIn>
 
-            <FadeIn delay={0.6} animateOnMount>
-              <p className="mx-auto max-w-xl text-xl md:text-2xl text-zinc-400 leading-relaxed">
-                One-click <span className="text-accent-cyan font-medium">automated</span> app packaging.
-              </p>
+            {/* Trust strip */}
+            <FadeIn delay={0.2} animateOnMount duration={0.4} direction="up">
+              <div className="flex items-center gap-4 text-sm text-stone-500">
+                <span className="flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-500" />
+                  {stars} stars
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-accent-cyan" />
+                  {signinClicks}+ users
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                  Open Source
+                </span>
+              </div>
             </FadeIn>
           </div>
 
-          {/* CTA Buttons */}
-          <FadeIn delay={0.7} className="w-full max-w-2xl" animateOnMount>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              {/* Primary CTA - Use Web Portal */}
-              <Link
-                href="/auth/signin"
-                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-white bg-gradient-to-r from-accent-cyan to-accent-cyan/80 rounded-xl hover:from-accent-cyan/90 hover:to-accent-cyan/70 transition-all duration-300 shadow-lg shadow-accent-cyan/25 hover:shadow-accent-cyan/40 hover:scale-[1.02]"
-              >
-                Get Started Free
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-
-              {/* Secondary CTA - Self-Host */}
-              <Link
-                href="/docs/getting-started"
-                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-zinc-300 bg-zinc-800/50 border border-zinc-700 rounded-xl hover:bg-zinc-800 hover:border-zinc-600 hover:text-white transition-all duration-300"
-              >
-                <Server className="h-5 w-5" />
-                Self-Host
-              </Link>
-            </div>
-            <p className="mt-4 text-sm text-zinc-500">
-              No credit card required. Deploy to your own infrastructure or use our hosted service.
-            </p>
+          {/* Right column: ProductShowcase */}
+          <FadeIn delay={0.2} animateOnMount duration={0.5} direction="right">
+            <DeploymentFeed />
           </FadeIn>
-
-          {/* Stats - inline with content */}
-          <FadeIn delay={0.9} animateOnMount>
-            <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 md:gap-12 pt-4">
-              <div className="flex flex-col items-center">
-                <span className="text-2xl md:text-3xl font-bold text-white">
-                  {isLoading ? "..." : <CountUp end={appsSupported} />}
-                </span>
-                <span className="text-xs md:text-sm text-zinc-500">Apps Available</span>
-              </div>
-              <div className="hidden sm:block w-px h-10 bg-zinc-700/50" />
-              <div className="flex flex-col items-center">
-                <span className="text-2xl md:text-3xl font-bold text-accent-cyan">
-                  {isLoading ? "..." : <CountUp end={appsDeployed} />}
-                </span>
-                <span className="text-xs md:text-sm text-zinc-500">Uploaded Apps</span>
-              </div>
-              <div className="hidden sm:block w-px h-10 bg-zinc-700/50" />
-              <div className="flex flex-col items-center">
-                <span className="text-2xl md:text-3xl font-bold text-white">
-                  {isLoading ? "..." : <CountUp end={signinClicks} />}
-                </span>
-                <span className="text-xs md:text-sm text-zinc-500">Active Users</span>
-              </div>
-            </div>
-          </FadeIn>
-
         </div>
       </div>
-
-      {/* Scroll indicator - fixed at bottom of viewport */}
-      <motion.div
-        className="absolute bottom-6 left-1/2"
-        style={{ x: "-50%" }}
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.2, duration: 0.5 }}
-      >
-        <motion.div
-          className="w-6 h-10 rounded-full border-2 border-zinc-700 flex items-start justify-center p-1"
-          animate={
-            shouldReduceMotion
-              ? {}
-              : {
-                  borderColor: [
-                    "rgba(113, 113, 122, 1)",
-                    "rgba(6, 182, 212, 0.5)",
-                    "rgba(113, 113, 122, 1)",
-                  ],
-                }
-          }
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          <motion.div
-            className="w-1.5 h-3 bg-zinc-500 rounded-full"
-            animate={
-              shouldReduceMotion
-                ? {}
-                : {
-                    y: [0, 12, 0],
-                    backgroundColor: [
-                      "rgba(113, 113, 122, 1)",
-                      "rgba(6, 182, 212, 1)",
-                      "rgba(113, 113, 122, 1)",
-                    ],
-                  }
-            }
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-        </motion.div>
-      </motion.div>
     </section>
   );
 }

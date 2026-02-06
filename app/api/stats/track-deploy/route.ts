@@ -72,9 +72,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     // Fire-and-forget: silently succeed on error
-    console.error('Error tracking deployment:', error);
     return NextResponse.json({ success: true });
   }
 }

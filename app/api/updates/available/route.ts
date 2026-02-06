@@ -14,7 +14,7 @@ import type { AvailableUpdate } from '@/types/update-policies';
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -30,8 +30,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Build query for update check results
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
+    let query = supabase
       .from('update_check_results')
       .select('*')
       .eq('user_id', user.userId)
@@ -55,7 +54,6 @@ export async function GET(request: NextRequest) {
     const { data: updates, error: updatesError } = await query;
 
     if (updatesError) {
-      console.error('Error fetching available updates:', updatesError);
       return NextResponse.json(
         { error: 'Failed to fetch updates' },
         { status: 500 }
@@ -71,9 +69,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Get policies for these updates
-    const wingetIds = [...new Set(updates.map((u: AvailableUpdate) => u.winget_id))];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: policies } = await (supabase as any)
+    const wingetIds = [...new Set(updates.map((u) => u.winget_id))];
+    const { data: policies } = await supabase
       .from('app_update_policies')
       .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, consecutive_failures')
       .eq('user_id', user.userId)
@@ -82,21 +79,21 @@ export async function GET(request: NextRequest) {
     // Create policy lookup
     const policyMap = new Map<string, AvailableUpdate['policy']>();
     if (policies) {
-      policies.forEach((policy: AvailableUpdate['policy'] & { winget_id: string; tenant_id: string }) => {
+      policies.forEach((policy) => {
         const key = `${policy.winget_id}:${policy.tenant_id}`;
         policyMap.set(key, {
-          id: policy!.id,
-          policy_type: policy!.policy_type,
-          is_enabled: policy!.is_enabled,
-          pinned_version: policy!.pinned_version,
-          last_auto_update_at: policy!.last_auto_update_at,
-          consecutive_failures: policy!.consecutive_failures,
+          id: policy.id,
+          policy_type: policy.policy_type,
+          is_enabled: policy.is_enabled,
+          pinned_version: policy.pinned_version,
+          last_auto_update_at: policy.last_auto_update_at,
+          consecutive_failures: policy.consecutive_failures,
         });
       });
     }
 
     // Combine updates with policy info
-    const updatesWithPolicies: AvailableUpdate[] = updates.map((update: AvailableUpdate) => {
+    const updatesWithPolicies: AvailableUpdate[] = updates.map((update) => {
       const policyKey = `${update.winget_id}:${update.tenant_id}`;
       return {
         ...update,
@@ -112,8 +109,7 @@ export async function GET(request: NextRequest) {
       count: updatesWithPolicies.length,
       criticalCount,
     });
-  } catch (error) {
-    console.error('Available updates GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -127,7 +123,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -159,15 +155,13 @@ export async function PATCH(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('update_check_results')
       .update(updateData)
       .in('id', update_ids)
       .eq('user_id', user.userId);
 
     if (error) {
-      console.error('Error updating dismiss status:', error);
       return NextResponse.json(
         { error: 'Failed to update updates' },
         { status: 500 }
@@ -179,8 +173,7 @@ export async function PATCH(request: NextRequest) {
       updated: update_ids.length,
       action,
     });
-  } catch (error) {
-    console.error('Available updates PATCH error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

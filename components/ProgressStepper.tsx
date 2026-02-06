@@ -59,7 +59,7 @@ export function ProgressStepper({
                     isJobCompleted && 'bg-status-success/20 border-2 border-status-success',
                     !isJobFailed && !isJobCompleted && isCompleted && 'bg-status-success/20 border-2 border-status-success',
                     !isJobFailed && !isJobCompleted && isCurrent && 'bg-accent-cyan/20 border-2 border-accent-cyan',
-                    isPending && !isJobCompleted && 'bg-bg-elevated border-2 border-white/10'
+                    isPending && !isJobCompleted && 'bg-bg-elevated border-2 border-black/10'
                   )}
                 >
                   {isJobFailed && isCurrent ? (
@@ -69,7 +69,7 @@ export function ProgressStepper({
                   ) : isCurrent ? (
                     <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />
                   ) : (
-                    <span className="w-2 h-2 rounded-full bg-zinc-600" />
+                    <span className="w-2 h-2 rounded-full bg-text-muted" />
                   )}
                 </motion.div>
 
@@ -80,7 +80,7 @@ export function ProgressStepper({
                     isJobFailed && isCurrent && 'text-status-error',
                     (isJobCompleted || isCompleted) && !isJobFailed && 'text-status-success',
                     isCurrent && !isJobFailed && !isJobCompleted && 'text-accent-cyan',
-                    isPending && !isJobCompleted && 'text-zinc-500'
+                    isPending && !isJobCompleted && 'text-text-muted'
                   )}
                 >
                   {stage.label}
@@ -89,7 +89,7 @@ export function ProgressStepper({
 
               {/* Connector Line */}
               {index < PROGRESS_STAGES.length - 1 && (
-                <div className="flex-1 mx-2 h-0.5 mt-[-16px] overflow-hidden rounded-full bg-white/5">
+                <div className="flex-1 mx-2 h-0.5 mt-[-16px] overflow-hidden rounded-full bg-black/5">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
@@ -115,10 +115,10 @@ export function ProgressStepper({
 
       {/* Status Message and Time */}
       <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-400">
+        <span className="text-text-secondary">
           {statusMessage || currentStage?.description || 'Processing...'}
         </span>
-        <div className="flex items-center gap-2 text-zinc-500">
+        <div className="flex items-center gap-2 text-text-muted">
           <Clock className="w-3.5 h-3.5" />
           <span className="tabular-nums">{formattedTime}</span>
         </div>
@@ -148,7 +148,7 @@ export function ProgressStepper({
       <div className="text-right">
         <span className={cn(
           'text-xs font-medium tabular-nums',
-          isJobFailed ? 'text-status-error' : isJobCompleted ? 'text-status-success' : 'text-zinc-400'
+          isJobFailed ? 'text-status-error' : isJobCompleted ? 'text-status-success' : 'text-text-secondary'
         )}>
           {progress}%
         </span>

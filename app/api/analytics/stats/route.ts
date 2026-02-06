@@ -42,6 +42,21 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServerClient();
 
+    // Define the shape of jobs returned from the queries
+    interface PackagingJobStats {
+      status: string;
+      completed_at: string | null;
+    }
+
+    interface PackagingJobRecent {
+      id: string;
+      winget_id: string;
+      display_name: string;
+      status: string;
+      created_at: string;
+      intune_app_url: string | null;
+    }
+
     // Get start of month in UTC for consistent timezone handling
     const now = new Date();
     const startOfMonth = new Date(Date.UTC(
@@ -52,15 +67,13 @@ export async function GET(request: NextRequest) {
 
     // Fetch all jobs in a single query and aggregate in memory
     // This is more efficient than 4 separate count queries
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: jobs, error: jobsError } = await (supabase as any)
+    const { data: jobs, error: jobsError } = await supabase
       .from('packaging_jobs')
       .select('status, completed_at')
       .eq('user_id', userId);
 
     // Fetch 5 most recent jobs for activity feed
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: recentJobs, error: recentJobsError } = await (supabase as any)
+    const { data: recentJobs, error: recentJobsError } = await supabase
       .from('packaging_jobs')
       .select('id, winget_id, display_name, status, created_at, intune_app_url')
       .eq('user_id', userId)
@@ -68,18 +81,17 @@ export async function GET(request: NextRequest) {
       .limit(5);
 
     if (recentJobsError) {
-      console.error('Failed to fetch recent jobs:', recentJobsError);
+      // Failed to fetch recent jobs - continue with empty array
     }
 
     if (jobsError) {
-      console.error('Failed to fetch jobs:', jobsError);
       return NextResponse.json(
         { error: 'Failed to fetch statistics' },
         { status: 500 }
       );
     }
 
-    const allJobs = jobs || [];
+    const allJobs = (jobs || []) as PackagingJobStats[];
 
     // Aggregate stats in memory
     let totalDeployed = 0;
@@ -119,14 +131,8 @@ export async function GET(request: NextRequest) {
       intuneAppUrl?: string;
     }
 
-    const recentActivity: RecentActivityItem[] = (recentJobs || []).map((job: {
-      id: string;
-      winget_id: string;
-      display_name: string;
-      status: string;
-      created_at: string;
-      intune_app_url?: string;
-    }) => {
+    const allRecentJobs = (recentJobs || []) as PackagingJobRecent[];
+    const recentActivity: RecentActivityItem[] = allRecentJobs.map((job) => {
       let type: 'upload' | 'package' | 'error' = 'package';
       let status: 'success' | 'pending' | 'failed' = 'pending';
       let description = '';
@@ -181,7 +187,7 @@ export async function GET(request: NextRequest) {
         description,
         timestamp: job.created_at,
         status,
-        intuneAppUrl: job.intune_app_url,
+        intuneAppUrl: job.intune_app_url ?? undefined,
       };
     });
 
@@ -192,8 +198,7 @@ export async function GET(request: NextRequest) {
       failed,
       recentActivity,
     });
-  } catch (error) {
-    console.error('Analytics stats error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch statistics' },
       { status: 500 }

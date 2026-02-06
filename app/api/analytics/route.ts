@@ -77,9 +77,20 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServerClient();
 
+    // Define the shape of jobs returned from the query
+    interface PackagingJobAnalytics {
+      id: string;
+      winget_id: string;
+      display_name: string;
+      publisher: string | null;
+      status: string;
+      error_message: string | null;
+      created_at: string;
+      completed_at: string | null;
+    }
+
     // Get all jobs in date range
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: jobs, error: jobsError } = await (supabase as any)
+    const { data: jobs, error: jobsError } = await supabase
       .from('packaging_jobs')
       .select('id, winget_id, display_name, publisher, status, error_message, created_at, completed_at')
       .eq('user_id', userId)
@@ -87,18 +98,17 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (jobsError) {
-      console.error('Failed to fetch jobs:', jobsError);
       return NextResponse.json(
         { error: 'Failed to fetch analytics data' },
         { status: 500 }
       );
     }
 
-    const allJobs = jobs || [];
+    const allJobs = (jobs || []) as PackagingJobAnalytics[];
 
     // Calculate success rate
-    const completedJobs = allJobs.filter((j: { status: string }) => j.status === 'completed').length;
-    const failedJobs = allJobs.filter((j: { status: string }) => j.status === 'failed').length;
+    const completedJobs = allJobs.filter((j) => j.status === 'completed').length;
+    const failedJobs = allJobs.filter((j) => j.status === 'failed').length;
     const totalFinished = completedJobs + failedJobs;
     const successRate = totalFinished > 0 ? Math.round((completedJobs / totalFinished) * 100) : 0;
 
@@ -114,7 +124,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fill in actual data
-    allJobs.forEach((job: { status: string; completed_at: string; created_at: string }) => {
+    allJobs.forEach((job) => {
       const date = job.completed_at
         ? new Date(job.completed_at).toISOString().split('T')[0]
         : new Date(job.created_at).toISOString().split('T')[0];
@@ -141,8 +151,8 @@ export async function GET(request: NextRequest) {
     const appCounts = new Map<string, { displayName: string; publisher: string; count: number }>();
 
     allJobs
-      .filter((j: { status: string }) => j.status === 'completed')
-      .forEach((job: { winget_id: string; display_name: string; publisher: string }) => {
+      .filter((j) => j.status === 'completed')
+      .forEach((job) => {
         const existing = appCounts.get(job.winget_id);
         if (existing) {
           existing.count++;
@@ -165,9 +175,9 @@ export async function GET(request: NextRequest) {
 
     // Get recent failures
     const recentFailures: RecentFailure[] = allJobs
-      .filter((j: { status: string }) => j.status === 'failed')
+      .filter((j) => j.status === 'failed')
       .slice(0, 10)
-      .map((job: { id: string; winget_id: string; display_name: string; error_message: string; created_at: string }) => ({
+      .map((job) => ({
         id: job.id,
         wingetId: job.winget_id,
         displayName: job.display_name,
@@ -180,7 +190,7 @@ export async function GET(request: NextRequest) {
       totalJobs: allJobs.length,
       completedJobs,
       failedJobs,
-      pendingJobs: allJobs.filter((j: { status: string }) =>
+      pendingJobs: allJobs.filter((j) =>
         ['queued', 'packaging', 'uploading'].includes(j.status)
       ).length,
       successRate,
@@ -197,8 +207,7 @@ export async function GET(request: NextRequest) {
         days,
       },
     });
-  } catch (error) {
-    console.error('Analytics error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch analytics' },
       { status: 500 }

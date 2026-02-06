@@ -19,7 +19,7 @@ interface RouteParams {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -32,8 +32,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Get webhook configuration
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: webhook, error: fetchError } = await (supabase as any)
+    const { data: webhook, error: fetchError } = await supabase
       .from('webhook_configurations')
       .select('*')
       .eq('id', id)
@@ -63,8 +62,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       statusUpdate.failure_count = (webhook.failure_count || 0) + 1;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from('webhook_configurations')
       .update(statusUpdate)
       .eq('id', id);
@@ -74,8 +72,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       statusCode: result.statusCode,
       error: result.error,
     });
-  } catch (error) {
-    console.error('Webhook test error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -207,6 +207,24 @@ $closeCountdown = if ($psadtConfig.closeCountdown) { [int]$psadtConfig.closeCoun
 $allowDefer = if ($psadtConfig.ContainsKey('allowDefer')) { [bool]$psadtConfig.allowDefer } else { $true }
 $deferTimes = if ($psadtConfig.deferTimes) { [int]$psadtConfig.deferTimes } else { 3 }
 
+# Extended welcome parameters
+$blockExecution = if ($psadtConfig.blockExecution) { $true } else { $false }
+$promptToSave = if ($psadtConfig.promptToSave) { $true } else { $false }
+$deferDeadline = $psadtConfig.deferDeadline
+$deferDays = $psadtConfig.deferDays
+$forceCloseCountdown = $psadtConfig.forceCloseProcessesCountdown
+$persistPrompt = if ($psadtConfig.persistPrompt) { $true } else { $false }
+$minimizeWindows = if ($psadtConfig.minimizeWindows) { $true } else { $false }
+$windowLocation = if ($psadtConfig.windowLocation) { $psadtConfig.windowLocation } else { 'Default' }
+$checkDiskSpace = if ($psadtConfig.checkDiskSpace) { $true } else { $false }
+$requiredDiskSpace = $psadtConfig.requiredDiskSpace
+
+# UI elements
+$progressConfig = $psadtConfig.progressDialog
+$customPrompts = $psadtConfig.customPrompts
+$restartPromptConfig = $psadtConfig.restartPrompt
+$balloonTips = $psadtConfig.balloonTips
+
 Write-Host "Install scope: $InstallScope (IsUserScope: $IsUserScope)"
 Write-Host "Close prompt enabled: $showClosePrompt"
 Write-Host "Processes to close: $($processesToClose.Count)"
@@ -229,7 +247,7 @@ if ($processesToClose.Count -gt 0) {
 
 # Build Show-ADTInstallationWelcome call if enabled
 $welcomeCall = ''
-if ($allowDefer -or ($showClosePrompt -and $processesToClose.Count -gt 0)) {
+if ($allowDefer -or ($showClosePrompt -and $processesToClose.Count -gt 0) -or $blockExecution -or $checkDiskSpace) {
     $welcomeParams = @(
         "-Title '$displayNameEscaped Installation'"
     )
@@ -251,6 +269,16 @@ if ($allowDefer -or ($showClosePrompt -and $processesToClose.Count -gt 0)) {
         # Only deferrals, no close prompts
         $welcomeParams += '-AllowDefer'
         $welcomeParams += "-DeferTimes $deferTimes"
+        if ($deferDeadline) { $welcomeParams += "-DeferDeadline '$deferDeadline'" }
+        if ($deferDays) { $welcomeParams += "-DeferDays $deferDays" }
+    }
+    if ($forceCloseCountdown) { $welcomeParams += "-ForceCloseProcessesCountdown $forceCloseCountdown" }
+    if ($persistPrompt) { $welcomeParams += '-PersistPrompt' }
+    if ($minimizeWindows) { $welcomeParams += '-MinimizeWindows' }
+    if ($windowLocation -ne 'Default') { $welcomeParams += "-WindowLocation '$windowLocation'" }
+    if ($checkDiskSpace) {
+        $welcomeParams += '-CheckDiskSpace'
+        if ($requiredDiskSpace) { $welcomeParams += "-RequiredDiskSpace $requiredDiskSpace" }
     }
 
     $welcomeCall = @(
@@ -258,6 +286,220 @@ if ($allowDefer -or ($showClosePrompt -and $processesToClose.Count -gt 0)) {
         '    # Show installation welcome dialog (for deferrals and/or close prompts)'
         "    Show-ADTInstallationWelcome $($welcomeParams -join ' ')"
         ''
+    ) -join "`r`n"
+}
+
+# Build progress dialog call if enabled
+$progressCall = ''
+if ($progressConfig -and $progressConfig.enabled) {
+    $progressParams = @()
+    if ($progressConfig.statusMessage) {
+        $statusMsgEscaped = $progressConfig.statusMessage -replace "'", "''"
+        $progressParams += "-StatusMessage '$statusMsgEscaped'"
+    }
+    if ($progressConfig.windowLocation -and $progressConfig.windowLocation -ne 'Default') {
+        $progressParams += "-WindowLocation '$($progressConfig.windowLocation)'"
+    }
+    $progressParamsStr = if ($progressParams.Count -gt 0) { " $($progressParams -join ' ')" } else { "" }
+    $progressCall = @(
+        ''
+        '    # Show progress dialog during installation'
+        "    Show-ADTInstallationProgress$progressParamsStr"
+        ''
+    ) -join "`r`n"
+}
+
+# Build custom prompt calls for pre-install
+$preInstallPromptCalls = ''
+if ($customPrompts -and $customPrompts.Count -gt 0) {
+    $preInstallPrompts = $customPrompts | Where-Object { $_.enabled -and $_.timing -eq 'pre-install' }
+    foreach ($prompt in $preInstallPrompts) {
+        $promptParams = @()
+        $titleEscaped = $prompt.title -replace "'", "''"
+        $messageEscaped = $prompt.message -replace "'", "''"
+        $promptParams += "-Title '$titleEscaped'"
+        $promptParams += "-Message '$messageEscaped'"
+        if ($prompt.icon -and $prompt.icon -ne 'None') { $promptParams += "-Icon '$($prompt.icon)'" }
+        if ($prompt.buttonLeftText) {
+            $btnLeft = $prompt.buttonLeftText -replace "'", "''"
+            $promptParams += "-ButtonLeftText '$btnLeft'"
+        }
+        if ($prompt.buttonMiddleText) {
+            $btnMiddle = $prompt.buttonMiddleText -replace "'", "''"
+            $promptParams += "-ButtonMiddleText '$btnMiddle'"
+        }
+        if ($prompt.buttonRightText) {
+            $btnRight = $prompt.buttonRightText -replace "'", "''"
+            $promptParams += "-ButtonRightText '$btnRight'"
+        }
+        if ($prompt.timeout -and $prompt.timeout -gt 0) { $promptParams += "-Timeout $($prompt.timeout)" }
+        if ($prompt.persistPrompt) { $promptParams += '-PersistPrompt' }
+
+        $preInstallPromptCalls += @(
+            ''
+            '    # Show custom pre-installation prompt'
+            "    Show-ADTInstallationPrompt $($promptParams -join ' ')"
+        ) -join "`r`n"
+    }
+}
+
+# Build custom prompt calls for post-install
+$postInstallPromptCalls = ''
+if ($customPrompts -and $customPrompts.Count -gt 0) {
+    $postInstallPrompts = $customPrompts | Where-Object { $_.enabled -and $_.timing -eq 'post-install' }
+    foreach ($prompt in $postInstallPrompts) {
+        $promptParams = @()
+        $titleEscaped = $prompt.title -replace "'", "''"
+        $messageEscaped = $prompt.message -replace "'", "''"
+        $promptParams += "-Title '$titleEscaped'"
+        $promptParams += "-Message '$messageEscaped'"
+        if ($prompt.icon -and $prompt.icon -ne 'None') { $promptParams += "-Icon '$($prompt.icon)'" }
+        if ($prompt.buttonLeftText) {
+            $btnLeft = $prompt.buttonLeftText -replace "'", "''"
+            $promptParams += "-ButtonLeftText '$btnLeft'"
+        }
+        if ($prompt.buttonMiddleText) {
+            $btnMiddle = $prompt.buttonMiddleText -replace "'", "''"
+            $promptParams += "-ButtonMiddleText '$btnMiddle'"
+        }
+        if ($prompt.buttonRightText) {
+            $btnRight = $prompt.buttonRightText -replace "'", "''"
+            $promptParams += "-ButtonRightText '$btnRight'"
+        }
+        if ($prompt.timeout -and $prompt.timeout -gt 0) { $promptParams += "-Timeout $($prompt.timeout)" }
+        if ($prompt.persistPrompt) { $promptParams += '-PersistPrompt' }
+
+        $postInstallPromptCalls += @(
+            ''
+            '    # Show custom post-installation prompt'
+            "    Show-ADTInstallationPrompt $($promptParams -join ' ')"
+        ) -join "`r`n"
+    }
+}
+
+# Build balloon tip calls for start
+$startBalloonCalls = ''
+if ($balloonTips -and $balloonTips.Count -gt 0) {
+    $startTips = $balloonTips | Where-Object { $_.enabled -and $_.timing -eq 'start' }
+    foreach ($tip in $startTips) {
+        $tipParams = @()
+        $titleEscaped = $tip.title -replace "'", "''"
+        $textEscaped = $tip.text -replace "'", "''"
+        $tipParams += "-BalloonTipTitle '$titleEscaped'"
+        $tipParams += "-BalloonTipText '$textEscaped'"
+        if ($tip.icon -and $tip.icon -ne 'None') { $tipParams += "-BalloonTipIcon '$($tip.icon)'" }
+        if ($tip.displayTime) { $tipParams += "-BalloonTipTime $($tip.displayTime)" }
+
+        $startBalloonCalls += @(
+            ''
+            '    # Show balloon notification at start'
+            "    Show-ADTBalloonTip $($tipParams -join ' ')"
+        ) -join "`r`n"
+    }
+}
+
+# Build balloon tip calls for end
+$endBalloonCalls = ''
+if ($balloonTips -and $balloonTips.Count -gt 0) {
+    $endTips = $balloonTips | Where-Object { $_.enabled -and $_.timing -eq 'end' }
+    foreach ($tip in $endTips) {
+        $tipParams = @()
+        $titleEscaped = $tip.title -replace "'", "''"
+        $textEscaped = $tip.text -replace "'", "''"
+        $tipParams += "-BalloonTipTitle '$titleEscaped'"
+        $tipParams += "-BalloonTipText '$textEscaped'"
+        if ($tip.icon -and $tip.icon -ne 'None') { $tipParams += "-BalloonTipIcon '$($tip.icon)'" }
+        if ($tip.displayTime) { $tipParams += "-BalloonTipTime $($tip.displayTime)" }
+
+        $endBalloonCalls += @(
+            ''
+            '    # Show balloon notification at end'
+            "    Show-ADTBalloonTip $($tipParams -join ' ')"
+        ) -join "`r`n"
+    }
+}
+
+# Build custom prompt calls for pre-uninstall
+$preUninstallPromptCalls = ''
+if ($customPrompts -and $customPrompts.Count -gt 0) {
+    $preUninstallPrompts = $customPrompts | Where-Object { $_.enabled -and $_.timing -eq 'pre-uninstall' }
+    foreach ($prompt in $preUninstallPrompts) {
+        $promptParams = @()
+        $titleEscaped = $prompt.title -replace "'", "''"
+        $messageEscaped = $prompt.message -replace "'", "''"
+        $promptParams += "-Title '$titleEscaped'"
+        $promptParams += "-Message '$messageEscaped'"
+        if ($prompt.icon -and $prompt.icon -ne 'None') { $promptParams += "-Icon '$($prompt.icon)'" }
+        if ($prompt.buttonLeftText) {
+            $btnLeft = $prompt.buttonLeftText -replace "'", "''"
+            $promptParams += "-ButtonLeftText '$btnLeft'"
+        }
+        if ($prompt.buttonMiddleText) {
+            $btnMiddle = $prompt.buttonMiddleText -replace "'", "''"
+            $promptParams += "-ButtonMiddleText '$btnMiddle'"
+        }
+        if ($prompt.buttonRightText) {
+            $btnRight = $prompt.buttonRightText -replace "'", "''"
+            $promptParams += "-ButtonRightText '$btnRight'"
+        }
+        if ($prompt.timeout -and $prompt.timeout -gt 0) { $promptParams += "-Timeout $($prompt.timeout)" }
+        if ($prompt.persistPrompt) { $promptParams += '-PersistPrompt' }
+
+        $preUninstallPromptCalls += @(
+            ''
+            '    # Show custom pre-uninstall prompt'
+            "    Show-ADTInstallationPrompt $($promptParams -join ' ')"
+        ) -join "`r`n"
+    }
+}
+
+# Build custom prompt calls for post-uninstall
+$postUninstallPromptCalls = ''
+if ($customPrompts -and $customPrompts.Count -gt 0) {
+    $postUninstallPrompts = $customPrompts | Where-Object { $_.enabled -and $_.timing -eq 'post-uninstall' }
+    foreach ($prompt in $postUninstallPrompts) {
+        $promptParams = @()
+        $titleEscaped = $prompt.title -replace "'", "''"
+        $messageEscaped = $prompt.message -replace "'", "''"
+        $promptParams += "-Title '$titleEscaped'"
+        $promptParams += "-Message '$messageEscaped'"
+        if ($prompt.icon -and $prompt.icon -ne 'None') { $promptParams += "-Icon '$($prompt.icon)'" }
+        if ($prompt.buttonLeftText) {
+            $btnLeft = $prompt.buttonLeftText -replace "'", "''"
+            $promptParams += "-ButtonLeftText '$btnLeft'"
+        }
+        if ($prompt.buttonMiddleText) {
+            $btnMiddle = $prompt.buttonMiddleText -replace "'", "''"
+            $promptParams += "-ButtonMiddleText '$btnMiddle'"
+        }
+        if ($prompt.buttonRightText) {
+            $btnRight = $prompt.buttonRightText -replace "'", "''"
+            $promptParams += "-ButtonRightText '$btnRight'"
+        }
+        if ($prompt.timeout -and $prompt.timeout -gt 0) { $promptParams += "-Timeout $($prompt.timeout)" }
+        if ($prompt.persistPrompt) { $promptParams += '-PersistPrompt' }
+
+        $postUninstallPromptCalls += @(
+            ''
+            '    # Show custom post-uninstall prompt'
+            "    Show-ADTInstallationPrompt $($promptParams -join ' ')"
+        ) -join "`r`n"
+    }
+}
+
+# Build restart prompt call if enabled
+$restartPromptCall = ''
+if ($restartPromptConfig -and $restartPromptConfig.enabled) {
+    $restartParams = @()
+    $countdownSeconds = if ($restartPromptConfig.countdownSeconds) { $restartPromptConfig.countdownSeconds } else { 600 }
+    $countdownNoHideSeconds = if ($restartPromptConfig.countdownNoHideSeconds) { $restartPromptConfig.countdownNoHideSeconds } else { 60 }
+    $restartParams += "-CountdownSeconds $countdownSeconds"
+    $restartParams += "-CountdownNoHideSeconds $countdownNoHideSeconds"
+
+    $restartPromptCall = @(
+        ''
+        '    # Show restart prompt with countdown'
+        "    Show-ADTInstallationRestartPrompt $($restartParams -join ' ')"
     ) -join "`r`n"
 }
 
@@ -322,7 +564,10 @@ $lines = @(
     '{'
     '    [CmdletBinding()]'
     '    param ()'
+    $startBalloonCalls
     $welcomeCall
+    $preInstallPromptCalls
+    $progressCall
 )
 
 # Add installer file existence check and progress display before install commands
@@ -444,7 +689,6 @@ if ($IsUserScope) {
         '    } catch {'
         '        Write-ADTLogEntry -Message "Warning: Could not write detection marker: $_" -Severity ''Warning'' -Source ''Install-ADTDeployment'''
         '    }'
-        '}'
     )
 } else {
     # Machine-scope: Write to HKLM (SYSTEM has write access)
@@ -465,9 +709,23 @@ if ($IsUserScope) {
         '    } catch {'
         '        Write-ADTLogEntry -Message "Warning: Could not write detection marker: $_" -Severity ''Warning'' -Source ''Install-ADTDeployment'''
         '    }'
-        '}'
     )
 }
+
+# Add post-install UI calls
+if ($postInstallPromptCalls) {
+    $lines += $postInstallPromptCalls
+}
+if ($endBalloonCalls) {
+    $lines += $endBalloonCalls
+}
+if ($restartPromptCall) {
+    $lines += $restartPromptCall
+}
+
+$lines += @(
+    '}'
+)
 
 $lines += @(
     ''
@@ -476,6 +734,11 @@ $lines += @(
     '    [CmdletBinding()]'
     '    param ()'
 )
+
+# Add pre-uninstall prompts
+if ($preUninstallPromptCalls) {
+    $lines += $preUninstallPromptCalls
+}
 
 # Generate uninstall command based on whether registry lookup is needed
 if ($useRegistryUninstall) {
@@ -615,6 +878,14 @@ $lines += @(
     '    } catch {'
     '        Write-ADTLogEntry -Message "Warning: Could not remove detection marker: $_" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
     '    }'
+)
+
+# Add post-uninstall prompts
+if ($postUninstallPromptCalls) {
+    $lines += $postUninstallPromptCalls
+}
+
+$lines += @(
     '}'
 )
 

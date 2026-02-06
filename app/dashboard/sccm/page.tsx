@@ -123,7 +123,7 @@ export default function SccmMigrationsPage() {
         <SkeletonGrid count={4} columns={4} variant="stat" />
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="glass-dark rounded-xl p-5 border border-white/5 animate-pulse h-32" />
+            <div key={i} className="glass-light rounded-xl p-5 border border-black/5 animate-pulse h-32" />
           ))}
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function SccmMigrationsPage() {
               onClick={() => fetchMigrations(true)}
               disabled={isRefreshing}
               variant="outline"
-              className="border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20"
+              className="border-black/10 text-text-secondary hover:bg-black/5 hover:border-black/20"
             >
               {isRefreshing ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -287,29 +287,29 @@ function MigrationCard({
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0 },
       }}
-      className="glass-dark border border-white/5 rounded-xl p-5 hover:border-white/10 transition-all group"
+      className="glass-light border border-black/5 rounded-xl p-5 hover:border-black/10 transition-all group"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h3 className="text-white font-medium truncate">{migration.name}</h3>
+            <h3 className="text-text-primary font-medium truncate">{migration.name}</h3>
             <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', config.bg, config.color)}>
               {config.label}
             </span>
           </div>
 
           {migration.description && (
-            <p className="text-zinc-500 text-sm mt-1 line-clamp-1">{migration.description}</p>
+            <p className="text-text-muted text-sm mt-1 line-clamp-1">{migration.description}</p>
           )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
             <div>
-              <p className="text-zinc-500 text-xs">Total Apps</p>
-              <p className="text-white font-medium">{migration.totalApps}</p>
+              <p className="text-text-muted text-xs">Total Apps</p>
+              <p className="text-text-primary font-medium">{migration.totalApps}</p>
             </div>
             <div>
-              <p className="text-zinc-500 text-xs">Matched</p>
+              <p className="text-text-muted text-xs">Matched</p>
               <p className="text-accent-cyan font-medium">
                 {migration.matchedApps}
                 {migration.partialMatchApps > 0 && (
@@ -318,11 +318,11 @@ function MigrationCard({
               </p>
             </div>
             <div>
-              <p className="text-zinc-500 text-xs">Migrated</p>
+              <p className="text-text-muted text-xs">Migrated</p>
               <p className="text-status-success font-medium">{migration.migratedApps}</p>
             </div>
             <div>
-              <p className="text-zinc-500 text-xs">Failed</p>
+              <p className="text-text-muted text-xs">Failed</p>
               <p className="text-status-error font-medium">{migration.failedApps}</p>
             </div>
           </div>
@@ -331,10 +331,10 @@ function MigrationCard({
           {migration.totalApps > 0 && (
             <div className="mt-4">
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-zinc-500">Migration Progress</span>
-                <span className="text-zinc-400">{migrationRate}%</span>
+                <span className="text-text-muted">Migration Progress</span>
+                <span className="text-text-secondary">{migrationRate}%</span>
               </div>
-              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-2 bg-black/5 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-accent-cyan to-accent-violet transition-all duration-500"
                   style={{ width: `${migrationRate}%` }}
@@ -344,7 +344,7 @@ function MigrationCard({
           )}
 
           {/* Timestamps */}
-          <div className="flex items-center gap-4 mt-4 text-xs text-zinc-500">
+          <div className="flex items-center gap-4 mt-4 text-xs text-text-muted">
             <span>Created: {new Date(migration.createdAt).toLocaleDateString()}</span>
             {migration.lastMigrationAt && (
               <span>Last migration: {new Date(migration.lastMigrationAt).toLocaleDateString()}</span>
@@ -359,7 +359,7 @@ function MigrationCard({
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-zinc-500 hover:text-status-error hover:bg-status-error/10"
+                className="text-text-muted hover:text-status-error hover:bg-status-error/10"
                 disabled={isDeleting}
               >
                 {isDeleting ? (

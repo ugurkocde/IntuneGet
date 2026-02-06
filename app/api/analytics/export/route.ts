@@ -56,9 +56,24 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServerClient();
 
+    // Define the shape of jobs returned from the query
+    interface PackagingJobExport {
+      id: string;
+      winget_id: string;
+      display_name: string;
+      publisher: string | null;
+      version: string;
+      architecture: string | null;
+      installer_type: string;
+      status: string;
+      error_message: string | null;
+      intune_app_id: string | null;
+      created_at: string;
+      completed_at: string | null;
+    }
+
     // Get all jobs in date range
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: jobs, error: jobsError } = await (supabase as any)
+    const { data: jobs, error: jobsError } = await supabase
       .from('packaging_jobs')
       .select(`
         id,
@@ -79,7 +94,6 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (jobsError) {
-      console.error('Failed to fetch jobs for export:', jobsError);
       return NextResponse.json(
         { error: 'Failed to fetch data for export' },
         { status: 500 }
@@ -102,20 +116,8 @@ export async function GET(request: NextRequest) {
       'Completed At',
     ];
 
-    const rows = (jobs || []).map((job: {
-      id: string;
-      winget_id: string;
-      display_name: string;
-      publisher: string;
-      version: string;
-      architecture: string;
-      installer_type: string;
-      status: string;
-      intune_app_id: string;
-      error_message: string;
-      created_at: string;
-      completed_at: string;
-    }) => [
+    const allJobs = (jobs || []) as PackagingJobExport[];
+    const rows = allJobs.map((job) => [
       job.id,
       job.winget_id,
       job.display_name,
@@ -153,8 +155,7 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
-  } catch (error) {
-    console.error('Export error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to export data' },
       { status: 500 }

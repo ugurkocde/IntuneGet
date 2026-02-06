@@ -40,8 +40,7 @@ export async function GET(request: NextRequest) {
           : null,
       }
     });
-  } catch (error) {
-    console.error('Changelog fetch error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch installation changelog' },
       { status: 500 }

@@ -64,8 +64,8 @@ export default function ReportsPage() {
         />
         <SkeletonGrid count={4} columns={4} variant="stat" />
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="glass-dark rounded-xl p-6 border border-white/5 h-64 animate-pulse" />
-          <div className="glass-dark rounded-xl p-6 border border-white/5 h-64 animate-pulse" />
+          <div className="glass-light rounded-xl p-6 border border-black/5 h-64 animate-pulse" />
+          <div className="glass-light rounded-xl p-6 border border-black/5 h-64 animate-pulse" />
         </div>
       </div>
     );
@@ -110,7 +110,7 @@ export default function ReportsPage() {
               size="sm"
               onClick={() => refetch()}
               disabled={isFetching}
-              className="text-zinc-400 hover:text-white"
+              className="text-text-secondary hover:text-text-primary"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
               Refresh
@@ -118,7 +118,7 @@ export default function ReportsPage() {
             <Button
               onClick={handleExport}
               disabled={isExporting}
-              className="bg-gradient-to-r from-accent-cyan to-accent-violet hover:opacity-90 text-white"
+              className="bg-gradient-to-r from-accent-cyan to-accent-violet hover:opacity-90 text-bg-elevated"
             >
               {isExporting ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -139,7 +139,7 @@ export default function ReportsPage() {
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0"
       >
         <DateRangePicker value={days} onChange={setDays} />
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           {data?.dateRange && (
             <>
               {new Date(data.dateRange.start).toLocaleDateString()} -{' '}
@@ -191,9 +191,9 @@ export default function ReportsPage() {
         {/* Success Rate */}
         <motion.div
           variants={itemVariants}
-          className="glass-dark border border-white/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
+          className="glass-light border border-black/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
         >
-          <h2 className="text-lg font-semibold text-white mb-4">Success Rate</h2>
+          <h2 className="text-lg font-semibold text-text-primary mb-4">Success Rate</h2>
           <SuccessRateChart
             completed={summary?.completedJobs || 0}
             failed={summary?.failedJobs || 0}
@@ -204,9 +204,9 @@ export default function ReportsPage() {
         {/* Deployments Over Time */}
         <motion.div
           variants={itemVariants}
-          className="glass-dark border border-white/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
+          className="glass-light border border-black/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
         >
-          <h2 className="text-lg font-semibold text-white mb-4">
+          <h2 className="text-lg font-semibold text-text-primary mb-4">
             Deployments Over Time
           </h2>
           <DeploymentsLineChart data={data?.dailyDeployments || []} />
@@ -218,9 +218,9 @@ export default function ReportsPage() {
         variants={itemVariants}
         initial="hidden"
         animate="visible"
-        className="glass-dark border border-white/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
+        className="glass-light border border-black/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
       >
-        <h2 className="text-lg font-semibold text-white mb-4">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">
           Most Deployed Applications
         </h2>
         <TopAppsChart data={data?.topApps || []} />
@@ -231,9 +231,9 @@ export default function ReportsPage() {
         variants={itemVariants}
         initial="hidden"
         animate="visible"
-        className="glass-dark border border-white/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
+        className="glass-light border border-black/5 rounded-xl p-6 hover:border-accent-cyan/20 transition-colors"
       >
-        <h2 className="text-lg font-semibold text-white mb-4">Recent Failures</h2>
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Recent Failures</h2>
         <RecentFailuresTable data={data?.recentFailures || []} />
       </motion.div>
     </div>

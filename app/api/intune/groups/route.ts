@@ -48,8 +48,7 @@ export async function GET(request: NextRequest) {
     // Get the service principal access token from the database
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: consentData, error: consentError } = await (supabase as any)
+    const { data: consentData, error: consentError } = await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
@@ -80,8 +79,7 @@ export async function GET(request: NextRequest) {
       groups,
       count: groups.length,
     });
-  } catch (error) {
-    console.error('Groups API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch groups' },
       { status: 500 }
@@ -97,7 +95,6 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
   const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    console.error('Azure AD credentials not configured');
     return null;
   }
 
@@ -119,15 +116,12 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
     );
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('Token request failed:', tokenResponse.status, errorText);
       return null;
     }
 
     const tokenData = await tokenResponse.json();
     return tokenData.access_token;
-  } catch (error) {
-    console.error('Failed to get service principal token:', error);
+  } catch {
     return null;
   }
 }

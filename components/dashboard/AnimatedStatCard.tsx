@@ -85,10 +85,10 @@ const colorStyles = {
     gradient: 'from-status-error/5 to-transparent'
   },
   neutral: {
-    icon: 'text-zinc-400',
+    icon: 'text-text-secondary',
     iconBg: 'bg-zinc-500/10',
     glow: '',
-    border: 'border-white/5',
+    border: 'border-black/5',
     gradient: 'from-white/5 to-transparent'
   }
 };
@@ -119,17 +119,17 @@ export function AnimatedStatCard({
     return (
       <div
         className={cn(
-          'glass-dark rounded-xl p-6 border border-white/5',
+          'glass-light rounded-xl p-6 border border-black/5',
           className
         )}
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="h-4 w-24 bg-white/5 rounded animate-pulse mb-3" />
-            <div className="h-8 w-32 bg-white/10 rounded animate-pulse mb-2" />
-            <div className="h-3 w-20 bg-white/5 rounded animate-pulse" />
+            <div className="h-4 w-24 bg-black/5 rounded animate-pulse mb-3" />
+            <div className="h-8 w-32 bg-black/10 rounded animate-pulse mb-2" />
+            <div className="h-3 w-20 bg-black/5 rounded animate-pulse" />
           </div>
-          <div className="w-12 h-12 rounded-xl bg-white/5 animate-pulse" />
+          <div className="w-12 h-12 rounded-xl bg-black/5 animate-pulse" />
         </div>
       </div>
     );
@@ -142,7 +142,7 @@ export function AnimatedStatCard({
 
     if (typeof value === 'string') {
       return (
-        <span className="text-3xl font-bold text-white tabular-nums">
+        <span className="text-3xl font-bold text-text-primary tabular-nums">
           {prefix}
           {value}
           {suffix}
@@ -156,7 +156,7 @@ export function AnimatedStatCard({
           value={value}
           decimals={decimals}
           duration={counterDuration}
-          className="text-3xl font-bold text-white"
+          className="text-3xl font-bold text-text-primary"
         />
       );
     }
@@ -168,7 +168,7 @@ export function AnimatedStatCard({
         suffix={suffix}
         decimals={decimals}
         duration={counterDuration}
-        className="text-3xl font-bold text-white"
+        className="text-3xl font-bold text-text-primary"
       />
     );
   };
@@ -194,7 +194,7 @@ export function AnimatedStatCard({
       initial="hidden"
       animate="visible"
       className={cn(
-        'glass-dark rounded-xl p-6 border transition-all duration-300 contain-layout',
+        'glass-light rounded-xl p-6 border transition-all duration-300 contain-layout',
         styles.border,
         styles.glow,
         `bg-gradient-to-br ${styles.gradient}`,
@@ -224,7 +224,7 @@ export function AnimatedStatCard({
 
         {/* Content */}
         <div className="flex-1">
-          <p className="text-sm font-medium text-zinc-400 mb-1">{title}</p>
+          <p className="text-sm font-medium text-text-secondary mb-1">{title}</p>
           {renderValue()}
 
           {/* Change indicator */}
@@ -242,14 +242,14 @@ export function AnimatedStatCard({
                 {change.value}%
               </span>
               {change.label && (
-                <span className="text-xs text-zinc-500">{change.label}</span>
+                <span className="text-xs text-text-muted">{change.label}</span>
               )}
             </div>
           )}
 
           {/* Description */}
           {description && (
-            <p className="text-xs text-zinc-500 mt-2">{description}</p>
+            <p className="text-xs text-text-muted mt-2">{description}</p>
           )}
         </div>
 

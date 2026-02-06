@@ -161,7 +161,6 @@ export async function GET(request: Request) {
               .upsert(versionRecord, { onConflict: 'winget_id,version' });
 
             if (vhError) {
-              console.error(`Failed to upsert version for ${winget_id}:`, vhError.message);
               failed++;
               return;
             }
@@ -197,8 +196,7 @@ export async function GET(request: Request) {
             }
 
             synced++;
-          } catch (error) {
-            console.error(`Error syncing ${app.winget_id}:`, error);
+          } catch {
             failed++;
           }
         })
@@ -236,7 +234,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Sync error:', errorMessage);
 
     // Update sync status to failed
     await supabase.from('curated_sync_status').upsert({

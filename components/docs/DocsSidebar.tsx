@@ -11,6 +11,9 @@ import {
   Container,
   HelpCircle,
   ChevronRight,
+  SearchX,
+  Building2,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +38,7 @@ const navItems: NavItem[] = [
     description: "Complete setup walkthrough",
   },
   {
-    title: "Azure AD Setup",
+    title: "Entra ID Setup",
     href: "/docs/azure-setup",
     icon: Cloud,
     description: "Microsoft Entra ID configuration",
@@ -44,7 +47,7 @@ const navItems: NavItem[] = [
     title: "Database Setup",
     href: "/docs/database-setup",
     icon: Database,
-    description: "Supabase configuration",
+    description: "SQLite configuration",
   },
   {
     title: "GitHub Setup",
@@ -57,6 +60,24 @@ const navItems: NavItem[] = [
     href: "/docs/docker",
     icon: Container,
     description: "Docker deployment",
+  },
+  {
+    title: "Unmanaged Apps",
+    href: "/docs/unmanaged-apps",
+    icon: SearchX,
+    description: "Discovered app detection",
+  },
+  {
+    title: "MSP Features",
+    href: "/docs/msp",
+    icon: Building2,
+    description: "Multi-tenant management",
+  },
+  {
+    title: "Settings & Webhooks",
+    href: "/docs/settings",
+    icon: Settings,
+    description: "Configuration & notifications",
   },
   {
     title: "Troubleshooting",
@@ -87,13 +108,13 @@ export function DocsSidebar({ className }: DocsSidebarProps) {
               "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
               isActive
                 ? "bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20"
-                : "text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent"
+                : "text-text-secondary hover:text-text-primary hover:bg-black/5 border border-transparent"
             )}
           >
             <Icon
               className={cn(
                 "h-4 w-4 flex-shrink-0 transition-colors",
-                isActive ? "text-accent-cyan" : "text-zinc-500 group-hover:text-zinc-300"
+                isActive ? "text-accent-cyan" : "text-text-muted group-hover:text-text-secondary"
               )}
             />
             <span className="flex-1 truncate">{item.title}</span>
@@ -127,12 +148,12 @@ export function MobileDocsSidebar({
       />
 
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 w-72 bg-bg-deepest border-r border-white/5 p-4 overflow-y-auto">
+      <div className="fixed inset-y-0 left-0 w-72 bg-bg-deepest border-r border-black/10 p-4 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <span className="text-lg font-semibold text-white">Documentation</span>
+          <span className="text-lg font-semibold text-text-primary">Documentation</span>
           <button
             onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-white transition-colors"
+            className="p-2 text-text-muted hover:text-text-primary transition-colors"
           >
             <svg
               className="h-5 w-5"
@@ -164,19 +185,19 @@ export function MobileDocsSidebar({
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
                   isActive
                     ? "bg-accent-cyan/10 text-accent-cyan"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    : "text-text-secondary hover:text-text-primary hover:bg-black/5"
                 )}
               >
                 <Icon
                   className={cn(
                     "h-4 w-4 flex-shrink-0",
-                    isActive ? "text-accent-cyan" : "text-zinc-500"
+                    isActive ? "text-accent-cyan" : "text-text-muted"
                   )}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="truncate">{item.title}</div>
                   {item.description && (
-                    <div className="text-xs text-zinc-500 truncate">
+                    <div className="text-xs text-text-muted truncate">
                       {item.description}
                     </div>
                   )}

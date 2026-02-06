@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
-import { Menu, X, Github } from "lucide-react";
+import { Menu, X, Github, Star, Apple, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
-  { href: "#features", label: "Features" },
-  { href: "#how-it-works", label: "How It Works" },
+  { href: "/#features", label: "Features" },
+  { href: "/#how-it-works", label: "How It Works" },
 ];
 
 export function Header() {
@@ -19,7 +19,6 @@ export function Header() {
 
   const { scrollY } = useScroll();
   const headerOpacity = useTransform(scrollY, [0, 100], [0, 1]);
-  const headerBlur = useTransform(scrollY, [0, 100], [0, 12]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -34,7 +33,7 @@ export function Header() {
       className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-colors duration-300",
         hasScrolled
-          ? "border-b border-white/5"
+          ? "border-b border-stone-200/60"
           : "border-b border-transparent"
       )}
       initial={{ y: -100 }}
@@ -55,7 +54,7 @@ export function Header() {
       <div className="container relative mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="#" className="flex items-center gap-2 group z-10">
+          <Link href="/" className="flex items-center gap-2 group z-10">
             <motion.div
               className="relative"
               whileHover={
@@ -74,9 +73,8 @@ export function Header() {
                 height={28}
                 className="h-7 w-7"
               />
-              <div className="absolute inset-0 bg-accent-cyan/30 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </motion.div>
-            <span className="text-xl font-semibold text-white">IntuneGet</span>
+            <span className="text-xl font-semibold text-stone-900">IntuneGet</span>
           </Link>
 
           {/* Desktop navigation */}
@@ -85,28 +83,42 @@ export function Header() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="relative text-sm font-medium text-zinc-400 hover:text-white transition-colors duration-200 group"
+                className="relative text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors duration-200 group"
               >
                 {link.label}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full" />
               </Link>
             ))}
             <a
+              href="https://intunebrew.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors duration-200 group inline-flex items-center gap-1.5"
+            >
+              <Apple className="h-4 w-4" />
+              <span>macOS</span>
+              <ExternalLink className="h-3 w-3 opacity-50" />
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full" />
+            </a>
+            <a
               href="https://github.com/ugurkocde/IntuneGet"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors duration-200"
+              className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors duration-200 px-3 py-1.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50"
             >
-              <Github className="h-5 w-5" />
+              <Github className="h-4 w-4" />
               <span>GitHub</span>
+              <span className="flex items-center gap-1 text-xs text-stone-500">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+              </span>
             </a>
             <Link
               href="/auth/signin"
               className={cn(
                 "inline-flex items-center justify-center px-4 py-2 rounded-lg",
-                "text-sm font-medium text-bg-deepest bg-accent-cyan",
+                "text-sm font-medium text-white bg-stone-900",
                 "transition-all duration-200",
-                "hover:bg-accent-cyan-bright hover:shadow-glow-cyan"
+                "hover:bg-stone-800 shadow-soft hover:shadow-soft-md"
               )}
             >
               Get Started
@@ -116,7 +128,7 @@ export function Header() {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden relative z-10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+            className="md:hidden relative z-10 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-stone-600 hover:text-stone-900 transition-colors"
             aria-label="Toggle menu"
           >
             {isMenuOpen ? (
@@ -131,7 +143,7 @@ export function Header() {
       {/* Mobile menu */}
       <motion.div
         className={cn(
-          "md:hidden fixed inset-x-0 top-16 bg-bg-deepest/95 backdrop-blur-xl border-b border-white/5",
+          "md:hidden fixed inset-x-0 top-16 bg-bg-deepest/95 backdrop-blur-xl border-b border-stone-200/60",
           !isMenuOpen && "pointer-events-none"
         )}
         initial={{ opacity: 0, y: -20 }}
@@ -149,17 +161,28 @@ export function Header() {
               key={link.href}
               href={link.href}
               onClick={() => setIsMenuOpen(false)}
-              className="text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-3"
+              className="text-lg font-medium text-stone-700 hover:text-accent-cyan transition-colors py-3"
             >
               {link.label}
             </Link>
           ))}
           <a
+            href="https://intunebrew.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsMenuOpen(false)}
+            className="inline-flex items-center gap-2 text-lg font-medium text-stone-700 hover:text-accent-cyan transition-colors py-3"
+          >
+            <Apple className="h-5 w-5" />
+            <span>macOS Apps</span>
+            <ExternalLink className="h-4 w-4 opacity-50" />
+          </a>
+          <a
             href="https://github.com/ugurkocde/IntuneGet"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setIsMenuOpen(false)}
-            className="inline-flex items-center gap-2 text-lg font-medium text-zinc-300 hover:text-accent-cyan transition-colors py-3"
+            className="inline-flex items-center gap-2 text-lg font-medium text-stone-700 hover:text-accent-cyan transition-colors py-3"
           >
             <Github className="h-5 w-5" />
             <span>GitHub</span>
@@ -169,9 +192,9 @@ export function Header() {
             onClick={() => setIsMenuOpen(false)}
             className={cn(
               "inline-flex items-center justify-center px-4 py-3 rounded-lg mt-2",
-              "text-sm font-medium text-bg-deepest bg-accent-cyan",
+              "text-sm font-medium text-white bg-stone-900",
               "transition-all duration-200",
-              "hover:bg-accent-cyan-bright"
+              "hover:bg-stone-800"
             )}
           >
             Get Started

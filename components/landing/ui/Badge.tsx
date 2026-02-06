@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 interface BadgeProps {
   children: ReactNode;
   icon?: ReactNode;
-  variant?: "cyan" | "violet" | "success" | "warning";
+  variant?: "cyan" | "violet" | "success" | "warning" | "dark";
   className?: string;
   animated?: boolean;
 }
@@ -22,17 +22,19 @@ export function Badge({
   const shouldReduceMotion = useReducedMotion();
 
   const variantStyles = {
-    cyan: "bg-accent-cyan/10 border-accent-cyan/20 text-accent-cyan-bright",
-    violet: "bg-accent-violet/10 border-accent-violet/20 text-accent-violet-bright",
-    success: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
-    warning: "bg-amber-500/10 border-amber-500/20 text-amber-400",
+    cyan: "bg-accent-cyan/10 border-accent-cyan/30 text-accent-cyan",
+    violet: "bg-accent-violet/10 border-accent-violet/30 text-accent-violet",
+    success: "bg-emerald-500/10 border-emerald-500/30 text-emerald-600",
+    warning: "bg-amber-500/10 border-amber-500/30 text-amber-600",
+    dark: "bg-stone-900 border-stone-800 text-white",
   };
 
-  const glowStyles = {
-    cyan: "hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]",
-    violet: "hover:shadow-[0_0_20px_rgba(139,92,246,0.2)]",
-    success: "hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]",
-    warning: "hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]",
+  const hoverStyles = {
+    cyan: "hover:bg-accent-cyan/15 hover:border-accent-cyan/40",
+    violet: "hover:bg-accent-violet/15 hover:border-accent-violet/40",
+    success: "hover:bg-emerald-500/15 hover:border-emerald-500/40",
+    warning: "hover:bg-amber-500/15 hover:border-amber-500/40",
+    dark: "hover:bg-stone-800",
   };
 
   const content = (
@@ -42,7 +44,7 @@ export function Badge({
         "border font-mono text-xs tracking-wide uppercase",
         "transition-all duration-300",
         variantStyles[variant],
-        glowStyles[variant],
+        hoverStyles[variant],
         className
       )}
     >

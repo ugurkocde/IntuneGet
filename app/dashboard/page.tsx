@@ -31,11 +31,11 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Welcome header */}
       <div className={mounted ? 'animate-fade-up stagger-1' : 'opacity-0'}>
-        <h1 className="text-display-sm text-white">
+        <h1 className="text-display-sm text-text-primary">
           {greeting},{' '}
           <span className="gradient-text-cyan">{user?.name?.split(' ')[0] || 'User'}</span>
         </h1>
-        <p className="text-zinc-400 mt-2">
+        <p className="text-text-secondary mt-2">
           Deploy Windows applications to Intune with precision and ease
         </p>
       </div>
@@ -86,10 +86,10 @@ export default function DashboardPage() {
       {/* Main content grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Quick start */}
-        <div className={`glass-dark rounded-xl p-6 ${mounted ? 'animate-fade-up stagger-5' : 'opacity-0'}`}>
+        <div className={`glass-light rounded-xl p-6 ${mounted ? 'animate-fade-up stagger-5' : 'opacity-0'}`}>
           <div className="flex items-center gap-2 mb-6">
             <Zap className="w-5 h-5 text-accent-cyan" />
-            <h2 className="text-lg font-semibold text-white">Quick Start</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Quick Start</h2>
           </div>
 
           {/* Timeline with gradient line */}
@@ -118,7 +118,7 @@ export default function DashboardPage() {
           </div>
 
           <Link href="/dashboard/apps">
-            <Button className="w-full mt-6 bg-gradient-to-r from-accent-cyan to-accent-violet hover:opacity-90 text-white border-0 shadow-glow-cyan">
+            <Button className="w-full mt-6 bg-gradient-to-r from-accent-cyan to-accent-violet hover:opacity-90 text-bg-elevated border-0 shadow-glow-cyan">
               <Package className="w-4 h-4 mr-2" />
               Browse App Catalog
               <ArrowRight className="w-4 h-4 ml-2" />
@@ -127,11 +127,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent activity */}
-        <div className={`glass-dark rounded-xl p-6 ${mounted ? 'animate-fade-up stagger-6' : 'opacity-0'}`}>
+        <div className={`glass-light rounded-xl p-6 ${mounted ? 'animate-fade-up stagger-6' : 'opacity-0'}`}>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-accent-violet" />
-              <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Recent Activity</h2>
             </div>
             <Link
               href="/dashboard/uploads"
@@ -149,22 +149,22 @@ export default function DashboardPage() {
       </div>
 
       {/* Intune connection status */}
-      <div className={`glass-dark rounded-xl p-6 border-glow-cyan ${mounted ? 'animate-fade-up animation-delay-300' : 'opacity-0'}`}>
+      <div className={`glass-light rounded-xl p-6 border-glow-cyan ${mounted ? 'animate-fade-up animation-delay-300' : 'opacity-0'}`}>
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-lg bg-status-success/10 flex items-center justify-center">
             <CheckCircle2 className="w-6 h-6 text-status-success" />
           </div>
           <div className="flex-1">
-            <h3 className="text-white font-medium">Connected to Microsoft Intune</h3>
-            <p className="text-zinc-400 text-sm mt-1">
+            <h3 className="text-text-primary font-medium">Connected to Microsoft Intune</h3>
+            <p className="text-text-secondary text-sm mt-1">
               Tenant: <span className="text-mono text-accent-cyan">{user?.tenantId || 'Not connected'}</span>
             </p>
-            <p className="text-zinc-500 text-sm">
+            <p className="text-text-muted text-sm">
               Signed in as: {user?.email}
             </p>
           </div>
           <Link href="/dashboard/settings">
-            <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:bg-white/5 hover:border-accent-cyan/50">
+            <Button variant="outline" size="sm" className="border-black/10 text-text-secondary hover:bg-black/5 hover:border-accent-cyan/50">
               Settings
             </Button>
           </Link>
@@ -222,7 +222,7 @@ function StatCard({
 
   return (
     <div
-      className={`group glass-dark rounded-xl p-6 card-hover-dark contain-layout ${mounted ? `animate-fade-up stagger-${delay}` : 'opacity-0'}`}
+      className={`group glass-light rounded-xl p-6 card-hover-light contain-layout ${mounted ? `animate-fade-up stagger-${delay}` : 'opacity-0'}`}
     >
       <div className="flex items-center gap-4">
         <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${classes.bg} transition-all ${classes.glow}`}>
@@ -230,11 +230,11 @@ function StatCard({
         </div>
         <div>
           {loading ? (
-            <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+            <Loader2 className="w-6 h-6 text-text-secondary animate-spin" />
           ) : (
-            <p className="text-2xl font-bold text-white">{value}</p>
+            <p className="text-2xl font-bold text-text-primary">{value}</p>
           )}
-          <p className="text-zinc-400 text-sm">{title}</p>
+          <p className="text-text-secondary text-sm">{title}</p>
         </div>
       </div>
     </div>
@@ -253,14 +253,14 @@ function QuickStartStep({
   href?: string;
 }) {
   const content = (
-    <div className="group relative flex items-start gap-4 p-3 rounded-lg hover:bg-white/5 transition-all cursor-pointer">
+    <div className="group relative flex items-start gap-4 p-3 rounded-lg hover:bg-black/5 transition-all cursor-pointer">
       {/* Step number with gradient */}
-      <div className="relative z-10 w-8 h-8 rounded-full bg-gradient-to-br from-accent-cyan to-accent-violet text-white flex items-center justify-center font-medium text-sm flex-shrink-0 shadow-glow-cyan">
+      <div className="relative z-10 w-8 h-8 rounded-full bg-gradient-to-br from-accent-cyan to-accent-violet text-bg-elevated flex items-center justify-center font-medium text-sm flex-shrink-0 shadow-glow-cyan">
         {number}
       </div>
       <div className="pt-0.5">
-        <p className="text-white font-medium group-hover:text-accent-cyan-bright transition-colors">{title}</p>
-        <p className="text-zinc-500 text-sm">{description}</p>
+        <p className="text-text-primary font-medium group-hover:text-accent-cyan-bright transition-colors">{title}</p>
+        <p className="text-text-muted text-sm">{description}</p>
       </div>
     </div>
   );

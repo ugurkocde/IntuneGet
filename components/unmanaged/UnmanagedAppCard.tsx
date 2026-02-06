@@ -25,7 +25,7 @@ function UnmanagedAppCardComponent({
   const canLink = app.matchStatus === 'unmatched' || app.matchStatus === 'partial';
 
   return (
-    <div className="group glass-dark rounded-xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-accent-cyan/5 hover:border-white/10">
+    <div className="group glass-light rounded-xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-accent-cyan/5 hover:border-black/10">
       <div className="flex items-start gap-4">
         {/* App icon */}
         <div className="relative">
@@ -46,15 +46,15 @@ function UnmanagedAppCardComponent({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-white font-semibold text-base truncate group-hover:text-accent-cyan-bright transition-colors">
+              <h3 className="text-text-primary font-semibold text-base truncate group-hover:text-accent-cyan-bright transition-colors">
                 {app.displayName}
               </h3>
-              <p className="text-zinc-500 text-sm truncate">
+              <p className="text-text-muted text-sm truncate">
                 {app.publisher || 'Unknown publisher'}
               </p>
             </div>
             {app.version && (
-              <span className="text-xs text-zinc-400 bg-bg-elevated px-2.5 py-1 rounded-md flex-shrink-0 border border-white/5">
+              <span className="text-xs text-text-secondary bg-bg-elevated px-2.5 py-1 rounded-md flex-shrink-0 border border-black/5">
                 v{app.version}
               </span>
             )}
@@ -62,7 +62,7 @@ function UnmanagedAppCardComponent({
 
           {/* Device count */}
           <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-1.5 text-zinc-400">
+            <div className="flex items-center gap-1.5 text-text-secondary">
               <Monitor className="w-4 h-4" />
               <span className="text-sm">
                 {app.deviceCount.toLocaleString()} {app.deviceCount === 1 ? 'device' : 'devices'}
@@ -73,7 +73,7 @@ function UnmanagedAppCardComponent({
 
           {/* Matched package info */}
           {app.matchedPackageId && (
-            <p className="text-zinc-600 text-xs font-mono mt-2 truncate group-hover:text-zinc-500 transition-colors">
+            <p className="text-text-muted text-xs font-mono mt-2 truncate group-hover:text-text-secondary transition-colors">
               {app.matchedPackageId}
             </p>
           )}
@@ -81,7 +81,7 @@ function UnmanagedAppCardComponent({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/5">
+      <div className="flex items-center justify-between mt-4 pt-4 border-t border-black/5">
         <div className="flex items-center gap-2">
           {app.isClaimed && (
             <span className="text-xs text-status-success flex items-center gap-1">
@@ -103,7 +103,7 @@ function UnmanagedAppCardComponent({
               size="sm"
               variant="outline"
               onClick={() => onLink?.(app)}
-              className="border-white/10 hover:bg-white/5 text-zinc-300"
+              className="border-black/10 hover:bg-black/5 text-text-secondary"
             >
               <LinkIcon className="w-4 h-4 mr-1.5" />
               Link Package

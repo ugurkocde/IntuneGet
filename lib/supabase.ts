@@ -4,7 +4,14 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@/types/database';
+import type { Database, Json } from '@/types/database';
+
+// Table type aliases for better readability
+type Tables = Database['public']['Tables'];
+type UserProfilesInsert = Tables['user_profiles']['Insert'];
+type StagedPackagesInsert = Tables['staged_packages']['Insert'];
+type UploadJobsInsert = Tables['upload_jobs']['Insert'];
+type UploadJobsUpdate = Tables['upload_jobs']['Update'];
 
 // Environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -78,8 +85,8 @@ export async function getCurrentUser() {
 
 // Helper to get user profile with Microsoft tokens
 export async function getUserProfile(userId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const client = getSupabaseClient();
+  const { data, error } = await client
     .from('user_profiles')
     .select('*')
     .eq('id', userId)
@@ -103,15 +110,16 @@ export async function updateMicrosoftTokens(
 ) {
   const serverClient = createServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (serverClient as any).from('user_profiles').upsert({
+  const profileData: UserProfilesInsert = {
     id: userId,
     microsoft_access_token: accessToken,
     microsoft_refresh_token: refreshToken,
     token_expires_at: expiresAt.toISOString(),
     intune_tenant_id: tenantId,
     updated_at: new Date().toISOString(),
-  });
+  };
+
+  const { error } = await serverClient.from('user_profiles').upsert(profileData);
 
   if (error) {
     console.error('Error updating Microsoft tokens:', error);
@@ -134,28 +142,30 @@ export async function createStagedPackage(
     installerSha256: string;
     installCommand: string;
     uninstallCommand: string;
-    detectionRules: unknown;
+    detectionRules: Json | null;
   }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const client = getSupabaseClient();
+  const insertData: StagedPackagesInsert = {
+    user_id: userId,
+    winget_id: packageData.wingetId,
+    display_name: packageData.displayName,
+    publisher: packageData.publisher,
+    version: packageData.version,
+    architecture: packageData.architecture,
+    install_scope: packageData.installScope,
+    installer_type: packageData.installerType,
+    installer_url: packageData.installerUrl,
+    installer_sha256: packageData.installerSha256,
+    install_command: packageData.installCommand,
+    uninstall_command: packageData.uninstallCommand,
+    detection_rules: packageData.detectionRules,
+    status: 'pending',
+  };
+
+  const { data, error } = await client
     .from('staged_packages')
-    .insert({
-      user_id: userId,
-      winget_id: packageData.wingetId,
-      display_name: packageData.displayName,
-      publisher: packageData.publisher,
-      version: packageData.version,
-      architecture: packageData.architecture,
-      install_scope: packageData.installScope,
-      installer_type: packageData.installerType,
-      installer_url: packageData.installerUrl,
-      installer_sha256: packageData.installerSha256,
-      install_command: packageData.installCommand,
-      uninstall_command: packageData.uninstallCommand,
-      detection_rules: packageData.detectionRules,
-      status: 'pending',
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -169,15 +179,17 @@ export async function createStagedPackage(
 
 // Helper to create an upload job
 export async function createUploadJob(userId: string, stagedPackageId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const client = getSupabaseClient();
+  const insertData: UploadJobsInsert = {
+    user_id: userId,
+    staged_package_id: stagedPackageId,
+    status: 'queued',
+    progress_percent: 0,
+  };
+
+  const { data, error } = await client
     .from('upload_jobs')
-    .insert({
-      user_id: userId,
-      staged_package_id: stagedPackageId,
-      status: 'queued',
-      progress_percent: 0,
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -200,21 +212,28 @@ export async function updateUploadJobStatus(
     errorMessage?: string;
   }
 ) {
-  const updateData: Record<string, unknown> = {
+  const updateData: UploadJobsUpdate = {
     status,
-    ...(progress !== undefined && { progress_percent: progress }),
-    ...additionalData,
   };
 
+  if (progress !== undefined) {
+    updateData.progress_percent = progress;
+  }
+  if (additionalData?.intuneAppId) {
+    updateData.intune_app_id = additionalData.intuneAppId;
+  }
+  if (additionalData?.intuneAppUrl) {
+    updateData.intune_app_url = additionalData.intuneAppUrl;
+  }
+  if (additionalData?.errorMessage) {
+    updateData.error_message = additionalData.errorMessage;
+  }
   if (status === 'completed' || status === 'failed') {
     updateData.completed_at = new Date().toISOString();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from('upload_jobs')
-    .update(updateData)
-    .eq('id', jobId);
+  const client = getSupabaseClient();
+  const { error } = await client.from('upload_jobs').update(updateData).eq('id', jobId);
 
   if (error) {
     console.error('Error updating upload job:', error);
@@ -224,8 +243,8 @@ export async function updateUploadJobStatus(
 
 // Helper to get user's upload jobs
 export async function getUserUploadJobs(userId: string, limit: number = 50) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const client = getSupabaseClient();
+  const { data, error } = await client
     .from('upload_jobs')
     .select(
       `
@@ -253,8 +272,8 @@ export async function getUserUploadJobs(userId: string, limit: number = 50) {
 
 // Helper to get app metadata (curated configurations)
 export async function getAppMetadata(wingetId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const client = getSupabaseClient();
+  const { data, error } = await client
     .from('app_metadata')
     .select('*')
     .eq('winget_id', wingetId)

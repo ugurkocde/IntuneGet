@@ -28,7 +28,7 @@ const statusConfig: Record<MatchStatus, {
   unmatched: {
     label: 'No Match',
     icon: HelpCircle,
-    colors: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+    colors: 'bg-black/5 text-text-muted border-black/10',
   },
   pending: {
     label: 'Pending',

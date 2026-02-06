@@ -12,12 +12,15 @@ interface LandingStats {
   error: Error | null;
 }
 
+// Default fallback values (close to actual) to prevent layout shift during load
+const DEFAULT_STATS = {
+  signinClicks: 1000,
+  appsDeployed: 2000,
+  appsSupported: 10000,
+};
+
 export function useLandingStats(): LandingStats {
-  const [stats, setStats] = useState<{ signinClicks: number; appsDeployed: number; appsSupported: number }>({
-    signinClicks: 0,
-    appsDeployed: 0,
-    appsSupported: 0,
-  });
+  const [stats, setStats] = useState<{ signinClicks: number; appsDeployed: number; appsSupported: number }>(DEFAULT_STATS);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 

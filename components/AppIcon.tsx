@@ -9,7 +9,7 @@ interface AppIconProps {
   packageId: string;
   packageName: string;
   iconPath?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   className?: string;
   showFallbackIcon?: boolean;
 }
@@ -19,6 +19,7 @@ const sizeClasses = {
   md: 'w-10 h-10',
   lg: 'w-12 h-12',
   xl: 'w-16 h-16',
+  '2xl': 'w-20 h-20',
 };
 
 const iconSizeClasses = {
@@ -26,6 +27,7 @@ const iconSizeClasses = {
   md: 'w-5 h-5',
   lg: 'w-6 h-6',
   xl: 'w-8 h-8',
+  '2xl': 'w-10 h-10',
 };
 
 const imageSizes = {
@@ -33,6 +35,7 @@ const imageSizes = {
   md: 32,
   lg: 64,
   xl: 128,
+  '2xl': 128,
 };
 
 export function AppIcon({
@@ -64,12 +67,12 @@ export function AppIcon({
     return (
       <div
         className={cn(
-          'rounded-lg bg-gradient-to-br from-bg-elevated to-bg-surface flex items-center justify-center flex-shrink-0 border border-white/5',
+          'rounded-lg bg-gradient-to-br from-bg-elevated to-bg-surface flex items-center justify-center flex-shrink-0 border border-black/5',
           sizeClasses[size],
           className
         )}
       >
-        <Package className={cn('text-zinc-500', iconSizeClasses[size])} />
+        <Package className={cn('text-text-muted', iconSizeClasses[size])} />
       </div>
     );
   }
@@ -77,7 +80,7 @@ export function AppIcon({
   return (
     <div
       className={cn(
-        'rounded-lg bg-gradient-to-br from-bg-elevated to-bg-surface flex items-center justify-center flex-shrink-0 border border-white/5 overflow-hidden relative',
+        'rounded-lg bg-gradient-to-br from-bg-elevated to-bg-surface flex items-center justify-center flex-shrink-0 border border-black/5 overflow-hidden relative',
         sizeClasses[size],
         className
       )}
@@ -86,7 +89,7 @@ export function AppIcon({
       {(!imageLoaded || imageError) && showFallbackIcon && (
         <Package
           className={cn(
-            'text-zinc-500 absolute',
+            'text-text-muted absolute',
             iconSizeClasses[size],
             imageLoaded && !imageError ? 'opacity-0' : 'opacity-100'
           )}

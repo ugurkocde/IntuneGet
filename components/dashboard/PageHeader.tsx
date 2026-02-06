@@ -36,7 +36,7 @@ interface PageHeaderProps {
 }
 
 const badgeVariants = {
-  default: 'bg-white/10 text-zinc-300',
+  default: 'bg-black/10 text-text-secondary',
   success: 'bg-status-success/10 text-status-success',
   warning: 'bg-status-warning/10 text-status-warning',
   error: 'bg-status-error/10 text-status-error'
@@ -98,7 +98,7 @@ export function PageHeader({
       {breadcrumbs && breadcrumbs.length > 0 && (
         <motion.nav
           variants={itemVariants}
-          className="flex items-center gap-2 text-sm text-zinc-500 mb-4"
+          className="flex items-center gap-2 text-sm text-text-muted mb-4"
           aria-label="Breadcrumb"
         >
           {breadcrumbs.map((crumb, index) => (
@@ -107,12 +107,12 @@ export function PageHeader({
               {crumb.href || crumb.onClick ? (
                 <button
                   onClick={crumb.onClick}
-                  className="hover:text-white transition-colors"
+                  className="hover:text-text-primary transition-colors"
                 >
                   {crumb.label}
                 </button>
               ) : (
-                <span className={index === breadcrumbs.length - 1 ? 'text-zinc-300' : ''}>
+                <span className={index === breadcrumbs.length - 1 ? 'text-text-secondary' : ''}>
                   {crumb.label}
                 </span>
               )}
@@ -137,7 +137,7 @@ export function PageHeader({
               <h1
                 className={cn(
                   'text-2xl sm:text-3xl font-bold',
-                  gradient ? gradientClasses[gradientColors] : 'text-white'
+                  gradient ? gradientClasses[gradientColors] : 'text-text-primary'
                 )}
               >
                 {title}
@@ -156,7 +156,7 @@ export function PageHeader({
 
             {/* Description */}
             {description && (
-              <p className="text-zinc-400 mt-1 text-sm sm:text-base">
+              <p className="text-text-secondary mt-1 text-sm sm:text-base">
                 {description}
               </p>
             )}
@@ -199,9 +199,9 @@ export function SectionHeader({
       )}
     >
       <div>
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
         {description && (
-          <p className="text-sm text-zinc-400">{description}</p>
+          <p className="text-sm text-text-secondary">{description}</p>
         )}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -228,7 +228,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex items-start justify-between gap-4 pb-4 mb-4 border-b border-white/5',
+        'flex items-start justify-between gap-4 pb-4 mb-4 border-b border-black/5',
         className
       )}
     >
@@ -239,9 +239,9 @@ export function CardHeader({
           </div>
         )}
         <div>
-          <h3 className="font-semibold text-white">{title}</h3>
+          <h3 className="font-semibold text-text-primary">{title}</h3>
           {description && (
-            <p className="text-sm text-zinc-400">{description}</p>
+            <p className="text-sm text-text-secondary">{description}</p>
           )}
         </div>
       </div>

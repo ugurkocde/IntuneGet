@@ -7,7 +7,6 @@ import {
   ShoppingCart,
   Trash2,
   Upload,
-  Package,
   ChevronRight,
   AlertCircle,
   Loader2,
@@ -15,6 +14,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AppIcon } from '@/components/AppIcon';
 import { useCartStore } from '@/stores/cart-store';
 import { CartItemConfig } from '@/components/CartItemConfig';
 import type { CartItem } from '@/types/upload';
@@ -145,12 +145,12 @@ export function UploadCart() {
       />
 
       {/* Sidebar with slide animation */}
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-bg-surface border-l border-white/5 shadow-2xl flex flex-col animate-slide-in-right">
+      <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-bg-surface border-l border-black/5 shadow-2xl flex flex-col animate-slide-in-right">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-black/5">
           <div className="flex items-center gap-3">
             <ShoppingCart className="w-5 h-5 text-accent-cyan" />
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-text-primary">
               Selected Apps
             </h2>
             <span className="px-2 py-0.5 bg-gradient-to-r from-accent-cyan/20 to-accent-violet/20 text-accent-cyan text-sm font-medium rounded border border-accent-cyan/20">
@@ -159,7 +159,7 @@ export function UploadCart() {
           </div>
           <button
             onClick={closeCart}
-            className="text-zinc-400 hover:text-white transition-colors"
+            className="text-text-secondary hover:text-text-primary transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -170,10 +170,10 @@ export function UploadCart() {
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
               <div className="w-16 h-16 rounded-full bg-bg-elevated flex items-center justify-center mb-4 animate-float-slow">
-                <ShoppingCart className="w-8 h-8 text-zinc-600" />
+                <ShoppingCart className="w-8 h-8 text-text-muted" />
               </div>
-              <h3 className="text-white font-medium mb-1">No apps selected</h3>
-              <p className="text-zinc-400 text-sm">
+              <h3 className="text-text-primary font-medium mb-1">No apps selected</h3>
+              <p className="text-text-secondary text-sm">
                 Select apps from the catalog to deploy to Intune
               </p>
             </div>
@@ -182,25 +182,28 @@ export function UploadCart() {
               {items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="glass-dark rounded-lg p-4 animate-fade-up"
+                  className="glass-light rounded-lg p-4 animate-fade-up"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-bg-elevated to-bg-surface flex items-center justify-center flex-shrink-0 border border-white/5">
-                      <Package className="w-5 h-5 text-zinc-500" />
-                    </div>
+                    <AppIcon
+                      packageId={item.wingetId}
+                      packageName={item.displayName}
+                      size="md"
+                      className="flex-shrink-0"
+                    />
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-white font-medium truncate">
+                      <h4 className="text-text-primary font-medium truncate">
                         {item.displayName}
                       </h4>
-                      <p className="text-zinc-500 text-sm truncate">
+                      <p className="text-text-muted text-sm truncate">
                         {item.publisher}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setEditingItem(item)}
-                        className="text-zinc-500 hover:text-accent-cyan transition-colors p-1"
+                        className="text-text-muted hover:text-accent-cyan transition-colors p-1"
                         disabled={isDeploying}
                         title="Edit configuration"
                       >
@@ -208,7 +211,7 @@ export function UploadCart() {
                       </button>
                       <button
                         onClick={() => removeItem(item.id)}
-                        className="text-zinc-500 hover:text-status-error transition-colors p-1"
+                        className="text-text-muted hover:text-status-error transition-colors p-1"
                         disabled={isDeploying}
                         title="Remove from cart"
                       >
@@ -218,16 +221,16 @@ export function UploadCart() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="px-2 py-1 bg-bg-elevated rounded text-zinc-300 text-xs border border-white/5">
+                    <span className="px-2 py-1 bg-bg-elevated rounded text-text-primary text-xs border border-black/5">
                       v{item.version}
                     </span>
-                    <span className="px-2 py-1 bg-bg-elevated rounded text-zinc-300 text-xs border border-white/5">
+                    <span className="px-2 py-1 bg-bg-elevated rounded text-text-primary text-xs border border-black/5">
                       {item.architecture}
                     </span>
-                    <span className="px-2 py-1 bg-bg-elevated rounded text-zinc-300 text-xs border border-white/5">
+                    <span className="px-2 py-1 bg-bg-elevated rounded text-text-primary text-xs border border-black/5">
                       {item.installScope}
                     </span>
-                    <span className="px-2 py-1 bg-bg-elevated rounded text-zinc-300 text-xs uppercase border border-white/5">
+                    <span className="px-2 py-1 bg-bg-elevated rounded text-text-primary text-xs uppercase border border-black/5">
                       {item.installerType}
                     </span>
                   </div>
@@ -239,7 +242,7 @@ export function UploadCart() {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="border-t border-white/5 p-4 space-y-4">
+          <div className="border-t border-black/5 p-4 space-y-4">
             {/* Permission status indicator */}
             {isAuthenticated && (
               <PermissionStatusIndicator
@@ -262,19 +265,6 @@ export function UploadCart() {
               </div>
             )}
 
-            {/* Warning */}
-            <div className="flex items-start gap-3 p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-status-warning flex-shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="text-status-warning font-medium">
-                  Deployment will start immediately
-                </p>
-                <p className="text-status-warning/70 mt-1">
-                  Packages will be processed via Azure DevOps and uploaded to your Intune tenant.
-                </p>
-              </div>
-            </div>
-
             {/* Auth warning if not signed in */}
             {!isAuthenticated && (
               <div className="flex items-start gap-3 p-3 bg-accent-cyan/10 border border-accent-cyan/20 rounded-lg">
@@ -296,7 +286,7 @@ export function UploadCart() {
                 variant="outline"
                 onClick={clearCart}
                 disabled={isDeploying}
-                className="flex-1 border-zinc-700 text-zinc-300 hover:bg-white/5 hover:border-zinc-600"
+                className="flex-1 border-black/10 text-text-secondary hover:bg-black/5 hover:border-black/20"
               >
                 Clear All
               </Button>
@@ -306,7 +296,7 @@ export function UploadCart() {
                 className={`flex-1 text-white border-0 disabled:opacity-50 ${
                   isAuthenticated && !canDeploy && permissionStatus !== 'checking'
                     ? 'bg-status-error hover:bg-status-error/90'
-                    : 'bg-gradient-to-r from-accent-cyan to-accent-violet hover:opacity-90 shadow-glow-cyan'
+                    : 'bg-accent-cyan hover:bg-accent-cyan-dim'
                 }`}
               >
                 {isDeploying ? (

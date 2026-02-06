@@ -24,7 +24,7 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -37,8 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Get webhook configuration
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: webhook, error } = await (supabase as any)
+    const { data: webhook, error } = await supabase
       .from('webhook_configurations')
       .select('*')
       .eq('id', id)
@@ -52,7 +51,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           { status: 404 }
         );
       }
-      console.error('Error fetching webhook:', error);
       return NextResponse.json(
         { error: 'Failed to fetch webhook' },
         { status: 500 }
@@ -66,8 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     };
 
     return NextResponse.json({ webhook: sanitizedWebhook });
-  } catch (error) {
-    console.error('Webhook GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -81,7 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -117,8 +114,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Verify ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing, error: fetchError } = await (supabase as any)
+    const { data: existing, error: fetchError } = await supabase
       .from('webhook_configurations')
       .select('id')
       .eq('id', id)
@@ -149,8 +145,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Update webhook
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: webhook, error } = await (supabase as any)
+    const { data: webhook, error } = await supabase
       .from('webhook_configurations')
       .update(updateData)
       .eq('id', id)
@@ -158,7 +153,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error) {
-      console.error('Error updating webhook:', error);
       return NextResponse.json(
         { error: 'Failed to update webhook' },
         { status: 500 }
@@ -172,8 +166,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     };
 
     return NextResponse.json({ webhook: sanitizedWebhook });
-  } catch (error) {
-    console.error('Webhook PUT error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -187,7 +180,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -200,15 +193,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Delete webhook (will automatically fail if not owned by user due to WHERE clause)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('webhook_configurations')
       .delete()
       .eq('id', id)
       .eq('user_id', user.userId);
 
     if (error) {
-      console.error('Error deleting webhook:', error);
       return NextResponse.json(
         { error: 'Failed to delete webhook' },
         { status: 500 }
@@ -216,8 +207,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Webhook DELETE error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

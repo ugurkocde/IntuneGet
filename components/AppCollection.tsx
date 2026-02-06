@@ -75,7 +75,7 @@ export function AppCollection({ category, onSelect, onSeeAll }: AppCollectionPro
   const scroll = (direction: 'left' | 'right') => {
     const container = scrollRef.current;
     if (container) {
-      const cardWidth = 220; // Approximate card width + gap
+      const cardWidth = 256; // Approximate card width + gap
       const scrollAmount = cardWidth * 2;
       container.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
@@ -94,7 +94,7 @@ export function AppCollection({ category, onSelect, onSeeAll }: AppCollectionPro
         </div>
         <div className="flex gap-4 overflow-hidden">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-52 h-28 glass-dark rounded-xl animate-shimmer" />
+            <div key={i} className="flex-shrink-0 w-60 h-28 glass-light rounded-xl animate-shimmer" />
           ))}
         </div>
       </div>
@@ -107,7 +107,7 @@ export function AppCollection({ category, onSelect, onSeeAll }: AppCollectionPro
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+        <h3 className="text-xl font-bold tracking-tight text-text-primary flex items-center gap-2">
           <span className={cn('w-1.5 h-5 rounded-full bg-gradient-to-b', style.gradient)} />
           {displayName}
         </h3>
@@ -128,9 +128,9 @@ export function AppCollection({ category, onSelect, onSeeAll }: AppCollectionPro
         {canScrollLeft && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center bg-bg-surface/95 backdrop-blur-sm border border-white/10 rounded-full shadow-lg hover:bg-bg-elevated transition-all opacity-0 group-hover/collection:opacity-100 -translate-x-1/2"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center bg-bg-surface/95 backdrop-blur-sm border border-black/10 rounded-full shadow-lg hover:bg-bg-elevated transition-all opacity-0 group-hover/collection:opacity-100 -translate-x-1/2"
           >
-            <ChevronLeft className="w-5 h-5 text-zinc-300" />
+            <ChevronLeft className="w-5 h-5 text-text-secondary" />
           </button>
         )}
 
@@ -153,12 +153,12 @@ export function AppCollection({ category, onSelect, onSeeAll }: AppCollectionPro
           {packages.length >= 10 && onSeeAll && (
             <button
               onClick={() => onSeeAll(category)}
-              className="flex-shrink-0 w-52 snap-start glass-dark rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-colors border border-dashed border-white/10"
+              className="flex-shrink-0 w-60 snap-start glass-light rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-black/5 transition-colors border border-dashed border-black/10"
             >
               <div className="w-12 h-12 rounded-xl bg-bg-elevated flex items-center justify-center">
-                <ArrowRight className="w-6 h-6 text-zinc-400" />
+                <ArrowRight className="w-6 h-6 text-text-secondary" />
               </div>
-              <span className="text-sm text-zinc-400">See all {displayName}</span>
+              <span className="text-sm text-text-secondary">See all {displayName}</span>
             </button>
           )}
         </div>
@@ -167,9 +167,9 @@ export function AppCollection({ category, onSelect, onSeeAll }: AppCollectionPro
         {canScrollRight && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center bg-bg-surface/95 backdrop-blur-sm border border-white/10 rounded-full shadow-lg hover:bg-bg-elevated transition-all opacity-0 group-hover/collection:opacity-100 translate-x-1/2"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center bg-bg-surface/95 backdrop-blur-sm border border-black/10 rounded-full shadow-lg hover:bg-bg-elevated transition-all opacity-0 group-hover/collection:opacity-100 translate-x-1/2"
           >
-            <ChevronRight className="w-5 h-5 text-zinc-300" />
+            <ChevronRight className="w-5 h-5 text-text-secondary" />
           </button>
         )}
 
@@ -233,7 +233,7 @@ function CollectionCardComponent({ package: pkg, onSelect }: CollectionCardProps
           psadtConfig: {
             ...DEFAULT_PSADT_CONFIG,
             processesToClose,
-            detectionRules: detectionRules as any,
+            detectionRules,
           },
         });
       }
@@ -247,7 +247,7 @@ function CollectionCardComponent({ package: pkg, onSelect }: CollectionCardProps
   return (
     <div
       onClick={() => onSelect?.(pkg)}
-      className="flex-shrink-0 w-52 snap-start group glass-dark rounded-xl p-4 cursor-pointer transition-all duration-200 hover:bg-white/5 hover:shadow-lg hover:shadow-black/20"
+      className="flex-shrink-0 w-60 snap-start group glass-light rounded-xl p-4 cursor-pointer transition-all duration-200 hover:bg-black/5 hover:shadow-card hover:-translate-y-0.5"
     >
       <div className="flex items-start gap-3">
         <AppIcon
@@ -259,15 +259,15 @@ function CollectionCardComponent({ package: pkg, onSelect }: CollectionCardProps
         />
 
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-medium text-white truncate group-hover:text-accent-cyan transition-colors">
+          <h4 className="text-sm font-medium text-text-primary truncate group-hover:text-accent-cyan transition-colors">
             {pkg.name}
           </h4>
-          <p className="text-xs text-zinc-500 truncate">{pkg.publisher}</p>
+          <p className="text-xs text-text-muted truncate">{pkg.publisher}</p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
-        <span className="text-xs text-zinc-500">v{pkg.version}</span>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5">
+        <span className="text-xs text-text-muted">v{pkg.version}</span>
         <Button
           size="sm"
           onClick={handleQuickAdd}

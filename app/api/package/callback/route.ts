@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { verifyCallbackSignature } from '@/lib/callback-signature';
+import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 
 interface PackageCallbackBody {
   jobId: string;
@@ -39,14 +40,11 @@ export async function POST(request: NextRequest) {
     // Verify HMAC signature
     if (callbackSecret) {
       if (!verifyCallbackSignature(body, signature, callbackSecret)) {
-        console.error('Invalid callback signature');
         return NextResponse.json(
           { error: 'Invalid signature' },
           { status: 401 }
         );
       }
-    } else {
-      console.warn('CALLBACK_SECRET not configured - signature verification disabled');
     }
 
     // Parse the verified body
@@ -66,8 +64,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    console.log(`Received callback for job ${data.jobId}: ${data.status}`);
 
     const db = getDatabase();
 
@@ -95,8 +91,6 @@ export async function POST(request: NextRequest) {
       updateData.intune_app_url = data.intuneAppUrl;
       updateData.completed_at = new Date().toISOString();
       updateData.progress_percent = 100;
-
-      console.log(`Job ${data.jobId} deployed successfully to Intune: ${data.intuneAppId}`);
 
       // Get job details for upload history
       const job = await db.jobs.getById(data.jobId);
@@ -148,19 +142,26 @@ export async function POST(request: NextRequest) {
     const updatedJob = await db.jobs.update(data.jobId, updateData);
 
     if (!updatedJob) {
-      console.error('Failed to update job');
       return NextResponse.json(
         { error: 'Failed to update job status' },
         { status: 500 }
       );
     }
 
+    // Check if this job belongs to a batch deployment item
+    if (data.status === 'deployed' || data.status === 'failed') {
+      const jobStatus = data.status === 'deployed' ? 'completed' : 'failed';
+      // Fire and forget - don't block the callback response
+      onJobCompleted(data.jobId, jobStatus, data.message).catch((err) => {
+        console.error('[Callback] Batch orchestrator error:', err);
+      });
+    }
+
     return NextResponse.json({
       success: true,
       job: updatedJob,
     });
-  } catch (error) {
-    console.error('Callback API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

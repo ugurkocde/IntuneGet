@@ -255,4 +255,4 @@ export async function GET(request: Request) {
 
 - Check existing [GitHub Issues](https://github.com/ugurkocde/IntuneGet-Website/issues)
 - Review documentation in `/docs`
-- Ask in GitHub Discussions
+- Open a [GitHub Issue](https://github.com/ugurkocde/IntuneGet-Website/issues)

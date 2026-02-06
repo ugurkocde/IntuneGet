@@ -39,16 +39,22 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 bg-bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="claim-all-modal-title"
+        aria-busy={!isComplete}
+        className="relative w-full max-w-md mx-4 bg-bg-surface rounded-2xl border border-black/10 shadow-2xl overflow-hidden"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-          <h2 className="text-lg font-semibold text-white">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-black/5">
+          <h2 id="claim-all-modal-title" className="text-lg font-semibold text-text-primary">
             {isComplete ? 'Claim Complete' : `Claiming ${apps.length} apps...`}
           </h2>
           {isComplete && (
             <button
               onClick={onClose}
-              className="text-zinc-400 hover:text-white transition-colors p-1"
+              className="text-text-secondary hover:text-text-primary transition-colors p-1"
             >
               <X className="w-5 h-5" />
             </button>
@@ -59,7 +65,7 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
         <div className="px-6 py-6 space-y-4">
           {/* Progress bar */}
           <div className="space-y-2">
-            <div className="flex justify-between text-sm text-zinc-400">
+            <div className="flex justify-between text-sm text-text-secondary">
               <span>
                 {processedCount} of {apps.length} processed
               </span>
@@ -69,7 +75,7 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
                 </span>
               )}
             </div>
-            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-2 bg-black/10 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-300 ease-out"
                 style={{ width: `${progress}%` }}
@@ -84,7 +90,7 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
               return (
                 <div
                   key={app.discoveredAppId}
-                  className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] border border-white/[0.03]"
+                  className="flex items-center gap-3 p-2 rounded-lg bg-black/[0.02] border border-black/[0.03]"
                 >
                   <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">
                     {status === 'pending' && (
@@ -102,7 +108,7 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
                     packageName={app.displayName}
                     size="sm"
                   />
-                  <span className="text-sm text-white truncate flex-1">
+                  <span className="text-sm text-text-primary truncate flex-1">
                     {app.displayName}
                   </span>
                 </div>
@@ -112,8 +118,8 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
 
           {/* Summary */}
           {isComplete && (
-            <div className="text-center p-4 rounded-lg bg-white/[0.02] border border-white/[0.03]">
-              <p className="text-white font-medium">
+            <div className="text-center p-4 rounded-lg bg-black/[0.02] border border-black/[0.03]">
+              <p className="text-text-primary font-medium">
                 {successCount} of {apps.length} apps added to cart
               </p>
               {failCount > 0 && (
@@ -126,7 +132,7 @@ export function ClaimAllModal({ state, onClose }: ClaimAllModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/5 bg-bg-elevated/50">
+        <div className="px-6 py-4 border-t border-black/5 bg-bg-elevated/50">
           <Button
             onClick={onClose}
             disabled={!isComplete}

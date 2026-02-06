@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowLeft } from "lucide-react";
+import { Header } from "@/components/landing/Header";
+import { Footer } from "@/components/landing/sections/Footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | IntuneGet",
@@ -11,46 +11,22 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-bg-deepest">
-      {/* Header */}
-      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-bg-deepest/80 backdrop-blur-xl">
-        <div className="flex h-14 items-center px-4 lg:px-6 max-w-4xl mx-auto">
-          <Link href="/" className="flex items-center gap-2 group">
-            <Image
-              src="/favicon.svg"
-              alt="IntuneGet"
-              width={24}
-              height={24}
-              className="h-6 w-6"
-            />
-            <span className="font-semibold text-white">IntuneGet</span>
-          </Link>
-
-          <div className="ml-auto">
-            <Link
-              href="/"
-              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to Home</span>
-            </Link>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-bg-deepest flex flex-col">
+      <Header />
 
       {/* Content */}
-      <main className="mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16">
+      <main className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28">
         <div className="space-y-8">
           <div>
-            <h1 className="text-3xl font-bold text-white sm:text-4xl">
+            <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">
               Privacy Policy
             </h1>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-text-muted">
               Effective: January 24, 2026
             </p>
           </div>
 
-          <p className="text-zinc-400 leading-relaxed">
+          <p className="text-text-secondary leading-relaxed">
             This Privacy Policy explains how IntuneGet (&quot;we&quot;,
             &quot;our&quot;, or &quot;the Service&quot;) handles information
             when you use the app to package and deploy applications from Winget
@@ -59,17 +35,17 @@ export default function PrivacyPage() {
           </p>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">What We Access</h2>
-            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+            <h2 className="text-xl font-semibold text-text-primary">What We Access</h2>
+            <ul className="list-disc list-inside space-y-2 text-text-secondary">
               <li>
-                <strong className="text-zinc-300">
+                <strong className="text-text-primary">
                   Authentication via Microsoft OAuth 2.0 (Azure AD).
                 </strong>{" "}
                 We request Microsoft Graph permissions necessary to upload
                 applications to your Intune environment.
               </li>
               <li>
-                <strong className="text-zinc-300">
+                <strong className="text-text-primary">
                   Intune application data.
                 </strong>{" "}
                 We access the permissions required to upload Win32 applications
@@ -79,10 +55,10 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-text-primary">
               How We Process Data
             </h2>
-            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+            <ul className="list-disc list-inside space-y-2 text-text-secondary">
               <li>
                 We do not persist your Intune configuration data beyond what is
                 necessary for the application upload process.
@@ -99,10 +75,10 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-text-primary">
               Analytics & Cookies
             </h2>
-            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+            <ul className="list-disc list-inside space-y-2 text-text-secondary">
               <li>
                 We use privacy-friendly analytics (Plausible) to understand
                 aggregate usage without cookies or personal identifiers.
@@ -123,8 +99,8 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Data Sharing</h2>
-            <p className="text-zinc-400 leading-relaxed">
+            <h2 className="text-xl font-semibold text-text-primary">Data Sharing</h2>
+            <p className="text-text-secondary leading-relaxed">
               We do not sell or share your configuration data with third
               parties. Data accessed from Microsoft Graph is used solely to
               facilitate application deployment to your Intune environment.
@@ -132,8 +108,8 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Security</h2>
-            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+            <h2 className="text-xl font-semibold text-text-primary">Security</h2>
+            <ul className="list-disc list-inside space-y-2 text-text-secondary">
               <li>
                 Authentication is handled via Microsoft OAuth 2.0 (Azure AD).
               </li>
@@ -149,8 +125,8 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Data Retention</h2>
-            <p className="text-zinc-400 leading-relaxed">
+            <h2 className="text-xl font-semibold text-text-primary">Data Retention</h2>
+            <p className="text-text-secondary leading-relaxed">
               We do not retain your Intune configuration data beyond the active
               session. Operational logs may exist temporarily within hosting
               provider systems as part of standard logging.
@@ -158,8 +134,8 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Your Choices</h2>
-            <ul className="list-disc list-inside space-y-2 text-zinc-400">
+            <h2 className="text-xl font-semibold text-text-primary">Your Choices</h2>
+            <ul className="list-disc list-inside space-y-2 text-text-secondary">
               <li>
                 You can disconnect at any time by signing out of the app.
               </li>
@@ -171,18 +147,18 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-text-primary">
               Children&apos;s Privacy
             </h2>
-            <p className="text-zinc-400 leading-relaxed">
+            <p className="text-text-secondary leading-relaxed">
               The Service is intended for professional/enterprise use and is not
               directed to children.
             </p>
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Changes</h2>
-            <p className="text-zinc-400 leading-relaxed">
+            <h2 className="text-xl font-semibold text-text-primary">Changes</h2>
+            <p className="text-text-secondary leading-relaxed">
               We may update this policy to reflect improvements or operational
               changes. If we make material changes, we will update the effective
               date above.
@@ -190,8 +166,8 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white">Contact</h2>
-            <p className="text-zinc-400 leading-relaxed">
+            <h2 className="text-xl font-semibold text-text-primary">Contact</h2>
+            <p className="text-text-secondary leading-relaxed">
               Questions about this policy? Contact us at:{" "}
               <a
                 href="mailto:support@ugurlabs.com"
@@ -203,6 +179,8 @@ export default function PrivacyPage() {
           </section>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }

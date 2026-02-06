@@ -154,7 +154,7 @@ export default function MigratePage({ params }: PageProps) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Loader2 className="w-10 h-10 text-accent-cyan animate-spin mb-4" />
-        <p className="text-zinc-400">Generating migration preview...</p>
+        <p className="text-text-secondary">Generating migration preview...</p>
       </div>
     );
   }
@@ -169,7 +169,7 @@ export default function MigratePage({ params }: PageProps) {
           gradientColors="cyan"
         />
 
-        <div className="glass-dark rounded-xl p-8 border border-white/5 text-center">
+        <div className="glass-light rounded-xl p-8 border border-black/5 text-center">
           <div className="w-20 h-20 mx-auto bg-status-success/10 rounded-xl flex items-center justify-center mb-6">
             <CheckCircle2 className="w-10 h-10 text-status-success" />
           </div>
@@ -177,25 +177,25 @@ export default function MigratePage({ params }: PageProps) {
           <div className="grid grid-cols-3 gap-6 max-w-md mx-auto mb-8">
             <div>
               <p className="text-2xl font-bold text-status-success">{result.successful}</p>
-              <p className="text-sm text-zinc-500">Migrated</p>
+              <p className="text-sm text-text-muted">Migrated</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-status-error">{result.failed}</p>
-              <p className="text-sm text-zinc-500">Failed</p>
+              <p className="text-sm text-text-muted">Failed</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-zinc-400">{result.skipped}</p>
-              <p className="text-sm text-zinc-500">Skipped</p>
+              <p className="text-2xl font-bold text-text-secondary">{result.skipped}</p>
+              <p className="text-sm text-text-muted">Skipped</p>
             </div>
           </div>
 
-          <p className="text-zinc-400 mb-6">
+          <p className="text-text-secondary mb-6">
             Applications have been added to your cart for deployment to Intune.
           </p>
 
           <div className="flex items-center justify-center gap-4">
             <Link href={`/dashboard/sccm/${resolvedParams.migrationId}`}>
-              <Button variant="outline" className="border-white/10 text-zinc-400">
+              <Button variant="outline" className="border-black/10 text-text-secondary">
                 Back to Migration
               </Button>
             </Link>
@@ -216,7 +216,7 @@ export default function MigratePage({ params }: PageProps) {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href={`/dashboard/sccm/${resolvedParams.migrationId}`}>
-          <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white">
+          <Button variant="ghost" size="sm" className="text-text-secondary hover:text-text-primary">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -246,49 +246,49 @@ export default function MigratePage({ params }: PageProps) {
       </AnimatePresence>
 
       {/* Options */}
-      <div className="glass-dark rounded-xl p-6 border border-white/5">
-        <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-          <Settings className="w-5 h-5 text-zinc-400" />
+      <div className="glass-light rounded-xl p-6 border border-black/5">
+        <h3 className="text-text-primary font-medium mb-4 flex items-center gap-2">
+          <Settings className="w-5 h-5 text-text-secondary" />
           Migration Options
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
+          <label className="flex items-center gap-3 p-3 bg-black/5 rounded-lg cursor-pointer hover:bg-black/10 transition-colors">
             <input
               type="checkbox"
               checked={options.preserveDetection}
               onChange={(e) => setOptions(prev => ({ ...prev, preserveDetection: e.target.checked }))}
-              className="rounded border-white/20"
+              className="rounded border-black/20"
             />
             <div>
-              <p className="text-white text-sm font-medium">Preserve Detection Rules</p>
-              <p className="text-zinc-500 text-xs">Use SCCM detection rules when possible</p>
+              <p className="text-text-primary text-sm font-medium">Preserve Detection Rules</p>
+              <p className="text-text-muted text-xs">Use SCCM detection rules when possible</p>
             </div>
           </label>
 
-          <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
+          <label className="flex items-center gap-3 p-3 bg-black/5 rounded-lg cursor-pointer hover:bg-black/10 transition-colors">
             <input
               type="checkbox"
               checked={options.preserveInstallCommands}
               onChange={(e) => setOptions(prev => ({ ...prev, preserveInstallCommands: e.target.checked }))}
-              className="rounded border-white/20"
+              className="rounded border-black/20"
             />
             <div>
-              <p className="text-white text-sm font-medium">Preserve Commands</p>
-              <p className="text-zinc-500 text-xs">Use SCCM install/uninstall commands</p>
+              <p className="text-text-primary text-sm font-medium">Preserve Commands</p>
+              <p className="text-text-muted text-xs">Use SCCM install/uninstall commands</p>
             </div>
           </label>
 
-          <label className="flex items-center gap-3 p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
+          <label className="flex items-center gap-3 p-3 bg-black/5 rounded-lg cursor-pointer hover:bg-black/10 transition-colors">
             <input
               type="checkbox"
               checked={options.useWingetDefaults}
               onChange={(e) => setOptions(prev => ({ ...prev, useWingetDefaults: e.target.checked }))}
-              className="rounded border-white/20"
+              className="rounded border-black/20"
             />
             <div>
-              <p className="text-white text-sm font-medium">WinGet Defaults</p>
-              <p className="text-zinc-500 text-xs">Fall back to WinGet package defaults</p>
+              <p className="text-text-primary text-sm font-medium">WinGet Defaults</p>
+              <p className="text-text-muted text-xs">Fall back to WinGet package defaults</p>
             </div>
           </label>
         </div>
@@ -297,20 +297,20 @@ export default function MigratePage({ params }: PageProps) {
       {/* Summary */}
       {preview && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="glass-dark rounded-lg p-4 border border-white/5">
-            <p className="text-zinc-500 text-sm">Total</p>
-            <p className="text-2xl font-bold text-white">{preview.totalApps}</p>
+          <div className="glass-light rounded-lg p-4 border border-black/5">
+            <p className="text-text-muted text-sm">Total</p>
+            <p className="text-2xl font-bold text-text-primary">{preview.totalApps}</p>
           </div>
-          <div className="glass-dark rounded-lg p-4 border border-status-success/20">
-            <p className="text-zinc-500 text-sm">Ready to Migrate</p>
+          <div className="glass-light rounded-lg p-4 border border-status-success/20">
+            <p className="text-text-muted text-sm">Ready to Migrate</p>
             <p className="text-2xl font-bold text-status-success">{preview.migratable}</p>
           </div>
-          <div className="glass-dark rounded-lg p-4 border border-status-error/20">
-            <p className="text-zinc-500 text-sm">Blocked</p>
+          <div className="glass-light rounded-lg p-4 border border-status-error/20">
+            <p className="text-text-muted text-sm">Blocked</p>
             <p className="text-2xl font-bold text-status-error">{preview.blocked}</p>
           </div>
-          <div className="glass-dark rounded-lg p-4 border border-status-warning/20">
-            <p className="text-zinc-500 text-sm">Warnings</p>
+          <div className="glass-light rounded-lg p-4 border border-status-warning/20">
+            <p className="text-text-muted text-sm">Warnings</p>
             <p className="text-2xl font-bold text-status-warning">{preview.warnings.length}</p>
           </div>
         </div>
@@ -331,9 +331,9 @@ export default function MigratePage({ params }: PageProps) {
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-white/5">
+      <div className="flex items-center justify-between pt-4 border-t border-black/5">
         <Link href={`/dashboard/sccm/${resolvedParams.migrationId}`}>
-          <Button variant="outline" className="border-white/10 text-zinc-400">
+          <Button variant="outline" className="border-black/10 text-text-secondary">
             Cancel
           </Button>
         </Link>
@@ -374,7 +374,7 @@ function PreviewItem({
       className={cn(
         'border rounded-lg transition-all',
         item.canMigrate
-          ? 'border-white/5 bg-white/2 hover:border-white/10'
+          ? 'border-black/5 bg-black/2 hover:border-black/10'
           : 'border-status-error/20 bg-status-error/5'
       )}
     >
@@ -395,7 +395,7 @@ function PreviewItem({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h4 className="text-white font-medium truncate">{item.sccmName}</h4>
+            <h4 className="text-text-primary font-medium truncate">{item.sccmName}</h4>
             {item.warnings.length > 0 && (
               <span className="flex items-center gap-1 text-xs text-status-warning">
                 <AlertTriangle className="w-3 h-3" />
@@ -404,7 +404,7 @@ function PreviewItem({
             )}
           </div>
           {item.canMigrate && (
-            <p className="text-zinc-500 text-sm mt-0.5">
+            <p className="text-text-muted text-sm mt-0.5">
               {item.wingetId} - Detection: {item.detectionSource}, Commands: {item.commandSource}
             </p>
           )}
@@ -415,7 +415,7 @@ function PreviewItem({
           )}
         </div>
 
-        <button className="text-zinc-500 hover:text-white">
+        <button className="text-text-muted hover:text-text-primary">
           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
         </button>
       </div>
@@ -428,7 +428,7 @@ function PreviewItem({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 pt-2 border-t border-white/5 space-y-3">
+            <div className="px-4 pb-4 pt-2 border-t border-black/5 space-y-3">
               {item.warnings.length > 0 && (
                 <div className="p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg">
                   <p className="text-status-warning text-sm font-medium mb-1">Warnings:</p>
@@ -443,15 +443,15 @@ function PreviewItem({
               {item.canMigrate && (
                 <>
                   <div>
-                    <p className="text-zinc-500 text-xs mb-1">Install Command</p>
-                    <code className="text-xs text-zinc-300 bg-black/30 px-2 py-1 rounded block truncate">
+                    <p className="text-text-muted text-xs mb-1">Install Command</p>
+                    <code className="text-xs text-text-secondary bg-black/5 px-2 py-1 rounded block truncate">
                       {item.installCommand || 'Default WinGet command'}
                     </code>
                   </div>
                   <div>
-                    <p className="text-zinc-500 text-xs mb-1">Detection Rules ({item.detectionRules.length})</p>
+                    <p className="text-text-muted text-xs mb-1">Detection Rules ({item.detectionRules.length})</p>
                     {item.detectionRules.slice(0, 2).map((rule, i) => (
-                      <code key={i} className="text-xs text-zinc-300 bg-black/30 px-2 py-1 rounded block truncate mb-1">
+                      <code key={i} className="text-xs text-text-secondary bg-black/5 px-2 py-1 rounded block truncate mb-1">
                         {rule.type}: {JSON.stringify(rule).slice(0, 100)}...
                       </code>
                     ))}

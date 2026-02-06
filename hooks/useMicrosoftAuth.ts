@@ -3,7 +3,7 @@
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionRequiredAuthError, AccountInfo } from "@azure/msal-browser";
 import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
 
 /**
@@ -35,6 +35,9 @@ async function trackSignInToServer(
 export function useMicrosoftAuth() {
   const { instance, accounts } = useMsal();
   const isAuthenticated = useIsAuthenticated();
+
+  // Track sign-out in progress to prevent auth guard redirects
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Cache the current token to check expiry
   const cachedTokenRef = useRef<string | null>(null);
@@ -166,6 +169,7 @@ export function useMicrosoftAuth() {
     try {
       const result = await instance.loginPopup({ scopes: graphScopes });
       if (result?.account) {
+        document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
         hasTrackedSignInRef.current = result.account.localAccountId;
         await trackSignInToServer(result.account, 'popup');
       }
@@ -180,6 +184,7 @@ export function useMicrosoftAuth() {
    */
   const signInRedirect = useCallback(async () => {
     try {
+      document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
       await instance.loginRedirect({ scopes: graphScopes });
       return true;
     } catch {
@@ -192,6 +197,12 @@ export function useMicrosoftAuth() {
    */
   const signOut = useCallback(async () => {
     try {
+      // Signal sign-out in progress to prevent auth guard redirects
+      setIsSigningOut(true);
+
+      // Clear auth hint cookie so middleware blocks dashboard access
+      document.cookie = 'msal-auth-hint=; path=/; SameSite=Lax; max-age=0';
+
       // Clear local cached tokens first
       cachedTokenRef.current = null;
       tokenExpiryRef.current = null;
@@ -205,6 +216,7 @@ export function useMicrosoftAuth() {
       });
       return true;
     } catch {
+      setIsSigningOut(false);
       return false;
     }
   }, [instance]);
@@ -246,6 +258,7 @@ export function useMicrosoftAuth() {
 
   return {
     isAuthenticated,
+    isSigningOut,
     account: accounts[0] || null,
     user: getUserInfo(),
     getAccessToken,

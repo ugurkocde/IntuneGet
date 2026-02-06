@@ -66,7 +66,7 @@ export default function MspSetupPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-accent-cyan animate-spin mx-auto mb-3" />
-          <p className="text-sm text-zinc-500">Loading...</p>
+          <p className="text-sm text-text-muted">Loading...</p>
         </div>
       </div>
     );
@@ -82,7 +82,7 @@ export default function MspSetupPage() {
       {/* Back link */}
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors mb-6"
+        className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Dashboard
@@ -93,39 +93,39 @@ export default function MspSetupPage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-cyan/20 to-accent-violet/20 mb-4">
           <Building2 className="w-8 h-8 text-accent-cyan" />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-2">Set Up MSP Mode</h1>
-        <p className="text-zinc-500">
+        <h1 className="text-2xl font-bold text-text-primary mb-2">Set Up MSP Mode</h1>
+        <p className="text-text-muted">
           Manage multiple customer Intune tenants from a single dashboard
         </p>
       </div>
 
       {/* Features */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+        <div className="p-4 rounded-xl bg-black/5 border border-black/10 text-center">
           <Users className="w-6 h-6 text-accent-cyan mx-auto mb-2" />
-          <p className="text-sm font-medium text-white">Multi-Tenant</p>
-          <p className="text-xs text-zinc-500 mt-1">Manage all customers</p>
+          <p className="text-sm font-medium text-text-primary">Multi-Tenant</p>
+          <p className="text-xs text-text-muted mt-1">Manage all customers</p>
         </div>
-        <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+        <div className="p-4 rounded-xl bg-black/5 border border-black/10 text-center">
           <Package className="w-6 h-6 text-accent-violet mx-auto mb-2" />
-          <p className="text-sm font-medium text-white">Unified Deployment</p>
-          <p className="text-xs text-zinc-500 mt-1">Deploy apps anywhere</p>
+          <p className="text-sm font-medium text-text-primary">Unified Deployment</p>
+          <p className="text-xs text-text-muted mt-1">Deploy apps anywhere</p>
         </div>
-        <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+        <div className="p-4 rounded-xl bg-black/5 border border-black/10 text-center">
           <Shield className="w-6 h-6 text-green-500 mx-auto mb-2" />
-          <p className="text-sm font-medium text-white">Secure</p>
-          <p className="text-xs text-zinc-500 mt-1">Consent-based access</p>
+          <p className="text-sm font-medium text-text-primary">Secure</p>
+          <p className="text-xs text-text-muted mt-1">Consent-based access</p>
         </div>
       </div>
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-          <h2 className="text-lg font-medium text-white mb-4">Organization Details</h2>
+        <div className="p-6 rounded-xl bg-black/5 border border-black/10">
+          <h2 className="text-lg font-medium text-text-primary mb-4">Organization Details</h2>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1.5">
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
                 Organization Name *
               </label>
               <input
@@ -133,18 +133,18 @@ export default function MspSetupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Acme IT Services"
-                className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan/50"
+                className="w-full px-3 py-2 bg-black/5 border border-black/10 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan/50"
                 required
                 minLength={2}
                 maxLength={100}
               />
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-text-muted">
                 Your MSP company name
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1.5">
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
                 Organization Slug
               </label>
               <div className="flex items-center gap-2">
@@ -157,8 +157,8 @@ export default function MspSetupPage() {
                   }}
                   placeholder="acme-it-services"
                   className={cn(
-                    "flex-1 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan/50",
-                    !useCustomSlug && "text-zinc-500"
+                    "flex-1 px-3 py-2 bg-black/5 border border-black/10 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan/50",
+                    !useCustomSlug && "text-text-muted"
                   )}
                 />
                 {useCustomSlug && (
@@ -170,13 +170,13 @@ export default function MspSetupPage() {
                       setUseCustomSlug(false);
                       setSlug(generateSlug(name));
                     }}
-                    className="text-zinc-400 hover:text-white"
+                    className="text-text-secondary hover:text-text-primary"
                   >
                     Auto
                   </Button>
                 )}
               </div>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-text-muted">
                 URL-friendly identifier (auto-generated from name)
               </p>
             </div>
@@ -185,8 +185,8 @@ export default function MspSetupPage() {
 
         {/* Info box */}
         <div className="p-4 rounded-xl bg-accent-cyan/10 border border-accent-cyan/20">
-          <h3 className="text-sm font-medium text-white mb-2">What happens next?</h3>
-          <ul className="text-sm text-zinc-400 space-y-1">
+          <h3 className="text-sm font-medium text-text-primary mb-2">What happens next?</h3>
+          <ul className="text-sm text-text-secondary space-y-1">
             <li className="flex items-start gap-2">
               <Check className="w-4 h-4 text-accent-cyan mt-0.5 flex-shrink-0" />
               Your MSP organization will be created
@@ -215,7 +215,7 @@ export default function MspSetupPage() {
             <Button
               type="button"
               variant="ghost"
-              className="text-zinc-400 hover:text-white"
+              className="text-text-secondary hover:text-text-primary"
             >
               Cancel
             </Button>

@@ -299,7 +299,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Send notifications error:', errorMessage);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

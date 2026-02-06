@@ -43,7 +43,6 @@ export async function GET() {
       const released = await db.jobs.forceRelease(job.id);
       if (released) {
         staleJobsRecovered++;
-        console.log(`[Health] Recovered stale job: ${job.id} (${job.winget_id})`);
       }
     }
 
@@ -88,7 +87,6 @@ export async function GET() {
       issues: issues.length > 0 ? issues : undefined,
     });
   } catch (error) {
-    console.error('Packager health check error:', error);
     return NextResponse.json(
       {
         status: 'error',

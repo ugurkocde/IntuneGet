@@ -16,10 +16,16 @@ interface CuratedAppResult {
   tags: string[] | null;
   icon_path: string | null;
   popularity_rank: number | null;
+  installer_type: string | null;
 }
 
 // Get popular packages from curated apps
-async function getCachedPopularPackages(limit: number, offset: number = 0, category?: string | null) {
+async function getCachedPopularPackages(
+  limit: number,
+  offset: number = 0,
+  category?: string | null,
+  sort: string = 'popular'
+) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -29,6 +35,37 @@ async function getCachedPopularPackages(limit: number, offset: number = 0, categ
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  // For non-popular sorts, query the table directly with appropriate ORDER BY
+  if (sort === 'name' || sort === 'newest') {
+    let query = supabase
+      .from('curated_apps')
+      .select('id, winget_id, name, publisher, latest_version, description, homepage, category, tags, icon_path, popularity_rank, installer_type');
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    if (sort === 'name') {
+      query = query.order('name', { ascending: true });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error } = await query;
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    return {
+      source: 'curated',
+      data: data as CuratedAppResult[],
+    };
+  }
+
+  // Default: use RPC for popularity-based sorting
   const { data: curatedData, error: curatedError } = await supabase.rpc(
     'get_popular_curated_apps',
     {
@@ -39,7 +76,6 @@ async function getCachedPopularPackages(limit: number, offset: number = 0, categ
   );
 
   if (curatedError) {
-    console.error('Cache popular packages error:', curatedError);
     return null;
   }
 
@@ -59,11 +95,12 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const category = searchParams.get('category');
+    const sort = searchParams.get('sort') || 'popular';
     const sanitizedLimit = Math.min(limit, 50);
     const sanitizedOffset = Math.max(offset, 0);
 
     // Try curated popular packages first
-    const cachedResult = await getCachedPopularPackages(sanitizedLimit, sanitizedOffset, category);
+    const cachedResult = await getCachedPopularPackages(sanitizedLimit, sanitizedOffset, category, sort);
 
     if (cachedResult && cachedResult.data.length > 0) {
       const curatedData = cachedResult.data;
@@ -80,6 +117,7 @@ export async function GET(request: NextRequest) {
           category: p.category,
           iconPath: p.icon_path,
           popularityRank: p.popularity_rank,
+          installerType: p.installer_type,
         })),
         source: 'curated',
       });
@@ -93,8 +131,7 @@ export async function GET(request: NextRequest) {
       packages,
       source: 'api',
     });
-  } catch (error) {
-    console.error('Popular packages fetch error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch popular packages' },
       { status: 500 }

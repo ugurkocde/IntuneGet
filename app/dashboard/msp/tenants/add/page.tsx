@@ -22,8 +22,8 @@ export default function AddTenantPage() {
   if (isLoadingOrganization) {
     return (
       <div className="max-w-lg mx-auto space-y-6">
-        <div className="h-6 w-32 bg-white/10 rounded animate-pulse" />
-        <div className="h-64 bg-white/5 rounded-xl animate-pulse" />
+        <div className="h-6 w-32 bg-black/10 rounded animate-pulse" />
+        <div className="h-64 bg-black/5 rounded-xl animate-pulse" />
       </div>
     );
   }
@@ -46,7 +46,7 @@ export default function AddTenantPage() {
       {/* Back link */}
       <Link
         href="/dashboard/msp/tenants"
-        className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Tenants
@@ -54,8 +54,8 @@ export default function AddTenantPage() {
 
       {/* Header */}
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-white">Add Customer Tenant</h1>
-        <p className="text-zinc-500 mt-1">
+        <h1 className="text-2xl font-bold text-text-primary">Add Customer Tenant</h1>
+        <p className="text-text-muted mt-1">
           Set up a new customer tenant for management
         </p>
       </div>

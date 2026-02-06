@@ -18,20 +18,29 @@ import type {
 } from '@/types/msp';
 
 /**
+ * Type for the user membership query result with joined organization
+ */
+interface MembershipWithOrg {
+  msp_organization_id: string;
+  msp_organizations: {
+    is_active: boolean;
+  };
+}
+
+/**
  * Get the user's MSP organization ID (only for active organizations)
  */
 async function getUserMspOrgId(userId: string): Promise<string | null> {
   const supabase = createServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: membership } = await (supabase as any)
+  const { data: membership } = await supabase
     .from('msp_user_memberships')
     .select('msp_organization_id, msp_organizations!inner(is_active)')
     .eq('user_id', userId)
     .eq('msp_organizations.is_active', true)
     .single();
 
-  return membership?.msp_organization_id || null;
+  return (membership as MembershipWithOrg | null)?.msp_organization_id || null;
 }
 
 /**
@@ -40,7 +49,7 @@ async function getUserMspOrgId(userId: string): Promise<string | null> {
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -59,8 +68,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get all managed tenants for this MSP
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: tenants, error: tenantsError } = await (supabase as any)
+    const { data: tenants, error: tenantsError } = await supabase
       .from('msp_managed_tenants')
       .select('*')
       .eq('msp_organization_id', mspOrgId)
@@ -68,7 +76,6 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (tenantsError) {
-      console.error('Error fetching tenants:', tenantsError);
       return NextResponse.json(
         { error: 'Failed to fetch tenants' },
         { status: 500 }
@@ -81,23 +88,24 @@ export async function GET(request: NextRequest) {
       .map((t: MspManagedTenant) => t.tenant_id);
 
     // Fetch job stats for all tenants in a single query
-    type JobRow = { tenant_id: string; status: string; created_at: string };
+    type JobRow = { tenant_id: string | null; status: string; created_at: string };
     let jobsByTenant: Record<string, JobRow[]> = {};
 
     if (tenantIds.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: allJobs } = await (supabase as any)
+      const { data: allJobs } = await supabase
         .from('packaging_jobs')
         .select('tenant_id, status, created_at')
         .in('tenant_id', tenantIds)
         .order('created_at', { ascending: false });
 
-      // Group jobs by tenant ID
-      jobsByTenant = (allJobs || []).reduce((acc: Record<string, JobRow[]>, job: JobRow) => {
-        if (!acc[job.tenant_id]) {
+      // Group jobs by tenant ID (skip jobs without tenant_id)
+      jobsByTenant = (allJobs || []).reduce((acc: Record<string, JobRow[]>, job) => {
+        if (job.tenant_id && !acc[job.tenant_id]) {
           acc[job.tenant_id] = [];
         }
-        acc[job.tenant_id].push(job);
+        if (job.tenant_id) {
+          acc[job.tenant_id].push(job);
+        }
         return acc;
       }, {});
     }
@@ -115,7 +123,7 @@ export async function GET(request: NextRequest) {
       }
 
       const jobList = jobsByTenant[tenant.tenant_id] || [];
-      const completedJobs = jobList.filter((j) => j.status === 'completed').length;
+      const completedJobs = jobList.filter((j) => j.status === 'completed' || j.status === 'deployed').length;
       const failedJobs = jobList.filter((j) => j.status === 'failed').length;
       const lastJob = jobList[0];
 
@@ -134,7 +142,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('MSP tenants GET error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -148,7 +155,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -178,8 +185,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Create a pending tenant record
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: tenant, error: insertError } = await (supabase as any)
+    const { data: tenant, error: insertError } = await supabase
       .from('msp_managed_tenants')
       .insert({
         msp_organization_id: mspOrgId,
@@ -193,7 +199,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error('Error creating tenant record:', insertError);
       return NextResponse.json(
         { error: 'Failed to create tenant record' },
         { status: 500 }
@@ -207,16 +212,15 @@ export async function POST(request: NextRequest) {
       const signedState = signConsentState(mspOrgId, tenant.id);
       consentUrl = getMspCustomerConsentUrl(mspOrgId, tenant.id, baseUrl, signedState);
     } catch (signError) {
-      console.error('Error generating consent URL:', signError);
       // The tenant was created but we couldn't generate the consent URL
-      // Return the tenant info with an error message so the user knows to retry
+      // Return 500 so the frontend treats this as an error, not a success
       return NextResponse.json(
         {
           error: 'Failed to generate consent URL',
           message: 'The tenant was created but the consent URL could not be generated. Please use the "Get Consent URL" option from the tenant menu to retrieve it.',
           tenant: tenant as MspManagedTenant,
         },
-        { status: 201 }
+        { status: 500 }
       );
     }
 
@@ -227,8 +231,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    console.error('MSP tenants POST error:', error);
-
     // Check if it's a state signing error
     if (error instanceof Error && error.message.includes('MSP_STATE_SECRET')) {
       return NextResponse.json(
@@ -253,7 +255,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -283,8 +285,7 @@ export async function DELETE(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify the tenant belongs to this MSP organization
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: tenant } = await (supabase as any)
+    const { data: tenant } = await supabase
       .from('msp_managed_tenants')
       .select('id, msp_organization_id, tenant_id')
       .eq('id', tenantRecordId)
@@ -305,8 +306,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Get MSP org info to check if this is the primary tenant
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: mspOrg } = await (supabase as any)
+    const { data: mspOrg } = await supabase
       .from('msp_organizations')
       .select('primary_tenant_id')
       .eq('id', mspOrgId)
@@ -321,8 +321,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Soft delete the tenant record
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from('msp_managed_tenants')
       .update({
         is_active: false,
@@ -331,7 +330,6 @@ export async function DELETE(request: NextRequest) {
       .eq('id', tenantRecordId);
 
     if (updateError) {
-      console.error('Error removing tenant:', updateError);
       return NextResponse.json(
         { error: 'Failed to remove tenant' },
         { status: 500 }
@@ -340,7 +338,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('MSP tenants DELETE error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

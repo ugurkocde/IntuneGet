@@ -178,11 +178,11 @@ export default function MigrationDetailPage({ params }: PageProps) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 bg-white/5 rounded animate-pulse" />
+        <div className="h-8 w-48 bg-black/5 rounded animate-pulse" />
         <SkeletonGrid count={4} columns={4} variant="stat" />
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-20 bg-white/5 rounded-lg animate-pulse" />
+            <div key={i} className="h-20 bg-black/5 rounded-lg animate-pulse" />
           ))}
         </div>
       </div>
@@ -193,7 +193,7 @@ export default function MigrationDetailPage({ params }: PageProps) {
     return (
       <div className="text-center py-12">
         <AlertCircle className="w-12 h-12 text-status-error mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-white mb-2">Migration Not Found</h2>
+        <h2 className="text-xl font-semibold text-text-primary mb-2">Migration Not Found</h2>
         <Link href="/dashboard/sccm">
           <Button variant="outline">Back to Migrations</Button>
         </Link>
@@ -211,7 +211,7 @@ export default function MigrationDetailPage({ params }: PageProps) {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard/sccm">
-          <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white">
+          <Button variant="ghost" size="sm" className="text-text-secondary hover:text-text-primary">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -229,7 +229,7 @@ export default function MigrationDetailPage({ params }: PageProps) {
               onClick={() => fetchApps(true)}
               disabled={isRefreshing}
               variant="outline"
-              className="border-white/10 text-zinc-300"
+              className="border-black/10 text-text-secondary"
             >
               {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </Button>
@@ -284,13 +284,13 @@ export default function MigrationDetailPage({ params }: PageProps) {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
             type="text"
             placeholder="Search apps..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-zinc-500 focus:border-accent-cyan focus:outline-none"
+            className="w-full pl-10 pr-4 py-2 bg-black/5 border border-black/10 rounded-lg text-text-primary placeholder-text-muted focus:border-accent-cyan focus:outline-none"
           />
         </div>
         <div className="flex gap-2">
@@ -302,7 +302,7 @@ export default function MigrationDetailPage({ params }: PageProps) {
                 'px-3 py-2 rounded-lg text-sm font-medium transition-all',
                 matchStatusFilter === status
                   ? 'bg-gradient-to-r from-accent-cyan to-accent-violet text-white'
-                  : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
+                  : 'bg-black/5 text-text-secondary hover:text-text-primary hover:bg-black/10'
               )}
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -312,14 +312,14 @@ export default function MigrationDetailPage({ params }: PageProps) {
       </div>
 
       {/* App List Header */}
-      <div className="flex items-center gap-4 py-2 px-4 bg-white/5 rounded-lg">
+      <div className="flex items-center gap-4 py-2 px-4 bg-black/5 rounded-lg">
         <input
           type="checkbox"
           checked={selectedApps.size === apps.length && apps.length > 0}
           onChange={handleSelectAll}
-          className="rounded border-white/20"
+          className="rounded border-black/20"
         />
-        <span className="text-sm text-zinc-400">
+        <span className="text-sm text-text-secondary">
           {selectedApps.size > 0 ? `${selectedApps.size} selected` : 'Select all'}
         </span>
       </div>
@@ -338,8 +338,8 @@ export default function MigrationDetailPage({ params }: PageProps) {
 
       {apps.length === 0 && (
         <div className="text-center py-12">
-          <AlertCircle className="w-12 h-12 text-zinc-500 mx-auto mb-4" />
-          <p className="text-zinc-400">No apps found matching your criteria</p>
+          <AlertCircle className="w-12 h-12 text-text-muted mx-auto mb-4" />
+          <p className="text-text-secondary">No apps found matching your criteria</p>
         </div>
       )}
     </div>
@@ -358,9 +358,9 @@ function AppRow({
   const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     matched: { label: 'Matched', color: 'text-status-success', bg: 'bg-status-success/10' },
     partial: { label: 'Partial', color: 'text-status-warning', bg: 'bg-status-warning/10' },
-    unmatched: { label: 'Unmatched', color: 'text-zinc-400', bg: 'bg-zinc-500/10' },
+    unmatched: { label: 'Unmatched', color: 'text-text-secondary', bg: 'bg-zinc-500/10' },
     pending: { label: 'Pending', color: 'text-accent-violet', bg: 'bg-accent-violet/10' },
-    excluded: { label: 'Excluded', color: 'text-zinc-500', bg: 'bg-zinc-500/10' },
+    excluded: { label: 'Excluded', color: 'text-text-muted', bg: 'bg-zinc-500/10' },
     manual: { label: 'Manual', color: 'text-accent-cyan', bg: 'bg-accent-cyan/10' },
   };
 
@@ -369,20 +369,20 @@ function AppRow({
   return (
     <div
       className={cn(
-        'flex items-center gap-4 p-4 bg-white/2 border rounded-lg transition-all hover:bg-white/5',
-        isSelected ? 'border-accent-cyan/50 bg-accent-cyan/5' : 'border-white/5'
+        'flex items-center gap-4 p-4 bg-black/2 border rounded-lg transition-all hover:bg-black/5',
+        isSelected ? 'border-accent-cyan/50 bg-accent-cyan/5' : 'border-black/5'
       )}
     >
       <input
         type="checkbox"
         checked={isSelected}
         onChange={onSelect}
-        className="rounded border-white/20"
+        className="rounded border-black/20"
       />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3">
-          <h4 className="text-white font-medium truncate">{app.display_name}</h4>
+          <h4 className="text-text-primary font-medium truncate">{app.display_name}</h4>
           <span className={cn('px-2 py-0.5 rounded text-xs font-medium', config.bg, config.color)}>
             {config.label}
             {app.match_confidence && app.match_status === 'matched' && (
@@ -390,10 +390,10 @@ function AppRow({
             )}
           </span>
         </div>
-        <div className="flex items-center gap-4 mt-1 text-sm text-zinc-500">
+        <div className="flex items-center gap-4 mt-1 text-sm text-text-muted">
           {app.manufacturer && <span>{app.manufacturer}</span>}
           {app.version && <span>v{app.version}</span>}
-          {app.technology && <span className="text-xs px-2 py-0.5 bg-white/5 rounded">{app.technology}</span>}
+          {app.technology && <span className="text-xs px-2 py-0.5 bg-black/5 rounded">{app.technology}</span>}
           {app.is_deployed && (
             <span className="text-accent-cyan text-xs">
               {app.deployment_count} deployments
@@ -404,7 +404,7 @@ function AppRow({
 
       {app.matched_winget_id && (
         <div className="flex items-center gap-2 text-sm">
-          <Link2 className="w-4 h-4 text-zinc-500" />
+          <Link2 className="w-4 h-4 text-text-muted" />
           <span className="text-accent-cyan">{app.matched_winget_id}</span>
         </div>
       )}

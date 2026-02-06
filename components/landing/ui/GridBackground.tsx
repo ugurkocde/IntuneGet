@@ -16,9 +16,9 @@ export function GridBackground({
   children,
 }: GridBackgroundProps) {
   const patterns = {
-    dots: "bg-dots-cyan",
-    lines: "bg-grid-dark",
-    grid: "bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:64px_64px]",
+    dots: "bg-dots-light",
+    lines: "bg-grid-light",
+    grid: "bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] bg-[size:64px_64px]",
   };
 
   return (

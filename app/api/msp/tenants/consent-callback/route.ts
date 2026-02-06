@@ -40,8 +40,6 @@ export async function GET(request: NextRequest) {
 
   // Handle error from Microsoft
   if (error) {
-    console.error('Consent error:', error, errorDescription);
-
     logConsentStatus(
       '/api/msp/tenants/consent-callback',
       tenantId || 'unknown',
@@ -100,8 +98,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify the tenant record exists and belongs to the MSP org
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: tenantRecord, error: fetchError } = await (supabase as any)
+    const { data: tenantRecord, error: fetchError } = await supabase
       .from('msp_managed_tenants')
       .select('*')
       .eq('id', tenantRecordId)
@@ -109,8 +106,6 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (fetchError || !tenantRecord) {
-      console.error('Tenant record not found:', fetchError);
-
       const errorUrl = new URL('/dashboard/msp/tenants', baseUrl);
       errorUrl.searchParams.set('error', 'tenant_not_found');
       errorUrl.searchParams.set('message', 'Tenant record not found');
@@ -128,8 +123,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if this tenant ID is already managed by this MSP
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingTenant } = await (supabase as any)
+    const { data: existingTenant } = await supabase
       .from('msp_managed_tenants')
       .select('id, display_name')
       .eq('msp_organization_id', mspOrgId)
@@ -140,8 +134,7 @@ export async function GET(request: NextRequest) {
 
     if (existingTenant) {
       // This tenant is already managed - update the existing record and delete this one
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      await supabase
         .from('msp_managed_tenants')
         .delete()
         .eq('id', tenantRecordId);
@@ -164,8 +157,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Update the tenant record with consent info
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from('msp_managed_tenants')
       .update({
         tenant_id: tenantId,
@@ -177,8 +169,6 @@ export async function GET(request: NextRequest) {
       .eq('id', tenantRecordId);
 
     if (updateError) {
-      console.error('Error updating tenant record:', updateError);
-
       const errorUrl = new URL('/dashboard/msp/tenants', baseUrl);
       errorUrl.searchParams.set('error', 'update_failed');
       errorUrl.searchParams.set('message', 'Failed to update tenant record');
@@ -188,8 +178,7 @@ export async function GET(request: NextRequest) {
 
     // Also record this in tenant_consent for general tracking
     // This is a secondary record; errors here shouldn't fail the consent flow
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: consentTrackingError } = await (supabase as any)
+    const { error: consentTrackingError } = await supabase
       .from('tenant_consent')
       .upsert({
         tenant_id: tenantId,
@@ -203,12 +192,11 @@ export async function GET(request: NextRequest) {
 
     if (consentTrackingError) {
       // Log but don't fail - the main record is already updated
-      console.warn('Failed to update tenant_consent tracking:', consentTrackingError);
     }
 
     // Verify actual Intune permissions before confirming consent
     const clientId = process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-    const clientSecret = process.env.AZURE_CLIENT_SECRET;
+    const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
 
     let permissionVerified = false;
 
@@ -245,8 +233,6 @@ export async function GET(request: NextRequest) {
           permissionVerified = roles.includes('DeviceManagementApps.ReadWrite.All');
 
           if (!permissionVerified) {
-            console.warn(`MSP tenant ${tenantId} missing DeviceManagementApps.ReadWrite.All. Found roles: ${roles.join(', ')}`);
-
             // Log incomplete permissions
             logConsentStatus(
               '/api/msp/tenants/consent-callback',
@@ -257,8 +243,7 @@ export async function GET(request: NextRequest) {
             );
 
             // Update status to indicate incomplete consent
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
+            await supabase
               .from('msp_managed_tenants')
               .update({
                 consent_status: 'consent_incomplete',
@@ -277,8 +262,6 @@ export async function GET(request: NextRequest) {
           }
         } else {
           const errorText = await tokenResponse.text();
-          console.warn('Failed to get token for permission verification:', errorText);
-
           logPermissions({
             route: '/api/msp/tenants/consent-callback',
             action: 'token_acquisition_failed',
@@ -289,8 +272,6 @@ export async function GET(request: NextRequest) {
           });
         }
       } catch (verifyError) {
-        console.error('Permission verification failed:', verifyError);
-
         logPermissions({
           route: '/api/msp/tenants/consent-callback',
           action: 'permission_verification_error',
@@ -320,8 +301,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(successUrl);
   } catch (err) {
-    console.error('Consent callback error:', err);
-
     const errorUrl = new URL('/dashboard/msp/tenants', baseUrl);
     errorUrl.searchParams.set('error', 'internal_error');
     errorUrl.searchParams.set('message', 'An unexpected error occurred');

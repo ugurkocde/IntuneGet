@@ -61,15 +61,16 @@ interface InfinitePackagesResponse {
   count: number;
 }
 
-export function useInfinitePackages(pageSize: number = 20, category?: string | null) {
+export function useInfinitePackages(pageSize: number = 20, category?: string | null, sort?: string) {
   return useInfiniteQuery<InfinitePackagesResponse>({
-    queryKey: ['packages', 'infinite', pageSize, category],
+    queryKey: ['packages', 'infinite', pageSize, category, sort],
     queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams({
         limit: pageSize.toString(),
         offset: (pageParam as number).toString(),
       });
       if (category) params.append('category', category);
+      if (sort) params.append('sort', sort);
       const response = await fetch(`/api/winget/popular?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch packages');
@@ -106,15 +107,16 @@ export function usePackagesByCategory(category: string, limit: number = 10) {
   });
 }
 
-export function useSearchPackages(query: string, limit: number = 50, category?: string | null) {
+export function useSearchPackages(query: string, limit: number = 50, category?: string | null, sort?: string) {
   return useQuery<SearchPackagesResponse>({
-    queryKey: ['packages', 'search', query, limit, category],
+    queryKey: ['packages', 'search', query, limit, category, sort],
     queryFn: async () => {
       const params = new URLSearchParams({
         q: query,
         limit: limit.toString(),
       });
       if (category) params.append('category', category);
+      if (sort) params.append('sort', sort);
       const response = await fetch(`/api/winget/search?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Search failed');

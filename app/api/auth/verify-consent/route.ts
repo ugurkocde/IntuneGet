@@ -52,10 +52,9 @@ interface GraphVerificationResult {
  */
 async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificationResult> {
   const clientId = process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    console.error('AZURE_CLIENT_SECRET not configured for consent verification');
     // FAIL-CLOSED: Cannot verify without credentials
     return { verified: false, error: 'missing_credentials' };
   }
@@ -98,8 +97,6 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
         const hasIntuneWritePermission = tokenRoles.includes('DeviceManagementApps.ReadWrite.All');
 
         if (!hasIntuneWritePermission) {
-          console.error(`Token roles missing DeviceManagementApps.ReadWrite.All. Found roles: ${tokenRoles.join(', ')}`);
-
           const permissionStatus = {
             deviceManagementApps: false,
             userRead: true,
@@ -122,8 +119,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
             permissions: permissionStatus,
           };
         }
-      } catch (tokenDecodeError) {
-        console.error('Failed to decode token roles:', tokenDecodeError);
+      } catch {
         // Fall through to API test as backup
       }
 
@@ -148,7 +144,6 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
         );
 
         if (intuneTestResponse.status === 403) {
-          console.error(`Intune API access denied for tenant ${tenantId} - DeviceManagementApps.ReadWrite.All not granted`);
           permissions.deviceManagementApps = false;
         } else if (intuneTestResponse.status >= 500) {
           // Server error - leave as null (unknown)
@@ -266,7 +261,6 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
     if (errorCode === 'invalid_client' ||
         errorDescription.includes('AADSTS7000215') ||
         errorDescription.includes('AADSTS7000222')) {
-      console.error('Invalid client credentials:', errorData);
       return { verified: false, error: 'missing_credentials' };
     }
 
@@ -289,12 +283,10 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
     }
 
     // Other errors (network, temporary issues)
-    console.error('Consent verification error:', errorData);
     // FAIL-CLOSED: Return false with network_error on unknown errors
     return { verified: false, error: 'network_error' };
 
-  } catch (error) {
-    console.error('Error verifying consent:', error);
+  } catch {
     // FAIL-CLOSED: Network error
     return { verified: false, error: 'network_error' };
   }
@@ -315,8 +307,7 @@ async function storeConsentRecord(
   try {
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('tenant_consent').upsert({
+    await supabase.from('tenant_consent').upsert({
       tenant_id: tenantId,
       consented_by_user_id: userId,
       consented_by_email: userEmail,
@@ -326,8 +317,8 @@ async function storeConsentRecord(
     }, {
       onConflict: 'tenant_id',
     });
-  } catch (error) {
-    console.error('Error storing consent record:', error);
+  } catch {
+    // Failed to store consent record - continue silently
   }
 }
 
@@ -342,8 +333,7 @@ async function checkStoredConsent(tenantId: string): Promise<boolean> {
   try {
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('tenant_consent')
       .select('is_active')
       .eq('tenant_id', tenantId)
@@ -370,13 +360,12 @@ async function clearStoredConsent(tenantId: string): Promise<void> {
   try {
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from('tenant_consent')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('tenant_id', tenantId);
-  } catch (error) {
-    console.error('Error clearing consent record:', error);
+  } catch {
+    // Failed to clear consent record - continue silently
   }
 }
 
@@ -475,8 +464,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
       permissions: verifyResult.permissions,
     });
 
-  } catch (error) {
-    console.error('Verify consent error:', error);
+  } catch {
     return NextResponse.json(
       { verified: false, tenantId: '', message: 'Internal server error' },
       { status: 500 }

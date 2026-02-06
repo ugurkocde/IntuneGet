@@ -23,20 +23,16 @@ export async function GET(request: NextRequest) {
 
     // If manifest lookup fails, try to get package info and use its version
     if (!manifest) {
-      console.warn(`Direct manifest lookup failed for ${packageId}, trying package lookup`);
       const pkg = await getPackage(packageId);
       if (pkg && pkg.version) {
-        console.log(`Found package ${packageId} with version ${pkg.version}, retrying manifest fetch`);
         manifest = await getManifest(packageId, pkg.version);
       }
     }
 
     // If still no manifest, try fetching available versions directly from GitHub
     if (!manifest) {
-      console.warn(`Package lookup failed for ${packageId}, trying GitHub versions`);
       const versions = await fetchAvailableVersions(packageId);
       if (versions.length > 0) {
-        console.log(`Found ${versions.length} versions for ${packageId} from GitHub, trying latest: ${versions[0]}`);
         manifest = await getManifest(packageId, versions[0]);
       }
     }
@@ -79,10 +75,9 @@ export async function GET(request: NextRequest) {
       installers,
       recommendedInstaller: bestInstaller,
     });
-  } catch (error) {
-    console.error('Manifest fetch error:', error);
+  } catch (err) {
     return NextResponse.json(
-      { error: 'Failed to fetch manifest', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch manifest', details: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }
     );
   }

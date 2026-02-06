@@ -100,15 +100,14 @@ async function main() {
         // Create tools directory
         await fs.promises.mkdir(config.paths.tools, { recursive: true });
 
-        // Download tools using inline method
+        // Download tools using the JobProcessor's ensureToolsAvailable method
         const processor = new (await import('./job-processor.js')).JobProcessor(
           config,
-          null as unknown as JobPoller
+          null
         );
 
-        // Access private method via any (not ideal but works for setup)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (processor as any).ensureToolsAvailable();
+        // ensureToolsAvailable is a public method that can be called without a poller
+        await processor.ensureToolsAvailable();
 
         logger.info('Tools setup complete!');
         logger.info(`Tools location: ${config.paths.tools}`);

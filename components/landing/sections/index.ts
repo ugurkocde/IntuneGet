@@ -1,7 +1,12 @@
 export { HeroSection } from "./HeroSection";
 export { FeaturesSection } from "./FeaturesSection";
+export { AdvancedCapabilitiesSection } from "./AdvancedCapabilitiesSection";
 export { HowItWorksSection } from "./HowItWorksSection";
-export { StatsSection } from "./StatsSection";
 export { FAQSectionAnimated } from "./FAQSectionAnimated";
 export { CTASection } from "./CTASection";
 export { Footer } from "./Footer";
+export { TrustSection } from "./TrustSection";
+export { ProblemOutcomeSection } from "./ProblemOutcomeSection";
+export { ComparisonSection } from "./ComparisonSection";
+export { MissionSection } from "./MissionSection";
+export { QuickFactsSection } from "./QuickFactsSection";

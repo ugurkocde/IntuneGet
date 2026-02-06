@@ -9,6 +9,8 @@ interface TextRevealProps {
   staggerDelay?: number;
   once?: boolean;
   as?: "h1" | "h2" | "h3" | "p" | "span";
+  /** If true, animate on mount instead of on scroll into view */
+  animateOnMount?: boolean;
 }
 
 export function TextReveal({
@@ -18,6 +20,7 @@ export function TextReveal({
   staggerDelay = 0.03,
   once = true,
   as: Component = "span",
+  animateOnMount = false,
 }: TextRevealProps) {
   const shouldReduceMotion = useReducedMotion();
   const words = text.split(" ");
@@ -51,12 +54,14 @@ export function TextReveal({
 
   const MotionComponent = motion[Component];
 
+  const motionProps = animateOnMount
+    ? { initial: "hidden" as const, animate: "visible" as const }
+    : { initial: "hidden" as const, whileInView: "visible" as const, viewport: { once, amount: 0.5 } };
+
   return (
     <MotionComponent
       className={className}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, amount: 0.5 }}
+      {...motionProps}
       variants={containerVariants}
       aria-label={text}
     >

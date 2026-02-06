@@ -6,19 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import type { ManualAppMapping, CreateMappingRequest } from '@/types/unmanaged';
+import type { Database } from '@/types/database';
 
-// Database row type
-interface ManualMappingRow {
-  id: string;
-  discovered_app_name: string;
-  discovered_publisher: string | null;
-  winget_package_id: string;
-  created_by: string | null;
-  tenant_id: string | null;
-  is_verified: boolean;
-  created_at: string;
-  updated_at: string;
-}
+// Database row types from the Database schema
+type ManualMappingRow = Database['public']['Tables']['manual_app_mappings']['Row'];
 
 /**
  * GET - List all manual mappings for the tenant
@@ -58,15 +49,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get mappings for this tenant and global mappings
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: mappings, error } = await (supabase as any)
+    const { data: mappings, error } = await supabase
       .from('manual_app_mappings')
       .select('*')
       .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
-      .order('created_at', { ascending: false }) as { data: ManualMappingRow[] | null; error: Error | null };
+      .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching mappings:', error);
       return NextResponse.json(
         { error: 'Failed to fetch mappings' },
         { status: 500 }
@@ -86,8 +75,7 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ mappings: formattedMappings });
-  } catch (error) {
-    console.error('Mappings GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch mappings' },
       { status: 500 }
@@ -144,18 +132,16 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Check if mapping already exists
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase as any)
+    const { data: existing } = await supabase
       .from('manual_app_mappings')
       .select('id')
       .eq('discovered_app_name', body.discoveredAppName.toLowerCase().trim())
       .eq('tenant_id', tenantId)
-      .single() as { data: { id: string } | null };
+      .single();
 
     if (existing) {
       // Update existing mapping
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: updated, error } = await (supabase as any)
+      const { data: updated, error } = await supabase
         .from('manual_app_mappings')
         .update({
           winget_package_id: body.wingetPackageId,
@@ -164,10 +150,9 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', existing.id)
         .select()
-        .single() as { data: ManualMappingRow | null; error: Error | null };
+        .single();
 
       if (error || !updated) {
-        console.error('Error updating mapping:', error);
         return NextResponse.json(
           { error: 'Failed to update mapping' },
           { status: 500 }
@@ -181,8 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new mapping
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: created, error } = await (supabase as any)
+    const { data: created, error } = await supabase
       .from('manual_app_mappings')
       .insert({
         discovered_app_name: body.discoveredAppName.toLowerCase().trim(),
@@ -193,10 +177,9 @@ export async function POST(request: NextRequest) {
         is_verified: false,
       })
       .select()
-      .single() as { data: ManualMappingRow | null; error: Error | null };
+      .single();
 
     if (error || !created) {
-      console.error('Error creating mapping:', error);
       return NextResponse.json(
         { error: 'Failed to create mapping' },
         { status: 500 }
@@ -204,8 +187,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update the discovered apps cache to reflect the new mapping
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: cacheError } = await (supabase as any)
+    await supabase
       .from('discovered_apps_cache')
       .update({
         matched_package_id: body.wingetPackageId,
@@ -215,17 +197,11 @@ export async function POST(request: NextRequest) {
       .eq('tenant_id', tenantId)
       .ilike('display_name', body.discoveredAppName);
 
-    if (cacheError) {
-      console.error('Error updating discovered apps cache:', cacheError);
-    }
-
     return NextResponse.json({
       mapping: formatMapping(created),
       updated: false,
-      cacheWarning: cacheError ? 'Cache update failed - mapping saved but cache may be stale' : undefined,
     }, { status: 201 });
-  } catch (error) {
-    console.error('Mappings POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to create mapping' },
       { status: 500 }
@@ -281,12 +257,11 @@ export async function DELETE(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get the mapping first to verify ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: mapping, error: fetchError } = await (supabase as any)
+    const { data: mapping, error: fetchError } = await supabase
       .from('manual_app_mappings')
       .select('*')
       .eq('id', mappingId)
-      .single() as { data: ManualMappingRow | null; error: Error | null };
+      .single();
 
     if (fetchError || !mapping) {
       return NextResponse.json(
@@ -304,14 +279,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the mapping
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: deleteError } = await (supabase as any)
+    const { error: deleteError } = await supabase
       .from('manual_app_mappings')
       .delete()
       .eq('id', mappingId);
 
     if (deleteError) {
-      console.error('Error deleting mapping:', deleteError);
       return NextResponse.json(
         { error: 'Failed to delete mapping' },
         { status: 500 }
@@ -319,8 +292,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Update the discovered apps cache to remove the mapping
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: cacheError } = await (supabase as any)
+    await supabase
       .from('discovered_apps_cache')
       .update({
         matched_package_id: null,
@@ -330,16 +302,10 @@ export async function DELETE(request: NextRequest) {
       .eq('tenant_id', tenantId)
       .ilike('display_name', mapping.discovered_app_name);
 
-    if (cacheError) {
-      console.error('Error updating discovered apps cache after delete:', cacheError);
-    }
-
     return NextResponse.json({
       success: true,
-      cacheWarning: cacheError ? 'Cache update failed - mapping deleted but cache may be stale' : undefined,
     });
-  } catch (error) {
-    console.error('Mappings DELETE error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to delete mapping' },
       { status: 500 }

@@ -51,8 +51,7 @@ export async function GET(
     // Verify admin consent
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: consentData, error: consentError } = await (supabase as any)
+    const { data: consentData, error: consentError } = await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
@@ -119,8 +118,7 @@ export async function GET(
     };
 
     return NextResponse.json({ app });
-  } catch (error) {
-    console.error('Intune app details API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch app details' },
       { status: 500 }
@@ -136,7 +134,6 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
   const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    console.error('Azure AD credentials not configured');
     return null;
   }
 
@@ -163,8 +160,7 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
 
     const tokenData = await tokenResponse.json();
     return tokenData.access_token;
-  } catch (error) {
-    console.error('Failed to get service principal token:', error);
+  } catch {
     return null;
   }
 }

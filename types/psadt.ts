@@ -1,7 +1,12 @@
 /**
  * PSADT (PowerShell App Deploy Toolkit) Configuration Types
- * Simplified for Intune deployments with essential features
+ * Comprehensive support for PSADT v4 UI elements and Intune deployments
  */
+
+import type { DetectionRule } from './intune';
+
+// Re-export DetectionRule for convenience
+export type { DetectionRule };
 
 /**
  * Restart behavior after installation
@@ -21,6 +26,38 @@ export type DetectionType =
   | 'script';          // PowerShell script
 
 /**
+ * Window position options for PSADT dialogs
+ */
+export type DialogPosition =
+  | 'Default'
+  | 'Center'
+  | 'Top'
+  | 'Bottom'
+  | 'TopLeft'
+  | 'TopRight'
+  | 'BottomLeft'
+  | 'BottomRight';
+
+/**
+ * Icon options for PSADT prompts
+ */
+export type DialogIcon =
+  | 'None'
+  | 'Information'
+  | 'Warning'
+  | 'Error'
+  | 'Question';
+
+/**
+ * Balloon tip icon options
+ */
+export type BalloonIcon =
+  | 'Info'
+  | 'Warning'
+  | 'Error'
+  | 'None';
+
+/**
  * Processes that should be closed before installation
  */
 export interface ProcessToClose {
@@ -29,55 +66,54 @@ export interface ProcessToClose {
 }
 
 /**
- * File-based detection rule
+ * Custom prompt configuration (Show-ADTInstallationPrompt)
  */
-export interface FileDetection {
-  type: 'file';
-  path: string;                    // e.g., %ProgramFiles%\App\app.exe
-  detectionMethod: 'exists' | 'version' | 'size' | 'dateModified';
-  operator?: 'equal' | 'notEqual' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
-  value?: string;
-  check32BitOn64System: boolean;
+export interface CustomPrompt {
+  enabled: boolean;
+  timing: 'pre-install' | 'post-install' | 'pre-uninstall' | 'post-uninstall';
+  title: string;
+  message: string;
+  icon: DialogIcon;
+  buttonLeftText?: string;
+  buttonMiddleText?: string;
+  buttonRightText?: string;
+  timeout?: number;
+  persistPrompt?: boolean;
 }
 
 /**
- * Registry-based detection rule
+ * Progress dialog configuration (Show-ADTInstallationProgress)
  */
-export interface RegistryDetection {
-  type: 'registry';
-  keyPath: string;                 // e.g., HKLM\SOFTWARE\App
-  valueName?: string;              // Optional - if not set, checks key existence
-  detectionMethod: 'exists' | 'string' | 'integer' | 'version';
-  operator?: 'equal' | 'notEqual' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
-  value?: string;
-  check32BitOn64System: boolean;
+export interface ProgressConfig {
+  enabled: boolean;
+  statusMessage?: string;
+  windowLocation?: DialogPosition;
 }
 
 /**
- * MSI-based detection rule
+ * Restart prompt configuration (Show-ADTInstallationRestartPrompt)
  */
-export interface MsiDetection {
-  type: 'msi';
-  productCode: string;             // MSI Product Code GUID
-  productVersionOperator?: 'equal' | 'notEqual' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
-  productVersion?: string;
+export interface RestartPromptConfig {
+  enabled: boolean;
+  countdownSeconds: number;
+  countdownNoHideSeconds: number;
 }
 
 /**
- * Script-based detection rule
+ * Balloon tip configuration (Show-ADTBalloonTip)
  */
-export interface ScriptDetection {
-  type: 'script';
-  script: string;                  // PowerShell script content
-  enforceSignatureCheck: boolean;
-  runAs32Bit: boolean;
+export interface BalloonTipConfig {
+  enabled: boolean;
+  timing: 'start' | 'end';
+  title: string;
+  text: string;
+  icon: BalloonIcon;
+  displayTime: number;
 }
-
-export type DetectionRule = FileDetection | RegistryDetection | MsiDetection | ScriptDetection;
 
 /**
  * Complete PSADT configuration for a package
- * Simplified to essential settings that are actually implemented
+ * Comprehensive support for all PSADT v4 UI elements
  */
 export interface PSADTConfig {
   // Process management
@@ -87,12 +123,38 @@ export interface PSADTConfig {
   showClosePrompt: boolean;        // Enable interactive close dialog
   closeCountdown: number;          // Countdown duration in seconds (default 60)
 
+  // Extended welcome parameters
+  blockExecution: boolean;         // Block users from launching apps during install
+  promptToSave: boolean;           // Prompt users to save documents before closing apps
+  forceCloseProcessesCountdown?: number; // Force countdown regardless of deferral
+  persistPrompt: boolean;          // Make prompt reappear until answered
+  minimizeWindows: boolean;        // Minimize other windows when showing dialog
+  windowLocation: DialogPosition;  // Position of dialog on screen
+
   // Deferral handling
   allowDefer: boolean;
   deferTimes: number;              // How many times user can defer (default 3)
+  deferDeadline?: string;          // ISO date string deadline for deferrals
+  deferDays?: number;              // Number of days user can defer
+
+  // Disk space check
+  checkDiskSpace: boolean;         // Validate disk space before install
+  requiredDiskSpace?: number;      // Required disk space in MB
 
   // Restart handling
   restartBehavior: RestartBehavior;
+
+  // Progress dialog (Show-ADTInstallationProgress)
+  progressDialog: ProgressConfig;
+
+  // Custom prompts (Show-ADTInstallationPrompt)
+  customPrompts: CustomPrompt[];
+
+  // Restart prompt (Show-ADTInstallationRestartPrompt)
+  restartPrompt: RestartPromptConfig;
+
+  // Balloon tips (Show-ADTBalloonTip)
+  balloonTips: BalloonTipConfig[];
 
   // Detection
   detectionRules: DetectionRule[];
@@ -113,12 +175,46 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   showClosePrompt: false,
   closeCountdown: 60,
 
+  // Extended welcome parameters - disabled by default
+  blockExecution: false,
+  promptToSave: false,
+  forceCloseProcessesCountdown: undefined,
+  persistPrompt: false,
+  minimizeWindows: false,
+  windowLocation: 'Default',
+
   // Deferral handling - disabled by default
   allowDefer: false,
   deferTimes: 3,
+  deferDeadline: undefined,
+  deferDays: undefined,
+
+  // Disk space check - disabled by default
+  checkDiskSpace: false,
+  requiredDiskSpace: undefined,
 
   // Suppress restarts - let Intune handle restart scheduling
   restartBehavior: 'Suppress',
+
+  // Progress dialog - disabled by default for silent deployments
+  progressDialog: {
+    enabled: false,
+    statusMessage: undefined,
+    windowLocation: undefined,
+  },
+
+  // Custom prompts - empty by default
+  customPrompts: [],
+
+  // Restart prompt - disabled by default
+  restartPrompt: {
+    enabled: false,
+    countdownSeconds: 600,
+    countdownNoHideSeconds: 60,
+  },
+
+  // Balloon tips - empty by default
+  balloonTips: [],
 
   // Detection rules will be auto-generated
   detectionRules: [],

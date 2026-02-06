@@ -31,8 +31,7 @@ export async function GET() {
       totalApps,
       categories,
     });
-  } catch (error) {
-    console.error('Categories fetch error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch categories' },
       { status: 500 }

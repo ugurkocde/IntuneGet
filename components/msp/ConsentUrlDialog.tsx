@@ -52,21 +52,21 @@ export function ConsentUrlDialog({
       />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-lg mx-4 bg-bg-elevated border border-white/10 rounded-xl shadow-2xl">
+      <div className="relative w-full max-w-lg mx-4 bg-bg-elevated border border-black/10 rounded-xl shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <div className="flex items-center justify-between p-4 border-b border-black/10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-accent-cyan/20 flex items-center justify-center">
               <Link2 className="w-5 h-5 text-accent-cyan" />
             </div>
             <div>
-              <h3 className="font-medium text-white">Consent URL</h3>
-              <p className="text-sm text-zinc-500">{tenantName}</p>
+              <h3 className="font-medium text-text-primary">Consent URL</h3>
+              <p className="text-sm text-text-muted">{tenantName}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-black/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -74,18 +74,18 @@ export function ConsentUrlDialog({
 
         {/* Content */}
         <div className="p-4 space-y-4">
-          <p className="text-sm text-zinc-300">
+          <p className="text-sm text-text-secondary">
             Share this link with the customer&apos;s Microsoft 365 administrator.
             They need to grant consent for IntuneGet to manage applications in their tenant.
           </p>
 
-          <div className="p-3 bg-black/30 rounded-lg border border-white/10">
+          <div className="p-3 bg-black/5 rounded-lg border border-black/10">
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={consentUrl}
                 readOnly
-                className="flex-1 bg-transparent text-sm text-zinc-400 focus:outline-none truncate"
+                className="flex-1 bg-transparent text-sm text-text-secondary focus:outline-none truncate"
               />
               <Button
                 type="button"
@@ -104,8 +104,8 @@ export function ConsentUrlDialog({
           </div>
 
           <div className="p-4 rounded-lg bg-accent-cyan/10 border border-accent-cyan/20">
-            <h4 className="text-sm font-medium text-white mb-2">What happens next?</h4>
-            <ul className="text-sm text-zinc-400 space-y-1">
+            <h4 className="text-sm font-medium text-text-primary mb-2">What happens next?</h4>
+            <ul className="text-sm text-text-secondary space-y-1">
               <li>1. Send the consent URL to your customer&apos;s admin</li>
               <li>2. They click the link and sign in with their admin account</li>
               <li>3. They grant consent for IntuneGet permissions</li>
@@ -113,18 +113,18 @@ export function ConsentUrlDialog({
             </ul>
           </div>
 
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-text-muted">
             Note: The consent URL expires after 1 hour. You can generate a new one anytime from the tenant menu.
           </p>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3 justify-end p-4 border-t border-white/10">
+        <div className="flex items-center gap-3 justify-end p-4 border-t border-black/10">
           <Button
             type="button"
             variant="outline"
             onClick={handleOpenConsent}
-            className="border-white/20 text-white hover:bg-white/5"
+            className="border-black/20 text-text-primary hover:bg-black/5"
           >
             <ExternalLink className="w-4 h-4 mr-2" />
             Open consent page

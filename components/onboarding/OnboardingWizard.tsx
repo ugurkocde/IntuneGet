@@ -10,6 +10,9 @@ import {
   setOnboardingStep,
 } from '@/lib/onboarding-utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
+import { GridBackground } from '@/components/landing/ui/GridBackground';
+import { GradientOrb } from '@/components/landing/ui/GradientOrb';
+import { FadeIn } from '@/components/landing/animations/FadeIn';
 
 interface OnboardingWizardProps {
   userName: string | null | undefined;
@@ -108,19 +111,34 @@ export function OnboardingWizard({
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-bg-deepest flex flex-col relative overflow-hidden">
+      {/* Background decorations */}
+      <GridBackground className="absolute inset-0" variant="dots" opacity={0.4} />
+      <GradientOrb
+        color="cyan"
+        size="xl"
+        className="-top-32 -left-32"
+        intensity="low"
+      />
+      <GradientOrb
+        color="violet"
+        size="lg"
+        className="-bottom-24 -right-24"
+        intensity="low"
+      />
+
       {/* Progress indicator */}
-      <div className="flex justify-center py-6 sm:py-8">
+      <div className="relative flex justify-center py-6 sm:py-8">
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div
                 className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-colors ${
                   step === currentStep
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-accent-cyan text-white'
                     : step < currentStep
-                      ? 'bg-green-600 text-white'
-                      : 'bg-slate-800 text-slate-500'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-stone-200 text-stone-500'
                 }`}
               >
                 {step < currentStep ? (
@@ -144,7 +162,7 @@ export function OnboardingWizard({
               {step < 3 && (
                 <div
                   className={`w-8 sm:w-12 h-0.5 ${
-                    step < currentStep ? 'bg-green-600' : 'bg-slate-800'
+                    step < currentStep ? 'bg-emerald-500' : 'bg-stone-200'
                   }`}
                 />
               )}
@@ -154,29 +172,37 @@ export function OnboardingWizard({
       </div>
 
       {/* Step labels */}
-      <div className="flex justify-center mb-6 sm:mb-8">
-        <div className="flex items-center gap-4 sm:gap-8 md:gap-12 text-xs text-slate-500">
-          <span className={currentStep === 1 ? 'text-blue-400' : ''}>
+      <div className="relative flex justify-center mb-6 sm:mb-8">
+        <div className="flex items-center gap-4 sm:gap-8 md:gap-12 text-xs text-stone-500">
+          <span className={currentStep === 1 ? 'text-accent-cyan font-medium' : ''}>
             Welcome
           </span>
-          <span className={currentStep === 2 ? 'text-blue-400' : ''}>
+          <span className={currentStep === 2 ? 'text-accent-cyan font-medium' : ''}>
             Setup
           </span>
-          <span className={currentStep === 3 ? 'text-blue-400' : ''}>
+          <span className={currentStep === 3 ? 'text-accent-cyan font-medium' : ''}>
             Complete
           </span>
         </div>
       </div>
 
       {/* Step content */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-16">
+      <div className="relative flex-1 flex items-center justify-center px-4 pb-16">
         {currentStep === 1 && (
-          <WelcomeStep userName={userName} onNext={handleNext} />
+          <FadeIn key="step-1" animateOnMount direction="up">
+            <WelcomeStep userName={userName} onNext={handleNext} />
+          </FadeIn>
         )}
         {currentStep === 2 && (
-          <ConsentStep onNext={handleNext} onBack={handleBack} />
+          <FadeIn key="step-2" animateOnMount direction="up">
+            <ConsentStep onNext={handleNext} onBack={handleBack} />
+          </FadeIn>
         )}
-        {currentStep === 3 && <SuccessStep userName={userName} />}
+        {currentStep === 3 && (
+          <FadeIn key="step-3" animateOnMount direction="up">
+            <SuccessStep userName={userName} />
+          </FadeIn>
+        )}
       </div>
     </div>
   );

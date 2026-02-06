@@ -1,125 +1,208 @@
 "use client";
 
 import Link from "next/link";
-import { Package, Github, Twitter, Linkedin } from "lucide-react";
+import Image from "next/image";
+import { Github, Linkedin, ExternalLink, Apple } from "lucide-react";
 import { FadeIn } from "../animations/FadeIn";
+
+const footerLinks = {
+  product: [
+    { label: "Features", href: "/#features" },
+    { label: "How It Works", href: "/#how-it-works" },
+    { label: "Documentation", href: "/docs" },
+  ],
+  company: [
+    { label: "About", href: "/about" },
+    { label: "Changelog", href: "/changelog" },
+    { label: "Contact", href: "mailto:hello@ugurlabs.com" },
+  ],
+  legal: [
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
+  ],
+  ecosystem: [
+    { label: "IntuneBrew", description: "macOS App Deployment", href: "https://intunebrew.com", external: true },
+    { label: "TenuVault", description: "Intune Backup & Restore", href: "https://www.tenuvault.com/", external: true },
+  ],
+};
+
+const socialLinks = [
+  { icon: Linkedin, href: "https://www.linkedin.com/in/ugurkocde/", label: "LinkedIn" },
+  { icon: Github, href: "https://github.com/ugurkocde/IntuneGet", label: "GitHub" },
+];
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="relative w-full py-12 md:py-16 border-t border-white/5">
-      {/* Top glow line */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-cyan/20 to-transparent" />
-
-      <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
+    <footer className="relative w-full bg-white border-t border-stone-200/60">
+      {/* Main footer content */}
+      <div className="container relative px-4 md:px-6 mx-auto max-w-7xl py-12 md:py-16">
         <FadeIn>
-          <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
-            {/* Logo and info */}
-            <div className="flex flex-col items-center md:items-start gap-4">
-              <Link
-                href="#"
-                className="flex items-center gap-2 group"
-              >
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 md:gap-10">
+            {/* Brand column */}
+            <div className="col-span-2">
+              <Link href="/" className="flex items-center gap-2 group mb-4">
                 <div className="relative">
-                  <Package className="h-6 w-6 text-accent-cyan transition-transform duration-300 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-accent-cyan/30 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <Image
+                    src="/favicon.svg"
+                    alt="IntuneGet Logo"
+                    width={28}
+                    height={28}
+                    className="h-7 w-7"
+                  />
                 </div>
-                <span className="text-xl font-semibold text-white">
-                  IntuneGet
-                </span>
+                <span className="text-xl font-semibold text-stone-900">IntuneGet</span>
               </Link>
-              <p className="text-sm text-zinc-500 text-center md:text-left">
-                {currentYear} | Made with care by Ugur Koc
-                <br />
-                Part of{" "}
+              <p className="text-sm text-stone-500 mb-6 max-w-xs">
+                Deploy any app from Winget to Intune in minutes. Free, open source, and trusted by IT teams worldwide.
+              </p>
+
+              {/* Social links */}
+              <div className="flex items-center gap-3">
+                {socialLinks.map((social) => (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-stone-50 text-stone-500 hover:bg-stone-100 hover:text-stone-900 transition-colors"
+                    aria-label={social.label}
+                  >
+                    <social.icon className="w-4 h-4" />
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Product links */}
+            <div>
+              <h4 className="text-sm font-semibold text-stone-900 mb-4">Product</h4>
+              <ul className="space-y-3">
+                {footerLinks.product.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Company links */}
+            <div>
+              <h4 className="text-sm font-semibold text-stone-900 mb-4">Company</h4>
+              <ul className="space-y-3">
+                {footerLinks.company.map((link) => (
+                  <li key={link.label}>
+                    {link.href.startsWith("mailto:") ? (
+                      <a
+                        href={link.href}
+                        className="text-sm text-stone-500 hover:text-stone-900 transition-colors inline-flex items-center gap-1"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="text-sm text-stone-500 hover:text-stone-900 transition-colors inline-flex items-center gap-1"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Legal links */}
+            <div>
+              <h4 className="text-sm font-semibold text-stone-900 mb-4">Legal</h4>
+              <ul className="space-y-3">
+                {footerLinks.legal.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Ecosystem links */}
+            <div>
+              <h4 className="text-sm font-semibold text-stone-900 mb-4">Ecosystem</h4>
+              <ul className="space-y-3">
+                {footerLinks.ecosystem.map((link) => (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      target={link.external ? "_blank" : undefined}
+                      rel={link.external ? "noopener noreferrer" : undefined}
+                      className="group"
+                    >
+                      <span className="text-sm text-stone-500 hover:text-accent-cyan transition-colors inline-flex items-center gap-1.5">
+                        <Apple className="w-4 h-4" />
+                        {link.label}
+                        {link.external && <ExternalLink className="w-3 h-3" />}
+                      </span>
+                      <span className="block text-xs text-stone-400 mt-0.5 ml-5.5">
+                        {link.description}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </FadeIn>
+      </div>
+
+      {/* Bottom bar */}
+      <div className="border-t border-stone-200/60">
+        <div className="container relative px-4 md:px-6 mx-auto max-w-7xl py-6">
+          <FadeIn delay={0.1}>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-stone-500">
+              <p>
+                {currentYear}{" "}
                 <a
                   href="https://ugurlabs.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-accent-cyan hover:text-accent-cyan/80 transition-colors"
+                  className="text-accent-cyan hover:text-accent-cyan-dim transition-colors"
                 >
-                  UgurLabs.com
+                  UgurLabs
+                </a>
+                . Made with care by{" "}
+                <a
+                  href="https://www.linkedin.com/in/ugurkocde/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-cyan hover:text-accent-cyan-dim transition-colors"
+                >
+                  Ugur Koc
+                </a>
+              </p>
+              <p className="text-center md:text-right">
+                Open source. Star us on{" "}
+                <a
+                  href="https://github.com/ugurkocde/IntuneGet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-cyan hover:text-accent-cyan-dim transition-colors"
+                >
+                  GitHub
                 </a>
               </p>
             </div>
-
-            {/* Navigation */}
-            <nav className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-4 sm:gap-6">
-              <Link
-                href="#features"
-                className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"
-              >
-                Features
-              </Link>
-              <Link
-                href="#how-it-works"
-                className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"
-              >
-                How It Works
-              </Link>
-              <Link
-                href="/privacy"
-                className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"
-              >
-                Privacy
-              </Link>
-              <Link
-                href="/terms"
-                className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200"
-              >
-                Terms
-              </Link>
-              <Link
-                href="https://github.com/ugurkocde/IntuneGet"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-zinc-400 hover:text-accent-cyan transition-colors duration-200 flex items-center gap-1"
-              >
-                <Github className="h-4 w-4" />
-                GitHub
-              </Link>
-            </nav>
-          </div>
-        </FadeIn>
-
-        {/* Bottom section */}
-        <FadeIn delay={0.1}>
-          <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-zinc-600">
-            <p>
-              Simplifying Intune app deployment for IT professionals worldwide.
-            </p>
-            <div className="flex items-center gap-4">
-              <Link
-                href="https://twitter.com/yourhandle"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-500 hover:text-accent-cyan transition-colors"
-                aria-label="Twitter"
-              >
-                <Twitter className="h-5 w-5" />
-              </Link>
-              <Link
-                href="https://linkedin.com/in/yourhandle"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-500 hover:text-accent-cyan transition-colors"
-                aria-label="LinkedIn"
-              >
-                <Linkedin className="h-5 w-5" />
-              </Link>
-              <Link
-                href="https://github.com/ugurkocde/IntuneGet"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-500 hover:text-accent-cyan transition-colors"
-                aria-label="GitHub"
-              >
-                <Github className="h-5 w-5" />
-              </Link>
-            </div>
-          </div>
-        </FadeIn>
+          </FadeIn>
+        </div>
       </div>
     </footer>
   );

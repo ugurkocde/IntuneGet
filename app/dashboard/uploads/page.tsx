@@ -203,7 +203,7 @@ export default function UploadsPage() {
         <SkeletonGrid count={4} columns={4} variant="stat" />
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="glass-dark rounded-xl p-5 border border-white/5 animate-pulse h-32" />
+            <div key={i} className="glass-light rounded-xl p-5 border border-black/5 animate-pulse h-32" />
           ))}
         </div>
       </div>
@@ -223,7 +223,7 @@ export default function UploadsPage() {
             onClick={handleRefresh}
             disabled={isRefreshing}
             variant="outline"
-            className="border-white/10 text-zinc-300 hover:bg-white/5 hover:border-white/20"
+            className="border-black/10 text-text-secondary hover:bg-black/5 hover:border-black/20"
           >
             {isRefreshing ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -299,8 +299,8 @@ export default function UploadsPage() {
             className={cn(
               'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
               filter === f
-                ? 'bg-gradient-to-r from-accent-cyan to-accent-violet text-white'
-                : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5'
+                ? 'bg-gradient-to-r from-accent-cyan to-accent-violet text-bg-elevated'
+                : 'bg-black/5 text-text-secondary hover:text-text-primary hover:bg-black/10 border border-black/5'
             )}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -381,8 +381,8 @@ function UploadJobCard({
     queued: {
       icon: Clock,
       label: 'Queued',
-      color: 'text-zinc-400',
-      bg: 'bg-zinc-500/10',
+      color: 'text-text-secondary',
+      bg: 'bg-black/5',
     },
     packaging: {
       icon: Package,
@@ -452,10 +452,10 @@ function UploadJobCard({
       layout
       variants={itemVariants}
       className={cn(
-        'glass-dark border rounded-xl p-5 transition-all contain-layout',
+        'glass-light border rounded-xl p-5 transition-all contain-layout',
         isHighlighted
           ? 'border-accent-cyan/50 ring-1 ring-accent-cyan/20 shadow-glow-cyan'
-          : 'border-white/5 hover:border-white/10'
+          : 'border-black/5 hover:border-black/10'
       )}
     >
       <div className="flex items-start gap-4">
@@ -473,8 +473,8 @@ function UploadJobCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-white font-medium">{job.display_name}</h3>
-              <p className="text-zinc-500 text-sm">
+              <h3 className="text-text-primary font-medium">{job.display_name}</h3>
+              <p className="text-text-muted text-sm">
                 {job.publisher} &middot; v{job.version} &middot; {job.architecture}
               </p>
               {/* Assignments */}
@@ -498,7 +498,7 @@ function UploadJobCard({
                       {assignment.type === 'allUsers' && 'All Users'}
                       {assignment.type === 'allDevices' && 'All Devices'}
                       {assignment.type === 'group' && (assignment.groupName || 'Group')}
-                      <span className="text-zinc-500">({assignment.intent})</span>
+                      <span className="text-text-muted">({assignment.intent})</span>
                     </span>
                   ))}
                 </div>
@@ -513,7 +513,7 @@ function UploadJobCard({
                       variant="outline"
                       className={cn(
                         isDismissable
-                          ? "border-zinc-500/30 text-zinc-400 hover:bg-zinc-500/10 hover:border-zinc-500/50"
+                          ? "border-black/10 text-text-secondary hover:bg-black/10 hover:border-black/20"
                           : "border-status-error/30 text-status-error hover:bg-status-error/10 hover:border-status-error/50"
                       )}
                       disabled={isCancelling}
@@ -622,8 +622,6 @@ function UploadJobCard({
                   size="sm"
                   className="bg-status-success hover:bg-status-success/90 text-white"
                   onClick={() => {
-                    // TODO: Trigger Intune upload
-                    console.log('Upload to Intune:', job.id);
                   }}
                 >
                   <Play className="w-3 h-3 mr-1" />
@@ -656,7 +654,7 @@ function UploadJobCard({
                 href={job.pipeline_run_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-400 text-xs transition-colors"
+                className="inline-flex items-center gap-2 text-text-muted hover:text-text-secondary text-xs transition-colors"
               >
                 <ExternalLink className="w-3 h-3" />
                 View Pipeline Run
@@ -665,7 +663,7 @@ function UploadJobCard({
           )}
 
           {/* Timestamps */}
-          <div className="mt-4 flex items-center gap-4 text-xs text-zinc-500">
+          <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
             <span>Created: {new Date(job.created_at).toLocaleString()}</span>
             {job.completed_at && (
               <span>Completed: {new Date(job.completed_at).toLocaleString()}</span>

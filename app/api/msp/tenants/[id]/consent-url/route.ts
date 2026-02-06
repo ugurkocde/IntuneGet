@@ -10,18 +10,27 @@ import { parseAccessToken, signConsentState, getBaseUrl } from '@/lib/auth-utils
 import type { MspManagedTenant, ConsentStatus } from '@/types/msp';
 
 /**
+ * Type for the membership query result with joined organization
+ */
+interface MspUserMembershipWithOrg {
+  msp_organization_id: string;
+  msp_organizations: {
+    is_active: boolean;
+  };
+}
+
+/**
  * Get the user's MSP organization ID (only for active organizations)
  */
 async function getUserMspOrgId(userId: string): Promise<string | null> {
   const supabase = createServerClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: membership } = await (supabase as any)
+  const { data: membership } = await supabase
     .from('msp_user_memberships')
     .select('msp_organization_id, msp_organizations!inner(is_active)')
     .eq('user_id', userId)
     .eq('msp_organizations.is_active', true)
-    .single();
+    .single<MspUserMembershipWithOrg>();
 
   return membership?.msp_organization_id || null;
 }
@@ -38,7 +47,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -66,8 +75,7 @@ export async function POST(
     const supabase = createServerClient();
 
     // Verify the tenant exists and belongs to this MSP organization
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: tenant, error: tenantError } = await (supabase as any)
+    const { data: tenant, error: tenantError } = await supabase
       .from('msp_managed_tenants')
       .select('*')
       .eq('id', tenantRecordId)
@@ -81,7 +89,7 @@ export async function POST(
       );
     }
 
-    const typedTenant = tenant as MspManagedTenant;
+    const typedTenant: MspManagedTenant = tenant;
 
     if (typedTenant.msp_organization_id !== mspOrgId) {
       return NextResponse.json(
@@ -113,8 +121,6 @@ export async function POST(
       tenant: typedTenant,
     });
   } catch (error) {
-    console.error('MSP tenant consent URL error:', error);
-
     // Check if it's a state signing error
     if (error instanceof Error && error.message.includes('MSP_STATE_SECRET')) {
       return NextResponse.json(

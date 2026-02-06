@@ -1,9 +1,75 @@
 'use client';
 
-import { ReactNode, forwardRef } from 'react';
+import { ReactNode, forwardRef, HTMLAttributes } from 'react';
 import { motion, HTMLMotionProps, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { cardHover, cardHoverSubtle, cardHoverGlow, fadeUp } from '@/lib/animations';
+
+/**
+ * Extract standard HTML div attributes from motion props.
+ * This filters out framer-motion specific properties that aren't valid on a regular div.
+ */
+function extractDivProps(
+  props: Omit<HTMLMotionProps<'div'>, 'children'>
+): HTMLAttributes<HTMLDivElement> {
+  const {
+    // Filter out motion-specific props
+    initial,
+    animate,
+    exit,
+    variants,
+    transition,
+    whileHover,
+    whileTap,
+    whileFocus,
+    whileDrag,
+    whileInView,
+    viewport,
+    layout,
+    layoutId,
+    layoutDependency,
+    layoutScroll,
+    layoutRoot,
+    onLayoutAnimationStart,
+    onLayoutAnimationComplete,
+    onAnimationStart,
+    onAnimationComplete,
+    onUpdate,
+    onDragStart,
+    onDrag,
+    onDragEnd,
+    onDirectionLock,
+    onDragTransitionEnd,
+    onViewportEnter,
+    onViewportLeave,
+    drag,
+    dragConstraints,
+    dragSnapToOrigin,
+    dragElastic,
+    dragMomentum,
+    dragTransition,
+    dragPropagation,
+    dragControls,
+    dragListener,
+    dragDirectionLock,
+    onPan,
+    onPanStart,
+    onPanEnd,
+    onPanSessionStart,
+    onTap,
+    onTapStart,
+    onTapCancel,
+    onHoverStart,
+    onHoverEnd,
+    onFocusCapture,
+    transformTemplate,
+    custom,
+    inherit,
+    ...divProps
+  } = props;
+
+  return divProps as HTMLAttributes<HTMLDivElement>;
+}
 
 type CardVariant = 'default' | 'subtle' | 'glow';
 
@@ -72,7 +138,7 @@ export const MotionCard = forwardRef<HTMLDivElement, MotionCardProps>(
     const baseClasses = cn(
       'rounded-xl p-6 transition-colors contain-layout',
       glass && 'backdrop-blur-md',
-      border && 'border border-white/5',
+      border && 'border border-black/5',
       bgOpacityClasses[bgOpacity],
       !prefersReducedMotion && glowColorClasses[glowColor],
       className
@@ -160,14 +226,14 @@ export const MotionContainer = forwardRef<HTMLDivElement, MotionContainerProps>(
     const baseClasses = cn(
       'rounded-xl p-6 transition-colors',
       glass && 'backdrop-blur-md',
-      border && 'border border-white/5',
+      border && 'border border-black/5',
       bgOpacityClasses[bgOpacity],
       className
     );
 
     if (!animate || prefersReducedMotion) {
       return (
-        <div ref={ref} className={baseClasses} {...(props as any)}>
+        <div ref={ref} className={baseClasses} {...extractDivProps(props)}>
           {children}
         </div>
       );

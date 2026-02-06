@@ -130,11 +130,34 @@ jobs:
               process.exit(1);
             }
 
+            // Batch-fetch known installer URLs from version_history
+            const wingetIds = apps.map(a => a.winget_id);
+            const installerUrlMap = {};
+            if (wingetIds.length > 0) {
+              const { data: vhRows } = await supabase
+                .from('version_history')
+                .select('winget_id, installer_url')
+                .in('winget_id', wingetIds)
+                .not('installer_url', 'is', null)
+                .order('detected_at', { ascending: false });
+
+              if (vhRows) {
+                for (const row of vhRows) {
+                  if (!installerUrlMap[row.winget_id]) {
+                    installerUrlMap[row.winget_id] = row.installer_url;
+                  }
+                }
+              }
+              console.log(`Found ${Object.keys(installerUrlMap).length} cached installer URLs from version_history`);
+            }
+
             // Additional local filtering for apps that don't have icon files
             const appsToProcess = [];
             for (const app of apps) {
               const iconPath = `public/icons/${app.winget_id}/icon-64.png`;
               if (forceRefresh || !fs.existsSync(iconPath)) {
+                // Attach cached installer URL if available
+                app.cached_installer_url = installerUrlMap[app.winget_id] || null;
                 appsToProcess.push(app);
               }
               if (appsToProcess.length >= maxApps) break;
@@ -183,37 +206,38 @@ jobs:
               $iconDir = "public/icons/$wingetId"
               New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
 
-              # Get installer URL from version_history or download directly
+              # Get installer URL using three-tier fallback
               $installerUrl = $null
               $installerPath = $null
 
-              # Try to get installer info from Winget manifest
               $parts = $wingetId.Split('.')
               $publisher = $parts[0]
-              # Join remaining parts with '/' for folder path structure
-              $namePath = ($parts[1..($parts.Length-1)] | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
               $firstLetter = $publisher.Substring(0,1).ToLower()
+
+              # Raw URLs: NO encoding (matches sync-manifests.yml pattern)
+              $namePath = $parts[1..($parts.Length-1)] -join '/'
+              $rawBaseUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/$firstLetter/$publisher/$namePath"
+
+              # API URLs: YES encoding (only used for version listing fallback)
+              $encodedParts = $parts[1..($parts.Length-1)] | ForEach-Object { [uri]::EscapeDataString($_) }
+              $encodedNamePath = $encodedParts -join '/'
               $encodedPublisher = [uri]::EscapeDataString($publisher)
+              $apiBaseUrl = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$firstLetter/$encodedPublisher/$encodedNamePath"
 
-              # Fetch manifest to get installer URL
-              $manifestUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/$firstLetter/$encodedPublisher/$namePath"
+              # --- Tier 1: Use cached installer URL from version_history ---
+              if ($app.cached_installer_url) {
+                Write-Host "Tier 1: Using cached installer URL from version_history"
+                $installerUrl = $app.cached_installer_url
+              }
 
-              # Get latest version
-              try {
-                $versionsUrl = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$firstLetter/$encodedPublisher/$namePath"
-                $versions = Invoke-RestMethod -Uri $versionsUrl -Headers @{ 'User-Agent' = 'IntuneGet' }
-                # Filter to only version-like directories (must start with a digit)
-                $versionDirs = $versions | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' }
-                $latestVersion = ($versionDirs | Sort-Object { [version]($_.name -replace '[^\d.]', '.') } -Descending -ErrorAction SilentlyContinue | Select-Object -First 1).name
-                if (-not $latestVersion) {
-                  $latestVersion = ($versionDirs | Sort-Object name -Descending | Select-Object -First 1).name
-                }
+              # --- Tier 2: Use latest_version from curated_apps + raw URL (no API call) ---
+              if (-not $installerUrl -and $app.latest_version) {
+                try {
+                  $latestVersion = $app.latest_version
+                  Write-Host "Tier 2: Using latest_version '$latestVersion' with raw URL"
+                  $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
+                  $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
 
-                if ($latestVersion) {
-                  $installerYamlUrl = "$manifestUrl/$latestVersion/$wingetId.installer.yaml"
-                  $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing
-
-                  # Parse YAML to get installer URL
                   $lines = $yamlContent.Content -split "`n"
                   foreach ($line in $lines) {
                     if ($line -match 'InstallerUrl:\s*(.+)') {
@@ -221,9 +245,37 @@ jobs:
                       break
                     }
                   }
+                } catch {
+                  Write-Host "Tier 2 failed for $wingetId : $($_.Exception.Message)"
                 }
-              } catch {
-                Write-Warning "Could not fetch manifest for $wingetId : $_"
+              }
+
+              # --- Tier 3: Fall back to GitHub API version listing ---
+              if (-not $installerUrl) {
+                try {
+                  Write-Host "Tier 3: Listing versions via GitHub API"
+                  $versions = Invoke-RestMethod -Uri $apiBaseUrl -Headers @{ 'User-Agent' = 'IntuneGet' } -ErrorAction Stop -TimeoutSec 30
+                  $versionDirs = $versions | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' }
+                  $latestVersion = ($versionDirs | Sort-Object { [version]($_.name -replace '[^\d.]', '.') } -Descending -ErrorAction SilentlyContinue | Select-Object -First 1).name
+                  if (-not $latestVersion) {
+                    $latestVersion = ($versionDirs | Sort-Object name -Descending | Select-Object -First 1).name
+                  }
+
+                  if ($latestVersion) {
+                    $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
+                    $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
+
+                    $lines = $yamlContent.Content -split "`n"
+                    foreach ($line in $lines) {
+                      if ($line -match 'InstallerUrl:\s*(.+)') {
+                        $installerUrl = $matches[1].Trim()
+                        break
+                      }
+                    }
+                  }
+                } catch {
+                  Write-Warning "Tier 3 failed for $wingetId : $_"
+                }
               }
 
               if (-not $installerUrl) {
@@ -233,18 +285,47 @@ jobs:
               }
 
               # Download installer
-              $extension = if ($installerUrl -match '\.msi$') { '.msi' }
-                          elseif ($installerUrl -match '\.msix$') { '.msix' }
+              $extension = if ($installerUrl -match '\.msi(\?|$)') { '.msi' }
+                          elseif ($installerUrl -match '\.msixbundle(\?|$)') { '.msixbundle' }
+                          elseif ($installerUrl -match '\.msix(\?|$)') { '.msix' }
+                          elseif ($installerUrl -match '\.appx(\?|$)') { '.appx' }
                           else { '.exe' }
 
               $installerPath = "$env:TEMP\installer_$([System.IO.Path]::GetRandomFileName())$extension"
 
               Write-Host "Downloading installer from $installerUrl"
-              Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing -MaximumRedirection 5
+              try {
+                Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 90
+              } catch {
+                Write-Warning "Download failed or timed out for ${wingetId}: $_"
+                $failed++
+                $results += @{
+                  winget_id = $wingetId
+                  status = 'failed'
+                  error = "Download timeout or error"
+                }
+                continue
+              }
 
               if (-not (Test-Path $installerPath)) {
                 Write-Warning "Failed to download installer for $wingetId"
                 $failed++
+                continue
+              }
+
+              # Skip excessively large installers (>500MB) - not worth processing for icon extraction
+              $fileSize = (Get-Item $installerPath).Length
+              $fileSizeMB = [math]::Round($fileSize / 1MB, 1)
+              Write-Host "Downloaded $fileSizeMB MB"
+              if ($fileSize -gt 500MB) {
+                Write-Warning "Installer too large ($fileSizeMB MB) for $wingetId, skipping"
+                Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+                $failed++
+                $results += @{
+                  winget_id = $wingetId
+                  status = 'failed'
+                  error = "Installer too large: ${fileSizeMB}MB"
+                }
                 continue
               }
 
@@ -319,10 +400,24 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          # Fetch latest and checkout main branch (we may be in detached HEAD from workflow_run trigger)
+          # Stash extracted icons before switching branches
+          # (workflow_run trigger causes detached HEAD, so checkout would fail with uncommitted changes)
+          STASH_CREATED=false
+          git add public/icons/ || true
+          if ! git diff --staged --quiet 2>/dev/null; then
+            git stash --include-untracked
+            STASH_CREATED=true
+          fi
+
+          # Fetch latest and checkout main branch
           git fetch origin main
           git checkout main || git checkout -b main origin/main
           git pull origin main
+
+          # Restore the extracted icons onto main (only if we actually stashed)
+          if [ "$STASH_CREATED" = true ]; then
+            git stash pop || true
+          fi
 
           # Stage the new icons
           git add public/icons/ || true

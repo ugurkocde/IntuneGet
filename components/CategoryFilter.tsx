@@ -72,8 +72,8 @@ export function CategoryFilter({
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 py-2">
-        <Loader2 className="w-4 h-4 text-zinc-500 animate-spin" />
-        <span className="text-zinc-500 text-sm">Loading categories...</span>
+        <Loader2 className="w-4 h-4 text-text-muted animate-spin" />
+        <span className="text-text-muted text-sm">Loading categories...</span>
       </div>
     );
   }
@@ -89,9 +89,9 @@ export function CategoryFilter({
         {canScrollLeft && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border border-white/10 rounded-full shadow-lg hover:bg-bg-elevated transition-colors"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border border-black/10 rounded-full shadow-lg hover:bg-bg-elevated transition-colors"
           >
-            <ChevronLeft className="w-4 h-4 text-zinc-400" />
+            <ChevronLeft className="w-4 h-4 text-text-secondary" />
           </button>
         )}
 
@@ -126,9 +126,9 @@ export function CategoryFilter({
         {canScrollRight && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border border-white/10 rounded-full shadow-lg hover:bg-bg-elevated transition-colors"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border border-black/10 rounded-full shadow-lg hover:bg-bg-elevated transition-colors"
           >
-            <ChevronRight className="w-4 h-4 text-zinc-400" />
+            <ChevronRight className="w-4 h-4 text-text-secondary" />
           </button>
         )}
       </div>
@@ -150,8 +150,8 @@ function CategoryPill({ label, count, isSelected, onClick }: CategoryPillProps) 
       className={cn(
         'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all flex-shrink-0',
         isSelected
-          ? 'bg-gradient-to-r from-accent-cyan to-accent-violet text-white shadow-glow-cyan'
-          : 'bg-bg-elevated border border-white/5 text-zinc-400 hover:text-white hover:border-white/10'
+          ? 'bg-gradient-to-r from-accent-cyan to-accent-violet text-text-primary shadow-glow-cyan'
+          : 'bg-bg-elevated border border-black/5 text-text-secondary hover:text-text-primary hover:border-black/10'
       )}
     >
       {label === 'All' && <Tag className="w-3 h-3" />}
@@ -159,7 +159,7 @@ function CategoryPill({ label, count, isSelected, onClick }: CategoryPillProps) 
       <span
         className={cn(
           'text-xs px-1.5 py-0.5 rounded-full',
-          isSelected ? 'bg-white/20 text-white' : 'bg-white/5 text-zinc-500'
+          isSelected ? 'bg-black/20 text-text-primary' : 'bg-black/5 text-text-muted'
         )}
       >
         {count}
@@ -180,7 +180,7 @@ export function CategoryBadge({ category, className }: CategoryBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20',
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-accent-cyan/10 text-accent-cyan',
         className
       )}
     >

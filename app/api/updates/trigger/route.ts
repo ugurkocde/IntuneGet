@@ -15,6 +15,7 @@ import type {
   TriggerUpdateResponse,
   AppUpdatePolicy,
 } from '@/types/update-policies';
+import type { Json } from '@/types/database';
 
 /**
  * POST /api/updates/trigger
@@ -22,7 +23,7 @@ import type {
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -79,8 +80,7 @@ export async function POST(request: NextRequest) {
     for (const req of updateRequests) {
       try {
         // Get the update check result for this app
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: updateResult, error: updateError } = await (supabase as any)
+        const { data: updateResult, error: updateError } = await supabase
           .from('update_check_results')
           .select('*')
           .eq('user_id', user.userId)
@@ -100,8 +100,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get or create policy for this app
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let { data: policy } = await (supabase as any)
+        let { data: policy } = await supabase
           .from('app_update_policies')
           .select('*')
           .eq('user_id', user.userId)
@@ -112,8 +111,7 @@ export async function POST(request: NextRequest) {
         // If no policy exists, check for prior deployment to get config
         if (!policy) {
           // Get the original deployment config from upload_history
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: uploadHistory } = await (supabase as any)
+          const { data: uploadHistory } = await supabase
             .from('upload_history')
             .select('id, packaging_job_id')
             .eq('user_id', user.userId)
@@ -135,8 +133,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Get the packaging job to extract deployment config
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: packagingJob } = await (supabase as any)
+          const { data: packagingJob } = await supabase
             .from('packaging_jobs')
             .select('*')
             .eq('id', uploadHistory.packaging_job_id)
@@ -163,12 +160,11 @@ export async function POST(request: NextRequest) {
             uninstallCommand: packagingJob.uninstall_command,
             installScope: packagingJob.install_scope || 'system',
             detectionRules: packagingJob.detection_rules || [],
-            assignedGroups: packagingJob.package_config?.assignedGroups || [],
+            assignedGroups: (packagingJob.package_config as { assignedGroups?: Json[] } | null)?.assignedGroups || [],
           };
 
           // Create a temporary policy for this manual trigger
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: newPolicy, error: policyError } = await (supabase as any)
+          const { data: newPolicy, error: policyError } = await supabase
             .from('app_update_policies')
             .insert({
               user_id: user.userId,
@@ -199,8 +195,7 @@ export async function POST(request: NextRequest) {
         // Temporarily enable auto-update for manual trigger
         const originalPolicyType = policy.policy_type;
         if (policy.policy_type !== 'auto_update') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
+          await supabase
             .from('app_update_policies')
             .update({ policy_type: 'auto_update', is_enabled: true })
             .eq('id', policy.id);
@@ -215,8 +210,7 @@ export async function POST(request: NextRequest) {
         if (!installerInfo) {
           // Restore original policy type
           if (originalPolicyType !== 'auto_update') {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
+            await supabase
               .from('app_update_policies')
               .update({ policy_type: originalPolicyType })
               .eq('id', policy.id);
@@ -242,8 +236,7 @@ export async function POST(request: NextRequest) {
 
         // Restore original policy type if it was changed
         if (originalPolicyType !== 'auto_update') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
+          await supabase
             .from('app_update_policies')
             .update({ policy_type: originalPolicyType })
             .eq('id', policy.id);
@@ -280,8 +273,7 @@ export async function POST(request: NextRequest) {
     response.success = response.failed === 0;
 
     return NextResponse.json(response);
-  } catch (error) {
-    console.error('Trigger updates POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

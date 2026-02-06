@@ -99,7 +99,7 @@ export function RecentActivityList({ activities, loading }: RecentActivityListPr
           <motion.div
             key={activity.id}
             variants={itemVariants}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors group"
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-black/5 transition-colors group"
           >
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -116,10 +116,10 @@ export function RecentActivityList({ activities, loading }: RecentActivityListPr
             </div>
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
+              <p className="text-sm text-text-secondary truncate group-hover:text-text-primary transition-colors">
                 {activity.description}
               </p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-text-muted">
                 {formatRelativeTime(activity.timestamp)}
               </p>
             </div>

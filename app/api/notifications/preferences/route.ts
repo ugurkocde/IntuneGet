@@ -12,6 +12,10 @@ import type {
   NotificationPreferences,
   NotificationPreferencesInput,
 } from '@/types/notifications';
+import type { Database } from '@/types/database';
+
+type NotificationPreferencesRow = Database['public']['Tables']['notification_preferences']['Row'];
+type NotificationPreferencesUpsert = Database['public']['Tables']['notification_preferences']['Insert'];
 
 /**
  * GET /api/notifications/preferences
@@ -19,7 +23,7 @@ import type {
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -30,15 +34,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get user's notification preferences
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: preferences, error } = await (supabase as any)
+    const { data: preferences, error } = await supabase
       .from('notification_preferences')
       .select('*')
       .eq('user_id', user.userId)
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching notification preferences:', error);
       return NextResponse.json(
         { error: 'Failed to fetch preferences' },
         { status: 500 }
@@ -64,8 +66,7 @@ export async function GET(request: NextRequest) {
       preferences: preferences as NotificationPreferences,
       isEmailConfigured: isEmailConfigured(),
     });
-  } catch (error) {
-    console.error('Notification preferences GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -116,10 +117,10 @@ export async function PUT(request: NextRequest) {
     const supabase = createServerClient();
 
     // Upsert notification preferences
-    const updateData = {
+    const updateData: NotificationPreferencesUpsert = {
       user_id: user.userId,
       ...(body.email_enabled !== undefined && { email_enabled: body.email_enabled }),
-      ...(body.email_frequency && { email_frequency: body.email_frequency }),
+      ...(body.email_frequency && { email_frequency: body.email_frequency as NotificationPreferencesUpsert['email_frequency'] }),
       ...(body.email_address !== undefined && { email_address: body.email_address }),
       ...(body.notify_critical_only !== undefined && {
         notify_critical_only: body.notify_critical_only,
@@ -127,15 +128,13 @@ export async function PUT(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: preferences, error } = await (supabase as any)
+    const { data: preferences, error } = await supabase
       .from('notification_preferences')
       .upsert(updateData, { onConflict: 'user_id' })
       .select()
       .single();
 
     if (error) {
-      console.error('Error updating notification preferences:', error);
       return NextResponse.json(
         { error: 'Failed to update preferences' },
         { status: 500 }
@@ -152,12 +151,11 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json({
-      preferences: preferences as NotificationPreferences,
+      preferences: (preferences as NotificationPreferencesRow) as NotificationPreferences,
       testEmailSent: testEmailResult?.success ?? false,
       testEmailError: testEmailResult?.error,
     });
-  } catch (error) {
-    console.error('Notification preferences PUT error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

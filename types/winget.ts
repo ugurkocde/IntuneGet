@@ -134,6 +134,7 @@ export interface NormalizedPackage {
   iconPath?: string;
   category?: string;
   popularityRank?: number;
+  installerType?: string;
 }
 
 // Normalized installer for internal use

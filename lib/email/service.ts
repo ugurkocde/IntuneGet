@@ -6,6 +6,7 @@
 import { Resend } from 'resend';
 import type { EmailTemplateData, NotificationPayload } from '@/types/notifications';
 import { generateUpdateNotificationEmail } from './templates/update-notification';
+import { generateTeamInvitationEmail, type TeamInvitationData } from './templates/team-invitation';
 
 // Initialize Resend client lazily
 let resendClient: Resend | null = null;
@@ -94,6 +95,35 @@ export async function sendUpdateNotificationEmail(
   };
 
   const { subject, html, text } = generateUpdateNotificationEmail(templateData);
+
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text,
+  });
+}
+
+/**
+ * Send team invitation email
+ */
+export async function sendTeamInvitationEmail(
+  to: string,
+  data: Omit<TeamInvitationData, 'accept_url'> & { token: string }
+): Promise<SendEmailResult> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || 'https://intuneget.com';
+  const acceptUrl = `${baseUrl.replace(/\/$/, '')}/msp/invite/accept?token=${data.token}`;
+
+  const templateData: TeamInvitationData = {
+    inviter_name: data.inviter_name,
+    inviter_email: data.inviter_email,
+    organization_name: data.organization_name,
+    role: data.role,
+    accept_url: acceptUrl,
+    expires_at: data.expires_at,
+  };
+
+  const { subject, html, text } = generateTeamInvitationEmail(templateData);
 
   return sendEmail({
     to,

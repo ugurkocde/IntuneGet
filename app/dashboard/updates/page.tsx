@@ -130,7 +130,7 @@ export default function UpdatesPage() {
               variant="ghost"
               onClick={() => refetchUpdates()}
               disabled={isFetchingUpdates}
-              className="text-zinc-400 hover:text-white"
+              className="text-text-secondary hover:text-text-primary"
             >
               <RefreshCw className={cn('w-4 h-4 mr-2', isFetchingUpdates && 'animate-spin')} />
               Refresh
@@ -190,12 +190,12 @@ export default function UpdatesPage() {
         onValueChange={(v: string) => setActiveTab(v as 'available' | 'history')}
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <TabsList className="glass-dark border border-white/5">
-            <TabsTrigger value="available" className="data-[state=active]:bg-white/10">
+          <TabsList className="glass-light border border-black/5">
+            <TabsTrigger value="available" className="data-[state=active]:bg-black/10">
               <Package className="w-4 h-4 mr-2" />
               Available Updates
             </TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-white/10">
+            <TabsTrigger value="history" className="data-[state=active]:bg-black/10">
               <History className="w-4 h-4 mr-2" />
               Update History
             </TabsTrigger>
@@ -205,12 +205,12 @@ export default function UpdatesPage() {
             <div className="flex items-center gap-3 w-full sm:w-auto">
               {/* Search */}
               <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
                 <Input
                   placeholder="Search updates..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 bg-bg-elevated border-white/10 text-white placeholder:text-zinc-500"
+                  className="pl-9 bg-bg-elevated border-black/10 text-text-primary placeholder:text-text-muted"
                 />
               </div>
 
@@ -222,7 +222,7 @@ export default function UpdatesPage() {
                 className={cn(
                   showCriticalOnly
                     ? 'bg-status-warning/20 text-status-warning hover:bg-status-warning/30'
-                    : 'text-zinc-400 hover:text-white'
+                    : 'text-text-secondary hover:text-text-primary'
                 )}
               >
                 <AlertTriangle className="w-4 h-4 mr-1.5" />

@@ -90,14 +90,14 @@ const config: Config = {
         },
       },
       backgroundImage: {
-        "grid-dark":
-          "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.02)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e\")",
-        "dots-cyan":
-          "radial-gradient(circle, rgba(6, 182, 212, 0.15) 1px, transparent 1px)",
+        "grid-light":
+          "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(0 0 0 / 0.04)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e\")",
+        "dots-light":
+          "radial-gradient(circle, rgba(8, 145, 178, 0.08) 1px, transparent 1px)",
         "gradient-radial-cyan":
-          "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(6, 182, 212, 0.15), transparent)",
+          "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(8, 145, 178, 0.08), transparent)",
         "gradient-radial-violet":
-          "radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139, 92, 246, 0.1), transparent)",
+          "radial-gradient(ellipse 60% 40% at 80% 100%, rgba(124, 58, 237, 0.06), transparent)",
       },
       colors: {
         background: "hsl(var(--background))",
@@ -140,22 +140,26 @@ const config: Config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
-        // Dark Command Center theme colors
-        "bg-deepest": "#09090b",
-        "bg-surface": "#121218",
-        "bg-elevated": "#18181b",
-        // Electric Cyan accent system
-        "accent-cyan": "#06b6d4",
-        "accent-cyan-bright": "#22d3ee",
-        "accent-cyan-dim": "#0891b2",
-        "accent-violet": "#8b5cf6",
-        "accent-violet-bright": "#a78bfa",
+        // Light theme colors (Evernote-inspired)
+        "bg-deepest": "#fafaf9",
+        "bg-surface": "#f5f5f4",
+        "bg-elevated": "#ffffff",
+        // Electric Cyan accent system (adjusted for light bg contrast)
+        "accent-cyan": "#0891b2",
+        "accent-cyan-bright": "#06b6d4",
+        "accent-cyan-dim": "#0e7490",
+        "accent-violet": "#7c3aed",
+        "accent-violet-bright": "#8b5cf6",
+        // Text colors for light theme
+        "text-primary": "#1c1917",
+        "text-secondary": "#57534e",
+        "text-muted": "#a8a29e",
         // Status indicators
         status: {
           success: "#10b981",
           warning: "#f59e0b",
           error: "#ef4444",
-          info: "#06b6d4",
+          info: "#0891b2",
         },
       },
       borderRadius: {
@@ -166,16 +170,19 @@ const config: Config = {
         "2xl": "1rem",
       },
       boxShadow: {
-        "glow-cyan": "0 0 20px rgba(6, 182, 212, 0.3)",
-        "glow-cyan-lg": "0 0 40px rgba(6, 182, 212, 0.4)",
-        "glow-cyan-intense": "0 0 60px rgba(6, 182, 212, 0.5), 0 0 120px rgba(6, 182, 212, 0.2)",
-        "glow-violet": "0 0 20px rgba(139, 92, 246, 0.3)",
-        "glow-violet-lg": "0 0 40px rgba(139, 92, 246, 0.4)",
-        "glow-success": "0 0 20px rgba(16, 185, 129, 0.2)",
-        "glow-warning": "0 0 20px rgba(245, 158, 11, 0.2)",
-        "glow-error": "0 0 20px rgba(239, 68, 68, 0.2)",
-        "card-hover": "0 20px 40px rgba(0, 0, 0, 0.15), 0 0 40px rgba(6, 182, 212, 0.15)",
-        "inner-glow": "inset 0 0 20px rgba(6, 182, 212, 0.1)",
+        "soft": "0 2px 8px rgba(0, 0, 0, 0.04)",
+        "soft-md": "0 4px 16px rgba(0, 0, 0, 0.06)",
+        "soft-lg": "0 8px 32px rgba(0, 0, 0, 0.08)",
+        "soft-xl": "0 12px 48px rgba(0, 0, 0, 0.1)",
+        "card": "0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.04)",
+        "card-hover": "0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+        "glow-cyan": "0 0 20px rgba(8, 145, 178, 0.15)",
+        "glow-cyan-lg": "0 0 40px rgba(8, 145, 178, 0.2)",
+        "glow-violet": "0 0 20px rgba(124, 58, 237, 0.15)",
+        "glow-violet-lg": "0 0 40px rgba(124, 58, 237, 0.2)",
+        "glow-success": "0 0 20px rgba(16, 185, 129, 0.15)",
+        "glow-warning": "0 0 20px rgba(245, 158, 11, 0.15)",
+        "glow-error": "0 0 20px rgba(239, 68, 68, 0.15)",
       },
       transitionTimingFunction: {
         "spring": "cubic-bezier(0.32, 0.72, 0, 1)",

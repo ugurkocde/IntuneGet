@@ -162,10 +162,10 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
   // Show loading state while verifying
   if (isVerifying && !isVisible) {
     return (
-      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6">
+      <div className="bg-bg-elevated/50 border border-black/10 rounded-xl p-4 mb-6">
         <div className="flex items-center gap-3">
-          <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-          <span className="text-slate-400">Verifying organization setup...</span>
+          <Loader2 className="w-5 h-5 text-accent-cyan animate-spin" />
+          <span className="text-text-secondary">Verifying organization setup...</span>
         </div>
       </div>
     );
@@ -182,17 +182,17 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
             <AlertTriangle className="w-5 h-5 text-amber-400" />
           </div>
           <div className="flex-1">
-            <h3 className="font-medium text-white mb-1">
+            <h3 className="font-medium text-text-primary mb-1">
               Intune Permissions Missing
             </h3>
-            <p className="text-sm text-slate-400 mb-2">
+            <p className="text-sm text-text-secondary mb-2">
               Admin consent was granted, but required Intune permissions are missing.
-              The app needs <code className="text-amber-400 text-xs">DeviceManagementApps.ReadWrite.All</code> and
-              <code className="text-amber-400 text-xs ml-1">DeviceManagementManagedDevices.Read.All</code>.
+              The app needs <code className="text-amber-600 text-xs">DeviceManagementApps.ReadWrite.All</code> and
+              <code className="text-amber-600 text-xs ml-1">DeviceManagementManagedDevices.Read.All</code>.
               This can happen if permissions were updated after initial consent.
             </p>
-            <p className="text-sm text-slate-400 mb-4">
-              <strong className="text-amber-400">Your packaging jobs may be failing because of this.</strong> A Global Administrator needs to re-grant admin consent.
+            <p className="text-sm text-text-secondary mb-4">
+              <strong className="text-amber-600">Your packaging jobs may be failing because of this.</strong> A Global Administrator needs to re-grant admin consent.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -207,7 +207,7 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
                 onClick={handleAlreadyGranted}
                 size="sm"
                 variant="ghost"
-                className="text-slate-400 hover:text-white"
+                className="text-text-secondary hover:text-text-primary"
                 disabled={isVerifying}
               >
                 {isVerifying ? (
@@ -230,14 +230,14 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
     <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6">
       <div className="flex items-start gap-3">
         <div className="p-2 bg-amber-500/20 rounded-lg">
-          <Shield className="w-5 h-5 text-amber-400" />
+          <Shield className="w-5 h-5 text-amber-600" />
         </div>
         <div className="flex-1">
-          <h3 className="font-medium text-white mb-1">
+          <h3 className="font-medium text-text-primary mb-1">
             Organization Setup Required
           </h3>
-          <p className="text-sm text-slate-400 mb-4">
-            To deploy apps to your Intune tenant, a <strong className="text-amber-400">Global Administrator</strong> needs
+          <p className="text-sm text-text-secondary mb-4">
+            To deploy apps to your Intune tenant, a <strong className="text-amber-600">Global Administrator</strong> needs
             to grant permission for IntuneGet to access your organization.
           </p>
 
@@ -255,7 +255,7 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
                 onClick={() => setShowShareOption(true)}
                 size="sm"
                 variant="outline"
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="border-black/10 text-text-primary hover:bg-black/5"
               >
                 I'm not a Global Admin
               </Button>
@@ -263,29 +263,29 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
                 onClick={handleAlreadyGranted}
                 size="sm"
                 variant="ghost"
-                className="text-slate-400 hover:text-white"
+                className="text-text-secondary hover:text-text-primary"
               >
                 Already granted
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 bg-slate-800/50 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-slate-300">
+              <div className="flex items-start gap-2 p-3 bg-bg-elevated/50 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-text-primary">
                   <p className="mb-2">
                     <strong>Intune Administrators</strong> cannot grant admin consent.
                     Please share this link with your Global Administrator:
                   </p>
                   <div className="flex items-center gap-2 mt-2">
-                    <code className="flex-1 bg-slate-900 px-3 py-2 rounded text-xs text-slate-400 overflow-hidden text-ellipsis whitespace-nowrap">
+                    <code className="flex-1 bg-bg-surface px-3 py-2 rounded text-xs text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
                       {getShareableConsentUrl() || 'Loading...'}
                     </code>
                     <Button
                       onClick={handleCopyLink}
                       size="sm"
                       variant="outline"
-                      className="border-slate-700 flex-shrink-0"
+                      className="border-black/10 flex-shrink-0"
                     >
                       {copied ? (
                         <Check className="w-4 h-4 text-green-400" />
@@ -301,7 +301,7 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
                   onClick={() => setShowShareOption(false)}
                   size="sm"
                   variant="ghost"
-                  className="text-slate-400 hover:text-white"
+                  className="text-text-secondary hover:text-text-primary"
                 >
                   Back
                 </Button>
@@ -309,7 +309,7 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
                   onClick={handleDismiss}
                   size="sm"
                   variant="ghost"
-                  className="text-slate-400 hover:text-white"
+                  className="text-text-secondary hover:text-text-primary"
                 >
                   I'll do this later
                 </Button>
@@ -317,7 +317,7 @@ export function AdminConsentBanner({ onConsentGranted }: AdminConsentBannerProps
             </div>
           )}
 
-          <p className="text-xs text-slate-500 mt-4">
+          <p className="text-xs text-text-muted mt-4">
             This is a one-time setup. After consent is granted, any user with Intune permissions can use IntuneGet.
           </p>
         </div>

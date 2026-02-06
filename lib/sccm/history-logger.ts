@@ -20,15 +20,12 @@ interface HistoryLogEntry {
   affected_count?: number;
 }
 
-// Use a minimal interface that works with any Supabase client
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClient = {
-  from: (table: string) => {
-    insert: (data: unknown) => {
-      select?: (columns?: string) => unknown;
-    } & PromiseLike<{ error: Error | null }>;
-  };
-};
+// Import Supabase client type from database
+import type { Database } from '@/types/database';
+import type { SupabaseClient as SupabaseClientType } from '@supabase/supabase-js';
+
+// Use the typed Supabase client
+type SupabaseClient = SupabaseClientType<Database>;
 
 /**
  * Safely log a migration history entry
@@ -40,8 +37,7 @@ export async function logMigrationHistory(
   entry: HistoryLogEntry
 ): Promise<void> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('sccm_migration_history')
       .insert({
         ...entry,

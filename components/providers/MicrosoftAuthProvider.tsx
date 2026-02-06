@@ -21,6 +21,15 @@ export function MicrosoftAuthProvider({
       try {
         const instance = getMsalInstance();
         await instance.initialize();
+
+        // Sync auth hint cookie for server-side middleware protection
+        const accounts = instance.getAllAccounts();
+        if (accounts.length > 0) {
+          document.cookie = "msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400";
+        } else {
+          document.cookie = "msal-auth-hint=; path=/; SameSite=Lax; max-age=0";
+        }
+
         setMsalInstance(instance);
         setIsInitialized(true);
       } catch (error) {

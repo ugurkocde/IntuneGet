@@ -6,6 +6,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import type { ClaimAppRequest, ClaimedApp } from '@/types/unmanaged';
+import type { Database } from '@/types/database';
+
+// Type alias for claimed_apps table row
+type ClaimedAppRow = Database['public']['Tables']['claimed_apps']['Row'];
+type ClaimedAppInsert = Database['public']['Tables']['claimed_apps']['Insert'];
+type ClaimedAppUpdate = Database['public']['Tables']['claimed_apps']['Update'];
+type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert'];
 
 /**
  * Ensure user profile exists in the database
@@ -17,52 +24,32 @@ async function ensureUserProfile(
   tenantId: string,
   tokenPayload: Record<string, unknown>
 ): Promise<void> {
-  const profileData = {
+  const email = tokenPayload.preferred_username || tokenPayload.email;
+  const name = tokenPayload.name;
+
+  const profileData: UserProfileInsert = {
     id: userId,
-    email: tokenPayload.preferred_username || tokenPayload.email || null,
-    name: tokenPayload.name || null,
+    email: typeof email === 'string' ? email : null,
+    name: typeof name === 'string' ? name : null,
     intune_tenant_id: tenantId,
     updated_at: new Date().toISOString(),
   };
 
-  console.log('Ensuring user profile exists:', { userId, tenantId });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any).from('user_profiles').upsert(
+  const { error } = await supabase.from('user_profiles').upsert(
     profileData,
     { onConflict: 'id' }
   );
 
   if (error) {
-    console.error('Error upserting user profile:', error);
     // Try insert instead if upsert fails
-    console.log('Attempting direct insert...');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: insertError } = await (supabase as any)
+    const { error: insertError } = await supabase
       .from('user_profiles')
       .insert(profileData);
 
     if (insertError) {
-      console.error('Error inserting user profile:', insertError);
       throw new Error(`Failed to create user profile: ${insertError.message}`);
     }
   }
-
-  console.log('User profile ensured successfully');
-}
-
-// Database row type for claimed_apps table
-interface ClaimedAppRow {
-  id: string;
-  user_id: string;
-  tenant_id: string;
-  discovered_app_id: string;
-  discovered_app_name: string;
-  winget_package_id: string;
-  intune_app_id: string | null;
-  device_count_at_claim: number | null;
-  claimed_at: string;
-  status: string;
 }
 
 /**
@@ -118,8 +105,7 @@ export async function POST(request: NextRequest) {
     await ensureUserProfile(supabase, userId, tenantId, tokenPayload);
 
     // Check if already claimed
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase as any)
+    const { data: existing } = await supabase
       .from('claimed_apps')
       .select('id')
       .eq('tenant_id', tenantId)
@@ -127,47 +113,46 @@ export async function POST(request: NextRequest) {
       .single();
 
     let claim: ClaimedAppRow | null = null;
-    let error: Error | null = null;
+    let error: { message: string } | null = null;
 
     if (existing) {
       // Update existing claim (allow re-claiming)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (supabase as any)
+      const updateData: ClaimedAppUpdate = {
+        user_id: userId,
+        winget_package_id: body.wingetPackageId,
+        device_count_at_claim: body.deviceCount || 0,
+        status: 'pending',
+        claimed_at: new Date().toISOString(),
+      };
+      const result = await supabase
         .from('claimed_apps')
-        .update({
-          user_id: userId,
-          winget_package_id: body.wingetPackageId,
-          device_count_at_claim: body.deviceCount || 0,
-          status: 'pending',
-          claimed_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', existing.id)
         .select()
-        .single() as { data: ClaimedAppRow | null; error: Error | null };
+        .single();
       claim = result.data;
       error = result.error;
     } else {
       // Create new claim record
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (supabase as any)
+      const insertData: ClaimedAppInsert = {
+        user_id: userId,
+        tenant_id: tenantId,
+        discovered_app_id: body.discoveredAppId,
+        discovered_app_name: body.discoveredAppName,
+        winget_package_id: body.wingetPackageId,
+        device_count_at_claim: body.deviceCount || 0,
+        status: 'pending',
+      };
+      const result = await supabase
         .from('claimed_apps')
-        .insert({
-          user_id: userId,
-          tenant_id: tenantId,
-          discovered_app_id: body.discoveredAppId,
-          discovered_app_name: body.discoveredAppName,
-          winget_package_id: body.wingetPackageId,
-          device_count_at_claim: body.deviceCount || 0,
-          status: 'pending',
-        })
+        .insert(insertData)
         .select()
-        .single() as { data: ClaimedAppRow | null; error: Error | null };
+        .single();
       claim = result.data;
       error = result.error;
     }
 
     if (error || !claim) {
-      console.error('Error creating claim:', error);
       return NextResponse.json(
         { error: 'Failed to create claim' },
         { status: 500 }
@@ -188,8 +173,7 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json({ claim: formattedClaim }, { status: 201 });
-  } catch (error) {
-    console.error('Claim POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to create claim' },
       { status: 500 }
@@ -234,15 +218,13 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: claims, error } = await (supabase as any)
+    const { data: claims, error } = await supabase
       .from('claimed_apps')
       .select('*')
       .eq('tenant_id', tenantId)
-      .order('claimed_at', { ascending: false }) as { data: ClaimedAppRow[] | null; error: Error | null };
+      .order('claimed_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching claims:', error);
       return NextResponse.json(
         { error: 'Failed to fetch claims' },
         { status: 500 }
@@ -263,8 +245,7 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ claims: formattedClaims });
-  } catch (error) {
-    console.error('Claim GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch claims' },
       { status: 500 }
@@ -319,21 +300,19 @@ export async function PATCH(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    const updates: Record<string, unknown> = {};
+    const updates: ClaimedAppUpdate = {};
     if (status) updates.status = status;
     if (intuneAppId) updates.intune_app_id = intuneAppId;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: claim, error } = await (supabase as any)
+    const { data: claim, error } = await supabase
       .from('claimed_apps')
       .update(updates)
       .eq('id', claimId)
       .eq('tenant_id', tenantId)
       .select()
-      .single() as { data: ClaimedAppRow | null; error: Error | null };
+      .single();
 
     if (error || !claim) {
-      console.error('Error updating claim:', error);
       return NextResponse.json(
         { error: 'Failed to update claim' },
         { status: 500 }
@@ -354,8 +333,7 @@ export async function PATCH(request: NextRequest) {
         status: claim.status,
       },
     });
-  } catch (error) {
-    console.error('Claim PATCH error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to update claim' },
       { status: 500 }

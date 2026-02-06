@@ -34,15 +34,13 @@ export async function POST(request: NextRequest) {
     ).toISOString();
 
     // Find stale jobs
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: staleJobs, error: fetchError } = await (supabase as any)
+    const { data: staleJobs, error: fetchError } = await supabase
       .from('packaging_jobs')
       .select('id, status, winget_id, updated_at, created_at')
       .in('status', INTERMEDIATE_STATES)
       .lt('updated_at', cutoffTime);
 
     if (fetchError) {
-      console.error('Failed to fetch stale jobs:', fetchError);
       return NextResponse.json(
         { error: 'Failed to fetch stale jobs' },
         { status: 500 }
@@ -58,10 +56,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Mark stale jobs as failed
-    const jobIds = staleJobs.map((job: { id: string }) => job.id);
+    const jobIds = staleJobs.map((job) => job.id);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from('packaging_jobs')
       .update({
         status: 'failed',
@@ -72,27 +69,23 @@ export async function POST(request: NextRequest) {
       .in('id', jobIds);
 
     if (updateError) {
-      console.error('Failed to update stale jobs:', updateError);
       return NextResponse.json(
         { error: 'Failed to update stale jobs' },
         { status: 500 }
       );
     }
 
-    console.log(`Cleaned up ${staleJobs.length} stale jobs:`, jobIds);
-
     return NextResponse.json({
       success: true,
       message: `Marked ${staleJobs.length} stale job(s) as failed`,
       cleaned: staleJobs.length,
-      jobs: staleJobs.map((job: { id: string; status: string; winget_id: string }) => ({
+      jobs: staleJobs.map((job) => ({
         id: job.id,
         previousStatus: job.status,
         wingetId: job.winget_id,
       })),
     });
-  } catch (error) {
-    console.error('Cleanup API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -108,8 +101,7 @@ export async function GET() {
     const supabase = createServerClient();
 
     // Get count of jobs by status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: jobs, error } = await (supabase as any)
+    const { data: jobs, error } = await supabase
       .from('packaging_jobs')
       .select('status, updated_at')
       .order('updated_at', { ascending: false })
@@ -149,8 +141,7 @@ export async function GET() {
       totalStale: Object.values(staleCount).reduce((a, b) => a + b, 0),
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
-    console.error('Cleanup stats error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

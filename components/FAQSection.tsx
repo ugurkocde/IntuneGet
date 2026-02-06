@@ -12,7 +12,7 @@ const faqs = [
   {
     question: "Is IntuneGet really free and open source?",
     answer:
-      "Yes! IntuneGet is completely free and open source under the MIT license. You can use it without any cost, modify it to fit your needs, and contribute to its development. We believe in making IT management tools accessible to everyone.",
+      "Yes! IntuneGet is completely free and open source. You can use it without any cost, modify it to fit your needs, and contribute to its development. We believe in making IT management tools accessible to everyone.",
   },
   {
     question: "Which applications are supported?",
@@ -80,9 +80,11 @@ export function FAQSection() {
             >
               <button
                 onClick={() => toggleFAQ(index)}
+                aria-expanded={openIndex === index}
+                aria-controls={`faq-answer-${index}`}
                 className="w-full px-6 py-6 text-left flex items-center justify-between hover:bg-gray-50/50 rounded-2xl transition-colors duration-200"
               >
-                <h3 className="text-lg font-semibold text-gray-900 pr-4">
+                <h3 id={`faq-question-${index}`} className="text-lg font-semibold text-gray-900 pr-4">
                   {faq.question}
                 </h3>
                 <div
@@ -95,6 +97,9 @@ export function FAQSection() {
               </button>
 
               <div
+                id={`faq-answer-${index}`}
+                role="region"
+                aria-labelledby={`faq-question-${index}`}
                 className={`overflow-hidden transition-all duration-300 ease-in-out ${
                   openIndex === index
                     ? "max-h-96 opacity-100"

@@ -2,7 +2,7 @@
  * Detection Rule Engine
  * Auto-generates Intune detection rules based on installer type
  *
- * Follows RoboPack/PatchMyPC approach: simple folder existence detection
+ * Uses simple folder existence detection
  * Example: %ProgramFiles%\Git - just check if the folder exists
  */
 

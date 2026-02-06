@@ -161,10 +161,10 @@ export default function MspTenantsPage() {
   if (isLoadingOrganization) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 bg-white/10 rounded animate-pulse" />
+        <div className="h-8 w-48 bg-black/10 rounded animate-pulse" />
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-32 bg-black/5 rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -192,7 +192,7 @@ export default function MspTenantsPage() {
       {/* Back link */}
       <Link
         href="/dashboard/msp"
-        className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to MSP Dashboard
@@ -201,8 +201,8 @@ export default function MspTenantsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Managed Tenants</h1>
-          <p className="text-zinc-500 mt-1">
+          <h1 className="text-2xl font-bold text-text-primary">Managed Tenants</h1>
+          <p className="text-text-muted mt-1">
             {managedTenants.length} tenant{managedTenants.length !== 1 ? 's' : ''} total
           </p>
         </div>
@@ -211,7 +211,7 @@ export default function MspTenantsPage() {
             variant="ghost"
             onClick={refreshTenants}
             disabled={isLoadingTenants}
-            className="text-zinc-400 hover:text-white"
+            className="text-text-secondary hover:text-text-primary"
           >
             <RefreshCw className={cn('w-4 h-4 mr-2', isLoadingTenants && 'animate-spin')} />
             Refresh
@@ -251,10 +251,10 @@ export default function MspTenantsPage() {
 
       {/* Empty state */}
       {!isLoadingTenants && managedTenants.length === 0 && (
-        <div className="p-12 rounded-xl bg-white/5 border border-white/10 text-center">
-          <Building2 className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-white mb-2">No customer tenants yet</h2>
-          <p className="text-zinc-500 mb-6 max-w-md mx-auto">
+        <div className="p-12 rounded-xl bg-black/5 border border-black/10 text-center">
+          <Building2 className="w-12 h-12 text-text-muted mx-auto mb-4" />
+          <h2 className="text-lg font-medium text-text-primary mb-2">No customer tenants yet</h2>
+          <p className="text-text-muted mb-6 max-w-md mx-auto">
             Start managing your customers' Intune tenants by adding them and having their admin grant consent.
           </p>
           <Link href="/dashboard/msp/tenants/add">
@@ -269,7 +269,7 @@ export default function MspTenantsPage() {
       {/* Active Tenants */}
       {activeTenants.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4">
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4">
             Active Tenants ({activeTenants.length})
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -289,7 +289,7 @@ export default function MspTenantsPage() {
       {/* Incomplete Consent Tenants */}
       {incompleteTenants.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-orange-500" />
             Incomplete Permissions ({incompleteTenants.length})
           </h2>
@@ -312,7 +312,7 @@ export default function MspTenantsPage() {
       {/* Pending Tenants */}
       {pendingTenants.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-yellow-500" />
             Pending Consent ({pendingTenants.length})
           </h2>
@@ -326,7 +326,7 @@ export default function MspTenantsPage() {
               />
             ))}
           </div>
-          <p className="mt-4 text-sm text-zinc-500">
+          <p className="mt-4 text-sm text-text-muted">
             These tenants are waiting for their administrator to grant consent. Use the menu on each card to get the consent URL to share with them.
           </p>
         </div>

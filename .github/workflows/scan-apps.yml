@@ -139,6 +139,7 @@ jobs:
 
       - name: Scan apps
         if: steps.get-apps.outputs.app_count != '0'
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -157,10 +158,23 @@ jobs:
           # Per-app timeout (default 15 minutes)
           $appTimeoutSeconds = [int]($env:APP_TIMEOUT_SECONDS ?? 900)
 
+          # Minimum free disk space in GB before skipping an app
+          $minDiskSpaceGB = 5
+          # Maximum memory usage in MB before skipping an app
+          $maxMemoryMB = 6000
+
           # Known problematic apps that tend to hang or cause issues
           $problematicApps = @(
             # Add any apps that consistently cause problems here
           )
+
+          # Helper: save results incrementally so partial progress survives runner crashes
+          function Save-Results {
+            param($ResultsList)
+            $resultsArray = @($ResultsList)
+            $jsonContent = ConvertTo-Json -InputObject $resultsArray -Depth 20 -Compress:$false
+            [System.IO.File]::WriteAllText("$PWD\scan-results.json", $jsonContent, (New-Object System.Text.UTF8Encoding $false))
+          }
 
           foreach ($app in $apps) {
             $wingetId = $app.winget_id
@@ -175,9 +189,25 @@ jobs:
               continue
             }
 
-            # Log memory usage before each app
+            # Check available disk space
+            $disk = Get-PSDrive -Name C
+            $freeDiskGB = [math]::Round($disk.Free / 1GB, 2)
+            Write-Host "Free disk space: ${freeDiskGB} GB"
+            if ($freeDiskGB -lt $minDiskSpaceGB) {
+              Write-Warning "Disk space below ${minDiskSpaceGB} GB, skipping remaining apps"
+              $skipped += ($apps.Count - $scanned - $failed - $skipped)
+              break
+            }
+
+            # Check memory usage
             $memInfo = Get-Process -Id $PID | Select-Object WorkingSet64
-            Write-Host "Memory before scan: $('{0:N0}' -f ($memInfo.WorkingSet64 / 1MB)) MB"
+            $memMB = [math]::Round($memInfo.WorkingSet64 / 1MB, 0)
+            Write-Host "Memory before scan: ${memMB} MB"
+            if ($memMB -gt $maxMemoryMB) {
+              Write-Warning "Memory usage above ${maxMemoryMB} MB, skipping remaining apps"
+              $skipped += ($apps.Count - $scanned - $failed - $skipped)
+              break
+            }
 
             $startTime = Get-Date
             $scanResult = @{
@@ -313,6 +343,9 @@ jobs:
 
             $results += $scanResult
 
+            # Save results incrementally after each app (survives runner crashes)
+            Save-Results $results
+
             # Force garbage collection to free memory between apps
             [System.GC]::Collect()
             [System.GC]::WaitForPendingFinalizers()
@@ -355,7 +388,7 @@ jobs:
           echo "failed=$failed" >> $env:GITHUB_OUTPUT
 
       - name: Upload results to Supabase
-        if: steps.get-apps.outputs.app_count != '0'
+        if: steps.get-apps.outputs.app_count != '0' && hashFiles('scan-results.json') != ''
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

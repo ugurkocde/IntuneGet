@@ -21,8 +21,8 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
     try {
       await onConfirm(app);
       onClose();
-    } catch (error) {
-      console.error('Claim error:', error);
+    } catch {
+      // Error handled by parent
     } finally {
       setIsLoading(false);
     }
@@ -39,13 +39,18 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg mx-4 bg-bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="claim-modal-title"
+        className="relative w-full max-w-lg mx-4 bg-bg-surface rounded-2xl border border-black/10 shadow-2xl overflow-hidden"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-          <h2 className="text-lg font-semibold text-white">Claim Unmanaged App</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-black/5">
+          <h2 id="claim-modal-title" className="text-lg font-semibold text-text-primary">Claim Unmanaged App</h2>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white transition-colors p-1"
+            className="text-text-secondary hover:text-text-primary transition-colors p-1"
           >
             <X className="w-5 h-5" />
           </button>
@@ -61,25 +66,25 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
               size="xl"
             />
             <div className="flex-1 min-w-0">
-              <h3 className="text-white font-semibold text-lg truncate">{app.displayName}</h3>
-              <p className="text-zinc-400 text-sm">{app.publisher || 'Unknown publisher'}</p>
+              <h3 className="text-text-primary font-semibold text-lg truncate">{app.displayName}</h3>
+              <p className="text-text-secondary text-sm">{app.publisher || 'Unknown publisher'}</p>
               {app.version && (
-                <p className="text-zinc-500 text-xs mt-1">Current version: {app.version}</p>
+                <p className="text-text-muted text-xs mt-1">Current version: {app.version}</p>
               )}
             </div>
           </div>
 
           {/* Info cards */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-bg-elevated rounded-xl p-4 border border-white/5">
-              <div className="flex items-center gap-2 text-zinc-400 mb-1">
+            <div className="bg-bg-elevated rounded-xl p-4 border border-black/5">
+              <div className="flex items-center gap-2 text-text-secondary mb-1">
                 <Monitor className="w-4 h-4" />
                 <span className="text-xs uppercase tracking-wide">Devices</span>
               </div>
-              <p className="text-2xl font-bold text-white">{app.deviceCount.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-text-primary">{app.deviceCount.toLocaleString()}</p>
             </div>
-            <div className="bg-bg-elevated rounded-xl p-4 border border-white/5">
-              <div className="flex items-center gap-2 text-zinc-400 mb-1">
+            <div className="bg-bg-elevated rounded-xl p-4 border border-black/5">
+              <div className="flex items-center gap-2 text-text-secondary mb-1">
                 <Package className="w-4 h-4" />
                 <span className="text-xs uppercase tracking-wide">WinGet Package</span>
               </div>
@@ -90,18 +95,18 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
           </div>
 
           {/* What happens next */}
-          <div className="bg-bg-elevated/50 rounded-xl p-4 border border-white/5">
-            <h4 className="text-sm font-medium text-white mb-3">What happens next?</h4>
+          <div className="bg-bg-elevated/50 rounded-xl p-4 border border-black/5">
+            <h4 className="text-sm font-medium text-text-primary mb-3">What happens next?</h4>
             <ul className="space-y-2">
-              <li className="flex items-start gap-2 text-sm text-zinc-400">
+              <li className="flex items-start gap-2 text-sm text-text-secondary">
                 <CheckCircle2 className="w-4 h-4 text-status-success flex-shrink-0 mt-0.5" />
                 <span>The WinGet package will be added to your cart</span>
               </li>
-              <li className="flex items-start gap-2 text-sm text-zinc-400">
+              <li className="flex items-start gap-2 text-sm text-text-secondary">
                 <CheckCircle2 className="w-4 h-4 text-status-success flex-shrink-0 mt-0.5" />
                 <span>You can configure deployment options before uploading</span>
               </li>
-              <li className="flex items-start gap-2 text-sm text-zinc-400">
+              <li className="flex items-start gap-2 text-sm text-text-secondary">
                 <CheckCircle2 className="w-4 h-4 text-status-success flex-shrink-0 mt-0.5" />
                 <span>After deployment, this app will become managed in Intune</span>
               </li>
@@ -110,8 +115,8 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/5 bg-bg-elevated/50">
-          <Button variant="outline" onClick={onClose} className="border-white/10">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-black/5 bg-bg-elevated/50">
+          <Button variant="outline" onClick={onClose} className="border-black/10">
             Cancel
           </Button>
           <Button

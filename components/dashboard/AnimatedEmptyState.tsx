@@ -55,11 +55,11 @@ const colorStyles = {
     orb2: 'bg-accent-cyan/20'
   },
   neutral: {
-    icon: 'text-zinc-400',
+    icon: 'text-text-secondary',
     iconBg: 'bg-zinc-500/10',
     glow: '',
     gradient: 'from-zinc-500/10 to-zinc-500/0',
-    button: 'bg-white/10 hover:bg-white/20',
+    button: 'bg-black/10 hover:bg-black/20',
     orb1: 'bg-zinc-500/20',
     orb2: 'bg-zinc-600/10'
   }
@@ -200,7 +200,7 @@ export function AnimatedEmptyState({
                     ease: 'easeInOut'
                   }}
                 >
-                  <FloatingIcon className="w-4 h-4 text-zinc-600" />
+                  <FloatingIcon className="w-4 h-4 text-text-muted" />
                 </motion.div>
               );
             })}
@@ -231,7 +231,7 @@ export function AnimatedEmptyState({
       {/* Title */}
       <motion.h3
         variants={itemVariants}
-        className="text-xl font-semibold text-white mb-2"
+        className="text-xl font-semibold text-text-primary mb-2"
       >
         {title}
       </motion.h3>
@@ -240,7 +240,7 @@ export function AnimatedEmptyState({
       {description && (
         <motion.p
           variants={itemVariants}
-          className="text-sm text-zinc-400 max-w-sm mb-6"
+          className="text-sm text-text-secondary max-w-sm mb-6"
         >
           {description}
         </motion.p>
@@ -265,8 +265,8 @@ export function AnimatedEmptyState({
               className={cn(
                 'px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
                 action.variant === 'secondary'
-                  ? 'bg-white/10 hover:bg-white/20 text-white'
-                  : cn(styles.button, 'text-white')
+                  ? 'bg-black/10 hover:bg-black/20 text-text-primary'
+                  : cn(styles.button, 'text-text-primary')
               )}
             >
               {action.label}
@@ -275,7 +275,7 @@ export function AnimatedEmptyState({
           {secondaryAction && (
             <button
               onClick={secondaryAction.onClick}
-              className="px-6 py-2.5 rounded-lg font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all duration-200"
+              className="px-6 py-2.5 rounded-lg font-medium text-text-secondary hover:text-text-primary hover:bg-black/5 transition-all duration-200"
             >
               {secondaryAction.label}
             </button>
@@ -314,10 +314,10 @@ export function InlineEmptyState({
         className
       )}
     >
-      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-3">
-        <Icon className="w-6 h-6 text-zinc-500" />
+      <div className="w-12 h-12 rounded-xl bg-black/5 flex items-center justify-center mb-3">
+        <Icon className="w-6 h-6 text-text-muted" />
       </div>
-      <p className="text-sm text-zinc-400 mb-3">{message}</p>
+      <p className="text-sm text-text-secondary mb-3">{message}</p>
       {action && (
         <button
           onClick={action.onClick}

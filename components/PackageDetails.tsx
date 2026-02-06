@@ -120,7 +120,7 @@ export function PackageDetails({ package: pkg, onClose }: PackageDetailsProps) {
       psadtConfig: {
         ...DEFAULT_PSADT_CONFIG,
         processesToClose,
-        detectionRules: detectionRules as any,
+        detectionRules,
       },
     });
 

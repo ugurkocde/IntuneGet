@@ -38,10 +38,10 @@ function OnboardingContent() {
   // Show loading while checking auth
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-bg-deepest flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Loading...</p>
+          <Loader2 className="w-8 h-8 text-accent-cyan animate-spin mx-auto mb-4" />
+          <p className="text-stone-500">Loading...</p>
         </div>
       </div>
     );
@@ -54,10 +54,10 @@ export default function OnboardingPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="min-h-screen bg-bg-deepest flex items-center justify-center">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-            <p className="text-slate-400">Loading...</p>
+            <Loader2 className="w-8 h-8 text-accent-cyan animate-spin mx-auto mb-4" />
+            <p className="text-stone-500">Loading...</p>
           </div>
         </div>
       }

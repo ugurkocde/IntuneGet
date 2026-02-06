@@ -10,7 +10,6 @@ import { logMigrationHistoryAsync, createSuccessEntry } from '@/lib/sccm/history
 import {
   prepareMigrations,
   executeMigrationBatch,
-  generateMigrationPreview,
   calculateMigrationStats,
 } from '@/lib/migration/migration-orchestrator';
 import { convertDetectionRules, mapInstallBehavior } from '@/lib/migration/settings-converter';
@@ -18,49 +17,45 @@ import type {
   SccmApplication,
   SccmAppRecord,
   SccmMigrationOptions,
-  SccmMigrationPreviewRequest,
   SccmMigrationPreviewResponse,
-  SccmMigrationExecuteRequest,
   SccmMigrationResult,
 } from '@/types/sccm';
-import type { NormalizedPackage, NormalizedInstaller } from '@/types/winget';
+import type {
+  NormalizedPackage,
+  NormalizedInstaller,
+  WingetArchitecture,
+  WingetInstallerType,
+  WingetScope,
+} from '@/types/winget';
+import type { Database } from '@/types/database';
 
-// Database row type
-interface SccmAppRow {
-  id: string;
-  migration_id: string;
-  user_id: string;
-  tenant_id: string;
-  sccm_ci_id: string;
-  display_name: string;
-  manufacturer: string | null;
-  version: string | null;
-  technology: string;
-  is_deployed: boolean;
-  deployment_count: number;
-  sccm_app_data: SccmApplication;
-  sccm_detection_rules: unknown[];
-  sccm_install_command: string | null;
-  sccm_uninstall_command: string | null;
-  sccm_install_behavior: string | null;
-  match_status: string;
-  match_confidence: number | null;
-  matched_winget_id: string | null;
-  matched_winget_name: string | null;
-  partial_matches: unknown[];
-  matched_by: string | null;
-  preserve_detection_rules: boolean;
-  preserve_install_commands: boolean;
-  use_winget_defaults: boolean;
-  custom_settings: unknown | null;
-  converted_detection_rules: unknown[] | null;
-  converted_install_behavior: string | null;
-  migration_status: string;
-  migration_error: string | null;
-  intune_app_id: string | null;
-  migrated_at: string | null;
-  created_at: string;
-  updated_at: string;
+// Type aliases for database rows
+type SccmAppRow = Database['public']['Tables']['sccm_apps']['Row'];
+type CuratedAppRow = Pick<
+  Database['public']['Tables']['curated_apps']['Row'],
+  'winget_id' | 'name' | 'publisher' | 'latest_version' | 'description' | 'homepage' | 'license' | 'tags' | 'category' | 'icon_path'
+>;
+type VersionHistoryRow = Pick<
+  Database['public']['Tables']['version_history']['Row'],
+  'installers' | 'installer_url' | 'installer_sha256' | 'installer_type' | 'installer_scope'
+>;
+
+// Installer data from JSON field
+interface InstallerData {
+  architecture?: string;
+  Architecture?: string;
+  InstallerUrl?: string;
+  url?: string;
+  InstallerSha256?: string;
+  sha256?: string;
+  InstallerType?: string;
+  type?: string;
+  Scope?: string;
+  scope?: string;
+  InstallerSwitches?: { Silent?: string };
+  silentArgs?: string;
+  ProductCode?: string;
+  productCode?: string;
 }
 
 /**
@@ -79,8 +74,8 @@ function rowToAppRecord(row: SccmAppRow): SccmAppRecord {
     technology: row.technology as SccmAppRecord['technology'],
     isDeployed: row.is_deployed,
     deploymentCount: row.deployment_count,
-    sccmAppData: row.sccm_app_data,
-    sccmDetectionRules: row.sccm_detection_rules as SccmAppRecord['sccmDetectionRules'],
+    sccmAppData: row.sccm_app_data as unknown as SccmApplication,
+    sccmDetectionRules: row.sccm_detection_rules as unknown as SccmAppRecord['sccmDetectionRules'],
     sccmInstallCommand: row.sccm_install_command,
     sccmUninstallCommand: row.sccm_uninstall_command,
     sccmInstallBehavior: row.sccm_install_behavior,
@@ -88,13 +83,13 @@ function rowToAppRecord(row: SccmAppRow): SccmAppRecord {
     matchConfidence: row.match_confidence,
     matchedWingetId: row.matched_winget_id,
     matchedWingetName: row.matched_winget_name,
-    partialMatches: row.partial_matches as SccmAppRecord['partialMatches'],
+    partialMatches: row.partial_matches as unknown as SccmAppRecord['partialMatches'],
     matchedBy: row.matched_by as SccmAppRecord['matchedBy'],
     preserveDetectionRules: row.preserve_detection_rules,
     preserveInstallCommands: row.preserve_install_commands,
     useWingetDefaults: row.use_winget_defaults,
-    customSettings: row.custom_settings as SccmAppRecord['customSettings'],
-    convertedDetectionRules: row.converted_detection_rules as SccmAppRecord['convertedDetectionRules'],
+    customSettings: row.custom_settings as unknown as SccmAppRecord['customSettings'],
+    convertedDetectionRules: row.converted_detection_rules as unknown as SccmAppRecord['convertedDetectionRules'],
     convertedInstallBehavior: row.converted_install_behavior as SccmAppRecord['convertedInstallBehavior'],
     migrationStatus: row.migration_status as SccmAppRecord['migrationStatus'],
     migrationError: row.migration_error || undefined,
@@ -112,12 +107,11 @@ async function fetchWingetPackage(
   wingetId: string,
   supabase: ReturnType<typeof createServerClient>
 ): Promise<NormalizedPackage | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = (await supabase
     .from('curated_apps')
     .select('winget_id, name, publisher, latest_version, description, homepage, license, tags, category, icon_path')
     .eq('winget_id', wingetId)
-    .single();
+    .single()) as { data: CuratedAppRow | null; error: Error | null };
 
   if (error || !data) {
     return null;
@@ -127,13 +121,13 @@ async function fetchWingetPackage(
     id: data.winget_id,
     name: data.name,
     publisher: data.publisher,
-    version: data.latest_version,
-    description: data.description,
-    homepage: data.homepage,
-    license: data.license,
-    tags: data.tags,
-    category: data.category,
-    iconPath: data.icon_path,
+    version: data.latest_version ?? '',
+    description: data.description ?? undefined,
+    homepage: data.homepage ?? undefined,
+    license: data.license ?? undefined,
+    tags: data.tags ?? undefined,
+    category: data.category ?? undefined,
+    iconPath: data.icon_path ?? undefined,
   };
 }
 
@@ -144,44 +138,44 @@ async function fetchBestInstaller(
   pkg: NormalizedPackage,
   supabase: ReturnType<typeof createServerClient>
 ): Promise<NormalizedInstaller | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = (await supabase
     .from('version_history')
     .select('installers, installer_url, installer_sha256, installer_type, installer_scope')
     .eq('winget_id', pkg.id)
     .eq('version', pkg.version)
-    .single();
+    .single()) as { data: VersionHistoryRow | null; error: Error | null };
 
   if (error || !data) {
     return null;
   }
 
   // Try to find x64 installer from installers array
-  if (data.installers && Array.isArray(data.installers)) {
-    const x64 = data.installers.find(
-      (i: { architecture?: string }) => i.architecture === 'x64'
+  const installers = data.installers as InstallerData[] | null;
+  if (installers && Array.isArray(installers)) {
+    const x64 = installers.find(
+      (i: InstallerData) => i.architecture === 'x64' || i.Architecture === 'x64'
     );
     if (x64) {
       return {
-        architecture: 'x64',
-        url: x64.InstallerUrl || x64.url,
-        sha256: x64.InstallerSha256 || x64.sha256,
-        type: (x64.InstallerType || x64.type || 'exe').toLowerCase(),
-        scope: x64.Scope || x64.scope,
+        architecture: 'x64' as WingetArchitecture,
+        url: x64.InstallerUrl || x64.url || '',
+        sha256: x64.InstallerSha256 || x64.sha256 || '',
+        type: (x64.InstallerType || x64.type || 'exe').toLowerCase() as WingetInstallerType,
+        scope: (x64.Scope || x64.scope) as WingetScope | undefined,
         silentArgs: x64.InstallerSwitches?.Silent || x64.silentArgs,
         productCode: x64.ProductCode || x64.productCode,
       };
     }
 
     // Fall back to first installer
-    const first = data.installers[0];
+    const first = installers[0];
     if (first) {
       return {
-        architecture: first.Architecture || first.architecture || 'x64',
-        url: first.InstallerUrl || first.url,
-        sha256: first.InstallerSha256 || first.sha256,
-        type: (first.InstallerType || first.type || 'exe').toLowerCase(),
-        scope: first.Scope || first.scope,
+        architecture: (first.Architecture || first.architecture || 'x64') as WingetArchitecture,
+        url: first.InstallerUrl || first.url || '',
+        sha256: first.InstallerSha256 || first.sha256 || '',
+        type: (first.InstallerType || first.type || 'exe').toLowerCase() as WingetInstallerType,
+        scope: (first.Scope || first.scope) as WingetScope | undefined,
         silentArgs: first.InstallerSwitches?.Silent || first.silentArgs,
         productCode: first.ProductCode || first.productCode,
       };
@@ -191,11 +185,11 @@ async function fetchBestInstaller(
   // Fall back to single installer columns
   if (data.installer_url && data.installer_sha256) {
     return {
-      architecture: 'x64',
+      architecture: 'x64' as WingetArchitecture,
       url: data.installer_url,
       sha256: data.installer_sha256,
-      type: data.installer_type || 'exe',
-      scope: data.installer_scope,
+      type: (data.installer_type || 'exe') as WingetInstallerType,
+      scope: data.installer_scope as WingetScope | undefined,
     };
   }
 
@@ -237,13 +231,12 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify migration ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: migration, error: migrationError } = await (supabase as any)
+    const { data: migration, error: migrationError } = (await supabase
       .from('sccm_migrations')
       .select('id, status')
       .eq('id', body.migrationId)
       .eq('tenant_id', auth.tenantId)
-      .single();
+      .single()) as { data: { id: string; status: string } | null; error: Error | null };
 
     if (migrationError || !migration) {
       return NextResponse.json(
@@ -253,12 +246,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch apps
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: appRows, error: appsError } = await (supabase as any)
+    const { data: appRows, error: appsError } = (await supabase
       .from('sccm_apps')
       .select('*')
       .eq('migration_id', body.migrationId)
-      .in('id', body.appIds) as { data: SccmAppRow[] | null; error: Error | null };
+      .in('id', body.appIds)) as { data: SccmAppRow[] | null; error: Error | null };
 
     if (appsError || !appRows || appRows.length === 0) {
       return NextResponse.json(
@@ -305,11 +297,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute mode - create cart items and update app status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from('sccm_migrations')
-      .update({ status: 'migrating', updated_at: new Date().toISOString() })
-      .eq('id', body.migrationId);
+    // Using type-safe update helpers - cast to unknown first to avoid TypeScript inference issues
+    type SccmMigrationUpdate = Database['public']['Tables']['sccm_migrations']['Update'];
+    type SccmAppUpdate = Database['public']['Tables']['sccm_apps']['Update'];
+    type SupabaseClientUntyped = { from: (table: string) => { update: (data: Record<string, unknown>) => { eq: (col: string, val: string) => Promise<unknown> } } };
+
+    const untypedClient = supabase as unknown as SupabaseClientUntyped;
+
+    const updateMigration = async (id: string, data: Partial<SccmMigrationUpdate>) => {
+      return untypedClient.from('sccm_migrations').update(data as Record<string, unknown>).eq('id', id);
+    };
+
+    const updateApp = async (id: string, data: Partial<SccmAppUpdate>) => {
+      return untypedClient.from('sccm_apps').update(data as Record<string, unknown>).eq('id', id);
+    };
+
+    await updateMigration(body.migrationId, { status: 'migrating', updated_at: new Date().toISOString() });
 
     // Log migration started (fire-and-forget)
     logMigrationHistoryAsync(
@@ -327,38 +330,26 @@ export async function POST(request: NextRequest) {
 
     // Update app statuses
     for (const appId of successful) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('sccm_apps')
-        .update({
-          migration_status: 'queued',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appId);
+      await updateApp(appId, {
+        migration_status: 'queued',
+        updated_at: new Date().toISOString(),
+      });
     }
 
     for (const { appId, error } of failed) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('sccm_apps')
-        .update({
-          migration_status: 'failed',
-          migration_error: error,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', appId);
+      await updateApp(appId, {
+        migration_status: 'failed',
+        migration_error: error,
+        updated_at: new Date().toISOString(),
+      });
     }
 
     // Update migration status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from('sccm_migrations')
-      .update({
-        status: 'ready',
-        last_migration_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', body.migrationId);
+    await updateMigration(body.migrationId, {
+      status: 'ready',
+      last_migration_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
 
     // Log migration result (fire-and-forget)
     logMigrationHistoryAsync(
@@ -410,8 +401,7 @@ export async function POST(request: NextRequest) {
       ...response,
       cartItems,
     });
-  } catch (error) {
-    console.error('Migration POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to process migration' },
       { status: 500 }
@@ -444,13 +434,12 @@ export async function PATCH(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify app ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: app, error: appError } = await (supabase as any)
+    const { data: app, error: appError } = (await supabase
       .from('sccm_apps')
       .select('id, migration_id')
       .eq('id', body.appId)
       .eq('tenant_id', auth.tenantId)
-      .single();
+      .single()) as { data: { id: string; migration_id: string } | null; error: Error | null };
 
     if (appError || !app) {
       return NextResponse.json(
@@ -480,16 +469,28 @@ export async function PATCH(request: NextRequest) {
       updates.migration_status = body.migrationStatus;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updated, error: updateError } = await (supabase as any)
+    // Cast to untyped client for update operation on dynamically typed tables
+    type SupabaseUpdateClient = {
+      from: (table: string) => {
+        update: (data: Record<string, unknown>) => {
+          eq: (col: string, val: string) => {
+            select: () => {
+              single: () => Promise<{ data: SccmAppRow | null; error: Error | null }>;
+            };
+          };
+        };
+      };
+    };
+    const updateClient = supabase as unknown as SupabaseUpdateClient;
+
+    const { data: updated, error: updateError } = await updateClient
       .from('sccm_apps')
-      .update(updates)
+      .update(updates as Record<string, unknown>)
       .eq('id', body.appId)
       .select()
       .single();
 
     if (updateError) {
-      console.error('Error updating app settings:', updateError);
       return NextResponse.json(
         { error: 'Failed to update app settings' },
         { status: 500 }
@@ -511,8 +512,7 @@ export async function PATCH(request: NextRequest) {
     );
 
     return NextResponse.json({ app: updated });
-  } catch (error) {
-    console.error('Migration PATCH error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to update migration settings' },
       { status: 500 }

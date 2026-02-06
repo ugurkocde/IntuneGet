@@ -15,6 +15,7 @@ interface CuratedAppResult {
   tags: string[] | null;
   icon_path: string | null;
   popularity_rank: number | null;
+  installer_type: string | null;
   rank: number;
 }
 
@@ -22,7 +23,8 @@ interface CuratedAppResult {
 async function searchCachedPackages(
   query: string,
   limit: number,
-  category?: string | null
+  category?: string | null,
+  sort: string = 'popular'
 ) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -43,14 +45,24 @@ async function searchCachedPackages(
   );
 
   if (curatedError) {
-    console.error('Cache search error:', curatedError);
     return null;
   }
 
   if (curatedData && curatedData.length > 0) {
+    let results = curatedData as CuratedAppResult[];
+
+    // Apply secondary sorting if requested
+    if (sort === 'name') {
+      results = results.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sort === 'newest') {
+      // newest first by id (higher id = newer entry)
+      results = results.sort((a, b) => b.id - a.id);
+    }
+    // 'popular' keeps the RPC's default relevance + popularity ordering
+
     return {
       source: 'curated',
-      data: curatedData as CuratedAppResult[],
+      data: results,
     };
   }
 
@@ -63,6 +75,7 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || searchParams.get('query');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const category = searchParams.get('category');
+    const sort = searchParams.get('sort') || 'popular';
 
     if (!query || query.trim().length < 2) {
       return NextResponse.json(
@@ -80,7 +93,8 @@ export async function GET(request: NextRequest) {
     const cachedResults = await searchCachedPackages(
       query,
       sanitizedLimit,
-      category
+      category,
+      sort
     );
 
     if (cachedResults && cachedResults.data.length > 0) {
@@ -99,6 +113,7 @@ export async function GET(request: NextRequest) {
           category: p.category,
           iconPath: p.icon_path,
           popularityRank: p.popularity_rank,
+          installerType: p.installer_type,
         })),
         source: 'curated',
       });
@@ -112,8 +127,7 @@ export async function GET(request: NextRequest) {
       packages: [],
       source: 'curated',
     });
-  } catch (error) {
-    console.error('Search error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to search packages' },
       { status: 500 }

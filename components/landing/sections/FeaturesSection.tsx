@@ -2,10 +2,9 @@
 
 import { Package, Upload, Cloud } from "lucide-react";
 import { FadeIn } from "../animations/FadeIn";
+import { TextReveal } from "../animations/TextReveal";
 import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 import { FeatureCard } from "../ui/FeatureCard";
-import { GradientOrb } from "../ui/GradientOrb";
-import { GridBackground } from "../ui/GridBackground";
 
 const features = [
   {
@@ -37,23 +36,6 @@ export function FeaturesSection() {
       id="features"
       className="relative w-full py-24 md:py-32 overflow-hidden"
     >
-      {/* Background */}
-      <GridBackground variant="grid" opacity={0.2} className="absolute inset-0" />
-
-      {/* Gradient orbs */}
-      <GradientOrb
-        color="cyan"
-        size="lg"
-        className="-left-48 top-1/4"
-        intensity="low"
-      />
-      <GradientOrb
-        color="violet"
-        size="md"
-        className="-right-24 bottom-1/4"
-        intensity="low"
-      />
-
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
         {/* Section header */}
         <div className="text-center mb-16 md:mb-20 space-y-4">
@@ -62,13 +44,15 @@ export function FeaturesSection() {
               Features
             </span>
           </FadeIn>
-          <FadeIn delay={0.1}>
-            <h2 className="text-display-md text-white">
-              Everything You Need
-            </h2>
-          </FadeIn>
+          <TextReveal
+            as="h2"
+            text="Everything You Need"
+            className="text-3xl md:text-4xl lg:text-5xl font-bold text-stone-900"
+            delay={0.1}
+            staggerDelay={0.04}
+          />
           <FadeIn delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-zinc-400">
+            <p className="mx-auto max-w-2xl text-lg text-stone-600">
               Powerful tools to streamline your Intune app deployment process
             </p>
           </FadeIn>

@@ -25,45 +25,52 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://intuneget.com"),
-  title: "IntuneGet | Deploy Winget Apps to Intune",
+  title: "IntuneGet | Free Intune App Deployment Tool - Deploy 10,000+ Winget Apps",
   description:
-    "Streamline your Microsoft Intune app deployment process with Winget integration. Package and upload applications effortlessly with automated deployment and cloud-native features.",
+    "Deploy 10,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool. No scripting, no IntuneWin packaging. Trusted by IT teams worldwide.",
   keywords: [
-    "Intune",
-    "Winget",
-    "App Deployment",
+    "Intune app deployment",
+    "Winget Intune",
+    "free Intune deployment tool",
     "Microsoft Intune",
-    "Cloud Deployment",
-    "Enterprise Software",
-    "Application Management",
+    "Intune app packaging",
+    "Winget to Intune",
+    "Intune application management",
+    "deploy apps to Intune",
+    "open source Intune tool",
+    "IntuneWin alternative",
+    "enterprise app deployment",
+    "Intune automation",
   ],
-  authors: [{ name: "Ugur Koc" }],
+  authors: [{ name: "Ugur Koc", url: "https://github.com/ugurkocde" }],
   creator: "Ugur Koc",
   publisher: "IntuneGet",
+  alternates: {
+    canonical: "https://intuneget.com",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: "https://intuneget.com",
-    title: "IntuneGet - Simplify Your Intune App Deployment",
+    title: "IntuneGet - Deploy 10,000+ Winget Apps to Intune for Free",
     description:
-      "Streamline your Microsoft Intune app deployment process with Winget integration. Access 1000+ apps with automated deployment.",
+      "Deploy 10,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool with no scripting required.",
     siteName: "IntuneGet",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "IntuneGet - Intune App Deployment Made Easy",
+        alt: "IntuneGet - Free Intune App Deployment Tool for 10,000+ Winget Apps",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "IntuneGet - Simplify Your Intune App Deployment",
+    title: "IntuneGet - Deploy 10,000+ Winget Apps to Intune for Free",
     description:
-      "Streamline your Microsoft Intune app deployment process with Winget integration. Access 1000+ apps with automated deployment.",
+      "Deploy 10,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool with no scripting required.",
     images: ["/og-image.png"],
-    creator: "@ugurkoc",
   },
   icons: {
     icon: [
@@ -86,14 +93,82 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  verification: {
-    google: "verification_token",
-  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+};
+
+// Organization JSON-LD structured data
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "IntuneGet",
+  url: "https://intuneget.com",
+  logo: "https://intuneget.com/logo-512.png",
+  description:
+    "IntuneGet is the leading free, open-source tool for deploying Winget applications to Microsoft Intune. Deploy 10,000+ apps in minutes with no scripting required.",
+  sameAs: ["https://github.com/ugurkocde/IntuneGet", "https://intunebrew.com"],
+  founder: {
+    "@type": "Person",
+    name: "Ugur Koc",
+    url: "https://ugurlabs.com",
+    sameAs: [
+      "https://github.com/ugurkocde",
+      "https://www.linkedin.com/in/ugurkocde/",
+    ],
+    jobTitle: "Software Engineer & IT Automation Expert",
+    knowsAbout: [
+      "Microsoft Intune",
+      "Endpoint Management",
+      "Application Deployment",
+      "IT Automation",
+      "Winget",
+    ],
+  },
+};
+
+// Person JSON-LD for E-E-A-T signals
+const personJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: "Ugur Koc",
+  url: "https://ugurlabs.com",
+  sameAs: [
+    "https://github.com/ugurkocde",
+    "https://www.linkedin.com/in/ugurkocde/",
+  ],
+  jobTitle: "Software Engineer & IT Automation Expert",
+  knowsAbout: [
+    "Microsoft Intune",
+    "Endpoint Management",
+    "Application Deployment",
+    "IT Automation",
+    "Winget",
+  ],
+};
+
+// WebSite JSON-LD with SearchAction for sitelinks search box
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "IntuneGet",
+  url: "https://intuneget.com",
+  description:
+    "Free, open-source Intune app deployment tool. Deploy 10,000+ Winget apps to Microsoft Intune in minutes.",
+  publisher: {
+    "@type": "Organization",
+    name: "IntuneGet",
+  },
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: "https://intuneget.com/dashboard?search={search_term_string}",
+    },
+    "query-input": "required name=search_term_string",
+  },
 };
 
 export default function RootLayout({
@@ -115,6 +190,26 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <link rel="preconnect" href="https://plausible.io" />
+        <link rel="dns-prefetch" href="https://api.github.com" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(personJsonLd),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(websiteJsonLd),
+          }}
+        />
         {ANALYTICS_ENABLED && PLAUSIBLE_DOMAIN && (
           <Script
             defer

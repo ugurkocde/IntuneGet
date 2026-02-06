@@ -14,6 +14,8 @@ import {
 } from '@/lib/github-actions';
 import { getAppConfig } from '@/lib/config';
 import { getFeatureFlags } from '@/lib/features';
+import { verifyTenantConsent } from '@/lib/msp/consent-verification';
+import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import type { CartItem } from '@/types/upload';
 
 interface PackageRequestBody {
@@ -33,93 +35,6 @@ interface PackagingJobRecord {
   github_run_id?: string;
   github_run_url?: string;
   created_at: string;
-}
-
-type ConsentVerifyError = 'consent_not_granted' | 'insufficient_intune_permissions' | 'network_error' | null;
-
-interface ConsentVerifyResult {
-  verified: boolean;
-  error?: ConsentVerifyError;
-}
-
-/**
- * Verify that admin consent has been granted for the tenant
- * Uses client credentials grant to test if the service principal exists
- * Also tests actual Intune API access to verify DeviceManagementApps.ReadWrite.All permission
- */
-async function verifyTenantConsent(tenantId: string): Promise<ConsentVerifyResult> {
-  const clientId = process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET;
-
-  // If credentials not configured, skip check (allows local/dev mode)
-  if (!clientId || !clientSecret) {
-    console.warn('Consent verification skipped: credentials not configured');
-    return { verified: true };
-  }
-
-  try {
-    const response = await fetch(
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          scope: 'https://graph.microsoft.com/.default',
-          grant_type: 'client_credentials',
-        }).toString(),
-      }
-    );
-
-    if (!response.ok) {
-      return { verified: false, error: 'consent_not_granted' };
-    }
-
-    // Token obtained - first check roles claim for explicit permission verification
-    const tokenData = await response.json();
-    const accessToken = tokenData.access_token;
-
-    try {
-      const tokenPayload = JSON.parse(
-        Buffer.from(accessToken.split('.')[1], 'base64').toString()
-      );
-      const roles: string[] = tokenPayload.roles || [];
-
-      if (!roles.includes('DeviceManagementApps.ReadWrite.All')) {
-        console.error(`Deployment blocked: Token missing DeviceManagementApps.ReadWrite.All. Found: ${roles.join(', ')}`);
-        return { verified: false, error: 'insufficient_intune_permissions' };
-      }
-    } catch {
-      // Fall through to API test as backup
-    }
-
-    // Secondary validation: test actual Intune API access
-    const intuneTestResponse = await fetch(
-      'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$top=1&$select=id',
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (intuneTestResponse.status === 403) {
-      console.error(`Intune API access denied for tenant ${tenantId} - DeviceManagementApps.ReadWrite.All not granted`);
-      return { verified: false, error: 'insufficient_intune_permissions' };
-    }
-
-    if (intuneTestResponse.status >= 500) {
-      return { verified: false, error: 'network_error' };
-    }
-
-    return { verified: true };
-  } catch (error) {
-    console.error('Error verifying tenant consent:', error);
-    return { verified: false, error: 'network_error' };
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -176,8 +91,7 @@ export async function POST(request: NextRequest) {
       const supabaseValidation = createServerClient();
 
       // Check if user is a member of an MSP organization
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: membership } = await (supabaseValidation as any)
+      const { data: membership } = await supabaseValidation
         .from('msp_user_memberships')
         .select('msp_organization_id')
         .eq('user_id', userId)
@@ -191,8 +105,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Check if the target tenant is managed by this MSP organization
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: managedTenant } = await (supabaseValidation as any)
+      const { data: managedTenant } = await supabaseValidation
         .from('msp_managed_tenants')
         .select('id')
         .eq('msp_organization_id', membership.msp_organization_id)
@@ -311,7 +224,6 @@ export async function POST(request: NextRequest) {
         });
 
         if (!jobRecord) {
-          console.error('Failed to create job record');
           errors.push({ wingetId: item.wingetId, error: 'Failed to create job record' });
           continue;
         }
@@ -330,8 +242,6 @@ export async function POST(request: NextRequest) {
             package_config: item,
             created_at: jobRecord?.created_at || new Date().toISOString(),
           });
-
-          console.log(`Job queued for local packager: ${item.wingetId}`);
           continue;
         }
 
@@ -384,10 +294,7 @@ export async function POST(request: NextRequest) {
           package_config: item,
           created_at: jobRecord?.created_at || new Date().toISOString(),
         });
-
-        console.log(`GitHub Actions workflow triggered for ${item.wingetId}`);
       } catch (error) {
-        console.error(`Failed to process ${item.wingetId}:`, error);
         errors.push({
           wingetId: item.wingetId,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -404,51 +311,12 @@ export async function POST(request: NextRequest) {
         ? `${jobs.length} job(s) queued, ${errors.length} failed`
         : `${jobs.length} job(s) queued successfully`,
     });
-  } catch (error) {
-    console.error('Package API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
-}
-
-/**
- * Extract silent switches from the install command
- */
-function extractSilentSwitches(installCommand: string, installerType: string): string {
-  // Common silent switches by installer type
-  const defaultSwitches: Record<string, string> = {
-    msi: '/qn /norestart',
-    exe: '/S',
-    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
-    nullsoft: '/S',
-    wix: '/qn /norestart',
-    burn: '/q /norestart',
-    msix: '', // MSIX doesn't need switches
-  };
-
-  // Strip executable path first (handles paths with hyphens like "7z2501-x64.exe")
-  // This removes everything up to and including common installer extensions
-  let cleaned = installCommand
-    .replace(/^"[^"]+"\s*/, '') // Remove quoted paths like "C:\path\installer.exe"
-    .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, ''); // Remove unquoted paths ending in installer extensions
-
-  // Strip msiexec action switches and their targets:
-  // /i filename.msi, /x {GUID}, /p patch.msp, etc.
-  cleaned = cleaned
-    .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '') // /i "quoted path.msi"
-    .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '') // /x {GUID}
-    .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '') // /i filename.msi
-    .replace(/\/[ixp]\s+/gi, ''); // /i alone (leftover)
-
-  // Extract switches from remaining string (starts with / or -)
-  const switchMatch = cleaned.match(/(?:\/\S+|-{1,2}\S+)(?:\s+(?:\/\S+|-{1,2}\S+))*/);
-  if (switchMatch && switchMatch[0] !== '-DeploymentType') {
-    return switchMatch[0];
-  }
-
-  return defaultSwitches[installerType] || '/S';
 }
 
 /**
@@ -486,8 +354,7 @@ export async function GET(request: NextRequest) {
     const jobs = await db.jobs.getByUserId(userId!, 50);
 
     return NextResponse.json({ jobs });
-  } catch (error) {
-    console.error('Error fetching jobs:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch jobs' },
       { status: 500 }

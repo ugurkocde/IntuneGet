@@ -63,7 +63,7 @@ export default function MspDashboardPage() {
   if (isLoadingOrganization) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 bg-white/10 rounded animate-pulse" />
+        <div className="h-8 w-48 bg-black/10 rounded animate-pulse" />
         <SkeletonGrid count={4} columns={4} variant="stat" />
       </div>
     );
@@ -97,7 +97,7 @@ export default function MspDashboardPage() {
         gradientColors="mixed"
         actions={
           <Link href="/dashboard/msp/tenants/add">
-            <Button className="bg-gradient-to-r from-accent-cyan to-accent-violet text-white hover:opacity-90">
+            <Button className="bg-gradient-to-r from-accent-cyan to-accent-violet text-bg-elevated hover:opacity-90">
               <Plus className="w-4 h-4 mr-2" />
               Add Customer
             </Button>
@@ -115,7 +115,7 @@ export default function MspDashboardPage() {
         {/* Tenants Section */}
         <motion.div variants={itemVariants} className="lg:col-span-1 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium text-white">Managed Tenants</h2>
+            <h2 className="text-lg font-medium text-text-primary">Managed Tenants</h2>
             <Link
               href="/dashboard/msp/tenants"
               className="text-sm text-accent-cyan hover:text-accent-cyan-bright transition-colors"
@@ -129,17 +129,17 @@ export default function MspDashboardPage() {
             {isLoadingTenants && activeTenants.length === 0 && (
               <div className="space-y-3">
                 {[1, 2].map((i) => (
-                  <div key={i} className="h-24 glass-dark rounded-xl border border-white/5 animate-pulse" />
+                  <div key={i} className="h-24 glass-light rounded-xl border border-black/5 animate-pulse" />
                 ))}
               </div>
             )}
 
             {!isLoadingTenants && activeTenants.length === 0 && pendingTenants.length === 0 && (
-              <div className="p-6 rounded-xl glass-dark border border-white/5 text-center">
-                <Building2 className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-                <p className="text-sm text-zinc-400 mb-3">No customer tenants yet</p>
+              <div className="p-6 rounded-xl glass-light border border-black/5 text-center">
+                <Building2 className="w-8 h-8 text-text-muted mx-auto mb-3" />
+                <p className="text-sm text-text-secondary mb-3">No customer tenants yet</p>
                 <Link href="/dashboard/msp/tenants/add">
-                  <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/5">
+                  <Button size="sm" variant="outline" className="border-black/20 text-text-primary hover:bg-black/5">
                     <Plus className="w-4 h-4 mr-2" />
                     Add first customer
                   </Button>
@@ -165,7 +165,7 @@ export default function MspDashboardPage() {
             {/* Show pending tenants if any */}
             {pendingTenants.length > 0 && (
               <>
-                <div className="text-xs text-zinc-500 uppercase tracking-wider px-1 mt-4">
+                <div className="text-xs text-text-muted uppercase tracking-wider px-1 mt-4">
                   Pending Consent ({pendingTenants.length})
                 </div>
                 {pendingTenants.slice(0, 2).map((tenant, index) => (
@@ -184,7 +184,7 @@ export default function MspDashboardPage() {
             {(activeTenants.length > 3 || pendingTenants.length > 2) && (
               <Link
                 href="/dashboard/msp/tenants"
-                className="block p-3 text-center text-sm text-zinc-400 hover:text-white rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/5"
+                className="block p-3 text-center text-sm text-text-secondary hover:text-text-primary rounded-lg bg-black/5 hover:bg-black/10 transition-colors border border-black/5"
               >
                 View all {managedTenants.length} tenants
               </Link>

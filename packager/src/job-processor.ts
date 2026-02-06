@@ -26,11 +26,11 @@ interface PackagingResult {
 
 export class JobProcessor {
   private config: PackagerConfig;
-  private poller: JobPoller;
+  private poller: JobPoller | null;
   private uploader: IntuneUploader;
   private logger: Logger;
 
-  constructor(config: PackagerConfig, poller: JobPoller) {
+  constructor(config: PackagerConfig, poller: JobPoller | null) {
     this.config = config;
     this.poller = poller;
     this.uploader = new IntuneUploader(config);
@@ -39,8 +39,13 @@ export class JobProcessor {
 
   /**
    * Process a packaging job
+   * @throws Error if poller is not provided (null)
    */
   async processJob(job: PackagingJob): Promise<void> {
+    if (!this.poller) {
+      throw new Error('JobProcessor requires a JobPoller instance to process jobs');
+    }
+    const poller = this.poller;
     const jobWorkDir = path.join(this.config.paths.work, job.id);
 
     try {
@@ -48,36 +53,36 @@ export class JobProcessor {
       await fs.promises.mkdir(jobWorkDir, { recursive: true });
 
       // Step 1: Download tools if needed (5%)
-      await this.poller.updateJobProgress(job.id, 5, 'Checking tools...');
+      await poller.updateJobProgress(job.id, 5, 'Checking tools...');
       await this.ensureToolsAvailable();
 
       // Step 2: Download installer (10-25%)
-      await this.poller.updateJobProgress(job.id, 10, 'Downloading installer...');
+      await poller.updateJobProgress(job.id, 10, 'Downloading installer...');
       const installerPath = await this.downloadInstaller(job, jobWorkDir);
-      await this.poller.updateJobProgress(job.id, 25, 'Installer downloaded');
+      await poller.updateJobProgress(job.id, 25, 'Installer downloaded');
 
       // Step 3: Verify SHA256 (25-30%)
       if (job.installer_sha256) {
-        await this.poller.updateJobProgress(job.id, 25, 'Verifying checksum...');
+        await poller.updateJobProgress(job.id, 25, 'Verifying checksum...');
         await this.verifyChecksum(installerPath, job.installer_sha256);
-        await this.poller.updateJobProgress(job.id, 30, 'Checksum verified');
+        await poller.updateJobProgress(job.id, 30, 'Checksum verified');
       }
 
       // Step 4: Create PSADT package (30-50%)
-      await this.poller.updateJobProgress(job.id, 30, 'Creating PSADT package...');
+      await poller.updateJobProgress(job.id, 30, 'Creating PSADT package...');
       const packageDir = await this.createPsadtPackage(job, installerPath, jobWorkDir);
-      await this.poller.updateJobProgress(job.id, 50, 'PSADT package created');
+      await poller.updateJobProgress(job.id, 50, 'PSADT package created');
 
       // Step 5: Create .intunewin package (50-70%)
-      await this.poller.updateJobProgress(job.id, 50, 'Creating .intunewin package...');
+      await poller.updateJobProgress(job.id, 50, 'Creating .intunewin package...');
       const result = await this.createIntunewinPackage(packageDir, jobWorkDir);
-      await this.poller.updateJobProgress(job.id, 70, '.intunewin package created');
+      await poller.updateJobProgress(job.id, 70, '.intunewin package created');
 
       // Step 6: Update status to uploading
-      await this.poller.updateJobStatus(job.id, 'uploading');
+      await poller.updateJobStatus(job.id, 'uploading');
 
       // Step 7: Upload to Intune (70-95%)
-      await this.poller.updateJobProgress(job.id, 75, 'Uploading to Intune...');
+      await poller.updateJobProgress(job.id, 75, 'Uploading to Intune...');
       const intuneApp = await this.uploader.uploadToIntune(
         job,
         result.intunewinPath,
@@ -85,12 +90,12 @@ export class JobProcessor {
         async (percent, message) => {
           // Map upload progress (0-100) to overall progress (75-95)
           const overallPercent = 75 + Math.floor(percent * 0.2);
-          await this.poller.updateJobProgress(job.id, overallPercent, message);
+          await poller.updateJobProgress(job.id, overallPercent, message);
         }
       );
 
       // Step 8: Mark as deployed (100%)
-      await this.poller.updateJobStatus(job.id, 'deployed', {
+      await poller.updateJobStatus(job.id, 'deployed', {
         intune_app_id: intuneApp.id,
         intune_app_url: intuneApp.url,
         progress_percent: 100,
@@ -115,8 +120,9 @@ export class JobProcessor {
 
   /**
    * Ensure required tools are downloaded
+   * This method is public to allow standalone tool setup without processing jobs
    */
-  private async ensureToolsAvailable(): Promise<void> {
+  async ensureToolsAvailable(): Promise<void> {
     const toolsDir = this.config.paths.tools;
     await fs.promises.mkdir(toolsDir, { recursive: true });
 

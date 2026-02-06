@@ -185,10 +185,10 @@ export default function NewMigrationPage() {
             <Terminal className="w-6 h-6 text-accent-violet" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-white mb-1">
+            <h3 className="text-lg font-semibold text-text-primary mb-1">
               Export from SCCM
             </h3>
-            <p className="text-zinc-400 text-sm mb-4">
+            <p className="text-text-secondary text-sm mb-4">
               Run this PowerShell script on your SCCM server to export applications with their
               deployment types, detection rules, and settings.
             </p>
@@ -200,10 +200,10 @@ export default function NewMigrationPage() {
                 <Download className="w-4 h-4 mr-2" />
                 Download Script
               </Button>
-              <span className="text-zinc-500 text-sm">Export-SCCMApps.ps1</span>
+              <span className="text-text-muted text-sm">Export-SCCMApps.ps1</span>
             </div>
-            <div className="mt-4 p-3 bg-black/30 rounded-lg border border-white/5">
-              <p className="text-xs text-zinc-500 font-mono">
+            <div className="mt-4 p-3 bg-black/5 rounded-lg border border-black/5">
+              <p className="text-xs text-text-muted font-mono">
                 # Run on SCCM server with ConfigMgr console installed
               </p>
               <p className="text-xs text-accent-cyan font-mono mt-1">
@@ -216,9 +216,9 @@ export default function NewMigrationPage() {
 
       {/* Divider */}
       <div className="flex items-center gap-4 mb-8">
-        <div className="flex-1 h-px bg-white/10" />
-        <span className="text-zinc-500 text-sm">or upload existing export</span>
-        <div className="flex-1 h-px bg-white/10" />
+        <div className="flex-1 h-px bg-black/10" />
+        <span className="text-text-muted text-sm">or upload existing export</span>
+        <div className="flex-1 h-px bg-black/10" />
       </div>
 
       {/* Dropzone */}
@@ -232,7 +232,7 @@ export default function NewMigrationPage() {
             ? 'border-accent-cyan bg-accent-cyan/5'
             : state.fileContent
               ? 'border-status-success/50 bg-status-success/5'
-              : 'border-white/10 hover:border-white/20 bg-white/2'
+              : 'border-black/10 hover:border-black/20 bg-black/2'
         )}
       >
         <input
@@ -253,15 +253,15 @@ export default function NewMigrationPage() {
                 )}
               </div>
               <div>
-                <p className="text-white font-medium">{state.fileName}</p>
-                <p className="text-zinc-500 text-sm mt-1">
+                <p className="text-text-primary font-medium">{state.fileName}</p>
+                <p className="text-text-muted text-sm mt-1">
                   {state.fileType?.toUpperCase()} file ready to import
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="text-zinc-400"
+                className="text-text-secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   setState(prev => ({
@@ -278,12 +278,12 @@ export default function NewMigrationPage() {
             </>
           ) : (
             <>
-              <div className="w-16 h-16 mx-auto bg-white/5 rounded-xl flex items-center justify-center">
-                <Upload className="w-8 h-8 text-zinc-400" />
+              <div className="w-16 h-16 mx-auto bg-black/5 rounded-xl flex items-center justify-center">
+                <Upload className="w-8 h-8 text-text-secondary" />
               </div>
               <div>
-                <p className="text-white font-medium">Drop your SCCM export file here</p>
-                <p className="text-zinc-500 text-sm mt-1">
+                <p className="text-text-primary font-medium">Drop your SCCM export file here</p>
+                <p className="text-text-muted text-sm mt-1">
                   or click to browse. Supports CSV and JSON formats.
                 </p>
               </div>
@@ -298,7 +298,7 @@ export default function NewMigrationPage() {
           <Info className="w-5 h-5 text-accent-cyan flex-shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="text-accent-cyan font-medium">Expected CSV columns:</p>
-            <p className="text-zinc-400 mt-1">
+            <p className="text-text-secondary mt-1">
               CI_ID, LocalizedDisplayName, Manufacturer, SoftwareVersion, IsDeployed,
               DeploymentCount, InstallCommand, UninstallCommand, InstallBehavior, Technology
             </p>
@@ -314,26 +314,26 @@ export default function NewMigrationPage() {
           className="mt-6 space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Migration Name
             </label>
             <input
               type="text"
               value={state.migrationName}
               onChange={(e) => setState(prev => ({ ...prev, migrationName: e.target.value }))}
-              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-zinc-500 focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan"
+              className="w-full px-4 py-2 bg-black/5 border border-black/10 rounded-lg text-text-primary placeholder-text-muted focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan"
               placeholder="Enter migration name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Description (optional)
             </label>
             <textarea
               value={state.migrationDescription}
               onChange={(e) => setState(prev => ({ ...prev, migrationDescription: e.target.value }))}
               rows={3}
-              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-zinc-500 focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan resize-none"
+              className="w-full px-4 py-2 bg-black/5 border border-black/10 rounded-lg text-text-primary placeholder-text-muted focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan resize-none"
               placeholder="Describe this migration"
             />
           </div>
@@ -356,7 +356,7 @@ export default function NewMigrationPage() {
       <div className="mt-8 flex items-center justify-between">
         <Button
           variant="outline"
-          className="border-white/10 text-zinc-400"
+          className="border-black/10 text-text-secondary"
           onClick={() => router.push('/dashboard/sccm')}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -380,8 +380,8 @@ export default function NewMigrationPage() {
       <div className="w-20 h-20 mx-auto bg-accent-cyan/10 rounded-xl flex items-center justify-center mb-6">
         <Loader2 className="w-10 h-10 text-accent-cyan animate-spin" />
       </div>
-      <h2 className="text-xl font-semibold text-white mb-2">Importing Applications</h2>
-      <p className="text-zinc-400">
+      <h2 className="text-xl font-semibold text-text-primary mb-2">Importing Applications</h2>
+      <p className="text-text-secondary">
         Parsing {state.fileName} and creating migration records...
       </p>
     </div>
@@ -392,8 +392,8 @@ export default function NewMigrationPage() {
       <div className="w-20 h-20 mx-auto bg-status-success/10 rounded-xl flex items-center justify-center mb-6">
         <CheckCircle2 className="w-10 h-10 text-status-success" />
       </div>
-      <h2 className="text-xl font-semibold text-white mb-2">Import Complete!</h2>
-      <p className="text-zinc-400 mb-6">
+      <h2 className="text-xl font-semibold text-text-primary mb-2">Import Complete!</h2>
+      <p className="text-text-secondary mb-6">
         Successfully imported {state.result?.validApps} applications.
         {state.result?.skippedApps && state.result.skippedApps > 0 && (
           <span className="block text-status-warning mt-1">
@@ -405,7 +405,7 @@ export default function NewMigrationPage() {
       <div className="flex items-center justify-center gap-4">
         <Button
           variant="outline"
-          className="border-white/10 text-zinc-400"
+          className="border-black/10 text-text-secondary"
           onClick={() => router.push('/dashboard/sccm')}
         >
           Back to Migrations
@@ -426,13 +426,13 @@ export default function NewMigrationPage() {
       <div className="w-20 h-20 mx-auto bg-status-error/10 rounded-xl flex items-center justify-center mb-6">
         <AlertCircle className="w-10 h-10 text-status-error" />
       </div>
-      <h2 className="text-xl font-semibold text-white mb-2">Import Failed</h2>
+      <h2 className="text-xl font-semibold text-text-primary mb-2">Import Failed</h2>
       <p className="text-status-error mb-6">{state.error}</p>
 
       <div className="flex items-center justify-center gap-4">
         <Button
           variant="outline"
-          className="border-white/10 text-zinc-400"
+          className="border-black/10 text-text-secondary"
           onClick={() => router.push('/dashboard/sccm')}
         >
           Back to Migrations
@@ -456,7 +456,7 @@ export default function NewMigrationPage() {
         gradientColors="cyan"
       />
 
-      <div className="glass-dark rounded-xl p-8 border border-white/5">
+      <div className="glass-light rounded-xl p-8 border border-black/5">
         {state.step === 'upload' && renderUploadStep()}
         {state.step === 'importing' && renderImportingStep()}
         {state.step === 'complete' && renderCompleteStep()}

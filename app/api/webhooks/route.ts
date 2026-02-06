@@ -19,7 +19,7 @@ import type {
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -30,15 +30,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get user's webhook configurations
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: webhooks, error } = await (supabase as any)
+    const { data: webhooks, error } = await supabase
       .from('webhook_configurations')
       .select('*')
       .eq('user_id', user.userId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching webhooks:', error);
       return NextResponse.json(
         { error: 'Failed to fetch webhooks' },
         { status: 500 }
@@ -52,8 +50,7 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ webhooks: sanitizedWebhooks });
-  } catch (error) {
-    console.error('Webhooks GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -67,7 +64,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -119,14 +116,12 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Check webhook limit (max 10 per user)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count, error: countError } = await (supabase as any)
+    const { count, error: countError } = await supabase
       .from('webhook_configurations')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.userId);
 
     if (countError) {
-      console.error('Error counting webhooks:', countError);
       return NextResponse.json(
         { error: 'Failed to create webhook' },
         { status: 500 }
@@ -141,8 +136,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create webhook
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: webhook, error } = await (supabase as any)
+    const { data: webhook, error } = await supabase
       .from('webhook_configurations')
       .insert({
         user_id: user.userId,
@@ -158,7 +152,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating webhook:', error);
       return NextResponse.json(
         { error: 'Failed to create webhook' },
         { status: 500 }
@@ -172,8 +165,7 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json({ webhook: sanitizedWebhook }, { status: 201 });
-  } catch (error) {
-    console.error('Webhooks POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

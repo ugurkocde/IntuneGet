@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { AppUpdatePolicyInput, AppUpdatePolicy } from '@/types/update-policies';
+import type { Json } from '@/types/database';
 
 /**
  * GET /api/update-policies
@@ -15,7 +16,7 @@ import type { AppUpdatePolicyInput, AppUpdatePolicy } from '@/types/update-polic
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -28,23 +29,21 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // Build query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
-      .from('app_update_policies')
-      .select('*')
-      .eq('user_id', user.userId)
-      .order('updated_at', { ascending: false });
-
-    // Filter by tenant if specified
-    if (tenantId) {
-      query = query.eq('tenant_id', tenantId);
-    }
-
-    const { data: policies, error } = await query;
+    // Build query - conditionally add tenant filter
+    const { data: policies, error } = tenantId
+      ? await supabase
+          .from('app_update_policies')
+          .select('*')
+          .eq('user_id', user.userId)
+          .eq('tenant_id', tenantId)
+          .order('updated_at', { ascending: false })
+      : await supabase
+          .from('app_update_policies')
+          .select('*')
+          .eq('user_id', user.userId)
+          .order('updated_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching update policies:', error);
       return NextResponse.json(
         { error: 'Failed to fetch policies' },
         { status: 500 }
@@ -55,8 +54,7 @@ export async function GET(request: NextRequest) {
       policies: policies as AppUpdatePolicy[],
       count: policies?.length || 0,
     });
-  } catch (error) {
-    console.error('Update policies GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -70,7 +68,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -116,8 +114,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Check if policy already exists for this user/tenant/app
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingPolicy } = await (supabase as any)
+    const { data: existingPolicy } = await supabase
       .from('app_update_policies')
       .select('id')
       .eq('user_id', user.userId)
@@ -125,14 +122,14 @@ export async function POST(request: NextRequest) {
       .eq('winget_id', body.winget_id)
       .single();
 
-    // Build policy data
+    // Build policy data - cast deployment_config to Json for database compatibility
     const policyData = {
       user_id: user.userId,
       tenant_id: body.tenant_id,
       winget_id: body.winget_id,
       policy_type: body.policy_type,
       pinned_version: body.policy_type === 'pin_version' ? body.pinned_version : null,
-      deployment_config: body.deployment_config || null,
+      deployment_config: (body.deployment_config || null) as Json,
       original_upload_history_id: body.original_upload_history_id || null,
       is_enabled: body.is_enabled ?? true,
       updated_at: new Date().toISOString(),
@@ -143,8 +140,7 @@ export async function POST(request: NextRequest) {
 
     if (existingPolicy) {
       // Update existing policy
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (supabase as any)
+      const result = await supabase
         .from('app_update_policies')
         .update(policyData)
         .eq('id', existingPolicy.id)
@@ -155,8 +151,7 @@ export async function POST(request: NextRequest) {
       error = result.error;
     } else {
       // Create new policy
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (supabase as any)
+      const result = await supabase
         .from('app_update_policies')
         .insert(policyData)
         .select()
@@ -167,7 +162,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
-      console.error('Error saving update policy:', error);
       return NextResponse.json(
         { error: 'Failed to save policy' },
         { status: 500 }
@@ -178,8 +172,7 @@ export async function POST(request: NextRequest) {
       policy: policy as AppUpdatePolicy,
       created: !existingPolicy,
     });
-  } catch (error) {
-    console.error('Update policies POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -7,6 +7,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { MspJob, GetMspJobsResponse } from '@/types/msp';
+import type { Database } from '@/types/database';
+
+// Type aliases for Supabase query results
+type MspUserMembershipRow = Database['public']['Tables']['msp_user_memberships']['Row'];
+type MspManagedTenantRow = Database['public']['Tables']['msp_managed_tenants']['Row'];
+type PackagingJobRow = Database['public']['Tables']['packaging_jobs']['Row'];
+
+// Type for membership query with joined organization
+interface MembershipWithOrg {
+  msp_organization_id: MspUserMembershipRow['msp_organization_id'];
+  msp_organizations: {
+    is_active: boolean;
+  };
+}
+
+// Type for managed tenant query result
+type ManagedTenantQueryResult = Pick<MspManagedTenantRow, 'tenant_id' | 'display_name'>;
 
 /**
  * GET /api/msp/jobs
@@ -14,7 +31,7 @@ import type { MspJob, GetMspJobsResponse } from '@/types/msp';
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -32,13 +49,12 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get user's MSP organization membership (only for active organizations)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: membership } = await (supabase as any)
+    const { data: membership } = await supabase
       .from('msp_user_memberships')
       .select('msp_organization_id, msp_organizations!inner(is_active)')
       .eq('user_id', user.userId)
       .eq('msp_organizations.is_active', true)
-      .single();
+      .single() as { data: MembershipWithOrg | null };
 
     if (!membership) {
       return NextResponse.json(
@@ -50,14 +66,13 @@ export async function GET(request: NextRequest) {
     const mspOrgId = membership.msp_organization_id;
 
     // Get all managed tenant IDs for this MSP
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: managedTenants } = await (supabase as any)
+    const { data: managedTenants } = await supabase
       .from('msp_managed_tenants')
       .select('tenant_id, display_name')
       .eq('msp_organization_id', mspOrgId)
       .eq('is_active', true)
       .eq('consent_status', 'granted')
-      .not('tenant_id', 'is', null);
+      .not('tenant_id', 'is', null) as { data: ManagedTenantQueryResult[] | null };
 
     if (!managedTenants || managedTenants.length === 0) {
       const response: GetMspJobsResponse = {
@@ -94,8 +109,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build the query for jobs
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
+    let query = supabase
       .from('packaging_jobs')
       .select('*', { count: 'exact' })
       .in('tenant_id', tenantId ? [tenantId] : tenantIds)
@@ -110,7 +124,6 @@ export async function GET(request: NextRequest) {
     const { data: jobs, error: jobsError, count } = await query;
 
     if (jobsError) {
-      console.error('Error fetching jobs:', jobsError);
       return NextResponse.json(
         { error: 'Failed to fetch jobs' },
         { status: 500 }
@@ -118,40 +131,26 @@ export async function GET(request: NextRequest) {
     }
 
     // Map jobs to MSP job format with tenant display names
-    const mspJobs: MspJob[] = (jobs || []).map((job: {
-      id: string;
-      tenant_id: string;
-      winget_id: string;
-      display_name: string;
-      publisher: string | null;
-      version: string;
-      status: string;
-      status_message: string | null;
-      progress_percent: number;
-      error_message: string | null;
-      intune_app_id: string | null;
-      intune_app_url: string | null;
-      created_at: string;
-      updated_at: string;
-      completed_at: string | null;
-    }) => ({
-      id: job.id,
-      tenant_id: job.tenant_id,
-      tenant_display_name: tenantNameMap[job.tenant_id] || 'Unknown Tenant',
-      winget_id: job.winget_id,
-      display_name: job.display_name,
-      publisher: job.publisher,
-      version: job.version,
-      status: job.status,
-      status_message: job.status_message,
-      progress_percent: job.progress_percent,
-      error_message: job.error_message,
-      intune_app_id: job.intune_app_id,
-      intune_app_url: job.intune_app_url,
-      created_at: job.created_at,
-      updated_at: job.updated_at,
-      completed_at: job.completed_at,
-    }));
+    const mspJobs: MspJob[] = (jobs || [])
+      .filter((job: PackagingJobRow) => job.tenant_id !== null)
+      .map((job: PackagingJobRow) => ({
+        id: job.id,
+        tenant_id: job.tenant_id as string,
+        tenant_display_name: tenantNameMap[job.tenant_id as string] || 'Unknown Tenant',
+        winget_id: job.winget_id,
+        display_name: job.display_name,
+        publisher: job.publisher,
+        version: job.version,
+        status: job.status,
+        status_message: job.status_message,
+        progress_percent: job.progress_percent,
+        error_message: job.error_message,
+        intune_app_id: job.intune_app_id,
+        intune_app_url: job.intune_app_url,
+        created_at: job.created_at,
+        updated_at: job.updated_at,
+        completed_at: job.completed_at,
+      }));
 
     const total = count || 0;
     const totalPages = Math.ceil(total / limit);
@@ -168,7 +167,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('MSP jobs GET error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

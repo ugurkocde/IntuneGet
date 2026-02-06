@@ -81,8 +81,7 @@ export async function storeUserProfile(
   try {
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from('user_profiles') as any).upsert({
+    await supabase.from('user_profiles').upsert({
       id: userId,
       email: profile.email,
       name: profile.name,
@@ -115,8 +114,8 @@ export async function getStoredTokens(
   try {
     const supabase = createServerClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from('user_profiles') as any)
+    const { data, error } = await supabase
+      .from('user_profiles')
       .select('microsoft_access_token, microsoft_refresh_token, token_expires_at, intune_tenant_id')
       .eq('id', userId)
       .single();
@@ -124,10 +123,10 @@ export async function getStoredTokens(
     if (error || !data) return null;
 
     return {
-      accessToken: data.microsoft_access_token,
-      refreshToken: data.microsoft_refresh_token,
+      accessToken: data.microsoft_access_token ?? undefined,
+      refreshToken: data.microsoft_refresh_token ?? undefined,
       expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
-      tenantId: data.intune_tenant_id,
+      tenantId: data.intune_tenant_id ?? undefined,
     };
   } catch (error) {
     console.error('Error getting stored tokens:', error);

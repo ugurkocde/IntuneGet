@@ -68,7 +68,7 @@ export function TenantCard({ tenant, onSelect, onRemove, onGetConsentUrl, isSele
         'relative group p-4 rounded-xl border transition-all duration-200',
         isSelected
           ? 'bg-accent-cyan/10 border-accent-cyan/30'
-          : 'bg-white/5 border-white/10 hover:border-white/20',
+          : 'bg-black/5 border-black/10 hover:border-black/20',
         isActive && 'cursor-pointer'
       )}
       onClick={handleSelect}
@@ -85,17 +85,17 @@ export function TenantCard({ tenant, onSelect, onRemove, onGetConsentUrl, isSele
             e.stopPropagation();
             setShowMenu(!showMenu);
           }}
-          className="p-1 rounded-md text-zinc-500 hover:text-white hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+          className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-black/10 transition-colors opacity-0 group-hover:opacity-100"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
 
         {showMenu && (
-          <div className="absolute top-full right-0 mt-1 w-48 bg-bg-elevated border border-white/10 rounded-lg shadow-xl z-10 overflow-hidden">
+          <div className="absolute top-full right-0 mt-1 w-48 bg-bg-elevated border border-black/10 rounded-lg shadow-xl z-10 overflow-hidden">
             {canGetConsentUrl && onGetConsentUrl && (
               <button
                 onClick={handleGetConsentUrl}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-black/5 transition-colors"
               >
                 <Link2 className="w-4 h-4" />
                 Get Consent URL
@@ -118,22 +118,22 @@ export function TenantCard({ tenant, onSelect, onRemove, onGetConsentUrl, isSele
         {/* Icon */}
         <div className={cn(
           'flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center',
-          isActive ? 'bg-accent-cyan/20' : 'bg-white/10'
+          isActive ? 'bg-accent-cyan/20' : 'bg-black/10'
         )}>
           <Building2 className={cn(
             'w-5 h-5',
-            isActive ? 'text-accent-cyan' : 'text-zinc-400'
+            isActive ? 'text-accent-cyan' : 'text-text-secondary'
           )} />
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-medium text-white truncate">{tenant.display_name}</h3>
+            <h3 className="font-medium text-text-primary truncate">{tenant.display_name}</h3>
           </div>
 
           {tenant.tenant_name && (
-            <p className="text-sm text-zinc-500 truncate">{tenant.tenant_name}</p>
+            <p className="text-sm text-text-muted truncate">{tenant.tenant_name}</p>
           )}
 
           {/* Status */}
@@ -146,12 +146,12 @@ export function TenantCard({ tenant, onSelect, onRemove, onGetConsentUrl, isSele
 
           {/* Notes */}
           {tenant.notes && (
-            <p className="text-xs text-zinc-500 mt-2 line-clamp-2">{tenant.notes}</p>
+            <p className="text-xs text-text-muted mt-2 line-clamp-2">{tenant.notes}</p>
           )}
 
           {/* Stats for active tenants */}
           {isActive && (
-            <div className="flex items-center gap-4 mt-3 text-xs text-zinc-500">
+            <div className="flex items-center gap-4 mt-3 text-xs text-text-muted">
               {typeof tenant.total_jobs === 'number' && (
                 <span>{tenant.total_jobs} jobs</span>
               )}

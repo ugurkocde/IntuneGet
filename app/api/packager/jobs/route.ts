@@ -49,8 +49,7 @@ export async function GET(request: NextRequest) {
     const jobs = await db.jobs.getByStatus(status, limit, true);
 
     return NextResponse.json({ jobs: jobs || [] });
-  } catch (error) {
-    console.error('Jobs API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -107,8 +106,7 @@ export async function POST(request: NextRequest) {
       claimed: true,
       job,
     });
-  } catch (error) {
-    console.error('Job claim error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -192,8 +190,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ updated: true, job });
-  } catch (error) {
-    console.error('Job update error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -247,8 +244,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ released: true, job });
-  } catch (error) {
-    console.error('Job release error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

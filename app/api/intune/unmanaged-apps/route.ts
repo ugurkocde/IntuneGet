@@ -17,36 +17,12 @@ import type {
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
-// Database row types
-interface DiscoveredAppCacheRow {
-  id: string;
-  user_id: string;
-  tenant_id: string;
-  discovered_app_id: string;
-  display_name: string;
-  version: string | null;
-  publisher: string | null;
-  device_count: number;
-  platform: string;
-  matched_package_id: string | null;
-  match_confidence: number | null;
-  match_status: string;
-  app_data: GraphUnmanagedApp;
-  last_synced: string;
-}
+import type { Database, Json } from '@/types/database';
 
-interface ClaimedAppRow {
-  discovered_app_id: string;
-  status: string;
-}
-
-interface ManualMappingRow {
-  id: string;
-  discovered_app_name: string;
-  discovered_publisher: string | null;
-  winget_package_id: string;
-  tenant_id: string | null;
-}
+// Database row types from Database types
+type DiscoveredAppCacheRow = Database['public']['Tables']['discovered_apps_cache']['Row'];
+type ClaimedAppRow = Pick<Database['public']['Tables']['claimed_apps']['Row'], 'discovered_app_id' | 'status'>;
+type ManualMappingRow = Database['public']['Tables']['manual_app_mappings']['Row'];
 
 export async function GET(request: NextRequest) {
   try {
@@ -92,8 +68,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify admin consent
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: consentData, error: consentError } = await (supabase as any)
+    const { data: consentData, error: consentError } = await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
@@ -109,12 +84,11 @@ export async function GET(request: NextRequest) {
 
     // Check cache first (unless force refresh)
     if (!forceRefresh) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: cachedApps } = await (supabase as any)
+      const { data: cachedApps } = await supabase
         .from('discovered_apps_cache')
         .select('*')
         .eq('tenant_id', tenantId)
-        .order('device_count', { ascending: false }) as { data: DiscoveredAppCacheRow[] | null };
+        .order('device_count', { ascending: false });
 
       if (cachedApps && cachedApps.length > 0) {
         const lastSynced = new Date(cachedApps[0].last_synced).getTime();
@@ -122,18 +96,17 @@ export async function GET(request: NextRequest) {
 
         if (isCacheValid) {
           // Get claimed apps for this tenant
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: claimedApps } = await (supabase as any)
+          const { data: claimedApps } = await supabase
             .from('claimed_apps')
             .select('discovered_app_id, status')
-            .eq('tenant_id', tenantId) as { data: ClaimedAppRow[] | null };
+            .eq('tenant_id', tenantId);
 
           const claimedMap = new Map(
             claimedApps?.map(c => [c.discovered_app_id, c.status]) || []
           );
 
           const apps: UnmanagedApp[] = cachedApps
-            .filter(app => includeSystem || !isSystemApp(app.app_data))
+            .filter(app => includeSystem || !isSystemApp(app.app_data as unknown as GraphUnmanagedApp))
             .filter(app => {
               // Only hide deployed apps - pending/deploying/failed should remain visible
               const status = claimedMap.get(app.discovered_app_id);
@@ -189,7 +162,6 @@ export async function GET(request: NextRequest) {
 
       if (!graphResponse.ok) {
         const errorText = await graphResponse.text();
-        console.error('Graph API error:', graphResponse.status, errorText);
 
         // Check for permission error
         if (graphResponse.status === 403 && errorText.includes('DeviceManagementManagedDevices')) {
@@ -234,22 +206,20 @@ export async function GET(request: NextRequest) {
     const unmanagedApps: UnmanagedApp[] = [];
 
     // Get claimed apps
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: claimedApps } = await (supabase as any)
+    const { data: claimedApps } = await supabase
       .from('claimed_apps')
       .select('discovered_app_id, status')
-      .eq('tenant_id', tenantId) as { data: ClaimedAppRow[] | null };
+      .eq('tenant_id', tenantId);
 
     const claimedMap = new Map(
       claimedApps?.map(c => [c.discovered_app_id, c.status]) || []
     );
 
     // Get manual mappings for this tenant
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: manualMappings } = await (supabase as any)
+    const { data: manualMappings } = await supabase
       .from('manual_app_mappings')
       .select('*')
-      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`) as { data: ManualMappingRow[] | null };
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
     const manualMappingMap = new Map(
       manualMappings?.map(m => [m.discovered_app_name.toLowerCase(), m]) || []
@@ -294,7 +264,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Update cache (upsert)
-    const cacheRecords = unmanagedApps.map(app => ({
+    type DiscoveredAppsCacheInsert = Database['public']['Tables']['discovered_apps_cache']['Insert'];
+    const cacheRecords: DiscoveredAppsCacheInsert[] = unmanagedApps.map(app => ({
       user_id: userId,
       tenant_id: tenantId,
       discovered_app_id: app.discoveredAppId,
@@ -306,20 +277,18 @@ export async function GET(request: NextRequest) {
       matched_package_id: app.matchedPackageId,
       match_confidence: app.matchConfidence,
       match_status: app.matchStatus,
-      app_data: filteredApps.find(a => a.id === app.discoveredAppId),
+      app_data: filteredApps.find(a => a.id === app.discoveredAppId) as unknown as Json,
       last_synced: now,
     }));
 
     // Delete old cache entries for this tenant and insert new ones
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from('discovered_apps_cache')
       .delete()
       .eq('tenant_id', tenantId);
 
     if (cacheRecords.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      await supabase
         .from('discovered_apps_cache')
         .insert(cacheRecords);
     }
@@ -336,8 +305,7 @@ export async function GET(request: NextRequest) {
       lastSynced: now,
       fromCache: false,
     } as UnmanagedAppsResponse);
-  } catch (error) {
-    console.error('Unmanaged apps API error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch unmanaged apps' },
       { status: 500 }
@@ -383,18 +351,16 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get cached apps
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: cachedApps } = await (supabase as any)
+    const { data: cachedApps } = await supabase
       .from('discovered_apps_cache')
       .select('match_status, device_count, discovered_app_id, display_name, publisher, matched_package_id')
-      .eq('tenant_id', tenantId) as { data: Array<{ match_status: string; device_count: number; discovered_app_id: string; display_name: string; publisher: string | null; matched_package_id: string | null }> | null };
+      .eq('tenant_id', tenantId);
 
     // Get claimed apps with status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: claimedApps } = await (supabase as any)
+    const { data: claimedApps } = await supabase
       .from('claimed_apps')
       .select('discovered_app_id, status')
-      .eq('tenant_id', tenantId) as { data: ClaimedAppRow[] | null };
+      .eq('tenant_id', tenantId);
 
     const claimedMap = new Map(
       claimedApps?.map(c => [c.discovered_app_id, c.status]) || []
@@ -430,8 +396,7 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json(stats);
-  } catch (error) {
-    console.error('Unmanaged apps stats error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch stats' },
       { status: 500 }
@@ -466,7 +431,6 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
   const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    console.error('Azure AD credentials not configured');
     return null;
   }
 
@@ -488,15 +452,12 @@ async function getServicePrincipalToken(tenantId: string): Promise<string | null
     );
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('Token request failed:', tokenResponse.status, errorText);
       return null;
     }
 
     const tokenData = await tokenResponse.json();
     return tokenData.access_token;
-  } catch (error) {
-    console.error('Failed to get service principal token:', error);
+  } catch {
     return null;
   }
 }

@@ -13,30 +13,10 @@ import type {
   SccmDashboardStats,
 } from '@/types/sccm';
 
-// Database row type
-interface MigrationRow {
-  id: string;
-  user_id: string;
-  tenant_id: string;
-  name: string;
-  description: string | null;
-  source_type: string;
-  source_site_code: string | null;
-  source_site_name: string | null;
-  imported_file_name: string | null;
-  total_apps: number;
-  matched_apps: number;
-  partial_match_apps: number;
-  unmatched_apps: number;
-  excluded_apps: number;
-  migrated_apps: number;
-  failed_apps: number;
-  status: string;
-  error_message: string | null;
-  created_at: string;
-  updated_at: string;
-  last_migration_at: string | null;
-}
+import type { Database } from '@/types/database';
+
+// Database row type - use the type from the Database schema
+type MigrationRow = Database['public']['Tables']['sccm_migrations']['Row'];
 
 /**
  * Format migration row to API response format
@@ -88,13 +68,12 @@ export async function GET(request: NextRequest) {
 
     // Get single migration by ID
     if (migrationId) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: migration, error } = await (supabase as any)
+      const { data: migration, error } = await supabase
         .from('sccm_migrations')
         .select('*')
         .eq('id', migrationId)
         .eq('tenant_id', auth.tenantId)
-        .single() as { data: MigrationRow | null; error: Error | null };
+        .single();
 
       if (error || !migration) {
         return NextResponse.json(
@@ -108,15 +87,13 @@ export async function GET(request: NextRequest) {
 
     // Get dashboard stats
     if (statsOnly) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: migrations, error } = await (supabase as any)
+      const { data: migrations, error } = await supabase
         .from('sccm_migrations')
         .select('*')
         .eq('tenant_id', auth.tenantId)
-        .order('created_at', { ascending: false }) as { data: MigrationRow[] | null; error: Error | null };
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching migrations:', error);
         return NextResponse.json(
           { error: 'Failed to fetch migrations' },
           { status: 500 }
@@ -155,15 +132,13 @@ export async function GET(request: NextRequest) {
     }
 
     // List all migrations
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: migrations, error } = await (supabase as any)
+    const { data: migrations, error } = await supabase
       .from('sccm_migrations')
       .select('*')
       .eq('tenant_id', auth.tenantId)
-      .order('created_at', { ascending: false }) as { data: MigrationRow[] | null; error: Error | null };
+      .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching migrations:', error);
       return NextResponse.json(
         { error: 'Failed to fetch migrations' },
         { status: 500 }
@@ -173,8 +148,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       migrations: (migrations || []).map(formatMigration),
     });
-  } catch (error) {
-    console.error('Migrations GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch migrations' },
       { status: 500 }
@@ -207,8 +181,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Ensure user profile exists
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from('user_profiles')
       .upsert({
         id: auth.userId,
@@ -217,8 +190,7 @@ export async function POST(request: NextRequest) {
       }, { onConflict: 'id' });
 
     // Create migration
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: migration, error } = await (supabase as any)
+    const { data: migration, error } = await supabase
       .from('sccm_migrations')
       .insert({
         user_id: auth.userId,
@@ -232,10 +204,9 @@ export async function POST(request: NextRequest) {
         status: 'importing',
       })
       .select()
-      .single() as { data: MigrationRow | null; error: Error | null };
+      .single();
 
     if (error || !migration) {
-      console.error('Error creating migration:', error);
       return NextResponse.json(
         { error: 'Failed to create migration' },
         { status: 500 }
@@ -258,8 +229,7 @@ export async function POST(request: NextRequest) {
       { migration: formatMigration(migration) },
       { status: 201 }
     );
-  } catch (error) {
-    console.error('Migrations POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to create migration' },
       { status: 500 }
@@ -292,13 +262,12 @@ export async function PATCH(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing, error: fetchError } = await (supabase as any)
+    const { data: existing, error: fetchError } = await supabase
       .from('sccm_migrations')
       .select('*')
       .eq('id', body.id)
       .eq('tenant_id', auth.tenantId)
-      .single() as { data: MigrationRow | null; error: Error | null };
+      .single();
 
     if (fetchError || !existing) {
       return NextResponse.json(
@@ -317,16 +286,14 @@ export async function PATCH(request: NextRequest) {
     if (body.status !== undefined) updates.status = body.status;
     if (body.errorMessage !== undefined) updates.error_message = body.errorMessage;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updated, error } = await (supabase as any)
+    const { data: updated, error } = await supabase
       .from('sccm_migrations')
       .update(updates)
       .eq('id', body.id)
       .select()
-      .single() as { data: MigrationRow | null; error: Error | null };
+      .single();
 
     if (error || !updated) {
-      console.error('Error updating migration:', error);
       return NextResponse.json(
         { error: 'Failed to update migration' },
         { status: 500 }
@@ -334,8 +301,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ migration: formatMigration(updated) });
-  } catch (error) {
-    console.error('Migrations PATCH error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to update migration' },
       { status: 500 }
@@ -369,13 +335,12 @@ export async function DELETE(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing, error: fetchError } = await (supabase as any)
+    const { data: existing, error: fetchError } = await supabase
       .from('sccm_migrations')
       .select('id, name')
       .eq('id', migrationId)
       .eq('tenant_id', auth.tenantId)
-      .single() as { data: { id: string; name: string } | null; error: Error | null };
+      .single();
 
     if (fetchError || !existing) {
       return NextResponse.json(
@@ -399,14 +364,12 @@ export async function DELETE(request: NextRequest) {
     );
 
     // Delete migration (cascade deletes apps and history)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('sccm_migrations')
       .delete()
       .eq('id', migrationId);
 
     if (error) {
-      console.error('Error deleting migration:', error);
       return NextResponse.json(
         { error: 'Failed to delete migration' },
         { status: 500 }
@@ -414,8 +377,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Migrations DELETE error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to delete migration' },
       { status: 500 }

@@ -49,8 +49,7 @@ export async function GET(request: NextRequest) {
       versions,
       installers,
     });
-  } catch (error) {
-    console.error('Package fetch error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch package details' },
       { status: 500 }

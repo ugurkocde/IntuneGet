@@ -11,6 +11,15 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// Type for table relationships (Supabase requirement)
+type GenericRelationship = {
+  foreignKeyName: string;
+  columns: string[];
+  isOneToOne?: boolean;
+  referencedRelation: string;
+  referencedColumns: string[];
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -24,6 +33,7 @@ export interface Database {
           token_expires_at: string | null;
           intune_tenant_id: string | null;
           tenant_name: string | null;
+          profile_image: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -36,6 +46,7 @@ export interface Database {
           token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
+          profile_image?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -48,9 +59,11 @@ export interface Database {
           token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
+          profile_image?: string | null;
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       app_metadata: {
         Row: {
@@ -104,6 +117,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       staged_packages: {
         Row: {
@@ -172,6 +186,7 @@ export interface Database {
           created_at?: string;
           expires_at?: string | null;
         };
+        Relationships: GenericRelationship[];
       };
       upload_jobs: {
         Row: {
@@ -219,6 +234,7 @@ export interface Database {
           started_at?: string | null;
           completed_at?: string | null;
         };
+        Relationships: GenericRelationship[];
       };
       packaging_jobs: {
         Row: {
@@ -347,6 +363,7 @@ export interface Database {
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
         };
+        Relationships: GenericRelationship[];
       };
       upload_history: {
         Row: {
@@ -388,6 +405,7 @@ export interface Database {
           intune_tenant_id?: string | null;
           deployed_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       tenant_consent: {
         Row: {
@@ -426,6 +444,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       msp_organizations: {
         Row: {
@@ -435,6 +454,7 @@ export interface Database {
           primary_tenant_id: string;
           created_by_user_id: string;
           created_by_email: string | null;
+          subscription_tier: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -446,6 +466,7 @@ export interface Database {
           primary_tenant_id: string;
           created_by_user_id: string;
           created_by_email?: string | null;
+          subscription_tier?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -457,10 +478,12 @@ export interface Database {
           primary_tenant_id?: string;
           created_by_user_id?: string;
           created_by_email?: string | null;
+          subscription_tier?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       msp_managed_tenants: {
         Row: {
@@ -469,7 +492,7 @@ export interface Database {
           tenant_id: string | null;
           tenant_name: string | null;
           display_name: string;
-          consent_status: 'pending' | 'granted' | 'revoked';
+          consent_status: 'pending' | 'granted' | 'revoked' | 'consent_incomplete';
           consent_granted_at: string | null;
           consented_by_email: string | null;
           added_by_user_id: string;
@@ -484,7 +507,7 @@ export interface Database {
           tenant_id?: string | null;
           tenant_name?: string | null;
           display_name: string;
-          consent_status?: 'pending' | 'granted' | 'revoked';
+          consent_status?: 'pending' | 'granted' | 'revoked' | 'consent_incomplete';
           consent_granted_at?: string | null;
           consented_by_email?: string | null;
           added_by_user_id: string;
@@ -499,7 +522,7 @@ export interface Database {
           tenant_id?: string | null;
           tenant_name?: string | null;
           display_name?: string;
-          consent_status?: 'pending' | 'granted' | 'revoked';
+          consent_status?: 'pending' | 'granted' | 'revoked' | 'consent_incomplete';
           consent_granted_at?: string | null;
           consented_by_email?: string | null;
           added_by_user_id?: string;
@@ -508,6 +531,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       msp_user_memberships: {
         Row: {
@@ -517,6 +541,7 @@ export interface Database {
           user_email: string;
           user_name: string | null;
           user_tenant_id: string | null;
+          role: 'owner' | 'admin' | 'operator' | 'viewer';
           created_at: string;
           updated_at: string;
         };
@@ -527,6 +552,7 @@ export interface Database {
           user_email: string;
           user_name?: string | null;
           user_tenant_id?: string | null;
+          role?: 'owner' | 'admin' | 'operator' | 'viewer';
           created_at?: string;
           updated_at?: string;
         };
@@ -537,9 +563,11 @@ export interface Database {
           user_email?: string;
           user_name?: string | null;
           user_tenant_id?: string | null;
+          role?: 'owner' | 'admin' | 'operator' | 'viewer';
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       notification_preferences: {
         Row: {
@@ -572,6 +600,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       webhook_configurations: {
         Row: {
@@ -619,6 +648,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       notification_history: {
         Row: {
@@ -660,6 +690,7 @@ export interface Database {
           sent_at?: string | null;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       update_check_results: {
         Row: {
@@ -707,6 +738,7 @@ export interface Database {
           detected_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       app_update_policies: {
         Row: {
@@ -757,6 +789,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: GenericRelationship[];
       };
       auto_update_history: {
         Row: {
@@ -795,6 +828,958 @@ export interface Database {
           triggered_at?: string;
           completed_at?: string | null;
         };
+        Relationships: GenericRelationship[];
+      };
+      claimed_apps: {
+        Row: {
+          id: string;
+          user_id: string;
+          tenant_id: string;
+          discovered_app_id: string;
+          discovered_app_name: string;
+          winget_package_id: string;
+          intune_app_id: string | null;
+          device_count_at_claim: number | null;
+          claimed_at: string;
+          status: 'pending' | 'deploying' | 'deployed' | 'failed';
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          tenant_id: string;
+          discovered_app_id: string;
+          discovered_app_name: string;
+          winget_package_id: string;
+          intune_app_id?: string | null;
+          device_count_at_claim?: number | null;
+          claimed_at?: string;
+          status?: 'pending' | 'deploying' | 'deployed' | 'failed';
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          tenant_id?: string;
+          discovered_app_id?: string;
+          discovered_app_name?: string;
+          winget_package_id?: string;
+          intune_app_id?: string | null;
+          device_count_at_claim?: number | null;
+          claimed_at?: string;
+          status?: 'pending' | 'deploying' | 'deployed' | 'failed';
+        };
+        Relationships: GenericRelationship[];
+      };
+      msp_webhook_configurations: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          url: string;
+          secret: string | null;
+          event_types: string[];
+          headers: Record<string, string>;
+          is_enabled: boolean;
+          failure_count: number;
+          last_failure_at: string | null;
+          last_success_at: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by_email: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          url: string;
+          secret?: string | null;
+          event_types?: string[];
+          headers?: Record<string, string>;
+          is_enabled?: boolean;
+          failure_count?: number;
+          last_failure_at?: string | null;
+          last_success_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          created_by_email: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          url?: string;
+          secret?: string | null;
+          event_types?: string[];
+          headers?: Record<string, string>;
+          is_enabled?: boolean;
+          failure_count?: number;
+          last_failure_at?: string | null;
+          last_success_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          created_by_email?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      msp_webhook_deliveries: {
+        Row: {
+          id: string;
+          webhook_id: string;
+          event_type: string;
+          payload: Record<string, unknown>;
+          status: 'pending' | 'success' | 'failed';
+          attempts: number;
+          response_status: number | null;
+          response_body: string | null;
+          error_message: string | null;
+          created_at: string;
+          delivered_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          webhook_id: string;
+          event_type: string;
+          payload: Record<string, unknown>;
+          status?: 'pending' | 'success' | 'failed';
+          attempts?: number;
+          response_status?: number | null;
+          response_body?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          delivered_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          webhook_id?: string;
+          event_type?: string;
+          payload?: Record<string, unknown>;
+          status?: 'pending' | 'success' | 'failed';
+          attempts?: number;
+          response_status?: number | null;
+          response_body?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          delivered_at?: string | null;
+        };
+        Relationships: GenericRelationship[];
+      };
+      msp_batch_deployments: {
+        Row: {
+          id: string;
+          organization_id: string;
+          created_by_user_id: string;
+          created_by_email: string | null;
+          winget_id: string;
+          display_name: string;
+          version: string;
+          total_tenants: number;
+          completed_tenants: number;
+          failed_tenants: number;
+          concurrency_limit: number;
+          status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+          started_at: string | null;
+          completed_at: string | null;
+          cancelled_at: string | null;
+          cancelled_by_email: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          created_by_user_id: string;
+          created_by_email?: string | null;
+          winget_id: string;
+          display_name: string;
+          version: string;
+          total_tenants: number;
+          completed_tenants?: number;
+          failed_tenants?: number;
+          concurrency_limit?: number;
+          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+          started_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by_email?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          created_by_user_id?: string;
+          created_by_email?: string | null;
+          winget_id?: string;
+          display_name?: string;
+          version?: string;
+          total_tenants?: number;
+          completed_tenants?: number;
+          failed_tenants?: number;
+          concurrency_limit?: number;
+          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+          started_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by_email?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      msp_batch_deployment_items: {
+        Row: {
+          id: string;
+          batch_id: string;
+          tenant_id: string;
+          tenant_display_name: string;
+          packaging_job_id: string | null;
+          status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+          error_message: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          batch_id: string;
+          tenant_id: string;
+          tenant_display_name: string;
+          packaging_job_id?: string | null;
+          status?: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+          error_message?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          batch_id?: string;
+          tenant_id?: string;
+          tenant_display_name?: string;
+          packaging_job_id?: string | null;
+          status?: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+          error_message?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      curated_apps: {
+        Row: {
+          id: number;
+          winget_id: string;
+          chocolatey_id: string | null;
+          name: string;
+          publisher: string;
+          latest_version: string | null;
+          description: string | null;
+          homepage: string | null;
+          license: string | null;
+          chocolatey_downloads: number | null;
+          popularity_rank: number | null;
+          category: string | null;
+          subcategory: string | null;
+          tags: string[];
+          icon_path: string | null;
+          has_icon: boolean;
+          curation_notes: string | null;
+          manually_mapped: boolean;
+          is_verified: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          winget_id: string;
+          chocolatey_id?: string | null;
+          name: string;
+          publisher: string;
+          latest_version?: string | null;
+          description?: string | null;
+          homepage?: string | null;
+          license?: string | null;
+          chocolatey_downloads?: number | null;
+          popularity_rank?: number | null;
+          category?: string | null;
+          subcategory?: string | null;
+          tags?: string[];
+          icon_path?: string | null;
+          has_icon?: boolean;
+          curation_notes?: string | null;
+          manually_mapped?: boolean;
+          is_verified?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          winget_id?: string;
+          chocolatey_id?: string | null;
+          name?: string;
+          publisher?: string;
+          latest_version?: string | null;
+          description?: string | null;
+          homepage?: string | null;
+          license?: string | null;
+          chocolatey_downloads?: number | null;
+          popularity_rank?: number | null;
+          category?: string | null;
+          subcategory?: string | null;
+          tags?: string[];
+          icon_path?: string | null;
+          has_icon?: boolean;
+          curation_notes?: string | null;
+          manually_mapped?: boolean;
+          is_verified?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      app_ratings: {
+        Row: {
+          id: string;
+          app_id: string;
+          user_id: string;
+          user_email: string | null;
+          rating: number;
+          comment: string | null;
+          deployment_success: boolean | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          app_id: string;
+          user_id: string;
+          user_email?: string | null;
+          rating: number;
+          comment?: string | null;
+          deployment_success?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          app_id?: string;
+          user_id?: string;
+          user_email?: string | null;
+          rating?: number;
+          comment?: string | null;
+          deployment_success?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      detection_rule_feedback: {
+        Row: {
+          id: string;
+          app_id: string;
+          user_id: string;
+          user_email: string | null;
+          feedback_type: 'working' | 'not_working' | 'partial' | 'suggestion';
+          description: string | null;
+          environment_info: Json | null;
+          status: 'pending' | 'reviewed' | 'implemented' | 'rejected';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          app_id: string;
+          user_id: string;
+          user_email?: string | null;
+          feedback_type: 'working' | 'not_working' | 'partial' | 'suggestion';
+          description?: string | null;
+          environment_info?: Json | null;
+          status?: 'pending' | 'reviewed' | 'implemented' | 'rejected';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          app_id?: string;
+          user_id?: string;
+          user_email?: string | null;
+          feedback_type?: 'working' | 'not_working' | 'partial' | 'suggestion';
+          description?: string | null;
+          environment_info?: Json | null;
+          status?: 'pending' | 'reviewed' | 'implemented' | 'rejected';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      app_suggestions: {
+        Row: {
+          id: string;
+          winget_id: string;
+          suggested_by_user_id: string;
+          suggested_by_email: string | null;
+          reason: string | null;
+          votes_count: number;
+          status: 'pending' | 'approved' | 'rejected' | 'implemented';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          winget_id: string;
+          suggested_by_user_id: string;
+          suggested_by_email?: string | null;
+          reason?: string | null;
+          votes_count?: number;
+          status?: 'pending' | 'approved' | 'rejected' | 'implemented';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          winget_id?: string;
+          suggested_by_user_id?: string;
+          suggested_by_email?: string | null;
+          reason?: string | null;
+          votes_count?: number;
+          status?: 'pending' | 'approved' | 'rejected' | 'implemented';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      app_suggestion_votes: {
+        Row: {
+          id: string;
+          suggestion_id: string;
+          user_id: string;
+          user_email: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          suggestion_id: string;
+          user_id: string;
+          user_email?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          suggestion_id?: string;
+          user_id?: string;
+          user_email?: string | null;
+          created_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      discovered_apps_cache: {
+        Row: {
+          id: string;
+          user_id: string;
+          tenant_id: string;
+          discovered_app_id: string;
+          display_name: string;
+          version: string | null;
+          publisher: string | null;
+          device_count: number;
+          platform: string;
+          matched_package_id: string | null;
+          match_confidence: number | null;
+          match_status: string;
+          app_data: Json;
+          last_synced: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          tenant_id: string;
+          discovered_app_id: string;
+          display_name: string;
+          version?: string | null;
+          publisher?: string | null;
+          device_count: number;
+          platform: string;
+          matched_package_id?: string | null;
+          match_confidence?: number | null;
+          match_status: string;
+          app_data: Json;
+          last_synced?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          tenant_id?: string;
+          discovered_app_id?: string;
+          display_name?: string;
+          version?: string | null;
+          publisher?: string | null;
+          device_count?: number;
+          platform?: string;
+          matched_package_id?: string | null;
+          match_confidence?: number | null;
+          match_status?: string;
+          app_data?: Json;
+          last_synced?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      manual_app_mappings: {
+        Row: {
+          id: string;
+          discovered_app_name: string;
+          discovered_publisher: string | null;
+          winget_package_id: string;
+          tenant_id: string | null;
+          created_by: string | null;
+          is_verified: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          discovered_app_name: string;
+          discovered_publisher?: string | null;
+          winget_package_id: string;
+          tenant_id?: string | null;
+          created_by?: string | null;
+          is_verified?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          discovered_app_name?: string;
+          discovered_publisher?: string | null;
+          winget_package_id?: string;
+          tenant_id?: string | null;
+          created_by?: string | null;
+          is_verified?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      msp_invitations: {
+        Row: {
+          id: string;
+          organization_id: string;
+          email: string;
+          role: 'owner' | 'admin' | 'operator' | 'viewer';
+          invited_by_user_id: string;
+          invited_by_email: string | null;
+          token: string;
+          expires_at: string;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          email: string;
+          role: 'owner' | 'admin' | 'operator' | 'viewer';
+          invited_by_user_id: string;
+          invited_by_email?: string | null;
+          token: string;
+          expires_at: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          email?: string;
+          role?: 'owner' | 'admin' | 'operator' | 'viewer';
+          invited_by_user_id?: string;
+          invited_by_email?: string | null;
+          token?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      user_notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          user_email: string;
+          type: string;
+          title: string;
+          message: string | null;
+          data: Record<string, unknown> | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          user_email: string;
+          type: string;
+          title: string;
+          message?: string | null;
+          data?: Record<string, unknown> | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          user_email?: string;
+          type?: string;
+          title?: string;
+          message?: string | null;
+          data?: Record<string, unknown> | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      sccm_migrations: {
+        Row: {
+          id: string;
+          user_id: string;
+          tenant_id: string;
+          name: string;
+          description: string | null;
+          source_type: string;
+          source_site_code: string | null;
+          source_site_name: string | null;
+          imported_file_name: string | null;
+          total_apps: number;
+          matched_apps: number;
+          partial_match_apps: number;
+          unmatched_apps: number;
+          excluded_apps: number;
+          migrated_apps: number;
+          failed_apps: number;
+          status: string;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+          last_migration_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          tenant_id: string;
+          name: string;
+          description?: string | null;
+          source_type: string;
+          source_site_code?: string | null;
+          source_site_name?: string | null;
+          imported_file_name?: string | null;
+          total_apps?: number;
+          matched_apps?: number;
+          partial_match_apps?: number;
+          unmatched_apps?: number;
+          excluded_apps?: number;
+          migrated_apps?: number;
+          failed_apps?: number;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          last_migration_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          tenant_id?: string;
+          name?: string;
+          description?: string | null;
+          source_type?: string;
+          source_site_code?: string | null;
+          source_site_name?: string | null;
+          imported_file_name?: string | null;
+          total_apps?: number;
+          matched_apps?: number;
+          partial_match_apps?: number;
+          unmatched_apps?: number;
+          excluded_apps?: number;
+          migrated_apps?: number;
+          failed_apps?: number;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          last_migration_at?: string | null;
+        };
+        Relationships: GenericRelationship[];
+      };
+      sccm_apps: {
+        Row: {
+          id: string;
+          migration_id: string;
+          user_id: string;
+          tenant_id: string;
+          sccm_ci_id: string;
+          display_name: string;
+          manufacturer: string | null;
+          version: string | null;
+          technology: string;
+          is_deployed: boolean;
+          deployment_count: number;
+          sccm_app_data: Json;
+          sccm_detection_rules: Json | null;
+          sccm_install_command: string | null;
+          sccm_uninstall_command: string | null;
+          sccm_install_behavior: string | null;
+          match_status: string;
+          match_confidence: number | null;
+          matched_winget_id: string | null;
+          matched_winget_name: string | null;
+          partial_matches: Json | null;
+          matched_by: string | null;
+          preserve_detection_rules: boolean;
+          preserve_install_commands: boolean;
+          use_winget_defaults: boolean;
+          custom_settings: Json | null;
+          converted_detection_rules: Json | null;
+          converted_install_behavior: string | null;
+          migration_status: string;
+          migration_error: string | null;
+          intune_app_id: string | null;
+          migrated_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          migration_id: string;
+          user_id: string;
+          tenant_id: string;
+          sccm_ci_id: string;
+          display_name: string;
+          manufacturer?: string | null;
+          version?: string | null;
+          technology: string;
+          is_deployed?: boolean;
+          deployment_count?: number;
+          sccm_app_data: Json;
+          sccm_detection_rules?: Json | null;
+          sccm_install_command?: string | null;
+          sccm_uninstall_command?: string | null;
+          sccm_install_behavior?: string | null;
+          match_status?: string;
+          match_confidence?: number | null;
+          matched_winget_id?: string | null;
+          matched_winget_name?: string | null;
+          partial_matches?: Json | null;
+          matched_by?: string | null;
+          preserve_detection_rules?: boolean;
+          preserve_install_commands?: boolean;
+          use_winget_defaults?: boolean;
+          custom_settings?: Json | null;
+          converted_detection_rules?: Json | null;
+          converted_install_behavior?: string | null;
+          migration_status?: string;
+          migration_error?: string | null;
+          intune_app_id?: string | null;
+          migrated_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          migration_id?: string;
+          user_id?: string;
+          tenant_id?: string;
+          sccm_ci_id?: string;
+          display_name?: string;
+          manufacturer?: string | null;
+          version?: string | null;
+          technology?: string;
+          is_deployed?: boolean;
+          deployment_count?: number;
+          sccm_app_data?: Json;
+          sccm_detection_rules?: Json | null;
+          sccm_install_command?: string | null;
+          sccm_uninstall_command?: string | null;
+          sccm_install_behavior?: string | null;
+          match_status?: string;
+          match_confidence?: number | null;
+          matched_winget_id?: string | null;
+          matched_winget_name?: string | null;
+          partial_matches?: Json | null;
+          matched_by?: string | null;
+          preserve_detection_rules?: boolean;
+          preserve_install_commands?: boolean;
+          use_winget_defaults?: boolean;
+          custom_settings?: Json | null;
+          converted_detection_rules?: Json | null;
+          converted_install_behavior?: string | null;
+          migration_status?: string;
+          migration_error?: string | null;
+          intune_app_id?: string | null;
+          migrated_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      version_history: {
+        Row: {
+          id: string;
+          winget_id: string;
+          version: string;
+          installer_url: string | null;
+          installer_sha256: string | null;
+          installer_type: string | null;
+          installer_scope: string | null;
+          installers: Json | null;
+          release_date: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          winget_id: string;
+          version: string;
+          installer_url?: string | null;
+          installer_sha256?: string | null;
+          installer_type?: string | null;
+          installer_scope?: string | null;
+          installers?: Json | null;
+          release_date?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          winget_id?: string;
+          version?: string;
+          installer_url?: string | null;
+          installer_sha256?: string | null;
+          installer_type?: string | null;
+          installer_scope?: string | null;
+          installers?: Json | null;
+          release_date?: string | null;
+          created_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      msp_audit_logs: {
+        Row: {
+          id: string;
+          organization_id: string;
+          user_id: string;
+          user_email: string;
+          action: string;
+          resource_type: string | null;
+          resource_id: string | null;
+          details: Record<string, unknown> | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          user_id: string;
+          user_email: string;
+          action: string;
+          resource_type?: string | null;
+          resource_id?: string | null;
+          details?: Record<string, unknown> | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          user_id?: string;
+          user_email?: string;
+          action?: string;
+          resource_type?: string | null;
+          resource_id?: string | null;
+          details?: Record<string, unknown> | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      usage_metrics: {
+        Row: {
+          id: string;
+          organization_id: string;
+          tenant_id: string | null;
+          metric_type: string;
+          count: number;
+          period_start: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          tenant_id?: string | null;
+          metric_type: string;
+          count?: number;
+          period_start: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          tenant_id?: string | null;
+          metric_type?: string;
+          count?: number;
+          period_start?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      sccm_migration_history: {
+        Row: {
+          id: string;
+          migration_id: string;
+          user_id: string;
+          tenant_id: string;
+          action: string;
+          app_id: string | null;
+          app_name: string | null;
+          previous_value: Record<string, unknown> | null;
+          new_value: Record<string, unknown> | null;
+          success: boolean;
+          error_message: string | null;
+          affected_count: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          migration_id: string;
+          user_id: string;
+          tenant_id: string;
+          action: string;
+          app_id?: string | null;
+          app_name?: string | null;
+          previous_value?: Record<string, unknown> | null;
+          new_value?: Record<string, unknown> | null;
+          success: boolean;
+          error_message?: string | null;
+          affected_count?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          migration_id?: string;
+          user_id?: string;
+          tenant_id?: string;
+          action?: string;
+          app_id?: string | null;
+          app_name?: string | null;
+          previous_value?: Record<string, unknown> | null;
+          new_value?: Record<string, unknown> | null;
+          success?: boolean;
+          error_message?: string | null;
+          affected_count?: number | null;
+          created_at?: string;
+        };
+        Relationships: GenericRelationship[];
       };
     };
     Views: {
@@ -813,6 +1798,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
+        Relationships: GenericRelationship[];
       };
       notification_stats: {
         Row: {
@@ -827,6 +1813,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
+        Relationships: GenericRelationship[];
       };
       update_policy_stats: {
         Row: {
@@ -840,12 +1827,35 @@ export interface Database {
           successful_updates_30d: number;
           failed_updates_30d: number;
         };
+        Relationships: GenericRelationship[];
       };
     };
     Functions: {
-      [_ in never]: never;
+      increment_usage: {
+        Args: {
+          p_org_id: string;
+          p_tenant_id: string | null;
+          p_metric_type: string;
+        };
+        Returns: void;
+      };
+      check_rate_limit: {
+        Args: {
+          p_key: string;
+          p_window_ms: number;
+          p_limit: number;
+        };
+        Returns: {
+          limited: boolean;
+          remaining: number;
+          reset_at: number;
+        };
+      };
     };
     Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
       [_ in never]: never;
     };
   };

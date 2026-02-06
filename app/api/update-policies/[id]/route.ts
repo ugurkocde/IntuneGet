@@ -20,7 +20,7 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -32,8 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Get policy by ID, ensuring it belongs to the user
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: policy, error } = await (supabase as any)
+    const { data: policy, error } = await supabase
       .from('app_update_policies')
       .select('*')
       .eq('id', id)
@@ -41,7 +40,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching update policy:', error);
       return NextResponse.json(
         { error: 'Failed to fetch policy' },
         { status: 500 }
@@ -58,8 +56,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       policy: policy as AppUpdatePolicy,
     });
-  } catch (error) {
-    console.error('Update policy GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -73,7 +70,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -87,8 +84,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Verify policy exists and belongs to user
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingPolicy, error: fetchError } = await (supabase as any)
+    const { data: existingPolicy, error: fetchError } = await supabase
       .from('app_update_policies')
       .select('*')
       .eq('id', id)
@@ -96,7 +92,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching policy for update:', fetchError);
       return NextResponse.json(
         { error: 'Failed to fetch policy' },
         { status: 500 }
@@ -154,8 +149,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Update the policy
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: policy, error } = await (supabase as any)
+    const { data: policy, error } = await supabase
       .from('app_update_policies')
       .update(updateData)
       .eq('id', id)
@@ -163,7 +157,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error) {
-      console.error('Error updating policy:', error);
       return NextResponse.json(
         { error: 'Failed to update policy' },
         { status: 500 }
@@ -173,8 +166,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       policy: policy as AppUpdatePolicy,
     });
-  } catch (error) {
-    console.error('Update policy PATCH error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -188,7 +180,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -200,15 +192,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Delete the policy (only if it belongs to the user)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error, count } = await (supabase as any)
+    const { error, count } = await supabase
       .from('app_update_policies')
       .delete({ count: 'exact' })
       .eq('id', id)
       .eq('user_id', user.userId);
 
     if (error) {
-      console.error('Error deleting policy:', error);
       return NextResponse.json(
         { error: 'Failed to delete policy' },
         { status: 500 }
@@ -226,8 +216,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       success: true,
       deleted: true,
     });
-  } catch (error) {
-    console.error('Update policy DELETE error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

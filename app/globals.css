@@ -16,22 +16,22 @@
 
 /* ===== CSS CUSTOM PROPERTIES ===== */
 :root {
-  /* Dark Command Center Theme */
-  --bg-deepest: #09090b;
-  --bg-surface: #121218;
-  --bg-elevated: #18181b;
+  /* Light Theme (Evernote-inspired) */
+  --bg-deepest: #fafaf9;
+  --bg-surface: #f5f5f4;
+  --bg-elevated: #ffffff;
 
-  /* Accent colors - Electric Cyan */
-  --accent-cyan: #06b6d4;
-  --accent-cyan-bright: #22d3ee;
-  --accent-cyan-dim: #0891b2;
-  --accent-violet: #8b5cf6;
-  --accent-violet-bright: #a78bfa;
+  /* Accent colors - Electric Cyan (adjusted for light) */
+  --accent-cyan: #0891b2;
+  --accent-cyan-bright: #06b6d4;
+  --accent-cyan-dim: #0e7490;
+  --accent-violet: #7c3aed;
+  --accent-violet-bright: #8b5cf6;
 
-  /* Text hierarchy */
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  /* Text hierarchy (light theme) */
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
 
   /* Status colors */
   --status-success: #10b981;
@@ -41,53 +41,31 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 6% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 6% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 187 85% 43%;
-    --primary-foreground: 240 10% 3.9%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --background: 40 20% 98%;
+    --foreground: 24 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 10% 10%;
+    --primary: 191 91% 37%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 24 6% 96%;
+    --secondary-foreground: 24 10% 10%;
+    --muted: 24 6% 96%;
+    --muted-foreground: 24 6% 45%;
     --accent: 262 83% 58%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 187 85% 43%;
-    --chart-1: 187 85% 43%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 24 6% 90%;
+    --input: 24 6% 90%;
+    --ring: 191 91% 37%;
+    --chart-1: 191 91% 37%;
     --chart-2: 262 83% 58%;
     --chart-3: 142 76% 36%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
     --radius: 0.625rem;
-  }
-
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 6% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 6% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 187 85% 43%;
-    --primary-foreground: 240 10% 3.9%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 262 83% 58%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 187 85% 43%;
   }
 }
 
@@ -96,7 +74,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-bg-deepest text-foreground antialiased;
+    @apply bg-bg-deepest text-text-primary antialiased;
   }
 }
 
@@ -107,93 +85,93 @@
 
   /* ===== GRADIENT TEXT UTILITIES ===== */
   .gradient-text-cyan {
-    background: linear-gradient(135deg, #06b6d4, #22d3ee, #67e8f9);
+    background: linear-gradient(135deg, #0891b2, #06b6d4, #22d3ee);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
   .gradient-text-violet {
-    background: linear-gradient(135deg, #8b5cf6, #a78bfa, #c4b5fd);
+    background: linear-gradient(135deg, #7c3aed, #8b5cf6, #a78bfa);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
   .gradient-text-mixed {
-    background: linear-gradient(135deg, #06b6d4, #8b5cf6, #22d3ee);
+    background: linear-gradient(135deg, #0891b2, #7c3aed, #06b6d4);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
-  /* ===== GLOW EFFECTS ===== */
+  /* ===== SHADOW EFFECTS (Light Theme) ===== */
+  .shadow-soft {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-soft-md {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  .shadow-soft-lg {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
   .glow-cyan {
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+    box-shadow: 0 0 20px rgba(8, 145, 178, 0.15);
   }
 
   .glow-cyan-lg {
-    box-shadow: 0 0 40px rgba(6, 182, 212, 0.4);
-  }
-
-  .glow-cyan-intense {
-    box-shadow: 0 0 60px rgba(6, 182, 212, 0.5), 0 0 120px rgba(6, 182, 212, 0.2);
+    box-shadow: 0 0 40px rgba(8, 145, 178, 0.2);
   }
 
   .glow-violet {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.15);
   }
 
   .glow-violet-lg {
-    box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 40px rgba(124, 58, 237, 0.2);
   }
 
-  .text-glow-cyan {
-    text-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+  /* Border accent */
+  .border-accent-cyan {
+    box-shadow: 0 0 0 1px rgba(8, 145, 178, 0.2);
   }
 
-  .text-glow-violet {
-    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  .border-accent-violet {
+    box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2);
   }
 
-  /* Border glow */
-  .border-glow-cyan {
-    box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.3), 0 0 20px rgba(6, 182, 212, 0.15);
-  }
-
-  .border-glow-violet {
-    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.3), 0 0 20px rgba(139, 92, 246, 0.15);
-  }
-
-  /* ===== GLASS MORPHISM EFFECTS ===== */
-  .glass-dark {
-    background: rgba(18, 18, 24, 0.8);
+  /* ===== GLASS MORPHISM EFFECTS (Light) ===== */
+  .glass-light {
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.05);
   }
 
-  .glass-dark-hover:hover {
-    background: rgba(24, 24, 27, 0.9);
-    border-color: rgba(6, 182, 212, 0.2);
+  .glass-light-hover:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(8, 145, 178, 0.2);
   }
 
-  /* ===== BACKGROUND PATTERNS ===== */
-  .bg-grid-dark {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.02)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
+  /* ===== BACKGROUND PATTERNS (Light Theme) ===== */
+  .bg-grid-light {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(0 0 0 / 0.04)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
   }
 
-  .bg-dots-cyan {
-    background-image: radial-gradient(circle, rgba(6, 182, 212, 0.15) 1px, transparent 1px);
+  .bg-dots-light {
+    background-image: radial-gradient(circle, rgba(8, 145, 178, 0.08) 1px, transparent 1px);
     background-size: 24px 24px;
   }
 
   .bg-gradient-radial-cyan {
-    background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(6, 182, 212, 0.15), transparent);
+    background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(8, 145, 178, 0.06), transparent);
   }
 
   .bg-gradient-radial-violet {
-    background: radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139, 92, 246, 0.1), transparent);
+    background: radial-gradient(ellipse 60% 40% at 80% 100%, rgba(124, 58, 237, 0.04), transparent);
   }
 
   /* ===== MASK UTILITIES ===== */
@@ -218,15 +196,14 @@
     transform: translateY(-4px);
   }
 
-  /* Card hover effect - dark theme with cyan glow */
-  .card-hover-dark {
+  /* Card hover effect - light theme with subtle shadow */
+  .card-hover-light {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .card-hover-dark:hover {
+  .card-hover-light:hover {
     transform: translateY(-4px);
-    box-shadow: 0 0 40px rgba(6, 182, 212, 0.15);
-    border-color: rgba(6, 182, 212, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   /* Staggered fade-up animation (CSS-only) */
@@ -275,7 +252,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(6, 182, 212, 0.05) 50%,
+      rgba(8, 145, 178, 0.08) 50%,
       transparent 100%
     );
     background-size: 200% 100%;
@@ -438,39 +415,39 @@
   }
 }
 
-/* Custom scrollbar - dark theme with cyan accent */
+/* Custom scrollbar - light theme with subtle styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-deepest);
+  background: var(--bg-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(6, 182, 212, 0.3);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(6, 182, 212, 0.5);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(6, 182, 212, 0.3) var(--bg-deepest);
+  scrollbar-color: rgba(0, 0, 0, 0.15) var(--bg-surface);
 }
 
 /* Selection color - cyan accent */
 ::selection {
-  background: rgba(6, 182, 212, 0.3);
-  color: #fafafa;
+  background: rgba(8, 145, 178, 0.2);
+  color: #1c1917;
 }
 
 /* Focus visible - cyan accent */
 :focus-visible {
-  outline: 2px solid rgba(6, 182, 212, 0.5);
+  outline: 2px solid rgba(8, 145, 178, 0.5);
   outline-offset: 2px;
 }

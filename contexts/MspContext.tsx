@@ -195,10 +195,17 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to add tenant');
+      // Prefer the detailed message field over the generic error field
+      throw new Error(errorData.message || errorData.error || 'Failed to add tenant');
     }
 
     const result: AddTenantResponse = await response.json();
+
+    if (!result.consentUrl) {
+      // Refresh tenants so the created record appears in the list
+      await refreshTenants();
+      throw new Error('The tenant was created but the consent URL could not be generated. Use "Get Consent URL" from the tenant menu to retrieve it.');
+    }
 
     // Refresh tenants list
     await refreshTenants();

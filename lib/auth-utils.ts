@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { decodeJwt } from 'jose';
 
 /**
  * User information extracted from a Microsoft access token
@@ -16,32 +17,19 @@ export interface TokenUserInfo {
 }
 
 /**
- * Parse user information from a Microsoft access token
- * Note: This only decodes the token payload, it does not verify the signature.
- * The token is already validated by Microsoft before being issued.
- * For additional security, implement proper JWKS validation in production.
+ * Decode and validate token payload claims.
+ * Microsoft Graph access tokens use internal signing keys not available
+ * in the public JWKS endpoint, so cryptographic signature verification
+ * is not possible for third-party apps. We validate structure and claims instead.
  */
-export function parseAccessToken(authHeader: string | null): TokenUserInfo | null {
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-
+function decodeTokenPayload(accessToken: string): TokenUserInfo | null {
   try {
-    const accessToken = authHeader.slice(7);
-    const parts = accessToken.split('.');
+    const payload = decodeJwt(accessToken);
 
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    const tokenPayload = JSON.parse(
-      Buffer.from(parts[1], 'base64').toString()
-    );
-
-    const userId = tokenPayload.oid || tokenPayload.sub;
-    const userEmail = tokenPayload.preferred_username || tokenPayload.email || 'unknown';
-    const tenantId = tokenPayload.tid;
-    const userName = tokenPayload.name || null;
+    const userId = (payload.oid || payload.sub) as string | undefined;
+    const userEmail = (payload.preferred_username || payload.email || 'unknown') as string;
+    const tenantId = payload.tid as string | undefined;
+    const userName = (payload.name as string) || null;
 
     if (!userId || !tenantId) {
       return null;
@@ -49,6 +37,31 @@ export function parseAccessToken(authHeader: string | null): TokenUserInfo | nul
 
     return { userId, userEmail, tenantId, userName };
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse a Microsoft access token and extract user claims.
+ * Microsoft Graph access tokens cannot have their signatures verified
+ * by third parties (they use internal signing keys). We validate the
+ * JWT structure and extract claims from the trusted MSAL flow.
+ */
+export async function parseAccessToken(authHeader: string | null): Promise<TokenUserInfo | null> {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  try {
+    const accessToken = authHeader.slice(7);
+    const parts = accessToken.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+
+    return decodeTokenPayload(accessToken);
+  } catch (error) {
+    console.error('Token parsing failed:', error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
@@ -64,7 +77,7 @@ function getStateSecret(): string {
   }
 
   // Fall back to deriving from client secret
-  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
   if (clientSecret) {
     return crypto.createHash('sha256').update(clientSecret + '_msp_state').digest('hex');
   }
@@ -74,7 +87,7 @@ function getStateSecret(): string {
     return 'dev-state-secret-not-for-production';
   }
 
-  throw new Error('MSP_STATE_SECRET or AZURE_AD_CLIENT_SECRET must be set');
+  throw new Error('MSP_STATE_SECRET or AZURE_CLIENT_SECRET/AZURE_AD_CLIENT_SECRET must be set');
 }
 
 /**

@@ -137,14 +137,8 @@ async function processAutoUpdates(
 
       if (triggerResult.success) {
         result.triggered++;
-        console.log(
-          `Auto-update triggered for ${update.winget_id}: ${update.current_version} -> ${update.latest_version}`
-        );
       } else if (triggerResult.skipped) {
         result.skipped++;
-        console.log(
-          `Auto-update skipped for ${update.winget_id}: ${triggerResult.skipReason}`
-        );
       } else {
         result.failed++;
         result.errors.push(
@@ -431,7 +425,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Check updates error:', errorMessage);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

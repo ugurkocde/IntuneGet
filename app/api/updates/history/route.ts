@@ -35,7 +35,7 @@ interface AutoUpdateHistoryRow {
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = parseAccessToken(request.headers.get('Authorization'));
+    const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -53,8 +53,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // First, get policy IDs for this user
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let policyQuery = (supabase as any)
+    let policyQuery = supabase
       .from('app_update_policies')
       .select('id, winget_id, tenant_id')
       .eq('user_id', user.userId);
@@ -70,7 +69,6 @@ export async function GET(request: NextRequest) {
     const { data: userPolicies, error: policyError } = await policyQuery;
 
     if (policyError) {
-      console.error('Error fetching policies:', policyError);
       return NextResponse.json(
         { error: 'Failed to fetch policies' },
         { status: 500 }
@@ -88,8 +86,7 @@ export async function GET(request: NextRequest) {
     const policyIds = userPolicies.map((p: { id: string }) => p.id);
 
     // Build history query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let historyQuery = (supabase as any)
+    let historyQuery = supabase
       .from('auto_update_history')
       .select(`
         *,
@@ -100,24 +97,24 @@ export async function GET(request: NextRequest) {
       .order('triggered_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (status) {
-      historyQuery = historyQuery.eq('status', status);
+    if (status && ['pending', 'packaging', 'deploying', 'completed', 'failed', 'cancelled'].includes(status)) {
+      historyQuery = historyQuery.eq('status', status as 'pending' | 'packaging' | 'deploying' | 'completed' | 'failed' | 'cancelled');
     }
 
     const { data: history, error: historyError, count } = await historyQuery;
 
     if (historyError) {
-      console.error('Error fetching auto-update history:', historyError);
       return NextResponse.json(
         { error: 'Failed to fetch history' },
         { status: 500 }
       );
     }
 
-    // Transform the data
-    const transformedHistory: AutoUpdateHistoryWithPolicy[] = (history || [])
-      .filter((h: AutoUpdateHistoryRow) => h.policy?.user_id === user.userId)
-      .map((h: AutoUpdateHistoryRow) => ({
+    // Transform the data - cast to unknown first to handle Supabase's complex types
+    const historyData = (history || []) as unknown as AutoUpdateHistoryRow[];
+    const transformedHistory: AutoUpdateHistoryWithPolicy[] = historyData
+      .filter((h) => h.policy?.user_id === user.userId)
+      .map((h) => ({
         id: h.id,
         policy_id: h.policy_id,
         packaging_job_id: h.packaging_job_id,
@@ -140,8 +137,7 @@ export async function GET(request: NextRequest) {
       count: transformedHistory.length,
       hasMore: transformedHistory.length === limit,
     });
-  } catch (error) {
-    console.error('Auto-update history GET error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

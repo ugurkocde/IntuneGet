@@ -15,6 +15,7 @@ import type {
   SccmImportResponse,
   SccmDeploymentTechnology,
 } from '@/types/sccm';
+import type { Json } from '@/types/database';
 
 /**
  * Parse CSV content to array of rows
@@ -296,8 +297,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Ensure user profile exists
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from('user_profiles')
       .upsert({
         id: auth.userId,
@@ -306,8 +306,7 @@ export async function POST(request: NextRequest) {
       }, { onConflict: 'id' });
 
     // Create migration
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: migration, error: migrationError } = await (supabase as any)
+    const { data: migration, error: migrationError } = await supabase
       .from('sccm_migrations')
       .insert({
         user_id: auth.userId,
@@ -320,10 +319,9 @@ export async function POST(request: NextRequest) {
         total_apps: applications.length,
       })
       .select()
-      .single() as { data: { id: string } | null; error: Error | null };
+      .single();
 
     if (migrationError || !migration) {
-      console.error('Error creating migration:', migrationError);
       return NextResponse.json(
         { error: 'Failed to create migration' },
         { status: 500 }
@@ -350,8 +348,8 @@ export async function POST(request: NextRequest) {
           technology: primaryDT?.technology || 'Unknown',
           is_deployed: app.isDeployed,
           deployment_count: app.deploymentCount || 0,
-          sccm_app_data: app,
-          sccm_detection_rules: primaryDT?.detectionClauses || [],
+          sccm_app_data: app as unknown as Json,
+          sccm_detection_rules: (primaryDT?.detectionClauses || []) as unknown as Json,
           sccm_install_command: primaryDT?.installCommand,
           sccm_uninstall_command: primaryDT?.uninstallCommand,
           sccm_install_behavior: primaryDT?.installBehavior,
@@ -361,14 +359,12 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: insertError, data: inserted } = await (supabase as any)
+      const { error: insertError, data: inserted } = await supabase
         .from('sccm_apps')
         .insert(appRecords)
         .select('id');
 
       if (insertError) {
-        console.error('Error inserting apps batch:', insertError);
         errors.push({
           row: i,
           message: `Failed to insert batch starting at row ${i + 1}: ${insertError.message}`,
@@ -379,8 +375,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update migration status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await supabase
       .from('sccm_migrations')
       .update({
         status: 'ready',
@@ -417,8 +412,7 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json(response, { status: 201 });
-  } catch (error) {
-    console.error('Import POST error:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to import SCCM applications' },
       { status: 500 }

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import {
   Bell,
-  Mail,
   CheckCircle2,
   Loader2,
   AlertTriangle,
@@ -135,30 +134,30 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
 
   if (isLoading) {
     return (
-      <div className={cn('glass-dark rounded-xl p-6 border border-white/5', className)}>
+      <div className={cn('glass-light rounded-xl p-6 border border-black/5', className)}>
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+          <Loader2 className="w-6 h-6 text-text-muted animate-spin" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn('glass-dark rounded-xl p-6 border border-white/5 hover:border-accent-cyan/20 transition-colors', className)}>
+    <div className={cn('glass-light rounded-xl p-6 border border-black/5 hover:border-accent-cyan/20 transition-colors', className)}>
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center">
           <Bell className="w-5 h-5 text-accent-cyan" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-white">Email Notifications</h2>
-          <p className="text-sm text-zinc-500">Get notified when app updates are available</p>
+          <h2 className="text-lg font-semibold text-text-primary">Email Notifications</h2>
+          <p className="text-sm text-text-secondary">Get notified when app updates are available</p>
         </div>
       </div>
 
       {!isEmailConfigured && (
-        <div className="mb-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-400">
+        <div className="mb-6 p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-status-warning flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-status-warning">
             Email notifications are not configured. Contact the administrator to enable this feature.
           </p>
         </div>
@@ -168,8 +167,8 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
         {/* Enable toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-white font-medium">Enable Email Notifications</p>
-            <p className="text-sm text-zinc-500">Receive email alerts for app updates</p>
+            <p className="text-text-primary font-medium">Enable Email Notifications</p>
+            <p className="text-sm text-text-secondary">Receive email alerts for app updates</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -183,19 +182,20 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
             />
             <div className={cn(
               "w-11 h-6 rounded-full transition-colors",
-              "bg-zinc-700 peer-checked:bg-accent-cyan",
+              "bg-black/10 peer-checked:bg-accent-cyan",
               "peer-focus:ring-2 peer-focus:ring-accent-cyan/20",
               "peer-disabled:opacity-50 peer-disabled:cursor-not-allowed",
               "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
               "after:bg-white after:rounded-full after:h-5 after:w-5",
-              "after:transition-transform peer-checked:after:translate-x-5"
+              "after:transition-transform peer-checked:after:translate-x-5",
+              "after:shadow-sm"
             )} />
           </label>
         </div>
 
         {/* Frequency */}
         <div className={cn(!preferences.email_enabled && 'opacity-50 pointer-events-none')}>
-          <p className="text-white font-medium mb-2">Notification Frequency</p>
+          <p className="text-text-primary font-medium mb-2">Notification Frequency</p>
           <div className="flex gap-2">
             {(['immediate', 'daily', 'weekly'] as EmailFrequency[]).map((freq) => (
               <button
@@ -204,15 +204,15 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
                 className={cn(
                   'px-4 py-2 rounded-lg border text-sm transition-all',
                   preferences.email_frequency === freq
-                    ? 'bg-accent-cyan/20 border-accent-cyan/50 text-accent-cyan'
-                    : 'bg-white/5 border-white/10 text-zinc-400 hover:border-white/20'
+                    ? 'bg-accent-cyan/10 border-accent-cyan/50 text-accent-cyan font-medium'
+                    : 'bg-bg-elevated border-black/10 text-text-secondary hover:border-black/20'
                 )}
               >
                 {freq.charAt(0).toUpperCase() + freq.slice(1)}
               </button>
             ))}
           </div>
-          <p className="text-xs text-zinc-500 mt-2">
+          <p className="text-xs text-text-muted mt-2">
             {preferences.email_frequency === 'immediate' && 'Get notified as soon as updates are detected'}
             {preferences.email_frequency === 'daily' && 'Receive a daily digest of available updates'}
             {preferences.email_frequency === 'weekly' && 'Receive a weekly summary of available updates'}
@@ -221,7 +221,7 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
 
         {/* Override email */}
         <div className={cn(!preferences.email_enabled && 'opacity-50 pointer-events-none')}>
-          <p className="text-white font-medium mb-2">Email Address</p>
+          <p className="text-text-primary font-medium mb-2">Email Address</p>
           <Input
             type="email"
             placeholder={user?.email || 'your@email.com'}
@@ -232,9 +232,9 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
                 email_address: e.target.value || null,
               })
             }
-            className="bg-white/5 border-white/10 text-white placeholder:text-zinc-500"
+            className="bg-bg-elevated border-black/10 text-text-primary placeholder:text-text-muted"
           />
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-text-muted mt-1">
             Leave blank to use your account email
           </p>
         </div>
@@ -245,8 +245,8 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
           !preferences.email_enabled && 'opacity-50 pointer-events-none'
         )}>
           <div>
-            <p className="text-white font-medium">Critical Updates Only</p>
-            <p className="text-sm text-zinc-500">Only notify for major version updates</p>
+            <p className="text-text-primary font-medium">Critical Updates Only</p>
+            <p className="text-sm text-text-secondary">Only notify for major version updates</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -259,11 +259,12 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
             />
             <div className={cn(
               "w-11 h-6 rounded-full transition-colors",
-              "bg-zinc-700 peer-checked:bg-accent-cyan",
+              "bg-black/10 peer-checked:bg-accent-cyan",
               "peer-focus:ring-2 peer-focus:ring-accent-cyan/20",
               "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
               "after:bg-white after:rounded-full after:h-5 after:w-5",
-              "after:transition-transform peer-checked:after:translate-x-5"
+              "after:transition-transform peer-checked:after:translate-x-5",
+              "after:shadow-sm"
             )} />
           </label>
         </div>
@@ -287,7 +288,7 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
           <Button
             onClick={() => handleSave(false)}
             disabled={isSaving}
-            className="bg-accent-cyan hover:bg-accent-cyan-bright text-black"
+            className="bg-accent-cyan hover:bg-accent-cyan-bright text-white"
           >
             {isSaving ? (
               <>
@@ -304,7 +305,7 @@ export function NotificationSettings({ className }: NotificationSettingsProps) {
               onClick={handleSendTestEmail}
               disabled={isSendingTest || isSaving}
               variant="outline"
-              className="border-white/10 hover:border-accent-cyan/50"
+              className="border-black/10 hover:border-accent-cyan/50"
             >
               {isSendingTest ? (
                 <>
