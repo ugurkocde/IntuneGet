@@ -42,7 +42,7 @@ export const faqData: FAQ[] = [
   {
     question: "What support is available?",
     answer:
-      "As an open source project, support is provided through our GitHub community. You can file issues, ask questions in discussions, and get help from other users. We also have comprehensive documentation covering common use cases and troubleshooting.",
+      "As an open source project, support is provided through our GitHub community. You can file issues and get help from other users. We also have comprehensive documentation covering common use cases and troubleshooting.",
   },
   {
     question: "Can I self-host IntuneGet?",

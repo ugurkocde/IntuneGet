@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Github, Twitter, Linkedin, ExternalLink, Apple } from "lucide-react";
+import { Github, Linkedin, ExternalLink, Apple } from "lucide-react";
 import { FadeIn } from "../animations/FadeIn";
 
 const footerLinks = {
@@ -22,12 +22,12 @@ const footerLinks = {
   ],
   ecosystem: [
     { label: "IntuneBrew", description: "macOS App Deployment", href: "https://intunebrew.com", external: true },
+    { label: "TenuVault", description: "Intune Backup & Restore", href: "https://www.tenuvault.com/", external: true },
   ],
 };
 
 const socialLinks = [
-  { icon: Twitter, href: "https://x.com/intikidev", label: "Twitter / X" },
-  { icon: Linkedin, href: "https://linkedin.com/in/intiki", label: "LinkedIn" },
+  { icon: Linkedin, href: "https://www.linkedin.com/in/ugurkocde/", label: "LinkedIn" },
   { icon: Github, href: "https://github.com/ugurkocde/IntuneGet", label: "GitHub" },
 ];
 
@@ -170,9 +170,18 @@ export function Footer() {
           <FadeIn delay={0.1}>
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-stone-500">
               <p>
-                {currentYear} IntuneGet. Made with care by{" "}
+                {currentYear}{" "}
                 <a
                   href="https://ugurlabs.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-cyan hover:text-accent-cyan-dim transition-colors"
+                >
+                  UgurLabs
+                </a>
+                . Made with care by{" "}
+                <a
+                  href="https://www.linkedin.com/in/ugurkocde/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-accent-cyan hover:text-accent-cyan-dim transition-colors"

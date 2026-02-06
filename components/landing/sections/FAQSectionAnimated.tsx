@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { ChevronDown, HelpCircle, MessageCircle } from "lucide-react";
+import { ChevronDown, HelpCircle } from "lucide-react";
 import { FadeIn } from "../animations/FadeIn";
 import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 import { Badge } from "../ui/Badge";
@@ -114,7 +114,7 @@ export function FAQSectionAnimated() {
           <div className="mt-10 md:mt-12 text-center">
             <p className="text-stone-600 mb-4">Still have questions?</p>
             <motion.a
-              href="https://github.com/ugurkocde/IntuneGet/discussions"
+              href="https://github.com/ugurkocde/IntuneGet/issues"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 hover:border-stone-300 transition-all duration-300 shadow-soft"
@@ -122,8 +122,8 @@ export function FAQSectionAnimated() {
               whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
               transition={springPresets.snappy}
             >
-              <MessageCircle className="w-4 h-4 text-accent-cyan" />
-              Ask on GitHub Discussions
+              <HelpCircle className="w-4 h-4 text-accent-cyan" />
+              Open a GitHub Issue
             </motion.a>
           </div>
         </FadeIn>

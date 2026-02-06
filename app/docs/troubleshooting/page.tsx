@@ -4,7 +4,6 @@ import {
   AlertCircle,
   CheckCircle,
   HelpCircle,
-  MessageCircle,
   Github,
   ExternalLink,
   ChevronDown,
@@ -529,20 +528,6 @@ export default function TroubleshootingPage() {
             </p>
           </a>
 
-          <a
-            href="https://github.com/ugurkocde/IntuneGet/discussions"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-black/10 bg-white p-6 hover:border-accent-cyan/30 hover:bg-bg-elevated transition-all"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <MessageCircle className="h-6 w-6 text-accent-cyan" />
-              <h3 className="font-semibold text-text-primary">GitHub Discussions</h3>
-            </div>
-            <p className="text-sm text-text-secondary">
-              Ask questions, share ideas, and connect with other self-hosters.
-            </p>
-          </a>
         </div>
 
         <Callout type="info" title="Before Opening an Issue">

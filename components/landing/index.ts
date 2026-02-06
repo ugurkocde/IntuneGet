@@ -12,7 +12,6 @@ export {
   Footer,
   TrustSection,
   ProblemOutcomeSection,
-  DemoSection,
   ComparisonSection,
   MissionSection,
   QuickFactsSection,

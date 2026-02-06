@@ -7,7 +7,6 @@ export { CTASection } from "./CTASection";
 export { Footer } from "./Footer";
 export { TrustSection } from "./TrustSection";
 export { ProblemOutcomeSection } from "./ProblemOutcomeSection";
-export { DemoSection } from "./DemoSection";
 export { ComparisonSection } from "./ComparisonSection";
 export { MissionSection } from "./MissionSection";
 export { QuickFactsSection } from "./QuickFactsSection";

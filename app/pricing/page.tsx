@@ -251,12 +251,12 @@ export default function PricingPage() {
           <p className="text-sm text-stone-500">
             Have questions?{" "}
             <a
-              href="https://github.com/ugurkocde/IntuneGet/discussions"
+              href="https://github.com/ugurkocde/IntuneGet/issues"
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent-cyan hover:text-accent-cyan-dim transition-colors"
             >
-              Ask on GitHub Discussions
+              Open a GitHub Issue
             </a>
           </p>
         </div>

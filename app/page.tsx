@@ -5,7 +5,6 @@ import {
   TrustSection,
   FeaturesSection,
   ComparisonSection,
-  DemoSection,
   AdvancedCapabilitiesSection,
   MissionSection,
   HowItWorksSection,
@@ -136,7 +135,6 @@ export default function LandingPage() {
           <FeaturesSection />
           <SectionDivider />
           <ComparisonSection />
-          <DemoSection />
           <TrustSection />
           <QuickFactsSection />
           <SectionDivider />

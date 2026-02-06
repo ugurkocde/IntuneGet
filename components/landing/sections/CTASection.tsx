@@ -36,8 +36,8 @@ export function CTASection() {
 
           <FadeIn delay={0.2}>
             <p className="text-xl text-stone-600 max-w-2xl mx-auto leading-relaxed">
-              Deploy your first app in under 5 minutes.
-              If it takes longer, we&apos;ll help you troubleshoot - that&apos;s our promise.
+              Set up in under 5 minutes and deploy as many apps as you need.
+              Completely free, no limits.
             </p>
           </FadeIn>
 
@@ -51,7 +51,7 @@ export function CTASection() {
                 whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
                 transition={springPresets.snappy}
               >
-                Deploy Your First App Free
+                Start Deploying — It's Free
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </MotionLink>
 

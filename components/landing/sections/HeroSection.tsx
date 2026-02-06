@@ -91,7 +91,7 @@ export function HeroSection() {
                     whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
                     transition={springPresets.snappy}
                   >
-                    Start Deploying -- It&apos;s Free
+                    Start Deploying — It&apos;s Free
                     <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                   </MotionLink>
                   <motion.a
