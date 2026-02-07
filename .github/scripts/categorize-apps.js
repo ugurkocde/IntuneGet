@@ -6,7 +6,7 @@ const MODEL = process.env.OPENAI_MODEL || 'gpt-5-nano';
 const MODE = (process.env.CATEGORIZE_MODE || 'uncategorized').trim().toLowerCase();
 const LIMIT = clampInt(process.env.CATEGORIZE_LIMIT, 500, 1, 10000);
 const BATCH_SIZE = clampInt(process.env.CATEGORIZE_BATCH_SIZE, 20, 1, 50);
-const DRY_RUN = `${process.env.CATEGORIZE_DRY_RUN || 'true'}`.toLowerCase() === 'true';
+const DRY_RUN = `${process.env.CATEGORIZE_DRY_RUN || 'false'}`.toLowerCase() === 'true';
 const MAX_DESCRIPTION_LENGTH = 280;
 const RETRIES = 3;
 const RETRY_DELAY_MS = 1200;
