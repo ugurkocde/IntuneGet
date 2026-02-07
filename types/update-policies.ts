@@ -160,6 +160,7 @@ export interface AvailableUpdate {
     is_enabled: boolean;
     pinned_version: string | null;
     last_auto_update_at: string | null;
+    last_auto_update_version: string | null;
     consecutive_failures: number;
   } | null;
 }

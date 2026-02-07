@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     const wingetIds = [...new Set(updates.map((u) => u.winget_id))];
     let policiesQuery = supabase
       .from('app_update_policies')
-      .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, consecutive_failures')
+      .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, last_auto_update_version, consecutive_failures')
       .eq('user_id', user.userId)
       .in('winget_id', wingetIds);
 
@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
           is_enabled: policy.is_enabled,
           pinned_version: policy.pinned_version,
           last_auto_update_at: policy.last_auto_update_at,
+          last_auto_update_version: policy.last_auto_update_version,
           consecutive_failures: policy.consecutive_failures,
         });
       });
@@ -107,7 +108,8 @@ export async function GET(request: NextRequest) {
           policy: policyMap.get(policyKey) || null,
         };
       })
-      .filter((u) => u.current_version !== 'Unknown');
+      .filter((u) => u.current_version !== 'Unknown')
+      .filter((u) => u.policy?.last_auto_update_version !== u.latest_version);
 
     // Count critical updates
     const criticalCount = updatesWithPolicies.filter((u) => u.is_critical).length;
