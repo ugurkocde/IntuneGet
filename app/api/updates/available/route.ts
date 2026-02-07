@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const tenantId = searchParams.get('tenant_id');
+    const tenantId = searchParams.get('tenant_id')?.trim() || null;
     const includeDismissed = searchParams.get('include_dismissed') === 'true';
     const criticalOnly = searchParams.get('critical_only') === 'true';
 
@@ -70,11 +70,17 @@ export async function GET(request: NextRequest) {
 
     // Get policies for these updates
     const wingetIds = [...new Set(updates.map((u) => u.winget_id))];
-    const { data: policies } = await supabase
+    let policiesQuery = supabase
       .from('app_update_policies')
       .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, consecutive_failures')
       .eq('user_id', user.userId)
       .in('winget_id', wingetIds);
+
+    if (tenantId) {
+      policiesQuery = policiesQuery.eq('tenant_id', tenantId);
+    }
+
+    const { data: policies } = await policiesQuery;
 
     // Create policy lookup
     const policyMap = new Map<string, AvailableUpdate['policy']>();

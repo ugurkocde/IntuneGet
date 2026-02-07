@@ -1,7 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useCallback } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMicrosoftAuth } from './useMicrosoftAuth';
 import { useMspOptional } from './useMspOptional';
 import type { AppUpdateInfo } from '@/types/inventory';
@@ -59,22 +58,32 @@ export function useAppUpdates() {
 // New hooks for auto-update management
 // ============================================
 
-interface AvailableUpdatesResponse {
+export interface AvailableUpdatesResponse {
   updates: AvailableUpdate[];
   count: number;
   criticalCount: number;
 }
 
-interface AutoUpdateHistoryResponse {
+export interface AutoUpdateHistoryResponse {
   history: AutoUpdateHistoryWithPolicy[];
   count: number;
   hasMore: boolean;
 }
 
-interface UseAvailableUpdatesOptions {
+export interface UseAvailableUpdatesOptions {
   tenantId?: string;
   criticalOnly?: boolean;
   includeDismissed?: boolean;
+}
+
+export function buildAvailableUpdatesQueryParams(options: UseAvailableUpdatesOptions = {}): URLSearchParams {
+  const queryParams = new URLSearchParams();
+
+  if (options.tenantId) queryParams.set('tenant_id', options.tenantId);
+  if (options.criticalOnly) queryParams.set('critical_only', 'true');
+  if (options.includeDismissed) queryParams.set('include_dismissed', 'true');
+
+  return queryParams;
 }
 
 /**
@@ -82,21 +91,25 @@ interface UseAvailableUpdatesOptions {
  */
 export function useAvailableUpdates(options: UseAvailableUpdatesOptions = {}) {
   const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
-
-  const queryParams = new URLSearchParams();
-  if (options.tenantId) queryParams.set('tenant_id', options.tenantId);
-  if (options.criticalOnly) queryParams.set('critical_only', 'true');
-  if (options.includeDismissed) queryParams.set('include_dismissed', 'true');
+  const queryParams = buildAvailableUpdatesQueryParams(options);
+  const queryString = queryParams.toString();
 
   return useQuery<AvailableUpdatesResponse>({
-    queryKey: ['availableUpdates', options],
+    queryKey: [
+      'availableUpdates',
+      options.tenantId || null,
+      options.criticalOnly === true,
+      options.includeDismissed === true,
+    ],
     queryFn: async () => {
       const token = await getAccessToken();
       if (!token) {
         return { updates: [], count: 0, criticalCount: 0 };
       }
 
-      const url = `/api/updates/available?${queryParams.toString()}`;
+      const url = queryString
+        ? `/api/updates/available?${queryString}`
+        : '/api/updates/available';
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -116,11 +129,33 @@ export function useAvailableUpdates(options: UseAvailableUpdatesOptions = {}) {
   });
 }
 
-interface UseAutoUpdateHistoryOptions {
+export interface UseAutoUpdateHistoryOptions {
   tenantId?: string;
   wingetId?: string;
   status?: string;
   limit?: number;
+}
+
+export function buildAutoUpdateHistoryQueryParams(
+  options: UseAutoUpdateHistoryOptions = {},
+  limit = 20,
+  offset = 0
+): URLSearchParams {
+  const queryParams = new URLSearchParams();
+
+  if (options.tenantId) queryParams.set('tenant_id', options.tenantId);
+  if (options.wingetId) queryParams.set('winget_id', options.wingetId);
+  if (options.status) queryParams.set('status', options.status);
+  queryParams.set('limit', limit.toString());
+  queryParams.set('offset', offset.toString());
+
+  return queryParams;
+}
+
+export function flattenAutoUpdateHistoryPages(
+  pages: AutoUpdateHistoryResponse[] | undefined
+): AutoUpdateHistoryWithPolicy[] {
+  return (pages || []).flatMap((page) => page.history);
 }
 
 /**
@@ -128,23 +163,28 @@ interface UseAutoUpdateHistoryOptions {
  */
 export function useAutoUpdateHistory(options: UseAutoUpdateHistoryOptions = {}) {
   const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
-  const [offset, setOffset] = useState(0);
   const limit = options.limit || 20;
 
-  const query = useQuery<AutoUpdateHistoryResponse>({
-    queryKey: ['autoUpdateHistory', { ...options, offset }],
-    queryFn: async () => {
+  const query = useInfiniteQuery<AutoUpdateHistoryResponse, Error>({
+    queryKey: [
+      'autoUpdateHistory',
+      options.tenantId || null,
+      options.wingetId || null,
+      options.status || null,
+      limit,
+    ],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
       const token = await getAccessToken();
       if (!token) {
         return { history: [], count: 0, hasMore: false };
       }
 
-      const queryParams = new URLSearchParams();
-      if (options.tenantId) queryParams.set('tenant_id', options.tenantId);
-      if (options.wingetId) queryParams.set('winget_id', options.wingetId);
-      if (options.status) queryParams.set('status', options.status);
-      queryParams.set('limit', limit.toString());
-      queryParams.set('offset', offset.toString());
+      const queryParams = buildAutoUpdateHistoryQueryParams(
+        options,
+        limit,
+        Number(pageParam)
+      );
 
       const url = `/api/updates/history?${queryParams.toString()}`;
       const response = await fetch(url, {
@@ -160,18 +200,33 @@ export function useAutoUpdateHistory(options: UseAutoUpdateHistoryOptions = {}) 
 
       return response.json();
     },
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) {
+        return undefined;
+      }
+      return allPages.length * limit;
+    },
     enabled: isAuthenticated,
     staleTime: 1000 * 60, // 1 minute
   });
 
-  const fetchMore = useCallback(() => {
-    setOffset((prev) => prev + limit);
-  }, [limit]);
+  const pages = query.data?.pages;
+  const mergedHistory = flattenAutoUpdateHistoryPages(pages);
+  const hasMore = query.hasNextPage ?? false;
+  const fetchMore = () => {
+    void query.fetchNextPage();
+  };
 
   return {
     ...query,
+    data: {
+      history: mergedHistory,
+      count: mergedHistory.length,
+      hasMore,
+    },
     fetchMore,
-    hasMore: query.data?.hasMore || false,
+    hasMore,
+    isLoadingMore: query.isFetchingNextPage,
   };
 }
 

@@ -5,6 +5,7 @@
 
 import type { Json } from './database';
 import type { DetectionRule } from './intune';
+import type { PackageAssignment } from './upload';
 
 // Policy type options
 export type UpdatePolicyType = 'auto_update' | 'notify' | 'ignore' | 'pin_version';
@@ -40,6 +41,16 @@ export interface DeploymentConfig {
     groupName: string;
     assignmentType: 'required' | 'available' | 'uninstall';
   }[];
+
+  // Normalized assignment shape used by packaging workflows
+  assignments?: PackageAssignment[];
+
+  // Update deployment behavior (optional)
+  forceCreateNewApp?: boolean;
+  assignmentMigration?: {
+    carryOverAssignments: boolean;
+    removeAssignmentsFromPreviousApp: boolean;
+  };
 
   // Additional metadata
   description?: string;

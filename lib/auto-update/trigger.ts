@@ -13,6 +13,7 @@ import {
   classifyUpdateType,
   canAutoUpdate,
 } from '@/types/update-policies';
+import type { PackageAssignment } from '@/types/upload';
 
 interface TriggerResult {
   success: boolean;
@@ -31,12 +32,32 @@ interface UpdateInfo {
   installerUrl: string;
   installerSha256: string;
   installerType: string;
+  currentIntuneAppId?: string;
 }
 
 interface RateLimitCheck {
   allowed: boolean;
   reason?: string;
   retryAfterMinutes?: number;
+}
+
+function normalizeAssignments(config: DeploymentConfig): PackageAssignment[] {
+  if (Array.isArray(config.assignments) && config.assignments.length > 0) {
+    return config.assignments;
+  }
+
+  if (!Array.isArray(config.assignedGroups) || config.assignedGroups.length === 0) {
+    return [];
+  }
+
+  return config.assignedGroups
+    .filter((group) => Boolean(group.groupId))
+    .map((group) => ({
+      type: 'group',
+      groupId: group.groupId,
+      groupName: group.groupName,
+      intent: group.assignmentType,
+    }));
 }
 
 /**
@@ -297,6 +318,12 @@ export class AutoUpdateTrigger {
     historyId: string
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
+    const assignments = normalizeAssignments(config);
+    const assignmentMigration = config.assignmentMigration || {
+      carryOverAssignments: false,
+      removeAssignmentsFromPreviousApp: false,
+    };
+    const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
 
     // Get user email for the job
     const { data: userProfile } = await this.supabase
@@ -322,7 +349,16 @@ export class AutoUpdateTrigger {
       install_scope: config.installScope,
       detection_rules: config.detectionRules,
       package_config: {
+        assignments,
         assignedGroups: config.assignedGroups,
+        forceCreate: config.forceCreateNewApp !== false,
+        sourceIntuneAppId,
+        assignmentMigration: {
+          carryOverAssignments: Boolean(assignmentMigration.carryOverAssignments),
+          removeAssignmentsFromPreviousApp: Boolean(
+            assignmentMigration.removeAssignmentsFromPreviousApp
+          ),
+        },
         description: config.description,
         notes: config.notes,
         autoUpdateHistoryId: historyId,

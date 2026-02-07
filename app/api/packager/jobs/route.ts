@@ -147,6 +147,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const db = getDatabase();
+    const existingJob = await db.jobs.getById(jobId);
     const now = new Date().toISOString();
 
     // Build update object
@@ -187,6 +188,28 @@ export async function PATCH(request: NextRequest) {
         { error: 'Failed to update job or job not owned by this packager' },
         { status: 400 }
       );
+    }
+
+    // Record deployments in upload_history so update checks can track versions.
+    if (status === 'deployed' && existingJob?.status !== 'deployed' && job.intune_app_id) {
+      try {
+        await db.uploadHistory.create({
+          packaging_job_id: job.id,
+          user_id: job.user_id,
+          winget_id: job.winget_id,
+          version: job.version,
+          display_name: job.display_name,
+          publisher: job.publisher,
+          intune_app_id: job.intune_app_id,
+          intune_app_url: job.intune_app_url,
+          intune_tenant_id: job.tenant_id,
+        });
+      } catch (historyError) {
+        console.error(
+          `[Packager Jobs API] Failed to write upload_history for job ${job.id}:`,
+          historyError
+        );
+      }
     }
 
     return NextResponse.json({ updated: true, job });

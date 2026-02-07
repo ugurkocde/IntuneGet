@@ -51,6 +51,14 @@ interface AutoUpdateResult {
   errors: string[];
 }
 
+interface ExistingUpdateCheckRow {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  winget_id: string;
+  intune_app_id: string;
+}
+
 /**
  * Process auto-updates for detected updates
  */
@@ -128,6 +136,7 @@ async function processAutoUpdates(
 
       // Add current version to installer info
       installerInfo.currentVersion = update.current_version;
+      installerInfo.currentIntuneAppId = update.intune_app_id;
 
       // Trigger the auto-update
       const triggerResult = await autoUpdateTrigger.triggerAutoUpdate(
@@ -212,16 +221,27 @@ export async function GET(request: Request) {
       throw autoUpdateError;
     }
 
+    // Always include users that have deployed apps tracked in upload_history.
+    // Without this, updates can stay at zero for users who did not enable notifications.
+    const { data: deploymentUsers, error: deploymentUsersError } = await supabase
+      .from('upload_history')
+      .select('user_id');
+
+    if (deploymentUsersError) {
+      throw deploymentUsersError;
+    }
+
     // Combine unique user IDs
     const userIds = new Set<string>();
     notificationUsers?.forEach((u) => userIds.add(u.user_id));
     webhookUsers?.forEach((u) => userIds.add(u.user_id));
     autoUpdateUsers?.forEach((u) => userIds.add(u.user_id));
+    deploymentUsers?.forEach((u) => userIds.add(u.user_id));
 
     if (userIds.size === 0) {
       return NextResponse.json({
         success: true,
-        message: 'No users with notifications or auto-update enabled',
+        message: 'No users with tracked deployments',
         usersChecked: 0,
         updatesFound: 0,
         autoUpdates: { triggered: 0, skipped: 0, failed: 0 },
@@ -268,6 +288,7 @@ export async function GET(request: Request) {
     let totalUsersChecked = 0;
     const errors: string[] = [];
     const allUpdates: UpdateCheckInsert[] = [];
+    const activeUpdateKeys = new Set<string>();
 
     // Process users in batches
     const userIdArray = Array.from(userIds);
@@ -356,6 +377,9 @@ export async function GET(request: Request) {
 
             updates.push(updateRecord);
             allUpdates.push(updateRecord);
+            activeUpdateKeys.add(
+              `${userId}:${tenantId}:${app.winget_id}:${app.intune_app_id}`
+            );
           }
         }
       }
@@ -378,6 +402,37 @@ export async function GET(request: Request) {
       // Rate limiting between batches
       if (i + BATCH_SIZE < userIdArray.length) {
         await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+
+    // Remove stale rows for processed users that are no longer active.
+    // This clears outdated entries from older Intune app objects and resolved updates.
+    if (userIdArray.length > 0) {
+      const { data: existingRows, error: existingRowsError } = await supabase
+        .from('update_check_results')
+        .select('id, user_id, tenant_id, winget_id, intune_app_id')
+        .in('user_id', userIdArray);
+
+      if (existingRowsError) {
+        errors.push(`Error loading existing update rows: ${existingRowsError.message}`);
+      } else if (existingRows) {
+        const staleIds = (existingRows as ExistingUpdateCheckRow[])
+          .filter((row) => {
+            const key = `${row.user_id}:${row.tenant_id}:${row.winget_id}:${row.intune_app_id}`;
+            return !activeUpdateKeys.has(key);
+          })
+          .map((row) => row.id);
+
+        if (staleIds.length > 0) {
+          const { error: staleDeleteError } = await supabase
+            .from('update_check_results')
+            .delete()
+            .in('id', staleIds);
+
+          if (staleDeleteError) {
+            errors.push(`Error deleting stale updates: ${staleDeleteError.message}`);
+          }
+        }
       }
     }
 

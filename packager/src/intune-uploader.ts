@@ -27,6 +27,47 @@ export interface EncryptionInfo {
 
 type ProgressCallback = (percent: number, message: string) => Promise<void>;
 
+type AssignmentIntent = 'required' | 'available' | 'uninstall';
+
+interface PackageAssignment {
+  type: 'allUsers' | 'allDevices' | 'group';
+  intent: AssignmentIntent;
+  groupId?: string;
+  groupName?: string;
+}
+
+interface AssignmentMigrationConfig {
+  carryOverAssignments: boolean;
+  removeAssignmentsFromPreviousApp: boolean;
+  sourceIntuneAppId?: string;
+}
+
+interface GraphAssignmentTarget {
+  '@odata.type': string;
+  groupId?: string;
+}
+
+interface GraphMobileAppAssignment {
+  '@odata.type': '#microsoft.graph.mobileAppAssignment';
+  intent: AssignmentIntent;
+  target: GraphAssignmentTarget;
+  settings: {
+    '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings';
+    notifications: 'showAll';
+    deliveryOptimizationPriority: 'notConfigured';
+  };
+}
+
+interface GraphAssignmentResponse {
+  value?: Array<{
+    intent?: string;
+    target?: {
+      '@odata.type'?: string;
+      groupId?: string;
+    };
+  }>;
+}
+
 export class IntuneUploader {
   private config: PackagerConfig;
   private logger: Logger;
@@ -124,6 +165,10 @@ export class IntuneUploader {
     await onProgress?.(98, 'Adding detection rules...');
     await this.addDetectionRules(graphClient, app.id, job);
     this.logger.info('Detection rules added');
+
+    // Step 10: Apply assignment configuration (99%)
+    await onProgress?.(99, 'Applying assignments...');
+    await this.applyAssignments(graphClient, app.id, job);
 
     await onProgress?.(100, 'Upload complete');
 
@@ -416,6 +461,257 @@ export class IntuneUploader {
   }
 
   /**
+   * Apply assignments to the new app and optionally remove assignments from the previous app.
+   */
+  private async applyAssignments(
+    graphClient: GraphClient,
+    newAppId: string,
+    job: PackagingJob
+  ): Promise<void> {
+    const explicitAssignments = this.extractExplicitAssignments(job);
+    const migrationConfig = this.extractAssignmentMigrationConfig(job);
+    let graphAssignments = this.toGraphAssignments(explicitAssignments);
+
+    if (
+      graphAssignments.length === 0 &&
+      migrationConfig.carryOverAssignments &&
+      migrationConfig.sourceIntuneAppId
+    ) {
+      graphAssignments = await this.getGraphAssignmentsForApp(
+        graphClient,
+        migrationConfig.sourceIntuneAppId
+      );
+      this.logger.info('Carried over assignments from previous app', {
+        sourceAppId: migrationConfig.sourceIntuneAppId,
+        assignmentCount: graphAssignments.length,
+      });
+    }
+
+    if (graphAssignments.length > 0) {
+      await this.assignApp(graphClient, newAppId, graphAssignments);
+      this.logger.info('Applied assignments to new app', {
+        newAppId,
+        assignmentCount: graphAssignments.length,
+      });
+    } else {
+      this.logger.debug('No assignments to apply', { newAppId });
+    }
+
+    if (
+      migrationConfig.carryOverAssignments &&
+      migrationConfig.removeAssignmentsFromPreviousApp &&
+      migrationConfig.sourceIntuneAppId
+    ) {
+      try {
+        await this.assignApp(graphClient, migrationConfig.sourceIntuneAppId, []);
+        this.logger.info('Removed assignments from previous app', {
+          sourceAppId: migrationConfig.sourceIntuneAppId,
+        });
+      } catch (error) {
+        this.logger.warn('Failed to remove assignments from previous app', {
+          sourceAppId: migrationConfig.sourceIntuneAppId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  private extractExplicitAssignments(job: PackagingJob): PackageAssignment[] {
+    const packageConfig = this.asRecord(job.package_config);
+    if (!packageConfig) {
+      return [];
+    }
+
+    const assignments = packageConfig.assignments;
+    if (Array.isArray(assignments)) {
+      return assignments
+        .filter((item): item is PackageAssignment => {
+          const assignment = this.asRecord(item);
+          if (!assignment) return false;
+
+          const type = assignment.type;
+          const intent = assignment.intent;
+          if (
+            type !== 'allUsers' &&
+            type !== 'allDevices' &&
+            type !== 'group'
+          ) {
+            return false;
+          }
+
+          if (
+            intent !== 'required' &&
+            intent !== 'available' &&
+            intent !== 'uninstall'
+          ) {
+            return false;
+          }
+
+          if (type === 'group') {
+            return typeof assignment.groupId === 'string' && assignment.groupId.length > 0;
+          }
+
+          return true;
+        })
+        .map((assignment) => ({
+          type: assignment.type,
+          intent: assignment.intent,
+          groupId: assignment.groupId,
+          groupName: assignment.groupName,
+        }));
+    }
+
+    const assignedGroups = packageConfig.assignedGroups;
+    if (!Array.isArray(assignedGroups)) {
+      return [];
+    }
+
+    return assignedGroups
+      .map((item) => this.asRecord(item))
+      .filter((group): group is Record<string, unknown> => Boolean(group))
+      .filter((group) => typeof group.groupId === 'string' && group.groupId.length > 0)
+      .map((group) => ({
+        type: 'group' as const,
+        intent: (group.assignmentType as AssignmentIntent) || 'required',
+        groupId: group.groupId as string,
+        groupName: typeof group.groupName === 'string' ? group.groupName : undefined,
+      }));
+  }
+
+  private extractAssignmentMigrationConfig(job: PackagingJob): AssignmentMigrationConfig {
+    const packageConfig = this.asRecord(job.package_config);
+    if (!packageConfig) {
+      return {
+        carryOverAssignments: false,
+        removeAssignmentsFromPreviousApp: false,
+      };
+    }
+
+    const nested = this.asRecord(packageConfig.assignmentMigration);
+    const sourceIntuneAppId = typeof packageConfig.sourceIntuneAppId === 'string'
+      ? packageConfig.sourceIntuneAppId
+      : undefined;
+
+    const carryOverAssignments = Boolean(
+      (nested?.carryOverAssignments as boolean | undefined) ??
+        packageConfig.carryOverAssignments
+    );
+    const removeAssignmentsFromPreviousApp = Boolean(
+      (nested?.removeAssignmentsFromPreviousApp as boolean | undefined) ??
+        packageConfig.removeAssignmentsFromPreviousApp
+    );
+
+    return {
+      carryOverAssignments,
+      removeAssignmentsFromPreviousApp,
+      sourceIntuneAppId,
+    };
+  }
+
+  private toGraphAssignments(assignments: PackageAssignment[]): GraphMobileAppAssignment[] {
+    const graphAssignments: GraphMobileAppAssignment[] = [];
+
+    for (const assignment of assignments) {
+      let target: GraphAssignmentTarget;
+
+      switch (assignment.type) {
+        case 'allUsers':
+          target = {
+            '@odata.type': '#microsoft.graph.allLicensedUsersAssignmentTarget',
+          };
+          break;
+        case 'allDevices':
+          target = {
+            '@odata.type': '#microsoft.graph.allDevicesAssignmentTarget',
+          };
+          break;
+        case 'group':
+          if (!assignment.groupId) {
+            continue;
+          }
+          target = {
+            '@odata.type': '#microsoft.graph.groupAssignmentTarget',
+            groupId: assignment.groupId,
+          };
+          break;
+        default:
+          continue;
+      }
+
+      graphAssignments.push({
+        '@odata.type': '#microsoft.graph.mobileAppAssignment',
+        intent: assignment.intent,
+        target,
+        settings: {
+          '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings',
+          notifications: 'showAll',
+          deliveryOptimizationPriority: 'notConfigured',
+        },
+      });
+    }
+
+    return graphAssignments;
+  }
+
+  private async getGraphAssignmentsForApp(
+    graphClient: GraphClient,
+    appId: string
+  ): Promise<GraphMobileAppAssignment[]> {
+    const response = await graphClient.get<GraphAssignmentResponse>(
+      `/deviceAppManagement/mobileApps/${appId}/assignments`
+    );
+
+    const assignments = response.value || [];
+    const mapped: GraphMobileAppAssignment[] = [];
+
+    for (const assignment of assignments) {
+      const targetType = assignment.target?.['@odata.type'];
+      if (!targetType) {
+        continue;
+      }
+
+      let intent: AssignmentIntent;
+      if (assignment.intent === 'required') {
+        intent = 'required';
+      } else if (assignment.intent === 'uninstall') {
+        intent = 'uninstall';
+      } else {
+        intent = 'available';
+      }
+
+      const target: GraphAssignmentTarget = {
+        '@odata.type': targetType,
+      };
+      if (assignment.target?.groupId) {
+        target.groupId = assignment.target.groupId;
+      }
+
+      mapped.push({
+        '@odata.type': '#microsoft.graph.mobileAppAssignment',
+        intent,
+        target,
+        settings: {
+          '@odata.type': '#microsoft.graph.win32LobAppAssignmentSettings',
+          notifications: 'showAll',
+          deliveryOptimizationPriority: 'notConfigured',
+        },
+      });
+    }
+
+    return mapped;
+  }
+
+  private async assignApp(
+    graphClient: GraphClient,
+    appId: string,
+    assignments: GraphMobileAppAssignment[]
+  ): Promise<void> {
+    await graphClient.post(`/deviceAppManagement/mobileApps/${appId}/assign`, {
+      mobileAppAssignments: assignments,
+    });
+  }
+
+  /**
    * Build detection rules from job configuration
    */
   private buildDetectionRules(job: PackagingJob): unknown[] {
@@ -495,5 +791,12 @@ export class IntuneUploader {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    if (typeof value !== 'object' || value === null) {
+      return null;
+    }
+    return value as Record<string, unknown>;
   }
 }

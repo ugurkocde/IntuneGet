@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
   Package,
   History,
-  Settings,
-  Filter,
   Search,
   XCircle,
 } from 'lucide-react';
@@ -19,15 +17,21 @@ import { PageHeader, AnimatedStatCard, StatCardGrid, AnimatedEmptyState } from '
 import { UpdateCard, UpdateCardSkeleton, AutoUpdateHistory } from '@/components/updates';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAvailableUpdates, useAutoUpdateHistory, useTriggerUpdate, useUpdatePolicy } from '@/hooks/use-updates';
+import { useMspOptional } from '@/hooks/useMspOptional';
 import { cn } from '@/lib/utils';
-import type { AvailableUpdate, UpdatePolicyType, AutoUpdateHistoryWithPolicy } from '@/types/update-policies';
+import type { AvailableUpdate, UpdatePolicyType } from '@/types/update-policies';
 
 export default function UpdatesPage() {
   const [search, setSearch] = useState('');
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
   const [activeTab, setActiveTab] = useState<'available' | 'history'>('available');
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
-  const prefersReducedMotion = useReducedMotion();
+  const { isMspUser, selectedTenantId, managedTenants } = useMspOptional();
+  const tenantId = isMspUser ? selectedTenantId || undefined : undefined;
+  const hasGrantedManagedTenants = managedTenants.some(
+    (tenant) => tenant.is_active && tenant.consent_status === 'granted' && Boolean(tenant.tenant_id)
+  );
+  const mspTenantSelectionRequired = isMspUser && hasGrantedManagedTenants && !selectedTenantId;
 
   // Data hooks
   const {
@@ -36,14 +40,17 @@ export default function UpdatesPage() {
     error: updatesError,
     refetch: refetchUpdates,
     isFetching: isFetchingUpdates,
-  } = useAvailableUpdates({ criticalOnly: showCriticalOnly });
+  } = useAvailableUpdates({
+    tenantId,
+    criticalOnly: showCriticalOnly,
+  });
 
   const {
     data: historyData,
     isLoading: isLoadingHistory,
     fetchMore: fetchMoreHistory,
     hasMore: hasMoreHistory,
-  } = useAutoUpdateHistory();
+  } = useAutoUpdateHistory({ tenantId });
 
   const { triggerUpdate } = useTriggerUpdate();
   const { updatePolicy } = useUpdatePolicy();
@@ -234,7 +241,15 @@ export default function UpdatesPage() {
 
         {/* Available Updates Tab */}
         <TabsContent value="available" className="mt-0">
-          {isLoadingUpdates ? (
+          {mspTenantSelectionRequired ? (
+            <AnimatedEmptyState
+              icon={Package}
+              title="Select a tenant to view updates"
+              description="Use the tenant switcher in the header to pick which managed tenant you want to update."
+              color="neutral"
+              showOrbs={false}
+            />
+          ) : isLoadingUpdates ? (
             <UpdateCardSkeleton count={5} />
           ) : updatesError ? (
             <AnimatedEmptyState
@@ -289,12 +304,22 @@ export default function UpdatesPage() {
 
         {/* History Tab */}
         <TabsContent value="history" className="mt-0">
-          <AutoUpdateHistory
-            history={history}
-            isLoading={isLoadingHistory}
-            onLoadMore={fetchMoreHistory}
-            hasMore={hasMoreHistory}
-          />
+          {mspTenantSelectionRequired ? (
+            <AnimatedEmptyState
+              icon={History}
+              title="Select a tenant to view update history"
+              description="Auto-update history is shown per tenant to avoid mixing deployment timelines."
+              color="neutral"
+              showOrbs={false}
+            />
+          ) : (
+            <AutoUpdateHistory
+              history={history}
+              isLoading={isLoadingHistory}
+              onLoadMore={fetchMoreHistory}
+              hasMore={hasMoreHistory}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

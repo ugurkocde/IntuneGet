@@ -5,6 +5,14 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/cron/check-updates",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/send-notifications",
+      "schedule": "0 4 * * *"
+    },
+    {
       "path": "/api/cron/process-batches",
       "schedule": "*/2 * * * *"
     }

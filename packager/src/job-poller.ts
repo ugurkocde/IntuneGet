@@ -394,6 +394,19 @@ export class JobPoller {
       return;
     }
 
+    const { data: existingJob, error: existingJobError } = await this.supabase!
+      .from('packaging_jobs')
+      .select('status')
+      .eq('id', jobId)
+      .single();
+
+    if (existingJobError) {
+      this.logger.warn('Could not read existing job status before update', {
+        jobId,
+        error: existingJobError.message,
+      });
+    }
+
     const updateData: Record<string, unknown> = {
       status,
       packager_heartbeat_at: new Date().toISOString(),
@@ -410,11 +423,13 @@ export class JobPoller {
       Object.assign(updateData, additionalData);
     }
 
-    const { error } = await this.supabase!
+    const { data: updatedJob, error } = await this.supabase!
       .from('packaging_jobs')
       .update(updateData)
       .eq('id', jobId)
-      .eq('packager_id', this.config.packagerId);
+      .eq('packager_id', this.config.packagerId)
+      .select('id, user_id, winget_id, version, display_name, publisher, tenant_id, intune_app_id, intune_app_url')
+      .single();
 
     if (error) {
       this.logger.error('Failed to update job status', {
@@ -423,6 +438,33 @@ export class JobPoller {
         error: error.message,
       });
       throw error;
+    }
+
+    if (
+      status === 'deployed' &&
+      existingJob?.status !== 'deployed' &&
+      updatedJob?.intune_app_id
+    ) {
+      const { error: uploadHistoryError } = await this.supabase!
+        .from('upload_history')
+        .insert({
+          packaging_job_id: updatedJob.id,
+          user_id: updatedJob.user_id,
+          winget_id: updatedJob.winget_id,
+          version: updatedJob.version,
+          display_name: updatedJob.display_name,
+          publisher: updatedJob.publisher,
+          intune_app_id: updatedJob.intune_app_id,
+          intune_app_url: updatedJob.intune_app_url,
+          intune_tenant_id: updatedJob.tenant_id,
+        });
+
+      if (uploadHistoryError) {
+        this.logger.warn('Failed to write upload_history after deployment', {
+          jobId,
+          error: uploadHistoryError.message,
+        });
+      }
     }
 
     this.logger.info('Job status updated', { jobId, status });

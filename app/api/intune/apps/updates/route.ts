@@ -7,11 +7,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
-import { matchAppToWinget } from '@/lib/app-matching';
-import { hasUpdate, normalizeVersion } from '@/lib/version-compare';
+import { matchAppToWinget, matchAppToWingetWithDatabase } from '@/lib/app-matching';
+import { compareVersions, hasUpdate, normalizeVersion } from '@/lib/version-compare';
 import type { IntuneWin32App, AppUpdateInfo } from '@/types/inventory';
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
+
+interface CheckedResult {
+  app: string;
+  wingetId: string | null;
+  result: string;
+}
+
+interface MatchedApp {
+  app: IntuneWin32App;
+  wingetId: string;
+}
+
+interface CuratedPackageRow {
+  winget_id: string;
+  latest_version: string | null;
+}
 
 // Extend timeout for Vercel (Pro plan: up to 60s)
 export const maxDuration = 30;
@@ -125,13 +141,15 @@ export async function GET(request: NextRequest) {
 
     // Match apps to Winget IDs
     const updates: AppUpdateInfo[] = [];
-    const checked: { app: string; wingetId: string | null; result: string }[] = [];
-
-    const appsToCheck: { app: IntuneWin32App; match: NonNullable<ReturnType<typeof matchAppToWinget>> }[] = [];
-    const wingetIdsToLookup: string[] = [];
+    const checked: CheckedResult[] = [];
+    const matchedApps: MatchedApp[] = [];
 
     for (const app of apps) {
-      const match = matchAppToWinget(app);
+      let match = matchAppToWinget(app);
+
+      if (!match || match.confidence === 'low') {
+        match = await matchAppToWingetWithDatabase(app, supabase);
+      }
 
       if (!match) {
         checked.push({
@@ -142,7 +160,6 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Only check high and medium confidence matches
       if (match.confidence === 'low') {
         checked.push({
           app: app.displayName,
@@ -152,12 +169,15 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      appsToCheck.push({ app, match });
-      wingetIdsToLookup.push(match.wingetId);
+      matchedApps.push({
+        app,
+        wingetId: match.wingetId,
+      });
     }
 
     // Batch lookup all Winget versions from curated_apps table (single DB query)
     const versionMap = new Map<string, string>();
+    const wingetIdsToLookup = Array.from(new Set(matchedApps.map((m) => m.wingetId)));
 
     if (wingetIdsToLookup.length > 0) {
       const { data: cachedPackages, error: cacheError } = await supabase
@@ -166,7 +186,7 @@ export async function GET(request: NextRequest) {
         .in('winget_id', wingetIdsToLookup);
 
       if (!cacheError && cachedPackages) {
-        for (const pkg of cachedPackages) {
+        for (const pkg of cachedPackages as CuratedPackageRow[]) {
           if (pkg.latest_version) {
             versionMap.set(pkg.winget_id, pkg.latest_version);
           }
@@ -174,43 +194,82 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Process results using cached data
-    for (const { app, match } of appsToCheck) {
-      const latestVersion = versionMap.get(match.wingetId);
+    // Group by Winget ID and compare using the newest tenant app object.
+    // This prevents older Intune objects from suppressing update detection.
+    const appsByWinget = new Map<string, MatchedApp[]>();
+    for (const matched of matchedApps) {
+      if (!appsByWinget.has(matched.wingetId)) {
+        appsByWinget.set(matched.wingetId, []);
+      }
+      appsByWinget.get(matched.wingetId)!.push(matched);
+    }
+
+    for (const [wingetId, candidates] of appsByWinget.entries()) {
+      const latestVersion = versionMap.get(wingetId);
 
       if (!latestVersion) {
-        checked.push({
-          app: app.displayName,
-          wingetId: match.wingetId,
-          result: 'Package not in cache',
-        });
+        for (const candidate of candidates) {
+          checked.push({
+            app: candidate.app.displayName,
+            wingetId,
+            result: 'Package not in cache',
+          });
+        }
         continue;
       }
 
-      const currentVersion = normalizeVersion(app.displayVersion);
-      const normalizedLatest = normalizeVersion(latestVersion);
+      const newestCandidate = candidates.reduce((currentNewest, candidate) => {
+        const currentNewestVersion = normalizeVersion(currentNewest.app.displayVersion);
+        const candidateVersion = normalizeVersion(candidate.app.displayVersion);
+        const comparison = compareVersions(candidateVersion, currentNewestVersion);
 
+        if (comparison > 0) {
+          return candidate;
+        }
+
+        if (comparison === 0) {
+          const currentModified = new Date(currentNewest.app.lastModifiedDateTime).getTime();
+          const candidateModified = new Date(candidate.app.lastModifiedDateTime).getTime();
+          if (candidateModified > currentModified) {
+            return candidate;
+          }
+        }
+
+        return currentNewest;
+      });
+
+      const currentVersion = normalizeVersion(newestCandidate.app.displayVersion);
+      const normalizedLatest = normalizeVersion(latestVersion);
       const updateAvailable = hasUpdate(currentVersion, normalizedLatest);
 
       if (updateAvailable) {
         updates.push({
-          intuneApp: app,
-          currentVersion: app.displayVersion || 'Unknown',
+          intuneApp: newestCandidate.app,
+          currentVersion: newestCandidate.app.displayVersion || 'Unknown',
           latestVersion: latestVersion,
-          wingetId: match.wingetId,
+          wingetId,
           hasUpdate: true,
         });
+      } else {
+        // no-op; tracked in checked entries below
+      }
+
+      for (const candidate of candidates) {
+        if (candidate.app.id === newestCandidate.app.id) {
+          checked.push({
+            app: candidate.app.displayName,
+            wingetId,
+            result: updateAvailable
+              ? `Update available (newest tenant app): ${currentVersion} -> ${normalizedLatest}`
+              : 'Up to date (newest tenant app)',
+          });
+          continue;
+        }
 
         checked.push({
-          app: app.displayName,
-          wingetId: match.wingetId,
-          result: `Update available: ${currentVersion} -> ${normalizedLatest}`,
-        });
-      } else {
-        checked.push({
-          app: app.displayName,
-          wingetId: match.wingetId,
-          result: 'Up to date',
+          app: candidate.app.displayName,
+          wingetId,
+          result: `Older tenant app object (${normalizeVersion(candidate.app.displayVersion)}) - compared using newest ${currentVersion}`,
         });
       }
     }
