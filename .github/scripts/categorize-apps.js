@@ -379,6 +379,12 @@ async function main() {
           : modelMap.get(app.winget_id).confidence,
     }));
 
+    console.log(`\n--- Batch ${i + 1}/${chunks.length} (${batchUpdates.length} apps) ---`);
+    for (const item of batchUpdates) {
+      const flag = item.category === 'other' ? ' [!]' : '';
+      console.log(`  ${item.winget_id} -> ${item.category} (confidence: ${item.confidence})${flag}`);
+    }
+
     assignments.push(...batchUpdates);
 
     if (!DRY_RUN) {
@@ -411,6 +417,15 @@ async function main() {
   };
 
   fs.writeFileSync('./categorize-stats.json', JSON.stringify(stats, null, 2));
+
+  const otherCount = stats.categoryCounts['other'] || 0;
+  const otherPct = stats.processed > 0 ? ((otherCount / stats.processed) * 100).toFixed(1) : '0.0';
+  console.log(`\n=== Summary ===`);
+  console.log(`Category distribution:`);
+  for (const [cat, count] of Object.entries(stats.categoryCounts).sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${cat}: ${count}`);
+  }
+  console.log(`"other" classifications: ${otherCount}/${stats.processed} (${otherPct}%)`);
 
   console.log(
     JSON.stringify(
