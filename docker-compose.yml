@@ -33,6 +33,9 @@ services:
       # ===========================================
       # Microsoft Entra ID (Required)
       # ===========================================
+      # NEXT_PUBLIC_AZURE_AD_CLIENT_ID is injected at runtime by the
+      # server component layout, so it works correctly even though the
+      # Docker image is built without it.
       - NEXT_PUBLIC_AZURE_AD_CLIENT_ID=${NEXT_PUBLIC_AZURE_AD_CLIENT_ID}
       - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
 

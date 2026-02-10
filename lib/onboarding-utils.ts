@@ -3,6 +3,8 @@
  * Handles localStorage caching for onboarding step persistence
  */
 
+import { getPublicClientId } from "@/lib/runtime-config";
+
 // Storage keys
 export const ONBOARDING_STEP_KEY = 'intuneget_onboarding_step';
 export const ONBOARDING_COMPLETE_KEY = 'intuneget_onboarding_complete';
@@ -97,7 +99,7 @@ export function clearOnboardingCache(): void {
  * Get shareable admin consent URL for non-admin users
  */
 export function getShareableConsentUrl(tenantId?: string): string {
-  const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || '';
+  const clientId = getPublicClientId();
   const redirectUri = typeof window !== 'undefined'
     ? `${window.location.origin}/auth/consent-callback`
     : '';

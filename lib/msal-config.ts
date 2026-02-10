@@ -3,10 +3,11 @@ import {
   PublicClientApplication,
   LogLevel,
 } from "@azure/msal-browser";
+import { getPublicClientId } from "@/lib/runtime-config";
 
 export const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || "",
+    clientId: getPublicClientId(),
     authority: "https://login.microsoftonline.com/common",
     redirectUri:
       typeof window !== "undefined" ? window.location.origin : "",
@@ -51,7 +52,7 @@ export const graphScopes = [
  * This grants the service principal access to the user's tenant
  */
 export function getAdminConsentUrl(tenantId?: string): string {
-  const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || "";
+  const clientId = getPublicClientId();
   const redirectUri = typeof window !== "undefined"
     ? `${window.location.origin}/auth/consent-callback`
     : "";
@@ -69,7 +70,7 @@ export function getAdminConsentUrl(tenantId?: string): string {
  * Note: This function is called from the server-side API, not from the client
  */
 export function getMspCustomerConsentUrl(mspOrgId: string, tenantRecordId: string, baseUrl?: string, signedState?: string): string {
-  const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || "";
+  const clientId = getPublicClientId();
   const base = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
   const redirectUri = `${base}/api/msp/tenants/consent-callback`;
 

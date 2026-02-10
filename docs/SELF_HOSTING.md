@@ -43,6 +43,15 @@ docker-compose up -d
 
 The application will be available at `http://localhost:3000`.
 
+> **Note on environment variables and Docker**: The Docker image is built without
+> any `NEXT_PUBLIC_*` environment variables baked in. Instead, these values are
+> injected at runtime when the container starts. This means you only need to
+> set your variables in the `environment` section of `docker-compose.yml` (or
+> in a `.env` file that Docker Compose loads). No build arguments or custom
+> image builds are required. See
+> [How Runtime Environment Injection Works](#how-runtime-environment-injection-works)
+> for technical details.
+
 ### Option 2: Vercel
 
 Deploy directly to Vercel for a managed hosting experience.
@@ -235,6 +244,34 @@ Expected response:
 
 For more details, see the [Packager README](../packager/README.md).
 
+## How Runtime Environment Injection Works
+
+Next.js normally inlines `NEXT_PUBLIC_*` environment variables into the client
+JavaScript bundle at **build time**. In a Docker deployment the image is built
+once (without tenant-specific values), so those variables would be empty in the
+browser.
+
+IntuneGet solves this with a runtime injection mechanism:
+
+1. The root `layout.tsx` (a server component) reads `process.env` at **request
+   time** and renders a `<script>` tag that sets `window.__RUNTIME_CONFIG__`
+   with the current value of `NEXT_PUBLIC_AZURE_AD_CLIENT_ID`.
+2. Client-side code (`lib/runtime-config.ts`) calls `getPublicClientId()`,
+   which checks `window.__RUNTIME_CONFIG__` first and falls back to
+   `process.env` for Vercel and local development builds where the value is
+   already inlined.
+
+This means:
+
+- **Docker / self-hosted**: Pass `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` in the
+  container's `environment` section. It will be read from the server process at
+  runtime and forwarded to the browser automatically. No build arguments or
+  custom Dockerfile changes are needed.
+- **Vercel / local development**: The standard `NEXT_PUBLIC_*` build-time
+  behavior works as usual. The runtime config layer is a transparent no-op.
+
+---
+
 ## Reverse Proxy Configuration
 
 ### Nginx
@@ -322,6 +359,10 @@ docker-compose up -d
 1. Verify Azure AD app registration is multi-tenant
 2. Check redirect URIs match your deployment URL
 3. Ensure admin consent was granted
+4. If MSAL login redirects fail or the `client_id` parameter is missing from
+   authentication URLs, confirm that `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` is set
+   in the Docker container's environment (see
+   [How Runtime Environment Injection Works](#how-runtime-environment-injection-works))
 
 ### Packaging pipeline not working
 

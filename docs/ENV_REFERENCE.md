@@ -114,9 +114,31 @@ The web app supports both:
 
 For consistency, prefer `AZURE_AD_CLIENT_SECRET` in web app config and `AZURE_CLIENT_SECRET` where integrations expect that name (for example workflow secrets and packager).
 
+## Docker Runtime Injection
+
+Next.js inlines `NEXT_PUBLIC_*` variables at build time, which means they are
+empty in a pre-built Docker image. IntuneGet includes a runtime injection layer
+(`lib/runtime-config.ts` + `layout.tsx`) that reads `NEXT_PUBLIC_AZURE_AD_CLIENT_ID`
+from the server process at request time and forwards it to the browser via
+`window.__RUNTIME_CONFIG__`.
+
+What this means for operators:
+
+- **No build arguments needed.** Pass `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` in the
+  container `environment` section of `docker-compose.yml` and it will be
+  available to the client automatically.
+- **Vercel and local dev are unaffected.** The standard build-time inlining
+  still works; the runtime layer is a transparent fallback.
+- Other `NEXT_PUBLIC_*` variables (Supabase URL, Plausible domain, etc.) are
+  currently only used in server components or server-side API routes, so they
+  are read from `process.env` at runtime and do not require this injection.
+
 ## Validation Tips
 
 1. In sqlite + local mode, missing `PACKAGER_API_KEY` is the most common failure.
 2. In github mode, missing `GITHUB_WORKFLOWS_REPO` prevents workflow dispatch.
 3. In supabase mode, missing `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` prevents app data access.
 4. Keep secrets out of client-exposed variables unless explicitly `NEXT_PUBLIC_*` and intended.
+5. In Docker deployments, if MSAL authentication URLs are missing the `client_id`
+   parameter, verify that `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` is set in the
+   container environment (not only in a `.env` file on the host).

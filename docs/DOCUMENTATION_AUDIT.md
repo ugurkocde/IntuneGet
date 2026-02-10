@@ -37,6 +37,21 @@ Audit date: 2026-02-07
    - Added `docs/FEATURES_INVENTORY_AND_REPORTS.md`.
    - Added `docs/ENV_REFERENCE.md`.
 
+## Fixed After Initial Audit
+
+1. **Docker runtime env var injection (GitHub Issue #6)**
+   - Problem: `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` was inlined at build time by
+     Next.js, so the Docker image shipped with an empty client ID. Passing the
+     variable at container runtime via docker-compose had no effect on the
+     already-built client bundle.
+   - Fix: Added `lib/runtime-config.ts` and a `<script>` tag in `layout.tsx`
+     that injects the value at request time via `window.__RUNTIME_CONFIG__`.
+     Client code now calls `getPublicClientId()` instead of accessing
+     `process.env` directly.
+   - Docs updated: `SELF_HOSTING.md` (Docker note + runtime injection section +
+     troubleshooting), `ENV_REFERENCE.md` (Docker Runtime Injection section +
+     validation tip).
+
 ## Remaining Gaps (Current)
 
 No major missing documentation areas remain from the original gap list.
