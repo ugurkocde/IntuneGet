@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { Github, ArrowRight, Star, Users, CheckCircle } from "lucide-react";
+import { Github, ArrowRight, Star, Users, Upload } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "../ui/Badge";
 import { GradientOrb } from "../ui/GradientOrb";
@@ -17,11 +17,12 @@ const MotionLink = motion.create(Link);
 
 export function HeroSection() {
   const { stars } = useGitHubStats();
-  const { signinClicks, appsSupported } = useLandingStats();
+  const { signinClicks, appsDeployed, appsSupported } = useLandingStats();
   const shouldReduceMotion = useReducedMotion();
   const sectionRef = useRef<HTMLElement>(null);
   const starsDisplay = stars.toLocaleString();
   const signinsDisplay = signinClicks.toLocaleString();
+  const appsDeployedDisplay = appsDeployed.toLocaleString();
   const supportedAppsDisplay = appsSupported.toLocaleString();
 
   // 3B: Parallax for gradient orbs
@@ -141,8 +142,8 @@ export function HeroSection() {
                   {signinsDisplay}+ active users
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                  Open source
+                  <Upload className="w-3.5 h-3.5 text-emerald-500" />
+                  {appsDeployedDisplay}+ apps uploaded
                 </span>
               </div>
             </FadeIn>
