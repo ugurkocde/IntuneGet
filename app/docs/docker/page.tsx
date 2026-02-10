@@ -216,6 +216,35 @@ volumes:
         </Callout>
       </section>
 
+      {/* Runtime Environment Injection */}
+      <section>
+        <h2 className="text-2xl font-semibold text-text-primary mb-4">
+          How Environment Variables Work in Docker
+        </h2>
+        <p className="text-text-secondary mb-4">
+          Next.js normally inlines <code>NEXT_PUBLIC_*</code> variables into the
+          client JavaScript at <strong>build time</strong>. Since the Docker image
+          is built without your specific configuration, IntuneGet uses runtime
+          injection to ensure these values are available in the browser.
+        </p>
+        <p className="text-text-secondary mb-4">
+          When a page is requested, the server reads{" "}
+          <code>NEXT_PUBLIC_AZURE_AD_CLIENT_ID</code> from the container&apos;s
+          environment and injects it into the HTML. Client-side code (such as
+          MSAL authentication) reads this injected value, so your sign-in and
+          consent URLs always contain the correct client ID.
+        </p>
+
+        <Callout type="info" title="No Build Args Needed">
+          <p>
+            You do not need to pass environment variables as Docker build arguments.
+            Simply set them in the <code>environment</code> section of your{" "}
+            <code>docker-compose.yml</code> (or via <code>.env.local</code>) and
+            they will be picked up at runtime.
+          </p>
+        </Callout>
+      </section>
+
       {/* Reverse Proxy */}
       <section>
         <h2 className="text-2xl font-semibold text-text-primary mb-4">
@@ -426,6 +455,31 @@ docker-compose up -d`}
                 <code>docker-compose build --no-cache</code>
               </li>
               <li>Check for any TypeScript errors in the codebase</li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-black/10 bg-white p-4">
+            <h3 className="font-medium text-text-primary mb-2 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-status-error" />
+              AADSTS900144: Missing client_id in authentication URLs
+            </h3>
+            <ul className="list-disc list-inside text-sm text-text-secondary space-y-1">
+              <li>
+                This was caused by a bug in older versions where the client ID
+                was not injected at runtime. Update to the latest version by
+                pulling and rebuilding:{" "}
+                <code>git pull && docker-compose up -d --build</code>
+              </li>
+              <li>
+                Verify <code>NEXT_PUBLIC_AZURE_AD_CLIENT_ID</code> is set in
+                your <code>docker-compose.yml</code> environment section or{" "}
+                <code>.env.local</code>
+              </li>
+              <li>
+                Open the browser console (F12) and run{" "}
+                <code>window.__RUNTIME_CONFIG__</code> to confirm the client ID
+                is being injected
+              </li>
             </ul>
           </div>
         </div>

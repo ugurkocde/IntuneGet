@@ -185,6 +185,36 @@ export default function TroubleshootingPage() {
           <div className="rounded-lg border border-status-error/20 bg-status-error/5 p-4">
             <h4 className="font-medium text-text-primary mb-2 flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-status-error" />
+              AADSTS900144: The request body must contain the parameter
+              &apos;client_id&apos;
+            </h4>
+            <p className="text-sm text-text-secondary mb-3">
+              The MSAL authentication URLs are missing the client ID. This
+              typically occurs in Docker deployments running an older version.
+            </p>
+            <div className="rounded bg-white p-3">
+              <p className="text-xs font-semibold text-text-secondary mb-2">Solution:</p>
+              <ol className="list-decimal list-inside text-xs text-text-secondary space-y-1">
+                <li>
+                  Update to the latest version:{" "}
+                  <code>git pull && docker-compose up -d --build</code>
+                </li>
+                <li>
+                  Verify <code>NEXT_PUBLIC_AZURE_AD_CLIENT_ID</code> is set in
+                  your <code>docker-compose.yml</code> or <code>.env.local</code>
+                </li>
+                <li>
+                  To confirm the fix is active, open browser console (F12) and
+                  run <code>window.__RUNTIME_CONFIG__</code> -- it should show
+                  your client ID
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-status-error/20 bg-status-error/5 p-4">
+            <h4 className="font-medium text-text-primary mb-2 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-status-error" />
               AADSTS700016: Application with identifier was not found
             </h4>
             <p className="text-sm text-text-secondary mb-3">

@@ -54,7 +54,7 @@ export default function EnvironmentReferencePage() {
             <TableRow>
               <TableCell><code>NEXT_PUBLIC_AZURE_AD_CLIENT_ID</code></TableCell>
               <TableCell>Yes</TableCell>
-              <TableCell className="text-sm text-text-secondary">Entra app client ID</TableCell>
+              <TableCell className="text-sm text-text-secondary">Entra app client ID. In Docker deployments, this is injected at runtime -- no build args needed.</TableCell>
             </TableRow>
             <TableRow>
               <TableCell><code>AZURE_AD_CLIENT_SECRET</code></TableCell>
