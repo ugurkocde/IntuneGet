@@ -6,6 +6,8 @@ import Image from "next/image";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import { Menu, X, Github, Star, Apple, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
+import { useProfileStore } from "@/stores/profile-store";
 
 const navLinks = [
   { href: "/#features", label: "Features" },
@@ -17,6 +19,10 @@ export function Header() {
   const [hasScrolled, setHasScrolled] = useState(false);
   const shouldReduceMotion = useReducedMotion();
 
+  const { isAuthenticated, user, getAccessToken } = useMicrosoftAuth();
+  const { profileImage, fetchProfileImage, hasFetched } = useProfileStore();
+  const initials = user?.name?.charAt(0) || user?.email?.charAt(0) || "U";
+
   const { scrollY } = useScroll();
   const headerOpacity = useTransform(scrollY, [0, 100], [0, 1]);
 
@@ -27,6 +33,35 @@ export function Header() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && !hasFetched) {
+      getAccessToken().then((token) => {
+        if (token) fetchProfileImage(token);
+      });
+    }
+  }, [isAuthenticated, hasFetched, getAccessToken, fetchProfileImage]);
+
+  const UserAvatar = ({ size = "sm" }: { size?: "sm" | "md" }) => (
+    <div className="relative flex-shrink-0">
+      <div className="absolute -inset-0.5 bg-gradient-to-br from-accent-cyan to-accent-violet rounded-full opacity-75 group-hover:opacity-100 transition-opacity" />
+      <div className={cn(
+        "relative rounded-full bg-stone-100 flex items-center justify-center overflow-hidden",
+        size === "sm" ? "w-8 h-8" : "w-9 h-9"
+      )}>
+        {profileImage ? (
+          <img
+            src={profileImage}
+            alt="Profile"
+            className="w-full h-full object-cover"
+            onError={() => useProfileStore.getState().setProfileImage(null)}
+          />
+        ) : (
+          <span className="text-sm font-semibold text-stone-700">{initials}</span>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <motion.header
@@ -126,17 +161,27 @@ export function Header() {
                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
               </span>
             </a>
-            <Link
-              href="/auth/signin"
-              className={cn(
-                "inline-flex items-center justify-center px-4 py-2 rounded-lg",
-                "text-sm font-medium text-white bg-stone-900",
-                "transition-all duration-200",
-                "hover:bg-stone-800 shadow-soft hover:shadow-soft-md"
-              )}
-            >
-              Get Started
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                aria-label="Go to dashboard"
+                className="group"
+              >
+                <UserAvatar size="sm" />
+              </Link>
+            ) : (
+              <Link
+                href="/auth/signin"
+                className={cn(
+                  "inline-flex items-center justify-center px-4 py-2 rounded-lg",
+                  "text-sm font-medium text-white bg-stone-900",
+                  "transition-all duration-200",
+                  "hover:bg-stone-800 shadow-soft hover:shadow-soft-md"
+                )}
+              >
+                Get Started
+              </Link>
+            )}
           </nav>
 
           {/* Mobile menu button */}
@@ -207,18 +252,29 @@ export function Header() {
             <Github className="h-5 w-5" />
             <span>GitHub</span>
           </a>
-          <Link
-            href="/auth/signin"
-            onClick={() => setIsMenuOpen(false)}
-            className={cn(
-              "inline-flex items-center justify-center px-4 py-3 rounded-lg mt-2",
-              "text-sm font-medium text-white bg-stone-900",
-              "transition-all duration-200",
-              "hover:bg-stone-800"
-            )}
-          >
-            Get Started
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              onClick={() => setIsMenuOpen(false)}
+              className="group inline-flex items-center gap-3 px-4 py-3 rounded-lg mt-2 bg-stone-900 hover:bg-stone-800 transition-all duration-200"
+            >
+              <UserAvatar size="md" />
+              <span className="text-sm font-medium text-white">Dashboard</span>
+            </Link>
+          ) : (
+            <Link
+              href="/auth/signin"
+              onClick={() => setIsMenuOpen(false)}
+              className={cn(
+                "inline-flex items-center justify-center px-4 py-3 rounded-lg mt-2",
+                "text-sm font-medium text-white bg-stone-900",
+                "transition-all duration-200",
+                "hover:bg-stone-800"
+              )}
+            >
+              Get Started
+            </Link>
+          )}
         </nav>
       </motion.div>
     </motion.header>
