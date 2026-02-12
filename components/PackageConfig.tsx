@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Clock,
   FolderTree,
+  Palette,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -48,7 +49,18 @@ interface PackageConfigProps {
   onClose: () => void;
 }
 
-type ConfigSection = 'behavior' | 'deferral' | 'progress' | 'prompts' | 'restart' | 'diskspace' | 'detection' | 'assignment' | 'category' | 'advanced';
+type ConfigSection =
+  | 'behavior'
+  | 'deferral'
+  | 'progress'
+  | 'prompts'
+  | 'restart'
+  | 'diskspace'
+  | 'detection'
+  | 'assignment'
+  | 'category'
+  | 'branding'
+  | 'advanced';
 
 export function PackageConfig({ package: pkg, installers, onClose }: PackageConfigProps) {
   // Selection state
@@ -1061,6 +1073,110 @@ export function PackageConfig({ package: pkg, installers, onClose }: PackageConf
                   categories={categories}
                   onChange={setCategories}
                 />
+              </ConfigSection>
+
+              {/* Branding */}
+              <ConfigSection
+                title="Branding"
+                icon={<Palette className="w-4 h-4" />}
+                expanded={expandedSection === 'branding'}
+                onToggle={() => toggleSection('branding')}
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Company name
+                    </label>
+                    <input
+                      type="text"
+                      value={config.brandingCompanyName || ''}
+                      onChange={(e) => updateConfig({ brandingCompanyName: e.target.value || undefined })}
+                      placeholder="PSAppDeployToolkit (default)"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Welcome dialog title (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.brandingWelcomeTitle || ''}
+                      onChange={(e) => updateConfig({ brandingWelcomeTitle: e.target.value || undefined })}
+                      placeholder={`${pkg.name} Installation`}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Welcome dialog custom message
+                    </label>
+                    <textarea
+                      value={config.brandingWelcomeMessage || ''}
+                      onChange={(e) => updateConfig({ brandingWelcomeMessage: e.target.value || undefined })}
+                      rows={3}
+                      placeholder="Optional message for the installation welcome prompt"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Fluent accent color
+                    </label>
+                    <input
+                      type="text"
+                      value={config.brandingAccentColor || ''}
+                      onChange={(e) => updateConfig({ brandingAccentColor: e.target.value || undefined })}
+                      placeholder="0xFF0078D7 or #0078D7"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm font-mono"
+                    />
+                    <p className="text-slate-500 text-xs mt-1">
+                      Supports hex values like 0xFF0078D7 or standard color names.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Logo path / URL
+                    </label>
+                    <input
+                      type="text"
+                      value={config.brandingLogoPath || ''}
+                      onChange={(e) => updateConfig({ brandingLogoPath: e.target.value || undefined })}
+                      placeholder="Leave empty to keep default logo"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Dark mode logo path / URL
+                    </label>
+                    <input
+                      type="text"
+                      value={config.brandingLogoDarkPath || ''}
+                      onChange={(e) => updateConfig({ brandingLogoDarkPath: e.target.value || undefined })}
+                      placeholder="Optional dark mode logo"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Banner path / URL
+                    </label>
+                    <input
+                      type="text"
+                      value={config.brandingBannerPath || ''}
+                      onChange={(e) => updateConfig({ brandingBannerPath: e.target.value || undefined })}
+                      placeholder="Optional classic UI banner"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+                </div>
               </ConfigSection>
 
               {/* Advanced */}

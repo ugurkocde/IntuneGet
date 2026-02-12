@@ -87,6 +87,184 @@ if ($env:PSADT_CONFIG -and $env:PSADT_CONFIG -ne '{}') {
     }
 }
 
+function ConvertTo-PSADTConfigValue {
+    param(
+        [AllowNull()][string]$Value,
+        [switch]$AllowNumericLike
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return '$null'
+    }
+
+    if ($AllowNumericLike -and $Value -match '^(?i)0x[0-9A-F]{8}$') {
+        return $Value.ToUpper()
+    }
+    return "'" + ($Value -replace "'", "''") + "'"
+}
+
+function ConvertTo-PSADTAccentValue {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return '$null'
+    }
+
+    $trimmed = $Value.Trim()
+    if ($trimmed -match '^(?i)0x[0-9A-F]{8}$') {
+        return $trimmed.ToUpper()
+    }
+
+    if ($trimmed -match '^#[0-9A-F]{6}$') {
+        return "0xFF$($trimmed.TrimStart('#').ToUpper())"
+    }
+
+    if ($trimmed -match '^#[0-9A-F]{8}$') {
+        return "0x$($trimmed.TrimStart('#').ToUpper())"
+    }
+
+    return "'" + ($trimmed -replace "'", "''") + "'"
+}
+
+function Update-PowerShellDataSetting {
+    param(
+        [string]$Path,
+        [string]$Section,
+        [string]$Setting,
+        [string]$ValueLiteral
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    $lines = Get-Content -Path $Path
+    $sectionStart = -1
+    $sectionEnd = $lines.Count - 1
+    $inSection = $false
+    $sectionIndent = ''
+    $settingIndent = ''
+    $sectionDepth = 0
+    $updated = $false
+
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
+
+        if (-not $inSection -and $line -match "^\s*$([regex]::Escape($Section))\s*=\s*@\{") {
+            $inSection = $true
+            $sectionStart = $index
+            $sectionIndent = $line -replace '(^\s*).+', '$1'
+            $settingIndent = "$sectionIndent    "
+            $sectionDepth = 1
+            continue
+        }
+
+        if (-not $inSection) {
+            continue
+        }
+
+        $sectionDepth += (([regex]::Matches($line, '\{')).Count)
+        $sectionDepth -= (([regex]::Matches($line, '\}')).Count)
+
+        if ($line -match "^\s*$([regex]::Escape($Setting))\s*=") {
+            $lines[$index] = "$settingIndent$Setting = $ValueLiteral"
+            $updated = $true
+            break
+        }
+
+        if ($sectionDepth -le 0) {
+            $sectionEnd = $index
+            break
+        }
+    }
+
+    if (-not $inSection) {
+        return
+    }
+
+    if (-not $updated -and -not [string]::IsNullOrWhiteSpace($ValueLiteral)) {
+        if (-not $sectionEnd -or $sectionEnd -lt 0) {
+            $sectionEnd = $lines.Count - 1
+        }
+
+        $lines = @(
+            $lines[0..($sectionEnd - 1)]
+            "$settingIndent$Setting = $ValueLiteral"
+            $lines[$sectionEnd..($lines.Count - 1)]
+        )
+    }
+
+    Set-Content -Path $Path -Value $lines -Encoding UTF8
+}
+
+function Use-PSADTBrandAsset {
+    param(
+        [string]$Source,
+        [string]$TargetName,
+        [string]$PackageAssetsPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Source)) {
+        return $false
+    }
+
+    $targetFile = Join-Path $PackageAssetsPath $TargetName
+
+    if ($Source -match '^https?://') {
+        try {
+            Invoke-WebRequest -Uri $Source -OutFile $targetFile -UseBasicParsing
+            return $true
+        } catch {
+            Write-Host "Warning: Could not download branding asset '$Source': $($_.Exception.Message)"
+            return $false
+        }
+    }
+
+    if (Test-Path -LiteralPath $Source) {
+        Copy-Item -LiteralPath $Source -Destination $targetFile -Force
+        return $true
+    }
+
+    $workspacePath = Join-Path $env:GITHUB_WORKSPACE $Source
+    if ($workspacePath -and (Test-Path -LiteralPath $workspacePath)) {
+        Copy-Item -LiteralPath $workspacePath -Destination $targetFile -Force
+        return $true
+    }
+
+    Write-Host "Warning: Branding asset not found: $Source"
+    return $false
+}
+
+function Get-PSADTAssetFileName {
+    param(
+        [string]$Source,
+        [string]$Fallback
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Source)) {
+        return $Fallback
+    }
+
+    $trimmed = $Source.Trim()
+    if ($trimmed -match '^https?://') {
+        try {
+            $uri = [uri]$trimmed
+            $fileName = [System.IO.Path]::GetFileName($uri.AbsolutePath)
+            if ($fileName) {
+                return $fileName
+            }
+        } catch {
+            Write-Host "Warning: Could not parse branding URL: $trimmed"
+        }
+    }
+
+    $fileName = [System.IO.Path]::GetFileName($trimmed)
+    if ($fileName) {
+        return $fileName
+    }
+
+    return $Fallback
+}
+
 # Extract config values with defaults
 $installMode = if ($psadtConfig.installMode) { $psadtConfig.installMode } else { 'Auto' }
 # Escape special PowerShell characters for embedding in generated script
@@ -98,6 +276,43 @@ $sanitizedWingetId = $WingetId -replace '[\.\-]', '_'
 $installerFileName = $env:INSTALLER_FILENAME
 $installerTypeLower = $InstallerType.ToLower()
 $psadtVersion = '4.1.8'
+$brandingCompanyName = $psadtConfig.brandingCompanyName
+$brandingWelcomeTitle = $psadtConfig.brandingWelcomeTitle
+$brandingWelcomeMessage = $psadtConfig.brandingWelcomeMessage
+$brandingAccentColor = $psadtConfig.brandingAccentColor
+$brandingLogoPath = $psadtConfig.brandingLogoPath
+$brandingLogoDarkPath = $psadtConfig.brandingLogoDarkPath
+$brandingBannerPath = $psadtConfig.brandingBannerPath
+$configPath = "$packageDir\Config\Config.psd1"
+$stringsPath = "$packageDir\Strings\strings.psd1"
+
+# Apply optional branding and asset customizations
+if (-not [string]::IsNullOrWhiteSpace($brandingCompanyName)) {
+    Update-PowerShellDataSetting -Path $configPath -Section 'Toolkit' -Setting 'CompanyName' -ValueLiteral (ConvertTo-PSADTConfigValue $brandingCompanyName)
+}
+
+if (-not [string]::IsNullOrWhiteSpace($brandingAccentColor)) {
+    Update-PowerShellDataSetting -Path $configPath -Section 'UI' -Setting 'FluentAccentColor' -ValueLiteral (ConvertTo-PSADTAccentValue $brandingAccentColor)
+}
+
+if (-not [string]::IsNullOrWhiteSpace($brandingWelcomeMessage)) {
+    Update-PowerShellDataSetting -Path $stringsPath -Section 'CloseAppsPrompt' -Setting 'CustomMessage' -ValueLiteral (ConvertTo-PSADTConfigValue $brandingWelcomeMessage)
+}
+
+$logoTarget = Get-PSADTAssetFileName -Source $brandingLogoPath -Fallback 'AppIcon.png'
+if (Use-PSADTBrandAsset -Source $brandingLogoPath -TargetName $logoTarget -PackageAssetsPath "$packageDir\Assets") {
+    Update-PowerShellDataSetting -Path $configPath -Section 'Assets' -Setting 'Logo' -ValueLiteral (ConvertTo-PSADTConfigValue $logoTarget)
+}
+
+$logoDarkTarget = Get-PSADTAssetFileName -Source $brandingLogoDarkPath -Fallback 'AppIconDark.png'
+if (Use-PSADTBrandAsset -Source $brandingLogoDarkPath -TargetName $logoDarkTarget -PackageAssetsPath "$packageDir\Assets") {
+    Update-PowerShellDataSetting -Path $configPath -Section 'Assets' -Setting 'LogoDark' -ValueLiteral (ConvertTo-PSADTConfigValue $logoDarkTarget)
+}
+
+$bannerTarget = Get-PSADTAssetFileName -Source $brandingBannerPath -Fallback 'Banner.png'
+if (Use-PSADTBrandAsset -Source $brandingBannerPath -TargetName $bannerTarget -PackageAssetsPath "$packageDir\Assets") {
+    Update-PowerShellDataSetting -Path $configPath -Section 'Assets' -Setting 'Banner' -ValueLiteral (ConvertTo-PSADTConfigValue $bannerTarget)
+}
 
 # Auto-detect installer type from file extension (override incorrect manifest data)
 $fileExtension = [System.IO.Path]::GetExtension($installerFileName).ToLower()
@@ -218,6 +433,9 @@ $minimizeWindows = if ($psadtConfig.minimizeWindows) { $true } else { $false }
 $windowLocation = if ($psadtConfig.windowLocation) { $psadtConfig.windowLocation } else { 'Default' }
 $checkDiskSpace = if ($psadtConfig.checkDiskSpace) { $true } else { $false }
 $requiredDiskSpace = $psadtConfig.requiredDiskSpace
+$welcomeTitle = if ([string]::IsNullOrWhiteSpace($brandingWelcomeTitle)) { "$displayNameEscaped Installation" } else { $brandingWelcomeTitle -replace "'", "''" -replace '`', '``' -replace '\$', '`$' }
+$welcomeMessageEscaped = if ($brandingWelcomeMessage) { $brandingWelcomeMessage -replace "'", "''" -replace '`', '``' -replace '\$', '`$' } else { '' }
+$welcomeMessageEscaped = $welcomeMessageEscaped -replace "`r`n", "`r`n"
 
 # UI elements
 $progressConfig = $psadtConfig.progressDialog
@@ -249,8 +467,12 @@ if ($processesToClose.Count -gt 0) {
 $welcomeCall = ''
 if ($allowDefer -or ($showClosePrompt -and $processesToClose.Count -gt 0) -or $blockExecution -or $checkDiskSpace) {
     $welcomeParams = @(
-        "-Title '$displayNameEscaped Installation'"
+        "-Title '$welcomeTitle'"
     )
+
+    if (-not [string]::IsNullOrWhiteSpace($welcomeMessageEscaped)) {
+        $welcomeParams += "-CustomText '$welcomeMessageEscaped'"
+    }
 
     # Handle parameter sets correctly for PSADT v4
     # When both deferrals AND close prompts are enabled, use -AllowDeferCloseProcesses

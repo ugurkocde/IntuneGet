@@ -130,6 +130,13 @@ export interface PSADTConfig {
   persistPrompt: boolean;          // Make prompt reappear until answered
   minimizeWindows: boolean;        // Minimize other windows when showing dialog
   windowLocation: DialogPosition;  // Position of dialog on screen
+  brandingCompanyName?: string;    // Company name used by toolkit UI
+  brandingWelcomeTitle?: string;   // Custom title for the welcome prompt
+  brandingWelcomeMessage?: string; // Custom message for the welcome prompt
+  brandingAccentColor?: string;    // Fluent UI accent color
+  brandingLogoPath?: string;       // Optional logo image path
+  brandingLogoDarkPath?: string;   // Optional dark mode logo image path
+  brandingBannerPath?: string;     // Optional banner image path
 
   // Deferral handling
   allowDefer: boolean;
@@ -182,6 +189,13 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   persistPrompt: false,
   minimizeWindows: false,
   windowLocation: 'Default',
+  brandingCompanyName: undefined,
+  brandingWelcomeTitle: undefined,
+  brandingWelcomeMessage: undefined,
+  brandingAccentColor: undefined,
+  brandingLogoPath: undefined,
+  brandingLogoDarkPath: undefined,
+  brandingBannerPath: undefined,
 
   // Deferral handling - disabled by default
   allowDefer: false,
