@@ -1,21 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// In-memory cache
-let cache: { data: { signinClicks: number; appsDeployed: number; appsSupported: number }; timestamp: number } | null = null;
-const CACHE_TTL = 5 * 1000; // 5 seconds - kept short since realtime handles live updates
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, max-age=0, must-revalidate',
+};
 
 export async function GET() {
   try {
-    // Check cache first
-    if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
-      return NextResponse.json(cache.data, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=5',
-        },
-      });
-    }
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -23,11 +14,7 @@ export async function GET() {
     if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
         { signinClicks: 0, appsDeployed: 0, appsSupported: 0 },
-        {
-          headers: {
-            'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=5',
-          },
-        }
+        { headers: NO_STORE_HEADERS }
       );
     }
 
@@ -46,15 +33,7 @@ export async function GET() {
     ]);
 
     if (countersResult.error) {
-      // Return cached data if available, otherwise zeros
-      return NextResponse.json(
-        cache?.data ?? { signinClicks: 0, appsDeployed: 0, appsSupported: 0 },
-        {
-          headers: {
-            'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=5',
-          },
-        }
-      );
+      return NextResponse.json({ signinClicks: 0, appsDeployed: 0, appsSupported: 0 }, { headers: NO_STORE_HEADERS });
     }
 
     const stats = {
@@ -63,22 +42,13 @@ export async function GET() {
       appsSupported: curatedAppsResult.count ?? 0,
     };
 
-    // Update cache
-    cache = { data: stats, timestamp: Date.now() };
-
     return NextResponse.json(stats, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=5',
-      },
+      headers: NO_STORE_HEADERS,
     });
   } catch {
     return NextResponse.json(
       { signinClicks: 0, appsDeployed: 0, appsSupported: 0 },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=5',
-        },
-      }
+      { headers: NO_STORE_HEADERS }
     );
   }
 }
