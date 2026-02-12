@@ -208,6 +208,7 @@ function CollectionCardComponent({ package: pkg, onSelect }: CollectionCardProps
           wingetId: pkg.id,
           displayName: pkg.name,
           publisher: pkg.publisher,
+          description: pkg.description,
           version: pkg.version,
           architecture: installer.architecture,
           installScope: installer.scope || 'machine',

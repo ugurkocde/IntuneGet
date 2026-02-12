@@ -122,6 +122,7 @@ export function PackageConfig({ package: pkg, installers, onClose }: PackageConf
         wingetId: pkg.id,
         displayName: pkg.name,
         publisher: pkg.publisher,
+        description: pkg.description,
         version: selectedVersion,
         architecture: selectedInstaller.architecture,
         installScope: selectedScope,

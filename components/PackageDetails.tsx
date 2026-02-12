@@ -108,6 +108,7 @@ export function PackageDetails({ package: pkg, onClose }: PackageDetailsProps) {
       wingetId: pkg.id,
       displayName: pkg.name,
       publisher: pkg.publisher,
+      description: pkg.description,
       version: selectedVersion,
       architecture: selectedInstaller.architecture,
       installScope: selectedScope,

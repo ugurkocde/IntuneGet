@@ -9,6 +9,7 @@ export interface WorkflowInputs {
   tenantId: string;
   wingetId: string;
   displayName: string;
+  description?: string;
   publisher: string;
   version: string;
   architecture?: string;
@@ -113,6 +114,7 @@ export async function triggerPackagingWorkflow(
         app: {
           wingetId: inputs.wingetId,
           displayName: inputs.displayName,
+          description: inputs.description,
           publisher: inputs.publisher,
           version: inputs.version,
           architecture: inputs.architecture,

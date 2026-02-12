@@ -253,6 +253,7 @@ export async function POST(request: NextRequest) {
           tenantId,
           wingetId: item.wingetId,
           displayName: item.displayName,
+          description: item.description,
           publisher: item.publisher,
           version: item.version,
           architecture: item.architecture,

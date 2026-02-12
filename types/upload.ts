@@ -123,6 +123,7 @@ export interface CartItem {
   wingetId: string;
   displayName: string;
   publisher: string;
+  description?: string;
   version: string;
   architecture: WingetArchitecture;
   installScope: WingetScope;
