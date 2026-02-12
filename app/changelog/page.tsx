@@ -26,6 +26,18 @@ interface Release {
 
 const releases: Release[] = [
   {
+    version: "0.5.4",
+    date: "2026-02-12",
+    title: "GitHub Actions Architecture Fix",
+    type: "patch",
+    highlights: [
+      "Preserve app architecture through GitHub Actions deployment payloads",
+      "Map architecture to applicableArchitectures in GA workflow Intune app creation",
+      "Propagate architecture consistently in workflow reference and executable workflow",
+      "Close Issue #11: fix multi-architecture deploys using ARM packages",
+    ],
+  },
+  {
     version: "0.5.2",
     date: "2026-02-12",
     title: "Inventory Flow UX Improvement",

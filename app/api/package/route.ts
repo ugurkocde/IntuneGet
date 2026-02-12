@@ -255,6 +255,7 @@ export async function POST(request: NextRequest) {
           displayName: item.displayName,
           publisher: item.publisher,
           version: item.version,
+          architecture: item.architecture,
           installerUrl: item.installerUrl,
           installerSha256: item.installerSha256 || '',
           installerType: item.installerType,

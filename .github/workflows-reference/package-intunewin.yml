@@ -18,6 +18,7 @@ jobs:
       DISPLAY_NAME: ${{ github.event.client_payload.app.displayName }}
       PUBLISHER: ${{ github.event.client_payload.app.publisher }}
       VERSION: ${{ github.event.client_payload.app.version }}
+      ARCHITECTURE: ${{ github.event.client_payload.app.architecture }}
       INSTALLER_URL: ${{ github.event.client_payload.installer.url }}
       INSTALLER_SHA256: ${{ github.event.client_payload.installer.sha256 }}
       INSTALLER_TYPE: ${{ github.event.client_payload.installer.type }}
@@ -188,6 +189,7 @@ jobs:
           INPUT_WINGET_ID: ${{ github.event.client_payload.app.wingetId }}
           INPUT_INSTALLER_TYPE: ${{ github.event.client_payload.installer.type }}
           INPUT_INSTALL_SCOPE: ${{ github.event.client_payload.config.installScope }}
+          INPUT_ARCHITECTURE: ${{ github.event.client_payload.app.architecture }}
         run: |
           & "$env:GITHUB_WORKSPACE\intuneget\.github\scripts\Create-PSADTPackage.ps1"
 
@@ -343,6 +345,15 @@ jobs:
             } catch {
               Write-Host "Warning: Could not parse PSADT config for restart behavior, using default"
             }
+          }
+
+          $mappedArchitecture = switch (($env:ARCHITECTURE ?? '').ToLowerInvariant()) {
+            'x64' { 'x64' }
+            'x86' { 'x86' }
+            'arm64' { 'arm64' }
+            'arm' { 'arm' }
+            'neutral' { 'neutral' }
+            default { 'x64' }
           }
 
           # Parse and convert detection rules to Graph API format
@@ -508,6 +519,7 @@ jobs:
             fileName = "$env:PACKAGE_FILENAME"
             installCommandLine = "Invoke-AppDeployToolkit.exe"
             uninstallCommandLine = "Invoke-AppDeployToolkit.exe -DeploymentType Uninstall"
+            applicableArchitectures = $mappedArchitecture
             installExperience = @{
               runAsAccount = if ($env:INSTALL_SCOPE -eq "user") { "user" } else { "system" }
               deviceRestartBehavior = $restartBehavior

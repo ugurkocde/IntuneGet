@@ -11,6 +11,7 @@ export interface WorkflowInputs {
   displayName: string;
   publisher: string;
   version: string;
+  architecture?: string;
   installerUrl: string;
   installerSha256: string;
   installerType: string;
@@ -114,6 +115,7 @@ export async function triggerPackagingWorkflow(
           displayName: inputs.displayName,
           publisher: inputs.publisher,
           version: inputs.version,
+          architecture: inputs.architecture,
         },
         installer: {
           url: inputs.installerUrl,
