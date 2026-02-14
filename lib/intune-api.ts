@@ -11,6 +11,7 @@ import type {
   WindowsMinimumOperatingSystem,
   EntraIDGroup,
   IntuneMobileAppCategory,
+  IntuneAssignmentFilter,
   GraphApiResponse,
 } from '@/types/intune';
 import type { PackageAssignment } from '@/types/upload';
@@ -480,6 +481,32 @@ export async function getMobileAppCategories(
 }
 
 /**
+ * Get Intune assignment filters
+ */
+export async function getAssignmentFilters(
+  accessToken: string
+): Promise<IntuneAssignmentFilter[]> {
+  const url = new URL(`${GRAPH_API_BASE}/deviceManagement/assignmentFilters`);
+  url.searchParams.set('$select', 'id,displayName,description,platform,rule');
+  url.searchParams.set('$orderby', 'displayName');
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get Intune assignment filters');
+  }
+
+  const data: GraphApiResponse<IntuneAssignmentFilter> = await response.json();
+  return (data.value || [])
+    .filter((filter) => Boolean(filter.id && filter.displayName))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+/**
  * Get default return codes for Win32 apps
  */
 function getDefaultReturnCodes() {
@@ -566,8 +593,20 @@ export function convertToGraphAssignments(
           groupId: assignment.groupId,
         };
         break;
+      case 'exclusionGroup':
+        target = {
+          '@odata.type': '#microsoft.graph.exclusionGroupAssignmentTarget',
+          groupId: assignment.groupId,
+        };
+        break;
       default:
         throw new Error(`Unknown assignment type: ${(assignment as PackageAssignment).type}`);
+    }
+
+    // Add filter properties if configured
+    if (assignment.filterId) {
+      target.deviceAndAppManagementAssignmentFilterId = assignment.filterId;
+      target.deviceAndAppManagementAssignmentFilterType = assignment.filterType || 'include';
     }
 
     // Map 'updateOnly' to 'required' for Graph API (requirement rules handle the gating)

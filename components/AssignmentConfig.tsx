@@ -11,12 +11,14 @@ import {
   UserCircle,
   ToggleLeft,
   ToggleRight,
+  ShieldBan,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useMspOptional } from '@/hooks/useMspOptional';
 import type { PackageAssignment } from '@/types/upload';
-import type { EntraIDGroup } from '@/types/intune';
+import type { EntraIDGroup, IntuneAssignmentFilter } from '@/types/intune';
 
 interface AssignmentConfigProps {
   assignments: PackageAssignment[];
@@ -30,6 +32,13 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [assignmentMode, setAssignmentMode] = useState<'include' | 'exclude'>('include');
+
+  // Filter state
+  const [availableFilters, setAvailableFilters] = useState<IntuneAssignmentFilter[]>([]);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
+  const [expandedFilterRow, setExpandedFilterRow] = useState<number | null>(null);
 
   const { getAccessToken } = useMicrosoftAuth();
   const { isMspUser, selectedTenantId } = useMspOptional();
@@ -46,6 +55,34 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
   // Check if specific assignment types are present
   const hasAllDevices = assignments.some((a) => a.type === 'allDevices');
   const hasAllUsers = assignments.some((a) => a.type === 'allUsers');
+
+  // Fetch assignment filters on first interaction
+  const loadFilters = useCallback(async () => {
+    if (filtersLoaded || isLoadingFilters) return;
+
+    setIsLoadingFilters(true);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
+
+      const response = await fetch('/api/intune/filters', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          ...(isMspUser && selectedTenantId ? { 'X-MSP-Tenant-Id': selectedTenantId } : {}),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableFilters(data.filters || []);
+      }
+    } catch (err) {
+      console.error('Failed to load assignment filters:', err);
+    } finally {
+      setIsLoadingFilters(false);
+      setFiltersLoaded(true);
+    }
+  }, [filtersLoaded, isLoadingFilters, getAccessToken, isMspUser, selectedTenantId]);
 
   // Debounced group search
   const searchGroups = useCallback(
@@ -122,18 +159,40 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
     }
   };
 
-  // Add a group assignment
+  // Check if a group is already added in any mode
+  const getGroupAssignmentType = (groupId: string): 'group' | 'exclusionGroup' | null => {
+    const existing = assignments.find(
+      (a) => (a.type === 'group' || a.type === 'exclusionGroup') && a.groupId === groupId
+    );
+    if (!existing) return null;
+    return existing.type === 'group' || existing.type === 'exclusionGroup' ? existing.type : null;
+  };
+
+  // Add a group assignment (include or exclude based on mode)
   const addGroupAssignment = (group: EntraIDGroup) => {
-    // Check if already added
-    if (assignments.some((a) => a.type === 'group' && a.groupId === group.id)) {
+    const existingType = getGroupAssignmentType(group.id);
+
+    // If already added as the same type, skip
+    if (
+      (assignmentMode === 'include' && existingType === 'group') ||
+      (assignmentMode === 'exclude' && existingType === 'exclusionGroup')
+    ) {
       return;
     }
+
+    // If added as the opposite type, block it
+    if (existingType !== null) {
+      return;
+    }
+
+    const type = assignmentMode === 'exclude' ? 'exclusionGroup' : 'group';
+    const intent = assignmentMode === 'exclude' ? 'required' : 'required';
 
     onChange([
       ...assignments,
       {
-        type: 'group',
-        intent: 'required',
+        type,
+        intent,
         groupId: group.id,
         groupName: group.displayName,
       },
@@ -151,9 +210,41 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
     onChange(updated);
   };
 
+  // Update assignment filter
+  const updateFilter = (index: number, filter: IntuneAssignmentFilter | null, filterType?: 'include' | 'exclude') => {
+    const updated = [...assignments];
+    if (filter) {
+      updated[index] = {
+        ...updated[index],
+        filterId: filter.id,
+        filterName: filter.displayName,
+        filterType: filterType || updated[index].filterType || 'include',
+      };
+    } else {
+      const { filterId: _, filterName: __, filterType: ___, ...rest } = updated[index];
+      updated[index] = rest as PackageAssignment;
+    }
+    onChange(updated);
+    setExpandedFilterRow(null);
+  };
+
+  // Update filter type on an existing filter
+  const updateFilterType = (index: number, filterType: 'include' | 'exclude') => {
+    const updated = [...assignments];
+    updated[index] = { ...updated[index], filterType };
+    onChange(updated);
+  };
+
   // Remove an assignment
   const removeAssignment = (index: number) => {
     onChange(assignments.filter((_, i) => i !== index));
+    if (expandedFilterRow !== null) {
+      if (expandedFilterRow === index) {
+        setExpandedFilterRow(null);
+      } else if (expandedFilterRow > index) {
+        setExpandedFilterRow(expandedFilterRow - 1);
+      }
+    }
   };
 
   // Get display name for assignment target
@@ -164,6 +255,8 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
       case 'allDevices':
         return 'All Devices';
       case 'group':
+        return assignment.groupName || 'Unknown Group';
+      case 'exclusionGroup':
         return assignment.groupName || 'Unknown Group';
       default:
         return 'Unknown';
@@ -262,6 +355,40 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
             <label className="block text-sm font-medium text-text-secondary mb-2">
               Add Group Assignment
             </label>
+
+            {/* Include/Exclude Mode Toggle */}
+            <div className="flex items-center gap-1 mb-2">
+              <button
+                type="button"
+                onClick={() => setAssignmentMode('include')}
+                className={cn(
+                  'px-3 py-1.5 rounded-l-lg border text-xs font-medium transition-colors',
+                  assignmentMode === 'include'
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-bg-elevated border-overlay/15 text-text-muted hover:text-text-primary'
+                )}
+              >
+                Include
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssignmentMode('exclude')}
+                className={cn(
+                  'px-3 py-1.5 rounded-r-lg border border-l-0 text-xs font-medium transition-colors',
+                  assignmentMode === 'exclude'
+                    ? 'bg-red-600 border-red-500 text-white'
+                    : 'bg-bg-elevated border-overlay/15 text-text-muted hover:text-text-primary'
+                )}
+              >
+                Exclude
+              </button>
+              <span className="text-text-muted text-xs ml-2">
+                {assignmentMode === 'exclude'
+                  ? 'Groups will be excluded from the assignment'
+                  : 'Groups will be included in the assignment'}
+              </span>
+            </div>
+
             <div className="relative">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
@@ -274,7 +401,12 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
                   }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Search Entra ID groups..."
-                  className="w-full pl-10 pr-10 py-2.5 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm placeholder-text-muted focus:border-overlay/20 focus:outline-none"
+                  className={cn(
+                    'w-full pl-10 pr-10 py-2.5 bg-bg-elevated border rounded-lg text-text-primary text-sm placeholder-text-muted focus:outline-none',
+                    assignmentMode === 'exclude'
+                      ? 'border-red-500/30 focus:border-red-500/50'
+                      : 'border-overlay/15 focus:border-overlay/20'
+                  )}
                 />
                 {isSearching && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted animate-spin" />
@@ -292,18 +424,24 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
                     </div>
                   ) : (
                     searchResults.map((group) => {
-                      const isAdded = assignments.some(
-                        (a) => a.type === 'group' && a.groupId === group.id
-                      );
+                      const existingType = getGroupAssignmentType(group.id);
+                      const isAddedSameMode =
+                        (assignmentMode === 'include' && existingType === 'group') ||
+                        (assignmentMode === 'exclude' && existingType === 'exclusionGroup');
+                      const isAddedOppositeMode =
+                        (assignmentMode === 'include' && existingType === 'exclusionGroup') ||
+                        (assignmentMode === 'exclude' && existingType === 'group');
+                      const isDisabled = isAddedSameMode || isAddedOppositeMode;
+
                       return (
                         <button
                           key={group.id}
                           type="button"
-                          onClick={() => !isAdded && addGroupAssignment(group)}
-                          disabled={isAdded}
+                          onClick={() => !isDisabled && addGroupAssignment(group)}
+                          disabled={isDisabled}
                           className={cn(
                             'w-full px-4 py-2 text-left hover:bg-overlay/10 transition-colors flex items-center gap-3',
-                            isAdded && 'opacity-50 cursor-not-allowed'
+                            isDisabled && 'opacity-50 cursor-not-allowed'
                           )}
                         >
                           <UserCircle className="w-5 h-5 text-text-muted flex-shrink-0" />
@@ -313,8 +451,13 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
                               <p className="text-text-muted text-xs truncate">{group.description}</p>
                             )}
                           </div>
-                          {isAdded && (
+                          {isAddedSameMode && (
                             <span className="text-xs text-text-muted flex-shrink-0">Added</span>
+                          )}
+                          {isAddedOppositeMode && (
+                            <span className="text-xs text-amber-400 flex-shrink-0">
+                              Already {existingType === 'group' ? 'included' : 'excluded'}
+                            </span>
                           )}
                         </button>
                       );
@@ -332,70 +475,200 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
                 Configured Assignments ({assignments.length})
               </label>
               <div className="space-y-2">
-                {assignments.map((assignment, index) => (
-                  <div
-                    key={`${assignment.type}-${assignment.groupId || index}`}
-                    className="flex items-center gap-3 p-3 bg-bg-elevated/50 rounded-lg border border-overlay/15"
-                  >
-                    {/* Target Icon */}
-                    <div className="flex-shrink-0">
-                      {assignment.type === 'allUsers' && (
-                        <Users className="w-5 h-5 text-text-muted" />
-                      )}
-                      {assignment.type === 'allDevices' && (
-                        <Monitor className="w-5 h-5 text-text-muted" />
-                      )}
-                      {assignment.type === 'group' && (
-                        <UserCircle className="w-5 h-5 text-text-muted" />
-                      )}
-                    </div>
+                {assignments.map((assignment, index) => {
+                  const isExclusion = assignment.type === 'exclusionGroup';
 
-                    {/* Target Name */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-text-primary text-sm font-medium truncate">
-                        {getTargetDisplay(assignment)}
-                      </p>
-                      <p className="text-text-muted text-xs capitalize">{assignment.type}</p>
-                    </div>
-
-                    {/* Intent Dropdown */}
-                    <div className="relative flex-shrink-0">
-                      <select
-                        value={assignment.intent}
-                        onChange={(e) =>
-                          updateIntent(index, e.target.value as 'required' | 'available' | 'uninstall' | 'updateOnly')
-                        }
-                        className={cn(
-                          'appearance-none pl-3 pr-8 py-1.5 rounded border text-xs font-medium cursor-pointer focus:outline-none',
-                          getIntentColor(assignment.intent)
-                        )}
-                      >
-                        <option value="required" className="bg-bg-elevated text-text-primary">
-                          Required
-                        </option>
-                        <option value="available" className="bg-bg-elevated text-text-primary">
-                          Available
-                        </option>
-                        <option value="uninstall" className="bg-bg-elevated text-text-primary">
-                          Uninstall
-                        </option>
-                        <option value="updateOnly" className="bg-bg-elevated text-text-primary">
-                          Update Only
-                        </option>
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" />
-                    </div>
-
-                    {/* Remove Button */}
-                    <button
-                      type="button"
-                      onClick={() => removeAssignment(index)}
-                      className="flex-shrink-0 text-text-muted hover:text-red-400 transition-colors p-1"
+                  return (
+                    <div
+                      key={`${assignment.type}-${assignment.groupId || index}`}
+                      className={cn(
+                        'rounded-lg border',
+                        isExclusion
+                          ? 'bg-red-500/5 border-red-500/20'
+                          : 'bg-bg-elevated/50 border-overlay/15'
+                      )}
                     >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-3 p-3">
+                        {/* Target Icon */}
+                        <div className="flex-shrink-0">
+                          {assignment.type === 'allUsers' && (
+                            <Users className="w-5 h-5 text-text-muted" />
+                          )}
+                          {assignment.type === 'allDevices' && (
+                            <Monitor className="w-5 h-5 text-text-muted" />
+                          )}
+                          {assignment.type === 'group' && (
+                            <UserCircle className="w-5 h-5 text-text-muted" />
+                          )}
+                          {isExclusion && (
+                            <ShieldBan className="w-5 h-5 text-red-400" />
+                          )}
+                        </div>
+
+                        {/* Target Name */}
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            'text-sm font-medium truncate',
+                            isExclusion ? 'text-red-300' : 'text-text-primary'
+                          )}>
+                            {getTargetDisplay(assignment)}
+                          </p>
+                          <p className={cn(
+                            'text-xs',
+                            isExclusion ? 'text-red-400/70' : 'text-text-muted'
+                          )}>
+                            {isExclusion ? 'Excluded' : assignment.type === 'group' ? 'Included' : assignment.type === 'allUsers' ? 'All Users' : assignment.type === 'allDevices' ? 'All Devices' : assignment.type}
+                          </p>
+                        </div>
+
+                        {/* Intent Dropdown (not shown for exclusion groups) */}
+                        {!isExclusion && (
+                          <div className="relative flex-shrink-0">
+                            <select
+                              value={assignment.intent}
+                              onChange={(e) =>
+                                updateIntent(index, e.target.value as 'required' | 'available' | 'uninstall' | 'updateOnly')
+                              }
+                              className={cn(
+                                'appearance-none pl-3 pr-8 py-1.5 rounded border text-xs font-medium cursor-pointer focus:outline-none',
+                                getIntentColor(assignment.intent)
+                              )}
+                            >
+                              <option value="required" className="bg-bg-elevated text-text-primary">
+                                Required
+                              </option>
+                              <option value="available" className="bg-bg-elevated text-text-primary">
+                                Available
+                              </option>
+                              <option value="uninstall" className="bg-bg-elevated text-text-primary">
+                                Uninstall
+                              </option>
+                              <option value="updateOnly" className="bg-bg-elevated text-text-primary">
+                                Update Only
+                              </option>
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" />
+                          </div>
+                        )}
+
+                        {/* Exclusion badge */}
+                        {isExclusion && (
+                          <span className="flex-shrink-0 px-2 py-1 rounded border text-xs font-medium text-red-400 bg-red-500/10 border-red-500/30">
+                            Excluded
+                          </span>
+                        )}
+
+                        {/* Filter button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (expandedFilterRow === index) {
+                              setExpandedFilterRow(null);
+                            } else {
+                              loadFilters();
+                              setExpandedFilterRow(index);
+                            }
+                          }}
+                          className={cn(
+                            'flex-shrink-0 p-1 rounded transition-colors',
+                            assignment.filterId
+                              ? 'text-purple-400 hover:text-purple-300'
+                              : 'text-text-muted hover:text-text-primary'
+                          )}
+                          title={assignment.filterId ? `Filter: ${assignment.filterName}` : 'Add filter'}
+                        >
+                          <SlidersHorizontal className="w-4 h-4" />
+                        </button>
+
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={() => removeAssignment(index)}
+                          className="flex-shrink-0 text-text-muted hover:text-red-400 transition-colors p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Filter indicator row */}
+                      {assignment.filterId && expandedFilterRow !== index && (
+                        <div className="px-3 pb-2 flex items-center gap-2">
+                          <SlidersHorizontal className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                          <span className="text-xs text-purple-400 truncate">
+                            Filter: {assignment.filterName}
+                          </span>
+                          <span className={cn(
+                            'text-xs px-1.5 py-0.5 rounded border',
+                            assignment.filterType === 'exclude'
+                              ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                              : 'text-green-400 bg-green-500/10 border-green-500/30'
+                          )}>
+                            {assignment.filterType === 'exclude' ? 'Exclude' : 'Include'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateFilter(index, null)}
+                            className="text-text-muted hover:text-red-400 transition-colors ml-auto"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Expanded filter picker */}
+                      {expandedFilterRow === index && (
+                        <div className="px-3 pb-3 border-t border-overlay/10 pt-2">
+                          {isLoadingFilters ? (
+                            <div className="flex items-center gap-2 text-text-muted text-xs py-2">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Loading filters...
+                            </div>
+                          ) : availableFilters.length === 0 ? (
+                            <p className="text-text-muted text-xs py-2">
+                              No assignment filters available in this tenant.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={assignment.filterId || ''}
+                                  onChange={(e) => {
+                                    if (e.target.value === '') {
+                                      updateFilter(index, null);
+                                    } else {
+                                      const filter = availableFilters.find((f) => f.id === e.target.value);
+                                      if (filter) {
+                                        updateFilter(index, filter);
+                                      }
+                                    }
+                                  }}
+                                  className="flex-1 text-xs bg-bg-elevated border border-overlay/15 rounded-lg px-3 py-2 text-text-primary focus:outline-none"
+                                >
+                                  <option value="">No filter</option>
+                                  {availableFilters.map((filter) => (
+                                    <option key={filter.id} value={filter.id}>
+                                      {filter.displayName} ({filter.platform})
+                                    </option>
+                                  ))}
+                                </select>
+                                {assignment.filterId && (
+                                  <select
+                                    value={assignment.filterType || 'include'}
+                                    onChange={(e) => updateFilterType(index, e.target.value as 'include' | 'exclude')}
+                                    className="text-xs bg-bg-elevated border border-overlay/15 rounded px-2 py-2 text-text-primary focus:outline-none"
+                                  >
+                                    <option value="include">Include</option>
+                                    <option value="exclude">Exclude</option>
+                                  </select>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -95,10 +95,13 @@ export interface GroupAssignment {
 
 // Flexible assignment target for package configuration
 export interface PackageAssignment {
-  type: 'allUsers' | 'allDevices' | 'group';
+  type: 'allUsers' | 'allDevices' | 'group' | 'exclusionGroup';
   intent: 'required' | 'available' | 'uninstall' | 'updateOnly';
-  groupId?: string;      // Only for type 'group'
+  groupId?: string;      // Only for type 'group' or 'exclusionGroup'
   groupName?: string;    // Display name for UI
+  filterId?: string;       // Intune assignment filter ID
+  filterName?: string;     // Display name for UI
+  filterType?: 'include' | 'exclude';  // Filter mode
 }
 
 export interface IntuneAppCategorySelection {
@@ -152,6 +155,9 @@ export interface CartItem {
 
   // Intune category configuration
   categories?: IntuneAppCategorySelection[];
+
+  // Redeploy flag - skip duplicate detection during deployment
+  forceCreate?: boolean;
 
   // Cart metadata
   addedAt: string;

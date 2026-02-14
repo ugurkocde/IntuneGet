@@ -31,10 +31,13 @@ type AssignmentIntent = 'required' | 'available' | 'uninstall' | 'updateOnly';
 type GraphAssignmentIntent = 'required' | 'available' | 'uninstall';
 
 interface PackageAssignment {
-  type: 'allUsers' | 'allDevices' | 'group';
+  type: 'allUsers' | 'allDevices' | 'group' | 'exclusionGroup';
   intent: AssignmentIntent;
   groupId?: string;
   groupName?: string;
+  filterId?: string;
+  filterName?: string;
+  filterType?: 'include' | 'exclude';
 }
 
 interface IntuneAppCategorySelection {
@@ -51,6 +54,8 @@ interface AssignmentMigrationConfig {
 interface GraphAssignmentTarget {
   '@odata.type': string;
   groupId?: string;
+  deviceAndAppManagementAssignmentFilterId?: string;
+  deviceAndAppManagementAssignmentFilterType?: 'include' | 'exclude';
 }
 
 interface GraphMobileAppAssignment {
@@ -70,6 +75,8 @@ interface GraphAssignmentResponse {
     target?: {
       '@odata.type'?: string;
       groupId?: string;
+      deviceAndAppManagementAssignmentFilterId?: string;
+      deviceAndAppManagementAssignmentFilterType?: string;
     };
   }>;
 }
@@ -631,7 +638,8 @@ export class IntuneUploader {
           if (
             type !== 'allUsers' &&
             type !== 'allDevices' &&
-            type !== 'group'
+            type !== 'group' &&
+            type !== 'exclusionGroup'
           ) {
             return false;
           }
@@ -645,7 +653,7 @@ export class IntuneUploader {
             return false;
           }
 
-          if (type === 'group') {
+          if (type === 'group' || type === 'exclusionGroup') {
             return typeof assignment.groupId === 'string' && assignment.groupId.length > 0;
           }
 
@@ -656,6 +664,11 @@ export class IntuneUploader {
           intent: assignment.intent,
           groupId: assignment.groupId,
           groupName: assignment.groupName,
+          filterId: typeof assignment.filterId === 'string' ? assignment.filterId : undefined,
+          filterName: typeof assignment.filterName === 'string' ? assignment.filterName : undefined,
+          filterType: assignment.filterType === 'include' || assignment.filterType === 'exclude'
+            ? assignment.filterType
+            : undefined,
         }));
     }
 
@@ -732,8 +745,23 @@ export class IntuneUploader {
             groupId: assignment.groupId,
           };
           break;
+        case 'exclusionGroup':
+          if (!assignment.groupId) {
+            continue;
+          }
+          target = {
+            '@odata.type': '#microsoft.graph.exclusionGroupAssignmentTarget',
+            groupId: assignment.groupId,
+          };
+          break;
         default:
           continue;
+      }
+
+      // Add filter properties if configured
+      if (assignment.filterId) {
+        target.deviceAndAppManagementAssignmentFilterId = assignment.filterId;
+        target.deviceAndAppManagementAssignmentFilterType = assignment.filterType || 'include';
       }
 
       // Map 'updateOnly' to 'required' for Graph API (requirement rules handle the gating)
@@ -786,6 +814,12 @@ export class IntuneUploader {
       };
       if (assignment.target?.groupId) {
         target.groupId = assignment.target.groupId;
+      }
+      if (assignment.target?.deviceAndAppManagementAssignmentFilterId) {
+        target.deviceAndAppManagementAssignmentFilterId =
+          assignment.target.deviceAndAppManagementAssignmentFilterId;
+        target.deviceAndAppManagementAssignmentFilterType =
+          (assignment.target.deviceAndAppManagementAssignmentFilterType as 'include' | 'exclude') || 'include';
       }
 
       mapped.push({

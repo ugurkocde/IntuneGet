@@ -224,8 +224,22 @@ export interface Win32LobAppAssignment {
 }
 
 export interface AssignmentTarget {
-  '@odata.type': '#microsoft.graph.groupAssignmentTarget' | '#microsoft.graph.allLicensedUsersAssignmentTarget' | '#microsoft.graph.allDevicesAssignmentTarget';
+  '@odata.type':
+    | '#microsoft.graph.groupAssignmentTarget'
+    | '#microsoft.graph.exclusionGroupAssignmentTarget'
+    | '#microsoft.graph.allLicensedUsersAssignmentTarget'
+    | '#microsoft.graph.allDevicesAssignmentTarget';
   groupId?: string;
+  deviceAndAppManagementAssignmentFilterId?: string;
+  deviceAndAppManagementAssignmentFilterType?: 'include' | 'exclude';
+}
+
+export interface IntuneAssignmentFilter {
+  id: string;
+  displayName: string;
+  description?: string;
+  platform: string;
+  rule?: string;
 }
 
 export interface Win32LobAppAssignmentSettings {
