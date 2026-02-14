@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, Github, Star, Shield, Clock, Download } from "lucide-react";
+import { ArrowRight, Github, Star, Shield, Clock, Download, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { FadeIn } from "../animations/FadeIn";
 import { GitHubStatsBar } from "../ui/GitHubStatsBar";
@@ -72,8 +72,17 @@ export function CTASection() {
             </div>
           </FadeIn>
 
-          {/* GitHub community stats */}
+          {/* Tertiary link */}
           <FadeIn delay={0.35}>
+            <div className="flex items-center justify-center gap-6 pt-2">
+              <Link
+                href="/docs"
+                className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors"
+              >
+                <BookOpen className="h-4 w-4" />
+                Read the Documentation
+              </Link>
+            </div>
             <GitHubStatsBar className="pt-4" />
           </FadeIn>
 

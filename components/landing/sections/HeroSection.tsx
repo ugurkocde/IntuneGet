@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { Github, ArrowRight, Star, Users, Upload } from "lucide-react";
+import { Github, ArrowRight, Star, Users, Upload, Clock, Shield, Download, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "../ui/Badge";
 import { GradientOrb } from "../ui/GradientOrb";
@@ -99,16 +99,23 @@ export function HeroSection() {
                     <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                   </MotionLink>
                   <MotionLink
-                    href="/#how-it-works"
+                    href="/docs"
                     className="inline-flex items-center justify-center gap-2 px-6 py-4 text-base font-semibold text-text-secondary bg-bg-elevated border border-overlay/10 rounded-xl hover:border-overlay/15 hover:bg-overlay/[0.04] transition-all duration-300"
                     whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
                     whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
                     transition={springPresets.snappy}
                   >
-                    See How It Works
+                    <BookOpen className="h-5 w-5" />
+                    Read the Docs
                   </MotionLink>
                 </div>
                 <div className="flex items-center gap-4 text-sm">
+                  <Link
+                    href="/#how-it-works"
+                    className="text-text-muted hover:text-text-secondary transition-colors"
+                  >
+                    See How It Works
+                  </Link>
                   <motion.a
                     href="https://github.com/ugurkocde/IntuneGet"
                     target="_blank"
@@ -144,6 +151,24 @@ export function HeroSection() {
                 <span className="flex items-center gap-1.5">
                   <Upload className="w-3.5 h-3.5 text-emerald-500" />
                   {appsDeployedDisplay}+ apps uploaded
+                </span>
+              </div>
+            </FadeIn>
+
+            {/* Risk reversal badges */}
+            <FadeIn delay={0.25} animateOnMount duration={0.4} direction="up">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-elevated border border-overlay/[0.06]">
+                  <Clock className="w-3 h-3 text-accent-cyan" />
+                  5-min setup
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-elevated border border-overlay/[0.06]">
+                  <Download className="w-3 h-3 text-accent-cyan" />
+                  No lock-in
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-elevated border border-overlay/[0.06]">
+                  <Shield className="w-3 h-3 text-accent-cyan" />
+                  Free forever
                 </span>
               </div>
             </FadeIn>

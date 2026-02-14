@@ -3,15 +3,12 @@ import {
   HeroSection,
   ProblemOutcomeSection,
   TrustSection,
-  FeaturesSection,
+  CapabilitiesSection,
   ComparisonSection,
-  AdvancedCapabilitiesSection,
-  MissionSection,
   HowItWorksSection,
   FAQSectionAnimated,
   CTASection,
   Footer,
-  QuickFactsSection,
 } from "@/components/landing";
 import { faqData } from "@/lib/data/faq-data";
 import { SectionDivider } from "@/components/landing/ui/SectionDivider";
@@ -89,7 +86,7 @@ const howToJsonLd = {
   ],
 };
 
-// FAQPage JSON-LD structured data
+// FAQPage JSON-LD structured data (uses all FAQs including hidden ones)
 const faqPageJsonLd = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
@@ -132,14 +129,11 @@ export default function LandingPage() {
           <SectionDivider />
           <ProblemOutcomeSection />
           <HowItWorksSection />
-          <FeaturesSection />
+          <CapabilitiesSection />
           <SectionDivider />
           <ComparisonSection />
           <TrustSection />
-          <QuickFactsSection />
           <SectionDivider />
-          <AdvancedCapabilitiesSection />
-          <MissionSection />
           <FAQSectionAnimated />
           <CTASection />
         </main>

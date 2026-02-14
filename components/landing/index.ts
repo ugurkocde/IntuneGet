@@ -5,6 +5,7 @@ export { Header } from "./Header";
 export {
   HeroSection,
   FeaturesSection,
+  CapabilitiesSection,
   AdvancedCapabilitiesSection,
   HowItWorksSection,
   FAQSectionAnimated,

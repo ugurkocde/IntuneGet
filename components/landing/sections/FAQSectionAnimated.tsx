@@ -7,8 +7,10 @@ import { FadeIn } from "../animations/FadeIn";
 import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 import { Badge } from "../ui/Badge";
 import { cn } from "@/lib/utils";
-import { faqData as faqs } from "@/lib/data/faq-data";
+import { faqData } from "@/lib/data/faq-data";
 import { springPresets } from "@/lib/animations/variants";
+
+const visibleFaqs = faqData.filter((f) => f.visibleOnPage !== false);
 
 export function FAQSectionAnimated() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -47,7 +49,7 @@ export function FAQSectionAnimated() {
 
         {/* FAQ items */}
         <StaggerContainer className="space-y-4" staggerDelay={0.1}>
-          {faqs.map((faq, index) => (
+          {visibleFaqs.map((faq, index) => (
             <StaggerItem key={index}>
               <div
                 className={cn(

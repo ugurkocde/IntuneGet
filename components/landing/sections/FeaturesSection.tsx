@@ -1,36 +1,64 @@
 "use client";
 
-import { Package, Upload, Cloud } from "lucide-react";
+import {
+  Sparkles,
+  RefreshCw,
+  Bell,
+  ShieldCheck,
+  Search,
+  BarChart3,
+} from "lucide-react";
 import { FadeIn } from "../animations/FadeIn";
 import { TextReveal } from "../animations/TextReveal";
 import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 import { FeatureCard } from "../ui/FeatureCard";
 
-const features = [
+const capabilities = [
   {
-    icon: <Package className="h-6 w-6" />,
-    title: "Winget Integration",
+    icon: <Sparkles className="h-6 w-6" />,
+    title: "AI-Powered App Discovery",
     description:
-      "Seamlessly package applications using Winget for easy deployment to your Intune environment.",
-    features: ["Access to 10,000+ apps", "Automatic updates", "Version control"],
+      "OpenAI integration automatically finds Winget IDs when standard search fails.",
+    features: ["Smart matching", "Reduced manual work", "Higher accuracy"],
   },
   {
-    icon: <Upload className="h-6 w-6" />,
-    title: "Automated Uploads",
+    icon: <RefreshCw className="h-6 w-6" />,
+    title: "Automated Update Management",
     description:
-      "Automatically upload packaged applications to your Intune environment with just a few clicks.",
-    features: ["Batch processing", "Error handling", "Progress tracking"],
+      "Configure update policies with auto_update, notify, ignore, or pin_version modes.",
+    features: ["Circuit breakers", "Rate limiting", "Update history"],
   },
   {
-    icon: <Cloud className="h-6 w-6" />,
-    title: "Cloud-Ready",
+    icon: <Bell className="h-6 w-6" />,
+    title: "Multi-Channel Notifications",
     description:
-      "Designed to work seamlessly with Microsoft's cloud infrastructure and modern workplace.",
-    features: ["Entra ID integration", "Secure authentication", "Real-time sync"],
+      "Email and webhook notifications for Slack, Teams, Discord, and custom endpoints.",
+    features: ["Real-time alerts", "Deployment status", "Update availability"],
+  },
+  {
+    icon: <ShieldCheck className="h-6 w-6" />,
+    title: "Pre-Upload Permission Check",
+    description:
+      "Verify all required permissions before starting deployment. Tests actual API access to avoid mid-process failures.",
+    features: ["Early detection", "Real API testing", "Clear error messages"],
+  },
+  {
+    icon: <Search className="h-6 w-6" />,
+    title: "Partial & Fuzzy Search",
+    description:
+      "Search with partial terms - type 'chr' to find 'Chrome' and similar apps instantly.",
+    features: ["Faster discovery", "Flexible matching", "Better UX"],
+  },
+  {
+    icon: <BarChart3 className="h-6 w-6" />,
+    title: "Real-time Statistics",
+    description:
+      "Track deployment metrics, success rates, and usage statistics in a live dashboard.",
+    features: ["Live metrics", "Deployment history", "Performance insights"],
   },
 ];
 
-export function FeaturesSection() {
+export function CapabilitiesSection() {
   return (
     <section
       id="features"
@@ -41,35 +69,36 @@ export function FeaturesSection() {
         <div className="text-center mb-16 md:mb-20 space-y-4">
           <FadeIn>
             <span className="inline-block font-mono text-xs tracking-wider text-accent-cyan uppercase mb-4">
-              Features
+              Capabilities
             </span>
           </FadeIn>
           <TextReveal
             as="h2"
-            text="Everything You Need"
+            text="Built for IT Teams at Scale"
             className="text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary"
             delay={0.1}
             staggerDelay={0.04}
           />
           <FadeIn delay={0.2}>
             <p className="mx-auto max-w-2xl text-lg text-text-secondary">
-              Powerful tools to streamline your Intune app deployment process
+              Powerful automation features that streamline your Intune app
+              deployment from discovery to delivery
             </p>
           </FadeIn>
         </div>
 
-        {/* Feature cards */}
+        {/* Capability cards - 2 cols on mobile, 3 cols on desktop */}
         <StaggerContainer
-          className="grid gap-6 md:gap-8 sm:grid-cols-2 lg:grid-cols-3"
-          staggerDelay={0.15}
+          className="grid gap-6 md:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+          staggerDelay={0.1}
         >
-          {features.map((feature, index) => (
+          {capabilities.map((cap, index) => (
             <StaggerItem key={index}>
               <FeatureCard
-                icon={feature.icon}
-                title={feature.title}
-                description={feature.description}
-                features={feature.features}
+                icon={cap.icon}
+                title={cap.title}
+                description={cap.description}
+                features={cap.features}
               />
             </StaggerItem>
           ))}
@@ -78,3 +107,6 @@ export function FeaturesSection() {
     </section>
   );
 }
+
+// Keep backward-compatible export
+export { CapabilitiesSection as FeaturesSection };
