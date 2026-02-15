@@ -230,24 +230,25 @@ export default function UpdatesPage() {
   }, [updatePolicy, refetchUpdates]);
 
   const handleBulkUpdate = useCallback(async () => {
-    const updatePromises = eligibleForBulkUpdate.map(async (update) => {
-      setUpdatingIds((prev) => new Set(prev).add(update.id));
-      try {
+    // Mark all eligible updates as updating at once
+    setUpdatingIds(new Set(eligibleForBulkUpdate.map((u) => u.id)));
+
+    try {
+      // Use bulk API - batch into groups of 10 (API limit)
+      const batchSize = 10;
+      for (let i = 0; i < eligibleForBulkUpdate.length; i += batchSize) {
+        const batch = eligibleForBulkUpdate.slice(i, i + batchSize);
         await triggerUpdate({
-          winget_id: update.winget_id,
-          tenant_id: update.tenant_id,
-        });
-      } finally {
-        setUpdatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(update.id);
-          return next;
+          updates: batch.map((u) => ({
+            winget_id: u.winget_id,
+            tenant_id: u.tenant_id,
+          })),
         });
       }
-    });
-
-    await Promise.allSettled(updatePromises);
-    router.push('/dashboard/uploads');
+      router.push('/dashboard/uploads');
+    } finally {
+      setUpdatingIds(new Set());
+    }
   }, [eligibleForBulkUpdate, triggerUpdate, router]);
 
   const handleRefresh = useCallback(async () => {
