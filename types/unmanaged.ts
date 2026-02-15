@@ -116,7 +116,6 @@ export interface UnmanagedAppCache {
 export interface UnmanagedAppsFilters {
   search: string;
   matchStatus: MatchStatus | 'all';
-  platform: string | 'all';
   sortBy: 'name' | 'deviceCount' | 'publisher' | 'matchStatus';
   sortOrder: 'asc' | 'desc';
   showClaimed: boolean;

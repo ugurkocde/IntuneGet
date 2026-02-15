@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   Radar,
@@ -12,6 +13,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Sparkles,
+  ShoppingCart,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/dashboard/PageHeader';
@@ -57,6 +60,9 @@ export default function UnmanagedAppsPage() {
     handleClaimApp,
     handleClaimAll,
     handleLinkPackage,
+    processClaimAll,
+    cancelClaimAll,
+    retryFailedClaims,
     clearFilters,
   } = useUnmanagedApps();
 
@@ -67,9 +73,28 @@ export default function UnmanagedAppsPage() {
     if (filteredApps.length > 0) return null;
     if (statusCounts.all === 0) return 'no-data' as const;
     if (filters.search) return 'search' as const;
+    // Check all-claimed BEFORE generic filtered check:
+    // When showClaimed is false and all matched apps are claimed, show success state
+    const allMatchedClaimed = claimableCount === 0 && statusCounts.matched > 0;
+    if (allMatchedClaimed && !filters.showClaimed) return 'all-claimed' as const;
     if (filters.matchStatus !== 'all' || !filters.showClaimed) return 'filtered' as const;
+    // All apps are claimed with showClaimed: true (shouldn't reach here normally)
+    if (allMatchedClaimed) return 'all-claimed' as const;
     return 'no-data' as const;
-  }, [filteredApps.length, statusCounts.all, filters]);
+  }, [filteredApps.length, statusCounts.all, statusCounts.matched, filters, claimableCount]);
+
+  // Link and Claim combined handler
+  const handleLinkAndClaim = useCallback(async (app: Parameters<typeof handleLinkPackage>[0], wingetPackageId: string) => {
+    await handleLinkPackage(app, wingetPackageId);
+    // After linking, the app becomes matched - claim it
+    const updatedApp = {
+      ...app,
+      matchStatus: 'matched' as const,
+      matchedPackageId: wingetPackageId,
+      matchConfidence: 1.0,
+    };
+    setClaimModalApp(updatedApp);
+  }, [handleLinkPackage, setClaimModalApp]);
 
   // Reduced-motion-aware stagger container
   const staggerVariants = prefersReducedMotion
@@ -79,6 +104,11 @@ export default function UnmanagedAppsPage() {
   const itemVariants = prefersReducedMotion
     ? { hidden: { opacity: 0 }, visible: { opacity: 1 } }
     : fadeUp;
+
+  // Claimed percentage for stat card description
+  const claimedPercentage = computedStats.matched > 0
+    ? Math.round((computedStats.claimed / computedStats.matched) * 100)
+    : 0;
 
   // Loading state
   if (isLoading) {
@@ -196,7 +226,7 @@ export default function UnmanagedAppsPage() {
         className="mb-0"
       />
 
-      {/* Stat Cards (4) */}
+      {/* Stat Cards (5) */}
       <StatCardGrid columns={4}>
         <AnimatedStatCard
           title="Total Apps"
@@ -232,6 +262,40 @@ export default function UnmanagedAppsPage() {
           loading={isLoading}
         />
       </StatCardGrid>
+
+      {/* Claimed progress card - shown as a separate row */}
+      {computedStats.claimed > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <AnimatedStatCard
+            title="Claimed"
+            value={computedStats.claimed}
+            icon={ShoppingCart}
+            color="violet"
+            description={`${claimedPercentage}% of matched apps`}
+            delay={0.4}
+            loading={isLoading}
+          />
+        </div>
+      )}
+
+      {/* Post-claim navigation banner */}
+      {computedStats.claimed > 0 && (
+        <div className="flex items-center justify-between gap-4 px-5 py-3 rounded-xl bg-gradient-to-r from-accent-violet/5 to-emerald-500/5 border border-accent-violet/10">
+          <div className="flex items-center gap-3">
+            <ShoppingCart className="w-5 h-5 text-accent-violet" />
+            <p className="text-sm text-text-secondary">
+              <span className="font-medium text-text-primary">{computedStats.claimed} {computedStats.claimed === 1 ? 'app' : 'apps'}</span>{' '}
+              in your cart ready for deployment
+            </p>
+          </div>
+          <Button asChild size="sm" className="bg-gradient-to-r from-accent-violet to-accent-violet-bright hover:opacity-90 text-white border-0 flex-shrink-0">
+            <Link href="/dashboard/uploads">
+              Go to Deployments
+              <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
 
       {/* Toolbar */}
       <UnmanagedToolbar
@@ -311,6 +375,7 @@ export default function UnmanagedAppsPage() {
           isOpen={!!linkModalApp}
           onClose={() => setLinkModalApp(null)}
           onLink={handleLinkPackage}
+          onLinkAndClaim={handleLinkAndClaim}
         />
       )}
 
@@ -318,6 +383,9 @@ export default function UnmanagedAppsPage() {
         <ClaimAllModal
           state={claimAllModal}
           onClose={() => setClaimAllModal(null)}
+          onConfirm={processClaimAll}
+          onCancel={cancelClaimAll}
+          onRetryFailed={retryFailedClaims}
         />
       )}
     </div>

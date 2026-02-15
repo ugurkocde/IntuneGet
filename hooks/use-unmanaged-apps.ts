@@ -15,14 +15,13 @@ import type {
   UnmanagedAppsFilters,
   MatchStatus,
 } from '@/types/unmanaged';
-import type { ClaimAllModalState, ClaimStatus } from '@/components/unmanaged';
+import type { ClaimAllModalState, ClaimAllItemStatus } from '@/components/unmanaged';
 
 type ViewMode = 'grid' | 'list';
 
 const defaultFilters: UnmanagedAppsFilters = {
   search: '',
   matchStatus: 'all',
-  platform: 'all',
   sortBy: 'deviceCount',
   sortOrder: 'desc',
   showClaimed: true,
@@ -62,6 +61,9 @@ export interface UseUnmanagedAppsReturn {
   handleClaimApp: (app: UnmanagedApp) => Promise<void>;
   handleClaimAll: () => Promise<void>;
   handleLinkPackage: (app: UnmanagedApp, wingetPackageId: string) => Promise<void>;
+  processClaimAll: (apps: UnmanagedApp[]) => Promise<void>;
+  cancelClaimAll: () => void;
+  retryFailedClaims: () => Promise<void>;
   clearFilters: () => void;
 }
 
@@ -156,9 +158,10 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       setFromCache(data.fromCache);
     } catch (error) {
       console.error('Error fetching unmanaged apps:', error);
+      const message = error instanceof Error ? error.message : 'Failed to fetch unmanaged apps from Intune';
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to fetch unmanaged apps from Intune',
+        title: 'Failed to load apps',
+        description: message.includes('fetch') ? 'Network error. Check your connection and try again.' : message,
         variant: 'destructive',
       });
     }
@@ -291,7 +294,6 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     if (!accessToken || !app.matchedPackageId) return;
 
     setClaimingAppId(app.discoveredAppId);
-    setClaimModalApp(null);
 
     try {
       const manifestResponse = await fetch(
@@ -299,13 +301,18 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       );
 
       if (!manifestResponse.ok) {
+        if (manifestResponse.status === 403) {
+          throw new Error('Permission denied. Check your access permissions.');
+        } else if (manifestResponse.status >= 500) {
+          throw new Error('Server error. Please try again later.');
+        }
         throw new Error('Failed to fetch package manifest');
       }
 
       const { recommendedInstaller, manifest } = await manifestResponse.json();
 
       if (!recommendedInstaller) {
-        throw new Error('No compatible installer found');
+        throw new Error('No compatible installer found for this package');
       }
 
       const detectionRules = generateDetectionRules(
@@ -363,6 +370,11 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
 
       if (!claimResponse.ok) {
         const errorData = await claimResponse.json().catch(() => ({}));
+        if (claimResponse.status === 403) {
+          throw new Error('Permission denied. You may not have access to claim apps.');
+        } else if (claimResponse.status >= 500) {
+          throw new Error('Server error while recording claim. The app was added to your cart.');
+        }
         throw new Error(errorData.error || 'Failed to record claim');
       }
 
@@ -373,13 +385,13 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
             : a
         )
       );
+
+      // Only close modal on success
+      setClaimModalApp(null);
     } catch (error) {
       console.error('Error claiming app:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to claim app',
-        variant: 'destructive',
-      });
+      // Re-throw so the modal can display the error inline
+      throw error;
     } finally {
       setClaimingAppId(null);
     }
@@ -469,11 +481,119 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     }
   }, [addItemSilent, mspHeaders]);
 
-  // Claim all matched apps handler
-  const handleClaimAll = useCallback(async () => {
+  // Claim All cancellation ref
+  const claimAllCancelledRef = useRef(false);
+
+  // Process claim all (called after confirmation)
+  const processClaimAll = useCallback(async (appsToProcess: UnmanagedApp[]) => {
     const accessToken = await getToken();
     if (!accessToken) return;
 
+    claimAllCancelledRef.current = false;
+
+    // Merge new pending items with any existing results (preserves previous successes on retry)
+    setClaimAllModal((prev) => {
+      if (!prev) return null;
+      const mergedResults = new Map(prev.results);
+      appsToProcess.forEach((a) => mergedResults.set(a.discoveredAppId, 'pending'));
+      return { ...prev, phase: 'processing', results: mergedResults };
+    });
+
+    const BATCH_SIZE = 5;
+    const successfulAppIds: string[] = [];
+
+    for (let i = 0; i < appsToProcess.length; i += BATCH_SIZE) {
+      if (claimAllCancelledRef.current) {
+        // Mark remaining unprocessed apps as 'failed' so they appear in "Retry Failed"
+        setClaimAllModal((prev) => {
+          if (!prev) return null;
+          const updatedResults = new Map(prev.results);
+          for (let j = i; j < appsToProcess.length; j++) {
+            const appId = appsToProcess[j].discoveredAppId;
+            if (updatedResults.get(appId) === 'pending') {
+              updatedResults.set(appId, 'failed');
+            }
+          }
+          return { ...prev, results: updatedResults, isComplete: true };
+        });
+
+        // Still update apps that succeeded before cancellation
+        if (successfulAppIds.length > 0) {
+          setApps((prev) =>
+            prev.map((a) =>
+              successfulAppIds.includes(a.discoveredAppId)
+                ? { ...a, isClaimed: true, claimStatus: 'pending' }
+                : a
+            )
+          );
+        }
+        return;
+      }
+
+      const batch = appsToProcess.slice(i, i + BATCH_SIZE);
+
+      const results = await Promise.allSettled(
+        batch.map((app) => claimSingleApp(app, accessToken))
+      );
+
+      setClaimAllModal((prev) => {
+        if (!prev) return null;
+        const updatedResults = new Map(prev.results);
+        results.forEach((result, idx) => {
+          const appId = batch[idx].discoveredAppId;
+          if (result.status === 'fulfilled' && result.value.success) {
+            updatedResults.set(appId, 'success');
+            successfulAppIds.push(appId);
+          } else {
+            updatedResults.set(appId, 'failed');
+          }
+        });
+        return { ...prev, results: updatedResults };
+      });
+    }
+
+    setApps((prev) =>
+      prev.map((a) =>
+        successfulAppIds.includes(a.discoveredAppId)
+          ? { ...a, isClaimed: true, claimStatus: 'pending' }
+          : a
+      )
+    );
+
+    setClaimAllModal((prev) => (prev ? { ...prev, isComplete: true } : null));
+  }, [getToken, claimSingleApp]);
+
+  // Cancel claim all - sets the ref so processClaimAll stops on next batch
+  const cancelClaimAll = useCallback(() => {
+    claimAllCancelledRef.current = true;
+    // processClaimAll checks this ref at the top of each batch loop iteration
+    // and will mark remaining pending items as 'failed' + set isComplete: true
+  }, []);
+
+  // Ref to hold latest claimAllModal for retryFailedClaims (avoids stale closure)
+  const claimAllModalRef = useRef(claimAllModal);
+  claimAllModalRef.current = claimAllModal;
+
+  // Retry failed claims
+  const retryFailedClaims = useCallback(async () => {
+    const currentModal = claimAllModalRef.current;
+    if (!currentModal) return;
+
+    const failedApps = currentModal.apps.filter(
+      (app) => currentModal.results.get(app.discoveredAppId) === 'failed'
+    );
+
+    if (failedApps.length === 0) return;
+
+    setClaimAllModal((prev) =>
+      prev ? { ...prev, isComplete: false } : null
+    );
+
+    await processClaimAll(failedApps);
+  }, [processClaimAll]);
+
+  // Claim all matched apps handler - opens confirmation first
+  const handleClaimAll = useCallback(async () => {
     const claimableApps = filteredApps.filter(
       (app) => app.matchStatus === 'matched' && !app.isClaimed && app.matchedPackageId
     );
@@ -486,51 +606,15 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       return;
     }
 
-    const resultsMap = new Map<string, ClaimStatus>(
-      claimableApps.map((a) => [a.discoveredAppId, 'pending'])
-    );
+    // Open modal in confirmation phase
     setClaimAllModal({
       isOpen: true,
+      phase: 'confirm',
       apps: claimableApps,
-      results: resultsMap,
+      results: new Map(),
       isComplete: false,
     });
-
-    const BATCH_SIZE = 5;
-    const successfulAppIds: string[] = [];
-
-    for (let i = 0; i < claimableApps.length; i += BATCH_SIZE) {
-      const batch = claimableApps.slice(i, i + BATCH_SIZE);
-
-      const results = await Promise.allSettled(
-        batch.map((app) => claimSingleApp(app, accessToken))
-      );
-
-      results.forEach((result, idx) => {
-        const appId = batch[idx].discoveredAppId;
-        if (result.status === 'fulfilled' && result.value.success) {
-          resultsMap.set(appId, 'success');
-          successfulAppIds.push(appId);
-        } else {
-          resultsMap.set(appId, 'failed');
-        }
-      });
-
-      setClaimAllModal((prev) =>
-        prev ? { ...prev, results: new Map(resultsMap) } : null
-      );
-    }
-
-    setApps((prev) =>
-      prev.map((a) =>
-        successfulAppIds.includes(a.discoveredAppId)
-          ? { ...a, isClaimed: true, claimStatus: 'pending' }
-          : a
-      )
-    );
-
-    setClaimAllModal((prev) => (prev ? { ...prev, isComplete: true } : null));
-  }, [getToken, filteredApps, claimSingleApp]);
+  }, [filteredApps]);
 
   // Link package handler
   const handleLinkPackage = useCallback(async (app: UnmanagedApp, wingetPackageId: string) => {
@@ -621,6 +705,9 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     handleClaimApp,
     handleClaimAll,
     handleLinkPackage,
+    processClaimAll,
+    cancelClaimAll,
+    retryFailedClaims,
     clearFilters,
   };
 }

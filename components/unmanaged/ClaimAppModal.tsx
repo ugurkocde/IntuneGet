@@ -1,8 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Monitor, Package, ShoppingCart, Loader2, CheckCircle2 } from 'lucide-react';
+import { Monitor, Package, ShoppingCart, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { AppIcon } from '@/components/AppIcon';
 import type { UnmanagedApp } from '@/types/unmanaged';
 
@@ -15,48 +23,43 @@ interface ClaimAppModalProps {
 
 export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleConfirm = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       await onConfirm(app);
-      onClose();
-    } catch {
-      // Error handled by parent
+      // Modal close is handled by the parent on success
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to claim app. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!isOpen) return null;
+  const handleOpenChange = (open: boolean) => {
+    if (!open && !isLoading) {
+      setError(null);
+      onClose();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="claim-modal-title"
-        className="relative w-full max-w-lg mx-4 bg-bg-surface rounded-2xl border border-overlay/10 shadow-2xl overflow-hidden"
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="max-w-lg mx-4"
+        onInteractOutside={(e) => {
+          if (isLoading) e.preventDefault();
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-overlay/5">
-          <h2 id="claim-modal-title" className="text-lg font-semibold text-text-primary">Claim Unmanaged App</h2>
-          <button
-            onClick={onClose}
-            className="text-text-secondary hover:text-text-primary transition-colors p-1"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+        <DialogHeader>
+          <DialogTitle>Claim Unmanaged App</DialogTitle>
+          <DialogDescription className="sr-only">
+            Add {app.displayName} to your deployment cart
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Content */}
         <div className="px-6 py-6">
           {/* App info */}
           <div className="flex items-center gap-4 mb-6">
@@ -94,6 +97,17 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
             </div>
           </div>
 
+          {/* Error state */}
+          {error && (
+            <div className="flex items-start gap-3 p-4 mb-6 rounded-xl bg-red-500/10 border border-red-500/20">
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-400">Failed to claim app</p>
+                <p className="text-sm text-red-400/80 mt-1">{error}</p>
+              </div>
+            </div>
+          )}
+
           {/* What happens next */}
           <div className="bg-bg-elevated/50 rounded-xl p-4 border border-overlay/5">
             <h4 className="text-sm font-medium text-text-primary mb-3">What happens next?</h4>
@@ -114,12 +128,18 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-overlay/5 bg-bg-elevated/50">
-          <Button variant="outline" onClick={onClose} className="border-overlay/10">
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isLoading}
+            className="border-overlay/10"
+          >
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={handleConfirm}
             disabled={isLoading}
             className="bg-gradient-to-r from-accent-cyan to-accent-violet hover:opacity-90 text-white border-0"
@@ -132,12 +152,12 @@ export function ClaimAppModal({ app, isOpen, onClose, onConfirm }: ClaimAppModal
             ) : (
               <>
                 <ShoppingCart className="w-4 h-4 mr-2" />
-                Add to Cart
+                {error ? 'Retry' : 'Add to Cart'}
               </>
             )}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

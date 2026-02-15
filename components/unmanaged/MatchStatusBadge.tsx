@@ -1,6 +1,12 @@
 'use client';
 
 import { CheckCircle2, AlertCircle, HelpCircle, Clock } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { MatchStatus } from '@/types/unmanaged';
 
@@ -37,23 +43,56 @@ const statusConfig: Record<MatchStatus, {
   },
 };
 
+function getConfidenceLabel(confidence: number): { label: string; color: string } {
+  if (confidence >= 0.9) return { label: 'High', color: 'text-emerald-400' };
+  if (confidence >= 0.7) return { label: 'Moderate', color: 'text-amber-400' };
+  return { label: 'Low', color: 'text-red-400' };
+}
+
+function getConfidenceTooltip(status: MatchStatus, confidence: number | null | undefined): string {
+  if (status === 'unmatched') return 'No WinGet package match was found for this app.';
+  if (status === 'pending') return 'Match analysis is in progress.';
+  if (confidence === null || confidence === undefined) return 'Match confidence data is not available.';
+
+  const pct = Math.round(confidence * 100);
+  if (pct >= 90) return `${pct}% confidence - strong match based on name, publisher, and version.`;
+  if (pct >= 70) return `${pct}% confidence - likely match but verify the package is correct.`;
+  return `${pct}% confidence - weak match. Consider linking a different package.`;
+}
+
 export function MatchStatusBadge({ status, confidence, className }: MatchStatusBadgeProps) {
   const config = statusConfig[status];
   const Icon = config.icon;
 
-  return (
+  const showConfidence = confidence !== null && confidence !== undefined && status !== 'unmatched';
+  const confidenceInfo = showConfidence ? getConfidenceLabel(confidence!) : null;
+
+  const badge = (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border',
+        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border cursor-default',
         config.colors,
         className
       )}
     >
       <Icon className="w-3.5 h-3.5" />
       <span>{config.label}</span>
-      {confidence !== null && confidence !== undefined && status !== 'unmatched' && (
-        <span className="opacity-70">({Math.round(confidence * 100)}%)</span>
+      {showConfidence && confidenceInfo && (
+        <span className={cn('font-semibold', confidenceInfo.color)}>
+          {confidenceInfo.label}
+        </span>
       )}
     </span>
+  );
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[260px]">
+          <p>{getConfidenceTooltip(status, confidence)}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

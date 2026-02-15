@@ -12,9 +12,17 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  ChevronsUpDown,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { FilterChip } from './FilterChip';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
@@ -43,6 +51,25 @@ const sortOptions = [
 ];
 
 const SEARCH_DEBOUNCE_MS = 300;
+
+function getFilterContextText(filters: UnmanagedAppsFilters): string {
+  const parts: string[] = [];
+  if (filters.matchStatus !== 'all') {
+    const labels: Record<string, string> = {
+      matched: 'Matched',
+      partial: 'Partial',
+      unmatched: 'Unmatched',
+    };
+    parts.push(labels[filters.matchStatus] || filters.matchStatus);
+  }
+  if (!filters.showClaimed) {
+    parts.push('unclaimed only');
+  }
+  if (filters.search) {
+    parts.push(`"${filters.search}"`);
+  }
+  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+}
 
 export function UnmanagedToolbar({
   filters,
@@ -87,6 +114,8 @@ export function UnmanagedToolbar({
     onFiltersChange({ ...filters, matchStatus: status });
   };
 
+  const currentSortLabel = sortOptions.find(o => o.value === filters.sortBy)?.label || 'Sort';
+
   return (
     <div className="glass-light rounded-xl p-4 border border-overlay/5 space-y-3">
       {/* Row 1: Search | Claim All | Sort | View Toggle */}
@@ -102,6 +131,8 @@ export function UnmanagedToolbar({
           />
           {localSearch && (
             <button
+              type="button"
+              aria-label="Clear search"
               onClick={() => {
                 setLocalSearch('');
                 onFiltersChange({ ...filters, search: '' });
@@ -116,6 +147,7 @@ export function UnmanagedToolbar({
         <div className="flex flex-wrap items-center gap-2">
           {/* Claim All */}
           <Button
+            type="button"
             onClick={onClaimAll}
             disabled={claimableCount === 0 || isClaimAllDisabled}
             className={cn(
@@ -134,15 +166,17 @@ export function UnmanagedToolbar({
             )}
           </Button>
 
-          {/* Sort buttons */}
-          <div className="flex flex-wrap items-center gap-1">
+          {/* Sort - Desktop: inline buttons */}
+          <div className="hidden md:flex items-center gap-1">
             <span className="text-sm text-text-muted">Sort:</span>
             {sortOptions.map((option) => (
               <Button
                 key={option.value}
+                type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => handleSortChange(option.value)}
+                aria-sort={filters.sortBy === option.value ? (filters.sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
                 className={cn(
                   'text-sm transition-colors',
                   filters.sortBy === option.value
@@ -154,8 +188,10 @@ export function UnmanagedToolbar({
               </Button>
             ))}
             <Button
+              type="button"
               variant="ghost"
               size="sm"
+              aria-label={`Sort ${filters.sortOrder === 'asc' ? 'ascending' : 'descending'}, click to toggle`}
               onClick={() =>
                 onFiltersChange({
                   ...filters,
@@ -172,29 +208,79 @@ export function UnmanagedToolbar({
             </Button>
           </div>
 
+          {/* Sort - Mobile: dropdown */}
+          <div className="md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-text-secondary hover:text-text-primary"
+                >
+                  <ChevronsUpDown className="w-4 h-4 mr-1.5" />
+                  {currentSortLabel}
+                  {filters.sortOrder === 'asc' ? (
+                    <SortAsc className="w-3.5 h-3.5 ml-1" />
+                  ) : (
+                    <SortDesc className="w-3.5 h-3.5 ml-1" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {sortOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => handleSortChange(option.value)}
+                    className="flex items-center justify-between"
+                  >
+                    {option.label}
+                    {filters.sortBy === option.value && (
+                      <Check className="w-4 h-4 text-accent-cyan ml-2" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem
+                  onClick={() =>
+                    onFiltersChange({
+                      ...filters,
+                      sortOrder: filters.sortOrder === 'desc' ? 'asc' : 'desc',
+                    })
+                  }
+                >
+                  {filters.sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
           {/* View toggle */}
-          <div className="flex items-center gap-0.5 border border-overlay/5 rounded-lg p-0.5">
+          <div className="flex items-center gap-0.5 border border-overlay/5 rounded-lg p-0.5" role="group" aria-label="View mode">
             <button
+              type="button"
               onClick={() => onViewModeChange('grid')}
+              aria-pressed={viewMode === 'grid'}
+              aria-label="Grid view"
               className={cn(
                 'p-1.5 rounded-md transition-colors',
                 viewMode === 'grid'
                   ? 'bg-accent-cyan/10 text-accent-cyan'
                   : 'text-text-muted hover:text-text-primary'
               )}
-              aria-label="Grid view"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => onViewModeChange('list')}
+              aria-pressed={viewMode === 'list'}
+              aria-label="List view"
               className={cn(
                 'p-1.5 rounded-md transition-colors',
                 viewMode === 'list'
                   ? 'bg-accent-cyan/10 text-accent-cyan'
                   : 'text-text-muted hover:text-text-primary'
               )}
-              aria-label="List view"
             >
               <Rows3 className="w-4 h-4" />
             </button>
@@ -247,12 +333,13 @@ export function UnmanagedToolbar({
           onClick={() => onFiltersChange({ ...filters, showClaimed: !filters.showClaimed })}
           color="#8b5cf6"
         >
-          {filters.showClaimed ? 'Hide Claimed' : 'Show Claimed'}
+          {filters.showClaimed ? 'Showing Claimed' : 'Hiding Claimed'}
         </FilterChip>
 
         <div className="ml-auto text-sm text-text-muted">
           Showing <span className="text-text-primary font-medium">{filteredCount}</span> of{' '}
           <span className="text-text-primary font-medium">{totalCount}</span>
+          <span className="hidden sm:inline">{getFilterContextText(filters)}</span>
         </div>
       </div>
     </div>

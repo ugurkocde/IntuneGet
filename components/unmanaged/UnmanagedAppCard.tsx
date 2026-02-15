@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, memo } from 'react';
-import { Monitor, Link as LinkIcon, ShoppingCart, Check, Loader2 } from 'lucide-react';
+import { memo } from 'react';
+import { Monitor, Link as LinkIcon, ShoppingCart, Check, Loader2, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
 import { MatchStatusBadge } from './MatchStatusBadge';
@@ -15,6 +15,13 @@ interface UnmanagedAppCardProps {
   isClaimLoading?: boolean;
 }
 
+const statusBorderColor: Record<string, string> = {
+  matched: 'border-l-emerald-500',
+  partial: 'border-l-amber-500',
+  unmatched: 'border-l-zinc-500',
+  pending: 'border-l-blue-500',
+};
+
 function UnmanagedAppCardComponent({
   app,
   onClaim,
@@ -23,9 +30,16 @@ function UnmanagedAppCardComponent({
 }: UnmanagedAppCardProps) {
   const canClaim = app.matchStatus === 'matched' && !app.isClaimed;
   const canLink = app.matchStatus === 'unmatched' || app.matchStatus === 'partial';
+  const hasPartialSuggestions = app.partialMatches && app.partialMatches.length > 0;
 
   return (
-    <div className="group glass-light rounded-xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-accent-cyan/5 hover:border-overlay/10">
+    <div
+      className={cn(
+        'group glass-light rounded-xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-accent-cyan/5 hover:border-overlay/10 border-l-[3px]',
+        statusBorderColor[app.matchStatus] || 'border-l-transparent',
+        app.isClaimed && 'opacity-70 hover:opacity-100'
+      )}
+    >
       <div className="flex items-start gap-4">
         {/* App icon */}
         <div className="relative">
@@ -60,12 +74,15 @@ function UnmanagedAppCardComponent({
             )}
           </div>
 
-          {/* Device count */}
+          {/* Device count + status */}
           <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-1.5 text-text-secondary">
-              <Monitor className="w-4 h-4" />
-              <span className="text-sm">
-                {app.deviceCount.toLocaleString()} {app.deviceCount === 1 ? 'device' : 'devices'}
+            <div className="flex items-center gap-1.5 bg-bg-elevated/80 px-2.5 py-1 rounded-lg border border-overlay/5">
+              <Monitor className="w-4 h-4 text-accent-cyan" />
+              <span className="text-sm font-semibold text-text-primary tabular-nums">
+                {app.deviceCount.toLocaleString()}
+              </span>
+              <span className="text-xs text-text-muted">
+                {app.deviceCount === 1 ? 'device' : 'devices'}
               </span>
             </div>
             <MatchStatusBadge status={app.matchStatus} confidence={app.matchConfidence} />
@@ -76,6 +93,18 @@ function UnmanagedAppCardComponent({
             <p className="text-text-muted text-xs font-mono mt-2 truncate group-hover:text-text-secondary transition-colors">
               {app.matchedPackageId}
             </p>
+          )}
+
+          {/* Partial match suggestions hint */}
+          {hasPartialSuggestions && canLink && (
+            <button
+              type="button"
+              onClick={() => onLink?.(app)}
+              className="flex items-center gap-1.5 mt-2 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              <Lightbulb className="w-3.5 h-3.5" />
+              {app.partialMatches!.length} {app.partialMatches!.length === 1 ? 'suggestion' : 'suggestions'} available
+            </button>
           )}
         </div>
       </div>
@@ -100,6 +129,7 @@ function UnmanagedAppCardComponent({
         <div className="flex items-center gap-2">
           {canLink && (
             <Button
+              type="button"
               size="sm"
               variant="outline"
               onClick={() => onLink?.(app)}
@@ -111,6 +141,7 @@ function UnmanagedAppCardComponent({
           )}
           {canClaim && (
             <Button
+              type="button"
               size="sm"
               onClick={() => onClaim?.(app)}
               disabled={isClaimLoading}
@@ -128,6 +159,7 @@ function UnmanagedAppCardComponent({
           )}
           {app.isClaimed && !app.claimStatus?.includes('deploy') && (
             <Button
+              type="button"
               size="sm"
               disabled
               className="bg-status-success/10 text-status-success cursor-default border-0"
@@ -154,6 +186,7 @@ export const UnmanagedAppCard = memo(UnmanagedAppCardComponent, (prev, next) => 
     prev.app.matchConfidence === next.app.matchConfidence &&
     prev.app.isClaimed === next.app.isClaimed &&
     prev.app.claimStatus === next.app.claimStatus &&
+    prev.app.partialMatches === next.app.partialMatches &&
     prev.isClaimLoading === next.isClaimLoading &&
     prev.onClaim === next.onClaim &&
     prev.onLink === next.onLink

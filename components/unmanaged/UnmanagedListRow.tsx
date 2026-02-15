@@ -8,6 +8,7 @@ import {
   Link as LinkIcon,
   Loader2,
   CheckCircle2,
+  Lightbulb,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
@@ -22,6 +23,13 @@ interface UnmanagedListRowProps {
   isClaimLoading: boolean;
 }
 
+const statusBorderColor: Record<string, string> = {
+  matched: 'border-l-emerald-500',
+  partial: 'border-l-amber-500',
+  unmatched: 'border-l-zinc-500',
+  pending: 'border-l-blue-500',
+};
+
 export const UnmanagedListRow = memo(function UnmanagedListRow({
   app,
   onClaim,
@@ -31,6 +39,7 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
   const prefersReducedMotion = useReducedMotion();
   const canClaim = app.matchStatus === 'matched' && !app.isClaimed;
   const canLink = app.matchStatus === 'unmatched' || app.matchStatus === 'partial';
+  const hasPartialSuggestions = app.partialMatches && app.partialMatches.length > 0;
 
   return (
     <motion.div
@@ -40,7 +49,13 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
       className="group relative"
     >
       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-black/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <div className="relative flex items-center gap-4 p-4 rounded-xl bg-overlay/[0.02] border border-black/[0.03] group-hover:border-overlay/10 transition-all duration-200">
+      <div
+        className={cn(
+          'relative flex items-center gap-4 p-4 rounded-xl bg-overlay/[0.02] border border-black/[0.03] group-hover:border-overlay/10 transition-all duration-200 border-l-[3px]',
+          statusBorderColor[app.matchStatus] || 'border-l-transparent',
+          app.isClaimed && 'opacity-70 group-hover:opacity-100'
+        )}
+      >
         {/* App icon */}
         <div className="relative flex-shrink-0">
           <AppIcon
@@ -62,13 +77,25 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
             <h3 className="text-text-primary font-medium truncate group-hover:text-accent-cyan-bright transition-colors">
               {app.displayName}
             </h3>
-            <p className="text-text-muted text-sm truncate">{app.publisher || 'Unknown publisher'}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-text-muted text-sm truncate">{app.publisher || 'Unknown publisher'}</p>
+              {hasPartialSuggestions && canLink && (
+                <button
+                  type="button"
+                  onClick={onLink}
+                  className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors flex-shrink-0"
+                >
+                  <Lightbulb className="w-3 h-3" />
+                  {app.partialMatches!.length}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Device count */}
           <div className="flex items-center gap-2 text-text-secondary">
             <Monitor className="w-4 h-4" />
-            <span className="text-sm tabular-nums">{app.deviceCount.toLocaleString()}</span>
+            <span className="text-sm font-semibold tabular-nums">{app.deviceCount.toLocaleString()}</span>
           </div>
 
           {/* Status badge */}
@@ -78,16 +105,19 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
           <div className="flex items-center gap-2">
             {canLink && (
               <Button
+                type="button"
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 onClick={onLink}
-                className="h-8 px-3 text-text-secondary hover:text-text-primary hover:bg-overlay/10"
+                className="h-8 px-3 text-text-secondary hover:text-text-primary border-overlay/10 hover:bg-overlay/5"
               >
-                <LinkIcon className="w-4 h-4" />
+                <LinkIcon className="w-4 h-4 mr-1.5" />
+                <span className="hidden lg:inline">Link</span>
               </Button>
             )}
             {canClaim && (
               <Button
+                type="button"
                 size="sm"
                 onClick={onClaim}
                 disabled={isClaimLoading}

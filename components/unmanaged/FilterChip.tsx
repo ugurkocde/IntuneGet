@@ -26,7 +26,9 @@ export function FilterChip({
 
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         'relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200',
         active
@@ -42,9 +44,10 @@ export function FilterChip({
         <span
           className="absolute inset-0 rounded-full opacity-20"
           style={{ backgroundColor: color }}
+          aria-hidden="true"
         />
       )}
-      {Icon && <Icon className="relative w-3.5 h-3.5" />}
+      {Icon && <Icon className="relative w-3.5 h-3.5" aria-hidden="true" />}
       <span className="relative">{children}</span>
       {count !== undefined && (
         <span
