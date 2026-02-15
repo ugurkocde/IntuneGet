@@ -73,7 +73,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci && npm install sharp
+        run: npm ci && npm install --no-save sharp
 
       - name: Fetch web icons
         id: fetch-web-icons
