@@ -233,8 +233,8 @@ export function ErrorDisplay({
 
       {/* Test results detail panel */}
       {details?.testResults && (
-        <div className="text-xs bg-black/30 p-3 rounded border border-white/5 space-y-2">
-          <p className="text-zinc-300 font-medium mb-2">Test Results</p>
+        <div className="text-xs bg-black/50 p-3 rounded border border-white/10 space-y-2">
+          <p className="text-zinc-100 font-medium mb-2">Test Results</p>
           {Object.entries(details.testResults.steps).map(([stepName, step]) => {
             const stepLabels: Record<string, string> = {
               structureValidation: 'Structure Validation',
@@ -249,11 +249,11 @@ export function ErrorDisplay({
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     'w-2 h-2 rounded-full',
-                    step.skipped ? 'bg-zinc-500' : step.passed ? 'bg-green-500' : 'bg-red-500'
+                    step.skipped ? 'bg-zinc-500' : step.passed ? 'bg-green-400' : 'bg-red-400'
                   )} />
-                  <span className="text-zinc-400">{label}</span>
+                  <span className="text-zinc-200">{label}</span>
                 </div>
-                <div className="flex items-center gap-3 text-zinc-500">
+                <div className="flex items-center gap-3 text-zinc-300">
                   {step.exitCode !== undefined && step.exitCode !== null && (
                     <span>exit: {step.exitCode}</span>
                   )}
@@ -263,7 +263,7 @@ export function ErrorDisplay({
               </div>
             );
           })}
-          <div className="pt-1 border-t border-white/5 text-zinc-500">
+          <div className="pt-1 border-t border-white/10 text-zinc-300">
             Total: {details.testResults.totalDuration_ms}ms
           </div>
         </div>
