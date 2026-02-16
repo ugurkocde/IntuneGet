@@ -105,6 +105,7 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>('detection');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [addedToCartSuccess, setAddedToCartSuccess] = useState(false);
   const [configMode, setConfigMode] = useState<'quick' | 'advanced'>('quick');
 
   const quickSections: ConfigSection[] = ['detection', 'assignment', 'category'];
@@ -189,7 +190,7 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
   }, [selectedInstaller, pkg.name, pkg.id, selectedVersion]);
 
   const handleAddToCart = async () => {
-    if (!selectedInstaller || inCart) return;
+    if (!selectedInstaller || inCart || addedToCartSuccess) return;
 
     setIsAddingToCart(true);
     try {
@@ -212,7 +213,8 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
         categories: categories.length > 0 ? categories : undefined,
         ...(isDeployed ? { forceCreate: true } : {}),
       });
-      // Keep panel open -- user closes manually
+      setAddedToCartSuccess(true);
+      setTimeout(() => onClose(), 1200);
     } finally {
       setIsAddingToCart(false);
     }
@@ -1426,31 +1428,36 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
                 </Button>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={!selectedInstaller || inCart || isAddingToCart}
+                  disabled={!selectedInstaller || inCart || isAddingToCart || addedToCartSuccess}
                   variant="outline"
-                  className="py-5 text-base font-medium border-overlay/15 text-text-primary hover:bg-overlay/10"
+                  className={cn(
+                    'py-5 text-base font-medium',
+                    inCart || addedToCartSuccess
+                      ? 'border-green-500/20 text-green-400 hover:bg-green-600/10'
+                      : 'border-overlay/15 text-text-primary hover:bg-overlay/10'
+                  )}
                 >
                   {isAddingToCart ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : inCart ? (
-                    <Check className="w-5 h-5 mr-2" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : inCart || addedToCartSuccess ? (
+                    <Check className="w-5 h-5" />
                   ) : (
-                    <RefreshCw className="w-5 h-5 mr-2" />
+                    <>
+                      <RefreshCw className="w-5 h-5 mr-2" />
+                      Redeploy
+                    </>
                   )}
-                  {inCart ? 'Added' : 'Redeploy'}
                 </Button>
               </div>
             </div>
           ) : (
             <Button
               onClick={handleAddToCart}
-              disabled={!selectedInstaller || inCart || isAddingToCart}
+              disabled={!selectedInstaller || inCart || isAddingToCart || addedToCartSuccess}
               className={cn(
                 'w-full py-5 text-base font-medium',
-                inCart
+                inCart || addedToCartSuccess
                   ? 'bg-green-600/10 text-green-400 hover:bg-green-600/10 cursor-default'
-                  : isDeployed
-                  ? 'bg-accent-cyan hover:bg-accent-cyan-dim text-white'
                   : 'bg-accent-cyan hover:bg-accent-cyan-dim text-white'
               )}
             >
@@ -1459,11 +1466,8 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                   Adding...
                 </>
-              ) : inCart ? (
-                <>
-                  <Check className="w-5 h-5 mr-2" />
-                  Added
-                </>
+              ) : inCart || addedToCartSuccess ? (
+                <Check className="w-5 h-5" />
               ) : isDeployed ? (
                 <>
                   <RefreshCw className="w-5 h-5 mr-2" />
