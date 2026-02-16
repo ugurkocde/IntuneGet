@@ -180,7 +180,7 @@ export async function GET(request: NextRequest) {
       completed_deployments: jobsList.filter((j: JobQueryResult) => j.status === 'deployed' || j.status === 'completed').length,
       failed_deployments: jobsList.filter((j: JobQueryResult) => j.status === 'failed').length,
       pending_deployments: jobsList.filter((j: JobQueryResult) =>
-        ['queued', 'packaging', 'uploading'].includes(j.status)
+        ['queued', 'packaging', 'testing', 'uploading'].includes(j.status)
       ).length,
       success_rate: 0,
       total_tenants: tenants.length,

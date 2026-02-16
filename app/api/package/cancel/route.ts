@@ -18,9 +18,9 @@ type PackagingJobRow = Database['public']['Tables']['packaging_jobs']['Row'];
 type PackagingJobUpdate = Database['public']['Tables']['packaging_jobs']['Update'];
 
 // Statuses that can be cancelled (active jobs)
-const CANCELLABLE_STATUSES = ['queued', 'packaging', 'uploading'];
+const CANCELLABLE_STATUSES = ['queued', 'packaging', 'testing', 'uploading'];
 // Statuses that can be force-dismissed by the user
-const DISMISSABLE_STATUSES = ['queued', 'packaging', 'uploading', 'completed', 'failed'];
+const DISMISSABLE_STATUSES = ['queued', 'packaging', 'testing', 'uploading', 'completed', 'failed'];
 
 export async function POST(request: NextRequest) {
   try {

@@ -52,7 +52,7 @@ export async function GET() {
     const stats: PackagerStats = {
       activePackagers: 0, // Will be calculated below
       queuedJobs: jobStats.queued,
-      processingJobs: jobStats.packaging + jobStats.uploading,
+      processingJobs: jobStats.packaging + jobStats.testing + jobStats.uploading,
       recentCompletedJobs: jobStats.deployed,
       recentFailedJobs: jobStats.failed,
     };

@@ -11,7 +11,7 @@ import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 
 interface PackageCallbackBody {
   jobId: string;
-  status: 'packaging' | 'uploading' | 'deployed' | 'failed' | 'duplicate_skipped';
+  status: 'packaging' | 'testing' | 'uploading' | 'deployed' | 'failed' | 'duplicate_skipped';
   message?: string;
   progress?: number;
 
@@ -32,7 +32,7 @@ interface PackageCallbackBody {
   runUrl?: string;
 
   // Enhanced error fields
-  errorStage?: 'download' | 'package' | 'upload' | 'authenticate' | 'finalize' | 'unknown';
+  errorStage?: 'download' | 'package' | 'test' | 'upload' | 'authenticate' | 'finalize' | 'unknown';
   errorCategory?: 'network' | 'validation' | 'permission' | 'installer' | 'intune_api' | 'system';
   errorCode?: string;
   errorDetails?: Record<string, unknown>;

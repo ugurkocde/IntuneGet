@@ -21,6 +21,7 @@ import {
   Monitor,
   UserCircle,
   Trash2,
+  FlaskConical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { ProgressStepper } from '@/components/ProgressStepper';
+import { TestSubStepper } from '@/components/TestSubStepper';
 import { ErrorDisplay } from '@/components/ErrorDisplay';
 import { PageHeader, AnimatedStatCard, StatCardGrid, AnimatedEmptyState, SkeletonGrid } from '@/components/dashboard';
 import type { PackageAssignment } from '@/types/upload';
@@ -50,7 +52,7 @@ interface PackagingJob {
   publisher: string;
   architecture: string;
   installer_type: string;
-  status: 'queued' | 'packaging' | 'completed' | 'failed' | 'uploading' | 'deployed' | 'cancelled' | 'duplicate_skipped';
+  status: 'queued' | 'packaging' | 'testing' | 'completed' | 'failed' | 'uploading' | 'deployed' | 'cancelled' | 'duplicate_skipped';
   status_message?: string;
   progress_percent: number;
   error_message?: string;
@@ -155,7 +157,7 @@ export default function UploadsPage() {
   // Auto-refresh for active jobs
   useEffect(() => {
     const hasActiveJobs = jobs.some((job) =>
-      ['queued', 'packaging', 'uploading'].includes(job.status)
+      ['queued', 'packaging', 'testing', 'uploading'].includes(job.status)
     );
 
     if (!hasActiveJobs) return;
@@ -278,7 +280,7 @@ export default function UploadsPage() {
   const filteredJobs = jobs.filter((job) => {
     switch (filter) {
       case 'active':
-        return ['queued', 'packaging', 'uploading'].includes(job.status);
+        return ['queued', 'packaging', 'testing', 'uploading'].includes(job.status);
       case 'completed':
         return ['completed', 'deployed', 'duplicate_skipped'].includes(job.status);
       case 'failed':
@@ -291,7 +293,7 @@ export default function UploadsPage() {
   const stats = {
     total: jobs.length,
     active: jobs.filter((j) =>
-      ['queued', 'packaging', 'uploading'].includes(j.status)
+      ['queued', 'packaging', 'testing', 'uploading'].includes(j.status)
     ).length,
     completed: jobs.filter((j) => ['completed', 'deployed', 'duplicate_skipped'].includes(j.status)).length,
     failed: jobs.filter((j) => ['failed', 'cancelled'].includes(j.status)).length,
@@ -552,6 +554,13 @@ function UploadJobCard({
       bg: 'bg-accent-cyan/10',
       border: 'border-l-accent-cyan',
     },
+    testing: {
+      icon: FlaskConical,
+      label: 'Testing',
+      color: 'text-status-warning',
+      bg: 'bg-status-warning/10',
+      border: 'border-l-status-warning',
+    },
     uploading: {
       icon: Upload,
       label: 'Uploading',
@@ -598,10 +607,10 @@ function UploadJobCard({
 
   const config = statusConfig[job.status] || statusConfig.queued;
   const StatusIcon = config.icon;
-  const isActive = ['queued', 'packaging', 'uploading'].includes(job.status);
+  const isActive = ['queued', 'packaging', 'testing', 'uploading'].includes(job.status);
   const isStale = isActive && (Date.now() - new Date(job.updated_at).getTime()) > 30 * 60 * 1000;
   // Allow cancelling active jobs or dismissing completed/failed jobs
-  const isCancellable = ['queued', 'packaging', 'uploading'].includes(job.status);
+  const isCancellable = ['queued', 'packaging', 'testing', 'uploading'].includes(job.status);
   const isDismissable = ['completed', 'failed', 'duplicate_skipped'].includes(job.status);
   const canRemove = isCancellable || isDismissable;
 
@@ -765,6 +774,16 @@ function UploadJobCard({
               errorStage={job.error_stage}
             />
           )}
+
+          {/* Test sub-stepper for testing phase */}
+          <AnimatePresence>
+            {(job.status === 'testing' || (job.status === 'failed' && job.error_stage === 'test')) && (
+              <TestSubStepper
+                statusMessage={job.status_message}
+                isJobFailed={job.status === 'failed'}
+              />
+            )}
+          </AnimatePresence>
 
           {/* Error message */}
           {job.status === 'failed' && (job.error_message || job.error_code) && (

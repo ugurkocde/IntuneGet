@@ -80,6 +80,7 @@ export interface UploadHistoryRecord {
 export interface JobStats {
   queued: number;
   packaging: number;
+  testing: number;
   uploading: number;
   deployed: number;
   failed: number;

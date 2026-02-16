@@ -57,6 +57,9 @@ docker-compose.override.yml
 # OS files
 Thumbs.db
 
+# Playwright MCP logs
+.playwright-mcp/
+
 # Packager
 packager/node_modules/
 packager/dist/

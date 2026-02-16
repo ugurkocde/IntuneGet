@@ -156,7 +156,7 @@ export const supabaseDb: DatabaseAdapter = {
       const supabase = createServerClient();
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const terminalStatuses = ['completed', 'deployed', 'failed', 'cancelled', 'duplicate_skipped'];
-      const activeStatuses = ['queued', 'packaging', 'uploading'];
+      const activeStatuses = ['queued', 'packaging', 'testing', 'uploading'];
 
       // Fetch jobs: either active (any age) or terminal within last 7 days
       const { data, error } = await supabase
@@ -354,6 +354,7 @@ export const supabaseDb: DatabaseAdapter = {
       const stats: JobStats = {
         queued: 0,
         packaging: 0,
+        testing: 0,
         uploading: 0,
         deployed: 0,
         failed: 0,

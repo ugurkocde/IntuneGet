@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import Script from "next/script";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { MicrosoftAuthProvider } from "@/components/providers/MicrosoftAuthProvider";
@@ -8,10 +7,11 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { UserSettingsProvider } from "@/components/providers/UserSettingsProvider";
 import { MspProvider } from "@/contexts/MspContext";
+import { CookieConsentBanner } from '@/components/consent/CookieConsentBanner';
+import { PlausibleLoader } from '@/components/analytics/PlausibleLoader';
 
 // Analytics configuration
 const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
-const ANALYTICS_ENABLED = Boolean(PLAUSIBLE_DOMAIN);
 
 const inter = localFont({
   src: "./fonts/InterVariable.woff2",
@@ -182,15 +182,17 @@ export default function RootLayout({
     <QueryProvider>
       <MicrosoftAuthProvider>
         <UserSettingsProvider>
-          <ThemeProvider>
-            <MspProvider>
-              {children}
-              <Toaster />
-            </MspProvider>
-          </ThemeProvider>
-        </UserSettingsProvider>
-      </MicrosoftAuthProvider>
-    </QueryProvider>
+              <ThemeProvider>
+                <MspProvider>
+                  {children}
+                  <PlausibleLoader domain={PLAUSIBLE_DOMAIN} />
+                  <CookieConsentBanner plausibleDomain={PLAUSIBLE_DOMAIN} />
+                  <Toaster />
+                </MspProvider>
+              </ThemeProvider>
+            </UserSettingsProvider>
+          </MicrosoftAuthProvider>
+        </QueryProvider>
   );
 
   return (
@@ -244,14 +246,6 @@ export default function RootLayout({
             __html: JSON.stringify(websiteJsonLd),
           }}
         />
-        {ANALYTICS_ENABLED && PLAUSIBLE_DOMAIN && (
-          <Script
-            defer
-            data-domain={PLAUSIBLE_DOMAIN}
-            src="https://plausible.io/js/script.js"
-            strategy="afterInteractive"
-          />
-        )}
       </head>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}

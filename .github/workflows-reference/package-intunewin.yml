@@ -272,11 +272,87 @@ jobs:
             }
           }
 
+      - name: Test package installation
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+
+          try {
+            $env:INPUT_PACKAGE_DIR = ".\package"
+            $env:INPUT_DETECTION_RULES = $env:DETECTION_RULES
+            $env:INPUT_WINGET_ID = $env:WINGET_ID
+            $env:INPUT_VERSION = $env:VERSION
+            $env:INPUT_INSTALL_SCOPE = $env:INSTALL_SCOPE
+            $env:INPUT_INSTALLER_TYPE = $env:INSTALLER_TYPE
+            $env:INPUT_TIMEOUT_SECONDS = "300"
+
+            & "$env:GITHUB_WORKSPACE\.github\scripts\Test-PSADTPackage.ps1"
+
+            $results = Get-Content ".\test-results.json" | ConvertFrom-Json
+            if (-not $results.passed) {
+              $failMsg = "Package test failed: $($results.failureReason)"
+              Send-Callback -Body @{
+                jobId = $env:JOB_ID
+                status = "failed"
+                message = $failMsg
+                progress = 0
+                errorStage = "test"
+                errorCategory = "validation"
+                errorCode = $results.failureReason
+                errorDetails = @{
+                  testResults = $results
+                  displayName = $env:DISPLAY_NAME
+                  version = $env:VERSION
+                }
+              } -CallbackUrl $env:CALLBACK_URL -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+              $env:ERROR_SENT = "true"
+              throw $failMsg
+            }
+
+            Send-Callback -Body @{
+              jobId    = $env:JOB_ID
+              status   = "testing"
+              message  = "Package test passed"
+              progress = 62
+            } -CallbackUrl $env:CALLBACK_URL -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+
+            Write-Host "Package test passed in $($results.totalDuration_ms)ms"
+
+          } catch {
+            if ($env:ERROR_SENT -ne "true") {
+              Send-Callback -Body @{
+                jobId = $env:JOB_ID
+                status = "failed"
+                message = "Package test error: $($_.Exception.Message)"
+                progress = 0
+                errorStage = "test"
+                errorCategory = "validation"
+                errorCode = "PACKAGE_TEST_ERROR"
+                errorDetails = @{ error = $_.Exception.Message }
+              } -CallbackUrl $env:CALLBACK_URL -CallbackSecret $env:CALLBACK_SECRET | Out-Null
+            }
+            throw
+          }
+
+      - name: Upload test debug logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-debug-logs
+          path: |
+            test-debug.log
+            test-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Clean up temp files
         run: |
           Remove-Item -Path ".\installer" -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item -Path ".\psadt" -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item -Path ".\package" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path ".\test-results.json" -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path ".\test-debug.log" -Force -ErrorAction SilentlyContinue
 
       - name: Authenticate to Microsoft Graph
         env:

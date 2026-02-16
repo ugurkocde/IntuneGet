@@ -123,8 +123,12 @@ export default function PrivacyPage() {
                 views, referrers, and device types.
               </li>
               <li>
-                Your consent preference for analytics is stored in localStorage
-                (not a cookie) and remains on your device only.
+                Your consent choice is managed by the cookie banner and stored in
+                localStorage (not a cookie) and remains on your device only.
+              </li>
+              <li>
+                You can revisit this page anytime to review what enabling or
+                disabling analytics changes.
               </li>
             </ul>
           </section>

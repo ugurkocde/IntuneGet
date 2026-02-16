@@ -10,6 +10,7 @@ import {
   XCircle,
   Loader2,
   ExternalLink,
+  FlaskConical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
@@ -78,6 +79,8 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       case 'packaging':
       case 'uploading':
         return <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />;
+      case 'testing':
+        return <FlaskConical className="w-4 h-4 text-amber-500" />;
       default:
         return <Clock className="w-4 h-4 text-text-muted" />;
     }
@@ -93,6 +96,8 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
         return 'Packaging';
       case 'uploading':
         return 'Uploading';
+      case 'testing':
+        return 'Testing';
       case 'queued':
         return 'Queued';
       default:
@@ -236,6 +241,7 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                         job.status === 'completed' && 'text-green-500',
                         job.status === 'failed' && 'text-red-500',
                         (job.status === 'packaging' || job.status === 'uploading') && 'text-accent-cyan',
+                        job.status === 'testing' && 'text-amber-500',
                         job.status === 'queued' && 'text-text-muted'
                       )}>
                         {getStatusText(job.status)}

@@ -11,7 +11,7 @@ import { createServerClient } from '@/lib/supabase';
 const STALE_JOB_TIMEOUT_MINUTES = 30;
 
 // Intermediate states that indicate a job might be stuck
-const INTERMEDIATE_STATES = ['queued', 'packaging', 'uploading'];
+const INTERMEDIATE_STATES = ['queued', 'packaging', 'testing', 'uploading'];
 
 export async function POST(request: NextRequest) {
   try {

@@ -126,8 +126,8 @@ export function ProgressStepper({
           isJobFailed ? 'text-status-error' : 'text-text-secondary'
         )}>
           {isJobFailed
-            ? statusMessage || 'Failed'
-            : statusMessage || currentStage?.description || 'Processing...'}
+            ? (statusMessage?.replace(/^\[test:\d+\/\d+\]\s*/, '') || 'Failed')
+            : (statusMessage?.replace(/^\[test:\d+\/\d+\]\s*/, '') || currentStage?.description || 'Processing...')}
         </span>
         <div className="flex items-center gap-2 text-text-muted">
           <Clock className="w-3.5 h-3.5" />

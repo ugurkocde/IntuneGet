@@ -278,6 +278,7 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
       async getStats(): Promise<{
         queued: number;
         packaging: number;
+        testing: number;
         uploading: number;
         deployed: number;
         failed: number;
@@ -293,6 +294,7 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
         const stats = {
           queued: 0,
           packaging: 0,
+          testing: 0,
           uploading: 0,
           deployed: 0,
           failed: 0,

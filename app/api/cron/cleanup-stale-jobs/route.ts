@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const STALE_JOB_TIMEOUT_MINUTES = 30;
-const INTERMEDIATE_STATES = ['queued', 'packaging', 'uploading'];
+const INTERMEDIATE_STATES = ['queued', 'packaging', 'testing', 'uploading'];
 
 export async function GET(request: Request) {
   // Verify cron secret

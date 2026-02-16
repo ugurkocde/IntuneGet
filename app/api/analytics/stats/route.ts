@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     let pending = 0;
     let failed = 0;
 
-    const pendingStatuses = ['queued', 'packaging', 'uploading'];
+    const pendingStatuses = ['queued', 'packaging', 'testing', 'uploading'];
 
     for (const job of allJobs) {
       // 'deployed' is the final success status (uploaded to Intune)
