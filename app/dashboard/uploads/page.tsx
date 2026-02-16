@@ -652,7 +652,7 @@ function UploadJobCard({
       layout
       variants={itemVariants}
       className={cn(
-        'glass-light border border-l-[3px] rounded-xl p-5 transition-all contain-layout',
+        'glass-light border border-l-[3px] rounded-xl p-6 transition-all contain-layout',
         config.border,
         isHighlighted
           ? 'border-accent-cyan/50 border-l-accent-cyan ring-1 ring-accent-cyan/20 shadow-glow-cyan'
@@ -663,20 +663,33 @@ function UploadJobCard({
         {/* Icon */}
         <div
           className={cn(
-            'w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0',
+            'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm relative',
             config.bg
           )}
         >
           <StatusIcon className={cn('w-6 h-6', config.color)} />
+          {isActive && job.status !== 'queued' && !prefersReducedMotion && (
+            <motion.span
+              className="absolute inset-0 rounded-xl"
+              animate={{
+                boxShadow: [
+                  `0 0 0 0px ${job.status === 'testing' ? 'rgba(245, 158, 11, 0.3)' : job.status === 'uploading' ? 'rgba(124, 58, 237, 0.3)' : 'rgba(8, 145, 178, 0.3)'}`,
+                  `0 0 0 6px ${job.status === 'testing' ? 'rgba(245, 158, 11, 0)' : job.status === 'uploading' ? 'rgba(124, 58, 237, 0)' : 'rgba(8, 145, 178, 0)'}`,
+                  `0 0 0 0px ${job.status === 'testing' ? 'rgba(245, 158, 11, 0.3)' : job.status === 'uploading' ? 'rgba(124, 58, 237, 0.3)' : 'rgba(8, 145, 178, 0.3)'}`,
+                ],
+              }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-text-primary font-medium">{job.display_name}</h3>
-              <p className="text-text-muted text-sm">
-                {job.publisher} &middot; v{job.version} &middot; {job.architecture}
+              <h3 className="text-text-primary text-[15px] font-semibold">{job.display_name}</h3>
+              <p className="text-text-secondary text-sm mt-0.5">
+                {job.publisher} <span className="text-overlay/20">|</span> v{job.version} <span className="text-overlay/20">|</span> {job.architecture}
               </p>
               {/* Assignments */}
               {job.package_config?.assignments && job.package_config.assignments.length > 0 && (
@@ -685,12 +698,12 @@ function UploadJobCard({
                     <span
                       key={idx}
                       className={cn(
-                        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium',
+                        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border',
                         assignment.intent === 'required'
-                          ? 'bg-accent-cyan/10 text-accent-cyan'
+                          ? 'bg-accent-cyan/10 text-accent-cyan border-accent-cyan/20'
                           : assignment.intent === 'available'
-                            ? 'bg-status-success/10 text-status-success'
-                            : 'bg-status-error/10 text-status-error'
+                            ? 'bg-status-success/10 text-status-success border-status-success/20'
+                            : 'bg-status-error/10 text-status-error border-status-error/20'
                       )}
                     >
                       {assignment.type === 'allUsers' && <Users className="w-3 h-3" />}
@@ -754,7 +767,7 @@ function UploadJobCard({
               )}
               <span
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5',
+                  'px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 relative overflow-hidden',
                   config.bg,
                   config.color
                 )}
@@ -767,6 +780,13 @@ function UploadJobCard({
                   <StatusIcon className="w-3 h-3" />
                 )}
                 {config.label}
+                {isActive && !prefersReducedMotion && (
+                  <motion.span
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                    animate={{ x: ['-100%', '100%'] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear', repeatDelay: 1 }}
+                  />
+                )}
               </span>
               {isStale && (
                 <span
@@ -818,7 +838,7 @@ function UploadJobCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="border-accent-cyan/30 text-accent-cyan hover:bg-accent-cyan/10"
+                className="border-accent-cyan/30 text-accent-cyan bg-accent-cyan/5 hover:bg-accent-cyan/10"
                 onClick={() => onForceRedeploy(job)}
                 disabled={isRedeploying}
               >
@@ -901,12 +921,12 @@ function UploadJobCard({
 
           {/* Success - deployed to Intune */}
           {job.intune_app_url && job.status !== 'duplicate_skipped' && (
-            <div className="mt-4">
+            <div className="mt-4 p-3 bg-status-success/[0.05] border border-status-success/10 rounded-lg">
               <a
                 href={job.intune_app_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-accent-cyan hover:text-accent-cyan-bright text-sm transition-colors"
+                className="inline-flex items-center gap-2 text-accent-cyan hover:text-accent-cyan-bright text-sm font-medium transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
                 View in Intune Portal
@@ -916,7 +936,7 @@ function UploadJobCard({
           )}
 
           {/* Timestamps */}
-          <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
+          <div className="mt-5 pt-4 border-t border-overlay/[0.05] flex items-center gap-4 text-xs text-text-muted">
             <span title={new Date(job.created_at).toLocaleString()}>
               Created: {formatRelativeTime(job.created_at)}
             </span>

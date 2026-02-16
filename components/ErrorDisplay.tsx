@@ -134,9 +134,9 @@ export function ErrorDisplay({
   // Fallback to basic display if no structured error data
   if (!errorCode && !errorStage && !errorCategory) {
     return (
-      <div className="mt-4 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
+      <div className="mt-4 p-4 bg-status-error/[0.07] border border-status-error/15 rounded-xl">
         <div className="flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-status-error flex-shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-status-error flex-shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="text-status-error/90">{errorMessage || 'Unknown error'}</p>
             {/* Fallback hint for permission-related errors detected from message */}
@@ -167,7 +167,7 @@ export function ErrorDisplay({
   const details = errorDetails as ErrorDetails | null;
 
   return (
-    <div className="mt-4 p-4 bg-status-error/10 border border-status-error/20 rounded-lg space-y-3">
+    <div className="mt-4 p-4 bg-status-error/[0.07] border border-status-error/15 rounded-xl space-y-3">
       {/* Header with stage and code */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -181,7 +181,7 @@ export function ErrorDisplay({
           </div>
         </div>
         {errorCode && (
-          <span className="px-2 py-1 bg-status-error/20 text-status-error text-xs font-mono rounded">
+          <span className="px-2 py-1 bg-status-error/20 border border-status-error/10 text-status-error text-xs font-mono rounded">
             {errorCode}
           </span>
         )}
@@ -228,8 +228,8 @@ export function ErrorDisplay({
 
       {/* Test results detail panel */}
       {details?.testResults && (
-        <div className="text-xs bg-black/50 p-3 rounded border border-white/10 space-y-2">
-          <p className="text-zinc-100 font-medium mb-2">Test Results</p>
+        <div className="text-xs bg-black/40 p-4 rounded-lg border border-white/10 space-y-0">
+          <p className="text-zinc-100 font-medium mb-3">Test Results</p>
           {Object.entries(details.testResults.steps).map(([stepName, step]) => {
             const stepLabels: Record<string, string> = {
               structureValidation: 'Structure Validation',
@@ -238,7 +238,7 @@ export function ErrorDisplay({
             };
             const label = stepLabels[stepName] || stepName;
             return (
-              <div key={stepName} className="flex items-center justify-between">
+              <div key={stepName} className="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     'w-2 h-2 rounded-full',
@@ -256,7 +256,7 @@ export function ErrorDisplay({
               </div>
             );
           })}
-          <div className="pt-1 border-t border-white/10 text-zinc-300">
+          <div className="pt-2.5 mt-1 text-zinc-300 font-medium">
             Total: {details.testResults.totalDuration_ms}ms
           </div>
         </div>
@@ -265,20 +265,23 @@ export function ErrorDisplay({
       {/* Category-specific hint */}
       {hint && (
         <div className={cn(
-          'text-sm p-2 rounded border',
+          'text-sm p-3 rounded-lg border flex items-start gap-2',
           hint.showReVerify
             ? 'bg-status-warning/10 border-status-warning/20 text-status-warning'
             : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
         )}>
-          <p>{hint.message}</p>
-          {hint.showReVerify && (
-            <Link
-              href="/onboarding"
-              className="inline-block mt-2 text-accent-cyan hover:underline"
-            >
-              Re-verify permissions
-            </Link>
-          )}
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <div>
+            <p>{hint.message}</p>
+            {hint.showReVerify && (
+              <Link
+                href="/onboarding"
+                className="inline-block mt-2 text-accent-cyan hover:underline"
+              >
+                Re-verify permissions
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>

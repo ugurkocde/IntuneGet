@@ -29,9 +29,12 @@ export function TestSubStepper({ statusMessage, isJobFailed }: TestSubStepperPro
       animate={{ opacity: 1, height: 'auto' }}
       exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
       transition={{ duration: prefersReducedMotion ? 0.1 : 0.25 }}
-      className="mt-3 ml-1 pl-3 border-l-2 border-overlay/10"
+      className={cn(
+        'mt-3 ml-2 pl-4 border-l-2 bg-overlay/[0.02] rounded-r-lg',
+        isJobFailed ? 'border-status-error/20' : 'border-accent-cyan/20'
+      )}
     >
-      <div className="space-y-1.5 py-1">
+      <div className="space-y-2.5 py-2">
         {TEST_SUBSTEPS.map((step, i) => (
           <SubStepRow
             key={step.id}
@@ -58,40 +61,41 @@ function SubStepRow({
   prefersReducedMotion: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-3">
       {/* Icon circle */}
       <div
         className={cn(
-          'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200',
+          'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200',
           status === 'completed' && 'bg-status-success/20',
           status === 'active' && 'bg-accent-cyan/20',
           status === 'failed' && 'bg-status-error/20',
-          status === 'pending' && 'bg-overlay/5'
+          status === 'pending' && 'bg-overlay/5',
+          status === 'active' && !prefersReducedMotion && 'animate-ring-pulse'
         )}
       >
         {status === 'completed' && (
-          <Check className="w-3 h-3 text-status-success" />
+          <Check className="w-3.5 h-3.5 text-status-success" />
         )}
         {status === 'active' && (
           <Loader2
             className={cn(
-              'w-3 h-3 text-accent-cyan',
+              'w-3.5 h-3.5 text-accent-cyan',
               !prefersReducedMotion && 'animate-spin'
             )}
           />
         )}
         {status === 'failed' && (
-          <XCircle className="w-3 h-3 text-status-error" />
+          <XCircle className="w-3.5 h-3.5 text-status-error" />
         )}
         {status === 'pending' && (
-          <Minus className="w-3 h-3 text-text-muted/50" />
+          <Minus className="w-3.5 h-3.5 text-text-muted/50" />
         )}
       </div>
 
       {/* Label */}
       <span
         className={cn(
-          'text-xs font-medium transition-colors',
+          'text-[13px] font-medium transition-colors',
           status === 'completed' && 'text-status-success',
           status === 'active' && 'text-accent-cyan',
           status === 'failed' && 'text-status-error',
@@ -108,9 +112,13 @@ function SubStepRow({
             initial={prefersReducedMotion ? {} : { opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
             exit={prefersReducedMotion ? {} : { opacity: 0, x: -4 }}
-            transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+            transition={
+              prefersReducedMotion
+                ? { duration: 0 }
+                : { type: 'spring', damping: 25, stiffness: 300 }
+            }
             className={cn(
-              'text-xs',
+              'text-[13px]',
               status === 'active' && 'text-text-secondary',
               status === 'failed' && 'text-status-error/70'
             )}

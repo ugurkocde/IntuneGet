@@ -509,6 +509,15 @@
   }
 }
 
+@keyframes ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0px rgba(8, 145, 178, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(8, 145, 178, 0);
+  }
+}
+
 /* Animation delays */
 .animation-delay-200 { animation-delay: 200ms; }
 .animation-delay-300 { animation-delay: 300ms; }

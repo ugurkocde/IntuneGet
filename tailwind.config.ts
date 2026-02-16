@@ -26,6 +26,7 @@ const config: Config = {
         blob: "blob 7s infinite",
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "gradient-shift": "gradient-shift 8s ease infinite",
+        "ring-pulse": "ring-pulse 2s ease-in-out infinite",
       },
       keyframes: {
         "fade-up": {
@@ -87,6 +88,10 @@ const config: Config = {
         "gradient-shift": {
           "0%, 100%": { backgroundPosition: "0% 50%" },
           "50%": { backgroundPosition: "100% 50%" },
+        },
+        "ring-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0px rgba(8, 145, 178, 0.3)" },
+          "50%": { boxShadow: "0 0 0 6px rgba(8, 145, 178, 0)" },
         },
       },
       backgroundImage: {
