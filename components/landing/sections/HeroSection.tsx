@@ -2,7 +2,8 @@
 
 import { useRef } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { Github, ArrowRight, Star, Users, Upload, BookOpen } from "lucide-react";
+import Image from "next/image";
+import { Github, ArrowRight, Star, Users, Upload, BookOpen, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "../ui/Badge";
 import { GradientOrb } from "../ui/GradientOrb";
@@ -153,6 +154,57 @@ export function HeroSection() {
                   {appsDeployedDisplay}+ apps uploaded
                 </span>
               </div>
+            </FadeIn>
+
+            {/* Sponsor banner */}
+            <FadeIn delay={0.25} animateOnMount duration={0.4} direction="up">
+              <motion.a
+                href="https://www.realmjoin.com"
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="block relative rounded-xl overflow-hidden max-w-lg group"
+                whileHover={shouldReduceMotion ? {} : { scale: 1.01 }}
+                whileTap={shouldReduceMotion ? {} : { scale: 0.995 }}
+                transition={springPresets.snappy}
+              >
+                {/* Outer glow on hover */}
+                <div className="absolute -inset-px rounded-xl bg-gradient-to-r from-orange-500/20 via-orange-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                {/* Card surface */}
+                <div className="relative rounded-xl bg-bg-elevated/80 backdrop-blur-sm border border-overlay/[0.08] group-hover:border-orange-500/20 transition-colors duration-300 p-4">
+                  {/* Left accent bar */}
+                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-gradient-to-b from-orange-400 to-orange-600" />
+
+                  <div className="pl-3">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-orange-400/80">
+                          Sponsor
+                        </span>
+                        <Image
+                          src="/realmjoin-logo.png"
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="rounded-[3px]"
+                        />
+                        <span className="text-sm font-bold text-text-primary group-hover:text-orange-300 transition-colors duration-300">
+                          RealmJoin
+                        </span>
+                        <span className="hidden sm:inline text-xs text-text-muted">
+                          by glueckkanja
+                        </span>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-300 shrink-0" />
+                    </div>
+                    <p className="text-[13px] text-text-secondary leading-relaxed">
+                      IntuneGet is free and community-driven. When your team needs
+                      enterprise app management, process automation, and dedicated
+                      support, RealmJoin is the Intune companion we recommend.
+                    </p>
+                  </div>
+                </div>
+              </motion.a>
             </FadeIn>
           </div>
 
