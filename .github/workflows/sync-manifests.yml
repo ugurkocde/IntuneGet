@@ -286,6 +286,12 @@ jobs:
               apps = apps.slice(0, appLimit);
             }
 
+            // Process in batches
+            // With GITHUB_TOKEN: 5000 req/hr. Without: 60 req/hr.
+            const batchSize = GITHUB_TOKEN ? 20 : 5;
+            const batchDelay = GITHUB_TOKEN ? 500 : 3000;
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+
             console.log(`\n========================================`);
             console.log(`  Sync Winget Manifests`);
             console.log(`========================================`);
@@ -306,12 +312,6 @@ jobs:
             let skippedNoManifest = 0;
             let newVersions = [];
             const startTime = Date.now();
-
-            // Process in batches
-            // With GITHUB_TOKEN: 5000 req/hr. Without: 60 req/hr.
-            const batchSize = GITHUB_TOKEN ? 20 : 5;
-            const batchDelay = GITHUB_TOKEN ? 500 : 3000;
-            const delay = ms => new Promise(r => setTimeout(r, ms));
 
             for (let i = 0; i < apps.length; i += batchSize) {
               const batch = apps.slice(i, i + batchSize);
