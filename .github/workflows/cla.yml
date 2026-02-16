@@ -1,0 +1,42 @@
+name: CLA Assistant
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: contributor-assistant/github-action@v2.6.1
+        if: |
+          (github.event_name == 'pull_request_target') ||
+          (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: "signatures/cla.json"
+          path-to-document: "https://github.com/${{ github.repository }}/blob/main/CLA.md"
+          branch: "main"
+          allowlist: dependabot[bot],github-actions[bot],renovate[bot],allcontributors[bot],imgbot[bot],ugurkocde
+          custom-notsigned-prcomment: |
+            Welcome, and thanks for this PR!
+
+            To keep things moving, we just need a one-time CLA signature. It takes about 5 seconds:
+
+            1. Read the [Contributor License Agreement](https://github.com/${{ github.repository }}/blob/main/CLA.md) (TL;DR: you keep your copyright, we get a license to distribute).
+            2. Reply to **this comment** with the exact text below:
+
+            > I have read the CLA Document and I hereby sign the CLA
+
+            That's it -- you'll never be asked again on future PRs.
+          custom-pr-sign-comment: "I have read the CLA Document and I hereby sign the CLA"
+          custom-allsigned-prcomment: "All contributors have signed the CLA. Thank you!"

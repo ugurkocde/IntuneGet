@@ -1,5 +1,21 @@
 # Contributing to IntuneGet
 
+Thank you for your interest in contributing to IntuneGet.
+
+## Contributor License Agreement (CLA)
+
+IntuneGet is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+
+Before your first pull request can be merged, you must sign the [Contributor License Agreement](CLA.md). This is a one-time requirement. The CLA lets you retain copyright to your contribution while granting the project maintainer the rights needed to distribute and sublicense the work.
+
+**How to sign:** When you open a pull request, a bot will post a comment with instructions. Simply reply with the exact text:
+
+> I have read the CLA Document and I hereby sign the CLA
+
+After signing once, all your future PRs will pass the CLA check automatically.
+
+If your contribution includes code from other sources, you must ensure that it is compatible with AGPL-3.0.
+
 ## Development Setup
 
 ```bash
