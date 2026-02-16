@@ -280,7 +280,6 @@ jobs:
 
           try {
             $env:INPUT_PACKAGE_DIR = ".\package"
-            $env:INPUT_DETECTION_RULES = $env:DETECTION_RULES
             $env:INPUT_WINGET_ID = $env:WINGET_ID
             $env:INPUT_VERSION = $env:VERSION
             $env:INPUT_INSTALL_SCOPE = $env:INSTALL_SCOPE
