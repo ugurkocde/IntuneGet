@@ -342,35 +342,16 @@ export function generateUninstallCommand(
 /**
  * Generate a registry-based uninstall command
  *
- * This searches the Windows registry for the app's UninstallString and executes it.
- * Much more reliable than hardcoded paths because:
- * - Works regardless of where the app was installed
- * - Uses the app's actual uninstaller
- * - Handles version-specific install paths
+ * Returns a marker that tells Create-PSADTPackage.ps1 to use
+ * Uninstall-ADTApplication with the display name. PSADT handles
+ * registry lookup, MSI vs EXE detection, and silent switches
+ * automatically via the app's registered QuietUninstallString.
  */
 function generateRegistryUninstallCommand(
   displayName: string,
-  installerType: string
+  _installerType: string
 ): string {
-  // Determine silent switches based on installer type
-  let silentSwitch: string;
-  switch (installerType) {
-    case 'inno':
-      silentSwitch = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART';
-      break;
-    case 'nullsoft':
-      silentSwitch = '/S';
-      break;
-    case 'burn':
-      silentSwitch = '/quiet /norestart';
-      break;
-    default:
-      silentSwitch = '/S';
-  }
-
-  // Return the display name as a marker - the actual uninstall script
-  // is generated in the PSADT workflow with full PowerShell logic
-  return `REGISTRY_UNINSTALL:${displayName}:${silentSwitch}`;
+  return `REGISTRY_UNINSTALL:${displayName}`;
 }
 
 /**
