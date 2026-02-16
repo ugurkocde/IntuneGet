@@ -79,7 +79,7 @@ jobs:
           const appIds = process.env.APP_IDS;
           const appLimit = parseInt(process.env.APP_LIMIT || '0', 10);
           const syncMode = process.env.SYNC_MODE || 'all';
-          const CHUNK_SIZE = 2000;
+          const CHUNK_SIZE = 1000;
 
           async function run() {
             let total = 0;
@@ -176,7 +176,7 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 3
 
     steps:
       - name: Checkout repository
@@ -224,7 +224,7 @@ jobs:
           const GITHUB_RAW_BASE = process.env.GITHUB_RAW_BASE;
           const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
-          function fetchUrl(url, retries = 3) {
+          function fetchUrl(url, retries = 5) {
             return new Promise((resolve, reject) => {
               const attempt = (retriesLeft) => {
                 const headers = { 'User-Agent': 'IntuneGet-Manifest-Sync' };
@@ -237,17 +237,23 @@ jobs:
                     return;
                   }
                   if (res.statusCode === 403 || res.statusCode === 429) {
-                    const retryAfter = parseInt(res.headers['retry-after'] || '5', 10);
+                    // Use Retry-After header, cap at 30s to avoid extremely long waits
+                    const retryAfter = Math.min(parseInt(res.headers['retry-after'] || '3', 10), 30);
                     if (retriesLeft > 0) {
                       setTimeout(() => attempt(retriesLeft - 1), retryAfter * 1000);
                       return;
                     }
+                    // Drain response body before rejecting
+                    res.resume();
+                    reject(new Error(`HTTP ${res.statusCode} (rate limited, retries exhausted)`));
+                    return;
                   }
                   if (res.statusCode !== 200) {
                     if (retriesLeft > 0 && res.statusCode >= 500) {
                       setTimeout(() => attempt(retriesLeft - 1), 1000);
                       return;
                     }
+                    res.resume();
                     reject(new Error(`HTTP ${res.statusCode}`));
                     return;
                   }
@@ -285,6 +291,7 @@ jobs:
             return `https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/${firstLetter}/${encodeURIComponent(publisher)}/${namePath}`;
           }
 
+          let versionFetchErrors = 0;
           async function fetchVersions(wingetId) {
             const url = buildVersionListUrl(wingetId);
             if (!url) return [];
@@ -299,6 +306,11 @@ jobs:
                 .filter(name => /^\d+[\d._-]*\d*$/.test(name) || name.includes('.'))
                 .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
             } catch (e) {
+              versionFetchErrors++;
+              // Log first few errors to help diagnose rate limiting
+              if (versionFetchErrors <= 5) {
+                console.error(`  [DEBUG] fetchVersions failed for ${wingetId}: ${e.message}`);
+              }
               return [];
             }
           }
@@ -368,8 +380,11 @@ jobs:
               apps = appIds.split(',').map(id => ({ winget_id: id.trim() }));
             }
 
-            const batchSize = GITHUB_TOKEN ? 20 : 5;
-            const batchDelay = GITHUB_TOKEN ? 500 : 3000;
+            const shardCount = parseInt(totalShards, 10) || 1;
+            // Scale batch size down and delay up when running multiple shards
+            // to stay within GitHub's secondary rate limits (~100 concurrent requests)
+            const batchSize = GITHUB_TOKEN ? Math.max(5, Math.floor(20 / shardCount)) : 5;
+            const batchDelay = GITHUB_TOKEN ? Math.max(500, 500 * shardCount) : 3000;
             const delay = ms => new Promise(r => setTimeout(r, ms));
 
             console.log(`\n========================================`);
