@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { useCartStore } from '@/stores/cart-store';
 
 type SettingsTab = 'general' | 'permissions' | 'notifications' | 'exports' | 'data';
-type PreferenceKey = 'theme' | 'cart';
+type PreferenceKey = 'theme' | 'cart' | 'assignments';
 
 interface PermissionStatusState {
   checked: boolean;
@@ -65,7 +65,7 @@ export default function SettingsPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activePreferenceSave, setActivePreferenceSave] = useState<PreferenceKey | null>(null);
   const [lastUpdatedPreference, setLastUpdatedPreference] = useState<PreferenceKey | null>(null);
-  const { settings: userSettings, isSaving, syncError, setCartAutoOpenOnAdd } = useUserSettings();
+  const { settings: userSettings, isSaving, syncError, setCartAutoOpenOnAdd, setCarryOverAssignments } = useUserSettings();
   const autoOpenOnAdd = userSettings.cartAutoOpenOnAdd;
   const setAutoOpenOnAddStore = useCartStore((state) => state.setAutoOpenOnAdd);
   const { theme, setTheme } = useTheme();
@@ -95,6 +95,19 @@ export default function SettingsPage() {
       }
     },
     [setAutoOpenOnAddStore, setCartAutoOpenOnAdd]
+  );
+
+  const handleAssignmentsToggle = useCallback(
+    async (value: boolean) => {
+      setActivePreferenceSave('assignments');
+      setLastUpdatedPreference('assignments');
+      try {
+        await setCarryOverAssignments(value);
+      } finally {
+        setActivePreferenceSave(null);
+      }
+    },
+    [setCarryOverAssignments]
   );
 
   const handleCheckPermissions = async () => {
@@ -429,6 +442,34 @@ export default function SettingsPage() {
                           <span className="text-xs text-text-muted">Saving...</span>
                         )}
                         {!isSaving && syncError && lastUpdatedPreference === 'cart' && (
+                          <span className="text-xs text-status-warning">Saved locally</span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.section>
+
+                  {/* Carry over assignments card */}
+                  <motion.section
+                    variants={itemVariants}
+                    className="glass-light rounded-xl p-6 border border-overlay/5 hover:border-accent-cyan/20 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-text-primary font-medium">Carry over assignments on app updates</p>
+                        <p className="text-sm text-text-muted">
+                          When enabled, assignments from the previous app version are copied to the new version and removed from the old app. When disabled, new app versions are created without assignments.
+                        </p>
+                      </div>
+                      <div className="flex min-w-28 flex-col items-end gap-1">
+                        <ToggleSwitch
+                          checked={userSettings.carryOverAssignments}
+                          onChange={(value) => void handleAssignmentsToggle(value)}
+                          disabled={isSaving && activePreferenceSave !== 'assignments'}
+                        />
+                        {isSaving && activePreferenceSave === 'assignments' && (
+                          <span className="text-xs text-text-muted">Saving...</span>
+                        )}
+                        {!isSaving && syncError && lastUpdatedPreference === 'assignments' && (
                           <span className="text-xs text-status-warning">Saved locally</span>
                         )}
                       </div>

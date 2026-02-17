@@ -9,6 +9,7 @@ export interface UserSettings {
   viewMode: ViewMode;
   quickStartDismissed: boolean;
   onboardingCompleted: boolean;
+  carryOverAssignments: boolean;
 }
 
 export type UserSettingsUpdate = Partial<UserSettings>;
@@ -21,6 +22,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   viewMode: "grid",
   quickStartDismissed: false,
   onboardingCompleted: false,
+  carryOverAssignments: false,
 };
 
 export interface UserSettingsResponse {

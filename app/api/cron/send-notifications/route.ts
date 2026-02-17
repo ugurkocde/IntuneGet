@@ -187,6 +187,8 @@ export async function GET(request: Request) {
             },
           };
 
+          let delivered = false;
+
           // Send email if enabled and configured
           if (prefs?.email_enabled && isEmailConfigured()) {
             // Check frequency
@@ -215,12 +217,17 @@ export async function GET(request: Request) {
                 });
 
                 if (result.success) {
+                  delivered = true;
                   emailsSent++;
                 } else {
                   errors.push(
                     `Email to ${emailAddress} failed: ${result.error}`
                   );
                 }
+              } else {
+                errors.push(
+                  `No email address available for user ${userId} (email_enabled is true but no address found)`
+                );
               }
             }
           }
@@ -260,14 +267,19 @@ export async function GET(request: Request) {
             });
 
             if (result.success) {
+              delivered = true;
               webhooksSent++;
             } else {
               errors.push(`Webhook ${webhook.name} failed: ${result.error}`);
             }
           }
 
-          // Mark updates as notified
-          notifiedUpdateIds.push(...tenantUpdateList.map((u) => u.id));
+          // Only mark updates as notified when at least one channel delivered.
+          // Undelivered updates will be retried on the next cron run until the
+          // user configures a valid email address or webhook.
+          if (delivered) {
+            notifiedUpdateIds.push(...tenantUpdateList.map((u) => u.id));
+          }
         }
       }
 

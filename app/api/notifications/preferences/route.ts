@@ -117,11 +117,13 @@ export async function PUT(request: NextRequest) {
     const supabase = createServerClient();
 
     // Upsert notification preferences
+    // When no custom email is provided, store the JWT email as fallback so the
+    // cron job can always resolve an address for users with email_enabled: true.
     const updateData: NotificationPreferencesUpsert = {
       user_id: user.userId,
       ...(body.email_enabled !== undefined && { email_enabled: body.email_enabled }),
       ...(body.email_frequency && { email_frequency: body.email_frequency as NotificationPreferencesUpsert['email_frequency'] }),
-      ...(body.email_address !== undefined && { email_address: body.email_address }),
+      email_address: body.email_address || (user.userEmail && user.userEmail !== 'unknown' ? user.userEmail : null),
       ...(body.notify_critical_only !== undefined && {
         notify_critical_only: body.notify_critical_only,
       }),

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   RefreshCw,
@@ -46,6 +47,7 @@ import {
   useUpdatePolicy,
 } from '@/hooks/use-updates';
 import { useMspOptional } from '@/hooks/useMspOptional';
+import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { fadeIn } from '@/lib/animations/variants';
 import { cn } from '@/lib/utils';
 import { classifyUpdateType } from '@/types/update-policies';
@@ -79,6 +81,7 @@ export default function UpdatesPage() {
     errors: { name: string; error: string }[];
   }>({ phase: 'confirm', completed: 0, failed: 0, total: 0, errors: [] });
   const shouldReduceMotion = useReducedMotion();
+  const { settings: userSettings } = useUserSettings();
   const { isMspUser, selectedTenantId, managedTenants } = useMspOptional();
   const tenantId = isMspUser ? selectedTenantId || undefined : undefined;
   const hasGrantedManagedTenants = managedTenants.some(
@@ -573,10 +576,26 @@ export default function UpdatesPage() {
                     <span className="mt-1 w-1 h-1 rounded-full bg-violet-500 flex-shrink-0" />
                     The existing app in Intune will not be modified
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1 w-1 h-1 rounded-full bg-violet-500 flex-shrink-0" />
-                    You will need to assign groups after deployment
-                  </li>
+                  {userSettings.carryOverAssignments ? (
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 w-1 h-1 rounded-full bg-violet-500 flex-shrink-0" />
+                      Assignments will be carried over from the existing app
+                    </li>
+                  ) : (
+                    <>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 w-1 h-1 rounded-full bg-violet-500 flex-shrink-0" />
+                        You will need to assign groups after deployment
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 w-1 h-1 rounded-full bg-violet-500 flex-shrink-0" />
+                        You can enable automatic assignment carryover in{' '}
+                        <Link href="/dashboard/settings" className="text-accent-cyan hover:text-accent-cyan-bright transition-colors underline underline-offset-2">
+                          Settings
+                        </Link>
+                      </li>
+                    </>
+                  )}
                 </ul>
               </div>
             </DialogDescription>

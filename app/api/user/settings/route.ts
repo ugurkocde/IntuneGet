@@ -55,6 +55,10 @@ function sanitizeSettings(payload: Record<string, unknown>): UserSettingsUpdate 
     updates.onboardingCompleted = payload.onboardingCompleted;
   }
 
+  if (isBoolean(payload.carryOverAssignments)) {
+    updates.carryOverAssignments = payload.carryOverAssignments;
+  }
+
   return updates;
 }
 

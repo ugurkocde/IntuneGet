@@ -34,6 +34,7 @@ type UserSettingsContextValue = {
   setViewMode: (mode: ViewMode) => Promise<void>;
   setQuickStartDismissed: (dismissed: boolean) => Promise<void>;
   setOnboardingCompleted: (completed: boolean) => Promise<void>;
+  setCarryOverAssignments: (enabled: boolean) => Promise<void>;
 };
 
 const UserSettingsContext = createContext<UserSettingsContextValue | null>(null);
@@ -45,6 +46,7 @@ const SELECTED_TENANT_KEY = "msp_selected_tenant_id";
 const VIEW_MODE_KEY = "intuneget-view-mode";
 const QUICK_START_DISMISSED_KEY = "intuneget-quick-start-dismissed";
 const ONBOARDING_COMPLETED_KEY = "intuneget-onboarding-completed";
+const CARRY_OVER_ASSIGNMENTS_KEY = "intuneget-carry-over-assignments";
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === "light" || value === "dark";
@@ -133,6 +135,7 @@ function readLegacyUserSettings(): {
   const viewModeValue = window.localStorage.getItem(VIEW_MODE_KEY);
   const quickStartDismissedValue = readBooleanStorageValue(QUICK_START_DISMISSED_KEY);
   const onboardingCompletedValue = readBooleanStorageValue(ONBOARDING_COMPLETED_KEY);
+  const carryOverAssignmentsValue = readBooleanStorageValue(CARRY_OVER_ASSIGNMENTS_KEY);
 
   const hasTheme = isThemeMode(themeValue);
   const fallbackTheme = getSystemPrefersDark() ? "dark" : DEFAULT_USER_SETTINGS.theme;
@@ -142,6 +145,7 @@ function readLegacyUserSettings(): {
   const hasViewMode = viewModeValue === "grid" || viewModeValue === "list";
   const hasQuickStartDismissed = quickStartDismissedValue !== null;
   const hasOnboardingCompleted = onboardingCompletedValue !== null;
+  const hasCarryOverAssignments = carryOverAssignmentsValue !== null;
 
   return {
     settings: {
@@ -153,6 +157,7 @@ function readLegacyUserSettings(): {
       ...(hasViewMode ? { viewMode: viewModeValue as "grid" | "list" } : {}),
       ...(hasQuickStartDismissed ? { quickStartDismissed: quickStartDismissedValue === true } : {}),
       ...(hasOnboardingCompleted ? { onboardingCompleted: onboardingCompletedValue === true } : {}),
+      ...(hasCarryOverAssignments ? { carryOverAssignments: carryOverAssignmentsValue === true } : {}),
     },
     hasTheme,
     hasSidebarCollapsed,
@@ -238,6 +243,10 @@ function persistLocally(update: UserSettingsUpdate) {
 
   if (update.onboardingCompleted !== undefined) {
     writeBooleanSetting(ONBOARDING_COMPLETED_KEY, update.onboardingCompleted);
+  }
+
+  if (update.carryOverAssignments !== undefined) {
+    writeBooleanSetting(CARRY_OVER_ASSIGNMENTS_KEY, update.carryOverAssignments);
   }
 }
 
@@ -430,6 +439,13 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     [updateSettings]
   );
 
+  const setCarryOverAssignments = useCallback(
+    async (carryOverAssignments: boolean) => {
+      await updateSettings({ carryOverAssignments });
+    },
+    [updateSettings]
+  );
+
   const value = useMemo<UserSettingsContextValue>(
     () => ({
       settings,
@@ -444,6 +460,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       setViewMode,
       setQuickStartDismissed,
       setOnboardingCompleted,
+      setCarryOverAssignments,
     }),
     [
       hasStoredSettings,
@@ -457,6 +474,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       setViewMode,
       setQuickStartDismissed,
       setOnboardingCompleted,
+      setCarryOverAssignments,
       syncError,
     ]
   );

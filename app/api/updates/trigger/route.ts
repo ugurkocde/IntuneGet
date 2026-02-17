@@ -107,16 +107,27 @@ function parsePackageAssignments(packageConfig: unknown): PackageAssignment[] {
     }));
 }
 
-function parseAssignmentMigration(packageConfig: unknown): DeploymentConfig['assignmentMigration'] {
+function parseAssignmentMigration(packageConfig: unknown): DeploymentConfig['assignmentMigration'] | undefined {
   if (!isObject(packageConfig)) {
-    return {
-      carryOverAssignments: false,
-      removeAssignmentsFromPreviousApp: false,
-    };
+    return undefined;
   }
 
   const typedConfig = packageConfig as PackageConfigWithAssignments;
   const nested = typedConfig.assignmentMigration;
+
+  // If no migration config was explicitly set, return undefined so the
+  // caller can fall back to the user's global setting.
+  const hasExplicitNested = nested && (
+    nested.carryOverAssignments !== undefined ||
+    nested.removeAssignmentsFromPreviousApp !== undefined
+  );
+  const hasExplicitTop =
+    typedConfig.carryOverAssignments !== undefined ||
+    typedConfig.removeAssignmentsFromPreviousApp !== undefined;
+
+  if (!hasExplicitNested && !hasExplicitTop) {
+    return undefined;
+  }
 
   const carryOverAssignments = Boolean(
     nested?.carryOverAssignments ?? typedConfig.carryOverAssignments
@@ -322,7 +333,30 @@ export async function POST(request: NextRequest) {
             const packageConfig = packagingJob.package_config;
             const parsedAssignments = parsePackageAssignments(packageConfig);
             const parsedCategories = parsePackageCategories(packageConfig);
-            const assignmentMigration = parseAssignmentMigration(packageConfig);
+            let assignmentMigration = parseAssignmentMigration(packageConfig);
+
+            // If no explicit migration config was stored on the packaging job,
+            // fall back to the user's global carryOverAssignments setting.
+            if (!assignmentMigration) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { data: userSettingsRow, error: settingsError } = await (supabase as any)
+                .from('user_settings')
+                .select('settings')
+                .eq('user_id', user.userId)
+                .maybeSingle();
+              if (settingsError) {
+                console.warn(
+                  `Failed to read user_settings for ${user.userId}: ${settingsError.message}`
+                );
+              }
+              const globalCarryOver = Boolean(
+                (userSettingsRow?.settings as Record<string, unknown> | null)?.carryOverAssignments
+              );
+              assignmentMigration = {
+                carryOverAssignments: globalCarryOver,
+                removeAssignmentsFromPreviousApp: globalCarryOver,
+              };
+            }
 
             deploymentConfig = {
               displayName: packagingJob.display_name,
