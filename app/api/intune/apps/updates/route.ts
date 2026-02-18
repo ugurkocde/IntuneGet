@@ -143,28 +143,35 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch Win32 apps from Intune using isof filter
+    // Fetch Win32 apps from Intune using isof filter with pagination
     // Note: We can't use $select with derived type fields (like displayVersion) when using type filters
-    const graphResponse = await fetch(
-      `${GRAPH_API_BASE}/deviceAppManagement/mobileApps?$filter=isof('microsoft.graph.win32LobApp')`,
-      {
+    const apps: IntuneWin32App[] = [];
+    let nextUrl: string | null = `${GRAPH_API_BASE}/deviceAppManagement/mobileApps?$filter=isof('microsoft.graph.win32LobApp')&$top=100`;
+
+    while (nextUrl) {
+      const graphResponse: Response = await fetch(nextUrl, {
         headers: {
           Authorization: `Bearer ${graphToken}`,
           'Content-Type': 'application/json',
         },
-      }
-    );
+      });
 
-    if (!graphResponse.ok) {
-      const errorText = await graphResponse.text();
-      return NextResponse.json(
-        { error: 'Failed to fetch apps from Intune', details: errorText },
-        { status: graphResponse.status }
-      );
+      if (!graphResponse.ok) {
+        const errorText = await graphResponse.text();
+        return NextResponse.json(
+          { error: 'Failed to fetch apps from Intune', details: errorText },
+          { status: graphResponse.status }
+        );
+      }
+
+      const graphData = await graphResponse.json();
+      const pageApps: IntuneWin32App[] = graphData.value || [];
+      apps.push(...pageApps);
+
+      nextUrl = graphData['@odata.nextLink'] || null;
     }
 
-    const graphData = await graphResponse.json();
-    const apps: IntuneWin32App[] = graphData.value || [];
+    const liveIntuneAppIds = new Set(apps.map((a) => a.id));
 
     // Build explicit app-id to winget-id mappings from deployment history.
     const uploadHistoryWingetMap = new Map<string, string>();
@@ -180,7 +187,7 @@ export async function GET(request: NextRequest) {
         if (row.intune_app_id && row.winget_id) {
           uploadHistoryWingetMap.set(row.intune_app_id, row.winget_id);
         }
-        if (row.intune_app_id && row.version) {
+        if (row.intune_app_id && row.version && liveIntuneAppIds.has(row.intune_app_id)) {
           uploadHistoryVersionMap.set(row.intune_app_id, row.version);
         }
       }

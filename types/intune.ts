@@ -5,7 +5,7 @@
 
 // Win32 LOB App
 export interface IntuneWin32App {
-  id?: string;
+  id: string;
   displayName: string;
   description?: string;
   publisher?: string;
