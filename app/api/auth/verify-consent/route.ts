@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
+import { parseAccessToken } from '@/lib/auth-utils';
 import {
   logTokenAcquired,
   logPermissionVerification,
@@ -381,39 +382,18 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
       );
     }
 
-    // Decode the token to get tenant ID
-    const accessToken = authHeader.slice(7);
-    let tenantId: string;
-    let userId: string;
-    let userEmail: string;
-
-    try {
-      const payload = JSON.parse(
-        Buffer.from(accessToken.split('.')[1], 'base64').toString()
-      );
-      tenantId = payload.tid;
-      userId = payload.oid || payload.sub;
-      userEmail = payload.preferred_username || payload.email || '';
-
-      if (!tenantId) {
-        return NextResponse.json(
-          { verified: false, tenantId: '', message: 'No tenant ID in token' },
-          { status: 400 }
-        );
-      }
-
-      if (!userId) {
-        return NextResponse.json(
-          { verified: false, tenantId: '', message: 'No user ID in token' },
-          { status: 400 }
-        );
-      }
-    } catch {
+    // Verify the token against Microsoft Graph before trusting any claims
+    const userInfo = await parseAccessToken(authHeader);
+    if (!userInfo) {
       return NextResponse.json(
-        { verified: false, tenantId: '', message: 'Invalid token format' },
+        { verified: false, tenantId: '', message: 'Authentication failed' },
         { status: 401 }
       );
     }
+
+    let tenantId = userInfo.tenantId;
+    const userId = userInfo.userId;
+    const userEmail = userInfo.userEmail;
 
     const supabase = createServerClient();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
