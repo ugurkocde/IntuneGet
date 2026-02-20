@@ -547,8 +547,8 @@ export default function SettingsPage() {
                         checking={isChecking}
                       />
                       <PermissionItem
-                        name="Group.Read.All"
-                        description="Read group memberships for app assignment"
+                        name="GroupMember.Read.All"
+                        description="Read group information for app assignment"
                         granted={permissionStatus?.permissions.groupRead ?? null}
                         checking={isChecking}
                       />

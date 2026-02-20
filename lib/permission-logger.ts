@@ -18,7 +18,7 @@ export interface PermissionLogContext {
 
 const REQUIRED_INTUNE_PERMISSIONS = [
   'DeviceManagementApps.ReadWrite.All',
-  'Group.Read.All',
+  'GroupMember.Read.All',
 ];
 
 const OPTIONAL_PERMISSIONS = [
@@ -61,7 +61,7 @@ export function logTokenAcquired(
     granted: hasRequiredPermissions,
     details: {
       hasIntunePermission: roles.includes('DeviceManagementApps.ReadWrite.All'),
-      hasGroupRead: roles.includes('Group.Read.All'),
+      hasGroupRead: roles.includes('GroupMember.Read.All'),
       totalRoles: roles.length,
     },
   });
@@ -91,9 +91,9 @@ export function logPermissionVerification(
   }
 
   if (permissions.groupRead === true) {
-    grantedPermissions.push('Group.Read.All');
+    grantedPermissions.push('GroupMember.Read.All');
   } else if (permissions.groupRead === false) {
-    missingPermissions.push('Group.Read.All');
+    missingPermissions.push('GroupMember.Read.All');
   }
 
   if (permissions.userRead === true) {

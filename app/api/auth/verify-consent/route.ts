@@ -102,7 +102,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
           const permissionStatus = {
             deviceManagementApps: false,
             userRead: true,
-            groupRead: tokenRoles.includes('Group.Read.All'),
+            groupRead: tokenRoles.includes('GroupMember.Read.All'),
             deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All'),
           };
 
@@ -128,7 +128,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
       const permissions: PermissionStatus = {
         deviceManagementApps: null,
         userRead: true, // If we got a token, basic access works
-        groupRead: tokenRoles.includes('Group.Read.All') || null,
+        groupRead: tokenRoles.includes('GroupMember.Read.All') || null,
         deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All') || null,
       };
 
@@ -167,7 +167,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
         permissions.deviceManagementApps = null;
       }
 
-      // Test Group.Read.All permission
+      // Test GroupMember.Read.All permission
       try {
         const groupTestResponse = await fetch(
           'https://graph.microsoft.com/v1.0/groups?$top=1&$select=id',
@@ -192,7 +192,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
         logApiPermissionTest(
           '/api/auth/verify-consent',
           tenantId,
-          'Group.Read.All',
+          'GroupMember.Read.All',
           groupTestResponse.status,
           permissions.groupRead
         );

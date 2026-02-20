@@ -183,11 +183,11 @@ export default function SettingsPage() {
             <TableRow>
               <TableCell>
                 <code className="text-accent-cyan text-xs">
-                  Group.Read.All
+                  GroupMember.Read.All
                 </code>
               </TableCell>
               <TableCell className="text-sm text-text-secondary">
-                Read group memberships for app assignment
+                Read group information for app assignment
               </TableCell>
               <TableCell className="text-sm text-text-secondary">
                 For group targeting
