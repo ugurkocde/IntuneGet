@@ -198,7 +198,7 @@ function parseJsonImport(content: string): SccmImportFormat | null {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequest(request);
     if (!auth) {
       return NextResponse.json(
         { error: 'Authentication required' },

@@ -4,6 +4,7 @@
  */
 
 import { createServerClient, isSupabaseConfigured } from './supabase';
+import { parseAccessToken } from './auth-utils';
 
 /**
  * User info extracted from token
@@ -16,42 +17,21 @@ export interface TokenUser {
 }
 
 /**
- * Decode JWT token payload without verification
- */
-function decodeToken(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Validate an access token from the client
- * Decodes and checks basic claims (expiry)
+ * Validate an access token by verifying it against the Microsoft Graph API.
+ * Returns user claims only if Microsoft confirms the token is authentic.
  */
 export async function validateToken(accessToken: string): Promise<TokenUser | null> {
   if (!accessToken) return null;
 
   try {
-    const payload = decodeToken(accessToken);
-    if (!payload) return null;
-
-    // Basic validation - check expiry
-    const now = Math.floor(Date.now() / 1000);
-    if (typeof payload.exp === 'number' && payload.exp < now) {
-      console.warn('Token has expired');
-      return null;
-    }
+    const info = await parseAccessToken(`Bearer ${accessToken}`);
+    if (!info) return null;
 
     return {
-      id: (payload.oid as string) || (payload.sub as string) || '',
-      name: payload.name as string | undefined,
-      email: (payload.preferred_username as string) || (payload.email as string) || undefined,
-      tenantId: payload.tid as string | undefined,
+      id: info.userId,
+      name: info.userName ?? undefined,
+      email: info.userEmail !== 'unknown' ? info.userEmail : undefined,
+      tenantId: info.tenantId,
     };
   } catch (error) {
     console.error('Token validation error:', error);
@@ -132,15 +112,6 @@ export async function getStoredTokens(
     console.error('Error getting stored tokens:', error);
     return null;
   }
-}
-
-/**
- * Get the Entra ID tenant ID from a token
- */
-export function getTenantFromToken(accessToken: string): string | null {
-  const payload = decodeToken(accessToken);
-  if (!payload) return null;
-  return (payload.tid as string) || null;
 }
 
 /**

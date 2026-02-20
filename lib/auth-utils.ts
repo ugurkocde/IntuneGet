@@ -17,53 +17,103 @@ export interface TokenUserInfo {
 }
 
 /**
- * Decode and validate token payload claims.
- * Microsoft Graph access tokens use internal signing keys not available
- * in the public JWKS endpoint, so cryptographic signature verification
- * is not possible for third-party apps. We validate structure and claims instead.
+ * In-process cache for verified tokens to avoid a Graph round-trip on every request.
+ * Keyed by SHA-256 hash of the raw token; value carries the verified claims and
+ * the wall-clock time at which the cache entry expires.
  */
-function decodeTokenPayload(accessToken: string): TokenUserInfo | null {
+const _tokenCache = new Map<string, { result: TokenUserInfo; expiresAt: number }>();
+
+/** Maximum age of a cache entry, regardless of token expiry (5 minutes). */
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function _tokenCacheKey(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Validate a Microsoft Graph access token by presenting it to the Graph /me
+ * endpoint. Microsoft's own servers verify the signature, issuer, audience and
+ * expiry; if the call succeeds we know the token is genuine and the claims it
+ * carries are trustworthy.
+ *
+ * Results are cached for min(token-expiry, TOKEN_CACHE_TTL_MS) so that
+ * subsequent requests with the same token incur no extra latency.
+ */
+async function verifyTokenWithGraph(accessToken: string): Promise<TokenUserInfo | null> {
+  const cacheKey = _tokenCacheKey(accessToken);
+  const now = Date.now();
+
+  const cached = _tokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.result;
+  }
+
+  // Evict stale entries when the map grows large (best-effort housekeeping).
+  if (_tokenCache.size > 1000) {
+    for (const [key, entry] of _tokenCache) {
+      if (entry.expiresAt <= now) _tokenCache.delete(key);
+    }
+  }
+
   try {
-    const payload = decodeJwt(accessToken);
+    const response = await fetch(
+      'https://graph.microsoft.com/v1.0/me?$select=id,displayName,userPrincipalName,mail',
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
 
-    const userId = (payload.oid || payload.sub) as string | undefined;
-    const userEmail = (payload.preferred_username || payload.email || 'unknown') as string;
-    const tenantId = payload.tid as string | undefined;
-    const userName = (payload.name as string) || null;
-
-    if (!userId || !tenantId) {
+    if (!response.ok) {
+      // Token was rejected by Microsoft — do not trust it.
       return null;
     }
 
-    return { userId, userEmail, tenantId, userName };
-  } catch {
+    const me = await response.json();
+
+    // Decode (not verify) the payload only to read the tenant ID (tid).  The
+    // Graph call above has already authenticated the token, so reading tid here
+    // is safe — an attacker cannot forge a tid that Microsoft would accept.
+    const payload = decodeJwt(accessToken);
+    const tenantId = payload.tid as string | undefined;
+
+    if (!me.id || !tenantId) {
+      return null;
+    }
+
+    const result: TokenUserInfo = {
+      userId: me.id as string,
+      userEmail: ((me.userPrincipalName || me.mail || 'unknown') as string),
+      tenantId,
+      userName: (me.displayName as string) || null,
+    };
+
+    // Cache until the token expires or TTL elapses, whichever comes first.
+    const tokenExpMs =
+      typeof payload.exp === 'number' ? payload.exp * 1000 : now + TOKEN_CACHE_TTL_MS;
+    _tokenCache.set(cacheKey, { result, expiresAt: Math.min(tokenExpMs, now + TOKEN_CACHE_TTL_MS) });
+
+    return result;
+  } catch (error) {
+    console.error('Token verification failed:', error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
 
 /**
- * Parse a Microsoft access token and extract user claims.
- * Microsoft Graph access tokens cannot have their signatures verified
- * by third parties (they use internal signing keys). We validate the
- * JWT structure and extract claims from the trusted MSAL flow.
+ * Parse and verify a Microsoft Graph access token from an Authorization header.
+ * The token's authenticity is confirmed by presenting it to the Microsoft Graph
+ * API — Microsoft verifies the signature, issuer, audience, and expiry.
+ * Results are cached to minimise latency on hot paths.
  */
 export async function parseAccessToken(authHeader: string | null): Promise<TokenUserInfo | null> {
   if (!authHeader?.startsWith('Bearer ')) {
     return null;
   }
 
-  try {
-    const accessToken = authHeader.slice(7);
-    const parts = accessToken.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    return decodeTokenPayload(accessToken);
-  } catch (error) {
-    console.error('Token parsing failed:', error instanceof Error ? error.message : 'Unknown error');
+  const accessToken = authHeader.slice(7);
+  if (accessToken.split('.').length !== 3) {
     return null;
   }
+
+  return verifyTokenWithGraph(accessToken);
 }
 
 /**
