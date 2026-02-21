@@ -76,11 +76,15 @@ export async function verifyTenantConsent(tenantId: string): Promise<ConsentVeri
       }
     );
 
-    if (intuneTestResponse.status === 403) {
+    if (intuneTestResponse.status === 401 || intuneTestResponse.status === 403) {
       return { verified: false, error: 'insufficient_intune_permissions' };
     }
 
     if (intuneTestResponse.status >= 500) {
+      return { verified: false, error: 'network_error' };
+    }
+
+    if (!intuneTestResponse.ok) {
       return { verified: false, error: 'network_error' };
     }
 
