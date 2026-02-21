@@ -56,8 +56,8 @@ const coreNav: NavItem[] = [
 
 const managementNav: NavItem[] = [
   { name: 'SCCM Migration', href: '/dashboard/sccm', icon: FolderSync },
-  { name: 'Inventory', href: '/dashboard/inventory', icon: Server, badge: <UpdateBadge /> },
-  { name: 'App Updates', href: '/dashboard/updates', icon: ArrowUpCircle },
+  { name: 'Inventory', href: '/dashboard/inventory', icon: Server },
+  { name: 'App Updates', href: '/dashboard/updates', icon: ArrowUpCircle, badge: <UpdateBadge /> },
 ];
 
 const analyticsNav: NavItem[] = [
