@@ -140,13 +140,24 @@ export function matchDiscoveredApp(app: GraphDiscoveredApp): MatchResult {
 
     // Check WinGet ID parts - skip publisher name (first part) to avoid false matches
     // e.g., "Microsoft.Edge" should match on "edge", not "microsoft"
+    // Scale score by proportion of app name words that match to prevent false positives
+    // e.g., "Intune Log Reader" matching only "reader" from Adobe.Acrobat.Reader = 1/2 = 0.35
     const idParts = mapping.wingetId.toLowerCase().split('.');
-    // Start from index 1 to skip publisher name (e.g., skip "microsoft" in "Microsoft.Edge")
-    for (let i = 1; i < idParts.length; i++) {
-      const part = idParts[i];
-      if (normalizedName.includes(part) && part.length > 3) {
-        score = Math.max(score, 0.7);
+    const nameWords = normalizedName.split(/\s+/).filter(w => w.length > 3);
+    let matchedNameWordCount = 0;
+
+    for (const word of nameWords) {
+      for (let i = 1; i < idParts.length; i++) {
+        if (idParts[i].length > 3 && (idParts[i].includes(word) || word.includes(idParts[i]))) {
+          matchedNameWordCount++;
+          break;
+        }
       }
+    }
+
+    if (matchedNameWordCount > 0 && nameWords.length > 0) {
+      const coverage = matchedNameWordCount / nameWords.length;
+      score = Math.max(score, 0.7 * coverage);
     }
 
     // Publisher bonus
