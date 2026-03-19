@@ -9,7 +9,7 @@ import { UserSettingsProvider } from "@/components/providers/UserSettingsProvide
 import { MspProvider } from "@/contexts/MspContext";
 import { CookieConsentBanner } from '@/components/consent/CookieConsentBanner';
 import { PlausibleLoader } from '@/components/analytics/PlausibleLoader';
-import { GTProvider } from "gt-next";
+import { GTProvider, getLocale } from "gt-next";
 
 // Analytics configuration
 const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
@@ -174,11 +174,12 @@ const websiteJsonLd = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
   const content = (
     <GTProvider>
       <QueryProvider>
@@ -199,7 +200,7 @@ export default function RootLayout({
   );
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://plausible.io" />
         <link rel="dns-prefetch" href="https://api.github.com" />
