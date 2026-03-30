@@ -10,9 +10,7 @@ import { verifyCallbackSignature } from '@/lib/callback-signature';
 import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { acquireGraphToken } from '@/lib/graph-token';
-import { addAppToEspProfile } from '@/lib/esp-api';
 import { applyAppRelationships } from '@/lib/intune-api';
-import type { EspProfileSelection } from '@/types/esp';
 import type { AppRelationship } from '@/types/intune';
 
 interface PackageCallbackBody {
@@ -131,16 +129,11 @@ export async function POST(request: NextRequest) {
           intune_tenant_id: job.tenant_id,
         });
 
-        // Apply ESP profiles if configured in package_config
-        const packageConfig = job.package_config as Record<string, unknown> | undefined;
-        const espProfiles = packageConfig?.espProfiles as EspProfileSelection[] | undefined;
-        if (espProfiles && espProfiles.length > 0 && job.tenant_id) {
-          applyEspProfilesAfterDeploy(job.tenant_id, data.intuneAppId, espProfiles).catch((err) => {
-            console.error('[Callback] ESP profile application error:', err);
-          });
-        }
+        // ESP profiles are now applied in the GitHub Actions workflow directly
+        // (same step as assignments and categories) for reliability.
 
         // Apply app relationships (dependencies/supersedence) if configured
+        const packageConfig = job.package_config as Record<string, unknown> | undefined;
         const relationships = packageConfig?.relationships as AppRelationship[] | undefined;
         if (relationships && relationships.length > 0 && job.tenant_id) {
           applyRelationshipsAfterDeploy(job.tenant_id, data.intuneAppId, relationships).catch((err) => {
@@ -164,18 +157,12 @@ export async function POST(request: NextRequest) {
 
       // Do NOT create uploadHistory record (no new app was created)
 
-      // Still apply ESP profiles and relationships to the existing app if configured
+      // ESP profiles are now applied in the GitHub Actions workflow directly.
+      // Still apply relationships to the existing app if configured.
       if (data.intuneAppId) {
         const job = await db.jobs.getById(data.jobId);
         if (job) {
           const packageConfig = job.package_config as Record<string, unknown> | undefined;
-          const espProfiles = packageConfig?.espProfiles as EspProfileSelection[] | undefined;
-          if (espProfiles && espProfiles.length > 0 && job.tenant_id) {
-            applyEspProfilesAfterDeploy(job.tenant_id, data.intuneAppId, espProfiles).catch((err) => {
-              console.error('[Callback] ESP profile application error (duplicate_skipped):', err);
-            });
-          }
-
           const relationships = packageConfig?.relationships as AppRelationship[] | undefined;
           if (relationships && relationships.length > 0 && job.tenant_id) {
             applyRelationshipsAfterDeploy(job.tenant_id, data.intuneAppId, relationships).catch((err) => {
@@ -245,21 +232,6 @@ export async function POST(request: NextRequest) {
       { error: 'Internal server error' },
       { status: 500 }
     );
-  }
-}
-
-/**
- * Apply ESP profiles after Win32 deployment using service principal credentials.
- */
-async function applyEspProfilesAfterDeploy(
-  tenantId: string,
-  intuneAppId: string,
-  espProfiles: EspProfileSelection[]
-): Promise<void> {
-  const tokenResult = await acquireGraphToken(tenantId);
-
-  for (const profile of espProfiles) {
-    await addAppToEspProfile(tokenResult.accessToken, profile.id, intuneAppId);
   }
 }
 
