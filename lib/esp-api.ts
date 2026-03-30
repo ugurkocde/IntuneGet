@@ -13,6 +13,7 @@ interface DeviceEnrollmentConfiguration {
   description?: string;
   '@odata.type': string;
   selectedMobileAppIds?: string[];
+  showInstallationProgress?: boolean;
 }
 
 interface GraphApiListResponse<T> {
@@ -65,12 +66,16 @@ export async function listEspProfiles(
 }
 
 /**
- * Get a single ESP profile with its selectedMobileAppIds.
+ * Get a single ESP profile with its full configuration.
  */
 export async function getEspProfile(
   accessToken: string,
   profileId: string
-): Promise<{ id: string; selectedMobileAppIds: string[] }> {
+): Promise<{
+  id: string;
+  selectedMobileAppIds: string[];
+  showInstallationProgress: boolean;
+}> {
   const response = await fetch(
     `${GRAPH_API_BASE}/deviceManagement/deviceEnrollmentConfigurations/${profileId}`,
     {
@@ -88,12 +93,14 @@ export async function getEspProfile(
   return {
     id: data.id,
     selectedMobileAppIds: data.selectedMobileAppIds || [],
+    showInstallationProgress: data.showInstallationProgress ?? false,
   };
 }
 
 /**
  * Add an app to an ESP profile's selectedMobileAppIds.
- * Reads current IDs first to avoid overwriting, then PATCHes the appended list.
+ * Reads current configuration first, enables showInstallationProgress if needed,
+ * then PATCHes the appended app list.
  * Returns { alreadyAdded: true } if the app was already present.
  *
  * Known limitation: The Graph API has no atomic append for selectedMobileAppIds.
@@ -106,7 +113,7 @@ export async function addAppToEspProfile(
   profileId: string,
   appId: string
 ): Promise<{ alreadyAdded: boolean }> {
-  // Get current selected apps
+  // Get current profile configuration
   const profile = await getEspProfile(accessToken, profileId);
 
   if (profile.selectedMobileAppIds.includes(appId)) {
@@ -116,6 +123,18 @@ export async function addAppToEspProfile(
   // Append the new app ID
   const updatedIds = [...profile.selectedMobileAppIds, appId];
 
+  // Build PATCH body: always include selectedMobileAppIds,
+  // and enable showInstallationProgress if it's currently off
+  const patchBody: Record<string, unknown> = {
+    '@odata.type':
+      '#microsoft.graph.windows10EnrollmentCompletionPageConfiguration',
+    selectedMobileAppIds: updatedIds,
+  };
+
+  if (!profile.showInstallationProgress) {
+    patchBody.showInstallationProgress = true;
+  }
+
   const patchResponse = await fetch(
     `${GRAPH_API_BASE}/deviceManagement/deviceEnrollmentConfigurations/${profileId}`,
     {
@@ -124,11 +143,7 @@ export async function addAppToEspProfile(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        '@odata.type':
-          '#microsoft.graph.windows10EnrollmentCompletionPageConfiguration',
-        selectedMobileAppIds: updatedIds,
-      }),
+      body: JSON.stringify(patchBody),
     }
   );
 
@@ -137,6 +152,11 @@ export async function addAppToEspProfile(
     if (patchResponse.status === 403) {
       throw new Error(
         `Missing permission to update ESP profiles. Ensure the app registration has the DeviceManagementServiceConfig.ReadWrite.All permission with admin consent granted.`
+      );
+    }
+    if (patchResponse.status === 400) {
+      throw new Error(
+        `Failed to add app to ESP profile (400 Bad Request). This can happen if the app type is not supported by ESP blocking apps (e.g. Microsoft Store apps deployed as winGetApp). ESP typically supports Win32 LOB apps. Details: ${errorBody}`
       );
     }
     throw new Error(
