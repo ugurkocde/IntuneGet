@@ -134,6 +134,11 @@ export async function addAppToEspProfile(
 
   if (!patchResponse.ok) {
     const errorBody = await patchResponse.text().catch(() => '');
+    if (patchResponse.status === 403) {
+      throw new Error(
+        `Missing permission to update ESP profiles. Ensure the app registration has the DeviceManagementServiceConfig.ReadWrite.All permission with admin consent granted.`
+      );
+    }
     throw new Error(
       `Failed to update ESP profile ${profileId} (${patchResponse.status}): ${errorBody}`
     );

@@ -38,7 +38,7 @@ const releases: Release[] = [
       "ESP profile error messages now show the actual Graph API error instead of a generic failure",
       "Fixed ESP profile selector readability in light mode: selected items and warning banners now display correctly",
       "ESP warning banner improved with actionable guidance when no required assignment is configured",
-      "Added DeviceManagementServiceConfig.Read.All to Entra ID setup documentation for ESP profile support",
+      "Updated Entra ID setup documentation: ESP profile support requires DeviceManagementServiceConfig.ReadWrite.All (not Read.All)",
       "Fixed React 19 compatibility: upgraded @react-three/fiber, drei, and postprocessing to versions compatible with Next.js 15 vendored React",
     ],
   },

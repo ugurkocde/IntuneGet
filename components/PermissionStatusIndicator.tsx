@@ -106,7 +106,7 @@ export function PermissionStatusIndicator({
             Intune permissions missing
           </p>
           <p className="text-status-warning/70 text-xs mt-1">
-            The app needs DeviceManagementApps.ReadWrite.All and DeviceManagementManagedDevices.Read.All permissions. Please re-grant admin consent.
+            The app needs DeviceManagementApps.ReadWrite.All, DeviceManagementManagedDevices.Read.All, and DeviceManagementServiceConfig.ReadWrite.All (for ESP profiles). Please re-grant admin consent.
           </p>
           <div className="flex gap-2 mt-3">
             <Button

@@ -41,6 +41,7 @@ interface PermissionStatusState {
     userRead: boolean | null;
     groupRead: boolean | null;
     deviceManagementManagedDevices: boolean | null;
+    deviceManagementServiceConfig: boolean | null;
   };
 }
 
@@ -127,6 +128,7 @@ export default function SettingsPage() {
             userRead: null,
             groupRead: null,
             deviceManagementManagedDevices: null,
+            deviceManagementServiceConfig: null,
           },
         });
         return;
@@ -150,6 +152,7 @@ export default function SettingsPage() {
           userRead: result.permissions?.userRead ?? true,
           groupRead: result.permissions?.groupRead ?? null,
           deviceManagementManagedDevices: result.permissions?.deviceManagementManagedDevices ?? null,
+          deviceManagementServiceConfig: result.permissions?.deviceManagementServiceConfig ?? null,
         },
       });
     } catch (error) {
@@ -163,6 +166,7 @@ export default function SettingsPage() {
           userRead: null,
           groupRead: null,
           deviceManagementManagedDevices: null,
+          deviceManagementServiceConfig: null,
         },
       });
     } finally {
@@ -553,6 +557,12 @@ export default function SettingsPage() {
                         granted={permissionStatus?.permissions.groupRead ?? null}
                         checking={isChecking}
                       />
+                      <PermissionItem
+                        name="DeviceManagementServiceConfig.ReadWrite.All"
+                        description={<T>Read and write enrollment configurations (ESP profiles)</T>}
+                        granted={permissionStatus?.permissions.deviceManagementServiceConfig ?? null}
+                        checking={isChecking}
+                      />
                     </div>
 
                     {permissionStatus?.lastChecked && (
@@ -580,6 +590,21 @@ export default function SettingsPage() {
                       <div className="mt-4 p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg">
                         <p className="text-sm text-status-warning mb-2">
                           <T>Discovered Apps permission is missing. The Discovered Apps feature requires this permission. A Global Administrator needs to re-grant consent.</T>
+                        </p>
+                        <Button
+                          onClick={handleGrantConsent}
+                          size="sm"
+                          className="bg-status-warning hover:bg-status-warning/90 text-white"
+                        >
+                          <T>Re-grant Admin Consent</T>
+                        </Button>
+                      </div>
+                    )}
+
+                    {permissionStatus?.permissions.deviceManagementServiceConfig === false && (
+                      <div className="mt-4 p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg">
+                        <p className="text-sm text-status-warning mb-2">
+                          <T>ESP profile permission is missing. Adding apps to Enrollment Status Page profiles requires this permission. A Global Administrator needs to re-grant consent.</T>
                         </p>
                         <Button
                           onClick={handleGrantConsent}

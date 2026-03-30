@@ -28,6 +28,7 @@ interface PermissionStatus {
   userRead: boolean | null;
   groupRead: boolean | null;
   deviceManagementManagedDevices: boolean | null;
+  deviceManagementServiceConfig: boolean | null;
 }
 
 interface ConsentVerificationResult {
@@ -104,6 +105,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
             userRead: true,
             groupRead: tokenRoles.includes('GroupMember.Read.All'),
             deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All'),
+            deviceManagementServiceConfig: tokenRoles.includes('DeviceManagementServiceConfig.ReadWrite.All'),
           };
 
           // Log the verification failure
@@ -130,6 +132,7 @@ async function verifyConsentWithGraph(tenantId: string): Promise<GraphVerificati
         userRead: true, // If we got a token, basic access works
         groupRead: tokenRoles.includes('GroupMember.Read.All') || null,
         deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All') || null,
+        deviceManagementServiceConfig: tokenRoles.includes('DeviceManagementServiceConfig.ReadWrite.All') || null,
       };
 
       // Test DeviceManagementApps.ReadWrite.All permission

@@ -231,7 +231,7 @@ export default function AzureSetupPage() {
               <li>
                 <T>Search and add:{" "}
                 <code className="text-accent-cyan">
-                  DeviceManagementServiceConfig.Read.All
+                  DeviceManagementServiceConfig.ReadWrite.All
                 </code></T>
               </li>
               <li>
@@ -274,7 +274,7 @@ export default function AzureSetupPage() {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell>DeviceManagementServiceConfig.Read.All</TableCell>
+                    <TableCell>DeviceManagementServiceConfig.ReadWrite.All</TableCell>
                     <TableCell><T>Application</T></TableCell>
                     <TableCell className="text-status-warning">
                       <T>Requires admin consent</T>

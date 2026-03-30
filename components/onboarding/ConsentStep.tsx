@@ -275,8 +275,9 @@ export function ConsentStep({ onNext, onBack }: ConsentStepProps) {
         </h1>
         <p className="text-text-muted mb-6">
           <T>Admin consent was granted, but required Intune permissions are missing.
-          The app needs <code className="text-amber-600 bg-amber-500/10 px-1 rounded">DeviceManagementApps.ReadWrite.All</code> and
-          <code className="text-amber-600 bg-amber-500/10 px-1 rounded ml-1">DeviceManagementManagedDevices.Read.All</code>.
+          The app needs <code className="text-amber-600 bg-amber-500/10 px-1 rounded">DeviceManagementApps.ReadWrite.All</code>,
+          <code className="text-amber-600 bg-amber-500/10 px-1 rounded ml-1">DeviceManagementManagedDevices.Read.All</code>, and
+          <code className="text-amber-600 bg-amber-500/10 px-1 rounded ml-1">DeviceManagementServiceConfig.ReadWrite.All</code> (for ESP profiles).
           This can happen if permissions were updated after initial consent.</T>
         </p>
         <div className="bg-bg-elevated border border-overlay/10 rounded-xl p-6 mb-6 shadow-soft">
