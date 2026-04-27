@@ -11,9 +11,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { acquireConsentToken } from '@/lib/consent-token';
+import {
+  checkStoredConsent,
+  storeConsentRecord,
+  clearStoredConsent,
+} from '@/lib/msp/consent-cache';
 import {
   logTokenAcquired,
   logPermissionVerification,
@@ -54,337 +60,207 @@ interface GraphVerificationResult {
  * This prevents users from bypassing consent verification.
  */
 async function verifyConsentWithGraph(tenantId: string, justConsented = false): Promise<GraphVerificationResult> {
-  const clientId = process.env.AZURE_CLIENT_ID || process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
+  // Acquire a service-principal token via the shared classifier so this route
+  // and lib/msp/consent-verification.ts cannot disagree about what counts as
+  // consent_not_granted vs a transient network error.
+  const tokenResult = await acquireConsentToken(tenantId);
 
-  if (!clientId || !clientSecret) {
-    // FAIL-CLOSED: Cannot verify without credentials
-    return { verified: false, error: 'missing_credentials' };
-  }
-
-  try {
-    const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
-
-    const body = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: 'https://graph.microsoft.com/.default',
-      grant_type: 'client_credentials',
-    });
-
-    const response = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    });
-
-    if (response.ok) {
-      // We got a token - now test actual API access for each permission
-      const tokenData = await response.json();
-      const accessToken = tokenData.access_token;
-
-      // Decode token and check roles claim for explicit permission verification
-      let tokenRoles: string[] = [];
-      try {
-        const tokenPayload = JSON.parse(
-          Buffer.from(accessToken.split('.')[1], 'base64').toString()
-        );
-        tokenRoles = tokenPayload.roles || [];
-
-        // Log token acquisition with roles
-        logTokenAcquired('/api/auth/verify-consent', tenantId, tokenRoles);
-
-        // Check for the exact permission needed for Intune deployment
-        const hasIntuneWritePermission = tokenRoles.includes('DeviceManagementApps.ReadWrite.All');
-
-        if (!hasIntuneWritePermission) {
-          const permissionStatus = {
-            deviceManagementApps: false,
-            userRead: true,
-            groupRead: tokenRoles.includes('GroupMember.Read.All'),
-            deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All'),
-            deviceManagementServiceConfig: tokenRoles.includes('DeviceManagementServiceConfig.ReadWrite.All'),
-          };
-
-          // If consent was just granted, Microsoft can take minutes to propagate
-          // the role claims into new service-principal tokens. Return a distinct
-          // error so the UI can show an actionable "still propagating" message.
-          const errorType: ConsentErrorType = justConsented
-            ? 'consent_propagating'
-            : 'insufficient_intune_permissions';
-
-          logPermissionVerification(
-            '/api/auth/verify-consent',
-            tenantId,
-            false,
-            permissionStatus,
-            errorType
-          );
-
-          return {
-            verified: false,
-            error: errorType,
-            permissions: permissionStatus,
-          };
-        }
-      } catch {
-        // Fall through to API test as backup
-      }
-
-      const permissions: PermissionStatus = {
-        deviceManagementApps: null,
-        userRead: true, // If we got a token, basic access works
-        groupRead: tokenRoles.includes('GroupMember.Read.All') || null,
-        deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All') || null,
-        deviceManagementServiceConfig: tokenRoles.includes('DeviceManagementServiceConfig.ReadWrite.All') || null,
-      };
-
-      // Test DeviceManagementApps.ReadWrite.All permission
-      try {
-        const intuneTestResponse = await fetch(
-          'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$top=1&$select=id',
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (intuneTestResponse.status === 403) {
-          permissions.deviceManagementApps = false;
-        } else if (intuneTestResponse.status >= 500) {
-          // Server error - leave as null (unknown)
-          permissions.deviceManagementApps = null;
-        } else {
-          // Success or 404 (no apps yet) - permission is granted
-          permissions.deviceManagementApps = true;
-        }
-
-        // Log the Intune API permission test
-        logApiPermissionTest(
-          '/api/auth/verify-consent',
-          tenantId,
-          'DeviceManagementApps.ReadWrite.All',
-          intuneTestResponse.status,
-          permissions.deviceManagementApps
-        );
-      } catch {
-        permissions.deviceManagementApps = null;
-      }
-
-      // Test GroupMember.Read.All permission
-      try {
-        const groupTestResponse = await fetch(
-          'https://graph.microsoft.com/v1.0/groups?$top=1&$select=id',
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (groupTestResponse.status === 403) {
-          permissions.groupRead = false;
-        } else if (groupTestResponse.status >= 500) {
-          permissions.groupRead = null;
-        } else {
-          permissions.groupRead = true;
-        }
-
-        // Log the Group API permission test
-        logApiPermissionTest(
-          '/api/auth/verify-consent',
-          tenantId,
-          'GroupMember.Read.All',
-          groupTestResponse.status,
-          permissions.groupRead
-        );
-      } catch {
-        permissions.groupRead = null;
-      }
-
-      // Test DeviceManagementManagedDevices.Read.All permission
-      try {
-        const discoveredAppsTestResponse = await fetch(
-          'https://graph.microsoft.com/v1.0/deviceManagement/detectedApps?$top=1&$select=id',
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (discoveredAppsTestResponse.status === 403) {
-          permissions.deviceManagementManagedDevices = false;
-        } else if (discoveredAppsTestResponse.status >= 500) {
-          permissions.deviceManagementManagedDevices = null;
-        } else {
-          permissions.deviceManagementManagedDevices = true;
-        }
-
-        // Log the Discovered Apps API permission test
-        logApiPermissionTest(
-          '/api/auth/verify-consent',
-          tenantId,
-          'DeviceManagementManagedDevices.Read.All',
-          discoveredAppsTestResponse.status,
-          permissions.deviceManagementManagedDevices
-        );
-      } catch {
-        permissions.deviceManagementManagedDevices = null;
-      }
-
-      // Determine overall verification status
-      const hasRequiredPermission = permissions.deviceManagementApps === true;
-
-      // Honor the just-consented hint on the live-API-test path too. If JWT
-      // decode succeeded but rolled through here because the test also checks
-      // live Graph, or if decode failed (catch above), we still want a fresh
-      // consent to surface the propagating state rather than "insufficient".
-      const fallthroughError: ConsentErrorType = justConsented
-        ? 'consent_propagating'
-        : 'insufficient_intune_permissions';
-
-      logPermissionVerification(
-        '/api/auth/verify-consent',
-        tenantId,
-        hasRequiredPermission,
-        permissions,
-        hasRequiredPermission ? undefined : fallthroughError
-      );
-
-      if (!hasRequiredPermission && permissions.deviceManagementApps === false) {
-        return { verified: false, error: fallthroughError, permissions };
-      }
-
-      return { verified: hasRequiredPermission, permissions };
-    }
-
-    // Check the error
-    const errorData = await response.json().catch(() => ({}));
-    const errorCode = errorData.error;
-    const errorDescription = errorData.error_description || '';
-
-    // Invalid client credentials (wrong secret, expired secret)
-    // AADSTS7000215: Invalid client secret provided
-    // AADSTS7000222: Client secret is expired
-    if (errorCode === 'invalid_client' ||
-        errorDescription.includes('AADSTS7000215') ||
-        errorDescription.includes('AADSTS7000222')) {
-      return { verified: false, error: 'missing_credentials' };
-    }
-
-    // AADSTS700016: Application not found in the directory
-    // AADSTS65001: User or admin has not consented
-    // These mean consent was NOT granted
-    if (errorCode === 'invalid_grant' ||
-        errorCode === 'unauthorized_client' ||
-        errorDescription.includes('AADSTS700016') ||
-        errorDescription.includes('AADSTS65001')) {
+  if (!tokenResult.ok) {
+    if (tokenResult.error === 'consent_not_granted') {
       logPermissions({
         route: '/api/auth/verify-consent',
         action: 'consent_not_granted',
         tenantId,
         granted: false,
         error: 'consent_not_granted',
-        details: { errorCode, errorDescription },
+        details: {
+          errorCode: tokenResult.errorCode,
+          errorDescription: tokenResult.errorDescription,
+        },
       });
-      return { verified: false, error: 'consent_not_granted' };
+    }
+    return { verified: false, error: tokenResult.error };
+  }
+
+  const accessToken = tokenResult.accessToken;
+
+  // Decode token and check roles claim for explicit permission verification
+  let tokenRoles: string[] = [];
+  try {
+    const tokenPayload = JSON.parse(
+      Buffer.from(accessToken.split('.')[1], 'base64').toString()
+    );
+    tokenRoles = tokenPayload.roles || [];
+
+    // Log token acquisition with roles
+    logTokenAcquired('/api/auth/verify-consent', tenantId, tokenRoles);
+
+    // Check for the exact permission needed for Intune deployment
+    const hasIntuneWritePermission = tokenRoles.includes('DeviceManagementApps.ReadWrite.All');
+
+    if (!hasIntuneWritePermission) {
+      const permissionStatus = {
+        deviceManagementApps: false,
+        userRead: true,
+        groupRead: tokenRoles.includes('GroupMember.Read.All'),
+        deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All'),
+        deviceManagementServiceConfig: tokenRoles.includes('DeviceManagementServiceConfig.ReadWrite.All'),
+      };
+
+      // If consent was just granted, Microsoft can take minutes to propagate
+      // the role claims into new service-principal tokens. Return a distinct
+      // error so the UI can show an actionable "still propagating" message.
+      const errorType: ConsentErrorType = justConsented
+        ? 'consent_propagating'
+        : 'insufficient_intune_permissions';
+
+      logPermissionVerification(
+        '/api/auth/verify-consent',
+        tenantId,
+        false,
+        permissionStatus,
+        errorType
+      );
+
+      return {
+        verified: false,
+        error: errorType,
+        permissions: permissionStatus,
+      };
+    }
+  } catch {
+    // Fall through to API test as backup
+  }
+
+  const permissions: PermissionStatus = {
+    deviceManagementApps: null,
+    userRead: true, // If we got a token, basic access works
+    groupRead: tokenRoles.includes('GroupMember.Read.All') || null,
+    deviceManagementManagedDevices: tokenRoles.includes('DeviceManagementManagedDevices.Read.All') || null,
+    deviceManagementServiceConfig: tokenRoles.includes('DeviceManagementServiceConfig.ReadWrite.All') || null,
+  };
+
+  // Test DeviceManagementApps.ReadWrite.All permission
+  try {
+    const intuneTestResponse = await fetch(
+      'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$top=1&$select=id',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (intuneTestResponse.status === 403) {
+      permissions.deviceManagementApps = false;
+    } else if (intuneTestResponse.status >= 500) {
+      // Server error - leave as null (unknown)
+      permissions.deviceManagementApps = null;
+    } else {
+      // Success or 404 (no apps yet) - permission is granted
+      permissions.deviceManagementApps = true;
     }
 
-    // Other errors (network, temporary issues)
-    // FAIL-CLOSED: Return false with network_error on unknown errors
-    return { verified: false, error: 'network_error' };
-
+    logApiPermissionTest(
+      '/api/auth/verify-consent',
+      tenantId,
+      'DeviceManagementApps.ReadWrite.All',
+      intuneTestResponse.status,
+      permissions.deviceManagementApps
+    );
   } catch {
-    // FAIL-CLOSED: Network error
-    return { verified: false, error: 'network_error' };
-  }
-}
-
-/**
- * Store verified consent in database
- */
-async function storeConsentRecord(
-  tenantId: string,
-  userId: string,
-  userEmail: string
-): Promise<void> {
-  if (!isSupabaseConfigured()) {
-    return;
+    permissions.deviceManagementApps = null;
   }
 
+  // Test GroupMember.Read.All permission
   try {
-    const supabase = createServerClient();
+    const groupTestResponse = await fetch(
+      'https://graph.microsoft.com/v1.0/groups?$top=1&$select=id',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    await supabase.from('tenant_consent').upsert({
-      tenant_id: tenantId,
-      consented_by_user_id: userId,
-      consented_by_email: userEmail,
-      consent_granted_at: new Date().toISOString(),
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'tenant_id',
-    });
-  } catch {
-    // Failed to store consent record - continue silently
-  }
-}
-
-/**
- * Check if consent is already stored in database
- */
-async function checkStoredConsent(tenantId: string): Promise<boolean> {
-  if (!isSupabaseConfigured()) {
-    return false;
-  }
-
-  try {
-    const supabase = createServerClient();
-
-    const { data, error } = await supabase
-      .from('tenant_consent')
-      .select('is_active')
-      .eq('tenant_id', tenantId)
-      .single();
-
-    if (error || !data) {
-      return false;
+    if (groupTestResponse.status === 403) {
+      permissions.groupRead = false;
+    } else if (groupTestResponse.status >= 500) {
+      permissions.groupRead = null;
+    } else {
+      permissions.groupRead = true;
     }
 
-    return data.is_active === true;
+    logApiPermissionTest(
+      '/api/auth/verify-consent',
+      tenantId,
+      'GroupMember.Read.All',
+      groupTestResponse.status,
+      permissions.groupRead
+    );
   } catch {
-    return false;
-  }
-}
-
-/**
- * Clear stored consent record (for when consent is revoked)
- */
-async function clearStoredConsent(tenantId: string): Promise<void> {
-  if (!isSupabaseConfigured()) {
-    return;
+    permissions.groupRead = null;
   }
 
+  // Test DeviceManagementManagedDevices.Read.All permission
   try {
-    const supabase = createServerClient();
+    const discoveredAppsTestResponse = await fetch(
+      'https://graph.microsoft.com/v1.0/deviceManagement/detectedApps?$top=1&$select=id',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    await supabase
-      .from('tenant_consent')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('tenant_id', tenantId);
+    if (discoveredAppsTestResponse.status === 403) {
+      permissions.deviceManagementManagedDevices = false;
+    } else if (discoveredAppsTestResponse.status >= 500) {
+      permissions.deviceManagementManagedDevices = null;
+    } else {
+      permissions.deviceManagementManagedDevices = true;
+    }
+
+    logApiPermissionTest(
+      '/api/auth/verify-consent',
+      tenantId,
+      'DeviceManagementManagedDevices.Read.All',
+      discoveredAppsTestResponse.status,
+      permissions.deviceManagementManagedDevices
+    );
   } catch {
-    // Failed to clear consent record - continue silently
+    permissions.deviceManagementManagedDevices = null;
   }
+
+  const hasRequiredPermission = permissions.deviceManagementApps === true;
+
+  // Honor the just-consented hint on the live-API-test path too. If JWT
+  // decode succeeded but rolled through here because the test also checks
+  // live Graph, or if decode failed (catch above), we still want a fresh
+  // consent to surface the propagating state rather than "insufficient".
+  const fallthroughError: ConsentErrorType = justConsented
+    ? 'consent_propagating'
+    : 'insufficient_intune_permissions';
+
+  logPermissionVerification(
+    '/api/auth/verify-consent',
+    tenantId,
+    hasRequiredPermission,
+    permissions,
+    hasRequiredPermission ? undefined : fallthroughError
+  );
+
+  if (!hasRequiredPermission && permissions.deviceManagementApps === false) {
+    return { verified: false, error: fallthroughError, permissions };
+  }
+
+  return { verified: hasRequiredPermission, permissions };
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<ConsentVerificationResult>> {
@@ -509,24 +385,55 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
 }
 
 /**
- * GET handler for checking consent status without full verification
- * Uses cached database record if available
+ * GET handler for checking consent status without full verification.
+ * Uses the cached database record if available.
+ *
+ * Authenticated: callers can only query the tenant of their own access token,
+ * preventing unauthenticated probing of "is this tenant an IntuneGet customer?".
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get('tenantId');
+  // Authenticate first — this endpoint exposes whether a tenant has a stored
+  // consent record, which is information disclosure if left open.
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json(
+      { error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
 
-  if (!tenantId) {
+  const userInfo = await parseAccessToken(authHeader);
+  if (!userInfo) {
+    return NextResponse.json(
+      { error: 'Authentication failed' },
+      { status: 401 }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const queryTenantId = searchParams.get('tenantId');
+
+  if (!queryTenantId) {
     return NextResponse.json(
       { error: 'tenantId parameter required' },
       { status: 400 }
     );
   }
 
-  const hasStoredConsent = await checkStoredConsent(tenantId);
+  // Only allow querying the user's own tenant. MSP users querying their
+  // managed tenants should go through the authenticated POST flow which
+  // validates membership via resolveTargetTenantId.
+  if (queryTenantId !== userInfo.tenantId) {
+    return NextResponse.json(
+      { error: 'Not authorized to query this tenant' },
+      { status: 403 }
+    );
+  }
+
+  const hasStoredConsent = await checkStoredConsent(queryTenantId);
 
   return NextResponse.json({
-    tenantId,
+    tenantId: queryTenantId,
     hasConsent: hasStoredConsent,
     message: hasStoredConsent
       ? 'Consent record found'

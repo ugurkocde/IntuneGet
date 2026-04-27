@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { verifyConsentState, getBaseUrl } from '@/lib/auth-utils';
+import { acquireConsentToken } from '@/lib/consent-token';
 import {
   logConsentCallback,
   logTokenAcquired,
@@ -176,100 +177,51 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(errorUrl);
     }
 
-    // Also record this in tenant_consent for general tracking
-    // This is a secondary record; errors here shouldn't fail the consent flow
-    const { error: consentTrackingError } = await supabase
-      .from('tenant_consent')
-      .upsert({
-        tenant_id: tenantId,
-        tenant_name: tenantName,
-        consented_by_user_id: tenantRecord.added_by_user_id,
-        consent_granted_at: new Date().toISOString(),
-        is_active: true,
-      }, {
-        onConflict: 'tenant_id',
-      });
-
-    if (consentTrackingError) {
-      // Log but don't fail - the main record is already updated
-    }
-
-    // Verify actual Intune permissions before confirming consent
-    const clientId = process.env.AZURE_CLIENT_ID || process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-    const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
-
+    // Verify actual Intune permissions BEFORE writing the tenant_consent
+    // cache record. The /api/package fast path trusts a present `is_active: true`
+    // record to skip live verification, so we must not create one until we've
+    // confirmed the required role is in the JWT. Uses the shared
+    // acquireConsentToken so error classification matches the user-facing
+    // verify-consent endpoint.
     let permissionVerified = false;
 
-    if (clientId && clientSecret) {
+    const tokenResult = await acquireConsentToken(tenantId);
+
+    if (tokenResult.ok) {
       try {
-        // Get client credentials token for the customer tenant
-        const tokenResponse = await fetch(
-          `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              client_id: clientId,
-              client_secret: clientSecret,
-              scope: 'https://graph.microsoft.com/.default',
-              grant_type: 'client_credentials',
-            }).toString(),
-          }
+        const tokenPayload = JSON.parse(
+          Buffer.from(tokenResult.accessToken.split('.')[1], 'base64').toString()
         );
+        const roles: string[] = tokenPayload.roles || [];
 
-        if (tokenResponse.ok) {
-          const tokenData = await tokenResponse.json();
-          const accessToken = tokenData.access_token;
+        logTokenAcquired('/api/msp/tenants/consent-callback', tenantId, roles);
 
-          // Decode token and check roles
-          const tokenPayload = JSON.parse(
-            Buffer.from(accessToken.split('.')[1], 'base64').toString()
-          );
-          const roles: string[] = tokenPayload.roles || [];
+        permissionVerified = roles.includes('DeviceManagementApps.ReadWrite.All');
 
-          // Log token acquisition with roles
-          logTokenAcquired('/api/msp/tenants/consent-callback', tenantId, roles);
-
-          permissionVerified = roles.includes('DeviceManagementApps.ReadWrite.All');
-
-          if (!permissionVerified) {
-            // Log incomplete permissions
-            logConsentStatus(
-              '/api/msp/tenants/consent-callback',
-              tenantId,
-              'incomplete',
-              roles,
-              { reason: 'missing_intune_permission' }
-            );
-
-            // Update status to indicate incomplete consent
-            await supabase
-              .from('msp_managed_tenants')
-              .update({
-                consent_status: 'consent_incomplete',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', tenantRecordId);
-          } else {
-            // Log successful permission verification
-            logConsentStatus(
-              '/api/msp/tenants/consent-callback',
-              tenantId,
-              'granted',
-              roles,
-              { tenantRecordId }
-            );
-          }
-        } else {
-          const errorText = await tokenResponse.text();
-          logPermissions({
-            route: '/api/msp/tenants/consent-callback',
-            action: 'token_acquisition_failed',
+        if (!permissionVerified) {
+          logConsentStatus(
+            '/api/msp/tenants/consent-callback',
             tenantId,
-            granted: false,
-            error: 'token_acquisition_failed',
-            details: { statusCode: tokenResponse.status, errorText },
-          });
+            'incomplete',
+            roles,
+            { reason: 'missing_intune_permission' }
+          );
+
+          await supabase
+            .from('msp_managed_tenants')
+            .update({
+              consent_status: 'consent_incomplete',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', tenantRecordId);
+        } else {
+          logConsentStatus(
+            '/api/msp/tenants/consent-callback',
+            tenantId,
+            'granted',
+            roles,
+            { tenantRecordId }
+          );
         }
       } catch (verifyError) {
         logPermissions({
@@ -282,6 +234,54 @@ export async function GET(request: NextRequest) {
         });
         // Continue - we'll catch this at deployment time
       }
+    } else {
+      // Token acquisition failed (consent_not_granted, network_error, or
+      // missing_credentials). The earlier unconditional update set
+      // msp_managed_tenants.consent_status='granted' optimistically — reset
+      // it to 'consent_incomplete' so the table doesn't end up claiming a
+      // tenant has consented when it actually hasn't.
+      await supabase
+        .from('msp_managed_tenants')
+        .update({
+          consent_status: 'consent_incomplete',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', tenantRecordId);
+
+      logPermissions({
+        route: '/api/msp/tenants/consent-callback',
+        action: 'token_acquisition_failed',
+        tenantId,
+        granted: false,
+        error: tokenResult.error,
+        details: {
+          errorCode: tokenResult.errorCode,
+          errorDescription: tokenResult.errorDescription,
+        },
+      });
+    }
+
+    // Only persist the tenant_consent cache record after the live token+role
+    // check actually confirms the required permission. A failed/transient
+    // verification must not leave behind an `is_active: true` record that
+    // would let /api/package skip live verification and silently queue jobs
+    // that will 401 at upload time.
+    if (permissionVerified) {
+      const { error: consentTrackingError } = await supabase
+        .from('tenant_consent')
+        .upsert({
+          tenant_id: tenantId,
+          tenant_name: tenantName,
+          consented_by_user_id: tenantRecord.added_by_user_id,
+          consent_granted_at: new Date().toISOString(),
+          is_active: true,
+        }, {
+          onConflict: 'tenant_id',
+        });
+
+      if (consentTrackingError) {
+        // Log but don't fail - msp_managed_tenants is the authoritative MSP record
+      }
     }
 
     // Modify the success redirect based on verification result
@@ -289,7 +289,7 @@ export async function GET(request: NextRequest) {
       const warningUrl = new URL('/dashboard/msp/tenants', baseUrl);
       warningUrl.searchParams.set('warning', 'incomplete_permissions');
       warningUrl.searchParams.set('tenant', tenantRecordId);
-      warningUrl.searchParams.set('message', 'Consent granted but Intune permissions missing. Customer admin needs to re-grant consent with the correct permissions.');
+      warningUrl.searchParams.set('message', 'Consent granted but Intune permissions could not be verified. The customer admin may need to re-grant consent, or Microsoft may still be propagating permissions — please retry in a few minutes.');
 
       return NextResponse.redirect(warningUrl);
     }

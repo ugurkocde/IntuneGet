@@ -16,6 +16,7 @@ import { getAppConfig } from '@/lib/config';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getFeatureFlags } from '@/lib/features';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
+import { checkStoredConsent } from '@/lib/msp/consent-cache';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { acquireGraphToken } from '@/lib/graph-token';
@@ -103,20 +104,51 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify admin consent for the target tenant before accepting jobs
-    // This prevents jobs from being queued when uploads will ultimately fail
-    const consentResult = await verifyTenantConsent(tenantId);
+    // This prevents jobs from being queued when uploads will ultimately fail.
+    //
+    // Fast path: if a recent successful verification is cached in Supabase
+    // (verify-consent route writes this on every successful check), trust it
+    // and skip the live token call. The cart's "Ready to deploy" indicator
+    // already does an authoritative check via /api/auth/verify-consent, so a
+    // present cache record means the user just passed that gate moments ago.
+    // This also avoids transient token-endpoint blips that would otherwise be
+    // misclassified as a deployment-blocking error.
+    const hasCachedConsent = await checkStoredConsent(tenantId);
+    let consentResult: Awaited<ReturnType<typeof verifyTenantConsent>>;
+
+    if (hasCachedConsent) {
+      consentResult = { verified: true };
+    } else {
+      consentResult = await verifyTenantConsent(tenantId);
+    }
+
     if (!consentResult.verified) {
       const isPermissionError = consentResult.error === 'insufficient_intune_permissions';
+      const isTransient = consentResult.error === 'network_error' || consentResult.error === 'missing_credentials';
+
+      const errorTitle = isPermissionError
+        ? 'Intune permissions required'
+        : isTransient
+          ? 'Could not verify consent'
+          : 'Admin consent required';
+
+      const errorMessage = isPermissionError
+        ? 'Admin consent was granted but Intune permissions (DeviceManagementApps.ReadWrite.All) are missing. Please have a Global Administrator re-grant admin consent.'
+        : consentResult.error === 'network_error'
+          ? "We couldn't reach Microsoft to verify your tenant's consent right now. This is usually a transient issue — please try again in a moment."
+          : consentResult.error === 'missing_credentials'
+            ? 'Server configuration issue. Please contact your administrator.'
+            : 'Admin consent has not been granted for your organization. Please complete the onboarding process.';
+
       return NextResponse.json(
         {
-          error: isPermissionError ? 'Intune permissions required' : 'Admin consent required',
-          message: isPermissionError
-            ? 'Admin consent was granted but Intune permissions (DeviceManagementApps.ReadWrite.All) are missing. Please have a Global Administrator re-grant admin consent.'
-            : 'Admin consent has not been granted for your organization. Please complete the onboarding process.',
+          error: errorTitle,
+          message: errorMessage,
           consentRequired: consentResult.error === 'consent_not_granted',
           permissionsRequired: isPermissionError,
+          retryable: isTransient,
         },
-        { status: 403 }
+        { status: isTransient ? 503 : 403 }
       );
     }
 
