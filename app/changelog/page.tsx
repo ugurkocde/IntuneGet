@@ -27,6 +27,17 @@ interface Release {
 
 const releases: Release[] = [
   {
+    version: "0.6.6",
+    date: "2026-04-28",
+    title: "SourceForge Reliability Improvements",
+    type: "patch",
+    highlights: [
+      "Freeplane installer downloads now go through GitHub Releases instead of SourceForge, eliminating frequent SourceForge mirror failures for this app",
+      "SourceForge download failures now surface as a transient error with a clear retry hint, since SourceForge mirror availability fluctuates and a quick retry usually succeeds",
+      "Added a per-app installer URL override mechanism so future SourceForge-hosted apps with cleaner download sources can be redirected without workflow changes",
+    ],
+  },
+  {
     version: "0.6.5",
     date: "2026-03-30",
     title: "App Dependencies & Supersedence, Changelog, and Bug Fixes",
