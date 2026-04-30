@@ -78,7 +78,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci && npm install --no-save sharp
+        # Use npm install (not npm ci) so platform-specific transitive deps
+        # of sharp (e.g. @emnapi/* on linux-x64) can be resolved on the fly.
+        # The committed lock file is generated on macOS and doesn't list them.
+        run: npm install --no-audit --no-fund --no-save sharp
 
       - name: Fetch web icons
         id: fetch-web-icons
