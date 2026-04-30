@@ -28,7 +28,13 @@ param(
     [string]$OutputDir,
 
     [Parameter(Mandatory=$false)]
-    [string]$AppId = "Unknown"
+    [string]$AppId = "Unknown",
+
+    # When set, sizes whose target file already exists are left alone. Used by
+    # the missing-sizes-only top-up mode to add 256 to existing apps without
+    # rewriting their existing 32/64/128 icons.
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipExisting
 )
 
 $ErrorActionPreference = 'Stop'
@@ -490,7 +496,8 @@ function Convert-ToMultipleSizes {
     param(
         [string]$SourcePath,
         [string]$OutputDir,
-        [int[]]$Sizes
+        [int[]]$Sizes,
+        [switch]$SkipExisting
     )
 
     Write-Host "Converting icon to multiple sizes..."
@@ -527,6 +534,10 @@ function Convert-ToMultipleSizes {
         }
 
         $outputPath = Join-Path $OutputDir "icon-$size.png"
+        if ($SkipExisting -and (Test-Path $outputPath)) {
+            Write-Host "Skipping ${size}x${size} (already exists - top-up mode)"
+            continue
+        }
         $conversionSucceeded = $false
 
         # Try ImageMagick first (if available)
@@ -608,7 +619,7 @@ if ($iconPath -and (Test-Path $iconPath)) {
     Write-Host "Extracted icon: $iconPath" -ForegroundColor Green
 
     # Convert to multiple sizes
-    $generatedFiles = Convert-ToMultipleSizes -SourcePath $iconPath -OutputDir $OutputDir -Sizes $IconSizes
+    $generatedFiles = Convert-ToMultipleSizes -SourcePath $iconPath -OutputDir $OutputDir -Sizes $IconSizes -SkipExisting:$SkipExisting
 
     if ($generatedFiles.Count -gt 0) {
         Write-Host "Generated $($generatedFiles.Count) icon sizes" -ForegroundColor Green

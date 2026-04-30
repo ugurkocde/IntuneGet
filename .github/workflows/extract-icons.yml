@@ -29,6 +29,11 @@ on:
         required: false
         default: 'false'
         type: boolean
+      missing_sizes_only:
+        description: 'Top-up mode: only generate sizes missing on disk for apps that already have an icon. Existing sizes are never overwritten.'
+        required: false
+        default: 'false'
+        type: boolean
 
 # Prevent concurrent runs that could cause git conflicts
 # Use same group as build-app-list and sync-manifests to ensure sequential execution
@@ -82,6 +87,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MAX_APPS: ${{ env.MAX_APPS }}
           ICONS_DIR: public/icons
+          MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
         run: node .github/scripts/fetch-web-icons.mjs
 
       - name: Commit web icons
@@ -276,18 +282,22 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
           FORCE_REFRESH: ${{ github.event.inputs.force_refresh || 'false' }}
+          MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
           MAX_APPS: ${{ env.MAX_APPS }}
         shell: bash
         run: |
           node << 'EOF'
           const fs = require('fs');
+          const path = require('path');
           const { createClient } = require('@supabase/supabase-js');
 
           const supabaseUrl = process.env.SUPABASE_URL;
           const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
           const appIds = process.env.APP_IDS || 'all';
           const forceRefresh = process.env.FORCE_REFRESH === 'true';
+          const missingSizesOnly = process.env.MISSING_SIZES_ONLY === 'true';
           const maxApps = parseInt(process.env.MAX_APPS) || 100;
+          const TARGET_SIZES = [32, 64, 128, 256];
 
           if (!supabaseUrl || !supabaseKey) {
             console.error('Supabase credentials not configured');
@@ -299,19 +309,27 @@ jobs:
           async function getApps() {
             let query = supabase
               .from('curated_apps')
-              .select('winget_id, name, publisher, latest_version, icon_extraction_attempts');
+              .select('winget_id, name, publisher, latest_version, icon_extraction_attempts, icon_source');
 
             if (appIds !== 'all') {
               const targetIds = appIds.split(',').map(id => id.trim());
               query = query.in('winget_id', targetIds);
             }
 
-            if (!forceRefresh) {
-              query = query.or('has_icon.is.null,has_icon.eq.false');
-            }
+            if (missingSizesOnly) {
+              // Top-up mode: target apps that already have a binary-sourced icon.
+              // Web-sourced icons are handled by the fetch-web-icons job.
+              query = query
+                .eq('has_icon', true)
+                .like('icon_source', 'binary_%');
+            } else {
+              if (!forceRefresh) {
+                query = query.or('has_icon.is.null,has_icon.eq.false');
+              }
 
-            if (!forceRefresh) {
-              query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
+              if (!forceRefresh) {
+                query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
+              }
             }
 
             query = query.limit(maxApps);
@@ -345,15 +363,26 @@ jobs:
 
             const appsToProcess = [];
             for (const app of apps) {
-              const iconPath = `public/icons/${app.winget_id}/icon-64.png`;
-              if (forceRefresh || !fs.existsSync(iconPath)) {
-                const attempts = app.icon_extraction_attempts || 0;
-                if (!forceRefresh && attempts >= 3) {
-                  console.log(`Skipping ${app.winget_id} (${attempts} failed attempts)`);
-                  continue;
-                }
+              const iconDir = `public/icons/${app.winget_id}`;
+              if (missingSizesOnly) {
+                // Process only if at least one target size is missing on disk.
+                const allPresent = TARGET_SIZES.every(s =>
+                  fs.existsSync(path.join(iconDir, `icon-${s}.png`))
+                );
+                if (allPresent) continue;
                 app.cached_installer_url = installerUrlMap[app.winget_id] || null;
                 appsToProcess.push(app);
+              } else {
+                const iconPath = `${iconDir}/icon-64.png`;
+                if (forceRefresh || !fs.existsSync(iconPath)) {
+                  const attempts = app.icon_extraction_attempts || 0;
+                  if (!forceRefresh && attempts >= 3) {
+                    console.log(`Skipping ${app.winget_id} (${attempts} failed attempts)`);
+                    continue;
+                  }
+                  app.cached_installer_url = installerUrlMap[app.winget_id] || null;
+                  appsToProcess.push(app);
+                }
               }
               if (appsToProcess.length >= maxApps) break;
             }
@@ -379,9 +408,15 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
+
+          $skipExisting = $env:MISSING_SIZES_ONLY -eq 'true'
+          if ($skipExisting) {
+            Write-Host "Top-up mode: existing icon sizes will be preserved" -ForegroundColor Cyan
+          }
 
           $apps = Get-Content "apps-to-process.json" | ConvertFrom-Json
 
@@ -543,7 +578,8 @@ jobs:
               $extractResult = & "$env:GITHUB_WORKSPACE\.github\scripts\extract-icon.ps1" `
                 -InstallerPath $installerPath `
                 -OutputDir $iconDir `
-                -AppId $wingetId 2>&1
+                -AppId $wingetId `
+                -SkipExisting:$skipExisting 2>&1
               $extractExitCode = $LASTEXITCODE
 
               if ($extractExitCode -ne 0) {

@@ -18,6 +18,10 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const MAX_APPS = parseInt(process.env.MAX_APPS || '500', 10);
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
 const ICON_SIZES = [32, 64, 128, 256];
+// When true, target apps that already have an icon and only generate sizes
+// that are missing on disk. Re-uses each app's original icon_source so the
+// new size stays visually consistent with the existing ones.
+const MISSING_SIZES_ONLY = process.env.MISSING_SIZES_ONLY === 'true';
 
 // Domains that should be skipped for favicon extraction (they host projects, not publishers)
 const GENERIC_DOMAINS = new Set([
@@ -81,22 +85,29 @@ async function resizeAndSave(sourceBuffer, outputDir) {
   }
 
   let success = false;
+  let written = 0;
   for (const size of ICON_SIZES) {
     if (sourceDim && size > sourceDim) {
       // Skip upscaling — keeps the largest produced size honest
+      continue;
+    }
+    const targetPath = path.join(outputDir, `icon-${size}.png`);
+    if (MISSING_SIZES_ONLY && fs.existsSync(targetPath)) {
+      // Don't overwrite sizes that were produced previously
       continue;
     }
     try {
       await sharp(sourceBuffer)
         .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .png()
-        .toFile(path.join(outputDir, `icon-${size}.png`));
+        .toFile(targetPath);
       success = true;
+      written++;
     } catch (err) {
       console.warn(`  Failed to resize to ${size}px: ${err.message}`);
     }
   }
-  return success;
+  return MISSING_SIZES_ONLY ? written > 0 : success;
 }
 
 /**
@@ -162,11 +173,22 @@ async function fetchAppsNeedingIcons(limit) {
 
   while (apps.length < limit) {
     const batchSize = Math.min(PAGE_SIZE, limit - apps.length);
-    const { data, error } = await supabase
+    let query = supabase
       .from('curated_apps')
-      .select('winget_id, name, publisher, homepage')
-      .or('has_icon.is.null,has_icon.eq.false')
+      .select('winget_id, name, publisher, homepage, icon_source')
       .range(offset, offset + batchSize - 1);
+
+    if (MISSING_SIZES_ONLY) {
+      // Top-up mode: only apps that already have an icon from a web source.
+      // Binary-extracted icons are handled by extract-icon.ps1.
+      query = query
+        .eq('has_icon', true)
+        .in('icon_source', ['github_avatar', 'favicon']);
+    } else {
+      query = query.or('has_icon.is.null,has_icon.eq.false');
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Failed to query apps:', error.message);
@@ -190,7 +212,11 @@ async function fetchAppsNeedingIcons(limit) {
 async function main() {
   const apps = await fetchAppsNeedingIcons(MAX_APPS);
 
-  console.log(`Found ${apps.length} apps without icons`);
+  if (MISSING_SIZES_ONLY) {
+    console.log(`Found ${apps.length} web-iconed apps to top up with missing sizes`);
+  } else {
+    console.log(`Found ${apps.length} apps without icons`);
+  }
 
   const results = [];
   let githubHits = 0;
@@ -202,32 +228,52 @@ async function main() {
     const publisher = wingetId.split('.')[0];
     const outputDir = path.join(ICONS_DIR, wingetId);
 
-    // Skip if icon files already exist on disk
-    if (fs.existsSync(path.join(outputDir, 'icon-64.png'))) {
-      continue;
+    if (MISSING_SIZES_ONLY) {
+      // Skip if every target size already exists on disk
+      const allPresent = ICON_SIZES.every(s =>
+        fs.existsSync(path.join(outputDir, `icon-${s}.png`))
+      );
+      if (allPresent) continue;
+    } else {
+      // Skip if icon files already exist on disk
+      if (fs.existsSync(path.join(outputDir, 'icon-64.png'))) {
+        continue;
+      }
     }
 
     let source = null;
     let buffer = null;
 
-    // Tier 2: GitHub avatar
-    buffer = await tryGitHubAvatar(publisher);
-    if (buffer) {
-      source = 'github_avatar';
-    }
-
-    // Tier 3: Favicon (only if Tier 2 failed and homepage exists)
-    if (!buffer && app.homepage) {
-      buffer = await tryFavicon(app.homepage);
+    if (MISSING_SIZES_ONLY) {
+      // Re-use the source that originally produced this app's icon so the
+      // newly added size matches the existing ones visually.
+      if (app.icon_source === 'github_avatar') {
+        buffer = await tryGitHubAvatar(publisher);
+        if (buffer) source = 'github_avatar';
+      } else if (app.icon_source === 'favicon') {
+        buffer = await tryFavicon(app.homepage);
+        if (buffer) source = 'favicon';
+      }
+    } else {
+      // Tier 2: GitHub avatar
+      buffer = await tryGitHubAvatar(publisher);
       if (buffer) {
-        source = 'favicon';
+        source = 'github_avatar';
+      }
+
+      // Tier 3: Favicon (only if Tier 2 failed and homepage exists)
+      if (!buffer && app.homepage) {
+        buffer = await tryFavicon(app.homepage);
+        if (buffer) {
+          source = 'favicon';
+        }
       }
     }
 
     if (buffer && source) {
       const saved = await resizeAndSave(buffer, outputDir);
       if (saved) {
-        console.log(`  [${source}] ${wingetId}`);
+        console.log(`  [${source}] ${wingetId}${MISSING_SIZES_ONLY ? ' (topped up)' : ''}`);
         results.push({
           winget_id: wingetId,
           status: 'success',
@@ -244,7 +290,7 @@ async function main() {
     results.push({
       winget_id: wingetId,
       status: 'skipped',
-      reason: 'no_web_icon_available',
+      reason: MISSING_SIZES_ONLY ? 'source_unavailable_for_topup' : 'no_web_icon_available',
     });
   }
 
