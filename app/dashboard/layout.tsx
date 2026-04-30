@@ -69,24 +69,32 @@ export default function DashboardLayout({
   }, [isLoading, isAuthenticated, isSigningOut, router]);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && !isCheckingOnboarding) {
-      if (!isOnboardingComplete) {
-        if (errorType === 'network_error' || errorType === 'missing_credentials') {
-          setShowRetryBanner(true);
-        } else if (errorType === 'consent_propagating') {
-          // Consent is actually granted; Microsoft is still propagating. Keep
-          // the user on the dashboard with a banner rather than bouncing them
-          // to the onboarding re-consent flow every few seconds.
-          setShowRetryBanner(true);
-        } else if (errorType === 'consent_not_granted') {
-          router.push('/onboarding');
-        } else {
-          router.push('/onboarding');
-        }
-      } else {
-        setShowRetryBanner(false);
-      }
+    if (isLoading || !isAuthenticated || isCheckingOnboarding) return;
+
+    if (isOnboardingComplete) {
+      setShowRetryBanner(false);
+      return;
     }
+
+    // Only act on a definitive errorType. errorType=null + !isOnboardingComplete
+    // is a transient state during MSAL hydration / verification — redirecting
+    // here would push known-good users to /onboarding on browser refresh.
+    if (errorType === null) return;
+
+    if (
+      errorType === 'network_error' ||
+      errorType === 'missing_credentials' ||
+      errorType === 'consent_propagating'
+    ) {
+      // Consent may already be granted (propagating) or the failure is
+      // transient. Keep the user on the dashboard with a retry banner
+      // rather than bouncing them to the onboarding re-consent flow.
+      setShowRetryBanner(true);
+      return;
+    }
+
+    // consent_not_granted or insufficient_intune_permissions: real consent gap.
+    router.push('/onboarding');
   }, [isLoading, isAuthenticated, isCheckingOnboarding, isOnboardingComplete, errorType, router]);
 
   useEffect(() => {

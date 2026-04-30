@@ -111,8 +111,12 @@ export function useOnboardingStatus(): OnboardingStatus {
       markOnboardingComplete();
       setIsOnboardingComplete(true);
     } else {
-      // On consent revocation, clear the cache
-      if (result.error === 'consent_not_granted') {
+      // On consent revocation or insufficient Intune scopes, clear the cache
+      // so the user can't bypass re-consent via a stale localStorage entry.
+      if (
+        result.error === 'consent_not_granted' ||
+        result.error === 'insufficient_intune_permissions'
+      ) {
         clearOnboardingCache();
       }
       setIsOnboardingComplete(false);
@@ -125,9 +129,11 @@ export function useOnboardingStatus(): OnboardingStatus {
    * Check onboarding status on mount
    */
   useEffect(() => {
-    // Wait for auth to be determined
+    // Wait for auth to be determined. Stay in the "checking" state instead of
+    // flipping to "not checking, not complete, no error" — that transient
+    // tuple is indistinguishable from a finished negative result and would
+    // otherwise let consumers redirect on stale state during MSAL hydration.
     if (!isAuthenticated) {
-      setIsChecking(false);
       return;
     }
 
@@ -151,8 +157,13 @@ export function useOnboardingStatus(): OnboardingStatus {
         markOnboardingComplete();
         setIsOnboardingComplete(true);
       } else {
-        // On consent revocation, clear the cache
-        if (result.error === 'consent_not_granted') {
+        // On consent revocation or insufficient Intune scopes, clear the
+        // cache so the user can't bypass re-consent via a stale localStorage
+        // entry on a subsequent direct visit to /dashboard.
+        if (
+          result.error === 'consent_not_granted' ||
+          result.error === 'insufficient_intune_permissions'
+        ) {
           clearOnboardingCache();
         }
         setIsOnboardingComplete(false);

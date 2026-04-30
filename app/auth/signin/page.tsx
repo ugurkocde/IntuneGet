@@ -67,13 +67,20 @@ function SignInContent() {
   };
 
   /**
-   * Verify consent status via API (server-side check)
-   * Returns true if consent is granted and permissions are valid
+   * Verify consent status via API (server-side check). Returns the structured
+   * result so the caller can distinguish a real consent gap (route to
+   * onboarding, wipe cache) from a transient failure (keep cache, retry on
+   * the dashboard).
    */
-  const verifyConsentStatus = useCallback(async (): Promise<boolean> => {
+  type VerifyOutcome =
+    | { kind: 'verified' }
+    | { kind: 'consent_missing' }
+    | { kind: 'transient' };
+
+  const verifyConsentStatus = useCallback(async (): Promise<VerifyOutcome> => {
     try {
       const token = await getAccessToken();
-      if (!token) return false;
+      if (!token) return { kind: 'transient' };
 
       const response = await fetch('/api/auth/verify-consent', {
         method: 'POST',
@@ -83,12 +90,23 @@ function SignInContent() {
         },
       });
 
-      if (!response.ok) return false;
+      if (!response.ok) return { kind: 'transient' };
 
       const result = await response.json();
-      return result.verified === true;
+      if (result.verified === true) return { kind: 'verified' };
+
+      // Only treat explicit consent-side failures as a reason to wipe the
+      // cache and route to onboarding. Network/propagation/missing-credentials
+      // are transient and must not invalidate a known-good local cache.
+      if (
+        result.error === 'consent_not_granted' ||
+        result.error === 'insufficient_intune_permissions'
+      ) {
+        return { kind: 'consent_missing' };
+      }
+      return { kind: 'transient' };
     } catch {
-      return false;
+      return { kind: 'transient' };
     }
   }, [getAccessToken]);
 
@@ -98,15 +116,18 @@ function SignInContent() {
     if (isAuthenticated && !isVerifyingConsent) {
       setIsVerifyingConsent(true);
 
-      verifyConsentStatus().then((isVerified) => {
-        if (isVerified) {
-          // Consent verified - update cache and go to dashboard
+      verifyConsentStatus().then((outcome) => {
+        if (outcome.kind === 'verified') {
           markOnboardingComplete();
           router.push(callbackUrl);
-        } else {
-          // Consent not granted or incomplete - clear stale cache and go to onboarding
+        } else if (outcome.kind === 'consent_missing') {
           clearOnboardingCache();
           router.push('/onboarding');
+        } else {
+          // Transient failure: don't wipe the cache and don't strand the user
+          // on /onboarding. Send them to the dashboard, where the in-page
+          // retry banner can re-verify against the live API.
+          router.push(callbackUrl);
         }
       });
     }
