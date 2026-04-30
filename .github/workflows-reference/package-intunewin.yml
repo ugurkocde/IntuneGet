@@ -1123,10 +1123,19 @@ jobs:
 
           Write-Host "Detection rules configured: $($graphRules.Count) rule(s)"
 
-          # Load app icon if available
+          # Load app icon if available - prefer the largest available size
+          # so the Company Portal renders crisply on high-DPI displays.
           $largeIcon = $null
-          $iconPath = "intuneget/public/icons/$env:WINGET_ID/icon-128.png"
-          if (Test-Path $iconPath) {
+          $iconDir = "intuneget/public/icons/$env:WINGET_ID"
+          $iconPath = $null
+          foreach ($size in @(256, 128)) {
+            $candidate = Join-Path $iconDir "icon-$size.png"
+            if (Test-Path $candidate) {
+              $iconPath = $candidate
+              break
+            }
+          }
+          if ($iconPath) {
             $iconBytes = [System.IO.File]::ReadAllBytes($iconPath)
             $iconBase64 = [System.Convert]::ToBase64String($iconBytes)
             $largeIcon = @{
@@ -1135,7 +1144,7 @@ jobs:
             }
             Write-Host "Loaded app icon from $iconPath"
           } else {
-            Write-Host "No icon found at $iconPath, deploying without icon"
+            Write-Host "No icon found in $iconDir, deploying without icon"
           }
 
           $sourceMarker = "Source: IntuneGet.com"

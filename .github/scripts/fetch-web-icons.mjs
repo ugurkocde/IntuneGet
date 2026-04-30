@@ -2,8 +2,8 @@
  * fetch-web-icons.mjs
  *
  * Multi-tier web icon fetcher for apps without icons.
- * Tier 2: GitHub publisher avatar (https://github.com/{publisher}.png?size=128)
- * Tier 3: Google S2 favicon (https://www.google.com/s2/favicons?domain={domain}&sz=128)
+ * Tier 2: GitHub publisher avatar (https://github.com/{publisher}.png?size=460)
+ * Tier 3: Google S2 favicon (https://www.google.com/s2/favicons?domain={domain}&sz=256)
  *
  * Runs on Ubuntu -- no Windows APIs needed.
  */
@@ -17,7 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const MAX_APPS = parseInt(process.env.MAX_APPS || '500', 10);
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
-const ICON_SIZES = [32, 64, 128];
+const ICON_SIZES = [32, 64, 128, 256];
 
 // Domains that should be skipped for favicon extraction (they host projects, not publishers)
 const GENERIC_DOMAINS = new Set([
@@ -72,8 +72,20 @@ async function fetchWithTimeout(url, timeoutMs = 10000) {
 async function resizeAndSave(sourceBuffer, outputDir) {
   fs.mkdirSync(outputDir, { recursive: true });
 
+  let sourceDim = 0;
+  try {
+    const meta = await sharp(sourceBuffer).metadata();
+    sourceDim = Math.min(meta.width || 0, meta.height || 0);
+  } catch {
+    // metadata read failed — fall through and let resize attempts log their own errors
+  }
+
   let success = false;
   for (const size of ICON_SIZES) {
+    if (sourceDim && size > sourceDim) {
+      // Skip upscaling — keeps the largest produced size honest
+      continue;
+    }
     try {
       await sharp(sourceBuffer)
         .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
@@ -92,7 +104,7 @@ async function resizeAndSave(sourceBuffer, outputDir) {
  * Returns the image buffer on success, null on failure.
  */
 async function tryGitHubAvatar(publisher) {
-  const url = `https://github.com/${encodeURIComponent(publisher)}.png?size=128`;
+  const url = `https://github.com/${encodeURIComponent(publisher)}.png?size=460`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
@@ -124,7 +136,7 @@ async function tryFavicon(homepage) {
 
   if (GENERIC_DOMAINS.has(domain)) return null;
 
-  const url = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+  const url = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return null;

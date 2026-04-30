@@ -33,8 +33,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Icon sizes to generate
-$IconSizes = @(32, 64, 128)
+# Icon sizes to generate (sizes larger than the source are skipped to avoid upscaling)
+$IconSizes = @(32, 64, 128, 256)
 
 # Ensure output directory exists
 if (-not (Test-Path $OutputDir)) {
@@ -507,7 +507,25 @@ function Convert-ToMultipleSizes {
     $sourceExt = [System.IO.Path]::GetExtension($SourcePath).ToLower()
     $isMultiFrame = $sourceExt -in @('.ico', '.tif', '.tiff')
 
+    # Read source dimensions so we can skip upscaling. For multi-frame formats
+    # the largest frame may not be frame 0, so probe via System.Drawing which
+    # surfaces the default frame's dimensions.
+    $sourceDim = 0
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+        $probeImage = [System.Drawing.Image]::FromFile($SourcePath)
+        $sourceDim = [Math]::Min($probeImage.Width, $probeImage.Height)
+        $probeImage.Dispose()
+    } catch {
+        Write-Host "Could not probe source dimensions: $_"
+    }
+
     foreach ($size in $Sizes) {
+        if ($sourceDim -gt 0 -and $size -gt $sourceDim) {
+            Write-Host "Skipping ${size}x${size} (source is only ${sourceDim}px - would upscale)"
+            continue
+        }
+
         $outputPath = Join-Path $OutputDir "icon-$size.png"
         $conversionSucceeded = $false
 
