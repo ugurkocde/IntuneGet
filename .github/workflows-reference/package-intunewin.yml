@@ -1125,7 +1125,7 @@ jobs:
 
           # Load app icon if available
           $largeIcon = $null
-          $iconPath = "intuneget/icons/$env:WINGET_ID/icon-128.png"
+          $iconPath = "intuneget/public/icons/$env:WINGET_ID/icon-128.png"
           if (Test-Path $iconPath) {
             $iconBytes = [System.IO.File]::ReadAllBytes($iconPath)
             $iconBase64 = [System.Convert]::ToBase64String($iconBytes)
