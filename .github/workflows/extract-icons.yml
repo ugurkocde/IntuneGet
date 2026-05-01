@@ -54,7 +54,7 @@ jobs:
   # ============================================================
   extract-web-icons:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
