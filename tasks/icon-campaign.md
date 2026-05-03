@@ -246,6 +246,56 @@ Closing the rest of the gap would need either:
 - `force_refresh=true` on the binary tier (user must authorize -- it
   re-downloads installers and rewrites every existing icon).
 
+## Binary-icon gap-fill pass (option 1, post-gap-fill, 2026-05-03)
+
+Added `BINARY_GAP_FILL` mode to `fetch-web-icons.mjs` (commit `522a653d`):
+- Targets `has_icon=true AND icon_source LIKE 'binary_%' AND missing icon-256`
+- Tries GitHub avatar -> homepage scrape (skips MS Store + favicon -- not
+  applicable / too low-res for this case)
+- Quality gate in script: only writes if source >= 256 px (so wrapper PE
+  icons are never replaced by something lower-res)
+- When it does write, replaces all 4 sizes for visual consistency
+
+### Run [`25285475449`](https://github.com/ugurkocde/IntuneGet/actions/runs/25285475449)
+
+`binary_gap_fill=true`, `max_apps=5000`, `skip_binary=true`.
+
+| Tier              | Hits |
+|-------------------|------|
+| Microsoft Store   |   0  |
+| GitHub avatars    | 269  |
+| Homepage images   |  13  |
+| Favicons          |   0  |
+| No icon found     | 459  |
+| Total processed   | 1625 |
+
+Bot commit `02313cbd`: 282 apps got fresh icons sourced from the web.
+File ops breakdown: **282 added** (the new icon-256.png files) +
+**846 modified** (= 282 apps x 3 existing sizes 32/64/128 each, replaced
+with the higher-fidelity web source).
+
+### Coverage at end of binary gap-fill
+
+- Total app icon directories: **12,041**
+- Apps with `icon-256.png`: **10,755** (up from 10,473 at end of previous gap-fill)
+- **Coverage: 89.3%** -- 0.7 percentage points short of the 90% goal.
+
+### What's left to close the final ~0.7%
+
+The remaining ~1,286 apps without 256-px icons are split across:
+- ~459 binary apps whose GitHub publisher avatar / homepage image also
+  came back at < 256 px or didn't exist. No web source found.
+- ~125 apps still tagged `has_icon=false` with no upstream source on
+  any tier.
+- Catalog growth -- new apps added since each pass.
+
+Closing this last segment would need either:
+- Manual curation for the most-deployed apps (highest leverage per hour).
+- `force_refresh=true` on the binary tier with the new payload extractor
+  -- might find better icons for some of the 459, but most likely the
+  binary itself doesn't carry a >= 256 px asset either.
+- Wikipedia / Wikidata as another tier.
+
 ## Code changes shipped during the campaign
 
 - `f3dbe228` fix: load app icon from public/icons path
@@ -259,5 +309,6 @@ Closing the rest of the gap would need either:
 - `a87da7b1` ci: add deterministic ordering + offset pagination to top-up query
 - `90a6b14b` feat: add Microsoft Store and homepage-image tiers to web icon fetcher
 - `7302de78` ci: bump web-icon job timeout to 120m
+- `522a653d` feat: add binary-icon gap-fill mode to web fetcher
 
 Plus the corresponding edits in `IntuneGet-Workflows` (the active workflow repo).
