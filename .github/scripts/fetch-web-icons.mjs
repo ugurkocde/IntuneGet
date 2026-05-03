@@ -25,6 +25,12 @@ const ICON_SIZES = [32, 64, 128, 256];
 // new size stays visually consistent with the existing ones.
 const MISSING_SIZES_ONLY = process.env.MISSING_SIZES_ONLY === 'true';
 
+// When true, target binary-iconed apps that are missing icon-256.png and try
+// to find a better source on the web (GitHub avatar, homepage scrape, favicon).
+// Existing sizes are REPLACED if-and-only-if the new source can actually
+// produce a real >= 256 px icon, so quality never regresses.
+const BINARY_GAP_FILL = process.env.BINARY_GAP_FILL === 'true';
+
 // Domains that should be skipped for favicon extraction (they host projects, not publishers)
 const GENERIC_DOMAINS = new Set([
   'github.com',
@@ -333,6 +339,15 @@ async function fetchAppsNeedingIcons(limit) {
       query = query
         .eq('has_icon', true)
         .in('icon_source', ['github_avatar', 'favicon']);
+    } else if (BINARY_GAP_FILL) {
+      // Binary-icon gap fill: target apps whose existing icon came from
+      // payload extraction but never produced a 256-px tier. Try web sources
+      // (GitHub avatar, homepage scrape) to see if we can replace a low-res
+      // wrapper PE icon with a crisper version.
+      query = query
+        .eq('has_icon', true)
+        .like('icon_source', 'binary_%')
+        .order('winget_id', { ascending: true });
     } else {
       query = query.or('has_icon.is.null,has_icon.eq.false');
     }
@@ -363,6 +378,8 @@ async function main() {
 
   if (MISSING_SIZES_ONLY) {
     console.log(`Found ${apps.length} web-iconed apps to top up with missing sizes`);
+  } else if (BINARY_GAP_FILL) {
+    console.log(`Found ${apps.length} binary-iconed apps to scan for higher-res web sources`);
   } else {
     console.log(`Found ${apps.length} apps without icons`);
   }
@@ -385,6 +402,9 @@ async function main() {
         fs.existsSync(path.join(outputDir, `icon-${s}.png`))
       );
       if (allPresent) continue;
+    } else if (BINARY_GAP_FILL) {
+      // Skip if a 256-px tier is already present (gap fill done for this app)
+      if (fs.existsSync(path.join(outputDir, 'icon-256.png'))) continue;
     } else {
       // Skip if icon files already exist on disk
       if (fs.existsSync(path.join(outputDir, 'icon-64.png'))) {
@@ -404,6 +424,35 @@ async function main() {
       } else if (app.icon_source === 'favicon') {
         buffer = await tryFavicon(app.homepage);
         if (buffer) source = 'favicon';
+      }
+    } else if (BINARY_GAP_FILL) {
+      // Try web sources for binary apps that never got a 256. We do NOT try
+      // Microsoft Store here -- msstore IDs don't appear under binary_*.
+      // We do NOT try favicon here -- it caps at low resolution and would
+      // never beat the existing wrapper PE icon at 32/64/128.
+      buffer = await tryGitHubAvatar(publisher);
+      if (buffer) source = 'github_avatar';
+
+      if (!buffer && app.homepage) {
+        buffer = await tryHomepageImage(app.homepage);
+        if (buffer) source = 'homepage_image';
+      }
+
+      // Quality gate: only proceed if the source can actually produce a real
+      // 256 px tier. If it can't, leaving the existing wrapper PE icons in
+      // place is the right call -- they at least show the user something.
+      if (buffer) {
+        try {
+          const meta = await sharp(buffer).metadata();
+          const minDim = Math.min(meta.width || 0, meta.height || 0);
+          if (minDim < 256) {
+            buffer = null;
+            source = null;
+          }
+        } catch {
+          buffer = null;
+          source = null;
+        }
       }
     } else {
       // Tier 1: Microsoft Store DisplayCatalog (msstore-source apps only).
@@ -437,7 +486,10 @@ async function main() {
     if (buffer && source) {
       const saved = await resizeAndSave(buffer, outputDir);
       if (saved) {
-        console.log(`  [${source}] ${wingetId}${MISSING_SIZES_ONLY ? ' (topped up)' : ''}`);
+        const tag = MISSING_SIZES_ONLY ? ' (topped up)'
+                  : BINARY_GAP_FILL ? ' (binary gap-fill)'
+                  : '';
+        console.log(`  [${source}] ${wingetId}${tag}`);
         results.push({
           winget_id: wingetId,
           status: 'success',
@@ -456,7 +508,9 @@ async function main() {
     results.push({
       winget_id: wingetId,
       status: 'skipped',
-      reason: MISSING_SIZES_ONLY ? 'source_unavailable_for_topup' : 'no_web_icon_available',
+      reason: MISSING_SIZES_ONLY ? 'source_unavailable_for_topup'
+            : BINARY_GAP_FILL ? 'no_high_res_web_source'
+            : 'no_web_icon_available',
     });
   }
 

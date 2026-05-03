@@ -34,6 +34,11 @@ on:
         required: false
         default: 'false'
         type: boolean
+      binary_gap_fill:
+        description: 'Web-tier gap fill for binary apps missing icon-256. Tries GitHub avatar + homepage scrape; replaces existing wrapper-PE icons only when the new source is >= 256 px.'
+        required: false
+        default: 'false'
+        type: boolean
       start_offset:
         description: 'Pagination offset for missing-sizes-only mode (winget_id-ordered). Use to walk through the binary tier batch by batch.'
         required: false
@@ -95,6 +100,7 @@ jobs:
           MAX_APPS: ${{ env.MAX_APPS }}
           ICONS_DIR: public/icons
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
+          BINARY_GAP_FILL: ${{ github.event.inputs.binary_gap_fill || 'false' }}
         run: node .github/scripts/fetch-web-icons.mjs
 
       - name: Commit web icons
