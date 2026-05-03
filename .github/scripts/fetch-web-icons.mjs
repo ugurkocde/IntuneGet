@@ -2,8 +2,10 @@
  * fetch-web-icons.mjs
  *
  * Multi-tier web icon fetcher for apps without icons.
+ * Tier 1: Microsoft Store DisplayCatalog (msstore-source apps with `9`-prefix IDs)
  * Tier 2: GitHub publisher avatar (https://github.com/{publisher}.png?size=460)
- * Tier 3: Google S2 favicon (https://www.google.com/s2/favicons?domain={domain}&sz=256)
+ * Tier 3: Homepage scrape (apple-touch-icon, og:image, twitter:image)
+ * Tier 4: Google S2 favicon (https://www.google.com/s2/favicons?domain={domain}&sz=256)
  *
  * Runs on Ubuntu -- no Windows APIs needed.
  */
@@ -132,6 +134,153 @@ async function tryGitHubAvatar(publisher) {
 }
 
 /**
+ * Tier: Microsoft Store DisplayCatalog API.
+ * Winget msstore-source apps have 12-char IDs starting with `9` (e.g.
+ * 9NBLGGH4NNS1). For those we can pull the official store icons -- usually
+ * available at 300x300 or 1080x1080 square Logos.
+ * Returns the image buffer on success, null on failure.
+ */
+function isMicrosoftStoreId(wingetId) {
+  return /^9[A-Z0-9]{11}$/.test(wingetId);
+}
+
+async function tryMicrosoftStore(wingetId) {
+  if (!isMicrosoftStoreId(wingetId)) return null;
+
+  const url = `https://displaycatalog.mp.microsoft.com/v7.0/products/${encodeURIComponent(wingetId)}?market=US&languages=en-US&fieldsTemplate=details`;
+  try {
+    const res = await fetchWithTimeout(url, 15000);
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const images = data?.Product?.LocalizedProperties?.[0]?.Images;
+    if (!Array.isArray(images) || images.length === 0) return null;
+
+    // Pick the largest square Logo / AppTile / etc. -- skip wide hero banners.
+    const candidates = images
+      .filter(img => img.Uri && img.Width && img.Height && img.Width === img.Height)
+      .sort((a, b) => (b.Width || 0) - (a.Width || 0));
+
+    if (candidates.length === 0) return null;
+    if ((candidates[0].Width || 0) < 96) return null; // too tiny to be useful
+
+    const imgUri = candidates[0].Uri;
+    const fullUrl = imgUri.startsWith('//') ? `https:${imgUri}` : imgUri;
+
+    const imgRes = await fetchWithTimeout(fullUrl, 15000);
+    if (!imgRes.ok) return null;
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    if (buffer.length < 1000) return null;
+    return buffer;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tier: scrape the app homepage for an icon-ish image.
+ * Priority: apple-touch-icon (square, usually 180+) > og:image / twitter:image
+ * (usually banners but sometimes squares). We discard images whose aspect
+ * ratio is too extreme so we don't end up shipping a hero banner as the icon.
+ * Returns the image buffer on success, null on failure.
+ */
+async function tryHomepageImage(homepage) {
+  if (!homepage) return null;
+
+  let pageUrl;
+  try {
+    pageUrl = new URL(homepage);
+  } catch {
+    return null;
+  }
+  if (GENERIC_DOMAINS.has(pageUrl.hostname.replace(/^www\./, ''))) return null;
+
+  let html;
+  try {
+    const res = await fetchWithTimeout(homepage, 15000);
+    if (!res.ok) return null;
+    const ctype = res.headers.get('content-type') || '';
+    if (!ctype.toLowerCase().includes('html')) return null;
+    html = await res.text();
+  } catch {
+    return null;
+  }
+  if (!html || html.length < 200) return null;
+
+  const candidates = [];
+
+  // apple-touch-icon (any rel variant: apple-touch-icon, apple-touch-icon-precomposed)
+  const appleMatches = [...html.matchAll(/<link\b[^>]*rel\s*=\s*["'][^"']*apple-touch-icon[^"']*["'][^>]*>/gi)];
+  for (const m of appleMatches) {
+    const tag = m[0];
+    const href = tag.match(/href\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (!href) continue;
+    const sizes = tag.match(/sizes\s*=\s*["']([^"']+)["']/i)?.[1];
+    const declaredSize = sizes ? parseInt(sizes.split('x')[0], 10) || 0 : 180;
+    candidates.push({ url: href, declaredSize, type: 'apple-touch-icon', requireSquare: true });
+  }
+
+  // og:image
+  const ogMatch = html.match(/<meta[^>]+property\s*=\s*["']og:image["'][^>]+content\s*=\s*["']([^"']+)["']/i)
+                || html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+property\s*=\s*["']og:image["']/i);
+  if (ogMatch?.[1]) {
+    candidates.push({ url: ogMatch[1], declaredSize: 1200, type: 'og:image', requireSquare: false });
+  }
+
+  // twitter:image
+  const twMatch = html.match(/<meta[^>]+name\s*=\s*["']twitter:image["'][^>]+content\s*=\s*["']([^"']+)["']/i)
+               || html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+name\s*=\s*["']twitter:image["']/i);
+  if (twMatch?.[1]) {
+    candidates.push({ url: twMatch[1], declaredSize: 1200, type: 'twitter:image', requireSquare: false });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Sort: apple-touch-icon first (best for our use case), then by declared size desc.
+  candidates.sort((a, b) => {
+    const aApple = a.type === 'apple-touch-icon' ? 0 : 1;
+    const bApple = b.type === 'apple-touch-icon' ? 0 : 1;
+    if (aApple !== bApple) return aApple - bApple;
+    return b.declaredSize - a.declaredSize;
+  });
+
+  for (const cand of candidates) {
+    let absUrl;
+    try {
+      absUrl = new URL(cand.url, pageUrl).toString();
+    } catch {
+      continue;
+    }
+
+    let buf;
+    try {
+      const imgRes = await fetchWithTimeout(absUrl, 15000);
+      if (!imgRes.ok) continue;
+      buf = Buffer.from(await imgRes.arrayBuffer());
+      if (buf.length < 1000) continue;
+    } catch {
+      continue;
+    }
+
+    // Validate dimensions/aspect via sharp metadata so we don't ship a banner.
+    try {
+      const meta = await sharp(buf).metadata();
+      const w = meta.width || 0;
+      const h = meta.height || 0;
+      if (w < 64 || h < 64) continue;
+      if (cand.requireSquare && w !== h) continue;
+      const aspect = w / h;
+      if (aspect < 0.7 || aspect > 1.43) continue; // too oblong, probably a banner
+      return buf;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Tier 3: Try to fetch a favicon via Google S2 for the app's homepage domain.
  * Returns the image buffer on success, null on failure.
  */
@@ -221,6 +370,8 @@ async function main() {
   const results = [];
   let githubHits = 0;
   let faviconHits = 0;
+  let storeHits = 0;
+  let homepageHits = 0;
   let misses = 0;
 
   for (const app of apps) {
@@ -255,18 +406,31 @@ async function main() {
         if (buffer) source = 'favicon';
       }
     } else {
-      // Tier 2: GitHub avatar
-      buffer = await tryGitHubAvatar(publisher);
-      if (buffer) {
-        source = 'github_avatar';
+      // Tier 1: Microsoft Store DisplayCatalog (msstore-source apps only).
+      // Comes first because for store apps it's the official, highest-fidelity
+      // icon and avoids burning a GitHub-avatar fallback on a publisher whose
+      // GitHub presence may be unrelated to the actual product.
+      buffer = await tryMicrosoftStore(wingetId);
+      if (buffer) source = 'microsoft_store';
+
+      // Tier 2: GitHub publisher avatar.
+      if (!buffer) {
+        buffer = await tryGitHubAvatar(publisher);
+        if (buffer) source = 'github_avatar';
       }
 
-      // Tier 3: Favicon (only if Tier 2 failed and homepage exists)
+      // Tier 3: Homepage scrape (apple-touch-icon, og:image, twitter:image).
+      // Catches a lot of the apps where the publisher has no GitHub presence
+      // but ships a proper logo on their site.
+      if (!buffer && app.homepage) {
+        buffer = await tryHomepageImage(app.homepage);
+        if (buffer) source = 'homepage_image';
+      }
+
+      // Tier 4: Google S2 favicon -- the last-resort low-res fallback.
       if (!buffer && app.homepage) {
         buffer = await tryFavicon(app.homepage);
-        if (buffer) {
-          source = 'favicon';
-        }
+        if (buffer) source = 'favicon';
       }
     }
 
@@ -281,6 +445,8 @@ async function main() {
           icon_path: `/icons/${wingetId}/`,
         });
         if (source === 'github_avatar') githubHits++;
+        else if (source === 'microsoft_store') storeHits++;
+        else if (source === 'homepage_image') homepageHits++;
         else faviconHits++;
         continue;
       }
@@ -295,7 +461,9 @@ async function main() {
   }
 
   console.log('\n=== Web Icon Fetch Summary ===');
+  console.log(`Microsoft Store: ${storeHits}`);
   console.log(`GitHub avatars: ${githubHits}`);
+  console.log(`Homepage images: ${homepageHits}`);
   console.log(`Favicons: ${faviconHits}`);
   console.log(`No icon found: ${misses}`);
   console.log(`Total processed: ${apps.length}`);
@@ -307,7 +475,9 @@ async function main() {
   if (outputFile) {
     fs.appendFileSync(outputFile, `github_hits=${githubHits}\n`);
     fs.appendFileSync(outputFile, `favicon_hits=${faviconHits}\n`);
-    fs.appendFileSync(outputFile, `total_hits=${githubHits + faviconHits}\n`);
+    fs.appendFileSync(outputFile, `store_hits=${storeHits}\n`);
+    fs.appendFileSync(outputFile, `homepage_hits=${homepageHits}\n`);
+    fs.appendFileSync(outputFile, `total_hits=${githubHits + faviconHits + storeHits + homepageHits}\n`);
   }
 }
 
