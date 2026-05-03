@@ -138,7 +138,7 @@ jobs:
 
             PUSH_SUCCESS=false
             for i in 1 2 3; do
-              if git pull --rebase origin main && git push origin main; then
+              if git pull --rebase --autostash origin main && git push origin main; then
                 PUSH_SUCCESS=true
                 break
               fi
@@ -697,7 +697,7 @@ jobs:
 
             PUSH_SUCCESS=false
             for i in 1 2 3; do
-              if git pull --rebase origin main && git push origin main; then
+              if git pull --rebase --autostash origin main && git push origin main; then
                 PUSH_SUCCESS=true
                 break
               fi

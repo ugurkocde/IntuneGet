@@ -700,13 +700,19 @@ if ($iconPath -and (Test-Path $iconPath)) {
     # Convert to multiple sizes
     $generatedFiles = Convert-ToMultipleSizes -SourcePath $iconPath -OutputDir $OutputDir -Sizes $IconSizes -SkipExisting:$SkipExisting
 
+    # Always clean up the intermediate icon-original.* file. If the conversion
+    # produced nothing (e.g. SkipExisting=true and source <= existing largest
+    # size), leaving the original behind would commit it as an orphan.
+    if ($iconPath -notmatch "icon-\d+\.png$") {
+        Remove-Item $iconPath -Force -ErrorAction SilentlyContinue
+    }
+
     if ($generatedFiles.Count -gt 0) {
         Write-Host "Generated $($generatedFiles.Count) icon sizes" -ForegroundColor Green
-
-        # Clean up original if it's not one of the standard sizes
-        if ($iconPath -notmatch "icon-\d+\.png$") {
-            Remove-Item $iconPath -Force -ErrorAction SilentlyContinue
-        }
+    } elseif ($SkipExisting) {
+        # Top-up mode: zero generated isn't a failure -- it just means every
+        # target size was already on disk or larger than the source.
+        Write-Host "No new sizes needed (top-up mode - existing sizes already cover or source too small to upscale)"
     } else {
         Write-Warning "Failed to generate icon sizes"
         exit 1
