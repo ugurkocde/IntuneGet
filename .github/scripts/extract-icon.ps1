@@ -47,6 +47,60 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
+function Get-SevenZipPath {
+    $candidates = @(
+        "C:\Program Files\7-Zip\7z.exe",
+        "C:\Program Files (x86)\7-Zip\7z.exe",
+        (Get-Command 7z -ErrorAction SilentlyContinue).Source
+    )
+    return $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+}
+
+function Try-IconFromExePayload {
+    # Many EXE installers are self-extracting archives (NSIS, Inno Setup,
+    # InstallShield, Wise, etc.). Their PE icon is the installer wrapper's
+    # generic launcher icon, not the actual app's icon. Unpacking the payload
+    # surfaces the real app binary and its icon.
+    param(
+        [string]$ExePath,
+        [string]$OutputDir
+    )
+
+    $sevenZip = Get-SevenZipPath
+    if (-not $sevenZip) {
+        Write-Host "7-Zip not available - skipping payload extraction"
+        return $null
+    }
+
+    $tempExtract = Join-Path $env:TEMP "exe_payload_$([System.IO.Path]::GetRandomFileName())"
+    New-Item -ItemType Directory -Path $tempExtract -Force | Out-Null
+
+    try {
+        Write-Host "Trying to unpack installer payload with 7-Zip..."
+        $process = Start-Process -FilePath $sevenZip `
+            -ArgumentList "x `"$ExePath`" -o`"$tempExtract`" -y" `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput "$env:TEMP\7z_exe_out.txt" `
+            -RedirectStandardError "$env:TEMP\7z_exe_err.txt"
+
+        if ($process.ExitCode -ne 0) {
+            Write-Host "7-Zip cannot unpack EXE (exit $($process.ExitCode)) - not a recognized self-extracting installer"
+            return $null
+        }
+
+        # Reuse the same search heuristic the MSI path uses: largest ICO,
+        # icon-named PNG, then largest payload EXE's PE icon.
+        return Search-ExtractedContentForIcon -ExtractDir $tempExtract -OutputDir $OutputDir
+    } catch {
+        Write-Host "Payload extraction error: $_"
+        return $null
+    } finally {
+        if (Test-Path $tempExtract) {
+            Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Extract-IconFromExe {
     param(
         [string]$ExePath,
@@ -54,6 +108,28 @@ function Extract-IconFromExe {
     )
 
     Write-Host "Extracting icon from EXE: $ExePath"
+
+    # Step 1: try to unpack the installer payload. For wrapper installers
+    # (NSIS / Inno / InstallShield / etc.) this finds the real app's icon,
+    # which is what Windows shows in the Start menu after install.
+    $payloadIcon = Try-IconFromExePayload -ExePath $ExePath -OutputDir $OutputDir
+    if ($payloadIcon -and (Test-Path $payloadIcon)) {
+        Write-Host "Got icon from installer payload"
+        return $payloadIcon
+    }
+
+    # Step 2: fall back to reading the wrapper EXE's own PE resources. This is
+    # the only option for non-archive EXEs (single-binary tools, packed/protected
+    # installers) and the safety net when payload extraction yields nothing.
+    Write-Host "Payload extraction yielded no icon - falling back to wrapper PE resources"
+    return Get-IconFromExeBinary -ExePath $ExePath -OutputDir $OutputDir
+}
+
+function Get-IconFromExeBinary {
+    param(
+        [string]$ExePath,
+        [string]$OutputDir
+    )
 
     Add-Type -AssemblyName System.Drawing
 
@@ -293,7 +369,10 @@ function Search-ExtractedContentForIcon {
     foreach ($exe in $exeFiles) {
         if ($exe -and $exe.FullName) {
             Write-Host "Trying to extract icon from: $($exe.Name)"
-            $iconPath = Extract-IconFromExe -ExePath $exe.FullName -OutputDir $OutputDir
+            # Use the binary-only extractor here. We're already inside an
+            # unpacked payload; recursing into Extract-IconFromExe would try
+            # to unpack each inner EXE again and could loop or explode in cost.
+            $iconPath = Get-IconFromExeBinary -ExePath $exe.FullName -OutputDir $OutputDir
             if ($iconPath) {
                 return $iconPath
             }
