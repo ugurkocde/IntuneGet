@@ -272,7 +272,11 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # Use npm install (not npm ci) so platform-specific transitive deps
+        # (e.g. @emnapi/* sharp natives on this runner) can be resolved on the
+        # fly when the lock file was generated on a different platform.
+        run: npm install --no-audit --no-fund
+        shell: pwsh
 
       - name: Install ImageMagick and 7-Zip
         run: |
