@@ -435,11 +435,6 @@ export const APP_MAPPINGS: AppMapping[] = [
     publisher: 'Microsoft',
   },
   {
-    wingetId: 'WinSCP.WinSCP',
-    aliases: ['winscp', 'win scp'],
-    publisher: 'WinSCP',
-  },
-  {
     wingetId: 'PuTTY.PuTTY',
     aliases: ['putty', 'put ty'],
     publisher: 'Simon Tatham',
