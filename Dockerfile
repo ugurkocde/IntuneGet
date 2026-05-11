@@ -6,8 +6,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install dependencies
+# Use npm install (not npm ci) so Sharp's platform-specific transitive deps
+# (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even when
+# package-lock.json was generated on a different OS/CPU.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 # Copy source files
 COPY . .

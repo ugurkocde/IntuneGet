@@ -21,7 +21,10 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        # Use npm install (not npm ci) so Sharp's platform-specific transitive
+        # deps (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even
+        # when package-lock.json was generated on a different OS/CPU.
+        run: npm install --no-audit --no-fund
 
       - name: Run tests
         run: npm test
@@ -40,7 +43,10 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        # Use npm install (not npm ci) so Sharp's platform-specific transitive
+        # deps (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even
+        # when package-lock.json was generated on a different OS/CPU.
+        run: npm install --no-audit --no-fund
 
       - name: Run ESLint
         run: npm run lint
@@ -59,7 +65,10 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        # Use npm install (not npm ci) so Sharp's platform-specific transitive
+        # deps (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even
+        # when package-lock.json was generated on a different OS/CPU.
+        run: npm install --no-audit --no-fund
 
       - name: Build
         run: npm run build:ci
