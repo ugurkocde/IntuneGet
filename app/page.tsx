@@ -8,6 +8,7 @@ import {
   HowItWorksSection,
   FAQSectionAnimated,
   CTASection,
+  SupportedSolutionBanner,
   Footer,
 } from "@/components/landing";
 import { faqData } from "@/lib/data/faq-data";
@@ -136,6 +137,7 @@ export default function LandingPage() {
           <SectionDivider />
           <FAQSectionAnimated />
           <CTASection />
+          <SupportedSolutionBanner />
         </main>
         <Footer />
       </div>

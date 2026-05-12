@@ -16,6 +16,7 @@ export {
   ComparisonSection,
   MissionSection,
   QuickFactsSection,
+  SupportedSolutionBanner,
 } from "./sections";
 
 // Animation primitives

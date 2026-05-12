@@ -10,3 +10,4 @@ export { ComparisonSection } from "./ComparisonSection";
 export { MissionSection } from "./MissionSection";
 export { QuickFactsSection } from "./QuickFactsSection";
 export { AdvancedCapabilitiesSection } from "./AdvancedCapabilitiesSection";
+export { SupportedSolutionBanner } from "./SupportedSolutionBanner";
