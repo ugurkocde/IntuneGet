@@ -402,7 +402,7 @@ function Install-ADTDeployment
 {
     [CmdletBinding()]
     param ()
-
+${this.getPreInstallRemovalBlock(job, appName)}
     ## Install the application
     ${this.getInstallCommand(job, installerFileName, silentSwitches)}
 
@@ -478,10 +478,10 @@ catch
   }
 
   /**
-   * Get custom install/uninstall command override from package_config.psadtConfig
-   * Returns null when the override is absent, not a string, or empty/whitespace
+   * Get the psadtConfig object from package_config
+   * Returns null when package_config or psadtConfig is absent or not an object
    */
-  private getCommandOverride(job: PackagingJob, key: 'installCommand' | 'uninstallCommand'): string | null {
+  private getPsadtConfig(job: PackagingJob): Record<string, unknown> | null {
     const packageConfig = job.package_config;
     if (typeof packageConfig !== 'object' || packageConfig === null) {
       return null;
@@ -490,11 +490,47 @@ catch
     if (typeof psadtConfig !== 'object' || psadtConfig === null) {
       return null;
     }
-    const value = (psadtConfig as Record<string, unknown>)[key];
+    return psadtConfig as Record<string, unknown>;
+  }
+
+  /**
+   * Get custom install/uninstall command override from package_config.psadtConfig
+   * Returns null when the override is absent, not a string, or empty/whitespace
+   */
+  private getCommandOverride(job: PackagingJob, key: 'installCommand' | 'uninstallCommand'): string | null {
+    const psadtConfig = this.getPsadtConfig(job);
+    if (!psadtConfig) {
+      return null;
+    }
+    const value = psadtConfig[key];
     if (typeof value !== 'string' || !value.trim()) {
       return null;
     }
     return value.trim();
+  }
+
+  /**
+   * Generate PowerShell code to remove any existing installation before installing
+   * Opt-in via package_config.psadtConfig.removeExistingInstall; returns '' when disabled
+   */
+  private getPreInstallRemovalBlock(job: PackagingJob, escapedAppName: string): string {
+    const psadtConfig = this.getPsadtConfig(job);
+    if (psadtConfig?.removeExistingInstall !== true) {
+      return '';
+    }
+    return `
+    ## Remove any existing installation before installing
+    try {
+        $existingApps = Get-ADTApplication -Name '${escapedAppName}' -NameMatch 'Contains' -ErrorAction SilentlyContinue
+        if ($existingApps) {
+            Write-ADTLogEntry -Message "Found $($existingApps.Count) existing installation(s), removing before install" -Source 'Install-ADTDeployment'
+            Uninstall-ADTApplication -InstalledApplication $existingApps -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-ADTLogEntry -Message "Pre-install removal failed: $($_.Exception.Message)" -Severity 'Warning' -Source 'Install-ADTDeployment'
+    }
+`;
   }
 
   /**

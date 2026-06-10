@@ -162,6 +162,9 @@ export interface PSADTConfig {
   // Deploy mode - controls PSADT v4 UI visibility
   deployMode?: DeployMode;
 
+  // Remove any detected existing installation before installing
+  removeExistingInstall?: boolean;
+
   // Progress dialog (Show-ADTInstallationProgress)
   progressDialog: ProgressConfig;
 
@@ -223,6 +226,9 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
 
   // Silent deploy mode - suppress all PSADT UI for Intune deployments
   deployMode: 'Silent',
+
+  // Do not remove existing installations by default
+  removeExistingInstall: false,
 
   // Progress dialog - disabled by default for silent deployments
   progressDialog: {

@@ -324,6 +324,14 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                     </p>
                   </div>
 
+                  {/* Remove Existing Install Toggle */}
+                  <ToggleOption
+                    label="Remove existing installation first"
+                    description="Uninstalls any detected existing installation of this application before installing. Use when upgrades fail because a previous version is present."
+                    checked={config.removeExistingInstall || false}
+                    onChange={(checked) => updateConfig({ removeExistingInstall: checked })}
+                  />
+
                   {/* Processes to Close */}
                   <div>
                     <div className="flex items-center justify-between mb-2">

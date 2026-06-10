@@ -283,6 +283,10 @@ $customUninstallCommand = if ($psadtConfig.uninstallCommand) { ([string]$psadtCo
 # Only escape single quotes - overrides are embedded in single-quoted strings in the generated script
 $customInstallCommandEscaped = $customInstallCommand -replace "'", "''"
 $customUninstallCommandEscaped = $customUninstallCommand -replace "'", "''"
+# Optional pre-install removal of any existing installation (opt-in via PSADT config)
+$removeExistingInstall = if ($psadtConfig.removeExistingInstall) { $true } else { $false }
+# Only escape single quotes - the app name is embedded in a single-quoted string in the generated script
+$displayNameSingleQuoteEscaped = $DisplayName -replace "'", "''"
 $brandingCompanyName = $psadtConfig.brandingCompanyName
 $brandingWelcomeTitle = $psadtConfig.brandingWelcomeTitle
 $brandingWelcomeMessage = $psadtConfig.brandingWelcomeMessage
@@ -818,6 +822,25 @@ $lines += @(
     "    Show-ADTInstallationProgress -StatusMessage `"Installing `$(`$adtSession.AppName)...`""
     ''
 )
+
+# Optional pre-install removal of existing installations (opt-in via PSADT config)
+if ($removeExistingInstall) {
+    Write-Host "Pre-install removal of existing installations enabled"
+    $lines += @(
+        '    ## Remove any existing installation before installing'
+        '    try {'
+        "        `$existingApps = Get-ADTApplication -Name '$displayNameSingleQuoteEscaped' -NameMatch 'Contains' -ErrorAction SilentlyContinue"
+        '        if ($existingApps) {'
+        '            Write-ADTLogEntry -Message "Found $($existingApps.Count) existing installation(s), removing before install" -Source ''Install-ADTDeployment'''
+        '            Uninstall-ADTApplication -InstalledApplication $existingApps -ErrorAction SilentlyContinue'
+        '        }'
+        '    }'
+        '    catch {'
+        '        Write-ADTLogEntry -Message "Pre-install removal failed: $($_.Exception.Message)" -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+        '    }'
+        ''
+    )
+}
 
 # Generate install command - custom override takes precedence over installer type synthesis
 if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
