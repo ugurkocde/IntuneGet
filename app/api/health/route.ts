@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getDatabase, getDatabaseMode } from "@/lib/db";
 
 interface HealthStatus {
   status: "healthy" | "degraded" | "unhealthy";
   mode: "hosted" | "self-hosted";
+  databaseMode: "sqlite" | "supabase";
   timestamp: string;
   services: {
     database: boolean;
@@ -16,9 +18,12 @@ interface HealthStatus {
 export async function GET() {
   const startTime = Date.now();
 
+  const databaseMode = getDatabaseMode();
+
   const status: HealthStatus = {
     status: "healthy",
     mode: process.env.VERCEL === "1" ? "hosted" : "self-hosted",
+    databaseMode,
     timestamp: new Date().toISOString(),
     services: {
       database: false,
@@ -29,13 +34,19 @@ export async function GET() {
 
   // Check database connectivity
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (databaseMode === "sqlite") {
+      // Triggers SQLite file creation and schema init on first call
+      await getDatabase().jobs.getStats();
+      status.services.database = true;
+    } else {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (supabaseUrl && supabaseKey) {
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      const { error } = await supabase.from("apps").select("id").limit(1);
-      status.services.database = !error;
+      if (supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { error } = await supabase.from("apps").select("id").limit(1);
+        status.services.database = !error;
+      }
     }
   } catch {
     status.services.database = false;
@@ -47,12 +58,14 @@ export async function GET() {
     (process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET)
   );
 
-  // Check pipeline configuration (uses private workflows repo)
-  status.services.pipeline = Boolean(
+  // Check pipeline configuration (GitHub Actions or local packager)
+  const localPackager = process.env.PACKAGER_MODE === "local";
+  const githubPipeline = Boolean(
     process.env.GITHUB_PAT &&
     process.env.GITHUB_OWNER &&
     process.env.GITHUB_WORKFLOWS_REPO
   );
+  status.services.pipeline = localPackager || githubPipeline;
 
   // Determine overall status
   const criticalServices = [status.services.database, status.services.auth];
