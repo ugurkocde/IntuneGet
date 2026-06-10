@@ -7,6 +7,7 @@
 import type { StoreCartItem, PackageAssignment, IntuneAppCategorySelection } from '@/types/upload';
 import type { EspProfileSelection } from '@/types/esp';
 import { addAppToEspProfile } from '@/lib/esp-api';
+import { fetchIconAsBase64 } from '@/lib/intune-icon';
 
 const GRAPH_BETA = 'https://graph.microsoft.com/beta';
 
@@ -215,33 +216,6 @@ async function waitForPublished(
 
   // Continue anyway after timeout - assignment might still work or fail with a clear error
   console.warn(`Store app ${appId} did not reach 'published' state after ${maxAttempts} attempts`);
-}
-
-/**
- * Download an icon from a URL and return it as a Graph API MimeContent object.
- * Returns null if the URL is missing, not HTTPS, or the download fails.
- */
-async function fetchIconAsBase64(
-  iconUrl: string | undefined
-): Promise<{ '@odata.type': string; type: string; value: string } | null> {
-  if (!iconUrl || !iconUrl.startsWith('https://')) return null;
-
-  try {
-    const response = await fetch(iconUrl);
-    if (!response.ok) return null;
-
-    const contentType = response.headers.get('content-type') || 'image/png';
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
-
-    return {
-      '@odata.type': '#microsoft.graph.mimeContent',
-      type: contentType.split(';')[0].trim(),
-      value: base64,
-    };
-  } catch {
-    return null;
-  }
 }
 
 /**

@@ -38,6 +38,7 @@ export async function createWin32App(
         displayName: app.displayName,
         description: app.description || '',
         publisher: app.publisher || '',
+        ...(app.largeIcon ? { largeIcon: app.largeIcon } : {}),
         fileName: app.fileName,
         installCommandLine: app.installCommandLine,
         uninstallCommandLine: app.uninstallCommandLine,

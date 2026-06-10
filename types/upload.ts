@@ -34,6 +34,7 @@ export interface StagedPackage {
   detectionRules: DetectionRule[];
 
   description?: string;
+  iconPath?: string; // Icon path for the Intune app largeIcon
 
   // Requirement rules (for "Update Only" - check app existence before install)
   requirementRules?: RequirementRule[];

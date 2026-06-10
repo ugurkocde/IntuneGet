@@ -37,6 +37,7 @@ export interface IntuneWin32App {
 
 // MIME content for icons
 export interface MimeContent {
+  '@odata.type'?: string;
   type: string;
   value: string; // Base64 encoded
 }

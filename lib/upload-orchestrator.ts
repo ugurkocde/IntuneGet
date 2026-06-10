@@ -7,6 +7,7 @@ import type { CartItem, Win32CartItem, StagedPackage, UploadJob, PackagingJob } 
 import type { DetectionRule } from '@/types/intune';
 import { resolveInstallerFileName } from '@/lib/installer-filename';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { fetchIconAsBase64, resolveIconUrl } from '@/lib/intune-icon';
 import {
   createWin32App,
   createContentVersion,
@@ -53,9 +54,13 @@ export async function deployToIntune(
       fallback: `Deployed via IntuneGet from Winget: ${stagedPackage.wingetId}`,
     });
 
+    // Non-fatal: fetchIconAsBase64 returns null on any failure
+    const largeIcon = await fetchIconAsBase64(resolveIconUrl(stagedPackage.iconPath));
+
     const appId = await createWin32App(accessToken, {
       displayName: stagedPackage.displayName,
       description,
+      ...(largeIcon ? { largeIcon } : {}),
       publisher: stagedPackage.publisher,
       fileName: installerFileName,
       installCommandLine: stagedPackage.installCommand,
@@ -237,6 +242,7 @@ export function cartItemToStagedPackage(
     installCommand: item.installCommand,
     uninstallCommand: item.uninstallCommand,
     description: item.description,
+    iconPath: item.iconPath,
     detectionRules: item.detectionRules,
     requirementRules: item.requirementRules,
     status: 'pending',

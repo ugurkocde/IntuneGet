@@ -12,6 +12,7 @@ import {
   type WorkflowInputs,
 } from '@/lib/github-actions';
 import { getAppConfig } from '@/lib/config';
+import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { queueWebhookDelivery } from '@/lib/msp/webhook-service';
@@ -248,6 +249,9 @@ async function startBatchItems(batchId: string): Promise<number> {
     batch.version
   );
 
+  // Get the curated app description (falls back to the generic marker text)
+  const appDescription = await lookupAppDescription(batch.winget_id);
+
   // Build callback URL
   const config = getAppConfig();
   const baseUrl =
@@ -324,6 +328,10 @@ async function startBatchItems(batchId: string): Promise<number> {
         tenantId: item.tenant_id,
         wingetId: batch.winget_id,
         displayName: batch.display_name,
+        description: buildIntuneAppDescription({
+          description: appDescription,
+          fallback: `Deployed via IntuneGet from Winget: ${batch.winget_id}`,
+        }),
         publisher: '',
         version: batch.version,
         installerUrl: installerDetails.installer_url,
@@ -528,6 +536,27 @@ async function advanceBatch(batchId: string): Promise<boolean> {
 // ============================================
 // Helpers
 // ============================================
+
+/**
+ * Look up the curated app description for a package.
+ * Returns undefined when the app is not in the catalog or has no description.
+ */
+async function lookupAppDescription(wingetId: string): Promise<string | undefined> {
+  const supabase = createServerClient();
+
+  const { data, error } = await supabase
+    .from('curated_apps')
+    .select('description')
+    .eq('winget_id', wingetId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.description || typeof data.description !== 'string') {
+    return undefined;
+  }
+
+  return data.description;
+}
 
 /**
  * Look up installer details from the version_history table.

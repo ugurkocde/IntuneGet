@@ -27,6 +27,58 @@ export interface EncryptionInfo {
 
 type ProgressCallback = (percent: number, message: string) => Promise<void>;
 
+interface GraphMimeContent {
+  '@odata.type': '#microsoft.graph.mimeContent';
+  type: string;
+  value: string;
+}
+
+/**
+ * Extract the curated app description from the job's package_config.
+ * Falls back to the provided string when absent or empty.
+ */
+export function extractPackageDescription(packageConfig: unknown, fallback: string): string {
+  if (typeof packageConfig === 'object' && packageConfig !== null) {
+    const description = (packageConfig as Record<string, unknown>).description;
+    if (typeof description === 'string' && description.trim().length > 0) {
+      return description.trim();
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Extract the icon path from the job's package_config.
+ */
+export function extractPackageIconPath(packageConfig: unknown): string | undefined {
+  if (typeof packageConfig === 'object' && packageConfig !== null) {
+    const iconPath = (packageConfig as Record<string, unknown>).iconPath;
+    if (typeof iconPath === 'string' && iconPath.trim().length > 0) {
+      return iconPath.trim();
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve an icon path to an absolute URL.
+ * Absolute http(s) URLs are returned as-is. Relative paths (e.g. /icons/<id>/)
+ * are treated as directories: a trailing slash is ensured and icon-256.png is
+ * appended (mirrors how the web app's AppIcon component builds icon URLs),
+ * then the result is resolved against the given base URL.
+ */
+export function resolveIconUrl(iconPath: string | undefined, baseUrl: string): string | undefined {
+  if (!iconPath) {
+    return undefined;
+  }
+  if (iconPath.startsWith('http://') || iconPath.startsWith('https://')) {
+    return iconPath;
+  }
+  const base = baseUrl.replace(/\/$/, '');
+  const directory = iconPath.startsWith('/') ? iconPath : `/${iconPath}`;
+  return `${base}${directory.replace(/\/?$/, '/')}icon-256.png`;
+}
+
 type AssignmentIntent = 'required' | 'available' | 'uninstall' | 'updateOnly';
 type GraphAssignmentIntent = 'required' | 'available' | 'uninstall';
 
@@ -235,10 +287,15 @@ export class IntuneUploader {
     job: PackagingJob
   ): Promise<{ id: string }> {
     const commands = this.buildCommandLines(job);
-    const appBody = {
+    const description = extractPackageDescription(
+      job.package_config,
+      `${job.display_name} ${job.version} - Deployed via IntuneGet`
+    );
+    const largeIcon = await this.fetchLargeIcon(job);
+    const appBody: Record<string, unknown> = {
       '@odata.type': '#microsoft.graph.win32LobApp',
       displayName: job.display_name,
-      description: `${job.display_name} ${job.version} - Deployed via IntuneGet`,
+      description,
       publisher: job.publisher,
       displayVersion: job.version,
       installCommandLine: commands.install,
@@ -261,8 +318,77 @@ export class IntuneUploader {
       rules: [], // Will add detection/requirement rules later
     };
 
+    if (largeIcon) {
+      appBody.largeIcon = largeIcon;
+    }
+
     const response = await graphClient.post<{ id: string }>('/deviceAppManagement/mobileApps', appBody);
     return { id: response.id };
+  }
+
+  /**
+   * Fetch the app icon referenced by package_config.iconPath as Graph mimeContent.
+   * Non-fatal: returns null (after logging a warning) on any failure so the app
+   * is still created without an icon.
+   */
+  private async fetchLargeIcon(job: PackagingJob): Promise<GraphMimeContent | null> {
+    const iconPath = extractPackageIconPath(job.package_config);
+    if (!iconPath) {
+      return null;
+    }
+
+    const baseUrl = this.config.api?.url || 'https://www.intuneget.com';
+    const iconUrl = resolveIconUrl(iconPath, baseUrl);
+    if (!iconUrl) {
+      return null;
+    }
+
+    try {
+      const fetch = (await import('node-fetch')).default;
+      const response = await fetch(iconUrl);
+
+      if (!response.ok) {
+        this.logger.warn('Failed to download app icon, creating app without icon', {
+          iconUrl,
+          status: response.status,
+        });
+        return null;
+      }
+
+      // Graph rejects large icons; skip anything bigger than 1 MB before buffering
+      const maxIconBytes = 1_048_576;
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > maxIconBytes) {
+        this.logger.warn('App icon too large, creating app without icon', {
+          iconUrl,
+          bytes: contentLength,
+        });
+        return null;
+      }
+
+      const contentType = response.headers.get('content-type') || 'image/png';
+      const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > maxIconBytes) {
+        this.logger.warn('App icon too large, creating app without icon', {
+          iconUrl,
+          bytes: arrayBuffer.byteLength,
+        });
+        return null;
+      }
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+      return {
+        '@odata.type': '#microsoft.graph.mimeContent',
+        type: contentType.split(';')[0].trim(),
+        value: base64,
+      };
+    } catch (error) {
+      this.logger.warn('Failed to fetch app icon, creating app without icon', {
+        iconUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   /**
