@@ -13,7 +13,7 @@ export function SupportedSolutionBanner() {
   return (
     <section
       aria-labelledby="supported-solution-heading"
-      className="relative w-full bg-bg-surface px-4 md:px-6 py-12 md:py-16"
+      className="relative w-full bg-bg-deepest px-4 md:px-6 py-12 md:py-16"
     >
       <div className="container mx-auto max-w-6xl">
         <FadeIn>
@@ -29,7 +29,7 @@ export function SupportedSolutionBanner() {
                   alt="RoboPack"
                   width={64}
                   height={64}
-                  className="h-10 w-10 object-contain md:h-12 md:w-12"
+                  className="h-12 w-12 object-contain md:h-14 md:w-14"
                 />
               </div>
 
@@ -42,7 +42,7 @@ export function SupportedSolutionBanner() {
 
                 <h2
                   id="supported-solution-heading"
-                  className="text-lg md:text-xl text-text-primary leading-relaxed"
+                  className="text-xl md:text-2xl text-text-primary leading-relaxed"
                 >
                   <T id="supported_banner.heading">
                     Need a supported, enterprise-ready solution with SLAs and maintenance? We recommend{" "}

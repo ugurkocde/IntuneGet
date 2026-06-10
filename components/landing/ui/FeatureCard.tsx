@@ -26,7 +26,7 @@ export function FeatureCard({
     <motion.div
       className={cn(
         "group relative flex flex-col p-6 md:p-8 rounded-2xl",
-        "bg-bg-elevated border border-overlay/[0.06]",
+        "bg-bg-elevated border border-overlay/10 hover:border-accent-cyan/20",
         "shadow-card hover:shadow-card-hover",
         "transition-all duration-300",
         className

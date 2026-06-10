@@ -182,9 +182,9 @@ export function Header() {
                 href="/auth/signin"
                 className={cn(
                   "inline-flex items-center justify-center px-4 py-2 rounded-lg",
-                  "text-sm font-medium text-white bg-stone-900",
+                  "text-sm font-medium text-bg-elevated bg-text-primary",
                   "transition-all duration-200",
-                  "hover:bg-stone-800 shadow-soft hover:shadow-soft-md"
+                  "hover:bg-text-primary/90 shadow-soft hover:shadow-soft-md"
                 )}
               >
                 <T id="nav.get-started">Get Started</T>
@@ -273,10 +273,10 @@ export function Header() {
             <Link
               href="/dashboard"
               onClick={() => setIsMenuOpen(false)}
-              className="group inline-flex items-center gap-3 px-4 py-3 rounded-lg mt-2 bg-stone-900 hover:bg-stone-800 transition-all duration-200"
+              className="group inline-flex items-center gap-3 px-4 py-3 rounded-lg mt-2 bg-text-primary hover:bg-text-primary/90 transition-all duration-200"
             >
               <UserAvatar size="md" />
-              <span className="text-sm font-medium text-white"><T id="nav.dashboard">Dashboard</T></span>
+              <span className="text-sm font-medium text-bg-elevated"><T id="nav.dashboard">Dashboard</T></span>
             </Link>
           ) : (
             <Link
@@ -284,9 +284,9 @@ export function Header() {
               onClick={() => setIsMenuOpen(false)}
               className={cn(
                 "inline-flex items-center justify-center px-4 py-3 rounded-lg mt-2",
-                "text-sm font-medium text-white bg-stone-900",
+                "text-sm font-medium text-bg-elevated bg-text-primary",
                 "transition-all duration-200",
-                "hover:bg-stone-800"
+                "hover:bg-text-primary/90"
               )}
             >
               <T id="nav.get-started">Get Started</T>

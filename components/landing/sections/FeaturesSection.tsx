@@ -59,11 +59,11 @@ export function CapabilitiesSection() {
   return (
     <section
       id="features"
-      className="relative w-full py-24 md:py-32 overflow-hidden"
+      className="relative w-full py-20 md:py-28 scroll-mt-20 md:scroll-mt-24 overflow-hidden"
     >
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
         {/* Section header */}
-        <div className="text-center mb-16 md:mb-20 space-y-4">
+        <div className="text-center mb-12 md:mb-16 space-y-4">
           <FadeIn>
             <span className="inline-block font-mono text-xs tracking-wider text-accent-cyan uppercase mb-4">
               <T id="features.badge">Capabilities</T>

@@ -129,14 +129,19 @@ export default function LandingPage() {
           <HeroSection />
           <SectionDivider />
           <ProblemOutcomeSection />
+          <SectionDivider />
           <HowItWorksSection />
+          <SectionDivider />
           <CapabilitiesSection />
           <SectionDivider />
           <ComparisonSection />
+          <SectionDivider />
           <TrustSection />
           <SectionDivider />
           <FAQSectionAnimated />
+          <SectionDivider />
           <CTASection />
+          <SectionDivider />
           <SupportedSolutionBanner />
         </main>
         <Footer />

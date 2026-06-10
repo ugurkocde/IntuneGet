@@ -22,12 +22,12 @@ export function TrustSection() {
   ];
 
   return (
-    <section className="relative w-full py-16 md:py-20 bg-bg-elevated border-y border-overlay/[0.06]">
+    <section className="relative w-full py-20 md:py-28 bg-bg-elevated">
       <div className="container relative px-4 md:px-6 mx-auto max-w-6xl">
         {/* Headline */}
         <FadeIn>
           <div className="text-center mb-10 md:mb-12">
-            <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-text-primary mb-3">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary mb-3">
               <T id="trust.heading">Open Source & Trusted</T>
             </h2>
             <p className="text-text-muted max-w-xl mx-auto">
@@ -38,7 +38,7 @@ export function TrustSection() {
 
         {/* Key metrics */}
         <FadeIn delay={0.1}>
-          <div className="grid grid-cols-3 gap-6 md:gap-12 mb-10 md:mb-12">
+          <div className="grid grid-cols-3 divide-x divide-overlay/10 mb-10 md:mb-12">
             {metrics.map((metric, index) => (
               <div key={metric.label} className="text-center">
                 <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-text-primary mb-1">
@@ -56,7 +56,7 @@ export function TrustSection() {
 
         {/* Quick Facts strip */}
         <FadeIn delay={0.2}>
-          <div className="p-5 md:p-6 rounded-2xl bg-bg-surface border border-overlay/[0.06]">
+          <div className="p-5 md:p-6 rounded-2xl bg-bg-surface border border-overlay/10">
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
               {quickFacts.map((fact) => (
                 <div key={fact.label} className="flex flex-col">

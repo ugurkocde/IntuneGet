@@ -53,7 +53,7 @@ export function ComparisonSection() {
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <section className="relative w-full py-24 md:py-32 overflow-hidden bg-bg-surface">
+    <section className="relative w-full py-20 md:py-28 overflow-hidden bg-bg-surface">
       <div className="container relative px-4 md:px-6 mx-auto max-w-5xl">
         {/* Section header */}
         <div className="text-center mb-12 md:mb-16 space-y-4">
@@ -85,11 +85,11 @@ export function ComparisonSection() {
           <StaggerContainer className="space-y-3" staggerDelay={0.05}>
             {comparisonData.map((row, index) => (
               <StaggerItem key={row.feature} direction="none">
-                <div className="rounded-xl bg-bg-elevated border border-overlay/[0.06] shadow-card overflow-hidden">
-                  <div className="px-4 py-3 border-b border-overlay/[0.06]">
+                <div className="rounded-xl bg-bg-elevated border border-overlay/10 shadow-card overflow-hidden">
+                  <div className="px-4 py-3 border-b border-overlay/10">
                     <span className="text-sm font-medium text-text-primary"><T>{row.feature}</T></span>
                   </div>
-                  <div className="grid grid-cols-2 divide-x divide-overlay/[0.06]">
+                  <div className="grid grid-cols-2 divide-x divide-overlay/10">
                     <div className="px-4 py-3 bg-accent-cyan/5">
                       <div className="text-[10px] font-medium text-accent-cyan uppercase tracking-wider mb-1">
                         IntuneGet
@@ -140,7 +140,7 @@ export function ComparisonSection() {
                 <div
                   className={cn(
                     "grid grid-cols-3 gap-4",
-                    index !== comparisonData.length - 1 && "border-b border-stone-100"
+                    index !== comparisonData.length - 1 && "border-b border-overlay/10"
                   )}
                 >
                   <div className="p-4 flex items-center">

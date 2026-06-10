@@ -40,11 +40,11 @@ export function HowItWorksSection() {
   return (
     <section
       id="how-it-works"
-      className="relative w-full py-24 md:py-32 overflow-hidden bg-bg-elevated"
+      className="relative w-full py-20 md:py-28 scroll-mt-20 md:scroll-mt-24 overflow-hidden bg-bg-elevated"
     >
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
         {/* Section header */}
-        <div className="text-center mb-16 md:mb-20 space-y-4">
+        <div className="text-center mb-12 md:mb-16 space-y-4">
           <FadeIn>
             <span className="inline-block font-mono text-xs tracking-wider text-accent-cyan uppercase mb-4">
               <T id="howitworks.badge">Process</T>
@@ -64,20 +64,21 @@ export function HowItWorksSection() {
 
         {/* Timeline */}
         <div ref={timelineRef} className="relative max-w-4xl mx-auto">
-          {/* Connecting line - scroll-animated */}
-          <div className="absolute left-8 md:left-1/2 top-0 bottom-0 w-px hidden md:block">
-            <div className="absolute inset-0 bg-stone-200/40" />
-            <motion.div
-              className="absolute top-0 left-0 right-0 origin-top bg-gradient-to-b from-accent-cyan/40 via-accent-violet/40 to-accent-cyan/20"
-              style={{
-                scaleY: shouldReduceMotion ? 1 : lineScaleY,
-                height: "100%",
-              }}
-            />
-          </div>
+          <div className="relative">
+            {/* Connecting line - scroll-animated */}
+            <div className="absolute left-6 md:left-1/2 top-0 bottom-0 w-0.5 -translate-x-1/2">
+              <div className="absolute inset-0 bg-overlay/10" />
+              <motion.div
+                className="absolute top-0 left-0 right-0 origin-top bg-gradient-to-b from-accent-cyan/40 via-accent-violet/40 to-accent-cyan/20"
+                style={{
+                  scaleY: shouldReduceMotion ? 1 : lineScaleY,
+                  height: "100%",
+                }}
+              />
+            </div>
 
-          {/* Steps */}
-          <div className="space-y-12 md:space-y-24">
+            {/* Steps */}
+            <div className="space-y-10 md:space-y-16">
             {steps.map((step, index) => (
               <FadeIn
                 key={index}
@@ -85,7 +86,7 @@ export function HowItWorksSection() {
                 direction={index % 2 === 0 ? "left" : "right"}
               >
                 <div
-                  className={`relative flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-12 ${
+                  className={`relative flex flex-row items-start md:items-center gap-4 md:gap-12 ${
                     index % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"
                   }`}
                 >
@@ -102,8 +103,8 @@ export function HowItWorksSection() {
                     }
                   >
                     <div className="relative">
-                      <div className="relative w-16 h-16 rounded-full bg-bg-elevated border-2 border-accent-cyan/30 flex items-center justify-center shadow-soft-lg">
-                        <span className="font-mono text-xl font-bold text-accent-cyan">
+                      <div className="relative w-12 h-12 md:w-16 md:h-16 rounded-full bg-bg-elevated border-2 border-accent-cyan/30 flex items-center justify-center shadow-soft-lg">
+                        <span className="font-mono text-base md:text-xl font-bold text-accent-cyan">
                           {step.number}
                         </span>
                       </div>
@@ -112,18 +113,18 @@ export function HowItWorksSection() {
 
                   {/* Content */}
                   <div
-                    className={`flex-1 ${
+                    className={`flex-1 min-w-0 ${
                       index % 2 === 0 ? "md:text-left" : "md:text-right"
                     }`}
                   >
                     <div
-                      className="p-6 md:p-8 rounded-2xl bg-bg-elevated border border-overlay/[0.06] shadow-card hover:shadow-card-hover transition-all duration-300"
+                      className="p-6 md:p-8 rounded-2xl bg-bg-elevated border border-overlay/10 hover:border-accent-cyan/20 shadow-card hover:shadow-card-hover transition-all duration-300"
                     >
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <h3 className="text-xl font-semibold text-text-primary">
                           <T>{step.title}</T>
                         </h3>
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-accent-cyan bg-accent-cyan/10 px-2.5 py-1 rounded-full">
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-accent-cyan bg-accent-cyan/10 px-2.5 py-1 rounded-full">
                           <Clock className="w-3 h-3" />
                           <T>{step.timeEstimate}</T>
                         </span>
@@ -136,6 +137,7 @@ export function HowItWorksSection() {
                 </div>
               </FadeIn>
             ))}
+            </div>
           </div>
 
           {/* Internal link to pillar blog post */}

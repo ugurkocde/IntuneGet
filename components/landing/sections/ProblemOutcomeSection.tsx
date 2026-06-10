@@ -23,7 +23,7 @@ export function ProblemOutcomeSection() {
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <section className="relative w-full py-16 md:py-24 bg-bg-surface">
+    <section className="relative w-full py-20 md:py-28 bg-bg-surface">
       <div className="container relative px-4 md:px-6 mx-auto max-w-6xl">
         {/* Section header */}
         <FadeIn>

@@ -67,7 +67,7 @@ export function FAQSectionAnimated() {
   };
 
   return (
-    <section className="relative w-full py-24 md:py-32 overflow-hidden">
+    <section className="relative w-full py-20 md:py-28 overflow-hidden">
       <div className="container relative px-4 md:px-6 mx-auto max-w-4xl">
         {/* Section header */}
         <StaggerContainer className="text-center mb-12 md:mb-16" staggerDelay={0.1}>
@@ -102,14 +102,14 @@ export function FAQSectionAnimated() {
                   "bg-bg-elevated shadow-card",
                   openIndex === index
                     ? "border-accent-cyan/30 shadow-card-hover"
-                    : "border-overlay/[0.06] hover:border-overlay/15/60"
+                    : "border-overlay/10 hover:border-overlay/15"
                 )}
               >
                 <motion.button
                   onClick={() => toggleFAQ(index)}
                   aria-expanded={openIndex === index}
                   aria-controls={`faq-answer-animated-${index}`}
-                  className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 rounded-2xl hover:bg-overlay/[0.04]/50 transition-colors"
+                  className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 rounded-2xl hover:bg-overlay/[0.03] transition-colors"
                   whileTap={shouldReduceMotion ? {} : { scale: 0.995 }}
                 >
                   <h3 id={`faq-question-animated-${index}`} className="text-base sm:text-lg font-semibold text-text-primary pr-4">
@@ -143,7 +143,7 @@ export function FAQSectionAnimated() {
                       }}
                     >
                       <div className="px-6 pb-5">
-                        <div className="h-px bg-gradient-to-r from-transparent via-stone-200 to-transparent mb-4" />
+                        <div className="h-px bg-gradient-to-r from-transparent via-overlay/15 to-transparent mb-4" />
                         <p className="text-text-secondary leading-relaxed">
                           {faq.answer}
                         </p>
