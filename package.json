@@ -2,6 +2,9 @@
   "name": "intuneget",
   "version": "0.6.6",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "npx gt translate --ignore-errors && next build",
@@ -32,7 +35,6 @@
     "@react-three/postprocessing": "^3.0.4",
     "@supabase/supabase-js": "^2.101.0",
     "@tanstack/react-query": "^5.95.2",
-    "better-sqlite3": "^12.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -53,6 +55,9 @@
     "yaml": "^2.8.3",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
