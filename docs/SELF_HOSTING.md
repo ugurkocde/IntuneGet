@@ -11,6 +11,8 @@ IntuneGet supports two self-hosting modes:
 | **GitHub Actions** (default) | GitHub Actions Windows runners | Simpler setup, no Windows server needed |
 | **Local Packager** | Self-hosted Windows machine | True self-hosting, air-gapped environments |
 
+An experimental [Azure DevOps pipeline](AZURE_DEVOPS_SETUP.md) also exists for standalone packaging, but it is not integrated with the web app.
+
 ## Prerequisites
 
 Before you begin, ensure you have:

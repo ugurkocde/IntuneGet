@@ -1,5 +1,7 @@
 # Azure DevOps Packaging Pipeline Setup
 
+> **Status: experimental / not integrated.** The IntuneGet web app currently dispatches packaging jobs to GitHub Actions (`PACKAGER_MODE=github`, the default) or the local packager (`PACKAGER_MODE=local`) only - see the [Self-Hosting Guide](SELF_HOSTING.md). The Azure DevOps pipeline in `.azuredevops/packaging-pipeline.yml` is provided as a standalone alternative: it packages and uploads to Azure Blob Storage when triggered with the documented parameters, but the web app does not trigger it automatically. Treat the architecture diagram below as the intended design for a future integration.
+
 This guide walks you through setting up the Azure DevOps pipeline that creates `.intunewin` packages from Winget installers.
 
 ## Architecture Overview
