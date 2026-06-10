@@ -36,6 +36,8 @@ export interface UseUnmanagedAppsReturn {
   claimableCount: number;
   lastSynced: string | null;
   fromCache: boolean;
+  isStale: boolean;
+  staleReason: string | null;
 
   // UI state
   isLoading: boolean;
@@ -101,6 +103,8 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
   const [apps, setApps] = useState<UnmanagedApp[]>([]);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const [isStale, setIsStale] = useState(false);
+  const [staleReason, setStaleReason] = useState<string | null>(null);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -162,6 +166,8 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       setApps(data.apps);
       setLastSynced(data.lastSynced);
       setFromCache(data.fromCache);
+      setIsStale(data.stale === true);
+      setStaleReason(data.stale === true ? data.staleReason ?? null : null);
       return true;
     } catch (err) {
       console.error('Error fetching unmanaged apps:', err);
@@ -702,6 +708,8 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     claimableCount,
     lastSynced,
     fromCache,
+    isStale,
+    staleReason,
     isLoading,
     isRefreshing,
     error,

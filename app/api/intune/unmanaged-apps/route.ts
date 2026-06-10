@@ -73,7 +73,107 @@ type DiscoveredAppCacheRow = Database['public']['Tables']['discovered_apps_cache
 type ClaimedAppRow = Pick<Database['public']['Tables']['claimed_apps']['Row'], 'discovered_app_id' | 'status'>;
 type ManualMappingRow = Database['public']['Tables']['manual_app_mappings']['Row'];
 
+/**
+ * Build an UnmanagedAppsResponse from discovered_apps_cache rows, applying the
+ * same claimed-app and system-app filtering as the live path. When staleReason
+ * is provided, the response is flagged as stale cached data.
+ */
+async function buildCachedAppsResponse(
+  supabase: ReturnType<typeof createServerClient>,
+  tenantId: string,
+  includeSystem: boolean,
+  cachedApps: DiscoveredAppCacheRow[],
+  staleReason?: string
+): Promise<NextResponse> {
+  // Get claimed apps for this tenant
+  const { data: claimedApps } = await supabase
+    .from('claimed_apps')
+    .select('discovered_app_id, status')
+    .eq('tenant_id', tenantId);
+
+  const claimedMap = new Map(
+    claimedApps?.map(c => [c.discovered_app_id, c.status]) || []
+  );
+
+  const apps: UnmanagedApp[] = cachedApps
+    .filter(app => includeSystem || !isSystemApp(app.app_data as unknown as GraphUnmanagedApp))
+    .filter(app => {
+      // Only hide deployed apps - pending/deploying/failed should remain visible
+      const status = claimedMap.get(app.discovered_app_id);
+      return status !== 'deployed';
+    })
+    .map(cached => ({
+      id: cached.id,
+      discoveredAppId: cached.discovered_app_id,
+      displayName: cached.display_name,
+      version: cached.version,
+      publisher: cached.publisher,
+      deviceCount: cached.device_count,
+      platform: cached.platform,
+      matchStatus: cached.match_status as MatchStatus,
+      matchedPackageId: cached.matched_package_id,
+      matchedPackageName: null,
+      matchConfidence: cached.match_confidence,
+      isClaimed: claimedMap.has(cached.discovered_app_id),
+      claimStatus: claimedMap.get(cached.discovered_app_id) as UnmanagedApp['claimStatus'],
+      lastSynced: cached.last_synced,
+    }));
+
+  const lastSynced = cachedApps[0].last_synced;
+
+  return NextResponse.json({
+    apps,
+    total: apps.length,
+    lastSynced,
+    fromCache: true,
+    ...(staleReason
+      ? { stale: true, staleReason, lastSyncedAt: lastSynced }
+      : {}),
+  } as UnmanagedAppsResponse);
+}
+
+/**
+ * Serve cached apps (regardless of TTL expiry) when the live Graph fetch
+ * fails. Returns null when the cache has no rows for the tenant.
+ */
+async function tryStaleCacheFallback(
+  supabase: ReturnType<typeof createServerClient>,
+  tenantId: string,
+  includeSystem: boolean,
+  failureSummary: string
+): Promise<NextResponse | null> {
+  const { data: cachedApps } = await supabase
+    .from('discovered_apps_cache')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('device_count', { ascending: false });
+
+  if (!cachedApps || cachedApps.length === 0) {
+    return null;
+  }
+
+  const lastSynced = cachedApps[0].last_synced;
+  console.warn(
+    `Serving stale discovered apps cache for tenant ${tenantId}: ${failureSummary}`
+  );
+
+  return buildCachedAppsResponse(
+    supabase,
+    tenantId,
+    includeSystem,
+    cachedApps,
+    `${failureSummary}; showing cached data from ${lastSynced}`
+  );
+}
+
 export async function GET(request: NextRequest) {
+  // Context for serving stale cached data when the live Graph fetch fails
+  let staleFallbackContext: {
+    supabase: ReturnType<typeof createServerClient>;
+    tenantId: string;
+    includeSystem: boolean;
+  } | null = null;
+
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
@@ -103,6 +203,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = tenantResolution.tenantId;
+    staleFallbackContext = { supabase, tenantId, includeSystem };
 
     // Verify admin consent
     const { data: consentData, error: consentError } = await supabase
@@ -132,46 +233,7 @@ export async function GET(request: NextRequest) {
         const isCacheValid = Date.now() - lastSynced < CACHE_DURATION_MS;
 
         if (isCacheValid) {
-          // Get claimed apps for this tenant
-          const { data: claimedApps } = await supabase
-            .from('claimed_apps')
-            .select('discovered_app_id, status')
-            .eq('tenant_id', tenantId);
-
-          const claimedMap = new Map(
-            claimedApps?.map(c => [c.discovered_app_id, c.status]) || []
-          );
-
-          const apps: UnmanagedApp[] = cachedApps
-            .filter(app => includeSystem || !isSystemApp(app.app_data as unknown as GraphUnmanagedApp))
-            .filter(app => {
-              // Only hide deployed apps - pending/deploying/failed should remain visible
-              const status = claimedMap.get(app.discovered_app_id);
-              return status !== 'deployed';
-            })
-            .map(cached => ({
-              id: cached.id,
-              discoveredAppId: cached.discovered_app_id,
-              displayName: cached.display_name,
-              version: cached.version,
-              publisher: cached.publisher,
-              deviceCount: cached.device_count,
-              platform: cached.platform,
-              matchStatus: cached.match_status as MatchStatus,
-              matchedPackageId: cached.matched_package_id,
-              matchedPackageName: null,
-              matchConfidence: cached.match_confidence,
-              isClaimed: claimedMap.has(cached.discovered_app_id),
-              claimStatus: claimedMap.get(cached.discovered_app_id) as UnmanagedApp['claimStatus'],
-              lastSynced: cached.last_synced,
-            }));
-
-          return NextResponse.json({
-            apps,
-            total: apps.length,
-            lastSynced: cachedApps[0].last_synced,
-            fromCache: true,
-          } as UnmanagedAppsResponse);
+          return buildCachedAppsResponse(supabase, tenantId, includeSystem, cachedApps);
         }
       }
     }
@@ -214,6 +276,20 @@ export async function GET(request: NextRequest) {
             },
             { status: 403 }
           );
+        }
+
+        // Fall back to cached data (even if expired) before surfacing the error
+        const failureSummary = graphResponse.status === 429
+          ? 'Intune API throttled (429)'
+          : `Intune API request failed (${graphResponse.status})`;
+        const staleResponse = await tryStaleCacheFallback(
+          supabase,
+          tenantId,
+          includeSystem,
+          failureSummary
+        );
+        if (staleResponse) {
+          return staleResponse;
         }
 
         return NextResponse.json(
@@ -375,6 +451,20 @@ export async function GET(request: NextRequest) {
     } as UnmanagedAppsResponse);
   } catch (error) {
     console.error('Unmanaged apps API error:', error);
+
+    // Fall back to cached data (even if expired) before surfacing the error
+    if (staleFallbackContext) {
+      const staleResponse = await tryStaleCacheFallback(
+        staleFallbackContext.supabase,
+        staleFallbackContext.tenantId,
+        staleFallbackContext.includeSystem,
+        error instanceof Error ? error.message : 'Failed to fetch unmanaged apps'
+      ).catch(() => null);
+      if (staleResponse) {
+        return staleResponse;
+      }
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch unmanaged apps' },
       { status: 500 }

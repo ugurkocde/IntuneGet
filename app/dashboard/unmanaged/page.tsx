@@ -42,6 +42,8 @@ export default function UnmanagedAppsPage() {
     claimableCount,
     lastSynced,
     fromCache,
+    isStale,
+    staleReason,
     isLoading,
     isRefreshing,
     error,
@@ -252,6 +254,35 @@ export default function UnmanagedAppsPage() {
               onClick={handleRefresh}
               disabled={isRefreshing}
               className="text-status-error hover:bg-status-error/10 text-xs"
+            >
+              <T>Retry</T>
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Stale data notice */}
+      <AnimatePresence>
+        {isStale && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex items-start gap-3 p-4 bg-status-warning/10 border border-status-warning/20 rounded-lg"
+          >
+            <AlertTriangle className="w-5 h-5 text-status-warning flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-status-warning font-medium"><T>Showing cached data</T></p>
+              <p className="text-status-warning/70 text-sm mt-1">
+                {staleReason || <T>Live data is temporarily unavailable. Showing the last successful sync.</T>}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="text-status-warning hover:bg-status-warning/10 text-xs"
             >
               <T>Retry</T>
             </Button>

@@ -129,6 +129,12 @@ export interface UnmanagedAppsResponse {
   total: number;
   lastSynced: string | null;
   fromCache: boolean;
+  /** True when the live Intune fetch failed and cached data is served instead */
+  stale?: boolean;
+  /** Human-readable reason why stale cached data is being served */
+  staleReason?: string;
+  /** Timestamp of the last successful sync (set when stale is true) */
+  lastSyncedAt?: string;
 }
 
 /**
