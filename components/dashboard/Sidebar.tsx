@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { T } from 'gt-next';
 import { cn } from '@/lib/utils';
+import { getClientFeatureFlags } from '@/lib/features';
 import { springPresets, staggerContainerFast } from '@/lib/animations/variants';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
@@ -105,9 +106,15 @@ export function Sidebar({ user, onSignOut }: SidebarProps) {
 
   const closeMobile = () => setMobileOpen(false);
 
+  // NEXT_PUBLIC_DISABLE_SCCM=true hides the SCCM Migration nav item
+  const { sccm: sccmEnabled } = getClientFeatureFlags();
+  const managementItems = sccmEnabled
+    ? managementNav
+    : managementNav.filter((item) => item.href !== '/dashboard/sccm');
+
   const navGroups: NavGroup[] = [
     { items: coreNav },
-    { label: 'Management', items: managementNav },
+    { label: 'Management', items: managementItems },
     { label: 'Analytics', items: analyticsNav },
     ...(isMspUser
       ? [{ label: 'MSP', items: mspNav }]
