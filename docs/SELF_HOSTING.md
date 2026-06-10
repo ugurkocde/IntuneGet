@@ -68,6 +68,16 @@ Deploy directly to Vercel for a managed hosting experience.
 
 For other hosting providers or bare metal.
 
+Prerequisites:
+
+- **Node.js 20 or 22 LTS recommended.** The optional `better-sqlite3`
+  dependency ships prebuilt binaries for these versions. Other Node.js
+  versions trigger a source build, which requires Python 3 and, on Windows,
+  Visual Studio Build Tools.
+- If the optional `better-sqlite3` install fails, the app still runs in
+  Supabase mode, but `DATABASE_MODE=sqlite` will not work until
+  `better-sqlite3` is installed successfully.
+
 ```bash
 # Clone and install
 git clone https://github.com/ugurkocde/IntuneGet.git
@@ -113,6 +123,13 @@ If `DATABASE_MODE=sqlite`, also set:
 | Variable | Description |
 |----------|-------------|
 | `PACKAGER_API_KEY` | Shared key between web app and local packager API mode |
+
+> **Important**: `DATABASE_MODE=sqlite` covers packaging jobs and upload
+> history only. The app catalog (the `curated_apps` and `version_history`
+> tables) requires a Supabase database, which is seeded by the
+> `build-app-list` and `sync-manifests` GitHub Actions workflows. Without
+> Supabase, catalog browsing and search are unavailable and the catalog API
+> routes return `503`.
 
 ### Pipeline Configuration
 

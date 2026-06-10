@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import YAML from 'yaml';
+import { selectAppsToSync } from './select-apps';
 
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests';
 const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
@@ -56,19 +57,12 @@ export async function GET(request: Request) {
       updated_at: new Date().toISOString(),
     });
 
-    // Get curated apps that need syncing
-    const { data: curatedApps, error: fetchError } = await supabase
-      .from('curated_apps')
-      .select('winget_id, latest_version')
-      .eq('is_verified', true)
-      .order('popularity_rank', { ascending: true })
-      .limit(200); // Process top 200 apps per cron run
+    // Get curated apps that need syncing (top ranked apps plus apps that
+    // have never been synced, which NULL popularity_rank would push past
+    // a single ranked limit)
+    const curatedApps = await selectAppsToSync(supabase);
 
-    if (fetchError) {
-      throw fetchError;
-    }
-
-    if (!curatedApps || curatedApps.length === 0) {
+    if (curatedApps.length === 0) {
       // No curated apps yet, update sync status
       await supabase.from('curated_sync_status').upsert({
         id: 'sync-manifests',
@@ -271,9 +265,14 @@ async function fetchVersions(wingetId: string): Promise<string[]> {
     if (!response.ok) return [];
 
     const dirs = await response.json();
+    // Keep only version-like directory names (same filter as the
+    // sync-manifests GitHub Actions workflow) so non-version directories
+    // such as ".validation" or named subfolders are never picked as latest
     return dirs
       .filter((d: { type: string }) => d.type === 'dir')
       .map((d: { name: string }) => d.name)
+      .filter((name: string) => /^\d/.test(name))
+      .filter((name: string) => /^\d+[\d._-]*\d*$/.test(name) || name.includes('.'))
       .sort((a: string, b: string) =>
         b.localeCompare(a, undefined, { numeric: true })
       );
