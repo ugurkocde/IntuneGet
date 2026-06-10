@@ -877,11 +877,11 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
             $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
             if ($msiProperties) {
                 $lines += @(
-                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName' -AdditionalArgumentList '$msiProperties'"
+                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList '$msiProperties'"
                 )
             } else {
                 $lines += @(
-                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName'"
+                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped'"
                 )
             }
         }
@@ -1003,7 +1003,7 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                     "    `$installerSource = `"`$(`$adtSession.DirFiles)\$installerFileName`""
                     '    $userTempDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
                     '    $null = New-Item -Path $userTempDir -ItemType Directory -Force'
-                    "    `$installerDest = Join-Path `$userTempDir '$installerFileName'"
+                    "    `$installerDest = Join-Path `$userTempDir '$installerFileNameSingleQuoteEscaped'"
                     '    Write-ADTLogEntry -Message "Copying installer to user temp: $installerDest" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                     '    Copy-Item -Path $installerSource -Destination $installerDest -Force'
                     ''
