@@ -275,6 +275,14 @@ $sanitizedWingetId = $WingetId -replace '[\.\-]', '_'
 $installerFileName = $env:INSTALLER_FILENAME
 $installerTypeLower = $InstallerType.ToLower()
 $psadtVersion = '4.1.8'
+
+# Custom install/uninstall command overrides from PSADT config
+# Non-empty values replace the synthesized install/uninstall commands entirely
+$customInstallCommand = if ($psadtConfig.installCommand) { ([string]$psadtConfig.installCommand).Trim() } else { '' }
+$customUninstallCommand = if ($psadtConfig.uninstallCommand) { ([string]$psadtConfig.uninstallCommand).Trim() } else { '' }
+# Only escape single quotes - overrides are embedded in single-quoted strings in the generated script
+$customInstallCommandEscaped = $customInstallCommand -replace "'", "''"
+$customUninstallCommandEscaped = $customUninstallCommand -replace "'", "''"
 $brandingCompanyName = $psadtConfig.brandingCompanyName
 $brandingWelcomeTitle = $psadtConfig.brandingWelcomeTitle
 $brandingWelcomeMessage = $psadtConfig.brandingWelcomeMessage
@@ -811,86 +819,95 @@ $lines += @(
     ''
 )
 
-# Generate install command based on installer type
-switch ($installerTypeLower) {
-    { $_ -in 'msi', 'wix' } {
-        $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
-        if ($msiProperties) {
+# Generate install command - custom override takes precedence over installer type synthesis
+if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
+    Write-Host "Using custom install command override from PSADT config"
+    $lines += @(
+        '    # Custom install command override (user-specified)'
+        "    Write-ADTLogEntry -Message 'Executing custom install command' -Severity 'Info' -Source 'Install-ADTDeployment'"
+        "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $customInstallCommandEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
+    )
+} else {
+    switch ($installerTypeLower) {
+        { $_ -in 'msi', 'wix' } {
+            $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
+            if ($msiProperties) {
+                $lines += @(
+                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName' -AdditionalArgumentList '$msiProperties'"
+                )
+            } else {
+                $lines += @(
+                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName'"
+                )
+            }
+        }
+        { $_ -in 'msix', 'appx' } {
             $lines += @(
-                "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName' -AdditionalArgumentList '$msiProperties'"
-            )
-        } else {
-            $lines += @(
-                "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileName'"
+                "    `$msixPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
+                '    Write-ADTLogEntry -Message "Provisioning MSIX/APPX package for all users: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                '    try {'
+                '        Add-AppxProvisionedPackage -Online -PackagePath $msixPath -SkipLicense -ErrorAction Stop'
+                '        Write-ADTLogEntry -Message "MSIX/APPX package provisioned successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                '    } catch {'
+                '        Write-ADTLogEntry -Message "Failed to provision MSIX/APPX package: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
+                '        throw'
+                '    }'
             )
         }
-    }
-    { $_ -in 'msix', 'appx' } {
-        $lines += @(
-            "    `$msixPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
-            '    Write-ADTLogEntry -Message "Provisioning MSIX/APPX package for all users: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-            '    try {'
-            '        Add-AppxProvisionedPackage -Online -PackagePath $msixPath -SkipLicense -ErrorAction Stop'
-            '        Write-ADTLogEntry -Message "MSIX/APPX package provisioned successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
-            '    } catch {'
-            '        Write-ADTLogEntry -Message "Failed to provision MSIX/APPX package: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
-            '        throw'
-            '    }'
-        )
-    }
-    { $_ -in 'zip', 'portable' } {
-        $lines += @(
-            "    `$zipPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
-            "    `$extractPath = `"`$env:ProgramFiles\$displayNameEscaped`""
-            '    Write-ADTLogEntry -Message "Extracting portable app to: $extractPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-            '    try {'
-            '        if (-not (Test-Path $extractPath)) {'
-            '            New-Item -Path $extractPath -ItemType Directory -Force | Out-Null'
-            '        }'
-            '        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force'
-            '        Write-ADTLogEntry -Message "Portable app extracted successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
-            '    } catch {'
-            '        Write-ADTLogEntry -Message "Failed to extract portable app: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
-            '        throw'
-            '    }'
-        )
-    }
-    default {
-        # EXE installers: Use -WaitForMsiExec for bootstrappers that spawn MSI, and -Timeout to prevent indefinite hangs
-        # Many installers (NSIS, Inno Setup, etc.) can spawn child processes that wait for user input in SYSTEM context
-        if ($IsUserScope) {
-            # Per-user installers: When Intune runs with runAsAccount=user, we're already in user context
-            # Some installers (like Spotify) fail when run from C:\Windows\IMECache because:
-            # 1. They need to download/extract components to the same directory
-            # 2. They check their launch path and fail if it's a system directory
-            # Solution: Copy installer to user's temp directory and run from there
+        { $_ -in 'zip', 'portable' } {
             $lines += @(
-                ''
-                '    # Per-user installer - copy to user temp directory first'
-                '    # Some installers (Spotify, etc.) fail from IMECache system directory'
-                "    `$installerSource = `"`$(`$adtSession.DirFiles)\$installerFileName`""
-                '    $userTempDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
-                '    $null = New-Item -Path $userTempDir -ItemType Directory -Force'
-                "    `$installerDest = Join-Path `$userTempDir '$installerFileName'"
-                '    Write-ADTLogEntry -Message "Copying installer to user temp: $installerDest" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-                '    Copy-Item -Path $installerSource -Destination $installerDest -Force'
-                ''
+                "    `$zipPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
+                "    `$extractPath = `"`$env:ProgramFiles\$displayNameEscaped`""
+                '    Write-ADTLogEntry -Message "Extracting portable app to: $extractPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                 '    try {'
-                '        Write-ADTLogEntry -Message "Running per-user installer from user temp directory" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-                '        # Use -UseShellExecute for shell context which inherits environment variables'
-                "        Start-ADTProcess -FilePath `$installerDest -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
-                '    }'
-                '    finally {'
-                '        # Cleanup temp directory'
-                '        if (Test-Path $userTempDir) {'
-                '            Remove-Item -Path $userTempDir -Recurse -Force -ErrorAction SilentlyContinue'
+                '        if (-not (Test-Path $extractPath)) {'
+                '            New-Item -Path $extractPath -ItemType Directory -Force | Out-Null'
                 '        }'
+                '        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force'
+                '        Write-ADTLogEntry -Message "Portable app extracted successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                '    } catch {'
+                '        Write-ADTLogEntry -Message "Failed to extract portable app: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
+                '        throw'
                 '    }'
             )
-        } else {
-            $lines += @(
-                "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
-            )
+        }
+        default {
+            # EXE installers: Use -WaitForMsiExec for bootstrappers that spawn MSI, and -Timeout to prevent indefinite hangs
+            # Many installers (NSIS, Inno Setup, etc.) can spawn child processes that wait for user input in SYSTEM context
+            if ($IsUserScope) {
+                # Per-user installers: When Intune runs with runAsAccount=user, we're already in user context
+                # Some installers (like Spotify) fail when run from C:\Windows\IMECache because:
+                # 1. They need to download/extract components to the same directory
+                # 2. They check their launch path and fail if it's a system directory
+                # Solution: Copy installer to user's temp directory and run from there
+                $lines += @(
+                    ''
+                    '    # Per-user installer - copy to user temp directory first'
+                    '    # Some installers (Spotify, etc.) fail from IMECache system directory'
+                    "    `$installerSource = `"`$(`$adtSession.DirFiles)\$installerFileName`""
+                    '    $userTempDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
+                    '    $null = New-Item -Path $userTempDir -ItemType Directory -Force'
+                    "    `$installerDest = Join-Path `$userTempDir '$installerFileName'"
+                    '    Write-ADTLogEntry -Message "Copying installer to user temp: $installerDest" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                    '    Copy-Item -Path $installerSource -Destination $installerDest -Force'
+                    ''
+                    '    try {'
+                    '        Write-ADTLogEntry -Message "Running per-user installer from user temp directory" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                    '        # Use -UseShellExecute for shell context which inherits environment variables'
+                    "        Start-ADTProcess -FilePath `$installerDest -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                    '    }'
+                    '    finally {'
+                    '        # Cleanup temp directory'
+                    '        if (Test-Path $userTempDir) {'
+                    '            Remove-Item -Path $userTempDir -Recurse -Force -ErrorAction SilentlyContinue'
+                    '        }'
+                    '    }'
+                )
+            } else {
+                $lines += @(
+                    "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                )
+            }
         }
     }
 }
@@ -968,8 +985,16 @@ if ($preUninstallPromptCalls) {
     $lines += $preUninstallPromptCalls
 }
 
-# Generate uninstall command based on whether registry lookup is needed
-if ($useRegistryUninstall) {
+# Generate uninstall command - custom override takes precedence over registry lookup
+if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
+    Write-Host "Using custom uninstall command override from PSADT config"
+    $lines += @(
+        ''
+        '    # Custom uninstall command override (user-specified)'
+        "    Write-ADTLogEntry -Message 'Executing custom uninstall command' -Severity 'Info' -Source 'Uninstall-ADTDeployment'"
+        "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $customUninstallCommandEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
+    )
+} elseif ($useRegistryUninstall) {
     $wingetIdEscaped = $WingetId -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
     $lines += @(
         ''

@@ -388,7 +388,7 @@ function Install-ADTDeployment
     param ()
 
     ## Install the application
-    ${this.getInstallCommand(job.installer_type, installerFileName, silentSwitches)}
+    ${this.getInstallCommand(job, installerFileName, silentSwitches)}
 
     ## Create IntuneGet detection marker for Intune detection rules
     ${this.getRegistryMarkerCreation(job)}
@@ -462,9 +462,37 @@ catch
   }
 
   /**
-   * Get install command based on installer type (PSADT v4 cmdlets)
+   * Get custom install/uninstall command override from package_config.psadtConfig
+   * Returns null when the override is absent, not a string, or empty/whitespace
    */
-  private getInstallCommand(installerType: string, fileName: string, silentSwitches: string): string {
+  private getCommandOverride(job: PackagingJob, key: 'installCommand' | 'uninstallCommand'): string | null {
+    const packageConfig = job.package_config;
+    if (typeof packageConfig !== 'object' || packageConfig === null) {
+      return null;
+    }
+    const psadtConfig = (packageConfig as Record<string, unknown>).psadtConfig;
+    if (typeof psadtConfig !== 'object' || psadtConfig === null) {
+      return null;
+    }
+    const value = (psadtConfig as Record<string, unknown>)[key];
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+    return value.trim();
+  }
+
+  /**
+   * Get install command based on installer type (PSADT v4 cmdlets)
+   * A custom install command override from psadtConfig takes precedence
+   */
+  private getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string {
+    const installOverride = this.getCommandOverride(job, 'installCommand');
+    if (installOverride) {
+      const overrideEscaped = installOverride.replace(/'/g, "''");
+      return `Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\cmd.exe" -ArgumentList '/c ${overrideEscaped}' -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden`;
+    }
+
+    const installerType = job.installer_type;
     const ext = path.extname(fileName).toLowerCase();
 
     if (ext === '.msi' || installerType === 'msi' || installerType === 'wix') {
@@ -485,8 +513,15 @@ catch
 
   /**
    * Get uninstall command (PSADT v4 cmdlets)
+   * A custom uninstall command override from psadtConfig takes precedence
    */
   private getUninstallCommand(job: PackagingJob): string {
+    const uninstallOverride = this.getCommandOverride(job, 'uninstallCommand');
+    if (uninstallOverride) {
+      const overrideEscaped = uninstallOverride.replace(/'/g, "''");
+      return `Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\cmd.exe" -ArgumentList '/c ${overrideEscaped}' -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden`;
+    }
+
     if (!job.uninstall_command) {
       return "Write-ADTLogEntry -Message 'No uninstall command specified' -Severity 'Warning' -Source 'Uninstall-ADTDeployment'";
     }
