@@ -194,6 +194,23 @@ function parseJsonImport(content: string): SccmImportFormat | null {
 }
 
 /**
+ * Check whether content is directly parseable for the declared file type,
+ * used to decide if a base64 decode attempt is needed at all
+ */
+function isParseableContent(text: string, fileType: string): boolean {
+  if (fileType === 'json') {
+    try {
+      JSON.parse(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  // CSV exports always carry the CI_ID column header
+  return text.includes('CI_ID');
+}
+
+/**
  * POST - Import SCCM applications from CSV or JSON
  */
 export async function POST(request: NextRequest) {
@@ -215,19 +232,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Decode file content if base64
+    // Decode file content if base64. Plain text must win over a base64 decode
+    // attempt: Buffer.from(x, 'base64') never throws, so decoding valid plain
+    // JSON/CSV produces garbage that previously overwrote the real content.
     let content = body.fileContent;
     if (body.fileContent.includes('base64,')) {
       content = Buffer.from(body.fileContent.split('base64,')[1], 'base64').toString('utf-8');
-    } else {
-      try {
-        // Try base64 decode
-        const decoded = Buffer.from(body.fileContent, 'base64').toString('utf-8');
-        if (decoded.includes('CI_ID') || decoded.includes('{')) {
-          content = decoded;
-        }
-      } catch {
-        // Use as-is if not base64
+    } else if (!isParseableContent(body.fileContent, body.fileType)) {
+      const decoded = Buffer.from(body.fileContent, 'base64').toString('utf-8');
+      if (isParseableContent(decoded, body.fileType)) {
+        content = decoded;
       }
     }
 
