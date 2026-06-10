@@ -283,6 +283,21 @@ $customUninstallCommand = if ($psadtConfig.uninstallCommand) { ([string]$psadtCo
 # Only escape single quotes - overrides are embedded in single-quoted strings in the generated script
 $customInstallCommandEscaped = $customInstallCommand -replace "'", "''"
 $customUninstallCommandEscaped = $customUninstallCommand -replace "'", "''"
+# Custom detection marker root from PSADT config (issue #106)
+# Subpath under the hive (no hive prefix), e.g. SOFTWARE\Contoso\Apps
+# Normalization mirrors normalizeMarkerPath in lib/registry-marker.ts - keep in sync
+$registryMarkerPath = if ($psadtConfig.registryMarkerPath) { ([string]$psadtConfig.registryMarkerPath).Trim() } else { '' }
+$registryMarkerPath = $registryMarkerPath -replace '/', '\'
+$registryMarkerPath = $registryMarkerPath -replace '\\+', '\'
+$registryMarkerPath = $registryMarkerPath.Trim('\')
+$registryMarkerPath = $registryMarkerPath -replace '^(HKLM|HKCU|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER):?(\\|$)', ''
+$registryMarkerPath = $registryMarkerPath -replace '[*?"''<>|\x00-\x1f]', ''
+$markerSegments = @($registryMarkerPath -split '\\' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$registryMarkerPath = $markerSegments -join '\'
+if ([string]::IsNullOrWhiteSpace($registryMarkerPath)) { $registryMarkerPath = 'SOFTWARE\IntuneGet\Apps' }
+# Escape for single-quoted embedding in the generated script (quotes are already
+# stripped by normalization, this is defense in depth)
+$registryMarkerPathEscaped = $registryMarkerPath -replace "'", "''"
 # Optional pre-install removal of any existing installation (opt-in via PSADT config)
 $removeExistingInstall = if ($psadtConfig.removeExistingInstall) { $true } else { $false }
 # Only escape single quotes - the app name is embedded in a single-quoted string in the generated script
@@ -950,11 +965,11 @@ if ($IsUserScope) {
         '    # Write IntuneGet detection marker to all user registry hives'
         '    try {'
         '        Invoke-ADTAllUsersRegistryAction -ScriptBlock {'
-        "            Set-ADTRegistryKey -LiteralPath 'HKCU\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId' -Name 'DisplayName' -Value '$displayNameEscaped' -Type String -SID `$_.SID"
-        "            Set-ADTRegistryKey -LiteralPath 'HKCU\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId' -Name 'Version' -Value '$Version' -Type String -SID `$_.SID"
-        "            Set-ADTRegistryKey -LiteralPath 'HKCU\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId' -Name 'Publisher' -Value '$publisherEscaped' -Type String -SID `$_.SID"
-        "            Set-ADTRegistryKey -LiteralPath 'HKCU\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId' -Name 'WingetId' -Value '$WingetId' -Type String -SID `$_.SID"
-        '            Set-ADTRegistryKey -LiteralPath ''HKCU\SOFTWARE\IntuneGet\Apps\' + $sanitizedWingetId + ''' -Name ''InstalledDate'' -Value (Get-Date -Format ''o'') -Type String -SID $_.SID'
+        "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'DisplayName' -Value '$displayNameEscaped' -Type String -SID `$_.SID"
+        "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'Version' -Value '$Version' -Type String -SID `$_.SID"
+        "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'Publisher' -Value '$publisherEscaped' -Type String -SID `$_.SID"
+        "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'WingetId' -Value '$WingetId' -Type String -SID `$_.SID"
+        '            Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''InstalledDate'' -Value (Get-Date -Format ''o'') -Type String -SID $_.SID'
         '        }'
         '        Write-ADTLogEntry -Message "IntuneGet detection marker written to all user hives" -Severity ''Success'' -Source ''Install-ADTDeployment'''
         '    } catch {'
@@ -967,7 +982,7 @@ if ($IsUserScope) {
         ''
         '    # Write IntuneGet detection marker to HKLM (machine-scope app)'
         '    try {'
-        "        `$regPath = 'HKLM\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId'"
+        "        `$regPath = 'HKLM\$registryMarkerPathEscaped\$sanitizedWingetId'"
         "        Set-ADTRegistryKey -LiteralPath `$regPath -Name 'DisplayName' -Value '$displayNameEscaped' -Type String"
         "        Set-ADTRegistryKey -LiteralPath `$regPath -Name 'Version' -Value '$Version' -Type String"
         "        Set-ADTRegistryKey -LiteralPath `$regPath -Name 'Publisher' -Value '$publisherEscaped' -Type String"
@@ -1137,7 +1152,7 @@ if ($IsUserScope) {
         '    # Remove IntuneGet detection marker from all user registry hives'
         '    try {'
         '        Invoke-ADTAllUsersRegistryAction -ScriptBlock {'
-        "            Remove-ADTRegistryKey -LiteralPath 'HKCU\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId' -SID `$_.SID -Recurse -ErrorAction SilentlyContinue"
+        "            Remove-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -SID `$_.SID -Recurse -ErrorAction SilentlyContinue"
         '        }'
         '        Write-ADTLogEntry -Message "IntuneGet detection marker cleanup completed across all user hives" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
         '    } catch {'
@@ -1146,8 +1161,8 @@ if ($IsUserScope) {
         ''
         '    # Also remove from current HKCU context (fallback for user-context uninstall)'
         '    try {'
-        "        `$regPathHKCU = 'HKCU\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId'"
-        '        if (Test-Path -LiteralPath "Registry::HKEY_CURRENT_USER\SOFTWARE\IntuneGet\Apps\' + $sanitizedWingetId + '" -PathType Container) {'
+        "        `$regPathHKCU = 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId'"
+        '        if (Test-Path -LiteralPath ''Registry::HKEY_CURRENT_USER\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -PathType Container) {'
         '            Remove-ADTRegistryKey -LiteralPath $regPathHKCU -Recurse'
         '        }'
         '    } catch { }'
@@ -1158,8 +1173,8 @@ if ($IsUserScope) {
         ''
         '    # Remove IntuneGet detection marker from HKLM'
         '    try {'
-        "        `$regPathHKLM = 'HKLM\SOFTWARE\IntuneGet\Apps\$sanitizedWingetId'"
-        '        if (Test-Path -LiteralPath "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\IntuneGet\Apps\' + $sanitizedWingetId + '" -PathType Container) {'
+        "        `$regPathHKLM = 'HKLM\$registryMarkerPathEscaped\$sanitizedWingetId'"
+        '        if (Test-Path -LiteralPath ''Registry::HKEY_LOCAL_MACHINE\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -PathType Container) {'
         '            Remove-ADTRegistryKey -LiteralPath $regPathHKLM -Recurse'
         '            Write-ADTLogEntry -Message "IntuneGet detection marker removed from HKLM" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
         '        }'

@@ -258,17 +258,24 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
     }
   }, [selectedInstaller]);
 
-  // Generate detection rules when installer, version, or locale changes
+  // Generate detection rules when installer, version, locale, or marker path changes
   // Pass effectiveWingetId so locale variant packages get correct detection markers
   useEffect(() => {
     if (selectedInstaller) {
-      const rules = generateDetectionRules(selectedInstaller, pkg.name, effectiveWingetId, selectedVersion);
+      const rules = generateDetectionRules(
+        selectedInstaller,
+        pkg.name,
+        effectiveWingetId,
+        selectedVersion,
+        config.registryMarkerPath
+      );
       setConfig((prev) => ({
         ...prev,
         detectionRules: rules,
       }));
     }
-  }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath]);
 
   const handleAddToCart = async () => {
     if (addedToCartSuccess) return;
@@ -1526,6 +1533,21 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
                   <p className="text-text-muted text-xs">
                     Detection rules are auto-generated based on installer type. They determine how Intune verifies the app is installed.
                   </p>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                      Detection marker registry path
+                    </label>
+                    <input
+                      type="text"
+                      value={config.registryMarkerPath || ''}
+                      onChange={(e) => updateConfig({ registryMarkerPath: e.target.value || undefined })}
+                      placeholder="SOFTWARE\IntuneGet\Apps"
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/10 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-cyan/50"
+                    />
+                    <p className="text-text-muted text-xs mt-1.5">
+                      Registry key under HKLM/HKCU where the detection marker is written. Customize to track deployments under your own key, e.g. SOFTWARE\CompanyName\Apps.
+                    </p>
+                  </div>
                 </div>
               </ConfigSection>}
 

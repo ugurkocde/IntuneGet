@@ -606,13 +606,47 @@ catch
   }
 
   /**
+   * Normalize a custom registry marker root into a safe subpath under the
+   * hive. Mirrors normalizeMarkerPath in lib/registry-marker.ts (the packager
+   * cannot import from lib/) - keep both in sync.
+   */
+  private normalizeMarkerPath(input: unknown): string {
+    const DEFAULT_MARKER_PATH = 'SOFTWARE\\IntuneGet\\Apps';
+    if (typeof input !== 'string') {
+      return DEFAULT_MARKER_PATH;
+    }
+
+    let markerPath = input.trim().replace(/\//g, '\\').replace(/\\+/g, '\\');
+    markerPath = markerPath.replace(/^\\+|\\+$/g, '');
+    markerPath = markerPath.replace(/^(HKLM|HKCU|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER):?(\\|$)/i, '');
+    // eslint-disable-next-line no-control-regex
+    markerPath = markerPath.replace(/[*?"'<>|\x00-\x1f]/g, '');
+
+    const segments = markerPath
+      .split('\\')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    return segments.length > 0 ? segments.join('\\') : DEFAULT_MARKER_PATH;
+  }
+
+  /**
+   * Get the registry marker root for a job: custom value from
+   * package_config.psadtConfig.registryMarkerPath, or the IntuneGet default
+   */
+  private getRegistryMarkerPath(job: PackagingJob): string {
+    return this.normalizeMarkerPath(this.getPsadtConfig(job)?.registryMarkerPath);
+  }
+
+  /**
    * Generate PowerShell code to create IntuneGet registry marker
    * This marker is used by Intune detection rules to verify installation
    */
   private getRegistryMarkerCreation(job: PackagingJob): string {
     const sanitizedId = this.sanitizeWingetId(job.winget_id);
     const hive = this.getRegistryHive(job.install_scope);
-    const regPath = `${hive}\\SOFTWARE\\IntuneGet\\Apps\\${sanitizedId}`;
+    const markerPath = this.getRegistryMarkerPath(job);
+    const regPath = `${hive}\\${markerPath}\\${sanitizedId}`;
 
     return `try {
         $regPath = '${regPath}'
@@ -635,11 +669,12 @@ catch
     const sanitizedId = this.sanitizeWingetId(job.winget_id);
     const hive = this.getRegistryHive(job.install_scope);
     const hiveLongName = job.install_scope === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE';
-    const regPath = `${hive}\\SOFTWARE\\IntuneGet\\Apps\\${sanitizedId}`;
+    const markerPath = this.getRegistryMarkerPath(job);
+    const regPath = `${hive}\\${markerPath}\\${sanitizedId}`;
 
     return `try {
         $regPath = '${regPath}'
-        if (Test-Path -LiteralPath 'Registry::${hiveLongName}\\SOFTWARE\\IntuneGet\\Apps\\${sanitizedId}' -PathType Container) {
+        if (Test-Path -LiteralPath 'Registry::${hiveLongName}\\${markerPath}\\${sanitizedId}' -PathType Container) {
             Remove-ADTRegistryKey -LiteralPath $regPath -Recurse
             Write-ADTLogEntry -Message "IntuneGet detection marker removed from $regPath" -Severity 'Success' -Source 'Uninstall-ADTDeployment'
         }

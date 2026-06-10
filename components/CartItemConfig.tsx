@@ -332,6 +332,23 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                     onChange={(checked) => updateConfig({ removeExistingInstall: checked })}
                   />
 
+                  {/* Detection Marker Registry Path */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                      Detection marker registry path
+                    </label>
+                    <input
+                      type="text"
+                      value={config.registryMarkerPath || ''}
+                      onChange={(e) => updateConfig({ registryMarkerPath: e.target.value || undefined })}
+                      placeholder="SOFTWARE\IntuneGet\Apps"
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/10 rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-cyan/50"
+                    />
+                    <p className="text-xs text-text-muted mt-1">
+                      Registry key under HKLM/HKCU where the detection marker is written. Customize to track deployments under your own key, e.g. SOFTWARE\CompanyName\Apps. The detection rule updates automatically on save.
+                    </p>
+                  </div>
+
                   {/* Processes to Close */}
                   <div>
                     <div className="flex items-center justify-between mb-2">

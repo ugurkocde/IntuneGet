@@ -15,6 +15,7 @@ import type {
 } from '@/types/intune';
 import type { NormalizedInstaller, WingetInstallerType, WingetScope } from '@/types/winget';
 import { resolveInstallerFileName } from '@/lib/installer-filename';
+import { normalizeMarkerPath } from '@/lib/registry-marker';
 
 /**
  * Generate detection rules based on installer metadata
@@ -34,24 +35,26 @@ import { resolveInstallerFileName } from '@/lib/installer-filename';
  * @param displayName - Application display name
  * @param wingetId - Optional Winget package ID for registry marker detection
  * @param version - Optional version for version comparison detection
+ * @param markerPath - Optional custom registry marker root (psadtConfig.registryMarkerPath)
  */
 export function generateDetectionRules(
   installer: NormalizedInstaller,
   displayName: string,
   wingetId?: string,
-  version?: string
+  version?: string,
+  markerPath?: string
 ): DetectionRule[] {
   switch (installer.type) {
     case 'msi':
     case 'wix':
       // MSI: Prefer registry marker (product codes go stale across versions),
       // then product code, then folder detection
-      return generateMsiDetectionRules(installer, displayName, wingetId, version);
+      return generateMsiDetectionRules(installer, displayName, wingetId, version, markerPath);
 
     case 'burn':
       // Burn bundles: Use registry marker if wingetId provided, otherwise folder detection
       if (wingetId && version) {
-        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope);
+        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope, markerPath);
       }
       return generateFolderDetectionRules(installer, displayName);
 
@@ -65,7 +68,7 @@ export function generateDetectionRules(
     case 'nullsoft':
       // Use PSADT registry marker - more reliable than uninstall registry search
       if (wingetId && version) {
-        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope);
+        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope, markerPath);
       }
       return generateFolderDetectionRules(installer, displayName);
 
@@ -73,13 +76,13 @@ export function generateDetectionRules(
     case 'zip':
       // Portable: Use registry marker if wingetId provided, otherwise folder existence
       if (wingetId && version) {
-        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope);
+        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope, markerPath);
       }
       return generateFolderDetectionRules(installer, displayName);
 
     default:
       if (wingetId && version) {
-        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope);
+        return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope, markerPath);
       }
       return generateFolderDetectionRules(installer, displayName);
   }
@@ -97,11 +100,14 @@ export function generateDetectionRules(
  *
  * Registry path: HKLM:\SOFTWARE\IntuneGet\Apps\{WingetId_sanitized}
  * For user scope: HKCU:\SOFTWARE\IntuneGet\Apps\{WingetId_sanitized}
+ * The SOFTWARE\IntuneGet\Apps root is customizable per package via
+ * psadtConfig.registryMarkerPath (issue #106)
  */
 function generateRegistryMarkerDetectionRules(
   wingetId: string,
   version: string,
-  scope?: WingetScope
+  scope?: WingetScope,
+  markerPath?: string
 ): DetectionRule[] {
   // Sanitize wingetId: replace . and - with _ to create valid registry key name
   const sanitizedId = wingetId.replace(/[\.\-]/g, '_');
@@ -112,7 +118,7 @@ function generateRegistryMarkerDetectionRules(
   return [
     {
       type: 'registry',
-      keyPath: `${hive}\\SOFTWARE\\IntuneGet\\Apps\\${sanitizedId}`,
+      keyPath: `${hive}\\${normalizeMarkerPath(markerPath)}\\${sanitizedId}`,
       valueName: 'Version',
       check32BitOn64System: false,
       detectionType: 'version',
@@ -135,11 +141,12 @@ function generateMsiDetectionRules(
   installer: NormalizedInstaller,
   displayName: string,
   wingetId?: string,
-  version?: string
+  version?: string,
+  markerPath?: string
 ): DetectionRule[] {
   // Primary: Registry marker detection (version-stable, written by PSADT)
   if (wingetId && version) {
-    return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope);
+    return generateRegistryMarkerDetectionRules(wingetId, version, installer.scope, markerPath);
   }
 
   // Fallback: MSI Product Code detection

@@ -185,6 +185,103 @@ describe('generateDetectionRules', () => {
       expect(rules).toHaveLength(1);
       expect(rules[0].type).toBe('file');
     });
+
+    it('should use a custom marker root when provided', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.exe',
+        sha256: 'abc123',
+        type: 'exe',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Test App',
+        'Publisher.TestApp',
+        '1.0.0',
+        'SOFTWARE\\Contoso\\Apps'
+      );
+
+      expect(rules).toHaveLength(1);
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.keyPath).toBe('HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Apps\\Publisher_TestApp');
+    });
+
+    it('should use a custom marker root with HKCU for user scope', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.exe',
+        sha256: 'abc123',
+        type: 'exe',
+        scope: 'user',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Test App',
+        'Publisher.TestApp',
+        '1.0.0',
+        'SOFTWARE\\Contoso\\Apps'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.keyPath).toBe('HKEY_CURRENT_USER\\SOFTWARE\\Contoso\\Apps\\Publisher_TestApp');
+    });
+
+    it('should use a custom marker root for MSI installers', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.msi',
+        sha256: 'abc123',
+        type: 'msi',
+        productCode: '{12345678-1234-1234-1234-123456789012}',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Test App',
+        'Publisher.TestApp',
+        '1.0.0',
+        'SOFTWARE\\Contoso\\Apps'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.keyPath).toBe('HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Apps\\Publisher_TestApp');
+    });
+
+    it('should normalize a marker root with hive prefix and trailing backslash', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.exe',
+        sha256: 'abc123',
+        type: 'exe',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Test App',
+        'Publisher.TestApp',
+        '1.0.0',
+        'HKLM\\SOFTWARE\\Contoso\\'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.keyPath).toBe('HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Publisher_TestApp');
+    });
+
+    it('should fall back to the default marker root for an empty custom path', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.exe',
+        sha256: 'abc123',
+        type: 'exe',
+      };
+
+      const rules = generateDetectionRules(installer, 'Test App', 'Publisher.TestApp', '1.0.0', '');
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.keyPath).toBe('HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Publisher_TestApp');
+    });
   });
 
   describe('MSIX detection rules', () => {

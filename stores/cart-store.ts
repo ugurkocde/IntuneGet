@@ -7,9 +7,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CartItem, Win32CartItem, StoreCartItem, NewCartItem } from '@/types/upload';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
+import type { DetectionRule, RegistryDetectionRule } from '@/types/intune';
 import type { NormalizedInstaller, WingetScope } from '@/types/winget';
 import type { PSADTConfig } from '@/types/psadt';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { normalizeMarkerPath, rewriteMarkerKeyPath } from '@/lib/registry-marker';
 
 interface CartState {
   items: CartItem[];
@@ -38,6 +40,50 @@ interface CartActions {
 }
 
 type CartStore = CartState & CartActions;
+
+/**
+ * Rewrite the registry marker detection rules of a Win32 cart item to match
+ * its psadtConfig.registryMarkerPath (issue #106).
+ *
+ * Detection rules are generated at add-to-cart time with the default marker
+ * root, BEFORE the user edits the PSADT config. When a later update changes
+ * the marker root, the already-generated registry rule must be rewritten so
+ * the deployed detection rule matches the marker PSADT actually writes.
+ *
+ * Only rules that look like an IntuneGet marker path for this package
+ * (hive + root + sanitized winget id) are touched; manually authored
+ * registry rules pointing elsewhere are left as-is.
+ */
+function applyRegistryMarkerPath(
+  item: Win32CartItem,
+  previousMarkerPath?: string | null
+): Win32CartItem {
+  const markerPath = normalizeMarkerPath(item.psadtConfig.registryMarkerPath);
+  const sanitizedId = item.wingetId.replace(/[\.\-]/g, '_');
+
+  const rewriteRules = (rules: DetectionRule[]): DetectionRule[] =>
+    rules.map((rule) => {
+      if (rule.type !== 'registry') return rule;
+      const regRule = rule as RegistryDetectionRule;
+      const rewritten = rewriteMarkerKeyPath(
+        regRule.keyPath,
+        sanitizedId,
+        markerPath,
+        previousMarkerPath
+      );
+      if (!rewritten || rewritten === regRule.keyPath) return rule;
+      return { ...regRule, keyPath: rewritten };
+    });
+
+  return {
+    ...item,
+    detectionRules: rewriteRules(item.detectionRules),
+    psadtConfig: {
+      ...item.psadtConfig,
+      detectionRules: rewriteRules(item.psadtConfig.detectionRules),
+    },
+  };
+}
 
 function generateCartItemId(item: NewCartItem): string {
   if ('appSource' in item && item.appSource === 'store') {
@@ -101,9 +147,27 @@ export const useCartStore = create<CartStore>()(
 
       updateItem: (id, updates) => {
         set((state) => ({
-          items: state.items.map((item) =>
-            item.id === id ? { ...item, ...updates } as CartItem : item
-          ),
+          items: state.items.map((item) => {
+            if (item.id !== id) return item;
+            const merged = { ...item, ...updates } as CartItem;
+            // When a psadtConfig update carries registryMarkerPath, rewrite
+            // the already-generated registry marker detection rules to the
+            // new root (see applyRegistryMarkerPath)
+            const updatedPsadtConfig = (updates as Partial<Win32CartItem>).psadtConfig;
+            if (
+              updatedPsadtConfig &&
+              'registryMarkerPath' in updatedPsadtConfig &&
+              isWin32CartItem(merged)
+            ) {
+              // Pass the pre-update marker path so only the rule that exactly
+              // matches the previous marker location is rewritten
+              const previousMarkerPath = isWin32CartItem(item)
+                ? item.psadtConfig?.registryMarkerPath
+                : undefined;
+              return applyRegistryMarkerPath(merged, previousMarkerPath);
+            }
+            return merged;
+          }),
         }));
       },
 
@@ -183,7 +247,14 @@ export function createCartItem(
   const { generateDetectionRules, generateInstallCommand, generateUninstallCommand } = require('@/lib/detection-rules');
 
   // Pass wingetId and version for registry marker detection (most reliable for EXE installers)
-  const detectionRules = generateDetectionRules(installer, displayName, wingetId, version);
+  // A custom marker root from the provided psadtConfig is honored at generation time
+  const detectionRules = generateDetectionRules(
+    installer,
+    displayName,
+    wingetId,
+    version,
+    psadtConfig?.registryMarkerPath
+  );
 
   return {
     appSource: 'win32',
