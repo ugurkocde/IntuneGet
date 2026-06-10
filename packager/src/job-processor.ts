@@ -183,10 +183,26 @@ export class JobProcessor {
 
   /**
    * Download a file
+   * Some vendor CDNs reject the default client identity while accepting a
+   * browser User-Agent (and vice versa), so retry once with a browser UA
+   * when the server refuses the request outright.
    */
   private async downloadFile(url: string, destPath: string): Promise<void> {
     const fetch = (await import('node-fetch')).default;
-    const response = await fetch(url);
+    let response = await fetch(url);
+
+    if (response.status === 403 || response.status === 406) {
+      this.logger.warn('Download refused, retrying with browser User-Agent', {
+        url,
+        status: response.status,
+      });
+      response = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`Failed to download ${url}: ${response.statusText}`);

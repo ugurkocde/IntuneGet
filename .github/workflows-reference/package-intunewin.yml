@@ -181,6 +181,26 @@ jobs:
                 }
                 return
               } catch {
+                $statusCode = $null
+                if ($_.Exception.Response) {
+                  $statusCode = [int]$_.Exception.Response.StatusCode
+                }
+                # Some vendor CDNs (e.g. downloads.tableau.com) reject Mozilla/5.0
+                # User-Agents that fail browser fingerprinting (including the
+                # PowerShell default) while accepting plain tool User-Agents;
+                # retry once with a simple tool identity before the normal retry loop
+                if ($statusCode -eq 403 -or $statusCode -eq 406) {
+                  try {
+                    Write-Host "Download refused with status $statusCode, retrying with plain tool User-Agent..."
+                    Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+                    Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UserAgent 'curl/8.4.0' -UseBasicParsing -MaximumRedirection 10 -TimeoutSec $TimeoutSec -ErrorAction Stop
+                    if (Test-Path -LiteralPath $OutFile) {
+                      return
+                    }
+                  } catch {
+                    Write-Host "Fallback download with plain tool User-Agent also failed"
+                  }
+                }
                 if ($attempt -ge $MaxRetries) {
                   throw
                 }
