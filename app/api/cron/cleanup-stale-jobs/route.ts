@@ -8,9 +8,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
-
-const STALE_JOB_TIMEOUT_MINUTES = 30;
-const INTERMEDIATE_STATES = ['queued', 'packaging', 'uploading'];
+import {
+  STALE_JOB_TIMEOUT_MINUTES,
+  INTERMEDIATE_STATES,
+  STALE_JOB_ERROR_MESSAGE,
+} from '@/lib/stale-jobs';
 
 export async function GET(request: Request) {
   // Verify cron secret
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
       .from('packaging_jobs')
       .update({
         status: 'failed',
-        error_message: `Job timed out after ${STALE_JOB_TIMEOUT_MINUTES} minutes without progress. This may indicate a callback delivery failure or workflow crash.`,
+        error_message: STALE_JOB_ERROR_MESSAGE,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

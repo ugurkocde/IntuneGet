@@ -21,6 +21,12 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { acquireGraphToken } from '@/lib/graph-token';
 import { deployStoreApp } from '@/lib/store-app-deploy';
+import {
+  STALE_JOB_TIMEOUT_MINUTES,
+  INTERMEDIATE_STATES,
+  STALE_JOB_ERROR_MESSAGE,
+} from '@/lib/stale-jobs';
+import type { PackagingJob } from '@/lib/db/types';
 import type { CartItem, Win32CartItem, StoreCartItem } from '@/types/upload';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 
@@ -502,6 +508,71 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Cap read-side healing per request to keep the GET fast
+const STALE_HEAL_BATCH_SIZE = 25;
+
+/**
+ * Mark jobs stuck in intermediate states beyond the stale timeout as failed.
+ * Read-side safety net for deployments where the cleanup cron never runs
+ * (e.g. missing CRON_SECRET or self-hosted without cron). Returns the job
+ * list with corrected statuses.
+ */
+async function healStaleJobs(
+  db: ReturnType<typeof getDatabase>,
+  jobs: PackagingJob[]
+): Promise<PackagingJob[]> {
+  const cutoff = Date.now() - STALE_JOB_TIMEOUT_MINUTES * 60 * 1000;
+
+  const staleJobs = jobs
+    .filter((job) => {
+      if (!INTERMEDIATE_STATES.includes(job.status)) return false;
+      const lastActivity = job.updated_at || job.created_at;
+      return new Date(lastActivity).getTime() < cutoff;
+    })
+    .slice(0, STALE_HEAL_BATCH_SIZE);
+
+  if (staleJobs.length === 0) {
+    return jobs;
+  }
+
+  const now = new Date().toISOString();
+  const results = await Promise.all(
+    staleJobs.map((job) =>
+      db.jobs
+        .update(job.id, {
+          status: 'failed',
+          error_message: STALE_JOB_ERROR_MESSAGE,
+          completed_at: now,
+          updated_at: now,
+        })
+        .catch((error) => {
+          console.error(`Failed to heal stale job ${job.id}:`, error);
+          return null;
+        })
+    )
+  );
+
+  const healedIds = new Set(
+    staleJobs.filter((_, index) => results[index] !== null).map((job) => job.id)
+  );
+
+  if (healedIds.size === 0) {
+    return jobs;
+  }
+
+  return jobs.map((job) =>
+    healedIds.has(job.id)
+      ? {
+          ...job,
+          status: 'failed',
+          error_message: STALE_JOB_ERROR_MESSAGE,
+          completed_at: now,
+          updated_at: now,
+        }
+      : job
+  );
+}
+
 /**
  * GET handler for checking job status
  */
@@ -536,7 +607,11 @@ export async function GET(request: NextRequest) {
     // Get all jobs for a user
     const jobs = await db.jobs.getByUserId(userId!, 50);
 
-    return NextResponse.json({ jobs });
+    // Self-heal jobs stuck in intermediate states (safety net for
+    // deployments where the cleanup cron is not running)
+    const healedJobs = await healStaleJobs(db, jobs);
+
+    return NextResponse.json({ jobs: healedJobs });
   } catch {
     return NextResponse.json(
       { error: 'Failed to fetch jobs' },
