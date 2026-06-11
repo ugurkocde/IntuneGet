@@ -251,6 +251,7 @@ jobs:
             let errors = 0;
 
             let purgedExisting = 0;
+            let purgedRecased = 0;
             try {
               for (let i = 0; i < filteredAppsToUpsert.length; i += batchSize) {
                 const batch = filteredAppsToUpsert.slice(i, i + batchSize);
@@ -304,6 +305,119 @@ jobs:
                 }
               }
 
+              // Self-heal winget publisher re-casings: when the index renames
+              // an ID's casing (e.g. NetSDK.S3Browser -> Netsdk.S3Browser) the
+              // upsert above creates the new-cased row, but the old-cased row
+              // would linger forever - its GitHub manifest paths 404
+              // case-sensitively so it can never sync again, it duplicates the
+              // app in search, and re-extracting its icon creates
+              // case-colliding directories under public/icons. Detect rows
+              // whose winget_id matches an imported ID case-insensitively but
+              // not exactly, carry over fields the new row is missing (icons
+              // and categories are expensive to regenerate), then delete the
+              // dead row and its version history. Rows that merely
+              // disappeared from the index are never touched.
+              {
+                const importedIds = new Set(filteredAppsToUpsert.map(a => a.winget_id));
+                const foldedToCanonical = new Map();
+                const ambiguousFolded = new Set();
+                for (const id of importedIds) {
+                  const folded = id.toLowerCase();
+                  if (foldedToCanonical.has(folded) && foldedToCanonical.get(folded) !== id) {
+                    // The index itself contains two casings - never purge then
+                    ambiguousFolded.add(folded);
+                  }
+                  foldedToCanonical.set(folded, id);
+                }
+
+                const recased = [];
+                const pageSize = 1000;
+                for (let from = 0; ; from += pageSize) {
+                  const { data, error } = await supabase
+                    .from('curated_apps')
+                    .select('winget_id, icon_path, has_icon, icon_source, description, category')
+                    .order('winget_id')
+                    .range(from, from + pageSize - 1);
+                  if (error) {
+                    console.error('Re-case scan failed:', error.message);
+                    errors++;
+                    recased.length = 0;
+                    break;
+                  }
+                  if (!data || data.length === 0) break;
+                  for (const row of data) {
+                    const folded = row.winget_id.toLowerCase();
+                    const canonical = foldedToCanonical.get(folded);
+                    if (canonical && canonical !== row.winget_id && !ambiguousFolded.has(folded)) {
+                      recased.push({ row, canonical });
+                    }
+                  }
+                  if (data.length < pageSize) break;
+                }
+
+                for (const { row, canonical } of recased) {
+                  const { data: canonicalRow, error: canonicalError } = await supabase
+                    .from('curated_apps')
+                    .select('winget_id, icon_path, has_icon, description, category')
+                    .eq('winget_id', canonical)
+                    .single();
+                  if (canonicalError || !canonicalRow) {
+                    console.error(`Re-case purge skipped for ${row.winget_id}: canonical row ${canonical} not readable`);
+                    errors++;
+                    continue;
+                  }
+
+                  const carryOver = {};
+                  if (!canonicalRow.icon_path && row.icon_path) {
+                    carryOver.icon_path = row.icon_path;
+                    carryOver.has_icon = row.has_icon;
+                    carryOver.icon_source = row.icon_source;
+                  }
+                  if (!canonicalRow.description && row.description) {
+                    carryOver.description = row.description;
+                  }
+                  if (!canonicalRow.category && row.category) {
+                    carryOver.category = row.category;
+                  }
+                  if (Object.keys(carryOver).length > 0) {
+                    carryOver.updated_at = new Date().toISOString();
+                    const { error: carryError } = await supabase
+                      .from('curated_apps')
+                      .update(carryOver)
+                      .eq('winget_id', canonical);
+                    if (carryError) {
+                      console.error(`Re-case carry-over failed for ${canonical}:`, carryError.message);
+                      errors++;
+                      // Keep the dead row rather than losing its data
+                      continue;
+                    }
+                  }
+
+                  const { error: vhError } = await supabase
+                    .from('version_history')
+                    .delete()
+                    .eq('winget_id', row.winget_id);
+                  if (vhError) {
+                    console.error(`Re-case version_history delete failed for ${row.winget_id}:`, vhError.message);
+                    errors++;
+                    continue;
+                  }
+
+                  const { error: deleteError } = await supabase
+                    .from('curated_apps')
+                    .delete()
+                    .eq('winget_id', row.winget_id);
+                  if (deleteError) {
+                    console.error(`Re-case delete failed for ${row.winget_id}:`, deleteError.message);
+                    errors++;
+                    continue;
+                  }
+
+                  purgedRecased++;
+                  console.log(`Purged re-cased ID: ${row.winget_id} -> ${canonical}`);
+                }
+              }
+
               // Icon inheritance: copy parent icon_path to locale variants
               if (variantCount > 0) {
                 const { data: iconCount, error: iconError } = await supabase.rpc('inherit_parent_icons');
@@ -327,6 +441,7 @@ jobs:
                   upserted: totalUpserted,
                   excluded_from_import: excludedFromImport,
                   purged_existing: purgedExisting,
+                  purged_recased: purgedRecased,
                   excluded_total: excludedIds.size,
                   batch_errors: errors
                 },
@@ -338,6 +453,7 @@ jobs:
               console.log(`  - Successfully upserted: ${totalUpserted}`);
               console.log(`  - Excluded from import: ${excludedFromImport}`);
               console.log(`  - Purged previously-existing rows: ${purgedExisting}`);
+              console.log(`  - Purged re-cased rows: ${purgedRecased}`);
               console.log(`  - Locale variants detected: ${variantCount}`);
               console.log(`  - Batch errors: ${errors}`);
 
@@ -347,6 +463,7 @@ jobs:
                 upserted: totalUpserted,
                 excluded_from_import: excludedFromImport,
                 purged_existing: purgedExisting,
+                purged_recased: purgedRecased,
                 excluded_total: excludedIds.size,
                 locale_variants: variantCount,
                 errors: errors
@@ -384,6 +501,7 @@ jobs:
             VARIANTS=$(jq -r '.locale_variants // 0' import-stats.json)
             EXCLUDED_IMPORT=$(jq -r '.excluded_from_import // 0' import-stats.json)
             PURGED=$(jq -r '.purged_existing // 0' import-stats.json)
+            PURGED_RECASED=$(jq -r '.purged_recased // 0' import-stats.json)
             EXCLUDED_TOTAL=$(jq -r '.excluded_total // 0' import-stats.json)
             ERRORS=$(jq -r '.errors' import-stats.json)
 
@@ -395,6 +513,7 @@ jobs:
             echo "- **Successfully imported:** $UPSERTED" >> $GITHUB_STEP_SUMMARY
             echo "- **Excluded from import:** $EXCLUDED_IMPORT (denylist size: $EXCLUDED_TOTAL)" >> $GITHUB_STEP_SUMMARY
             echo "- **Purged existing rows:** $PURGED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Purged re-cased rows:** $PURGED_RECASED" >> $GITHUB_STEP_SUMMARY
             echo "- **Locale variants detected:** $VARIANTS" >> $GITHUB_STEP_SUMMARY
             echo "- **Batch errors:** $ERRORS" >> $GITHUB_STEP_SUMMARY
             echo "- **Generated at:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
