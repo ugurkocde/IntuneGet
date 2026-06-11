@@ -155,6 +155,75 @@ export async function fetchInstallerManifest(
   }
 }
 
+function localeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function hasLocaleDescription(manifest: Record<string, unknown> | null): boolean {
+  return Boolean(
+    manifest &&
+      (localeText(manifest.ShortDescription) || localeText(manifest.Description))
+  );
+}
+
+/**
+ * Fetch a single locale manifest file without any fallback resolution
+ */
+async function fetchLocaleFile(
+  wingetId: string,
+  version: string,
+  locale: string
+): Promise<Record<string, unknown> | null> {
+  const { basePath } = getManifestPaths(wingetId);
+  const url = `${GITHUB_RAW_BASE}/${basePath}/${version}/${wingetId}.locale.${locale}.yaml`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'text/plain',
+        'User-Agent': 'IntuneGet',
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return YAML.parse(await response.text());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Complete locale resolution from already-fetched pieces, mirroring the
+ * catalog sync paths: the requested locale wins when it carries a
+ * description; singleton manifests keep their locale fields in <id>.yaml;
+ * otherwise the package's DefaultLocale file is fetched (e.g. zh-CN-only
+ * packages name their only locale file <id>.locale.zh-CN.yaml).
+ */
+async function resolveLocaleManifest(
+  wingetId: string,
+  version: string,
+  requestedLocale: string,
+  requested: Record<string, unknown> | null,
+  versionManifest: Record<string, unknown> | null
+): Promise<Record<string, unknown> | null> {
+  if (hasLocaleDescription(requested)) return requested;
+  if (hasLocaleDescription(versionManifest)) return versionManifest;
+
+  const defaultLocale = localeText(versionManifest?.DefaultLocale);
+  if (defaultLocale && defaultLocale.toLowerCase() !== requestedLocale.toLowerCase()) {
+    const defaultManifest = await fetchLocaleFile(wingetId, version, defaultLocale);
+    if (hasLocaleDescription(defaultManifest) || (defaultManifest && !requested)) {
+      return defaultManifest;
+    }
+  }
+
+  return requested;
+}
+
 /**
  * Fetch locale manifest (for description, release notes)
  */
@@ -163,33 +232,13 @@ export async function fetchLocaleManifest(
   version: string,
   locale: string = 'en-US'
 ): Promise<Record<string, unknown> | null> {
-  const { basePath } = getManifestPaths(wingetId);
-
-  // Try specific locale first, then default
-  const locales = [`locale.${locale}`, 'locale'];
-
-  for (const localeFile of locales) {
-    const url = `${GITHUB_RAW_BASE}/${basePath}/${version}/${wingetId}.${localeFile}.yaml`;
-
-    try {
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'text/plain',
-          'User-Agent': 'IntuneGet',
-        },
-        cache: 'no-store',
-      });
-
-      if (response.ok) {
-        const yamlContent = await response.text();
-        return YAML.parse(yamlContent);
-      }
-    } catch {
-      // Continue to next locale
-    }
+  const requested = await fetchLocaleFile(wingetId, version, locale);
+  if (hasLocaleDescription(requested)) {
+    return requested;
   }
 
-  return null;
+  const versionManifest = await fetchVersionManifest(wingetId, version);
+  return resolveLocaleManifest(wingetId, version, locale, requested, versionManifest);
 }
 
 /**
@@ -392,10 +441,12 @@ export async function getFullManifest(
       targetVersion = versions[0];
     }
 
-    // Fetch all manifests in parallel
-    const [installerManifest, localeManifest, versionManifest] = await Promise.all([
+    // Fetch all manifests in parallel, then finish the locale resolution
+    // with the already-fetched version manifest so the common case (en-US
+    // locale with a description) costs no extra request
+    const [installerManifest, enUSLocale, versionManifest] = await Promise.all([
       fetchInstallerManifest(wingetId, targetVersion),
-      fetchLocaleManifest(wingetId, targetVersion),
+      fetchLocaleFile(wingetId, targetVersion, 'en-US'),
       fetchVersionManifest(wingetId, targetVersion),
     ]);
 
@@ -403,16 +454,29 @@ export async function getFullManifest(
       return null;
     }
 
+    const localeManifest = await resolveLocaleManifest(
+      wingetId,
+      targetVersion,
+      'en-US',
+      enUSLocale,
+      versionManifest
+    );
+
     // Normalize installers
     const installers = normalizeInstallers(installerManifest);
 
-    // Build combined manifest
+    // Build combined manifest. Description prefers ShortDescription to match
+    // what the catalog syncs store in curated_apps, so the same app gets the
+    // same text whether it is served from Supabase or this GitHub fallback.
     const manifest: WingetManifest = {
       Id: wingetId,
       Name: (localeManifest?.PackageName as string) || wingetId.split('.').slice(1).join(' '),
       Publisher: (localeManifest?.Publisher as string) || wingetId.split('.')[0],
       Version: targetVersion,
-      Description: (localeManifest?.Description as string) || (localeManifest?.ShortDescription as string),
+      Description:
+        localeText(localeManifest?.ShortDescription) ||
+        localeText(localeManifest?.Description) ||
+        undefined,
       Homepage: (localeManifest?.PackageUrl as string) || (localeManifest?.PublisherUrl as string),
       License: localeManifest?.License as string,
       LicenseUrl: localeManifest?.LicenseUrl as string,

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { normalizeInstaller } from '../manifest-api';
+import {
+  normalizeInstaller,
+  fetchLocaleManifest,
+  getFullManifest,
+  clearManifestCache,
+} from '../manifest-api';
 import type { WingetInstaller, NormalizedInstaller } from '@/types/winget';
 
 // Mock fetch for network tests
@@ -745,5 +750,173 @@ describe('architecture priority', () => {
     }
 
     expect(selected?.architecture).toBe('arm');
+  });
+});
+
+function yamlResponse(body: string) {
+  return { ok: true, status: 200, text: async () => body };
+}
+
+function notFound() {
+  return { ok: false, status: 404, text: async () => '' };
+}
+
+describe('fetchLocaleManifest locale resolution', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('returns the en-US locale manifest when it has a description', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith('Git.Git.locale.en-US.yaml')) {
+        return yamlResponse('PackageLocale: en-US\nShortDescription: Distributed version control\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await fetchLocaleManifest('Git.Git', '2.44.0');
+
+    expect(manifest?.ShortDescription).toBe('Distributed version control');
+    // en-US hit short-circuits: no version-manifest or default-locale fetch
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the DefaultLocale file when there is no en-US locale', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith('/3.0.0.0/xkonglong.gongwen.yaml')) {
+        return yamlResponse('PackageIdentifier: xkonglong.gongwen\nDefaultLocale: zh-CN\nManifestType: version\n');
+      }
+      if (url.endsWith('xkonglong.gongwen.locale.zh-CN.yaml')) {
+        return yamlResponse('PackageLocale: zh-CN\nShortDescription: Chinese-only description\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await fetchLocaleManifest('xkonglong.gongwen', '3.0.0.0');
+
+    expect(manifest?.ShortDescription).toBe('Chinese-only description');
+  });
+
+  it('uses singleton manifests that carry locale fields in <id>.yaml', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith('/1.0.0/Foo.Bar.yaml')) {
+        return yamlResponse('PackageIdentifier: Foo.Bar\nShortDescription: Singleton description\nManifestType: singleton\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await fetchLocaleManifest('Foo.Bar', '1.0.0');
+
+    expect(manifest?.ShortDescription).toBe('Singleton description');
+  });
+
+  it('builds slash-joined paths for multi-part package IDs', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes('/m/MongoDB/Compass/Full/1.49.0/MongoDB.Compass.Full.locale.en-US.yaml')) {
+        return yamlResponse('PackageLocale: en-US\nShortDescription: The GUI for MongoDB\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await fetchLocaleManifest('MongoDB.Compass.Full', '1.49.0');
+
+    expect(manifest?.ShortDescription).toBe('The GUI for MongoDB');
+  });
+
+  it('returns null when no manifest carries a description', async () => {
+    mockFetch.mockImplementation(async () => notFound());
+
+    const manifest = await fetchLocaleManifest('Foo.Missing', '1.0.0');
+
+    expect(manifest).toBeNull();
+  });
+
+  it('resolves the DefaultLocale file when en-US exists but has no description', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith('Foo.German.locale.en-US.yaml')) {
+        // Additional-locale files may omit ShortDescription/Description
+        return yamlResponse('PackageLocale: en-US\nReleaseNotesUrl: https://example.com/notes\n');
+      }
+      if (url.endsWith('/2.0.0/Foo.German.yaml')) {
+        return yamlResponse('PackageIdentifier: Foo.German\nDefaultLocale: de-DE\nManifestType: version\n');
+      }
+      if (url.endsWith('Foo.German.locale.de-DE.yaml')) {
+        return yamlResponse('PackageLocale: de-DE\nShortDescription: Deutsche Beschreibung\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await fetchLocaleManifest('Foo.German', '2.0.0');
+
+    expect(manifest?.ShortDescription).toBe('Deutsche Beschreibung');
+    // en-US file + version manifest + DefaultLocale file
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('still returns a description-less requested locale when nothing better exists', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith('Foo.Bare.locale.en-US.yaml')) {
+        return yamlResponse('PackageLocale: en-US\nReleaseNotesUrl: https://example.com/notes\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await fetchLocaleManifest('Foo.Bare', '1.0.0');
+
+    // The pre-change behavior of returning the en-US manifest even without
+    // a description is preserved (callers may want other locale fields)
+    expect(manifest?.ReleaseNotesUrl).toBe('https://example.com/notes');
+  });
+});
+
+describe('getFullManifest description order', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    clearManifestCache();
+  });
+
+  it('prefers ShortDescription over Description, matching the catalog syncs', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.endsWith('Foo.App.installer.yaml')) {
+        return yamlResponse(
+          [
+            'PackageIdentifier: Foo.App',
+            'InstallerType: exe',
+            'Installers:',
+            '  - Architecture: x64',
+            '    InstallerUrl: https://example.com/foo.exe',
+            '    InstallerSha256: abc123',
+          ].join('\n')
+        );
+      }
+      if (url.endsWith('Foo.App.locale.en-US.yaml')) {
+        return yamlResponse(
+          'PackageLocale: en-US\nShortDescription: Short text\nDescription: Much longer marketing text\n'
+        );
+      }
+      if (url.endsWith('/1.0.0/Foo.App.yaml')) {
+        return yamlResponse('PackageIdentifier: Foo.App\nDefaultLocale: en-US\nManifestType: version\n');
+      }
+      return notFound();
+    });
+
+    const manifest = await getFullManifest('Foo.App', '1.0.0');
+
+    expect(manifest?.Description).toBe('Short text');
+    expect(manifest?.ShortDescription).toBe('Short text');
+
+    // Common case stays at 3 parallel GitHub fetches (installer + en-US
+    // locale + version manifest) with no extra DefaultLocale request
+    const githubCalls = mockFetch.mock.calls.filter((call) =>
+      String(call[0]).includes('raw.githubusercontent.com')
+    );
+    expect(githubCalls).toHaveLength(3);
   });
 });

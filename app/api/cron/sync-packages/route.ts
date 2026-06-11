@@ -22,9 +22,9 @@ interface VersionHistoryRecord {
 interface CuratedAppUpdate {
   winget_id: string;
   latest_version: string;
-  description: string | null;
-  homepage: string | null;
-  license: string | null;
+  description?: string;
+  homepage?: string;
+  license?: string;
   updated_at: string;
 }
 
@@ -112,6 +112,27 @@ export async function GET(request: Request) {
               .single();
 
             if (existing) {
+              // Version already synced, but heal a still-missing description
+              // (e.g. the locale fetch failed when this version was first
+              // synced) instead of waiting for the next version bump. The
+              // DB-side null filter makes the write a no-op when a
+              // description appeared in the meantime.
+              if (!localeText(app.description)) {
+                const healManifest = await fetchLocaleManifest(winget_id, latestVersion);
+                const healDescription =
+                  localeText(healManifest?.ShortDescription) ||
+                  localeText(healManifest?.Description);
+                if (healDescription) {
+                  await supabase
+                    .from('curated_apps')
+                    .update({
+                      description: healDescription,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('winget_id', winget_id)
+                    .is('description', null);
+                }
+              }
               skipped++;
               return;
             }
@@ -159,21 +180,28 @@ export async function GET(request: Request) {
               return;
             }
 
-            // Update curated_apps with latest version and metadata
+            // Update curated_apps with latest version and metadata.
+            // Locale fields are only written when a non-empty value was
+            // extracted, so a failed locale fetch can never wipe data a
+            // previous sync already stored.
             const appUpdate: CuratedAppUpdate = {
               winget_id,
               latest_version: latestVersion,
-              description:
-                (localeManifest?.ShortDescription as string) ||
-                (localeManifest?.Description as string) ||
-                null,
-              homepage:
-                (localeManifest?.PackageUrl as string) ||
-                (localeManifest?.PublisherUrl as string) ||
-                null,
-              license: (localeManifest?.License as string) || null,
               updated_at: new Date().toISOString(),
             };
+
+            const description =
+              localeText(localeManifest?.ShortDescription) ||
+              localeText(localeManifest?.Description);
+            if (description) appUpdate.description = description;
+
+            const homepage =
+              localeText(localeManifest?.PackageUrl) ||
+              localeText(localeManifest?.PublisherUrl);
+            if (homepage) appUpdate.homepage = homepage;
+
+            const license = localeText(localeManifest?.License);
+            if (license) appUpdate.license = license;
 
             await supabase
               .from('curated_apps')
@@ -243,17 +271,36 @@ export async function GET(request: Request) {
 
 // Helper functions
 
-async function fetchVersions(wingetId: string): Promise<string[]> {
+/**
+ * Build the manifest directory path for a winget ID. Every dot-separated
+ * segment of the ID is a directory in winget-pkgs (e.g. MongoDB.Compass.Full
+ * -> m/MongoDB/Compass/Full), so multi-part IDs must not keep their dots.
+ */
+function manifestBasePath(wingetId: string): string | null {
   const parts = wingetId.split('.');
-  if (parts.length < 2) return [];
+  if (parts.length < 2) return null;
+  const firstLetter = parts[0].charAt(0).toLowerCase();
+  return `${firstLetter}/${parts.join('/')}`;
+}
 
-  const publisher = parts[0];
-  const name = parts.slice(1).join('.');
-  const firstLetter = publisher.charAt(0).toLowerCase();
+function localeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function hasLocaleDescription(manifest: Record<string, unknown> | null): boolean {
+  return Boolean(
+    manifest &&
+      (localeText(manifest.ShortDescription) || localeText(manifest.Description))
+  );
+}
+
+async function fetchVersions(wingetId: string): Promise<string[]> {
+  const basePath = manifestBasePath(wingetId);
+  if (!basePath) return [];
 
   try {
     const response = await fetch(
-      `${GITHUB_API_BASE}/${firstLetter}/${publisher}/${name}`,
+      `${GITHUB_API_BASE}/${basePath}`,
       {
         headers: {
           'User-Agent': 'IntuneGet',
@@ -285,14 +332,10 @@ async function fetchInstallerManifest(
   wingetId: string,
   version: string
 ): Promise<Record<string, unknown> | null> {
-  const parts = wingetId.split('.');
-  if (parts.length < 2) return null;
+  const basePath = manifestBasePath(wingetId);
+  if (!basePath) return null;
 
-  const publisher = parts[0];
-  const name = parts.slice(1).join('.');
-  const firstLetter = publisher.charAt(0).toLowerCase();
-
-  const url = `${GITHUB_RAW_BASE}/${firstLetter}/${publisher}/${name}/${version}/${wingetId}.installer.yaml`;
+  const url = `${GITHUB_RAW_BASE}/${basePath}/${version}/${wingetId}.installer.yaml`;
 
   try {
     const response = await fetch(url, {
@@ -311,22 +354,15 @@ async function fetchInstallerManifest(
   }
 }
 
-async function fetchLocaleManifest(
-  wingetId: string,
-  version: string
+/**
+ * Fetch and parse a manifest YAML with one retry on transient failures
+ * (network errors, 429/5xx). 404 means the file does not exist and is
+ * not retried.
+ */
+async function fetchManifestYaml(
+  url: string
 ): Promise<Record<string, unknown> | null> {
-  const parts = wingetId.split('.');
-  if (parts.length < 2) return null;
-
-  const publisher = parts[0];
-  const name = parts.slice(1).join('.');
-  const firstLetter = publisher.charAt(0).toLowerCase();
-
-  const locales = ['locale.en-US', 'locale'];
-
-  for (const locale of locales) {
-    const url = `${GITHUB_RAW_BASE}/${firstLetter}/${publisher}/${name}/${version}/${wingetId}.${locale}.yaml`;
-
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await fetch(url, {
         headers: {
@@ -335,16 +371,61 @@ async function fetchLocaleManifest(
         },
       });
 
+      if (response.status === 404) return null;
+
       if (response.ok) {
-        const yamlContent = await response.text();
-        return YAML.parse(yamlContent);
+        return YAML.parse(await response.text());
       }
     } catch {
-      // Continue to next locale
+      // Network or parse error: fall through to the retry
+    }
+
+    if (attempt === 0) {
+      // Short backoff: this route runs many fetches inside Vercel's
+      // maxDuration budget, so retries must stay cheap.
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
   return null;
+}
+
+/**
+ * Resolve the locale manifest for a package version. en-US is preferred,
+ * but when it is absent or carries no description (packages whose
+ * DefaultLocale is not en-US name their locale file accordingly, e.g.
+ * <id>.locale.zh-CN.yaml), the DefaultLocale declared in <id>.yaml is
+ * fetched instead. Singleton manifests carry the locale fields directly
+ * in <id>.yaml and are handled by the same lookup.
+ */
+async function fetchLocaleManifest(
+  wingetId: string,
+  version: string
+): Promise<Record<string, unknown> | null> {
+  const basePath = manifestBasePath(wingetId);
+  if (!basePath) return null;
+
+  const versionDir = `${GITHUB_RAW_BASE}/${basePath}/${version}`;
+
+  const enUS = await fetchManifestYaml(
+    `${versionDir}/${wingetId}.locale.en-US.yaml`
+  );
+  if (hasLocaleDescription(enUS)) return enUS;
+
+  const versionManifest = await fetchManifestYaml(`${versionDir}/${wingetId}.yaml`);
+  if (hasLocaleDescription(versionManifest)) return versionManifest;
+
+  const defaultLocale = localeText(versionManifest?.DefaultLocale);
+  if (defaultLocale && defaultLocale.toLowerCase() !== 'en-us') {
+    const defaultManifest = await fetchManifestYaml(
+      `${versionDir}/${wingetId}.locale.${defaultLocale}.yaml`
+    );
+    if (hasLocaleDescription(defaultManifest) || (defaultManifest && !enUS)) {
+      return defaultManifest;
+    }
+  }
+
+  return enUS;
 }
 
 // Allow up to 5 minutes for the sync to complete

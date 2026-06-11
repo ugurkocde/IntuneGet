@@ -330,19 +330,55 @@ jobs:
             }
           }
 
-          async function fetchLocaleManifest(wingetId, version) {
-            const locales = ['locale.en-US', 'locale'];
-            for (const locale of locales) {
-              const url = buildManifestUrl(wingetId, version, locale);
-              if (!url) continue;
-              try {
-                const content = await fetchUrl(url);
-                if (content) return yaml.parse(content);
-              } catch (e) {
-                // Continue to next locale
-              }
+          function buildVersionManifestUrl(wingetId, version) {
+            const parts = wingetId.split('.');
+            if (parts.length < 2) return null;
+            const publisher = parts[0];
+            const namePath = parts.slice(1).join('/');
+            const firstLetter = publisher.charAt(0).toLowerCase();
+            return `${GITHUB_RAW_BASE}/${firstLetter}/${publisher}/${namePath}/${version}/${wingetId}.yaml`;
+          }
+
+          function localeText(value) {
+            return typeof value === 'string' ? value.trim() : '';
+          }
+
+          function hasLocaleDescription(manifest) {
+            return Boolean(manifest && (localeText(manifest.ShortDescription) || localeText(manifest.Description)));
+          }
+
+          async function fetchYamlManifest(url) {
+            if (!url) return null;
+            try {
+              const content = await fetchUrl(url);
+              if (content) return yaml.parse(content);
+            } catch (e) {
+              // Treat as missing; fetchUrl already retried transient failures
             }
             return null;
+          }
+
+          // en-US is preferred, but when it is absent or carries no
+          // description the DefaultLocale declared in <id>.yaml is fetched
+          // instead (e.g. zh-CN-only packages). Singleton manifests carry
+          // the locale fields directly in <id>.yaml and are handled by the
+          // same lookup.
+          async function fetchLocaleManifest(wingetId, version) {
+            const enUS = await fetchYamlManifest(buildManifestUrl(wingetId, version, 'locale.en-US'));
+            if (hasLocaleDescription(enUS)) return enUS;
+
+            const versionManifest = await fetchYamlManifest(buildVersionManifestUrl(wingetId, version));
+            if (hasLocaleDescription(versionManifest)) return versionManifest;
+
+            const defaultLocale = localeText(versionManifest?.DefaultLocale);
+            if (defaultLocale && defaultLocale.toLowerCase() !== 'en-us') {
+              const defaultManifest = await fetchYamlManifest(buildManifestUrl(wingetId, version, `locale.${defaultLocale}`));
+              if (hasLocaleDescription(defaultManifest) || (defaultManifest && !enUS)) {
+                return defaultManifest;
+              }
+            }
+
+            return enUS;
           }
 
           async function syncManifests() {
@@ -368,7 +404,7 @@ jobs:
               // Fetch this shard's slice using .range()
               let query = supabase
                 .from('curated_apps')
-                .select('winget_id, latest_version')
+                .select('winget_id, latest_version, description')
                 .order('popularity_rank', { ascending: true, nullsFirst: false })
                 .range(appOffset, appOffset + chunkSize - 1);
 
@@ -405,6 +441,7 @@ jobs:
             let synced = 0;
             let failed = 0;
             let skipped = 0;
+            let healed = 0;
             let failedApps = [];
             let skippedNoVersions = 0;
             let skippedExisting = 0;
@@ -436,6 +473,24 @@ jobs:
                       .single();
 
                     if (existing) {
+                      // Version already synced, but heal a still-missing
+                      // description (e.g. the locale fetch failed when this
+                      // version was first synced) instead of waiting for the
+                      // next version bump. The DB-side null filter makes the
+                      // write a no-op when a description appeared meanwhile.
+                      if (!localeText(app.description)) {
+                        const healManifest = await fetchLocaleManifest(app.winget_id, latestVersion);
+                        const healDescription = localeText(healManifest?.ShortDescription) ||
+                                                localeText(healManifest?.Description);
+                        if (healDescription) {
+                          const { error: healError } = await supabase
+                            .from('curated_apps')
+                            .update({ description: healDescription, updated_at: new Date().toISOString() })
+                            .eq('winget_id', app.winget_id)
+                            .is('description', null);
+                          if (!healError) healed++;
+                        }
+                      }
                       skipped++;
                       skippedExisting++;
                       return;
@@ -500,17 +555,25 @@ jobs:
                     return;
                   }
 
+                  // Locale fields are only written when a non-empty value
+                  // was extracted, so a failed locale fetch can never wipe
+                  // data a previous sync already stored.
+                  const curatedUpdate = {
+                    latest_version: latestVersion,
+                    updated_at: new Date().toISOString()
+                  };
+                  const localeDescription = localeText(localeManifest?.ShortDescription) ||
+                                            localeText(localeManifest?.Description);
+                  if (localeDescription) curatedUpdate.description = localeDescription;
+                  const localeHomepage = localeText(localeManifest?.PackageUrl) ||
+                                         localeText(localeManifest?.PublisherUrl);
+                  if (localeHomepage) curatedUpdate.homepage = localeHomepage;
+                  const localeLicense = localeText(localeManifest?.License);
+                  if (localeLicense) curatedUpdate.license = localeLicense;
+
                   const { error: caError } = await supabase
                     .from('curated_apps')
-                    .update({
-                      latest_version: latestVersion,
-                      description: localeManifest?.ShortDescription ||
-                                   localeManifest?.Description || null,
-                      homepage: localeManifest?.PackageUrl ||
-                                localeManifest?.PublisherUrl || null,
-                      license: localeManifest?.License || null,
-                      updated_at: new Date().toISOString()
-                    })
+                    .update(curatedUpdate)
                     .eq('winget_id', app.winget_id);
 
                   if (caError) {
@@ -553,6 +616,7 @@ jobs:
             console.log(`  Synced:      ${synced}`);
             console.log(`  Failed:      ${failed}`);
             console.log(`  Skipped:     ${skipped}`);
+            console.log(`  Healed descriptions: ${healed}`);
             console.log(`    - No versions found: ${skippedNoVersions}`);
             console.log(`    - Already up to date: ${skippedExisting}`);
             console.log(`    - No manifest found:  ${skippedNoManifest}`);
@@ -579,7 +643,7 @@ jobs:
             }
 
             fs.writeFileSync('./sync-results.json', JSON.stringify({
-              synced, failed, skipped, newVersions
+              synced, failed, skipped, healed, newVersions
             }));
           }
 
@@ -640,7 +704,7 @@ jobs:
           const path = require('path');
 
           const resultsDir = './results';
-          let totalSynced = 0, totalFailed = 0, totalSkipped = 0;
+          let totalSynced = 0, totalFailed = 0, totalSkipped = 0, totalHealed = 0;
           let allNewVersions = [];
           let shardsFound = 0;
 
@@ -653,6 +717,7 @@ jobs:
                 totalSynced += data.synced || 0;
                 totalFailed += data.failed || 0;
                 totalSkipped += data.skipped || 0;
+                totalHealed += data.healed || 0;
                 allNewVersions = allNewVersions.concat(data.newVersions || []);
                 shardsFound++;
               }
@@ -665,6 +730,7 @@ jobs:
           console.log(`  Synced:      ${totalSynced}`);
           console.log(`  Failed:      ${totalFailed}`);
           console.log(`  Skipped:     ${totalSkipped}`);
+          console.log(`  Healed descriptions: ${totalHealed}`);
           console.log(`  New versions: ${allNewVersions.length}`);
           console.log(`========================================`);
 
@@ -672,6 +738,7 @@ jobs:
             synced: totalSynced,
             failed: totalFailed,
             skipped: totalSkipped,
+            healed: totalHealed,
             newVersions: allNewVersions
           }));
 
