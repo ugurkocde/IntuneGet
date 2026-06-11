@@ -30,6 +30,7 @@ import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/uplo
 import type { AppRelationship, DetectionRule, RequirementRule } from '@/types/intune';
 import type { NormalizedInstaller } from '@/types/winget';
 import type { Json } from '@/types/database';
+import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
 
 interface PackageConfigWithAssignments {
   assignments?: PackageAssignment[];
@@ -357,6 +358,19 @@ export async function POST(request: NextRequest) {
       } | null = null;
 
       try {
+        // Self-updating apps are excluded from update detection; guard here
+        // too in case a stale check result from before the exclusion remains
+        if (isSelfUpdatingApp(req.winget_id)) {
+          response.failed++;
+          response.results.push({
+            winget_id: req.winget_id,
+            tenant_id: req.tenant_id,
+            success: false,
+            error: `${req.winget_id} keeps itself up to date on the device (Click-to-Run); IntuneGet does not deploy updates for it. Refresh the updates list to remove it.`,
+          });
+          continue;
+        }
+
         // Get the update check result for this app
         const { data: updateResult, error: updateError } = await supabase
           .from('update_check_results')
@@ -467,12 +481,22 @@ export async function POST(request: NextRequest) {
             );
 
             if (!defaultConfig) {
+              // Distinguish missing installer data from a missing catalog
+              // entry so the user knows whether waiting for the catalog
+              // sync can help
+              const { data: catalogRow } = await supabase
+                .from('curated_apps')
+                .select('winget_id')
+                .eq('winget_id', req.winget_id)
+                .maybeSingle();
               response.failed++;
               response.results.push({
                 winget_id: req.winget_id,
                 tenant_id: req.tenant_id,
                 success: false,
-                error: 'Could not determine deployment configuration for this app',
+                error: catalogRow
+                  ? `No installer data is available for ${req.winget_id} ${updateResult.latest_version} yet - the catalog has not synced this version's manifest. Try again after the next catalog sync.`
+                  : `${req.winget_id} is not in the app catalog, so a deployment configuration cannot be built for it.`,
               });
               continue;
             }

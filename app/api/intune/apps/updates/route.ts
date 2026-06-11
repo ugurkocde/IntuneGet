@@ -13,6 +13,7 @@ import {
   matchAppToWingetWithDatabase,
 } from '@/lib/app-matching';
 import { compareVersions, hasUpdate, normalizeVersion } from '@/lib/version-compare';
+import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { IntuneWin32App, AppUpdateInfo } from '@/types/inventory';
 
@@ -327,6 +328,20 @@ export async function GET(request: NextRequest) {
     }
 
     for (const [wingetId, candidates] of appsByWinget.entries()) {
+      // Self-updating apps (e.g. Microsoft 365 Apps via Click-to-Run) must
+      // never be offered as updates - the installed product updates itself
+      // and the winget version only tracks the setup bootstrapper
+      if (isSelfUpdatingApp(wingetId)) {
+        for (const candidate of candidates) {
+          checked.push({
+            app: candidate.app.displayName,
+            wingetId,
+            result: 'Self-updating app, excluded from updates',
+          });
+        }
+        continue;
+      }
+
       const latestVersion = versionMap.get(wingetId);
 
       if (!latestVersion) {
