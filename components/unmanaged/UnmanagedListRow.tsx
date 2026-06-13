@@ -20,6 +20,7 @@ interface UnmanagedListRowProps {
   app: UnmanagedApp;
   onClaim: () => void;
   onLink: () => void;
+  onDeviceCountClick?: () => void;
   isClaimLoading: boolean;
 }
 
@@ -34,6 +35,7 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
   app,
   onClaim,
   onLink,
+  onDeviceCountClick,
   isClaimLoading,
 }: UnmanagedListRowProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -93,10 +95,22 @@ export const UnmanagedListRow = memo(function UnmanagedListRow({
           </div>
 
           {/* Device count */}
-          <div className="flex items-center gap-2 text-text-secondary">
-            <Monitor className="w-4 h-4" />
-            <span className="text-sm font-semibold tabular-nums">{app.deviceCount.toLocaleString()}</span>
-          </div>
+          {onDeviceCountClick ? (
+            <button
+              type="button"
+              onClick={onDeviceCountClick}
+              aria-label={`View ${app.deviceCount.toLocaleString()} ${app.deviceCount === 1 ? 'device' : 'devices'} for ${app.displayName}`}
+              className="flex items-center gap-2 text-text-secondary justify-self-start rounded-lg px-2 py-1 -mx-2 transition-colors hover:text-accent-cyan hover:bg-overlay/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+            >
+              <Monitor className="w-4 h-4" />
+              <span className="text-sm font-semibold tabular-nums">{app.deviceCount.toLocaleString()}</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 text-text-secondary">
+              <Monitor className="w-4 h-4" />
+              <span className="text-sm font-semibold tabular-nums">{app.deviceCount.toLocaleString()}</span>
+            </div>
+          )}
 
           {/* Status badge */}
           <MatchStatusBadge status={app.matchStatus} confidence={app.matchConfidence} />

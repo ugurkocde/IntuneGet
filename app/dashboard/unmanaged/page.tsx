@@ -25,12 +25,14 @@ import {
   ClaimAppModal,
   LinkPackageModal,
   ClaimAllModal,
+  DeviceListModal,
 } from '@/components/unmanaged';
 import { UnmanagedToolbar } from '@/components/unmanaged/UnmanagedToolbar';
 import { UnmanagedListRow } from '@/components/unmanaged/UnmanagedListRow';
 import { UnmanagedEmptyState } from '@/components/unmanaged/UnmanagedEmptyState';
 import { UnmanagedPageSkeleton } from '@/components/unmanaged/UnmanagedLoadingSkeleton';
 import { useUnmanagedApps } from '@/hooks/use-unmanaged-apps';
+import { useCartStore } from '@/stores/cart-store';
 import { staggerContainerFast, fadeUp } from '@/lib/animations/variants';
 import { cn } from '@/lib/utils';
 
@@ -54,11 +56,14 @@ export default function UnmanagedAppsPage() {
     claimModalApp,
     linkModalApp,
     claimAllModal,
+    deviceListApp,
     setFilters,
     setViewMode,
     setClaimModalApp,
     setLinkModalApp,
     setClaimAllModal,
+    setDeviceListApp,
+    fetchAppDevices,
     setPermissionError,
     handleRefresh,
     handleClaimApp,
@@ -69,6 +74,12 @@ export default function UnmanagedAppsPage() {
     retryFailedClaims,
     clearFilters,
   } = useUnmanagedApps();
+
+  // Actual number of apps in the cart. The banner says "in your cart", so it
+  // must reflect the real cart size — not computedStats.claimed, which counts
+  // discovered apps and over-counts when several discovered entries (e.g. two
+  // installed versions) map to the same winget package already in the cart.
+  const cartItemCount = useCartStore((state) => state.items.length);
 
   const prefersReducedMotion = useReducedMotion();
 
@@ -348,7 +359,7 @@ export default function UnmanagedAppsPage() {
           <div className="flex items-center gap-3">
             <ShoppingCart className="w-5 h-5 text-accent-violet" />
             <p className="text-sm text-text-secondary">
-              <T><span className="font-medium text-text-primary"><Var>{computedStats.claimed}</Var> {computedStats.claimed === 1 ? 'app' : 'apps'}</span> in your cart ready for deployment</T>
+              <T><span className="font-medium text-text-primary"><Var>{cartItemCount}</Var> {cartItemCount === 1 ? 'app' : 'apps'}</span> in your cart ready for deployment</T>
             </p>
           </div>
           <Button asChild size="sm" className="bg-gradient-to-r from-accent-violet to-accent-violet-bright hover:opacity-90 text-white border-0 flex-shrink-0">
@@ -397,6 +408,7 @@ export default function UnmanagedAppsPage() {
                 app={app}
                 onClaim={() => setClaimModalApp(app)}
                 onLink={() => setLinkModalApp(app)}
+                onDeviceCountClick={() => setDeviceListApp(app)}
                 isClaimLoading={claimingAppId === app.discoveredAppId}
               />
             </motion.div>
@@ -415,6 +427,7 @@ export default function UnmanagedAppsPage() {
                 app={app}
                 onClaim={() => setClaimModalApp(app)}
                 onLink={() => setLinkModalApp(app)}
+                onDeviceCountClick={() => setDeviceListApp(app)}
                 isClaimLoading={claimingAppId === app.discoveredAppId}
               />
             </motion.div>
@@ -449,6 +462,15 @@ export default function UnmanagedAppsPage() {
           onConfirm={processClaimAll}
           onCancel={cancelClaimAll}
           onRetryFailed={retryFailedClaims}
+        />
+      )}
+
+      {deviceListApp && (
+        <DeviceListModal
+          app={deviceListApp}
+          isOpen={!!deviceListApp}
+          onClose={() => setDeviceListApp(null)}
+          fetchDevices={fetchAppDevices}
         />
       )}
     </div>
