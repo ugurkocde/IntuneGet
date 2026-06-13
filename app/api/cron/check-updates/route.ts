@@ -40,6 +40,7 @@ interface UpdateCheckInsert {
   current_version: string;
   latest_version: string;
   is_critical: boolean;
+  is_managed: boolean;
   detected_at: string;
   updated_at: string;
 }
@@ -384,6 +385,9 @@ export async function GET(request: Request) {
               current_version: app.version,
               latest_version: latestVersion,
               is_critical: isCritical,
+              // The cron only ever scans apps from upload_history, so every
+              // detected update here is for an IntuneGet-managed app.
+              is_managed: true,
               detected_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };

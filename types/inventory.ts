@@ -117,4 +117,7 @@ export interface AppUpdateInfo {
   latestVersion: string;
   wingetId: string | null;
   hasUpdate: boolean;
+  // True when the app was deployed/claimed/mapped through IntuneGet (explicit
+  // provenance); false when matched only by fuzzy name/heuristics.
+  isManaged: boolean;
 }

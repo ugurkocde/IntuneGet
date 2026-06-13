@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
         current_version: update.currentVersion,
         latest_version: update.latestVersion,
         is_critical: isCriticalUpdate(update.currentVersion, update.latestVersion),
+        is_managed: update.isManaged,
         large_icon_type: update.intuneApp.largeIcon?.type || null,
         large_icon_value: update.intuneApp.largeIcon?.value || null,
         detected_at: now,

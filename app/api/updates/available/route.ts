@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenant_id')?.trim() || null;
     const includeDismissed = searchParams.get('include_dismissed') === 'true';
     const criticalOnly = searchParams.get('critical_only') === 'true';
+    // By default only surface updates for IntuneGet-managed apps; fuzzy-matched
+    // apps are opt-in to avoid accidentally updating mismatched/customized apps.
+    const includeUnmanaged = searchParams.get('include_unmanaged') === 'true';
 
     const supabase = createServerClient();
 
@@ -126,13 +129,15 @@ export async function GET(request: NextRequest) {
         const policyKey = `${update.winget_id}:${update.tenant_id}`;
         return {
           ...update,
+          is_managed: update.is_managed ?? true,
           has_prior_deployment: deployedSet.has(policyKey),
           policy: policyMap.get(policyKey) || null,
         };
       })
       .filter((u) => u.current_version !== 'Unknown')
       .filter((u) => compareVersions(u.current_version, u.latest_version) < 0)
-      .filter((u) => u.policy?.last_auto_update_version !== u.latest_version);
+      .filter((u) => u.policy?.last_auto_update_version !== u.latest_version)
+      .filter((u) => includeUnmanaged || u.is_managed);
 
     // Count critical updates
     const criticalCount = updatesWithPolicies.filter((u) => u.is_critical).length;

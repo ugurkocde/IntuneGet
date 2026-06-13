@@ -28,6 +28,9 @@ interface CheckedResult {
 interface MatchedApp {
   app: IntuneWin32App;
   wingetId: string;
+  // True for explicit provenance (deployment history, IntuneGet description
+  // marker, or user-claimed/manual mapping); false for fuzzy name matches.
+  isManaged: boolean;
 }
 
 interface CuratedPackageRow {
@@ -230,6 +233,7 @@ export async function GET(request: NextRequest) {
         matchedApps.push({
           app,
           wingetId: historyWingetId,
+          isManaged: true,
         });
         continue;
       }
@@ -239,6 +243,7 @@ export async function GET(request: NextRequest) {
         matchedApps.push({
           app,
           wingetId: descriptionWingetId,
+          isManaged: true,
         });
         continue;
       }
@@ -254,6 +259,7 @@ export async function GET(request: NextRequest) {
         matchedApps.push({
           app,
           wingetId: explicitWingetId,
+          isManaged: true,
         });
         continue;
       }
@@ -285,6 +291,7 @@ export async function GET(request: NextRequest) {
       matchedApps.push({
         app,
         wingetId: match.wingetId,
+        isManaged: false,
       });
     }
 
@@ -379,6 +386,11 @@ export async function GET(request: NextRequest) {
       const normalizedLatest = normalizeVersion(latestVersion);
       const updateAvailable = hasUpdate(currentVersion, normalizedLatest);
 
+      // If IntuneGet has explicit provenance over ANY app object for this
+      // winget ID, treat the whole group as managed -- an unmanaged duplicate
+      // object with a higher version must not mask a package we deployed.
+      const groupIsManaged = candidates.some((candidate) => candidate.isManaged);
+
       if (updateAvailable) {
         updates.push({
           intuneApp: newestCandidate.app,
@@ -386,6 +398,7 @@ export async function GET(request: NextRequest) {
           latestVersion: latestVersion,
           wingetId,
           hasUpdate: true,
+          isManaged: groupIsManaged,
         });
       } else {
         // no-op; tracked in checked entries below

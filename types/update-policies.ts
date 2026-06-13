@@ -171,6 +171,9 @@ export interface AvailableUpdate {
   dismissed_at: string | null;
   // Whether this app was previously deployed through IntuneGet
   has_prior_deployment: boolean;
+  // Whether this update was matched to an IntuneGet-managed app (deployed,
+  // claimed, or explicitly mapped) vs. a fuzzy/heuristic name match.
+  is_managed: boolean;
   // Policy data (if exists)
   policy?: {
     id: string;

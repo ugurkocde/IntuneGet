@@ -143,4 +143,75 @@ describe('GET /api/updates/available', () => {
       )
     ).toBe(true);
   });
+
+  it('hides unmanaged updates by default and includes them on request', async () => {
+    parseAccessTokenMock.mockResolvedValue({
+      userId: 'user-1',
+      userEmail: 'user@example.com',
+      tenantId: 'home-tenant',
+      userName: 'User',
+    });
+
+    const rows = [
+      {
+        id: 'upd-managed',
+        user_id: 'user-1',
+        tenant_id: 'tenant-a',
+        winget_id: 'Microsoft.Edge',
+        intune_app_id: 'app-1',
+        display_name: 'Edge',
+        current_version: '1.0.0',
+        latest_version: '1.1.0',
+        is_critical: false,
+        is_managed: true,
+        detected_at: '2026-02-01T00:00:00Z',
+        notified_at: null,
+        dismissed_at: null,
+      },
+      {
+        id: 'upd-unmanaged',
+        user_id: 'user-1',
+        tenant_id: 'tenant-a',
+        winget_id: 'VideoLAN.VLC',
+        intune_app_id: 'app-2',
+        display_name: 'VLC',
+        current_version: '2.0.0',
+        latest_version: '2.1.0',
+        is_critical: false,
+        is_managed: false,
+        detected_at: '2026-02-01T00:00:00Z',
+        notified_at: null,
+        dismissed_at: null,
+      },
+    ];
+
+    // Fresh awaitable queries per client call so two GETs don't share state.
+    createServerClientMock.mockImplementation(() => ({
+      from: (table: string) => {
+        if (table === 'update_check_results')
+          return createAwaitableQuery({ data: rows, error: null }, []);
+        if (table === 'app_update_policies')
+          return createAwaitableQuery({ data: [], error: null }, []);
+        if (table === 'upload_history')
+          return createAwaitableQuery({ data: [], error: null }, []);
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    }));
+
+    // Default: unmanaged hidden
+    const defaultReq = new NextRequest('http://localhost:3000/api/updates/available');
+    defaultReq.headers.set('Authorization', 'Bearer test-token');
+    const defaultBody = await (await GET(defaultReq)).json();
+    expect(defaultBody.count).toBe(1);
+    expect(defaultBody.updates[0].winget_id).toBe('Microsoft.Edge');
+    expect(defaultBody.updates[0].is_managed).toBe(true);
+
+    // include_unmanaged=true: both managed and unmanaged shown
+    const allReq = new NextRequest(
+      'http://localhost:3000/api/updates/available?include_unmanaged=true'
+    );
+    allReq.headers.set('Authorization', 'Bearer test-token');
+    const allBody = await (await GET(allReq)).json();
+    expect(allBody.count).toBe(2);
+  });
 });

@@ -18,6 +18,7 @@ import {
   Loader2,
   ArrowRight,
   Info,
+  ShieldOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,7 @@ export default function UpdatesPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [showCriticalOnly, setShowCriticalOnly] = useState(false);
+  const [showUnmanaged, setShowUnmanaged] = useState(false);
   const [updateTypeFilter, setUpdateTypeFilter] = useState<UpdateType | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('severity');
   const [activeTab, setActiveTab] = useState<'available' | 'history'>('available');
@@ -100,6 +102,7 @@ export default function UpdatesPage() {
   } = useAvailableUpdates({
     tenantId,
     criticalOnly: showCriticalOnly,
+    includeUnmanaged: showUnmanaged,
   });
 
   const {
@@ -179,9 +182,14 @@ export default function UpdatesPage() {
     (h) => h.status === 'failed' && isWithinDays(h.triggered_at, 7)
   ).length;
 
-  // Eligible updates for bulk action (exclude ignore and pinned)
+  // Eligible updates for bulk action (exclude ignore and pinned).
+  // "Update All" never includes unmanaged (fuzzy-matched) apps -- even when the
+  // user has opted to view them -- to avoid mass-updating mismatched/customized apps.
   const eligibleForBulkUpdate = filteredUpdates.filter(
-    (u) => u.policy?.policy_type !== 'ignore' && u.policy?.policy_type !== 'pin_version'
+    (u) =>
+      u.is_managed &&
+      u.policy?.policy_type !== 'ignore' &&
+      u.policy?.policy_type !== 'pin_version'
   );
 
   // Update type counts for filter
@@ -228,7 +236,10 @@ export default function UpdatesPage() {
   }, [triggerUpdate, router]);
 
   const handleTriggerUpdate = useCallback(async (update: AvailableUpdate) => {
-    if (!update.has_prior_deployment) {
+    // Confirm before updating an app that is new to IntuneGet OR not managed by
+    // it (fuzzy-matched) -- the latter may be a mismatched package or carry local
+    // customizations that a standard update could overwrite.
+    if (!update.has_prior_deployment || !update.is_managed) {
       setPendingNewAppUpdate(update);
       setNewAppDialogOpen(true);
       return;
@@ -244,6 +255,10 @@ export default function UpdatesPage() {
       await executeTriggerUpdate(updateToTrigger);
     }
   }, [pendingNewAppUpdate, executeTriggerUpdate]);
+
+  // The confirmation dialog doubles as an "unmanaged app" warning when the
+  // pending update is for an app IntuneGet did not deploy/claim/map.
+  const pendingIsUnmanaged = !!pendingNewAppUpdate && !pendingNewAppUpdate.is_managed;
 
   const handlePolicyChange = useCallback(async (
     update: AvailableUpdate,
@@ -559,11 +574,43 @@ export default function UpdatesPage() {
         <DialogContent className="bg-bg-surface border-overlay/10">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Info className="w-5 h-5 text-violet-500" />
-              <T>Create new app in Intune</T>
+              {pendingIsUnmanaged ? (
+                <>
+                  <AlertTriangle className="w-5 h-5 text-status-warning" />
+                  <T>Update app not managed by IntuneGet?</T>
+                </>
+              ) : (
+                <>
+                  <Info className="w-5 h-5 text-violet-500" />
+                  <T>Create new app in Intune</T>
+                </>
+              )}
             </DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-3 pt-1">
+                {pendingIsUnmanaged ? (
+                  <>
+                    <p>
+                      <T><Var><span className="font-medium text-text-primary">{pendingNewAppUpdate?.display_name}</span></Var> was matched
+                      to this Winget package automatically and is not managed by IntuneGet.</T>
+                    </p>
+                    <ul className="space-y-1.5 text-sm">
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 w-1 h-1 rounded-full bg-status-warning flex-shrink-0" />
+                        <T>The match may be incorrect, or the app may use custom installers or steps</T>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 w-1 h-1 rounded-full bg-status-warning flex-shrink-0" />
+                        <T>Updating with the standard package could overwrite those customizations</T>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 w-1 h-1 rounded-full bg-status-warning flex-shrink-0" />
+                        <T>Only continue if you are sure this is the correct package</T>
+                      </li>
+                    </ul>
+                  </>
+                ) : (
+                  <>
                 <p>
                   <T><Var><span className="font-medium text-text-primary">{pendingNewAppUpdate?.display_name}</span></Var> was not
                   originally deployed through IntuneGet.</T>
@@ -598,6 +645,8 @@ export default function UpdatesPage() {
                     </>
                   )}
                 </ul>
+                  </>
+                )}
               </div>
             </DialogDescription>
           </DialogHeader>
@@ -614,9 +663,14 @@ export default function UpdatesPage() {
             </Button>
             <Button
               onClick={() => void handleConfirmNewApp()}
-              className="bg-violet-600 hover:bg-violet-700 text-white font-medium"
+              className={cn(
+                'text-white font-medium',
+                pendingIsUnmanaged
+                  ? 'bg-status-warning hover:bg-status-warning/90'
+                  : 'bg-violet-600 hover:bg-violet-700'
+              )}
             >
-              <T>Create New App</T>
+              {pendingIsUnmanaged ? <T>Update anyway</T> : <T>Create New App</T>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -758,6 +812,24 @@ export default function UpdatesPage() {
                   {criticalCount > 0 && (
                     <span className="ml-1 tabular-nums">{criticalCount}</span>
                   )}
+                </Button>
+
+                {/* Show unmanaged (fuzzy-matched) apps -- hidden by default and
+                    always excluded from Update All to avoid mismatched updates */}
+                <Button
+                  variant={showUnmanaged ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setShowUnmanaged(!showUnmanaged)}
+                  title="Show updates for apps that were matched automatically and are not managed by IntuneGet. Hidden by default and never included in Update All."
+                  className={cn(
+                    'h-8 text-xs',
+                    showUnmanaged
+                      ? 'bg-accent-violet/20 text-accent-violet hover:bg-accent-violet/30 border border-accent-violet/20'
+                      : 'text-text-secondary hover:text-text-primary'
+                  )}
+                >
+                  <ShieldOff className="w-3.5 h-3.5 mr-1.5" />
+                  <T>Unmanaged</T>
                 </Button>
 
                 {/* Update type filter */}

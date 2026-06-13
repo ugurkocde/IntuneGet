@@ -45,6 +45,11 @@ function createSupabaseMock(
       discovered_app_name: string;
       winget_package_id: string;
     }>;
+    uploadHistoryRows?: Array<{
+      intune_app_id: string;
+      winget_id: string;
+      version: string | null;
+    }>;
   } = {}
 ) {
   return {
@@ -62,7 +67,7 @@ function createSupabaseMock(
         chain.select = vi.fn(() => chain);
         chain.eq = vi.fn(() => chain);
         chain.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
-          Promise.resolve({ data: [], error: null }).then(resolve);
+          Promise.resolve({ data: options.uploadHistoryRows || [], error: null }).then(resolve);
         return chain;
       }
 
@@ -169,6 +174,8 @@ describe('GET /api/intune/apps/updates', () => {
     expect(body.updates[0].intuneApp.id).toBe('app-new');
     expect(body.updates[0].currentVersion).toBe('2.0.0');
     expect(body.updates[0].latestVersion).toBe('2.5.0');
+    // Matched only by the fuzzy matcher -> not IntuneGet-managed
+    expect(body.updates[0].isManaged).toBe(false);
     expect(
       body.checkedApps.some((item: { result: string }) =>
         item.result.includes('Older tenant app object')
@@ -222,6 +229,8 @@ describe('GET /api/intune/apps/updates', () => {
     expect(response.status).toBe(200);
     expect(body.updateCount).toBe(1);
     expect(body.updates[0].wingetId).toBe('VideoLAN.VLC');
+    // Database fuzzy matcher is still a heuristic match -> not managed
+    expect(body.updates[0].isManaged).toBe(false);
     expect(matchAppToWingetWithDatabaseMock).toHaveBeenCalled();
   });
 
@@ -282,6 +291,8 @@ describe('GET /api/intune/apps/updates', () => {
     expect(response.status).toBe(200);
     expect(body.updateCount).toBe(1);
     expect(body.updates[0].wingetId).toBe('Contoso.CustomApp');
+    // Explicit manual mapping -> IntuneGet-managed
+    expect(body.updates[0].isManaged).toBe(true);
     expect(matchAppToWingetMock).not.toHaveBeenCalled();
     expect(matchAppToWingetWithDatabaseMock).not.toHaveBeenCalled();
   });
@@ -339,6 +350,63 @@ describe('GET /api/intune/apps/updates', () => {
     expect(response.status).toBe(200);
     expect(body.updateCount).toBe(1);
     expect(body.updates[0].wingetId).toBe('Fabrikam.Tool');
+    // Explicit claimed-app link -> IntuneGet-managed
+    expect(body.updates[0].isManaged).toBe(true);
+    expect(matchAppToWingetMock).not.toHaveBeenCalled();
+    expect(matchAppToWingetWithDatabaseMock).not.toHaveBeenCalled();
+  });
+
+  it('tags deployment-history matches as managed without fuzzy matching', async () => {
+    createServerClientMock.mockReturnValue(
+      createSupabaseMock(
+        [{ winget_id: 'Git.Git', latest_version: '2.45.0' }],
+        {
+          uploadHistoryRows: [
+            { intune_app_id: 'app-git', winget_id: 'Git.Git', version: '2.40.0' },
+          ],
+        }
+      )
+    );
+
+    matchAppToWingetMock.mockReturnValue(null);
+    matchAppToWingetWithDatabaseMock.mockResolvedValue(null);
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'graph-token' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          value: [
+            {
+              id: 'app-git',
+              displayName: 'Git',
+              publisher: 'The Git Development Community',
+              displayVersion: '2.40.0',
+              lastModifiedDateTime: '2026-02-02T00:00:00Z',
+            },
+          ],
+        }),
+      });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = new NextRequest('http://localhost:3000/api/intune/apps/updates', {
+      headers: {
+        Authorization: 'Bearer mock-token',
+      },
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.updateCount).toBe(1);
+    expect(body.updates[0].wingetId).toBe('Git.Git');
+    // Deployment history is authoritative provenance -> managed, fuzzy skipped
+    expect(body.updates[0].isManaged).toBe(true);
     expect(matchAppToWingetMock).not.toHaveBeenCalled();
     expect(matchAppToWingetWithDatabaseMock).not.toHaveBeenCalled();
   });

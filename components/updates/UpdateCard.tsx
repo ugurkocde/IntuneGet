@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Zap,
   Plus,
+  ShieldOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
@@ -159,6 +160,15 @@ export function UpdateCard({
                   <T>Critical</T>
                 </span>
               )}
+              {!update.is_managed && (
+                <span
+                  className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold text-accent-violet bg-accent-violet/10 border border-accent-violet/20 rounded-md flex-shrink-0 uppercase tracking-wide"
+                  title="Matched automatically; not managed by IntuneGet. Update with care -- excluded from Update All."
+                >
+                  <ShieldOff className="w-2.5 h-2.5" />
+                  <T>Unmanaged</T>
+                </span>
+              )}
             </div>
             <span className="text-xs font-mono text-text-muted leading-none">{update.winget_id}</span>
           </div>
@@ -210,7 +220,7 @@ export function UpdateCard({
 
         {/* Status metadata line */}
         <div className="flex items-center gap-2.5 mb-3.5 flex-wrap">
-          {!update.has_prior_deployment && (
+          {!update.has_prior_deployment && update.is_managed && (
             <span className="flex items-center gap-1 text-[11px] font-medium text-violet-500">
               <Plus className="w-3 h-3" />
               <T>New to IntuneGet</T>
