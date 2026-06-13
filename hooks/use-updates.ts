@@ -33,6 +33,7 @@ export interface UseAvailableUpdatesOptions {
   tenantId?: string;
   criticalOnly?: boolean;
   includeDismissed?: boolean;
+  includeUnmanaged?: boolean;
 }
 
 export function buildAvailableUpdatesQueryParams(options: UseAvailableUpdatesOptions = {}): URLSearchParams {
@@ -41,6 +42,7 @@ export function buildAvailableUpdatesQueryParams(options: UseAvailableUpdatesOpt
   if (options.tenantId) queryParams.set('tenant_id', options.tenantId);
   if (options.criticalOnly) queryParams.set('critical_only', 'true');
   if (options.includeDismissed) queryParams.set('include_dismissed', 'true');
+  if (options.includeUnmanaged) queryParams.set('include_unmanaged', 'true');
 
   return queryParams;
 }
@@ -59,6 +61,7 @@ export function useAvailableUpdates(options: UseAvailableUpdatesOptions = {}) {
       options.tenantId || null,
       options.criticalOnly === true,
       options.includeDismissed === true,
+      options.includeUnmanaged === true,
     ],
     queryFn: async () => {
       const token = await getAccessToken();

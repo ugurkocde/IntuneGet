@@ -54,13 +54,14 @@ import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt'
 import { useCartStore, createStoreCartItem } from '@/stores/cart-store';
 import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
-import { useLocaleVariants } from '@/hooks/use-packages';
+import { useLocaleVariants, usePackageManifest } from '@/hooks/use-packages';
 import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
 
 interface PackageConfigProps {
   package: NormalizedPackage;
   installers: NormalizedInstaller[];
+  versions?: string[];
   onClose: () => void;
   isDeployed?: boolean;
   deployedConfig?: CartItem | null;
@@ -83,7 +84,7 @@ type ConfigSection =
   | 'branding'
   | 'advanced';
 
-export function PackageConfig({ package: pkg, installers, onClose, isDeployed = false, deployedConfig, intuneAppId, storeManifest }: PackageConfigProps) {
+export function PackageConfig({ package: pkg, installers, versions = [], onClose, isDeployed = false, deployedConfig, intuneAppId, storeManifest }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
 
   // Store app install experience state
@@ -227,9 +228,27 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
   }, [isDeployed, deployedConfig, assignments, categories, espProfiles,
       selectedVersion, selectedArch, selectedScope, selectedLocale, config]);
 
+  // Installers always arrive for the package's default (latest) version. When the
+  // user selects a different version we must re-fetch so the installer URL/SHA
+  // (which flow straight into the cart item) match the chosen version rather than
+  // silently deploying the latest binary under an older version label.
+  const isNonDefaultVersion = !isStoreApp && !!selectedVersion && selectedVersion !== pkg.version;
+  const { data: versionManifest, isFetching: isFetchingVersionInstallers } = usePackageManifest(
+    pkg.id,
+    selectedVersion,
+    undefined,
+    !isNonDefaultVersion
+  );
+  const effectiveInstallers =
+    isNonDefaultVersion && versionManifest?.installers?.length
+      ? versionManifest.installers
+      : installers;
+
   // Get selected installer (not relevant for store apps)
-  const selectedInstaller = installers.find((i) => i.architecture === selectedArch) || installers[0];
-  const availableArchitectures = [...new Set(installers.map((i) => i.architecture))];
+  const selectedInstaller = effectiveInstallers.find((i) => i.architecture === selectedArch) || effectiveInstallers[0];
+  const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
+  const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
+  const hasMultipleVersions = availableVersions.length > 1;
   const inCart = isStoreApp
     ? isInCart(pkg.packageIdentifier || pkg.id, selectedVersion, undefined, storeInstallExperience)
     : selectedInstaller
@@ -258,6 +277,18 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
     }
   }, [selectedInstaller]);
 
+  // When the installer set changes (e.g. after switching to a different version),
+  // ensure the selected architecture still exists; otherwise fall back to the
+  // first available one so the selection and the deployed installer stay in sync.
+  useEffect(() => {
+    if (
+      effectiveInstallers.length > 0 &&
+      !effectiveInstallers.some((i) => i.architecture === selectedArch)
+    ) {
+      setSelectedArch(effectiveInstallers[0].architecture as WingetArchitecture);
+    }
+  }, [effectiveInstallers, selectedArch]);
+
   // Generate detection rules when installer, version, locale, or marker path changes
   // Pass effectiveWingetId so locale variant packages get correct detection markers
   useEffect(() => {
@@ -282,6 +313,9 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
 
     // Store apps don't need an installer
     if (!isStoreApp && !selectedInstaller) return;
+    // Don't add while installers for a newly-selected version are still loading,
+    // otherwise the cart could capture the previous version's installer.
+    if (!isStoreApp && isFetchingVersionInstallers) return;
     if (!isStoreApp && inCart) return;
 
     setIsAddingToCart(true);
@@ -541,16 +575,26 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
                 <label className="block text-sm font-medium text-text-muted mb-2">Version</label>
                 <div className="relative">
                   <button
-                    onClick={() => setShowVersions(!showVersions)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary hover:border-overlay/20 transition-colors text-sm"
+                    type="button"
+                    onClick={() => hasMultipleVersions && setShowVersions(!showVersions)}
+                    disabled={!hasMultipleVersions}
+                    className={cn(
+                      'w-full flex items-center justify-between px-4 py-2.5 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary transition-colors text-sm',
+                      hasMultipleVersions ? 'hover:border-overlay/20 cursor-pointer' : 'cursor-default'
+                    )}
                   >
                     <span>v{selectedVersion}</span>
-                    <ChevronDown className={cn('w-4 h-4 transition-transform', showVersions && 'rotate-180')} />
+                    {isFetchingVersionInstallers ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-text-muted" />
+                    ) : hasMultipleVersions ? (
+                      <ChevronDown className={cn('w-4 h-4 transition-transform', showVersions && 'rotate-180')} />
+                    ) : null}
                   </button>
-                  {showVersions && pkg.versions && (
+                  {showVersions && hasMultipleVersions && (
                     <div className="absolute z-10 w-full mt-1 bg-bg-elevated border border-overlay/15 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {pkg.versions.slice(0, 10).map((version) => (
+                      {availableVersions.slice(0, 50).map((version) => (
                         <button
+                          type="button"
                           key={version}
                           onClick={() => {
                             setSelectedVersion(version);
@@ -1825,7 +1869,7 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
                 </Button>
                 <Button
                   onClick={handleAddToCart}
-                  disabled={(!isStoreApp && !selectedInstaller) || inCart || isAddingToCart || addedToCartSuccess}
+                  disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
                   variant="outline"
                   className={cn(
                     'py-5 text-base font-medium',
@@ -1850,7 +1894,7 @@ export function PackageConfig({ package: pkg, installers, onClose, isDeployed = 
           ) : (
             <Button
               onClick={handleAddToCart}
-              disabled={(!isStoreApp && !selectedInstaller) || inCart || isAddingToCart || addedToCartSuccess}
+              disabled={(!isStoreApp && (!selectedInstaller || isFetchingVersionInstallers)) || inCart || isAddingToCart || addedToCartSuccess}
               className={cn(
                 'w-full py-5 text-base font-medium',
                 inCart || addedToCartSuccess

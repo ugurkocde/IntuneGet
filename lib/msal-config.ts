@@ -13,7 +13,11 @@ export const msalConfig: Configuration = {
       typeof window !== "undefined" ? `${window.location.origin}/redirect` : "",
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    // localStorage so the session is shared across tabs and survives reloads,
+    // preventing the "signed out when switching tabs" loop. The browser-held
+    // token is low-privilege (User.Read/openid/profile); all privileged Graph
+    // operations run server-side via the service principal.
+    cacheLocation: "localStorage",
   },
   system: {
     loggerOptions: {

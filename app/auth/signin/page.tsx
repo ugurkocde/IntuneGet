@@ -42,13 +42,14 @@ function MicrosoftLogo({ className }: { className?: string }) {
 }
 
 function SignInContent() {
-  const { isAuthenticated, signIn, getAccessToken } = useMicrosoftAuth();
+  const { isAuthenticated, signIn, signOut, getAccessToken } = useMicrosoftAuth();
   const { signinClicks, appsSupported } = useLandingStats();
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldReduceMotion = useReducedMotion();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isVerifyingConsent, setIsVerifyingConsent] = useState(false);
+  const [verifyFailed, setVerifyFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConsentSectionOpen, setIsConsentSectionOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -110,13 +111,27 @@ function SignInContent() {
     }
   }, [getAccessToken]);
 
-  // Redirect based on ACTUAL consent status (server-verified, not localStorage)
-  // This ensures users with revoked/incomplete consent are sent to onboarding
-  useEffect(() => {
-    if (isAuthenticated && !isVerifyingConsent) {
-      setIsVerifyingConsent(true);
+  // Run consent verification with a hard timeout so a hung token/popup
+  // acquisition can never leave the user stuck on the loading animation.
+  const runVerification = useCallback(() => {
+    setVerifyFailed(false);
+    setIsVerifyingConsent(true);
 
-      verifyConsentStatus().then((outcome) => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      // Verification hung (commonly a blocked or backgrounded sign-in popup).
+      // Surface a retry path instead of spinning forever.
+      setIsVerifyingConsent(false);
+      setVerifyFailed(true);
+    }, 15000);
+
+    verifyConsentStatus()
+      .then((outcome) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         if (outcome.kind === 'verified') {
           markOnboardingComplete();
           router.push(callbackUrl);
@@ -129,9 +144,23 @@ function SignInContent() {
           // retry banner can re-verify against the live API.
           router.push(callbackUrl);
         }
+      })
+      .catch(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        setIsVerifyingConsent(false);
+        setVerifyFailed(true);
       });
+  }, [verifyConsentStatus, router, callbackUrl]);
+
+  // Redirect based on ACTUAL consent status (server-verified, not localStorage)
+  // This ensures users with revoked/incomplete consent are sent to onboarding
+  useEffect(() => {
+    if (isAuthenticated && !isVerifyingConsent && !verifyFailed) {
+      runVerification();
     }
-  }, [isAuthenticated, router, callbackUrl, verifyConsentStatus, isVerifyingConsent]);
+  }, [isAuthenticated, isVerifyingConsent, verifyFailed, runVerification]);
 
   const handleSignIn = async () => {
     // Track signin click (fire-and-forget)
@@ -151,6 +180,38 @@ function SignInContent() {
       setIsSigningIn(false);
     }
   };
+
+  // Verification hung or failed -- never leave the user on an endless animation.
+  if (verifyFailed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-deepest px-4">
+        <div className="w-full max-w-md rounded-2xl border border-overlay/[0.08] bg-bg-elevated/95 p-8 text-center shadow-soft-lg">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10">
+            <AlertTriangle className="h-7 w-7 text-amber-500" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary">
+            <T>Sign-in is taking longer than expected</T>
+          </h2>
+          <p className="mt-2 text-sm text-text-muted">
+            <T>We couldn&apos;t finish verifying your session. This can happen when a sign-in popup is blocked or closed before it completes.</T>
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <Button onClick={runVerification} size="lg" className="w-full">
+              <T>Try again</T>
+            </Button>
+            <Button
+              onClick={() => { void signOut(); }}
+              variant="outline"
+              size="lg"
+              className="w-full border-overlay/15 text-text-secondary"
+            >
+              <T>Sign out and start over</T>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show loading state while checking auth or verifying consent
   if (isAuthenticated || isVerifyingConsent) {

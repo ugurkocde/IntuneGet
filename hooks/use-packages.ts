@@ -21,6 +21,7 @@ interface SearchPackagesResponse {
 interface ManifestResponse {
   installers: NormalizedInstaller[];
   recommendedInstaller?: NormalizedInstaller;
+  versions?: string[];
 }
 
 interface Category {

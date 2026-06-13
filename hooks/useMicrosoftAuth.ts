@@ -53,11 +53,12 @@ export function useMicrosoftAuth() {
     if (accounts.length === 0) {
       return null;
     }
+    const account = instance.getActiveAccount() ?? accounts[0];
 
     try {
       const tokenResponse = await instance.acquireTokenSilent({
         scopes: graphScopes,
-        account: accounts[0],
+        account,
         forceRefresh: true,
       });
 
@@ -70,7 +71,7 @@ export function useMicrosoftAuth() {
         try {
           const tokenResponse = await instance.acquireTokenPopup({
             scopes: graphScopes,
-            account: accounts[0],
+            account,
           });
 
           cachedTokenRef.current = tokenResponse.accessToken;
@@ -92,6 +93,7 @@ export function useMicrosoftAuth() {
     if (accounts.length === 0) {
       return null;
     }
+    const account = instance.getActiveAccount() ?? accounts[0];
 
     // Check if we have a cached token that's expiring soon (< 5 minutes)
     if (
@@ -105,7 +107,7 @@ export function useMicrosoftAuth() {
     try {
       const tokenResponse = await instance.acquireTokenSilent({
         scopes: graphScopes,
-        account: accounts[0],
+        account,
       });
 
       cachedTokenRef.current = tokenResponse.accessToken;
@@ -117,7 +119,7 @@ export function useMicrosoftAuth() {
         try {
           const tokenResponse = await instance.acquireTokenPopup({
             scopes: graphScopes,
-            account: accounts[0],
+            account,
           });
 
           cachedTokenRef.current = tokenResponse.accessToken;
@@ -169,6 +171,10 @@ export function useMicrosoftAuth() {
     try {
       const result = await instance.loginPopup({ scopes: graphScopes });
       if (result?.account) {
+        // Pin the account we just signed in with so subsequent silent token
+        // calls target it instead of blindly using accounts[0], which breaks
+        // when multiple Microsoft accounts are signed in.
+        instance.setActiveAccount(result.account);
         document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
         hasTrackedSignInRef.current = result.account.localAccountId;
         await trackSignInToServer(result.account, 'popup');
