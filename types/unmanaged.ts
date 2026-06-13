@@ -138,6 +138,33 @@ export interface UnmanagedAppsResponse {
 }
 
 /**
+ * A single device an app is installed on (drill-down from the device count)
+ */
+export interface DeviceListItem {
+  id: string;
+  deviceName: string;
+  operatingSystem?: string | null;
+}
+
+/**
+ * Response from the detected-app-devices API (device drill-down)
+ */
+export interface DetectedAppDevicesResponse {
+  /** Distinct devices the app is installed on, deduplicated across versions */
+  devices: DeviceListItem[];
+  /** Number of distinct devices (devices.length) */
+  total: number;
+  /**
+   * The app's displayed device count (summed across versions). Present so the
+   * modal can explain a discrepancy when a device has multiple versions
+   * installed and is therefore counted once here but twice in the sum.
+   */
+  summedDeviceCount?: number;
+  /** True when the per-version fan-out was capped (very high version churn) */
+  truncated?: boolean;
+}
+
+/**
  * Request body for claiming an app
  */
 export interface ClaimAppRequest {

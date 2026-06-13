@@ -12,6 +12,7 @@ interface UnmanagedAppCardProps {
   app: UnmanagedApp;
   onClaim?: (app: UnmanagedApp) => void;
   onLink?: (app: UnmanagedApp) => void;
+  onDeviceCountClick?: () => void;
   isClaimLoading?: boolean;
 }
 
@@ -26,6 +27,7 @@ function UnmanagedAppCardComponent({
   app,
   onClaim,
   onLink,
+  onDeviceCountClick,
   isClaimLoading = false,
 }: UnmanagedAppCardProps) {
   const canClaim = app.matchStatus === 'matched' && !app.isClaimed;
@@ -76,15 +78,32 @@ function UnmanagedAppCardComponent({
 
           {/* Device count + status */}
           <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-1.5 bg-bg-elevated/80 px-2.5 py-1 rounded-lg border border-overlay/5">
-              <Monitor className="w-4 h-4 text-accent-cyan" />
-              <span className="text-sm font-semibold text-text-primary tabular-nums">
-                {app.deviceCount.toLocaleString()}
-              </span>
-              <span className="text-xs text-text-muted">
-                {app.deviceCount === 1 ? 'device' : 'devices'}
-              </span>
-            </div>
+            {onDeviceCountClick ? (
+              <button
+                type="button"
+                onClick={onDeviceCountClick}
+                aria-label={`View ${app.deviceCount.toLocaleString()} ${app.deviceCount === 1 ? 'device' : 'devices'} for ${app.displayName}`}
+                className="flex items-center gap-1.5 bg-bg-elevated/80 px-2.5 py-1 rounded-lg border border-overlay/5 transition-colors hover:border-accent-cyan/40 hover:bg-bg-elevated focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
+              >
+                <Monitor className="w-4 h-4 text-accent-cyan" />
+                <span className="text-sm font-semibold text-text-primary tabular-nums">
+                  {app.deviceCount.toLocaleString()}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {app.deviceCount === 1 ? 'device' : 'devices'}
+                </span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-bg-elevated/80 px-2.5 py-1 rounded-lg border border-overlay/5">
+                <Monitor className="w-4 h-4 text-accent-cyan" />
+                <span className="text-sm font-semibold text-text-primary tabular-nums">
+                  {app.deviceCount.toLocaleString()}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {app.deviceCount === 1 ? 'device' : 'devices'}
+                </span>
+              </div>
+            )}
             <MatchStatusBadge status={app.matchStatus} confidence={app.matchConfidence} />
           </div>
 
@@ -189,6 +208,7 @@ export const UnmanagedAppCard = memo(UnmanagedAppCardComponent, (prev, next) => 
     prev.app.partialMatches === next.app.partialMatches &&
     prev.isClaimLoading === next.isClaimLoading &&
     prev.onClaim === next.onClaim &&
-    prev.onLink === next.onLink
+    prev.onLink === next.onLink &&
+    prev.onDeviceCountClick === next.onDeviceCountClick
   );
 });

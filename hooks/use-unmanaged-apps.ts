@@ -14,6 +14,7 @@ import type {
   UnmanagedAppsStats,
   UnmanagedAppsFilters,
   MatchStatus,
+  DetectedAppDevicesResponse,
 } from '@/types/unmanaged';
 import type { ClaimAllModalState, ClaimAllItemStatus } from '@/components/unmanaged';
 
@@ -52,6 +53,7 @@ export interface UseUnmanagedAppsReturn {
   claimModalApp: UnmanagedApp | null;
   linkModalApp: UnmanagedApp | null;
   claimAllModal: ClaimAllModalState | null;
+  deviceListApp: UnmanagedApp | null;
 
   // Actions
   setFilters: (filters: UnmanagedAppsFilters) => void;
@@ -59,6 +61,8 @@ export interface UseUnmanagedAppsReturn {
   setClaimModalApp: (app: UnmanagedApp | null) => void;
   setLinkModalApp: (app: UnmanagedApp | null) => void;
   setClaimAllModal: (state: ClaimAllModalState | null) => void;
+  setDeviceListApp: (app: UnmanagedApp | null) => void;
+  fetchAppDevices: (app: UnmanagedApp) => Promise<DetectedAppDevicesResponse>;
   setPermissionError: (error: string | null) => void;
   handleRefresh: () => Promise<void>;
   handleClaimApp: (app: UnmanagedApp) => Promise<void>;
@@ -124,6 +128,7 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
   const [linkModalApp, setLinkModalApp] = useState<UnmanagedApp | null>(null);
   const [claimingAppId, setClaimingAppId] = useState<string | null>(null);
   const [claimAllModal, setClaimAllModal] = useState<ClaimAllModalState | null>(null);
+  const [deviceListApp, setDeviceListApp] = useState<UnmanagedApp | null>(null);
 
   // Get current access token
   const getToken = useCallback(async (): Promise<string | null> => {
@@ -209,6 +214,32 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       });
     }
   }, [fetchApps]);
+
+  // Fetch the devices a discovered app is installed on (device count drill-down).
+  // Resolves the complete deduplicated device list across all detected versions.
+  const fetchAppDevices = useCallback(
+    async (app: UnmanagedApp): Promise<DetectedAppDevicesResponse> => {
+      const accessToken = await getToken();
+      if (!accessToken) {
+        throw new Error('Authentication failed. Please sign in again.');
+      }
+      const response = await fetch(
+        `/api/intune/detected-app-devices?appId=${encodeURIComponent(app.discoveredAppId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...mspHeaders,
+          },
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to load devices');
+      }
+      return response.json();
+    },
+    [getToken, mspHeaders]
+  );
 
   // Cart winget IDs for quick lookup
   const cartWingetIds = useMemo(() => {
@@ -726,11 +757,14 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
     claimModalApp,
     linkModalApp,
     claimAllModal,
+    deviceListApp,
     setFilters,
     setViewMode,
     setClaimModalApp,
     setLinkModalApp,
     setClaimAllModal,
+    setDeviceListApp,
+    fetchAppDevices,
     setPermissionError,
     handleRefresh,
     handleClaimApp,

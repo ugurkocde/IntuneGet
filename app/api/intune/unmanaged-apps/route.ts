@@ -319,13 +319,19 @@ export async function GET(request: NextRequest) {
 
     // Consolidate apps: group by normalized name+publisher, keep newest version, sum device counts
     const appGroups = new Map<string, GraphUnmanagedApp>();
+    // Track every detected-app id merged into each group, keyed by group key.
+    // The consolidated app only keeps the newest version's id, but the device
+    // drill-down must fan out across all versions to list every device.
+    const groupMemberIds = new Map<string, string[]>();
     for (const app of graphApps) {
       const key = `${normalizeAppName(app.displayName)}::${(app.publisher || '').toLowerCase().trim()}`;
       const existing = appGroups.get(key);
       if (!existing) {
         appGroups.set(key, { ...app });
+        groupMemberIds.set(key, [app.id]);
       } else {
         existing.deviceCount += app.deviceCount;
+        groupMemberIds.get(key)!.push(app.id);
         if (app.version && (!existing.version || compareVersions(app.version, existing.version) > 0)) {
           existing.id = app.id;
           existing.displayName = app.displayName;
@@ -334,6 +340,17 @@ export async function GET(request: NextRequest) {
       }
     }
     const consolidatedApps = [...appGroups.values()];
+
+    // Re-key the merged ids by the consolidated winner's id so the cache write
+    // can attach the full version list to each app (fallback handled on read).
+    // Winner ids are unique across groups (each detected-app id belongs to one
+    // group), but merge defensively so a collision could never drop a version.
+    const mergedIdsByWinnerId = new Map<string, string[]>();
+    for (const [key, group] of appGroups) {
+      const ids = groupMemberIds.get(key) ?? [group.id];
+      const existing = mergedIdsByWinnerId.get(group.id);
+      mergedIdsByWinnerId.set(group.id, existing ? [...new Set([...existing, ...ids])] : ids);
+    }
 
     // Filter to Windows apps only
     const windowsApps = consolidatedApps.filter(app => app.platform === 'windows');
@@ -417,7 +434,12 @@ export async function GET(request: NextRequest) {
       matched_package_id: app.matchedPackageId,
       match_confidence: app.matchConfidence,
       match_status: app.matchStatus,
-      app_data: filteredApps.find(a => a.id === app.discoveredAppId) as unknown as Json,
+      // Store the winner GraphUnmanagedApp plus every detected-app id merged
+      // into this group, so the device drill-down can fan out across versions.
+      app_data: {
+        ...(filteredApps.find(a => a.id === app.discoveredAppId) as unknown as Record<string, unknown>),
+        mergedAppIds: mergedIdsByWinnerId.get(app.discoveredAppId) ?? [app.discoveredAppId],
+      } as unknown as Json,
       last_synced: now,
     }));
 

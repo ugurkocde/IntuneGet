@@ -25,6 +25,7 @@ import {
   ClaimAppModal,
   LinkPackageModal,
   ClaimAllModal,
+  DeviceListModal,
 } from '@/components/unmanaged';
 import { UnmanagedToolbar } from '@/components/unmanaged/UnmanagedToolbar';
 import { UnmanagedListRow } from '@/components/unmanaged/UnmanagedListRow';
@@ -55,11 +56,14 @@ export default function UnmanagedAppsPage() {
     claimModalApp,
     linkModalApp,
     claimAllModal,
+    deviceListApp,
     setFilters,
     setViewMode,
     setClaimModalApp,
     setLinkModalApp,
     setClaimAllModal,
+    setDeviceListApp,
+    fetchAppDevices,
     setPermissionError,
     handleRefresh,
     handleClaimApp,
@@ -404,6 +408,7 @@ export default function UnmanagedAppsPage() {
                 app={app}
                 onClaim={() => setClaimModalApp(app)}
                 onLink={() => setLinkModalApp(app)}
+                onDeviceCountClick={() => setDeviceListApp(app)}
                 isClaimLoading={claimingAppId === app.discoveredAppId}
               />
             </motion.div>
@@ -422,6 +427,7 @@ export default function UnmanagedAppsPage() {
                 app={app}
                 onClaim={() => setClaimModalApp(app)}
                 onLink={() => setLinkModalApp(app)}
+                onDeviceCountClick={() => setDeviceListApp(app)}
                 isClaimLoading={claimingAppId === app.discoveredAppId}
               />
             </motion.div>
@@ -456,6 +462,15 @@ export default function UnmanagedAppsPage() {
           onConfirm={processClaimAll}
           onCancel={cancelClaimAll}
           onRetryFailed={retryFailedClaims}
+        />
+      )}
+
+      {deviceListApp && (
+        <DeviceListModal
+          app={deviceListApp}
+          isOpen={!!deviceListApp}
+          onClose={() => setDeviceListApp(null)}
+          fetchDevices={fetchAppDevices}
         />
       )}
     </div>
