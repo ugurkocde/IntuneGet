@@ -60,6 +60,10 @@ export async function GET(request: NextRequest) {
       ? await getBestInstaller(packageId, version || manifest.Version, architecture)
       : installers[0] || null;
 
+    // List of all available versions (Supabase-backed) so the catalog can offer
+    // a version selector. Best-effort: an empty list just hides the selector.
+    const versions = await fetchAvailableVersions(packageId);
+
     return NextResponse.json({
       manifest: {
         id: manifest.Id,
@@ -74,6 +78,7 @@ export async function GET(request: NextRequest) {
       },
       installers,
       recommendedInstaller: bestInstaller,
+      versions,
     });
   } catch (err) {
     return NextResponse.json(

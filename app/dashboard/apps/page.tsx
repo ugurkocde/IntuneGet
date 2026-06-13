@@ -257,6 +257,7 @@ export default function AppCatalogPage() {
     return uniquePackages;
   }, [infiniteData?.pages]);
   const selectedInstallers = manifestData?.installers || [];
+  const selectedVersions = manifestData?.versions || [];
 
   const showSearchResults = hasSearched;
   const showCategoryResults = !hasSearched && selectedCategory !== null;
@@ -920,6 +921,7 @@ export default function AppCatalogPage() {
         <PackageConfig
           package={selectedPackage}
           installers={selectedInstallers}
+          versions={selectedVersions}
           onClose={handleCloseConfig}
           isDeployed={isSelectedDeployed}
           deployedConfig={deployedConfig}
