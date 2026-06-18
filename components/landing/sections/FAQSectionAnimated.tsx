@@ -34,7 +34,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: <T>Where is my data stored?</T>,
-    answer: <T>Your credentials and sensitive data never leave your environment. IntuneGet uses secure Microsoft authentication (Entra ID) and only stores minimal metadata needed for the service. All communications are encrypted, and you can self-host for complete control.</T>,
+    answer: <T>On the hosted version (intuneget.com), data is stored in the European Union, in Supabase&apos;s Frankfurt, Germany region (eu-central-1). We only keep the operational metadata needed to run the service, such as your account email, deployment history, app catalog, and team settings. We never store your app installers or your Intune credentials: authentication uses Microsoft Entra ID, access tokens stay in your browser, and packaged apps are uploaded directly to your own Intune tenant. The web app is served over an encrypted (TLS) connection via Vercel&apos;s global edge network, and packaging runs on temporary GitHub-hosted runners. If you need data to stay entirely on your own infrastructure or in a specific region, IntuneGet is open source and can be self-hosted with an embedded SQLite database.</T>,
   },
   {
     question: <T>Which applications are supported?</T>,
@@ -43,6 +43,10 @@ const faqItems: FAQItem[] = [
   {
     question: <T>Do I need special permissions to use IntuneGet?</T>,
     answer: <T>You'll need appropriate permissions in your Entra ID and Intune environment to upload and manage applications. Typically, this requires Intune Administrator or Application Administrator roles. We provide detailed documentation on the required permissions.</T>,
+  },
+  {
+    question: <T>Can I assign the Owner role to a team member?</T>,
+    answer: <T>The Owner role is held by the person who creates the MSP organization and cannot be reassigned or granted to other members, which protects the organization from an accidental takeover. When you invite or edit members, the highest role you can assign is Admin. An Admin has every permission except changing member roles and deleting the organization, which remain exclusive to the Owner. This is the same in the hosted and self-hosted versions; there is no separate step or upgrade required to unlock Owner. If ownership of an organization needs to change, contact support.</T>,
   },
   {
     question: <T>What support is available?</T>,

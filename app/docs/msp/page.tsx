@@ -180,8 +180,8 @@ export default function MspPage() {
             <TableRow>
               <TableCell className="font-medium text-text-primary"><T>Owner</T></TableCell>
               <TableCell className="text-sm text-text-secondary">
-                <T>Full access including organization settings, billing, team
-                management, and all tenant operations</T>
+                <T>Full access, including organization settings, team and role
+                management, organization deletion, and all tenant operations</T>
               </TableCell>
             </TableRow>
             <TableRow>
@@ -206,6 +206,19 @@ export default function MspPage() {
             </TableRow>
           </TableBody>
         </Table>
+
+        <Callout type="info" title="Assigning the Owner role">
+          <p>
+            <T>The Owner role is automatically assigned to the person who creates
+            the organization and cannot be transferred or granted to other
+            members. This protects the organization from an accidental takeover.
+            Admin is the highest role that can be assigned; an Admin has every
+            permission except changing member roles and deleting the
+            organization, which remain exclusive to the Owner. This works the
+            same way in the hosted and self-hosted versions, and there is no
+            separate step required to unlock Owner.</T>
+          </p>
+        </Callout>
       </section>
 
       {/* Webhooks */}

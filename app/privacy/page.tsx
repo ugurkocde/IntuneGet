@@ -120,6 +120,44 @@ export default function PrivacyPage() {
 
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-text-primary">
+              <T>Data Location &amp; Hosting</T>
+            </h2>
+            <ul className="list-disc list-inside space-y-2 text-text-secondary">
+              <li>
+                <T>
+                  The hosted version (intuneget.com) stores its data in the
+                  European Union, in Supabase&apos;s Frankfurt, Germany region
+                  (eu-central-1).
+                </T>
+              </li>
+              <li>
+                <T>
+                  We store only the operational metadata needed to run the
+                  service, for example your account email, deployment history,
+                  app catalog, team and organization settings, and audit logs.
+                  We do not store application installers or your Intune
+                  credentials.
+                </T>
+              </li>
+              <li>
+                <T>
+                  The web application is served over TLS through Vercel&apos;s
+                  global edge network, and application packaging runs on
+                  temporary, ephemeral GitHub-hosted runners.
+                </T>
+              </li>
+              <li>
+                <T>
+                  If you require data to remain entirely within your own
+                  infrastructure or a specific region, you can self-host
+                  IntuneGet with an embedded SQLite database.
+                </T>
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-text-primary">
               <T>Analytics & Cookies</T>
             </h2>
             <ul className="list-disc list-inside space-y-2 text-text-secondary">

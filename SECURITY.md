@@ -40,6 +40,17 @@ This separation ensures that:
 - Tenant IDs are masked in logs using GitHub's `::add-mask::` feature
 - No sensitive data is stored permanently (jobs are ephemeral)
 
+### Data Residency (Hosted Version)
+
+The hosted service at intuneget.com stores its data in the European Union:
+
+- **Database**: Supabase, Frankfurt, Germany region (`eu-central-1`). Stores only operational metadata (account email, deployment history, app catalog, team/organization settings, audit logs).
+- **Application/compute**: Served over TLS via Vercel's global edge network.
+- **Packaging**: Runs on ephemeral GitHub-hosted runners; installer files are downloaded only during packaging and discarded afterward.
+- **Not stored**: Application installers and Intune credentials. Authentication uses Microsoft Entra ID, access tokens remain in the browser session, and packaged apps are uploaded directly to your own Intune tenant.
+
+Self-hosting is available for organizations that require data to remain entirely within their own infrastructure or a specific region.
+
 ## Security Best Practices
 
 When self-hosting IntuneGet:
