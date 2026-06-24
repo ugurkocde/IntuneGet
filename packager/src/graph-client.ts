@@ -4,6 +4,7 @@
  */
 
 import { ConfidentialClientApplication } from '@azure/msal-node';
+import { ManagedIdentityCredential, type TokenCredential } from '@azure/identity';
 import { PackagerConfig } from './config.js';
 import { createLogger, Logger } from './logger.js';
 
@@ -18,7 +19,9 @@ interface TokenCache {
 export class GraphClient {
   private config: PackagerConfig;
   private tenantId: string;
-  private msalClient: ConfidentialClientApplication;
+  // Exactly one of these is set, depending on the auth mode.
+  private msalClient: ConfidentialClientApplication | null = null;
+  private managedIdentity: TokenCredential | null = null;
   private tokenCache: TokenCache | null = null;
   private logger: Logger;
 
@@ -27,13 +30,21 @@ export class GraphClient {
     this.tenantId = tenantId;
     this.logger = createLogger('GraphClient');
 
-    this.msalClient = new ConfidentialClientApplication({
-      auth: {
-        clientId: config.azure.clientId,
-        clientSecret: config.azure.clientSecret,
-        authority: `https://login.microsoftonline.com/${tenantId}`,
-      },
-    });
+    if (config.azure.useManagedIdentity) {
+      // Managed identity: authenticate AS the identity via @azure/identity - no
+      // secret, nothing stored. The identity must hold the Graph app roles.
+      this.managedIdentity = config.azure.managedIdentityClientId
+        ? new ManagedIdentityCredential({ clientId: config.azure.managedIdentityClientId })
+        : new ManagedIdentityCredential();
+    } else {
+      this.msalClient = new ConfidentialClientApplication({
+        auth: {
+          clientId: config.azure.clientId,
+          clientSecret: config.azure.clientSecret,
+          authority: `https://login.microsoftonline.com/${tenantId}`,
+        },
+      });
+    }
   }
 
   /**
@@ -46,22 +57,30 @@ export class GraphClient {
     }
 
     try {
-      const result = await this.msalClient.acquireTokenByClientCredential({
-        scopes: [GRAPH_SCOPE],
-      });
+      let token: string;
+      let expiresAt: number;
 
-      if (!result || !result.accessToken) {
-        throw new Error('Failed to acquire access token');
+      if (this.managedIdentity) {
+        const result = await this.managedIdentity.getToken(GRAPH_SCOPE);
+        if (!result?.token) {
+          throw new Error('Failed to acquire access token from managed identity');
+        }
+        token = result.token;
+        expiresAt = result.expiresOnTimestamp || Date.now() + 3600000;
+      } else {
+        const result = await this.msalClient!.acquireTokenByClientCredential({
+          scopes: [GRAPH_SCOPE],
+        });
+        if (!result || !result.accessToken) {
+          throw new Error('Failed to acquire access token');
+        }
+        token = result.accessToken;
+        expiresAt = result.expiresOn ? result.expiresOn.getTime() : Date.now() + 3600000;
       }
 
-      // Cache the token
-      this.tokenCache = {
-        token: result.accessToken,
-        expiresAt: result.expiresOn ? result.expiresOn.getTime() : Date.now() + 3600000,
-      };
-
+      this.tokenCache = { token, expiresAt };
       this.logger.debug('Acquired new access token', { tenantId: this.tenantId });
-      return result.accessToken;
+      return token;
     } catch (error) {
       this.logger.error('Failed to acquire access token', {
         tenantId: this.tenantId,

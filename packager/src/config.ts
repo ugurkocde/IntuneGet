@@ -32,7 +32,12 @@ export interface PackagerConfig {
   // Azure AD / Microsoft Entra ID
   azure: {
     clientId: string;
-    clientSecret: string;
+    // Either a clientSecret or useManagedIdentity is required. Managed identity
+    // (AZURE_AUTH_MODE=managed-identity) authenticates via @azure/identity with
+    // no stored secret - the managed identity must hold the Graph app roles.
+    clientSecret?: string;
+    useManagedIdentity: boolean;
+    managedIdentityClientId?: string; // optional user-assigned identity
     tenantId?: string; // Optional default tenant
   };
 
@@ -104,7 +109,9 @@ export function loadConfig(): PackagerConfig {
 
     azure: {
       clientId: getEnvVar('AZURE_CLIENT_ID', true)!,
-      clientSecret: getEnvVar('AZURE_CLIENT_SECRET', true)!,
+      clientSecret: getEnvVar('AZURE_CLIENT_SECRET') || getEnvVar('AZURE_AD_CLIENT_SECRET'),
+      useManagedIdentity: (getEnvVar('AZURE_AUTH_MODE') || '').toLowerCase() === 'managed-identity',
+      managedIdentityClientId: getEnvVar('AZURE_MANAGED_IDENTITY_CLIENT_ID'),
       tenantId: getEnvVar('AZURE_TENANT_ID'),
     },
 
@@ -145,6 +152,9 @@ export function validateConfig(config: PackagerConfig): string[] {
   // Validate Azure
   if (!config.azure.clientId.match(/^[0-9a-f-]{36}$/i)) {
     issues.push('AZURE_CLIENT_ID must be a valid GUID');
+  }
+  if (!config.azure.clientSecret && !config.azure.useManagedIdentity) {
+    issues.push('Either AZURE_CLIENT_SECRET or AZURE_AUTH_MODE=managed-identity is required');
   }
 
   // Validate polling

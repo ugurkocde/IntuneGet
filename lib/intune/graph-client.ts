@@ -10,6 +10,8 @@
  * them onto this module is a deliberate follow-up, not a drive-by change.
  */
 
+import { acquireAppOnlyToken } from '@/lib/azure-app-credential';
+
 export const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 
 // Module-scoped token cache keyed by tenantId
@@ -89,49 +91,20 @@ export function invalidateServicePrincipalToken(tenantId: string): void {
 }
 
 async function fetchServicePrincipalToken(tenantId: string): Promise<string | null> {
-  const clientId = process.env.AZURE_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    console.error('Service principal token failure: missing AZURE_CLIENT_ID or AZURE_CLIENT_SECRET');
-    return null;
-  }
-
-  try {
-    const tokenResponse = await fetch(
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          scope: 'https://graph.microsoft.com/.default',
-          grant_type: 'client_credentials',
-        }),
-      }
+  const result = await acquireAppOnlyToken(tenantId);
+  if (!result.ok) {
+    console.error(
+      `Service principal token failure for tenant ${tenantId}: ${result.error}` +
+        (result.errorDescription ? ` - ${result.errorDescription}` : '')
     );
-
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text().catch(() => 'unknown error');
-      console.error(`Service principal token failure for tenant ${tenantId}: ${tokenResponse.status} - ${errorText}`);
-      tokenCache.delete(tenantId);
-      return null;
-    }
-
-    const tokenData = await tokenResponse.json();
-    const token = tokenData.access_token;
-    const expiresIn = tokenData.expires_in || 3600;
-    tokenCache.set(tenantId, {
-      token,
-      expiresAt: Date.now() + expiresIn * 1000,
-    });
-    return token;
-  } catch (error) {
-    console.error('Service principal token error:', error);
     tokenCache.delete(tenantId);
     return null;
   }
+
+  const expiresIn = result.expiresIn || 3600;
+  tokenCache.set(tenantId, {
+    token: result.accessToken,
+    expiresAt: Date.now() + expiresIn * 1000,
+  });
+  return result.accessToken;
 }

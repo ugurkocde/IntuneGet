@@ -167,6 +167,14 @@ export function validateConfig(config: AppConfig): string[] {
   if (!config.azure.clientId) {
     issues.push("NEXT_PUBLIC_AZURE_AD_CLIENT_ID is required");
   }
+  // App-only Graph auth needs either a client secret or a managed identity.
+  const usingManagedIdentity =
+    (process.env.AZURE_AUTH_MODE || "").toLowerCase() === "managed-identity";
+  if (!usingManagedIdentity && !config.azure.clientSecret) {
+    issues.push(
+      "AZURE_CLIENT_SECRET is required unless AZURE_AUTH_MODE=managed-identity",
+    );
+  }
 
   // Pipeline configuration validation
   if (config.packager.mode === "github") {

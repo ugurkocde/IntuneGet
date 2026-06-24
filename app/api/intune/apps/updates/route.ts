@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
+import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
   isValidWingetId,
   matchAppToWinget,
@@ -435,44 +436,5 @@ export async function GET(request: NextRequest) {
       { error: 'Failed to check for updates' },
       { status: 500 }
     );
-  }
-}
-
-/**
- * Get access token for the service principal
- */
-async function getServicePrincipalToken(tenantId: string): Promise<string | null> {
-  const clientId = process.env.AZURE_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    return null;
-  }
-
-  try {
-    const tokenResponse = await fetch(
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          scope: 'https://graph.microsoft.com/.default',
-          grant_type: 'client_credentials',
-        }),
-      }
-    );
-
-    if (!tokenResponse.ok) {
-      return null;
-    }
-
-    const tokenData = await tokenResponse.json();
-    return tokenData.access_token;
-  } catch {
-    return null;
   }
 }

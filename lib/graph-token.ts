@@ -1,8 +1,10 @@
 /**
  * Graph API Token Acquisition
- * Shared utility for obtaining access tokens via client credentials flow.
- * Used by consent verification and store app deployment.
+ * Shared utility for obtaining app-only access tokens. Used by consent
+ * verification and store app deployment.
  */
+
+import { acquireAppOnlyToken } from '@/lib/azure-app-credential';
 
 export interface GraphTokenResult {
   accessToken: string;
@@ -10,40 +12,16 @@ export interface GraphTokenResult {
 }
 
 /**
- * Acquire a Graph API access token for the given tenant using client credentials.
- * Requires AZURE_AD_CLIENT_ID and AZURE_CLIENT_SECRET environment variables.
+ * Acquire a Graph API access token for the given tenant. Uses the app
+ * registration's client secret by default, or an Azure managed identity when
+ * AZURE_AUTH_MODE=managed-identity (see lib/azure-app-credential).
  */
 export async function acquireGraphToken(tenantId: string): Promise<GraphTokenResult> {
-  const clientId = process.env.AZURE_CLIENT_ID || process.env.AZURE_AD_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Azure AD credentials not configured (AZURE_AD_CLIENT_ID / AZURE_CLIENT_SECRET)');
+  const result = await acquireAppOnlyToken(tenantId);
+  if (!result.ok) {
+    throw new Error(
+      `Token acquisition failed (${result.error})${result.errorDescription ? `: ${result.errorDescription}` : ''}`
+    );
   }
-
-  const response = await fetch(
-    `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        scope: 'https://graph.microsoft.com/.default',
-        grant_type: 'client_credentials',
-      }).toString(),
-    }
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
-    throw new Error(`Token acquisition failed (${response.status}): ${errorBody}`);
-  }
-
-  const tokenData = await response.json();
-
-  return {
-    accessToken: tokenData.access_token,
-    expiresIn: tokenData.expires_in,
-  };
+  return { accessToken: result.accessToken, expiresIn: result.expiresIn };
 }
