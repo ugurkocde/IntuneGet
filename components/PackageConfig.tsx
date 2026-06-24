@@ -54,6 +54,15 @@ import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt'
 import { useCartStore, createStoreCartItem } from '@/stores/cart-store';
 import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
+import { INTUNE_APP_SOURCE_MARKER } from '@/lib/intune-description';
+
+// Strip the auto-appended "Source: IntuneGet.com" marker so the description
+// editor shows only the human-authored text. The marker is re-appended at
+// deploy time by buildIntuneAppDescription, which is idempotent.
+function stripSourceMarker(value: string): string {
+  const idx = value.toLowerCase().lastIndexOf(INTUNE_APP_SOURCE_MARKER.toLowerCase());
+  return (idx === -1 ? value : value.slice(0, idx)).trimEnd();
+}
 import { useLocaleVariants, usePackageManifest } from '@/hooks/use-packages';
 import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
@@ -163,6 +172,13 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     };
   });
 
+  // Editable Intune app description (#117). Defaults to the package description;
+  // left blank, it falls back to the package default at deploy time. The
+  // "Source: IntuneGet.com" marker is appended later by buildIntuneAppDescription.
+  const [description, setDescription] = useState<string>(
+    () => stripSourceMarker(deployedConfig?.description ?? pkg.description ?? '')
+  );
+
   // Assignment configuration state - pre-fill from deployed config
   const [assignments, setAssignments] = useState<PackageAssignment[]>(
     deployedConfig?.assignments || []
@@ -221,12 +237,16 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     const hasPsadtChange = win32Deployed
       ? JSON.stringify(config) !== JSON.stringify(win32Deployed.psadtConfig)
       : false;
+    // Description is written into the package and applied during (re)deployment,
+    // so a change to it requires a redeploy rather than a Graph settings patch.
+    const deployedDescription = stripSourceMarker(deployedConfig.description ?? pkg.description ?? '');
+    const hasDescriptionChange = description.trim() !== deployedDescription.trim();
     const hasRedeployChanges =
-      hasVersionChange || hasArchChange || hasScopeChange || hasLocaleChange || hasPsadtChange;
+      hasVersionChange || hasArchChange || hasScopeChange || hasLocaleChange || hasPsadtChange || hasDescriptionChange;
 
     return { hasGraphChanges, hasRedeployChanges };
   }, [isDeployed, deployedConfig, assignments, categories, espProfiles,
-      selectedVersion, selectedArch, selectedScope, selectedLocale, config]);
+      selectedVersion, selectedArch, selectedScope, selectedLocale, config, description, pkg.description]);
 
   // Installers always arrive for the package's default (latest) version. When the
   // user selects a different version we must re-fetch so the installer URL/SHA
@@ -358,7 +378,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           wingetId: effectiveWingetId,
           displayName,
           publisher: pkg.publisher,
-          description: pkg.description,
+          description: description.trim() || pkg.description,
           version: selectedVersion,
           architecture: selectedInstaller!.architecture,
           installScope: selectedScope,
@@ -1783,6 +1803,23 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                 onToggle={() => toggleSection('advanced')}
               >
                 <div className="space-y-4">
+                  {/* Custom Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Description override
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
+                      placeholder={pkg.description || 'Description shown in Intune and Company Portal'}
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm resize-y"
+                    />
+                    <p className="text-text-muted text-xs mt-1">
+                      Shown in Intune and the Company Portal. Leave empty to use the default description.
+                    </p>
+                  </div>
+
                   {/* Custom Install Command */}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
