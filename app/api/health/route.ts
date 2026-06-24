@@ -52,8 +52,10 @@ export async function GET() {
     status.services.database = false;
   }
 
-  // Check auth configuration
-  status.services.auth = Boolean(
+  // Check auth configuration. Managed-identity mode needs no secret; otherwise a
+  // client id plus a client secret is required.
+  const managedIdentity = (process.env.AZURE_AUTH_MODE || '').toLowerCase() === 'managed-identity';
+  status.services.auth = managedIdentity || Boolean(
     (process.env.AZURE_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID) &&
     (process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET)
   );

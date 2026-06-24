@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { invalidateServicePrincipalToken } from '@/lib/intune/graph-client';
 
 const {
   parseAccessTokenMock,
@@ -105,6 +106,9 @@ function createSupabaseMock(
 describe('GET /api/intune/apps/updates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The shared service-principal token helper caches per tenant; clear it so
+    // each case's mocked token fetch is exercised fresh.
+    invalidateServicePrincipalToken('tenant-1');
     process.env.AZURE_CLIENT_ID = '00000000-0000-0000-0000-000000000001';
     process.env.AZURE_CLIENT_SECRET = 'test-secret';
     parseAccessTokenMock.mockResolvedValue({

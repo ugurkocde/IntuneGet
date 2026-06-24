@@ -155,6 +155,42 @@ If `DATABASE_MODE=sqlite`, also set:
 |----------|-------------|---------|
 | `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | Plausible analytics domain | (disabled) |
 | `BEEHIIV_API_KEY` | Newsletter integration | (disabled) |
+| `AZURE_AUTH_MODE` | Set to `managed-identity` to authenticate via an Azure [managed identity](#managed-identity-no-client-secret) instead of a client secret | (client secret) |
+| `AZURE_MANAGED_IDENTITY_CLIENT_ID` | Client id of a user-assigned managed identity (omit for system-assigned) | (system-assigned) |
+
+### Managed identity (no client secret)
+
+If you self-host IntuneGet on Azure (App Service, Container Apps, AKS, or a VM),
+you can authenticate to Microsoft Graph using the compute's **managed identity** -
+no client secret, no token files, nothing to rotate. In this mode IntuneGet calls
+Graph **as the managed identity**, so the identity itself must hold the Graph
+permissions.
+
+1. **Enable a managed identity** on your Azure compute (system-assigned is
+   simplest) and note its object (principal) id.
+2. **Grant the Graph app roles to the managed identity.** These are the same
+   permissions the app registration uses. Example (Microsoft Graph PowerShell):
+
+   ```powershell
+   Connect-MgGraph -Scopes 'AppRoleAssignment.ReadWrite.All','Application.Read.All'
+   $miId   = '<managed-identity-object-id>'
+   $graph  = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
+   foreach ($role in 'DeviceManagementApps.ReadWrite.All','DeviceManagementManagedDevices.Read.All','DeviceManagementServiceConfig.ReadWrite.All','DeviceManagementConfiguration.Read.All','GroupMember.Read.All') {
+     $appRole = $graph.AppRoles | Where-Object { $_.Value -eq $role -and $_.AllowedMemberTypes -contains 'Application' }
+     New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $miId -PrincipalId $miId -ResourceId $graph.Id -AppRoleId $appRole.Id
+   }
+   ```
+
+3. **Configure IntuneGet:** set `AZURE_AUTH_MODE=managed-identity` and leave
+   `AZURE_AD_CLIENT_SECRET` empty. For a user-assigned identity also set
+   `AZURE_MANAGED_IDENTITY_CLIENT_ID`. The same variables apply to the local
+   packager.
+
+When `AZURE_AUTH_MODE` is unset, IntuneGet uses the client secret exactly as
+before, so existing deployments are unaffected. Managed identity is intended for
+**single-tenant self-hosting** (your compute, managed identity, and Intune tenant
+are the same organization); it does not apply to the hosted multi-tenant service.
+The app registration is still used for interactive user sign-in.
 
 ## Setup Steps
 

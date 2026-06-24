@@ -9,6 +9,7 @@ import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { matchDiscoveredApp, filterUserApps, isSystemApp, normalizeAppName } from '@/lib/matching/app-matcher';
 import { compareVersions } from '@/lib/version-compare';
+import { getServicePrincipalToken, invalidateServicePrincipalToken } from '@/lib/intune/graph-client';
 import type {
   GraphUnmanagedApp,
   UnmanagedApp,
@@ -22,10 +23,6 @@ export const maxDuration = 300;
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
-
-// Module-scoped token cache keyed by tenantId
-const tokenCache = new Map<string, { token: string; expiresAt: number }>();
-const tokenInflight = new Map<string, Promise<string | null>>();
 
 /**
  * Fetch with retry logic for Graph API rate limiting (429) and transient errors (5xx).
@@ -265,7 +262,7 @@ export async function GET(request: NextRequest) {
       if (!graphResponse.ok) {
         // Invalidate cached token on 401 (revoked/expired)
         if (graphResponse.status === 401) {
-          tokenCache.delete(tenantId);
+          invalidateServicePrincipalToken(tenantId);
         }
 
         const errorText = await graphResponse.text();
@@ -608,71 +605,5 @@ function mapPlatform(platform: string | undefined): GraphUnmanagedApp['platform'
   }
 }
 
-/**
- * Get access token for the service principal using client credentials flow
- */
-async function getServicePrincipalToken(tenantId: string): Promise<string | null> {
-  // Return cached token if still valid (with 10-min buffer)
-  const cached = tokenCache.get(tenantId);
-  if (cached && cached.expiresAt > Date.now() + 10 * 60 * 1000) {
-    return cached.token;
-  }
-
-  // Deduplicate concurrent token fetches for the same tenant
-  const inflight = tokenInflight.get(tenantId);
-  if (inflight) return inflight;
-
-  const promise = fetchServicePrincipalToken(tenantId).finally(() => {
-    tokenInflight.delete(tenantId);
-  });
-  tokenInflight.set(tenantId, promise);
-  return promise;
-}
-
-async function fetchServicePrincipalToken(tenantId: string): Promise<string | null> {
-  const clientId = process.env.AZURE_CLIENT_ID || process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET || process.env.AZURE_AD_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    console.error('Service principal token failure: missing AZURE_CLIENT_ID or AZURE_CLIENT_SECRET');
-    return null;
-  }
-
-  try {
-    const tokenResponse = await fetch(
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          scope: 'https://graph.microsoft.com/.default',
-          grant_type: 'client_credentials',
-        }),
-      }
-    );
-
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text().catch(() => 'unknown error');
-      console.error(`Service principal token failure for tenant ${tenantId}: ${tokenResponse.status} - ${errorText}`);
-      tokenCache.delete(tenantId);
-      return null;
-    }
-
-    const tokenData = await tokenResponse.json();
-    const token = tokenData.access_token;
-    const expiresIn = tokenData.expires_in || 3600;
-    tokenCache.set(tenantId, {
-      token,
-      expiresAt: Date.now() + expiresIn * 1000,
-    });
-    return token;
-  } catch (error) {
-    console.error('Service principal token error:', error);
-    tokenCache.delete(tenantId);
-    return null;
-  }
-}
+// Service-principal token acquisition (with per-tenant caching and federated
+// credential support) is shared from lib/intune/graph-client.
