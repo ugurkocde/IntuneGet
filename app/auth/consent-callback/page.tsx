@@ -14,6 +14,11 @@ function ConsentCallbackContent() {
   const { signIn, isAuthenticated, getAccessToken, refreshToken } = useMicrosoftAuth();
   const [status, setStatus] = useState<'processing' | 'verifying' | 'success' | 'error' | 'propagating'>('processing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 'role': Microsoft rejected the consent request (often a missing admin role).
+  // 'verification': consent completed but server-side verification failed - usually
+  // permission propagation or, when self-hosting, an app-registration/credential
+  // misconfiguration rather than the user's role.
+  const [errorKind, setErrorKind] = useState<'role' | 'verification'>('role');
   const [statusMessage, setStatusMessage] = useState('Processing admin consent...');
 
   /**
@@ -69,6 +74,7 @@ function ConsentCallbackContent() {
 
     if (error) {
       setStatus('error');
+      setErrorKind('role');
       setErrorMessage(errorDescription || `Admin consent failed: ${error}`);
       return;
     }
@@ -89,6 +95,7 @@ function ConsentCallbackContent() {
         return;
       }
       setStatus('error');
+      setErrorKind('verification');
       setErrorMessage(
         result.message || 'Admin consent was not granted. Please ensure a Global Administrator grants consent.'
       );
@@ -147,6 +154,7 @@ function ConsentCallbackContent() {
       } catch {
         if (cancelled) return;
         setStatus('error');
+        setErrorKind('verification');
         setErrorMessage('Failed to complete sign in. Please try again.');
       }
     };
@@ -215,25 +223,42 @@ function ConsentCallbackContent() {
               <T><Var>{errorMessage || 'Something went wrong during setup.'}</Var></T>
             </p>
 
-            {/* Detailed explanation */}
+            {/* Detailed explanation - tailored to the failure kind */}
             <div className="bg-bg-surface/50 border border-overlay/10 rounded-xl p-4 mb-4 text-left">
               <p className="text-sm text-amber-400 font-medium mb-2">
                 <T>Why did this happen?</T>
               </p>
-              <ul className="text-xs text-text-muted space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="text-text-muted mt-0.5">1.</span>
-                  <span><T>You may not have the required role. Only <Var><strong className="text-text-primary">Global Administrators</strong></Var> or <Var><strong className="text-text-primary">Privileged Role Administrators</strong></Var> can grant admin consent.</T></span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-text-muted mt-0.5">2.</span>
-                  <span><T>Intune Administrators, Application Administrators, and other roles <Var><strong className="text-red-400">cannot</strong></Var> grant organization-wide consent.</T></span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-text-muted mt-0.5">3.</span>
-                  <span><T>If you&apos;re not sure of your role, ask your IT department who the Global Admin is.</T></span>
-                </li>
-              </ul>
+              {errorKind === 'role' ? (
+                <ul className="text-xs text-text-muted space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-text-muted mt-0.5">1.</span>
+                    <span><T>You may not have the required role. Only <Var><strong className="text-text-primary">Global Administrators</strong></Var> or <Var><strong className="text-text-primary">Privileged Role Administrators</strong></Var> can grant admin consent.</T></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-text-muted mt-0.5">2.</span>
+                    <span><T>Intune Administrators, Application Administrators, and other roles <Var><strong className="text-red-400">cannot</strong></Var> grant organization-wide consent.</T></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-text-muted mt-0.5">3.</span>
+                    <span><T>If you&apos;re not sure of your role, ask your IT department who the Global Admin is.</T></span>
+                  </li>
+                </ul>
+              ) : (
+                <ul className="text-xs text-text-muted space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-text-muted mt-0.5">1.</span>
+                    <span><T>Consent may still be propagating. Microsoft can take 5-15 minutes to apply new permissions - wait a few minutes, then re-check from the Settings page.</T></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-text-muted mt-0.5">2.</span>
+                    <span><T>If you are <Var><strong className="text-text-primary">self-hosting</strong></Var>, confirm the app registration is configured correctly: <Var><strong className="text-text-primary">AZURE_CLIENT_ID</strong></Var> and <Var><strong className="text-text-primary">AZURE_CLIENT_SECRET</strong></Var> are set, the required Microsoft Graph application permissions are added, and this app&apos;s redirect URI matches your deployment URL.</T></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-text-muted mt-0.5">3.</span>
+                    <span><T>A valid, unexpired client secret is required - regenerate it in Entra if it may have expired.</T></span>
+                  </li>
+                </ul>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -241,7 +266,7 @@ function ConsentCallbackContent() {
                 onClick={() => router.push('/onboarding?step=2')}
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
-                <T>Go Back and Request from Admin</T>
+                {errorKind === 'role' ? <T>Go Back and Request from Admin</T> : <T>Try Again</T>}
               </Button>
               <Button
                 onClick={() => router.push('/auth/signin')}

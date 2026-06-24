@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "npx gt translate --ignore-errors && next build",
+    "build": "node scripts/maybe-translate.mjs && next build",
     "build:ci": "next build",
     "translate": "npx gt translate --ignore-errors",
     "start": "next start",

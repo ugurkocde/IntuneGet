@@ -91,6 +91,13 @@ npm run build
 npm start
 ```
 
+> **Note:** `npm run build` does **not** require a General Translation
+> (generaltranslation.com) account. IntuneGet ships with its translations
+> committed in `public/_gt`, and the build automatically skips the translation
+> step when `GT_API_KEY` is unset. `GT_API_KEY` / `GT_PROJECT_ID` are only
+> needed by maintainers regenerating translations after changing user-facing
+> text - leave them empty for self-hosting.
+
 For process management, use PM2:
 
 ```bash
