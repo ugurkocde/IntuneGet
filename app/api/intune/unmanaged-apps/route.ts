@@ -248,8 +248,14 @@ export async function GET(request: NextRequest) {
     // Note: no $orderby — server-side sorting of the full detectedApps collection
     // is expensive and a frequent throttling (429) trigger. We re-sort by device
     // count in code after consolidation instead.
+    // $top=1000: detectedApps honors page sizes well above the old default of 100
+    // (verified against Graph). A larger page size means far fewer sequential
+    // requests on large tenants, which both reduces 429 throttling and avoids the
+    // 300s function timeout that otherwise surfaces as a generic fetch failure.
+    // Graph caps the page size server-side if needed and returns @odata.nextLink,
+    // which the loop below already follows.
     const graphApps: GraphUnmanagedApp[] = [];
-    let nextUrl: string | null = `${GRAPH_API_BASE}/deviceManagement/detectedApps?$top=100`;
+    let nextUrl: string | null = `${GRAPH_API_BASE}/deviceManagement/detectedApps?$top=1000`;
 
     while (nextUrl) {
       const graphResponse: Response = await fetchWithRetry(nextUrl, {
