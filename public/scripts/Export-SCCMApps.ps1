@@ -220,15 +220,19 @@ function Get-DeploymentTypeDetails {
                     $details.uninstallCommand = $uninstallAction.'#text'
                 }
 
-                # Execution context
-                $executionContext = $installer.InstallAction.Args.Arg |
+                # Execution context. Do not name this $executionContext: that
+                # collides with PowerShell's read-only automatic $ExecutionContext
+                # variable and throws "Cannot overwrite variable ExecutionContext
+                # because it is read-only or constant", which aborts deployment
+                # type parsing and leaves installBehavior and friends null.
+                $execContextArg = $installer.InstallAction.Args.Arg |
                     Where-Object { $_.Name -eq "ExecutionContext" }
-                if ($executionContext) {
-                    $details.installBehavior = switch ($executionContext.'#text') {
+                if ($execContextArg) {
+                    $details.installBehavior = switch ($execContextArg.'#text') {
                         "System" { "InstallForSystem" }
                         "User" { "InstallForUser" }
                         "Any" { "InstallForSystemIfResourceIsDeviceOtherwiseInstallForUser" }
-                        default { $executionContext.'#text' }
+                        default { $execContextArg.'#text' }
                     }
                 }
 
