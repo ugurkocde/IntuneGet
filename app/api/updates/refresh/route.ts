@@ -9,6 +9,7 @@ import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { GET as getLiveIntuneUpdates } from '@/app/api/intune/apps/updates/route';
+import { notifyUserOfPendingUpdates } from '@/lib/notifications/notify-user';
 import type { AppUpdateInfo } from '@/types/inventory';
 
 interface RefreshRequestBody {
@@ -95,24 +96,45 @@ export async function POST(request: NextRequest) {
 
     const liveData = (await liveResponse.json()) as LiveUpdatesResponse;
     const now = new Date().toISOString();
+
+    // Load the prior rows so the upsert can preserve notified_at for unchanged
+    // updates but reset it to null when latest_version changed. Without the
+    // reset, a row that was already notified for an older version keeps its
+    // notified_at and the next version bump is never notified.
+    const { data: priorRows } = await supabase
+      .from('update_check_results')
+      .select('winget_id, intune_app_id, latest_version, notified_at')
+      .eq('user_id', user.userId)
+      .eq('tenant_id', tenantId);
+    const priorMap = new Map<string, { latest_version: string; notified_at: string | null }>();
+    (priorRows as Array<{ winget_id: string; intune_app_id: string; latest_version: string; notified_at: string | null }> | null)?.forEach(
+      (r) => priorMap.set(`${r.winget_id}:${r.intune_app_id}`, { latest_version: r.latest_version, notified_at: r.notified_at })
+    );
+
     const rows = liveData.updates
       .filter((update) => Boolean(update.wingetId))
       .filter((update) => update.currentVersion !== 'Unknown')
-      .map((update) => ({
-        user_id: user.userId,
-        tenant_id: tenantId,
-        winget_id: update.wingetId as string,
-        intune_app_id: update.intuneApp.id,
-        display_name: update.intuneApp.displayName,
-        current_version: update.currentVersion,
-        latest_version: update.latestVersion,
-        is_critical: isCriticalUpdate(update.currentVersion, update.latestVersion),
-        is_managed: update.isManaged,
-        large_icon_type: update.intuneApp.largeIcon?.type || null,
-        large_icon_value: update.intuneApp.largeIcon?.value || null,
-        detected_at: now,
-        updated_at: now,
-      }));
+      .map((update) => {
+        const prior = priorMap.get(`${update.wingetId as string}:${update.intuneApp.id}`);
+        const notifiedAt =
+          prior && prior.latest_version === update.latestVersion ? prior.notified_at : null;
+        return {
+          user_id: user.userId,
+          tenant_id: tenantId,
+          winget_id: update.wingetId as string,
+          intune_app_id: update.intuneApp.id,
+          display_name: update.intuneApp.displayName,
+          current_version: update.currentVersion,
+          latest_version: update.latestVersion,
+          is_critical: isCriticalUpdate(update.currentVersion, update.latestVersion),
+          is_managed: update.isManaged,
+          large_icon_type: update.intuneApp.largeIcon?.type || null,
+          large_icon_value: update.intuneApp.largeIcon?.value || null,
+          notified_at: notifiedAt,
+          detected_at: now,
+          updated_at: now,
+        };
+      });
 
     if (rows.length > 0) {
       const { error: upsertError } = await supabase
@@ -162,10 +184,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Near-immediate notifications: if this refresh surfaced any new or changed
+    // update (notified_at reset to null above), deliver to the user's channels
+    // now instead of waiting for the daily cron. Force-send regardless of the
+    // user's email frequency, since they just ran an on-demand check. Failures
+    // here must not fail the refresh; the daily cron remains the backstop.
+    const hasPendingNotifications = rows.some((row) => row.notified_at === null);
+    let notified: { emailsSent: number; webhooksSent: number } | undefined;
+    if (hasPendingNotifications) {
+      try {
+        const res = await notifyUserOfPendingUpdates(supabase, user.userId, {
+          respectFrequency: false,
+        });
+        notified = { emailsSent: res.emailsSent, webhooksSent: res.webhooksSent };
+      } catch (notifyError) {
+        console.error(
+          'On-demand update notification failed:',
+          notifyError instanceof Error ? notifyError.message : notifyError
+        );
+      }
+    }
+
     return NextResponse.json({
       success: true,
       refreshedCount: rows.length,
       removedCount: staleIds.length,
+      ...(notified ? { notified } : {}),
       updateCount: liveData.updateCount,
       matchingSummary: {
         totalChecked: liveData.checkedApps?.length || 0,

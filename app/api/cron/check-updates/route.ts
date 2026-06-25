@@ -41,6 +41,7 @@ interface UpdateCheckInsert {
   latest_version: string;
   is_critical: boolean;
   is_managed: boolean;
+  notified_at: string | null;
   detected_at: string;
   updated_at: string;
 }
@@ -325,6 +326,23 @@ export async function GET(request: Request) {
         continue;
       }
 
+      // Load prior update rows for this batch so the upsert can preserve
+      // notified_at for unchanged updates but reset it to null when
+      // latest_version changed. Without the reset, an app that was already
+      // notified for an older version never notifies again on the next bump.
+      const { data: priorRows } = await supabase
+        .from('update_check_results')
+        .select('user_id, tenant_id, winget_id, intune_app_id, latest_version, notified_at')
+        .in('user_id', batch);
+      const priorMap = new Map<string, { latest_version: string; notified_at: string | null }>();
+      (priorRows as Array<{ user_id: string; tenant_id: string; winget_id: string; intune_app_id: string; latest_version: string; notified_at: string | null }> | null)?.forEach(
+        (r) =>
+          priorMap.set(`${r.user_id}:${r.tenant_id}:${r.winget_id}:${r.intune_app_id}`, {
+            latest_version: r.latest_version,
+            notified_at: r.notified_at,
+          })
+      );
+
       // Group by user and tenant
       const userTenantApps = new Map<string, UploadHistoryRecord[]>();
       deployedApps.forEach((app: UploadHistoryRecord) => {
@@ -376,6 +394,14 @@ export async function GET(request: Request) {
             // Check if it's a critical update (major version change)
             const isCritical = latestParsed.major > currentParsed.major;
 
+            // Preserve notified_at only when the same version is still pending;
+            // a changed latest_version resets it so the new version notifies.
+            const prior = priorMap.get(
+              `${userId}:${tenantId}:${app.winget_id}:${app.intune_app_id}`
+            );
+            const notifiedAt =
+              prior && prior.latest_version === latestVersion ? prior.notified_at : null;
+
             const updateRecord = {
               user_id: userId,
               tenant_id: tenantId,
@@ -388,6 +414,7 @@ export async function GET(request: Request) {
               // The cron only ever scans apps from upload_history, so every
               // detected update here is for an IntuneGet-managed app.
               is_managed: true,
+              notified_at: notifiedAt,
               detected_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
