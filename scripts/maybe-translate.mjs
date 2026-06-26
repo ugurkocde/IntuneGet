@@ -15,7 +15,10 @@ if (!process.env.GT_API_KEY) {
   process.exit(0);
 }
 
-const result = spawnSync('npx gt translate --ignore-errors', {
+// gt is no longer a declared dependency (it pulled in a heavy native module,
+// tree-sitter-python, that broke arm64 Docker builds). It is fetched on demand
+// here via npx, pinned to the v2 major, and only runs when GT_API_KEY is set.
+const result = spawnSync('npx -y gt@^2 translate --ignore-errors', {
   stdio: 'inherit',
   shell: true,
 });
