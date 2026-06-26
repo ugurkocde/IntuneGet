@@ -180,7 +180,12 @@ export class SnapshotCatalogSource implements CatalogSource {
                 WHEN lower(ca.name) LIKE lower(@q) || '%' OR ca.winget_id LIKE '%.' || @q || '%' THEN 1
                 ELSE 2
               END,
-              bm25(curated_fts) ASC,
+              -- Weight name matches highest, then publisher/tags, then
+              -- description. Mirrors the weighted tsvector the Postgres catalog
+              -- uses, so a name hit beats an incidental description hit. Column
+              -- order matches the curated_fts(name, publisher, description, tags)
+              -- definition; lower bm25 = better.
+              bm25(curated_fts, 10.0, 4.0, 1.0, 2.0) ASC,
               ca.popularity_rank IS NULL,
               ca.popularity_rank ASC
             LIMIT @limit
