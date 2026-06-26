@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { acquireConsentToken } from '@/lib/consent-token';
@@ -300,6 +300,25 @@ async function verifyConsentWithGraph(tenantId: string, justConsented = false): 
   return { verified: hasRequiredPermission, permissions };
 }
 
+/**
+ * Build the user-facing message for a fresh (non-cached) verification result.
+ */
+function messageForResult(result: GraphVerificationResult): string {
+  if (result.verified) return 'Admin consent verified';
+  switch (result.error) {
+    case 'consent_not_granted':
+      return 'Admin consent not granted. A Global Administrator must grant consent.';
+    case 'insufficient_intune_permissions':
+      return 'Intune permissions not granted. Please re-grant admin consent to include DeviceManagementApps.ReadWrite.All permission.';
+    case 'consent_propagating':
+      return 'Consent was granted. Microsoft is still propagating the new permissions to tokens - this typically takes 5-15 minutes. Please check again shortly.';
+    case 'missing_credentials':
+      return 'Server configuration error. Contact administrator.';
+    default:
+      return 'Unable to verify consent. Please check your connection and try again.';
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse<ConsentVerificationResult>> {
   try {
     // Get the authorization header
@@ -324,6 +343,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
     const userId = userInfo.userId;
     const userEmail = userInfo.userEmail;
 
+    // Hint from the client indicating admin consent was just granted.
+    // Lets us distinguish Microsoft's role-claim propagation delay from a
+    // genuine "insufficient permissions" scenario.
+    const justConsented = new URL(request.url).searchParams.get('justConsented') === 'true';
+
+    // Self-hosted sqlite deployments have no Supabase, which backs the consent
+    // cache and MSP tenant resolution. createServerClient() would throw here and
+    // surface as a 500 on the consent screen. In that mode, verify admin consent
+    // directly against Microsoft Graph for the signed-in user's tenant (no cache,
+    // single tenant).
+    if (!isSupabaseConfigured()) {
+      const verifyResult = await verifyConsentWithGraph(tenantId, justConsented);
+      return NextResponse.json({
+        verified: verifyResult.verified,
+        tenantId,
+        message: messageForResult(verifyResult),
+        cachedResult: false,
+        error: verifyResult.error,
+        permissions: verifyResult.permissions,
+      });
+    }
+
     const supabase = createServerClient();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
@@ -346,11 +387,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ConsentVe
     }
 
     tenantId = tenantResolution.tenantId;
-
-    // Hint from the client indicating admin consent was just granted.
-    // Lets us distinguish Microsoft's role-claim propagation delay from a
-    // genuine "insufficient permissions" scenario.
-    const justConsented = new URL(request.url).searchParams.get('justConsented') === 'true';
 
     // First, check if we have a cached consent record in the database
     const hasStoredConsent = await checkStoredConsent(tenantId);
