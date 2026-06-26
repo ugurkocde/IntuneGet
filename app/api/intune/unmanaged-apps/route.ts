@@ -31,7 +31,8 @@ const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  maxRetries = 5
+  maxRetries = 5,
+  deadlineAt?: number
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const response = await fetch(url, options);
@@ -54,6 +55,13 @@ async function fetchWithRetry(
       delayMs = Math.pow(2, attempt) * 1000;
     }
     delayMs = Math.min(delayMs, 30000);
+
+    // Stop retrying if the backoff would run past the caller's overall time
+    // budget. Returning the throttled response lets the caller fall back to
+    // cached data instead of a single page's retries blowing the whole budget.
+    if (deadlineAt !== undefined && Date.now() + delayMs >= deadlineAt) {
+      return response;
+    }
 
     console.warn(
       `Graph API ${status} on attempt ${attempt + 1}/${maxRetries + 1}, retrying in ${delayMs}ms`
@@ -217,7 +225,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check cache first (unless force refresh)
+    // Check cache first (unless force refresh). Serve any cached data we have -
+    // fresh when within the TTL, otherwise the last sync marked stale - so
+    // opening the Discovered Apps tab returns immediately. A full Graph re-scan
+    // can run for minutes on large tenants, so we never block a normal page load
+    // on it; the user refreshes explicitly (forceRefresh) to pull the latest,
+    // and that path is time-bounded below. Only when there is no cached data at
+    // all do we fetch inline here.
     if (!forceRefresh) {
       const { data: cachedApps } = await supabase
         .from('discovered_apps_cache')
@@ -229,9 +243,15 @@ export async function GET(request: NextRequest) {
         const lastSynced = new Date(cachedApps[0].last_synced).getTime();
         const isCacheValid = Date.now() - lastSynced < CACHE_DURATION_MS;
 
-        if (isCacheValid) {
-          return buildCachedAppsResponse(supabase, tenantId, includeSystem, cachedApps);
-        }
+        return buildCachedAppsResponse(
+          supabase,
+          tenantId,
+          includeSystem,
+          cachedApps,
+          isCacheValid
+            ? undefined
+            : 'Showing the last synced results. Use Refresh to fetch the latest.'
+        );
       }
     }
 
@@ -254,16 +274,29 @@ export async function GET(request: NextRequest) {
     // 300s function timeout that otherwise surfaces as a generic fetch failure.
     // Graph caps the page size server-side if needed and returns @odata.nextLink,
     // which the loop below already follows.
+    // Bound the live scan so an extremely large tenant cannot run the function
+    // toward its 300s limit and make the client appear to hang. If we run out of
+    // budget mid-pagination we stop and fall back to the last cache (or return
+    // the partial set we collected) rather than waiting for the full scan.
+    const FETCH_BUDGET_MS = 90_000;
+    const fetchStartedAt = Date.now();
+    let budgetExceeded = false;
+
     const graphApps: GraphUnmanagedApp[] = [];
     let nextUrl: string | null = `${GRAPH_API_BASE}/deviceManagement/detectedApps?$top=1000`;
 
     while (nextUrl) {
-      const graphResponse: Response = await fetchWithRetry(nextUrl, {
-        headers: {
-          Authorization: `Bearer ${graphToken}`,
-          'Content-Type': 'application/json',
+      const graphResponse: Response = await fetchWithRetry(
+        nextUrl,
+        {
+          headers: {
+            Authorization: `Bearer ${graphToken}`,
+            'Content-Type': 'application/json',
+          },
         },
-      });
+        5,
+        fetchStartedAt + FETCH_BUDGET_MS
+      );
 
       if (!graphResponse.ok) {
         // Invalidate cached token on 401 (revoked/expired)
@@ -321,8 +354,29 @@ export async function GET(request: NextRequest) {
       graphApps.push(...pageApps);
       nextUrl = graphData['@odata.nextLink'] || null;
 
+      if (nextUrl && Date.now() - fetchStartedAt > FETCH_BUDGET_MS) {
+        budgetExceeded = true;
+        break;
+      }
+
       if (nextUrl) {
         await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+
+    // Ran out of time budget on a very large tenant: prefer the last complete
+    // cache over a slow partial scan. If there is no cache to fall back to, we
+    // continue with the partial set below but do not persist or prune the cache,
+    // so a later refresh can still seed it with a complete scan.
+    if (budgetExceeded) {
+      const staleResponse = await tryStaleCacheFallback(
+        supabase,
+        tenantId,
+        includeSystem,
+        'The discovered apps scan is taking longer than usual on this tenant'
+      );
+      if (staleResponse) {
+        return staleResponse;
       }
     }
 
@@ -457,21 +511,27 @@ export async function GET(request: NextRequest) {
       last_synced: now,
     }));
 
-    // Upsert new cache entries, then remove stale ones from previous syncs.
-    // This avoids a delete-then-insert race where concurrent requests could
-    // see an empty cache and both hit the Graph API.
-    if (cacheRecords.length > 0) {
+    // Persist the cache only for a complete scan. A partial scan (budget
+    // exceeded with no prior cache to fall back to) must not be written as the
+    // authoritative cache or used to prune rows, otherwise it would look like a
+    // complete result on the next load.
+    if (!budgetExceeded) {
+      // Upsert new cache entries, then remove stale ones from previous syncs.
+      // This avoids a delete-then-insert race where concurrent requests could
+      // see an empty cache and both hit the Graph API.
+      if (cacheRecords.length > 0) {
+        await supabase
+          .from('discovered_apps_cache')
+          .upsert(cacheRecords, { onConflict: 'tenant_id,discovered_app_id' });
+      }
+
+      // Remove entries from previous syncs that are no longer present
       await supabase
         .from('discovered_apps_cache')
-        .upsert(cacheRecords, { onConflict: 'tenant_id,discovered_app_id' });
+        .delete()
+        .eq('tenant_id', tenantId)
+        .lt('last_synced', now);
     }
-
-    // Remove entries from previous syncs that are no longer present
-    await supabase
-      .from('discovered_apps_cache')
-      .delete()
-      .eq('tenant_id', tenantId)
-      .lt('last_synced', now);
 
     // Only hide deployed apps - pending/deploying/failed should remain visible
     const visibleApps = unmanagedApps.filter(app => {
@@ -484,6 +544,13 @@ export async function GET(request: NextRequest) {
       total: visibleApps.length,
       lastSynced: now,
       fromCache: false,
+      ...(budgetExceeded
+        ? {
+            stale: true,
+            staleReason:
+              'Showing a partial result; this tenant has too many apps to scan in one request. Use Refresh to continue.',
+          }
+        : {}),
     } as UnmanagedAppsResponse);
   } catch (error) {
     console.error('Unmanaged apps API error:', error);
