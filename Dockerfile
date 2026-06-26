@@ -5,6 +5,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Toolchain for native node modules that have no prebuilt binary for the target
+# arch (notably tree-sitter-python from the gt translation tooling, and
+# better-sqlite3 used by sqlite mode). Required for the linux/arm64 multi-arch
+# build, where these compile from source via node-gyp.
+RUN apk add --no-cache python3 make g++
+
 # Install dependencies
 # Use npm install (not npm ci) so Sharp's platform-specific transitive deps
 # (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even when
