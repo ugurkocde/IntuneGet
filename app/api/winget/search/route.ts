@@ -28,13 +28,6 @@ async function searchCachedPackages(
   category?: string | null,
   sort: string = 'popular'
 ) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return null;
-  }
-
   const { data: curatedData, error: curatedError } = await getCatalogSource().searchApps(
     query,
     { limit, category: category || null }
@@ -67,16 +60,6 @@ async function searchCachedPackages(
 
 export async function GET(request: NextRequest) {
   try {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json(
-        {
-          error:
-            'App catalog requires a configured Supabase database. See docs/SELF_HOSTING.md - the catalog is not available in standalone SQLite mode.',
-        },
-        { status: 503, headers: { 'Cache-Control': 'no-store, max-age=0' } }
-      );
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q') || searchParams.get('query');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
