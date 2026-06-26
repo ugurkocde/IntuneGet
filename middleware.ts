@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createNextMiddleware } from 'gt-next/middleware';
 
 const PROTECTED_ROUTES = ['/dashboard'];
+
+// gt-next locale middleware in cookie-only mode (no path-based locale routing).
+// It resolves the UI locale once per request and writes it to the gt locale
+// cookie, so the server-rendered locale and the client provider read the same
+// value. Without this the locale was re-derived independently on the server
+// (Accept-Language) and the client, which showed up as a brief German->English
+// flip in client-rendered sections like Uploads (issue #136).
+const gtMiddleware = createNextMiddleware({ localeRouting: false });
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,7 +25,11 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.next();
+  // Pin the UI locale on page requests. API requests are skipped: their locale
+  // is irrelevant and must not drive the shared cookie.
+  const response = pathname.startsWith('/api')
+    ? NextResponse.next()
+    : gtMiddleware(request);
 
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'SAMEORIGIN');
