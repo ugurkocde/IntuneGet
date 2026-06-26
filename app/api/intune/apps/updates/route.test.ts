@@ -21,6 +21,9 @@ vi.mock('@/lib/auth-utils', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
+  // getCatalogSource() now branches on isSupabaseConfigured(); the route
+  // imports it transitively, so the mock must provide it (Supabase mode).
+  isSupabaseConfigured: () => true,
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({

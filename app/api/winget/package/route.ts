@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPackage, getPackageVersions, getInstallers } from '@/lib/winget-api';
 import { fetchSimilarPackages } from '@/lib/manifest-api';
 
-export const runtime = 'edge';
-
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

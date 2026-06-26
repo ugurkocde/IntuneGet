@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCatalogSource } from '@/lib/catalog';
 
-export const runtime = 'edge';
 export const fetchCache = 'force-no-store';
 
 interface CuratedAppResult {

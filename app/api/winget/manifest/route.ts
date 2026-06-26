@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getManifest, getInstallers, getBestInstaller, getPackage } from '@/lib/winget-api';
 import { fetchSimilarPackages, fetchAvailableVersions } from '@/lib/manifest-api';
 
-export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
   try {

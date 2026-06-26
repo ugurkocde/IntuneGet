@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getCategories } from '@/lib/winget-api';
 import { getCatalogSource } from '@/lib/catalog';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
