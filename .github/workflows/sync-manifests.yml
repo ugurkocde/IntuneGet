@@ -819,3 +819,58 @@ jobs:
                 -f trigger_source="sync-manifests" || echo "Scan workflow not available or failed to trigger"
             fi
           fi
+
+  # ── Job 4: Catalog snapshot ──────────────────────────────────────────
+  # After the daily sync, export the public catalog tables to a SQLite
+  # snapshot and publish it on the rolling `catalog-latest` release so
+  # self-hosted (Supabase-less) instances can download the catalog.
+  snapshot:
+    needs: [plan, sync]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build catalog snapshot
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SNAPSHOT_OUT_DIR: ./snapshot
+        run: node scripts/build-catalog-snapshot.mjs
+
+      - name: Publish to catalog-latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view catalog-latest >/dev/null 2>&1; then
+            gh release create catalog-latest \
+              --title "App catalog snapshot (self-hosted)" \
+              --notes "Rolling SQLite snapshot of the public IntuneGet app catalog, rebuilt daily. Self-hosted instances in DATABASE_MODE=sqlite download \`manifest.json\` then \`catalog.sqlite.gz\` (verify against the manifest sha256). Contains only public catalog data (curated apps, version/installer metadata, global SCCM mappings) - no user or tenant data." \
+              --prerelease \
+              --latest=false
+          fi
+          gh release upload catalog-latest snapshot/catalog.sqlite.gz snapshot/manifest.json --clobber
+
+      - name: Summary
+        run: |
+          echo "## Catalog Snapshot Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f snapshot/manifest.json ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat snapshot/manifest.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Assets: https://github.com/${{ github.repository }}/releases/tag/catalog-latest" >> $GITHUB_STEP_SUMMARY
+          fi
