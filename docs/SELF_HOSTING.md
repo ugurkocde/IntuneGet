@@ -131,12 +131,26 @@ If `DATABASE_MODE=sqlite`, also set:
 |----------|-------------|
 | `PACKAGER_API_KEY` | Shared key between web app and local packager API mode |
 
-> **Important**: `DATABASE_MODE=sqlite` covers packaging jobs and upload
-> history only. The app catalog (the `curated_apps` and `version_history`
-> tables) requires a Supabase database, which is seeded by the
-> `build-app-list` and `sync-manifests` GitHub Actions workflows. Without
-> Supabase, catalog browsing and search are unavailable and the catalog API
-> routes return `503`.
+Optional catalog snapshot overrides (sensible defaults, normally unset):
+
+| Variable | Description |
+|----------|-------------|
+| `CATALOG_SNAPSHOT_BASE_URL` | HTTPS base URL to fetch `manifest.json` + `catalog.sqlite.gz` from. Defaults to the public `catalog-latest` GitHub release. |
+| `CATALOG_SNAPSHOT_DIR` | Directory to store the downloaded snapshot. Defaults to the directory of `DATABASE_PATH` (e.g. `./data`). |
+| `CATALOG_SNAPSHOT_FILE` | Path to a trusted local `catalog.sqlite` to use directly, skipping all downloading (fully offline). |
+
+> **App catalog in SQLite mode**: when `DATABASE_MODE=sqlite` and Supabase is
+> not configured, the app catalog (browse, search, categories, update detection,
+> SCCM matching) is served from a **downloaded SQLite snapshot** instead of
+> Supabase. On first use the app downloads `catalog.sqlite.gz` from the public
+> `catalog-latest` GitHub release, verifies its sha256 against the published
+> manifest, opens it read-only, and re-checks daily. Requirements: the optional
+> `better-sqlite3` package installed (it is in the Docker image), a writable data
+> directory, and outbound HTTPS to `github.com`. For a fully offline install,
+> point `CATALOG_SNAPSHOT_FILE` at a snapshot you fetched yourself.
+>
+> Note: other Supabase-backed surfaces (dashboard history, notifications, MSP
+> features) still require Supabase; only the catalog runs Supabase-less.
 
 ### Pipeline Configuration
 

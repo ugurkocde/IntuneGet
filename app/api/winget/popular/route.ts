@@ -7,19 +7,6 @@ type SortBy = 'popular' | 'name' | 'newest';
 
 export async function GET(request: NextRequest) {
   try {
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            'App catalog requires a configured Supabase database. See docs/SELF_HOSTING.md - the catalog is not available in standalone SQLite mode.',
-        },
-        { status: 503, headers: { 'Cache-Control': 'no-store, max-age=0' } }
-      );
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const requestedLimit = parseInt(searchParams.get('limit') || '20', 10);
     const requestedOffset = parseInt(searchParams.get('offset') || '0', 10);
