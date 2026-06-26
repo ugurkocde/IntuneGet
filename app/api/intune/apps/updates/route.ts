@@ -16,6 +16,7 @@ import {
 import { compareVersions, hasUpdate, normalizeVersion } from '@/lib/version-compare';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { getCatalogSource } from '@/lib/catalog';
 import type { IntuneWin32App, AppUpdateInfo } from '@/types/inventory';
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
@@ -301,16 +302,11 @@ export async function GET(request: NextRequest) {
     const wingetIdsToLookup = Array.from(new Set(matchedApps.map((m) => m.wingetId)));
 
     if (wingetIdsToLookup.length > 0) {
-      const { data: cachedPackages, error: cacheError } = await supabase
-        .from('curated_apps')
-        .select('winget_id, latest_version')
-        .in('winget_id', wingetIdsToLookup);
+      const cachedPackages = await getCatalogSource().getAppsByWingetIds(wingetIdsToLookup);
 
-      if (!cacheError && cachedPackages) {
-        for (const pkg of cachedPackages as CuratedPackageRow[]) {
-          if (pkg.latest_version) {
-            versionMap.set(pkg.winget_id, pkg.latest_version);
-          }
+      for (const pkg of cachedPackages as CuratedPackageRow[]) {
+        if (pkg.latest_version) {
+          versionMap.set(pkg.winget_id, pkg.latest_version);
         }
       }
     }

@@ -22,6 +22,7 @@ import {
 } from '@/lib/rate-limit';
 import { createAppSuggestionIssue } from '@/lib/github-issues';
 import { checkWingetPackageExists } from '@/lib/winget-existence';
+import { getCatalogSource } from '@/lib/catalog';
 
 /**
  * GET /api/community/suggestions
@@ -182,12 +183,7 @@ export async function POST(request: NextRequest) {
 
     // Check if app already exists in curated_apps (case-insensitive: users
     // often type a differently-cased but otherwise correct id)
-    const { data: existingApp } = await supabase
-      .from('curated_apps')
-      .select('id, winget_id')
-      .ilike('winget_id', winget_id)
-      .limit(1)
-      .maybeSingle();
+    const existingApp = await getCatalogSource().appExistsCaseInsensitive(winget_id);
 
     if (existingApp) {
       return NextResponse.json(
@@ -206,14 +202,9 @@ export async function POST(request: NextRequest) {
     if (existence === 'not-found') {
       // Offer close matches from the catalog to help correct the id
       const lastSegment = winget_id.split('.').pop() || winget_id;
-      const { data: similar } = await supabase
-        .from('curated_apps')
-        .select('winget_id, name')
-        .or(`winget_id.ilike.%${lastSegment}%,name.ilike.%${lastSegment}%`)
-        .eq('is_verified', true)
-        .limit(3);
+      const similar = await getCatalogSource().findSimilarVerifiedApps(lastSegment, 3);
 
-      const matches = (similar || []).map((s) => s.winget_id);
+      const matches = similar.map((s) => s.winget_id);
       const hint =
         matches.length > 0
           ? ` Did you mean: ${matches.join(', ')}?`

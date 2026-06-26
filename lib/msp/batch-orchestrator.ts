@@ -5,6 +5,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import { getCatalogSource } from '@/lib/catalog';
 import { getDatabase } from '@/lib/db';
 import {
   isGitHubActionsConfigured,
@@ -542,20 +543,7 @@ async function advanceBatch(batchId: string): Promise<boolean> {
  * Returns undefined when the app is not in the catalog or has no description.
  */
 async function lookupAppDescription(wingetId: string): Promise<string | undefined> {
-  const supabase = createServerClient();
-
-  const { data, error } = await supabase
-    .from('curated_apps')
-    .select('description')
-    .eq('winget_id', wingetId)
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data?.description || typeof data.description !== 'string') {
-    return undefined;
-  }
-
-  return data.description;
+  return getCatalogSource().getAppDescription(wingetId);
 }
 
 /**
@@ -566,18 +554,9 @@ async function lookupInstallerDetails(
   wingetId: string,
   version: string
 ): Promise<InstallerDetails | null> {
-  const supabase = createServerClient();
+  const data = await getCatalogSource().getLatestVersionInstallerInfo(wingetId, version);
 
-  const { data, error } = await supabase
-    .from('version_history')
-    .select('installer_url, installer_sha256, installer_type, installer_scope, installers')
-    .eq('winget_id', wingetId)
-    .eq('version', version)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error || !data) {
+  if (!data) {
     return null;
   }
 

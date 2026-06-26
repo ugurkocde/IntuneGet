@@ -14,6 +14,7 @@ import {
   canAutoUpdate,
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
+import { getCatalogSource } from '@/lib/catalog';
 
 interface TriggerResult {
   success: boolean;
@@ -676,29 +677,26 @@ export function createAutoUpdateTrigger(): AutoUpdateTrigger | null {
  * Get installer info from curated_apps and version_history
  */
 export async function getLatestInstallerInfo(
-  supabase: SupabaseClient,
+  // Kept for call-site compatibility; the catalog source owns client creation.
+  _supabase: SupabaseClient,
   wingetId: string
 ): Promise<UpdateInfo | null> {
-  // Get the curated app info
-  const { data: curatedApp, error: appError } = await supabase
-    .from('curated_apps')
-    .select('winget_id, name, latest_version')
-    .eq('winget_id', wingetId)
-    .single();
+  const catalog = getCatalogSource();
 
-  if (appError || !curatedApp?.latest_version) {
+  // Get the curated app info
+  const curatedApp = await catalog.getAppForInstaller(wingetId);
+
+  if (!curatedApp?.latest_version) {
     return null;
   }
 
   // Get the version history for the latest version
-  const { data: versionInfo, error: versionError } = await supabase
-    .from('version_history')
-    .select('installer_url, installer_sha256, installer_type, installers')
-    .eq('winget_id', wingetId)
-    .eq('version', curatedApp.latest_version)
-    .single();
+  const versionInfo = await catalog.getVersionInstallerInfo(
+    wingetId,
+    curatedApp.latest_version
+  );
 
-  if (versionError || !versionInfo) {
+  if (!versionInfo) {
     return null;
   }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getCategories } from '@/lib/winget-api';
+import { getCatalogSource } from '@/lib/catalog';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -26,11 +26,7 @@ export async function GET() {
     // Get actual total count of verified apps (not just sum of categories)
     let totalApps = categories.reduce((sum, cat) => sum + cat.count, 0);
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { count } = await supabase
-      .from('curated_apps')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_verified', true);
+    const count = await getCatalogSource().getCategoryCount({ verifiedOnly: true });
 
     if (count !== null) {
       totalApps = count;

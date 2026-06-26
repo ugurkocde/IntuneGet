@@ -4,7 +4,6 @@
  * Uses GitHub raw manifests for installer data via manifest-api.ts
  */
 
-import { createClient } from '@supabase/supabase-js';
 import type {
   WingetManifest,
   WingetInstaller,
@@ -18,20 +17,8 @@ import {
   getBestInstaller as getManifestBestInstaller,
   fetchAvailableVersions,
 } from './manifest-api';
-import { getLocaleDisplay } from './locale-utils';
-import type { LocaleVariant } from '@/types/winget';
-
-// Supabase client for server-side operations
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    throw new Error('Supabase configuration missing');
-  }
-
-  return createClient(url, key);
-}
+import { getCatalogSource } from './catalog';
+import type { CuratedAppRpcRow } from './catalog/types';
 
 /**
  * Extended package type with curated app fields
@@ -55,15 +42,11 @@ export async function searchPackages(
   }
 
   try {
-    const supabase = getSupabaseClient();
-
     // Search curated apps
-    const { data: curatedData, error: curatedError } = await supabase
-      .rpc('search_curated_apps', {
-        search_query: query,
-        category_filter: category || null,
-        result_limit: limit,
-      });
+    const { data: curatedData, error: curatedError } = await getCatalogSource().searchApps(
+      query,
+      { limit, category: category || null }
+    );
 
     if (!curatedError && curatedData && curatedData.length > 0) {
       return curatedData.map(normalizeCuratedApp);
@@ -91,44 +74,13 @@ export async function getPackage(packageId: string): Promise<CuratedPackage | nu
   }
 
   try {
-    const supabase = getSupabaseClient();
-
     // Try curated_apps first
-    const { data: curatedData } = await supabase
-      .from('curated_apps')
-      .select('*')
-      .eq('winget_id', packageId)
-      .single();
+    const curated = await getCatalogSource().getAppByWingetId(packageId);
 
-    if (curatedData) {
-      // Get versions from version_history
-      const { data: versionData } = await supabase
-        .from('version_history')
-        .select('version')
-        .eq('winget_id', packageId)
-        .order('created_at', { ascending: false });
-
-      const versions = versionData?.map(v => v.version) || [];
-
-      // Fetch locale variants if this is a parent app (not a variant itself)
-      let localeVariants: LocaleVariant[] | undefined;
-      if (!curatedData.is_locale_variant) {
-        const { data: variantData } = await supabase.rpc('get_locale_variants', {
-          parent_id: packageId,
-        });
-        if (variantData && variantData.length > 0) {
-          localeVariants = variantData.map((v: { winget_id: string; locale_code: string; latest_version: string | null }) => {
-            const display = getLocaleDisplay(v.locale_code);
-            return {
-              wingetId: v.winget_id,
-              localeCode: v.locale_code,
-              localeName: display.name,
-              countryFlag: display.flag,
-              version: v.latest_version || undefined,
-            };
-          });
-        }
-      }
+    if (curated) {
+      const curatedData = curated.app;
+      const versions = curated.versions;
+      const localeVariants = curated.localeVariants;
 
       return {
         id: curatedData.winget_id,
@@ -179,17 +131,11 @@ export async function getPackage(packageId: string): Promise<CuratedPackage | nu
  */
 export async function getPackageVersions(packageId: string): Promise<string[]> {
   try {
-    const supabase = getSupabaseClient();
-
     // Try version_history table first
-    const { data } = await supabase
-      .from('version_history')
-      .select('version')
-      .eq('winget_id', packageId)
-      .order('created_at', { ascending: false });
+    const versions = await getCatalogSource().getVersions(packageId);
 
-    if (data && data.length > 0) {
-      return data.map(v => v.version);
+    if (versions.length > 0) {
+      return versions;
     }
 
     // Fallback to manifest API
@@ -241,13 +187,10 @@ export async function getPopularPackages(
   category?: string
 ): Promise<CuratedPackage[]> {
   try {
-    const supabase = getSupabaseClient();
-
-    const { data: curatedData, error: curatedError } = await supabase
-      .rpc('get_popular_curated_apps', {
-        result_limit: limit,
-        category_filter: category || null,
-      });
+    const { data: curatedData, error: curatedError } = await getCatalogSource().getPopularPackages(
+      limit,
+      category || null
+    );
 
     if (curatedError) {
       console.error('Error getting popular packages:', curatedError);
@@ -270,19 +213,7 @@ export async function getPopularPackages(
  */
 export async function getCategories(): Promise<{ category: string; count: number }[]> {
   try {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase.rpc('get_curated_categories');
-
-    if (error) {
-      console.error('Error getting categories:', error);
-      return [];
-    }
-
-    return (data || []).map((c: { category: string; app_count: number }) => ({
-      category: c.category,
-      count: c.app_count,
-    }));
+    return await getCatalogSource().getCategories();
   } catch (error) {
     console.error('Error getting categories:', error);
     return [];
@@ -297,19 +228,7 @@ export async function getInstallationChangelog(
   version?: string
 ): Promise<InstallationSnapshot | null> {
   try {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase
-      .rpc('get_installation_changelog', {
-        app_winget_id: wingetId,
-        app_version: version || null,
-      });
-
-    if (error || !data || data.length === 0) {
-      return null;
-    }
-
-    return data[0] as InstallationSnapshot;
+    return await getCatalogSource().getInstallationChangelog(wingetId, version);
   } catch (error) {
     console.error('Error getting installation changelog:', error);
     return null;
@@ -386,22 +305,22 @@ export interface InstallationSnapshot {
 
 // Helper functions
 
-function normalizeCuratedApp(app: Record<string, unknown>): CuratedPackage {
+function normalizeCuratedApp(app: CuratedAppRpcRow): CuratedPackage {
   return {
-    id: app.winget_id as string,
-    name: app.name as string,
-    publisher: app.publisher as string,
-    version: app.latest_version as string || '',
-    description: app.description as string | undefined,
-    homepage: app.homepage as string | undefined,
+    id: app.winget_id,
+    name: app.name,
+    publisher: app.publisher,
+    version: app.latest_version || '',
+    description: app.description ?? undefined,
+    homepage: app.homepage ?? undefined,
     license: undefined,
-    tags: app.tags as string[] || [],
+    tags: app.tags || [],
     versions: undefined,
-    iconPath: app.icon_path as string | undefined,
-    category: app.category as string | undefined,
-    popularityRank: app.popularity_rank as number | undefined,
+    iconPath: app.icon_path ?? undefined,
+    category: app.category ?? undefined,
+    popularityRank: app.popularity_rank ?? undefined,
     appSource: app.app_source === 'store' ? 'store' : 'win32',
-    packageIdentifier: app.store_package_id as string | undefined,
+    packageIdentifier: app.store_package_id ?? undefined,
   };
 }
 

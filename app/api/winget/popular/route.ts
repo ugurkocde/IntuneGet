@@ -1,99 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getCatalogSource } from '@/lib/catalog';
 
 export const runtime = 'edge';
 export const fetchCache = 'force-no-store';
 
-interface CuratedAppResult {
-  id: number;
-  winget_id: string;
-  name: string;
-  publisher: string;
-  latest_version: string;
-  description: string | null;
-  homepage: string | null;
-  category: string | null;
-  tags: string[] | null;
-  icon_path: string | null;
-  popularity_rank: number | null;
-  app_source: string | null;
-  store_package_id: string | null;
-}
-
 type SortBy = 'popular' | 'name' | 'newest';
-
-interface PopularPackagesResult {
-  data: CuratedAppResult[];
-  total: number;
-}
-
-async function getCuratedPackages(
-  limit: number,
-  offset: number,
-  category: string | null,
-  sort: SortBy
-): Promise<PopularPackagesResult | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return null;
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  const baseQuery = supabase
-    .from('curated_apps')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_verified', true)
-    .eq('is_locale_variant', false);
-
-  const countQuery = category ? baseQuery.eq('category', category) : baseQuery;
-  const { count: totalCount, error: countError } = await countQuery;
-
-  if (countError) {
-    console.error('Failed to count curated packages', { error: countError, category });
-    return null;
-  }
-
-  let dataQuery = supabase
-    .from('curated_apps')
-    .select('id, winget_id, name, publisher, latest_version, description, homepage, category, tags, icon_path, popularity_rank, app_source, store_package_id')
-    .eq('is_verified', true)
-    .eq('is_locale_variant', false);
-
-  if (category) {
-    dataQuery = dataQuery.eq('category', category);
-  }
-
-  switch (sort) {
-    case 'name':
-      dataQuery = dataQuery.order('name', { ascending: true });
-      break;
-    case 'newest':
-      dataQuery = dataQuery.order('created_at', { ascending: false });
-      break;
-    case 'popular':
-    default:
-      dataQuery = dataQuery
-        .order('popularity_rank', { ascending: true, nullsFirst: false })
-        .order('name', { ascending: true });
-      break;
-  }
-
-  const { data, error } = await dataQuery.range(offset, offset + limit - 1);
-
-  if (error) {
-    console.error('Failed to query curated packages', { error, category, sort, limit, offset });
-    return null;
-  }
-
-  return {
-    data: (data || []) as CuratedAppResult[],
-    total: totalCount || 0,
-  };
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -126,12 +37,12 @@ export async function GET(request: NextRequest) {
       ? Math.max(requestedOffset, 0)
       : 0;
 
-    const result = await getCuratedPackages(
-      sanitizedLimit,
-      sanitizedOffset,
+    const result = await getCatalogSource().getPopularApps({
+      limit: sanitizedLimit,
+      offset: sanitizedOffset,
       category,
-      sort
-    );
+      sort,
+    });
 
     if (!result) {
       return NextResponse.json(

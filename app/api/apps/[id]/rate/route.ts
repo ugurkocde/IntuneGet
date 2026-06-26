@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
   ratingSchema,
@@ -162,11 +163,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const supabase = createServerClient();
 
     // Verify the app exists
-    const { data: existingApp } = await supabase
-      .from('curated_apps')
-      .select('id, winget_id')
-      .eq('winget_id', decodedAppId)
-      .single();
+    const existingApp = await getCatalogSource().appExists(decodedAppId);
 
     if (!existingApp) {
       return NextResponse.json(

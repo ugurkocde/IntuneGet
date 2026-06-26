@@ -11,6 +11,7 @@ import {
   type MatchResult,
 } from './app-matcher';
 import { APP_MAPPINGS, getWingetIdFromName, searchCuratedApps } from '@/lib/app-mappings';
+import { getCatalogSource } from '@/lib/catalog';
 import type {
   SccmApplication,
   SccmMsiDetectionClause,
@@ -121,82 +122,20 @@ export function getPrimaryDeploymentType(app: SccmApplication) {
 export async function checkSccmMapping(
   app: SccmApplication,
   tenantId: string,
-  supabaseClient: { from: (table: string) => unknown }
+  // Kept for call-site compatibility; the catalog source owns client creation.
+  _supabaseClient?: { from: (table: string) => unknown }
 ): Promise<SccmMatchResult | null> {
   const normalizedName = app.localizedDisplayName.toLowerCase().trim();
   const productCode = extractProductCode(app);
 
-  // sccm_winget_mappings columns are snake_case. Read the row with the actual
-  // column names: reading camelCase here returned undefined and threw on
-  // wingetPackageId.split(...), which surfaced as a 500 on Run Matching for any
-  // app that hit a seeded mapping (e.g. "google chrome").
-  type SccmWingetMappingRow = {
-    id: string;
-    winget_package_id: string | null;
-    winget_package_name: string | null;
-    confidence: number | null;
-    is_verified: boolean | null;
-    tenant_id: string | null;
-    sccm_product_code: string | null;
-  };
-
-  // Build the OR conditions defensively: quote values so names containing
-  // spaces or parentheses (e.g. "Zoom Workplace (64-bit)") don't break the
-  // PostgREST or() parser, and only filter on product code when one exists
-  // (eq.null would not match NULL rows anyway).
-  const quote = (v: string) => `"${v.replace(/"/g, '')}"`;
-  const orConditions = [
-    `sccm_display_name_normalized.eq.${quote(normalizedName)}`,
-    `sccm_ci_id.eq.${quote(String(app.ci_id ?? ''))}`,
-  ];
-  if (productCode) {
-    orConditions.push(`sccm_product_code.eq.${quote(productCode)}`);
-  }
-
-  // Query custom SCCM mappings
-  const { data, error } = await (supabaseClient.from('sccm_winget_mappings') as {
-    select: (columns: string) => {
-      or: (filter: string) => {
-        order: (column: string, options: { ascending: boolean }) => {
-          limit: (count: number) => Promise<{
-            data: SccmWingetMappingRow[] | null;
-            error: { message: string } | null;
-          }>;
-        };
-      };
-    };
-  })
-    .select('*')
-    .or(orConditions.join(','))
-    .order('is_verified', { ascending: false })
-    .limit(1);
-
-  if (error || !data || data.length === 0) {
-    return null;
-  }
-
-  const mapping = data[0];
-
-  // Check tenant scope
-  if (mapping.tenant_id && mapping.tenant_id !== tenantId) {
-    return null;
-  }
-
-  // Guard against a mapping row without a winget package id.
-  const wingetId = mapping.winget_package_id;
-  if (!wingetId) {
-    return null;
-  }
-
-  return {
-    status: 'matched',
-    wingetId,
-    wingetName: mapping.winget_package_name || wingetId.split('.').pop() || wingetId,
-    confidence: mapping.confidence ?? 1.0,
-    partialMatches: [],
-    matchedBy: mapping.sccm_product_code && productCode ? 'product_code' : 'mapping',
-    mappingId: mapping.id,
-  };
+  return getCatalogSource().getSccmMapping(
+    {
+      displayNameNormalized: normalizedName,
+      ciId: String(app.ci_id ?? ''),
+      productCode,
+    },
+    tenantId
+  );
 }
 
 /**

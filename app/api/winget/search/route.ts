@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getCatalogSource } from '@/lib/catalog';
 
 export const runtime = 'edge';
 export const fetchCache = 'force-no-store';
@@ -36,15 +36,9 @@ async function searchCachedPackages(
     return null;
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-  const { data: curatedData, error: curatedError } = await supabase.rpc(
-    'search_curated_apps',
-    {
-      search_query: query,
-      category_filter: category || null,
-      result_limit: limit,
-    }
+  const { data: curatedData, error: curatedError } = await getCatalogSource().searchApps(
+    query,
+    { limit, category: category || null }
   );
 
   if (curatedError) {

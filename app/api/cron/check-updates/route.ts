@@ -13,6 +13,7 @@ import {
   getLatestInstallerInfo,
 } from '@/lib/auto-update/trigger';
 import { AppUpdatePolicy, shouldSkipUpdate } from '@/types/update-policies';
+import { getCatalogSource } from '@/lib/catalog';
 
 const BATCH_SIZE = 50;
 
@@ -24,11 +25,6 @@ interface UploadHistoryRecord {
   display_name: string;
   intune_app_id: string;
   intune_tenant_id: string | null;
-}
-
-interface CuratedApp {
-  winget_id: string;
-  latest_version: string;
 }
 
 interface UpdateCheckInsert {
@@ -264,18 +260,11 @@ export async function GET(request: Request) {
     }
 
     // Get all curated apps with their latest versions
-    const { data: curatedApps, error: curatedError } = await supabase
-      .from('curated_apps')
-      .select('winget_id, latest_version')
-      .not('latest_version', 'is', null);
-
-    if (curatedError) {
-      throw curatedError;
-    }
+    const curatedApps = await getCatalogSource().getAllLatestVersions();
 
     // Create a map for quick lookup
     const latestVersions = new Map<string, string>();
-    curatedApps?.forEach((app: CuratedApp) => {
+    curatedApps?.forEach((app) => {
       if (app.latest_version) {
         latestVersions.set(app.winget_id, app.latest_version);
       }

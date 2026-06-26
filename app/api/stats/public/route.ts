@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getCatalogSource } from '@/lib/catalog';
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, max-age=0, must-revalidate',
@@ -22,14 +23,12 @@ export async function GET() {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch site counters and curated apps count in parallel
-    const [countersResult, curatedAppsResult] = await Promise.all([
+    const [countersResult, catalogStats] = await Promise.all([
       supabase
         .from('site_counters')
         .select('*')
         .in('id', ['signin_clicks', 'apps_deployed']),
-      supabase
-        .from('curated_apps')
-        .select('*', { count: 'exact', head: true }),
+      getCatalogSource().getCatalogStats(),
     ]);
 
     if (countersResult.error) {
@@ -39,7 +38,7 @@ export async function GET() {
     const stats = {
       signinClicks: countersResult.data?.find((row) => row.id === 'signin_clicks')?.value ?? 0,
       appsDeployed: countersResult.data?.find((row) => row.id === 'apps_deployed')?.value ?? 0,
-      appsSupported: curatedAppsResult.count ?? 0,
+      appsSupported: catalogStats.totalApps,
     };
 
     return NextResponse.json(stats, {

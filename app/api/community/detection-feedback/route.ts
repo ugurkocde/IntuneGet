@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
   feedbackSchema,
@@ -58,11 +59,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify the app exists in curated_apps
-    const { data: existingApp } = await supabase
-      .from('curated_apps')
-      .select('id, winget_id, name')
-      .eq('winget_id', app_id)
-      .single();
+    const existingApp = await getCatalogSource().appExists(app_id);
 
     if (!existingApp) {
       return NextResponse.json(

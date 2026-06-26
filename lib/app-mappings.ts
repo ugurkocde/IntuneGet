@@ -3,6 +3,8 @@
  * Pre-defined mappings between common app names and their Winget IDs
  */
 
+import { getCatalogSource } from '@/lib/catalog';
+
 export interface AppMapping {
   wingetId: string;
   aliases: string[];
@@ -590,57 +592,10 @@ export interface CuratedAppMatch {
  */
 export async function searchCuratedApps(
   searchTerm: string,
-  supabaseClient: { from: (table: string) => unknown }
+  // Kept for call-site compatibility; the catalog source owns client creation.
+  _supabaseClient?: { from: (table: string) => unknown }
 ): Promise<CuratedAppMatch[]> {
-  if (!searchTerm || searchTerm.length < 2) {
-    return [];
-  }
-
-  const normalizedSearch = searchTerm.toLowerCase().trim();
-
-  try {
-    // Query curated_apps table for verified apps with latest_version
-    const { data, error } = await (supabaseClient.from('curated_apps') as {
-      select: (columns: string) => {
-        not: (column: string, operator: string, value: null) => {
-          or: (filter: string) => {
-            order: (column: string, options: { ascending: boolean; nullsFirst: boolean }) => {
-              limit: (count: number) => Promise<{ data: Array<{
-                winget_id: string;
-                name: string;
-                publisher: string;
-                latest_version: string | null;
-              }> | null; error: { message: string } | null }>;
-            };
-          };
-        };
-      };
-    })
-      .select('winget_id, name, publisher, latest_version')
-      .not('latest_version', 'is', null)
-      .or(`name.ilike.%${normalizedSearch}%,publisher.ilike.%${normalizedSearch}%,winget_id.ilike.%${normalizedSearch}%`)
-      .order('popularity_rank', { ascending: true, nullsFirst: false })
-      .limit(10);
-
-    if (error) {
-      console.error('Error searching curated apps:', error.message);
-      return [];
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    return data.map(app => ({
-      wingetId: app.winget_id,
-      name: app.name,
-      publisher: app.publisher,
-      latestVersion: app.latest_version,
-    }));
-  } catch (e) {
-    console.error('Failed to search curated apps:', e);
-    return [];
-  }
+  return getCatalogSource().searchCuratedAppsForMatching(searchTerm);
 }
 
 /**

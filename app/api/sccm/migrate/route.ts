@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { getCatalogSource } from '@/lib/catalog';
 import { getAuthFromRequest } from '@/lib/auth/parse-token';
 import { logMigrationHistoryAsync, createSuccessEntry } from '@/lib/sccm/history-logger';
 import {
@@ -105,15 +106,14 @@ function rowToAppRecord(row: SccmAppRow): SccmAppRecord {
  */
 async function fetchWingetPackage(
   wingetId: string,
-  supabase: ReturnType<typeof createServerClient>
+  // Kept for call-site compatibility; the catalog source owns client creation.
+  _supabase: ReturnType<typeof createServerClient>
 ): Promise<NormalizedPackage | null> {
-  const { data, error } = (await supabase
-    .from('curated_apps')
-    .select('winget_id, name, publisher, latest_version, description, homepage, license, tags, category, icon_path')
-    .eq('winget_id', wingetId)
-    .single()) as { data: CuratedAppRow | null; error: Error | null };
+  const data = (await getCatalogSource().getSccmCuratedApp(
+    wingetId
+  )) as CuratedAppRow | null;
 
-  if (error || !data) {
+  if (!data) {
     return null;
   }
 
@@ -136,16 +136,15 @@ async function fetchWingetPackage(
  */
 async function fetchBestInstaller(
   pkg: NormalizedPackage,
-  supabase: ReturnType<typeof createServerClient>
+  // Kept for call-site compatibility; the catalog source owns client creation.
+  _supabase: ReturnType<typeof createServerClient>
 ): Promise<NormalizedInstaller | null> {
-  const { data, error } = (await supabase
-    .from('version_history')
-    .select('installers, installer_url, installer_sha256, installer_type, installer_scope')
-    .eq('winget_id', pkg.id)
-    .eq('version', pkg.version)
-    .single()) as { data: VersionHistoryRow | null; error: Error | null };
+  const data = (await getCatalogSource().getVersionInstallerInfo(
+    pkg.id,
+    pkg.version
+  )) as VersionHistoryRow | null;
 
-  if (error || !data) {
+  if (!data) {
     return null;
   }
 

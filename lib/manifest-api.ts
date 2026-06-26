@@ -12,6 +12,7 @@ import type {
   NormalizedInstaller,
   WingetInstallerType,
 } from '@/types/winget';
+import { getCatalogSource } from '@/lib/catalog';
 
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests';
 const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
@@ -61,22 +62,14 @@ function getManifestPaths(wingetId: string) {
  * Priority: Supabase version_history -> GitHub API
  */
 export async function fetchAvailableVersions(wingetId: string): Promise<string[]> {
-  // Try Supabase first
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { data: versions } = await supabase
-        .from('version_history')
-        .select('version')
-        .eq('winget_id', wingetId)
-        .order('created_at', { ascending: false });
-
-      if (versions && versions.length > 0) {
-        return versions.map(v => v.version);
-      }
-    } catch (error) {
-      console.warn(`Supabase version lookup failed for ${wingetId}:`, error);
+  // Try the catalog first
+  try {
+    const versions = await getCatalogSource().getVersions(wingetId);
+    if (versions.length > 0) {
+      return versions;
     }
+  } catch (error) {
+    console.warn(`Supabase version lookup failed for ${wingetId}:`, error);
   }
 
   // Fallback to GitHub API

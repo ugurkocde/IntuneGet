@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
   AutoUpdateTrigger,
@@ -484,11 +485,7 @@ export async function POST(request: NextRequest) {
               // Distinguish missing installer data from a missing catalog
               // entry so the user knows whether waiting for the catalog
               // sync can help
-              const { data: catalogRow } = await supabase
-                .from('curated_apps')
-                .select('winget_id')
-                .eq('winget_id', req.winget_id)
-                .maybeSingle();
+              const catalogRow = await getCatalogSource().appExists(req.winget_id);
               response.failed++;
               response.results.push({
                 winget_id: req.winget_id,
@@ -729,28 +726,23 @@ export async function POST(request: NextRequest) {
  * that were never deployed through IntuneGet.
  */
 async function buildDefaultDeploymentConfig(
-  supabase: ReturnType<typeof createServerClient>,
+  // Kept for call-site compatibility; the catalog source owns client creation.
+  _supabase: ReturnType<typeof createServerClient>,
   wingetId: string,
   latestVersion: string
 ): Promise<DeploymentConfig | null> {
   // Get curated app info
-  const { data: curatedApp } = await supabase
-    .from('curated_apps')
-    .select('name, publisher')
-    .eq('winget_id', wingetId)
-    .single();
+  const curatedApp = await getCatalogSource().getAppNamePublisher(wingetId);
 
   if (!curatedApp) {
     return null;
   }
 
   // Get version history for installer metadata
-  const { data: versionInfo } = await supabase
-    .from('version_history')
-    .select('installer_url, installer_sha256, installer_type, installers')
-    .eq('winget_id', wingetId)
-    .eq('version', latestVersion)
-    .single();
+  const versionInfo = await getCatalogSource().getVersionInstallerInfo(
+    wingetId,
+    latestVersion
+  );
 
   if (!versionInfo?.installer_url) {
     return null;
