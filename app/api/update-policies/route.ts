@@ -6,8 +6,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
-import type { AppUpdatePolicyInput, AppUpdatePolicy } from '@/types/update-policies';
+import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
+import type { AppUpdatePolicyInput, AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { Json } from '@/types/database';
 
 /**
@@ -95,23 +97,102 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pin version requires a version
-    if (body.policy_type === 'pin_version' && !body.pinned_version) {
-      return NextResponse.json(
-        { error: 'pinned_version is required for pin_version policy' },
-        { status: 400 }
-      );
-    }
-
-    // Auto-update requires deployment config
-    if (body.policy_type === 'auto_update' && !body.deployment_config) {
-      return NextResponse.json(
-        { error: 'deployment_config is required for auto_update policy' },
-        { status: 400 }
-      );
-    }
-
     const supabase = createServerClient();
+
+    // Fields the client may omit for pin_version / auto_update. We derive them
+    // server-side below so the bell-icon dropdown can set these policies with
+    // just { winget_id, tenant_id, policy_type }.
+    let derivedPinnedVersion = body.pinned_version || null;
+    let derivedDeploymentConfig: DeploymentConfig | null = body.deployment_config || null;
+    let derivedOriginalUploadHistoryId = body.original_upload_history_id || null;
+
+    // Pin version requires a version. If the client didn't send one, derive the
+    // currently deployed version for this app.
+    if (body.policy_type === 'pin_version' && !derivedPinnedVersion) {
+      const { data: updateRow } = await supabase
+        .from('update_check_results')
+        .select('current_version')
+        .eq('user_id', user.userId)
+        .eq('tenant_id', body.tenant_id)
+        .eq('winget_id', body.winget_id)
+        .maybeSingle();
+
+      derivedPinnedVersion = updateRow?.current_version || null;
+
+      if (!derivedPinnedVersion) {
+        const { data: latestUpload } = await supabase
+          .from('upload_history')
+          .select('version')
+          .eq('user_id', user.userId)
+          .eq('intune_tenant_id', body.tenant_id)
+          .eq('winget_id', body.winget_id)
+          .order('deployed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        derivedPinnedVersion = latestUpload?.version || null;
+      }
+
+      if (!derivedPinnedVersion) {
+        return NextResponse.json(
+          { error: 'pinned_version is required for pin_version policy' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Auto-update requires a deployment config. If the client didn't send one,
+    // build it from the app's prior deployment or the catalog.
+    if (body.policy_type === 'auto_update' && !derivedDeploymentConfig) {
+      // Resolve the app's latest version: prefer the update check row, fall
+      // back to the catalog's latest_version.
+      const { data: updateRow } = await supabase
+        .from('update_check_results')
+        .select('latest_version')
+        .eq('user_id', user.userId)
+        .eq('tenant_id', body.tenant_id)
+        .eq('winget_id', body.winget_id)
+        .maybeSingle();
+
+      let latestVersion = updateRow?.latest_version || '';
+      if (!latestVersion) {
+        const catalogApp = await getCatalogSource().getAppForInstaller(body.winget_id);
+        latestVersion = catalogApp?.latest_version || '';
+      }
+
+      // Read the user's global carry-over setting (same source as the trigger route)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: userSettingsRow } = await (supabase as any)
+        .from('user_settings')
+        .select('settings')
+        .eq('user_id', user.userId)
+        .maybeSingle();
+      const userSettings = (userSettingsRow?.settings as Record<string, unknown> | null) || null;
+      const globalCarryOver = Boolean(userSettings?.carryOverAssignments);
+
+      const built = await buildDeploymentConfigForApp(supabase, {
+        userId: user.userId,
+        tenantId: body.tenant_id,
+        wingetId: body.winget_id,
+        latestVersion,
+        globalCarryOver,
+      });
+
+      if (built.status !== 'ok') {
+        return NextResponse.json(
+          {
+            error:
+              built.status === 'orphaned_job'
+                ? 'Could not retrieve the saved deployment configuration for this app.'
+                : 'Auto-update requires a prior deployment of this app, or the app must be in the catalog.',
+          },
+          { status: 400 }
+        );
+      }
+
+      derivedDeploymentConfig = built.deploymentConfig;
+      derivedOriginalUploadHistoryId = built.originalUploadHistoryId;
+    }
 
     // Check if policy already exists for this user/tenant/app
     const { data: existingPolicy } = await supabase
@@ -120,7 +201,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.userId)
       .eq('tenant_id', body.tenant_id)
       .eq('winget_id', body.winget_id)
-      .single();
+      .maybeSingle();
 
     // Build policy data - cast deployment_config to Json for database compatibility
     const policyData = {
@@ -128,9 +209,9 @@ export async function POST(request: NextRequest) {
       tenant_id: body.tenant_id,
       winget_id: body.winget_id,
       policy_type: body.policy_type,
-      pinned_version: body.policy_type === 'pin_version' ? body.pinned_version : null,
-      deployment_config: (body.deployment_config || null) as Json,
-      original_upload_history_id: body.original_upload_history_id || null,
+      pinned_version: body.policy_type === 'pin_version' ? derivedPinnedVersion : null,
+      deployment_config: (derivedDeploymentConfig || null) as Json,
+      original_upload_history_id: derivedOriginalUploadHistoryId,
       is_enabled: body.is_enabled ?? true,
       updated_at: new Date().toISOString(),
     };
