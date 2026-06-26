@@ -18,8 +18,8 @@ import {
 import { getAppConfig } from '@/lib/config';
 import { getFeatureFlags } from '@/lib/features';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
-import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
 import type { WorkflowInputs } from '@/lib/github-actions';
 import type {
   TriggerUpdateRequest,
@@ -27,247 +27,8 @@ import type {
   AppUpdatePolicy,
   DeploymentConfig,
 } from '@/types/update-policies';
-import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
-import type { AppRelationship, DetectionRule, RequirementRule } from '@/types/intune';
-import type { NormalizedInstaller } from '@/types/winget';
 import type { Json } from '@/types/database';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
-
-interface PackageConfigWithAssignments {
-  assignments?: PackageAssignment[];
-  categories?: IntuneAppCategorySelection[];
-  categoryIds?: string[];
-  assignedGroups?: Array<{
-    groupId?: string;
-    groupName?: string;
-    assignmentType?: 'required' | 'available' | 'uninstall' | 'updateOnly';
-  }>;
-  requirementRules?: RequirementRule[];
-  relationships?: AppRelationship[];
-  assignmentMigration?: {
-    carryOverAssignments?: boolean;
-    removeAssignmentsFromPreviousApp?: boolean;
-  };
-  carryOverAssignments?: boolean;
-  removeAssignmentsFromPreviousApp?: boolean;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function parsePackageAssignments(packageConfig: unknown): PackageAssignment[] {
-  if (!isObject(packageConfig)) {
-    return [];
-  }
-
-  const assignments = packageConfig.assignments;
-  if (Array.isArray(assignments)) {
-    return assignments.filter((assignment): assignment is PackageAssignment => {
-      if (!isObject(assignment)) {
-        return false;
-      }
-
-      const type = assignment.type;
-      const intent = assignment.intent;
-      if (
-        type !== 'allUsers' &&
-        type !== 'allDevices' &&
-        type !== 'group'
-      ) {
-        return false;
-      }
-
-      if (
-        intent !== 'required' &&
-        intent !== 'available' &&
-        intent !== 'uninstall' &&
-        intent !== 'updateOnly'
-      ) {
-        return false;
-      }
-
-      if (type === 'group') {
-        return typeof assignment.groupId === 'string' && assignment.groupId.length > 0;
-      }
-
-      return true;
-    });
-  }
-
-  const assignedGroups = packageConfig.assignedGroups;
-  if (!Array.isArray(assignedGroups)) {
-    return [];
-  }
-
-  return assignedGroups
-    .filter((group): group is { groupId: string; groupName?: string; assignmentType?: 'required' | 'available' | 'uninstall' | 'updateOnly' } => {
-      return isObject(group) && typeof group.groupId === 'string' && group.groupId.length > 0;
-    })
-    .map((group) => ({
-      type: 'group',
-      groupId: group.groupId,
-      groupName: typeof group.groupName === 'string' ? group.groupName : undefined,
-      intent: group.assignmentType || 'required',
-    }));
-}
-
-function parseRequirementRules(packageConfig: unknown): RequirementRule[] | undefined {
-  if (!isObject(packageConfig)) {
-    return undefined;
-  }
-  const typedConfig = packageConfig as PackageConfigWithAssignments;
-  if (Array.isArray(typedConfig.requirementRules) && typedConfig.requirementRules.length > 0) {
-    return typedConfig.requirementRules as RequirementRule[];
-  }
-  return undefined;
-}
-
-function parseAppRelationships(packageConfig: unknown): AppRelationship[] {
-  if (!isObject(packageConfig)) {
-    return [];
-  }
-
-  const relationships = packageConfig.relationships;
-  if (!Array.isArray(relationships)) {
-    return [];
-  }
-
-  return relationships.filter((relationship): relationship is AppRelationship => {
-    if (!isObject(relationship)) {
-      return false;
-    }
-
-    const relationshipType = relationship.relationshipType;
-    if (relationshipType !== 'dependency' && relationshipType !== 'supersedence') {
-      return false;
-    }
-
-    if (typeof relationship.targetId !== 'string' || relationship.targetId.length === 0) {
-      return false;
-    }
-
-    if (
-      relationship.dependencyType !== undefined &&
-      relationship.dependencyType !== 'detect' &&
-      relationship.dependencyType !== 'autoInstall'
-    ) {
-      return false;
-    }
-
-    if (
-      relationship.supersedenceType !== undefined &&
-      relationship.supersedenceType !== 'update' &&
-      relationship.supersedenceType !== 'replace'
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
-function parseAssignmentMigration(packageConfig: unknown): DeploymentConfig['assignmentMigration'] | undefined {
-  if (!isObject(packageConfig)) {
-    return undefined;
-  }
-
-  const typedConfig = packageConfig as PackageConfigWithAssignments;
-  const nested = typedConfig.assignmentMigration;
-
-  // If no migration config was explicitly set, return undefined so the
-  // caller can fall back to the user's global setting.
-  const hasExplicitNested = nested && (
-    nested.carryOverAssignments !== undefined ||
-    nested.removeAssignmentsFromPreviousApp !== undefined
-  );
-  const hasExplicitTop =
-    typedConfig.carryOverAssignments !== undefined ||
-    typedConfig.removeAssignmentsFromPreviousApp !== undefined;
-
-  if (!hasExplicitNested && !hasExplicitTop) {
-    return undefined;
-  }
-
-  const carryOverAssignments = Boolean(
-    nested?.carryOverAssignments ?? typedConfig.carryOverAssignments
-  );
-  const removeAssignmentsFromPreviousApp = Boolean(
-    nested?.removeAssignmentsFromPreviousApp ?? typedConfig.removeAssignmentsFromPreviousApp
-  );
-
-  return {
-    carryOverAssignments,
-    removeAssignmentsFromPreviousApp,
-  };
-}
-
-function parsePackageCategories(packageConfig: unknown): IntuneAppCategorySelection[] {
-  if (!isObject(packageConfig)) {
-    return [];
-  }
-
-  const typedConfig = packageConfig as PackageConfigWithAssignments;
-  const parsedCategories: IntuneAppCategorySelection[] = [];
-
-  if (Array.isArray(typedConfig.categories)) {
-    for (const category of typedConfig.categories) {
-      if (!isObject(category)) {
-        continue;
-      }
-
-      if (typeof category.id !== 'string' || category.id.length === 0) {
-        continue;
-      }
-
-      if (typeof category.displayName !== 'string' || category.displayName.length === 0) {
-        continue;
-      }
-
-      parsedCategories.push({
-        id: category.id,
-        displayName: category.displayName,
-      });
-    }
-  }
-
-  // Backward-compatible support for legacy shape with category IDs only
-  if (parsedCategories.length === 0 && Array.isArray(typedConfig.categoryIds)) {
-    for (const categoryId of typedConfig.categoryIds) {
-      if (typeof categoryId !== 'string' || categoryId.length === 0) {
-        continue;
-      }
-      parsedCategories.push({
-        id: categoryId,
-        displayName: categoryId,
-      });
-    }
-  }
-
-  const seen = new Set<string>();
-  return parsedCategories.filter((category) => {
-    if (seen.has(category.id)) {
-      return false;
-    }
-    seen.add(category.id);
-    return true;
-  });
-}
-
-function parseDetectionRules(value: unknown): DetectionRule[] {
-  return Array.isArray(value) ? (value as DetectionRule[]) : [];
-}
-
-function parsePsadtConfig(packageConfig: unknown): DeploymentConfig['psadtConfig'] {
-  if (!isObject(packageConfig)) {
-    return undefined;
-  }
-  const psadtConfig = packageConfig.psadtConfig;
-  if (!isObject(psadtConfig)) {
-    return undefined;
-  }
-  return psadtConfig as unknown as DeploymentConfig['psadtConfig'];
-}
 
 // Batches of up to 10 apps run sequentially (DB lookups, job creation, and a
 // workflow dispatch each); the platform default duration times out mid-batch
@@ -403,103 +164,43 @@ export async function POST(request: NextRequest) {
 
         // If no policy exists, check for prior deployment to get config
         if (!policy) {
-          // Get the original deployment config from upload_history
-          const { data: uploadHistory } = await supabase
-            .from('upload_history')
-            .select('id, packaging_job_id')
-            .eq('user_id', user.userId)
-            .eq('intune_tenant_id', req.tenant_id)
-            .eq('winget_id', req.winget_id)
-            .order('deployed_at', { ascending: false })
-            .limit(1)
-            .single();
+          const built = await buildDeploymentConfigForApp(supabase, {
+            userId: user.userId,
+            tenantId: req.tenant_id,
+            wingetId: req.winget_id,
+            latestVersion: updateResult.latest_version,
+            globalCarryOver,
+          });
 
-          let deploymentConfig: DeploymentConfig;
-          let originalUploadHistoryId: string | null = null;
-
-          if (uploadHistory?.packaging_job_id) {
-            // Has prior deployment: extract config from packaging job
-            const { data: packagingJob } = await supabase
-              .from('packaging_jobs')
-              .select('*')
-              .eq('id', uploadHistory.packaging_job_id)
-              .single();
-
-            if (!packagingJob) {
-              response.failed++;
-              response.results.push({
-                winget_id: req.winget_id,
-                tenant_id: req.tenant_id,
-                success: false,
-                error: 'Could not retrieve deployment configuration',
-              });
-              continue;
-            }
-
-            const packageConfig = packagingJob.package_config;
-            const parsedAssignments = parsePackageAssignments(packageConfig);
-            const parsedCategories = parsePackageCategories(packageConfig);
-            const parsedRequirementRules = parseRequirementRules(packageConfig);
-            const parsedRelationships = parseAppRelationships(packageConfig);
-            let assignmentMigration = parseAssignmentMigration(packageConfig);
-
-            // If no explicit migration config was stored on the packaging job,
-            // fall back to the user's global carryOverAssignments setting
-            // (read once for the whole batch above).
-            // Note: createPackagingJob() also re-reads the global setting at
-            // trigger time, so the value here is for policy record consistency.
-            if (!assignmentMigration) {
-              assignmentMigration = {
-                carryOverAssignments: globalCarryOver,
-                removeAssignmentsFromPreviousApp: globalCarryOver,
-              };
-            }
-
-            deploymentConfig = {
-              displayName: packagingJob.display_name,
-              publisher: packagingJob.publisher || 'Unknown Publisher',
-              architecture: packagingJob.architecture || 'x64',
-              installerType: packagingJob.installer_type || 'exe',
-              installCommand: packagingJob.install_command || '',
-              uninstallCommand: packagingJob.uninstall_command || '',
-              installScope: packagingJob.install_scope || 'system',
-              detectionRules: parseDetectionRules(packagingJob.detection_rules),
-              assignments: parsedAssignments,
-              categories: parsedCategories,
-              requirementRules: parsedRequirementRules,
-              relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
-              psadtConfig: parsePsadtConfig(packageConfig),
-              forceCreateNewApp: true,
-              assignmentMigration,
-            };
-            originalUploadHistoryId = uploadHistory.id;
-          } else {
-            // No prior deployment: build config from curated catalog data
-            const defaultConfig = await buildDefaultDeploymentConfig(
-              supabase,
-              req.winget_id,
-              updateResult.latest_version
-            );
-
-            if (!defaultConfig) {
-              // Distinguish missing installer data from a missing catalog
-              // entry so the user knows whether waiting for the catalog
-              // sync can help
-              const catalogRow = await getCatalogSource().appExists(req.winget_id);
-              response.failed++;
-              response.results.push({
-                winget_id: req.winget_id,
-                tenant_id: req.tenant_id,
-                success: false,
-                error: catalogRow
-                  ? `No installer data is available for ${req.winget_id} ${updateResult.latest_version} yet - the catalog has not synced this version's manifest. Try again after the next catalog sync.`
-                  : `${req.winget_id} is not in the app catalog, so a deployment configuration cannot be built for it.`,
-              });
-              continue;
-            }
-
-            deploymentConfig = defaultConfig;
+          if (built.status === 'orphaned_job') {
+            response.failed++;
+            response.results.push({
+              winget_id: req.winget_id,
+              tenant_id: req.tenant_id,
+              success: false,
+              error: 'Could not retrieve deployment configuration',
+            });
+            continue;
           }
+
+          if (built.status === 'unavailable') {
+            // Distinguish missing installer data from a missing catalog
+            // entry so the user knows whether waiting for the catalog
+            // sync can help
+            const catalogRow = await getCatalogSource().appExists(req.winget_id);
+            response.failed++;
+            response.results.push({
+              winget_id: req.winget_id,
+              tenant_id: req.tenant_id,
+              success: false,
+              error: catalogRow
+                ? `No installer data is available for ${req.winget_id} ${updateResult.latest_version} yet - the catalog has not synced this version's manifest. Try again after the next catalog sync.`
+                : `${req.winget_id} is not in the app catalog, so a deployment configuration cannot be built for it.`,
+            });
+            continue;
+          }
+
+          const { deploymentConfig, originalUploadHistoryId } = built;
 
           // Create a policy for this manual trigger
           const { data: newPolicy, error: policyError } = await supabase
@@ -719,89 +420,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Build a deployment config from curated catalog data for apps
- * that were never deployed through IntuneGet.
- */
-async function buildDefaultDeploymentConfig(
-  // Kept for call-site compatibility; the catalog source owns client creation.
-  _supabase: ReturnType<typeof createServerClient>,
-  wingetId: string,
-  latestVersion: string
-): Promise<DeploymentConfig | null> {
-  // Get curated app info
-  const curatedApp = await getCatalogSource().getAppNamePublisher(wingetId);
-
-  if (!curatedApp) {
-    return null;
-  }
-
-  // Get version history for installer metadata
-  const versionInfo = await getCatalogSource().getVersionInstallerInfo(
-    wingetId,
-    latestVersion
-  );
-
-  if (!versionInfo?.installer_url) {
-    return null;
-  }
-
-  // Resolve architecture-specific installer (prefer x64)
-  let installerUrl = versionInfo.installer_url;
-  let installerSha256 = versionInfo.installer_sha256 || '';
-  let installerType = versionInfo.installer_type || 'exe';
-  let architecture = 'x64';
-
-  if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    type InstallerEntry = { Architecture?: string; InstallerUrl?: string; InstallerSha256?: string; InstallerType?: string };
-    const installers = versionInfo.installers as InstallerEntry[];
-    const x64Installer = installers.find(
-      (i) => i.Architecture === 'x64'
-    );
-    if (x64Installer) {
-      installerUrl = x64Installer.InstallerUrl || installerUrl;
-      installerSha256 = x64Installer.InstallerSha256 || installerSha256;
-      installerType = x64Installer.InstallerType || installerType;
-    } else if (installers.length > 0) {
-      // Use first available installer's architecture
-      const first = installers[0];
-      if (first?.Architecture) {
-        architecture = first.Architecture.toLowerCase();
-      }
-    }
-  }
-
-  // Build a NormalizedInstaller for detection rule generation
-  const normalizedInstaller: NormalizedInstaller = {
-    architecture: architecture as NormalizedInstaller['architecture'],
-    url: installerUrl,
-    sha256: installerSha256,
-    type: installerType as NormalizedInstaller['type'],
-    scope: 'machine',
-  };
-
-  const installCommand = generateInstallCommand(normalizedInstaller, 'machine');
-  const uninstallCommand = generateUninstallCommand(normalizedInstaller, curatedApp.name);
-  const detectionRules = generateDetectionRules(
-    normalizedInstaller,
-    curatedApp.name,
-    wingetId,
-    latestVersion
-  );
-
-  return {
-    displayName: curatedApp.name,
-    publisher: curatedApp.publisher || 'Unknown Publisher',
-    architecture,
-    installerType,
-    installCommand,
-    uninstallCommand,
-    installScope: 'system',
-    detectionRules,
-    assignments: [],
-    categories: [],
-    forceCreateNewApp: true,
-  };
 }

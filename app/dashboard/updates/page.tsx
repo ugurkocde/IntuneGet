@@ -5,6 +5,7 @@ import { T, Var } from "gt-next";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
+import { toast } from 'sonner';
 import {
   RefreshCw,
   AlertTriangle,
@@ -271,8 +272,12 @@ export default function UpdatesPage() {
         policy_type: policyType,
       });
       refetchUpdates();
-    } catch {
-      // Policy update failed; don't refetch stale data
+    } catch (err) {
+      // Surface the failure instead of silently swallowing it; don't refetch
+      // stale data on failure.
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update the policy. Please try again.'
+      );
     }
   }, [updatePolicy, refetchUpdates]);
 
