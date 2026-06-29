@@ -23,10 +23,34 @@ export const maxDuration = 300;
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
+// Hard ceiling on a single Graph request. A heavily throttled tenant can leave
+// the connection open instead of returning 429 promptly; without this an
+// in-flight fetch would run toward the function's maxDuration and hang the tab
+// (the root cause in #125). Aborting lets the caller fall back to cache/partial.
+const PER_REQUEST_TIMEOUT_MS = 20_000;
+
+/**
+ * Raised when the overall scan time budget is exhausted (a request was aborted
+ * because the caller's deadline passed). The caller treats this like a partial
+ * scan: serve cached data, a partial result, or a clear "try again" error -
+ * never hang waiting on the full collection.
+ */
+class GraphScanTimeoutError extends Error {
+  constructor(message = 'Discovered apps scan exceeded its time budget') {
+    super(message);
+    this.name = 'GraphScanTimeoutError';
+  }
+}
 
 /**
  * Fetch with retry logic for Graph API rate limiting (429) and transient errors (5xx).
  * Respects Retry-After header; falls back to exponential backoff capped at 30s.
+ *
+ * Every request is bounded by an AbortSignal: a per-request timeout, plus the
+ * caller's overall deadline. A stalled Graph connection is therefore aborted
+ * rather than allowed to run the function to its maxDuration limit. When the
+ * overall deadline is hit, a GraphScanTimeoutError is thrown so the caller can
+ * fall back to cached/partial data.
  */
 async function fetchWithRetry(
   url: string,
@@ -35,9 +59,50 @@ async function fetchWithRetry(
   deadlineAt?: number
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, options);
-    const status = response.status;
+    if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+      throw new GraphScanTimeoutError();
+    }
 
+    // Bound this request: abort on the per-request timeout, the overall
+    // deadline, or any caller-supplied signal, whichever fires first.
+    const signals = [AbortSignal.timeout(PER_REQUEST_TIMEOUT_MS)];
+    if (deadlineAt !== undefined) {
+      // Past the deadline is already handled by the pre-check above; only add a
+      // deadline signal when time remains (timeout(0) would fire immediately).
+      const remaining = deadlineAt - Date.now();
+      if (remaining > 0) {
+        signals.push(AbortSignal.timeout(remaining));
+      }
+    }
+    if (options.signal) {
+      signals.push(options.signal);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url, { ...options, signal: AbortSignal.any(signals) });
+    } catch (err) {
+      // Abort (per-request timeout / deadline) or a transient network error.
+      // If the overall budget is gone, surface a typed timeout so the caller
+      // falls back instead of hanging. Otherwise retry within budget.
+      if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+        throw new GraphScanTimeoutError();
+      }
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      const delayMs = Math.min(Math.pow(2, attempt) * 1000, 30000);
+      if (deadlineAt !== undefined && Date.now() + delayMs >= deadlineAt) {
+        throw new GraphScanTimeoutError();
+      }
+      console.warn(
+        `Graph API request error on attempt ${attempt + 1}/${maxRetries + 1}, retrying in ${delayMs}ms`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      continue;
+    }
+
+    const status = response.status;
     const isRetryable = status === 429 || status >= 500;
     if (!isRetryable || attempt === maxRetries) {
       return response;
@@ -287,7 +352,7 @@ export async function GET(request: NextRequest) {
     // toward its 300s limit and make the client appear to hang. If we run out of
     // budget mid-pagination we stop and fall back to the last cache (or return
     // the partial set we collected) rather than waiting for the full scan.
-    const FETCH_BUDGET_MS = 90_000;
+    const FETCH_BUDGET_MS = 45_000;
     const fetchStartedAt = Date.now();
     let budgetExceeded = false;
 
@@ -295,17 +360,29 @@ export async function GET(request: NextRequest) {
     let nextUrl: string | null = `${GRAPH_API_BASE}/deviceManagement/detectedApps?$top=1000`;
 
     while (nextUrl) {
-      const graphResponse: Response = await fetchWithRetry(
-        nextUrl,
-        {
-          headers: {
-            Authorization: `Bearer ${graphToken}`,
-            'Content-Type': 'application/json',
+      let graphResponse: Response;
+      try {
+        graphResponse = await fetchWithRetry(
+          nextUrl,
+          {
+            headers: {
+              Authorization: `Bearer ${graphToken}`,
+              'Content-Type': 'application/json',
+            },
           },
-        },
-        5,
-        fetchStartedAt + FETCH_BUDGET_MS
-      );
+          5,
+          fetchStartedAt + FETCH_BUDGET_MS
+        );
+      } catch (err) {
+        // Ran out of the overall time budget mid-request (a stalled/throttled
+        // page was aborted). Stop paging and fall back to cache/partial below
+        // instead of letting the request hang toward maxDuration.
+        if (err instanceof GraphScanTimeoutError) {
+          budgetExceeded = true;
+          break;
+        }
+        throw err;
+      }
 
       if (!graphResponse.ok) {
         // Invalidate cached token on 401 (revoked/expired)
@@ -389,6 +466,20 @@ export async function GET(request: NextRequest) {
       if (staleResponse) {
         return staleResponse;
       }
+    }
+
+    // Budget ran out before a single page came back and there is no cache to
+    // fall back to (e.g. a first load on a heavily throttled tenant). Returning
+    // an empty "partial" list would look like the tenant has no apps, so surface
+    // an actionable throttling error instead.
+    if (budgetExceeded && graphApps.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            'Microsoft Graph is throttling this tenant, so the discovered apps scan timed out. This is common on large tenants right after several syncs. Please wait a minute and try Refresh again.',
+        },
+        { status: 503 }
+      );
     }
 
     // Consolidate apps: group by normalized name+publisher, keep newest version, sum device counts
@@ -528,26 +619,33 @@ export async function GET(request: NextRequest) {
       last_synced: now,
     }));
 
-    // Persist the cache only for a complete scan. A partial scan (budget
-    // exceeded with no prior cache to fall back to) must not be written as the
-    // authoritative cache or used to prune rows, otherwise it would look like a
-    // complete result on the next load.
-    if (supabase && !budgetExceeded) {
-      // Upsert new cache entries, then remove stale ones from previous syncs.
-      // This avoids a delete-then-insert race where concurrent requests could
-      // see an empty cache and both hit the Graph API.
+    // Persist the scan results. Both complete and partial scans upsert their
+    // rows, so a heavily throttled tenant that can never finish a full scan in
+    // one request (the #125 case) still accumulates a usable cache across
+    // retries instead of discarding every incomplete pass. The difference is
+    // pruning: only a complete scan removes rows from previous syncs, because a
+    // partial scan never reached most apps and pruning would wrongly delete
+    // them. Upsert-then-prune (rather than delete-then-insert) also avoids a
+    // race where concurrent requests see an empty cache and both hit Graph.
+    if (supabase) {
       if (cacheRecords.length > 0) {
         await supabase
           .from('discovered_apps_cache')
           .upsert(cacheRecords, { onConflict: 'tenant_id,discovered_app_id' });
       }
 
-      // Remove entries from previous syncs that are no longer present
-      await supabase
-        .from('discovered_apps_cache')
-        .delete()
-        .eq('tenant_id', tenantId)
-        .lt('last_synced', now);
+      // Remove entries from previous syncs that are no longer present. Complete
+      // scans only - a partial scan's coverage is incomplete by definition.
+      // This runs even when the complete scan found zero apps, so a tenant that
+      // genuinely emptied out (every app uninstalled/now managed) is pruned
+      // rather than left showing phantom rows from an earlier sync.
+      if (!budgetExceeded) {
+        await supabase
+          .from('discovered_apps_cache')
+          .delete()
+          .eq('tenant_id', tenantId)
+          .lt('last_synced', now);
+      }
     }
 
     // Only hide deployed apps - pending/deploying/failed should remain visible
