@@ -477,12 +477,12 @@ $deferTimes = if ($psadtConfig.deferTimes) { [int]$psadtConfig.deferTimes } else
 # Extended welcome parameters
 $blockExecution = if ($psadtConfig.blockExecution) { $true } else { $false }
 $promptToSave = if ($psadtConfig.promptToSave) { $true } else { $false }
-$deferDeadline = $psadtConfig.deferDeadline
+$deferDeadline = if ($psadtConfig.deferDeadline) { ([string]$psadtConfig.deferDeadline) -replace "'", "''" -replace '`', '``' -replace '\$', '`$' } else { $null }
 $deferDays = $psadtConfig.deferDays
 $forceCloseCountdown = $psadtConfig.forceCloseProcessesCountdown
 $persistPrompt = if ($psadtConfig.persistPrompt) { $true } else { $false }
 $minimizeWindows = if ($psadtConfig.minimizeWindows) { $true } else { $false }
-$windowLocation = if ($psadtConfig.windowLocation) { $psadtConfig.windowLocation } else { 'Default' }
+$windowLocation = if ($psadtConfig.windowLocation) { ([string]$psadtConfig.windowLocation) -replace "'", "''" -replace '`', '``' -replace '\$', '`$' } else { 'Default' }
 $checkDiskSpace = if ($psadtConfig.checkDiskSpace) { $true } else { $false }
 $requiredDiskSpace = $psadtConfig.requiredDiskSpace
 $welcomeTitle = if ([string]::IsNullOrWhiteSpace($brandingWelcomeTitle)) { "$displayNameEscaped Installation" } else { $brandingWelcomeTitle -replace "'", "''" -replace '`', '``' -replace '\$', '`$' }
@@ -570,7 +570,8 @@ if ($progressConfig -and $progressConfig.enabled) {
         $progressParams += "-StatusMessage '$statusMsgEscaped'"
     }
     if ($progressConfig.windowLocation -and $progressConfig.windowLocation -ne 'Default') {
-        $progressParams += "-WindowLocation '$($progressConfig.windowLocation)'"
+        $progressWindowLocationEscaped = ([string]$progressConfig.windowLocation) -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+        $progressParams += "-WindowLocation '$progressWindowLocationEscaped'"
     }
     $progressParamsStr = if ($progressParams.Count -gt 0) { " $($progressParams -join ' ')" } else { "" }
     $progressCall = @(

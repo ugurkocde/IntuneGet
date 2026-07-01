@@ -806,14 +806,17 @@ jobs:
           }
 
           # Rename package to use display name for better identification in Intune
+          # Strip square brackets too: PowerShell treats [ ] as wildcard characters in Path
+          # parameters, so display names like "[Deprecated] Google Drive..." would silently
+          # break Get-Item / Move-Item without -LiteralPath.
           $displayName = $env:DISPLAY_NAME
-          $safeDisplayName = $displayName -replace '[\\/:*?"<>|]', '_'
+          $safeDisplayName = $displayName -replace '[\[\]\\/:*?"<>|]', '_'
           $packageFileName = "$safeDisplayName.intunewin"
           $newPath = Join-Path $outputDir $packageFileName
 
           if ($intunewinFile.Name -ne $packageFileName) {
-            Move-Item $intunewinFile.FullName $newPath -Force
-            $intunewinFile = Get-Item $newPath
+            Move-Item -LiteralPath $intunewinFile.FullName -Destination $newPath -Force
+            $intunewinFile = Get-Item -LiteralPath $newPath
           }
 
           echo "INTUNEWIN_PATH=$($intunewinFile.FullName)" >> $env:GITHUB_ENV

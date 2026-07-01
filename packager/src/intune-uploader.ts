@@ -151,8 +151,9 @@ export class IntuneUploader {
    */
   async uploadToIntune(
     job: PackagingJob,
-    intunewinPath: string,
+    encryptedContentPath: string,
     encryptionInfo: EncryptionInfo,
+    sizes: { unencryptedSize: number; encryptedSize: number },
     onProgress?: ProgressCallback
   ): Promise<IntuneAppResult> {
     const graphClient = new GraphClient(this.config, job.tenant_id);
@@ -168,16 +169,18 @@ export class IntuneUploader {
     this.logger.info('Created content version', { contentVersionId: contentVersion.id });
 
     // Step 3: Create content file (15%)
+    // Intune's mobileAppContentFile.size is the unencrypted content size and
+    // sizeEncrypted is the encrypted payload size; the encrypted payload (not
+    // the outer .intunewin) is what gets uploaded to Azure Storage.
     await onProgress?.(15, 'Preparing file upload...');
-    const fileInfo = await fs.promises.stat(intunewinPath);
-    const encryptedSize = fileInfo.size;
 
     const contentFile = await this.createContentFile(
       graphClient,
       app.id,
       contentVersion.id,
-      path.basename(intunewinPath),
-      encryptedSize
+      path.basename(encryptedContentPath),
+      sizes.unencryptedSize,
+      sizes.encryptedSize
     );
     this.logger.info('Created content file', { contentFileId: contentFile.id });
 
@@ -194,7 +197,7 @@ export class IntuneUploader {
     // Step 5: Upload file chunks (25-80%)
     await onProgress?.(25, 'Uploading package...');
     await this.uploadFileChunks(
-      intunewinPath,
+      encryptedContentPath,
       uploadInfo.azureStorageUri,
       async (percent) => {
         // Map chunk upload progress (0-100) to overall (25-80)
@@ -417,7 +420,8 @@ export class IntuneUploader {
     appId: string,
     contentVersionId: string,
     fileName: string,
-    size: number
+    size: number,
+    sizeEncrypted: number
   ): Promise<{ id: string }> {
     const response = await graphClient.post<{ id: string }>(
       `/deviceAppManagement/mobileApps/${appId}/microsoft.graph.win32LobApp/contentVersions/${contentVersionId}/files`,
@@ -425,7 +429,7 @@ export class IntuneUploader {
         '@odata.type': '#microsoft.graph.mobileAppContentFile',
         name: fileName,
         size: size,
-        sizeEncrypted: size,
+        sizeEncrypted: sizeEncrypted,
         isDependency: false,
       }
     );

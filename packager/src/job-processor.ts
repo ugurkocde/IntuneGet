@@ -13,6 +13,14 @@ import { createLogger, Logger } from './logger.js';
 
 interface PackagingResult {
   intunewinPath: string;
+  // Path to the inner AES-encrypted payload extracted from the .intunewin zip.
+  // This (not the outer .intunewin) is what must be uploaded to Azure Storage.
+  encryptedContentPath: string;
+  // Size of the original unencrypted content (from Detection.xml); Intune's
+  // mobileAppContentFile.size must be this value, not the encrypted size.
+  unencryptedContentSize: number;
+  // Size of the inner encrypted payload file (mobileAppContentFile.sizeEncrypted).
+  encryptedContentSize: number;
   encryptionInfo: {
     encryptionKey: string;
     macKey: string;
@@ -85,8 +93,12 @@ export class JobProcessor {
       await poller.updateJobProgress(job.id, 75, 'Uploading to Intune...');
       const intuneApp = await this.uploader.uploadToIntune(
         job,
-        result.intunewinPath,
+        result.encryptedContentPath,
         result.encryptionInfo,
+        {
+          unencryptedSize: result.unencryptedContentSize,
+          encryptedSize: result.encryptedContentSize,
+        },
         async (percent, message) => {
           // Map upload progress (0-100) to overall progress (75-95)
           const overallPercent = 75 + Math.floor(percent * 0.2);
@@ -877,31 +889,41 @@ ${steps}
 
     const intunewinPath = path.join(outputDir, intunewinFile);
 
-    // Extract encryption info from Detection.xml inside the intunewin
-    const encryptionInfo = await this.extractEncryptionInfo(intunewinPath);
-
-    return {
-      intunewinPath,
-      encryptionInfo,
-    };
+    // Extract encryption info AND the inner encrypted payload from the intunewin
+    return await this.extractPackageContents(intunewinPath, outputDir);
   }
 
   /**
-   * Extract encryption info from .intunewin file
+   * Extract encryption info and the inner encrypted content file from a
+   * .intunewin package.
+   *
+   * A .intunewin is a ZIP containing Metadata/Detection.xml (encryption keys,
+   * digest, the unencrypted content size, and the encrypted payload's file
+   * name) plus Contents/<encrypted-payload>. Intune expects the raw encrypted
+   * payload to be uploaded to Azure Storage - never the outer .intunewin zip -
+   * with size = UnencryptedContentSize and sizeEncrypted = the payload's size.
    */
-  private async extractEncryptionInfo(
-    intunewinPath: string
-  ): Promise<PackagingResult['encryptionInfo']> {
-    // The .intunewin file is a ZIP containing Detection.xml with encryption info
-    // Use PowerShell to extract and parse it
+  private async extractPackageContents(
+    intunewinPath: string,
+    outputDir: string
+  ): Promise<PackagingResult> {
+    const extractDir = path.join(outputDir, 'intunewin-extract');
+    const escapedIntunewin = intunewinPath.replace(/'/g, "''");
+    const escapedExtractDir = extractDir.replace(/'/g, "''");
+
     const script = `
       Add-Type -AssemblyName System.IO.Compression.FileSystem
-      $zip = [System.IO.Compression.ZipFile]::OpenRead('${intunewinPath.replace(/'/g, "''")}')
-      $entry = $zip.Entries | Where-Object { $_.Name -eq 'Detection.xml' }
-      $reader = New-Object System.IO.StreamReader($entry.Open())
-      $xml = [xml]$reader.ReadToEnd()
-      $reader.Close()
-      $zip.Dispose()
+      $extractDir = '${escapedExtractDir}'
+      if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+      [System.IO.Compression.ZipFile]::ExtractToDirectory('${escapedIntunewin}', $extractDir)
+
+      $detection = Get-ChildItem $extractDir -Filter 'Detection.xml' -Recurse | Select-Object -First 1
+      if (-not $detection) { throw 'Detection.xml not found inside .intunewin package' }
+      [xml]$xml = Get-Content $detection.FullName
+
+      $encryptedFileName = $xml.ApplicationInfo.FileName
+      $encryptedFile = Get-ChildItem $extractDir -Filter $encryptedFileName -Recurse | Select-Object -First 1
+      if (-not $encryptedFile) { throw "Encrypted content file '$encryptedFileName' not found inside .intunewin package" }
 
       @{
         EncryptionKey = $xml.ApplicationInfo.EncryptionInfo.EncryptionKey
@@ -911,20 +933,29 @@ ${steps}
         ProfileIdentifier = $xml.ApplicationInfo.EncryptionInfo.ProfileIdentifier
         FileDigest = $xml.ApplicationInfo.EncryptionInfo.FileDigest
         FileDigestAlgorithm = $xml.ApplicationInfo.EncryptionInfo.FileDigestAlgorithm
+        EncryptedContentPath = $encryptedFile.FullName
+        EncryptedContentSize = $encryptedFile.Length
+        UnencryptedContentSize = [long]$xml.ApplicationInfo.UnencryptedContentSize
       } | ConvertTo-Json
     `;
 
     const result = await this.runPowerShell(script);
-    const encryptionData = JSON.parse(result.trim());
+    const data = JSON.parse(result.trim());
 
     return {
-      encryptionKey: encryptionData.EncryptionKey,
-      macKey: encryptionData.MacKey,
-      initializationVector: encryptionData.InitializationVector,
-      mac: encryptionData.Mac,
-      profileIdentifier: encryptionData.ProfileIdentifier,
-      fileDigest: encryptionData.FileDigest,
-      fileDigestAlgorithm: encryptionData.FileDigestAlgorithm,
+      intunewinPath,
+      encryptedContentPath: data.EncryptedContentPath,
+      unencryptedContentSize: Number(data.UnencryptedContentSize),
+      encryptedContentSize: Number(data.EncryptedContentSize),
+      encryptionInfo: {
+        encryptionKey: data.EncryptionKey,
+        macKey: data.MacKey,
+        initializationVector: data.InitializationVector,
+        mac: data.Mac,
+        profileIdentifier: data.ProfileIdentifier || 'ProfileVersion1',
+        fileDigest: data.FileDigest,
+        fileDigestAlgorithm: data.FileDigestAlgorithm,
+      },
     };
   }
 

@@ -7,6 +7,8 @@ interface ParsedVersion {
   major: number;
   minor: number;
   patch: number;
+  /** All numeric release segments in order (e.g. [1, 2, 3, 4] for "1.2.3.4"). */
+  segments: number[];
   prerelease: string;
   build: string;
 }
@@ -18,12 +20,17 @@ export function parseVersion(version: string): ParsedVersion {
   // Remove leading 'v' if present
   const cleaned = version.replace(/^v/i, '').trim();
 
-  // Split by common separators and extract numeric parts
-  const parts = cleaned.split(/[.\-+]/);
+  // The release portion is everything before the first prerelease/build
+  // separator; keep every numeric segment (not just the first three) so that
+  // 4-part versions like "1.2.3.4" (common for winget/MSI) compare correctly.
+  const releasePart = cleaned.split(/[-+]/)[0];
+  const segments = releasePart
+    .split('.')
+    .map((p) => parseInt(p, 10) || 0);
 
-  const major = parseInt(parts[0], 10) || 0;
-  const minor = parseInt(parts[1], 10) || 0;
-  const patch = parseInt(parts[2], 10) || 0;
+  const major = segments[0] || 0;
+  const minor = segments[1] || 0;
+  const patch = segments[2] || 0;
 
   // Extract prerelease (alpha, beta, rc, etc.)
   let prerelease = '';
@@ -39,7 +46,7 @@ export function parseVersion(version: string): ParsedVersion {
     build = buildMatch[1];
   }
 
-  return { major, minor, patch, prerelease, build };
+  return { major, minor, patch, segments, prerelease, build };
 }
 
 /**
@@ -50,19 +57,15 @@ export function compareVersions(versionA: string, versionB: string): number {
   const a = parseVersion(versionA);
   const b = parseVersion(versionB);
 
-  // Compare major
-  if (a.major !== b.major) {
-    return a.major > b.major ? 1 : -1;
-  }
-
-  // Compare minor
-  if (a.minor !== b.minor) {
-    return a.minor > b.minor ? 1 : -1;
-  }
-
-  // Compare patch
-  if (a.patch !== b.patch) {
-    return a.patch > b.patch ? 1 : -1;
+  // Compare every numeric release segment in order (major.minor.patch.build...),
+  // treating a missing segment as 0 so "1.2.3" == "1.2.3.0" and "1.2.3.4" < "1.2.3.9".
+  const maxSegments = Math.max(a.segments.length, b.segments.length);
+  for (let i = 0; i < maxSegments; i++) {
+    const segA = a.segments[i] ?? 0;
+    const segB = b.segments[i] ?? 0;
+    if (segA !== segB) {
+      return segA > segB ? 1 : -1;
+    }
   }
 
   // Handle prerelease versions
