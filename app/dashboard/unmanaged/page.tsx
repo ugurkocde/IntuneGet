@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { T, Var } from 'gt-next';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -35,6 +35,11 @@ import { useUnmanagedApps } from '@/hooks/use-unmanaged-apps';
 import { useCartStore } from '@/stores/cart-store';
 import { staggerContainerFast, fadeUp } from '@/lib/animations/variants';
 import { cn } from '@/lib/utils';
+
+// Large tenants can surface thousands of detected apps; rendering (and stagger-
+// animating) them all at once freezes the main thread. Render incrementally.
+const INITIAL_VISIBLE_COUNT = 60;
+const VISIBLE_COUNT_STEP = 120;
 
 export default function UnmanagedAppsPage() {
   const {
@@ -82,6 +87,19 @@ export default function UnmanagedAppsPage() {
   const cartItemCount = useCartStore((state) => state.items.length);
 
   const prefersReducedMotion = useReducedMotion();
+
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
+
+  // Start over from the first page whenever the visible set changes shape
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+  }, [filters, viewMode]);
+
+  const visibleApps = useMemo(
+    () => filteredApps.slice(0, visibleCount),
+    [filteredApps, visibleCount]
+  );
+  const hiddenCount = filteredApps.length - visibleApps.length;
 
   // Determine empty state variant
   const emptyVariant = useMemo(() => {
@@ -402,7 +420,7 @@ export default function UnmanagedAppsPage() {
           animate="visible"
           className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
         >
-          {filteredApps.map((app) => (
+          {visibleApps.map((app) => (
             <motion.div key={app.discoveredAppId} variants={itemVariants}>
               <UnmanagedAppCard
                 app={app}
@@ -421,7 +439,7 @@ export default function UnmanagedAppsPage() {
           animate="visible"
           className="space-y-2"
         >
-          {filteredApps.map((app) => (
+          {visibleApps.map((app) => (
             <motion.div key={app.discoveredAppId} variants={itemVariants}>
               <UnmanagedListRow
                 app={app}
@@ -433,6 +451,19 @@ export default function UnmanagedAppsPage() {
             </motion.div>
           ))}
         </motion.div>
+      )}
+
+      {/* Incremental rendering: reveal the next batch on demand */}
+      {!emptyVariant && hiddenCount > 0 && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            onClick={() => setVisibleCount((count) => count + VISIBLE_COUNT_STEP)}
+            className="border-overlay/10 hover:bg-overlay/5 hover:border-accent-cyan/30"
+          >
+            <T>Show <Var>{Math.min(hiddenCount, VISIBLE_COUNT_STEP)}</Var> more (<Var>{hiddenCount}</Var> remaining)</T>
+          </Button>
+        </div>
       )}
 
       {/* Modals */}

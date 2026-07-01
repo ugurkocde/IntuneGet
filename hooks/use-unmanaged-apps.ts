@@ -148,7 +148,10 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
 
     try {
       const url = `/api/intune/unmanaged-apps${forceRefresh ? '?refresh=true' : ''}`;
+      // Hard client-side timeout: the route bounds its own scan, but if the
+      // request itself stalls the page must not spin forever.
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(120_000),
         headers: {
           Authorization: `Bearer ${accessToken}`,
           ...mspHeaders,
@@ -176,7 +179,13 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       return true;
     } catch (err) {
       console.error('Error fetching unmanaged apps:', err);
-      const message = err instanceof Error ? err.message : 'Failed to fetch unmanaged apps';
+      const timedOut =
+        err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+      const message = timedOut
+        ? 'The request took too long to respond. Your tenant may be throttled by Microsoft Graph - wait a minute and try again.'
+        : err instanceof Error
+          ? err.message
+          : 'Failed to fetch unmanaged apps';
       setError(message);
       return false;
     }
@@ -223,15 +232,26 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
       if (!accessToken) {
         throw new Error('Authentication failed. Please sign in again.');
       }
-      const response = await fetch(
-        `/api/intune/detected-app-devices?appId=${encodeURIComponent(app.discoveredAppId)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            ...mspHeaders,
-          },
+      let response: Response;
+      try {
+        // The route bounds its Graph fan-out to ~40s; this timeout only covers
+        // a stalled request so the modal never spins forever.
+        response = await fetch(
+          `/api/intune/detected-app-devices?appId=${encodeURIComponent(app.discoveredAppId)}`,
+          {
+            signal: AbortSignal.timeout(60_000),
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              ...mspHeaders,
+            },
+          }
+        );
+      } catch (err) {
+        if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+          throw new Error('The device list request timed out. Please try again in a moment.');
         }
-      );
+        throw err;
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Failed to load devices');

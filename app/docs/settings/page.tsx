@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   Callout,
+  CodeBlock,
   Table,
   TableHead,
   TableBody,
@@ -285,6 +286,38 @@ export default function SettingsPage() {
             </TableRow>
           </TableBody>
         </Table>
+
+        <h3 className="text-lg font-semibold text-text-primary mt-6 mb-3">
+          <T>Structured Payload Data</T>
+        </h3>
+        <p className="text-text-secondary mb-4">
+          <T>Every webhook payload includes a machine-readable <code>data</code>{" "}
+          object alongside the platform-specific message (Slack blocks, Teams
+          Adaptive Card, Discord embeds, or the raw custom payload). Use it to
+          process notifications programmatically without parsing the
+          presentation format:</T>
+        </p>
+        <CodeBlock language="json">
+{`{
+  "data": {
+    "event": "app_updates_available",
+    "timestamp": "2026-06-25T12:40:07Z",
+    "tenant_id": "00000000-0000-0000-0000-000000000000",
+    "tenant_name": "Contoso",
+    "summary": { "total": 1, "critical": 0 },
+    "updates": [
+      {
+        "displayName": "Notepad++",
+        "wingetId": "Notepad++.Notepad++",
+        "intuneAppId": "11111111-1111-1111-1111-111111111111",
+        "fromVersion": "8.9.4",
+        "toVersion": "8.9.6",
+        "isCritical": false
+      }
+    ]
+  }
+}`}
+        </CodeBlock>
 
         <Callout type="info" title="Webhook Security">
           <p>

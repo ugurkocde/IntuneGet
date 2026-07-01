@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
@@ -70,6 +70,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Maximum 10 updates can be triggered at once' },
         { status: 400 }
+      );
+    }
+
+    if (!isSupabaseConfigured()) {
+      const unavailableError =
+        'Update deployment requires Supabase and is not available on this self-hosted deployment';
+      return NextResponse.json(
+        {
+          success: false,
+          triggered: 0,
+          failed: updateRequests.length,
+          results: updateRequests.map((req) => ({
+            winget_id: req.winget_id,
+            tenant_id: req.tenant_id,
+            success: false,
+            error: unavailableError,
+          })),
+          error: unavailableError,
+        },
+        { status: 503 }
       );
     }
 

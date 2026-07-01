@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { compareVersions } from '@/lib/version-compare';
 import type { AvailableUpdate } from '@/types/update-policies';
@@ -30,6 +30,14 @@ export async function GET(request: NextRequest) {
     // By default only surface updates for IntuneGet-managed apps; fuzzy-matched
     // apps are opt-in to avoid accidentally updating mismatched/customized apps.
     const includeUnmanaged = searchParams.get('include_unmanaged') === 'true';
+
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        updates: [],
+        count: 0,
+        criticalCount: 0,
+      });
+    }
 
     const supabase = createServerClient();
 
@@ -183,6 +191,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         { error: 'action must be "dismiss" or "restore"' },
         { status: 400 }
+      );
+    }
+
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            'Update dismissal requires Supabase and is not available on this self-hosted deployment',
+        },
+        { status: 503 }
       );
     }
 

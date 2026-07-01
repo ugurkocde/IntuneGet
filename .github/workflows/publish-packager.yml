@@ -53,7 +53,7 @@ jobs:
 
             Install or update:
             ```bash
-            npm install -g @intuneget/packager
+            npm install -g @ugurkocde/intuneget-packager
             ```
 
             See [packager/README.md](https://github.com/${{ github.repository }}/blob/main/packager/README.md) for documentation.

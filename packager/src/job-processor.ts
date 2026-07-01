@@ -141,11 +141,25 @@ export class JobProcessor {
     const intuneWinUtil = path.join(toolsDir, 'IntuneWinAppUtil.exe');
     const psadtDir = path.join(toolsDir, 'PSAppDeployToolkit');
 
+    // A valid PSADT v4 template has Invoke-AppDeployToolkit.exe and the
+    // PSAppDeployToolkit module folder at its root. Packager versions before
+    // 1.2.0 extracted a v3-era layout (Toolkit/Deploy-Application.exe), so an
+    // existing folder is not enough - treat anything else as stale.
+    const isPsadtValid = () =>
+      fs.existsSync(path.join(psadtDir, 'Invoke-AppDeployToolkit.exe')) &&
+      fs.existsSync(path.join(psadtDir, 'PSAppDeployToolkit'));
+
+    if (fs.existsSync(psadtDir) && !isPsadtValid()) {
+      this.logger.warn('PSAppDeployToolkit folder has an outdated layout, re-downloading', {
+        psadtDir,
+      });
+      await fs.promises.rm(psadtDir, { recursive: true, force: true });
+    }
+
     // Check if tools exist
     const intuneWinExists = fs.existsSync(intuneWinUtil);
-    const psadtExists = fs.existsSync(psadtDir);
 
-    if (!intuneWinExists || !psadtExists) {
+    if (!intuneWinExists || !fs.existsSync(psadtDir)) {
       this.logger.info('Downloading required tools...');
 
       // Run the download script
@@ -162,6 +176,12 @@ export class JobProcessor {
     // Verify tools are now available
     if (!fs.existsSync(intuneWinUtil)) {
       throw new Error('IntuneWinAppUtil.exe not found after download');
+    }
+    if (!isPsadtValid()) {
+      throw new Error(
+        `PSAppDeployToolkit template is missing or incomplete at ${psadtDir}. ` +
+          'Delete the folder and run "intuneget-packager setup" to download it again.'
+      );
     }
 
     this.logger.debug('Tools verified', { toolsDir });
@@ -247,7 +267,15 @@ export class JobProcessor {
   private getInstallerFileName(job: PackagingJob): string {
     // Try to extract filename from URL
     const urlPath = new URL(job.installer_url).pathname;
-    const urlFileName = path.basename(urlPath);
+    let urlFileName = path.basename(urlPath);
+
+    // Store URL-encoded names decoded (Firefox%20Setup.exe -> Firefox Setup.exe),
+    // stripping any separators a decoded name could smuggle in
+    try {
+      urlFileName = path.basename(decodeURIComponent(urlFileName)).replace(/[\\/]/g, '');
+    } catch {
+      // Malformed escape sequence: keep the encoded name
+    }
 
     if (urlFileName && urlFileName.includes('.')) {
       return urlFileName;
@@ -308,9 +336,13 @@ export class JobProcessor {
 
     // Copy PSADT v4.1 toolkit files
     const psadtSource = path.join(this.config.paths.tools, 'PSAppDeployToolkit', 'PSAppDeployToolkit');
-    if (fs.existsSync(psadtSource)) {
-      await this.copyDirectory(psadtSource, toolkitDir);
+    if (!fs.existsSync(psadtSource)) {
+      throw new Error(
+        `PSAppDeployToolkit module not found at ${psadtSource}. ` +
+          'Run "intuneget-packager setup" to download the required tools.'
+      );
     }
+    await this.copyDirectory(psadtSource, toolkitDir);
 
     // Copy Config, Strings, and Assets directories for PSADT v4.1
     const configSource = path.join(this.config.paths.tools, 'PSAppDeployToolkit', 'Config');
@@ -332,9 +364,13 @@ export class JobProcessor {
       'PSAppDeployToolkit',
       'Invoke-AppDeployToolkit.exe'
     );
-    if (fs.existsSync(deployExeSource)) {
-      await fs.promises.copyFile(deployExeSource, path.join(packageDir, 'Invoke-AppDeployToolkit.exe'));
+    if (!fs.existsSync(deployExeSource)) {
+      throw new Error(
+        `Invoke-AppDeployToolkit.exe not found at ${deployExeSource}. ` +
+          'Run "intuneget-packager setup" to download the required tools.'
+      );
     }
+    await fs.promises.copyFile(deployExeSource, path.join(packageDir, 'Invoke-AppDeployToolkit.exe'));
 
     // Copy installer to Files directory
     const installerFileName = path.basename(installerPath);
@@ -871,10 +907,19 @@ ${steps}
 
     const intuneWinUtil = path.join(this.config.paths.tools, 'IntuneWinAppUtil.exe');
 
-    // Run IntuneWinAppUtil.exe
-    await this.runProcess(intuneWinUtil, [
+    const setupFile = 'Invoke-AppDeployToolkit.exe';
+    if (!fs.existsSync(path.join(packageDir, setupFile))) {
+      throw new Error(
+        `${setupFile} is missing from the package folder. ` +
+          'Run "intuneget-packager setup" to repair the tools directory.'
+      );
+    }
+
+    // Run IntuneWinAppUtil.exe. It reports some failures on stdout while still
+    // exiting 0, so keep the output for diagnostics.
+    const toolOutput = await this.runProcess(intuneWinUtil, [
       '-c', packageDir,
-      '-s', 'Invoke-AppDeployToolkit.exe',
+      '-s', setupFile,
       '-o', outputDir,
       '-q', // Quiet mode
     ]);
@@ -884,7 +929,10 @@ ${steps}
     const intunewinFile = files.find(f => f.endsWith('.intunewin'));
 
     if (!intunewinFile) {
-      throw new Error('IntuneWinAppUtil did not generate .intunewin file');
+      const detail = toolOutput.trim().slice(-500);
+      throw new Error(
+        `IntuneWinAppUtil did not generate .intunewin file${detail ? `. Tool output: ${detail}` : ''}`
+      );
     }
 
     const intunewinPath = path.join(outputDir, intunewinFile);
@@ -999,7 +1047,8 @@ ${steps}
         if (code === 0) {
           resolve(stdout);
         } else {
-          reject(new Error(`Process exited with code ${code}: ${stderr}`));
+          const detail = (stderr.trim() || stdout.trim()).slice(-500);
+          reject(new Error(`Process exited with code ${code}${detail ? `: ${detail}` : ''}`));
         }
       });
 

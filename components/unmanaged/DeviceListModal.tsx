@@ -136,6 +136,17 @@ export function DeviceListModal({ app, isOpen, onClose, fetchDevices }: DeviceLi
                 </p>
               )}
 
+              {/* Partial scan note (Graph throttling / time budget) */}
+              {data?.partial && (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-status-warning/10 border border-status-warning/20">
+                  <Info className="w-4 h-4 text-status-warning flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-text-muted">
+                    This list may be incomplete because Microsoft Graph responded slowly.
+                    Close and reopen to load the rest.
+                  </p>
+                </div>
+              )}
+
               {/* Search */}
               {showSearch && (
                 <div className="relative">

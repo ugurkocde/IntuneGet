@@ -11,6 +11,7 @@ vi.mock('@/lib/auth-utils', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
+  isSupabaseConfigured: () => true,
 }));
 
 import { GET } from '@/app/api/updates/available/route';

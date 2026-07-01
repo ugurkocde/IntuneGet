@@ -162,6 +162,11 @@ export interface DetectedAppDevicesResponse {
   summedDeviceCount?: number;
   /** True when the per-version fan-out was capped (very high version churn) */
   truncated?: boolean;
+  /**
+   * True when the scan ran out of its time budget (e.g. Graph throttling) and
+   * the device list is incomplete. A later retry can return the full list.
+   */
+  partial?: boolean;
 }
 
 /**

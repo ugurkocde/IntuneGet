@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseVersion } from '@/lib/version-compare';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { GET as getLiveIntuneUpdates } from '@/app/api/intune/apps/updates/route';
@@ -51,6 +51,13 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as RefreshRequestBody;
     const requestedTenantId = body.tenant_id?.trim() || null;
+
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { error: 'Update checking requires Supabase and is not available on this self-hosted deployment' },
+        { status: 503 }
+      );
+    }
 
     const supabase = createServerClient();
 

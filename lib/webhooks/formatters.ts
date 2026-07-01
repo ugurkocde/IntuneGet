@@ -9,13 +9,61 @@ import type {
   AppUpdate,
 } from '@/types/notifications';
 
+// Machine-readable data included alongside the presentation payload
+export interface WebhookDataUpdate {
+  displayName: string;
+  wingetId: string;
+  intuneAppId: string;
+  fromVersion: string;
+  toVersion: string;
+  isCritical: boolean;
+}
+
+export interface WebhookData {
+  event: NotificationPayload['event'];
+  timestamp: string;
+  tenant_id: string;
+  tenant_name?: string;
+  summary: {
+    total: number;
+    critical: number;
+  };
+  updates: WebhookDataUpdate[];
+}
+
+type WebhookPayloadData = WebhookData | WebhookTestPayload;
+
 // Use flexible types for external webhook payloads
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SlackPayload = { blocks: any[] };
+type SlackPayload = { blocks: any[]; data: WebhookPayloadData };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type TeamsPayload = { type: string; attachments: any[] };
+type TeamsPayload = { type: string; attachments: any[]; data: WebhookPayloadData };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DiscordPayload = { embeds: any[] };
+type DiscordPayload = { embeds: any[]; data: WebhookPayloadData };
+
+/**
+ * Build the machine-readable data object attached to every webhook payload
+ */
+export function buildWebhookData(payload: NotificationPayload): WebhookData {
+  return {
+    event: payload.event,
+    timestamp: payload.timestamp,
+    tenant_id: payload.tenant_id,
+    tenant_name: payload.tenant_name,
+    summary: {
+      total: payload.summary.total,
+      critical: payload.summary.critical,
+    },
+    updates: payload.updates.map((app) => ({
+      displayName: app.app_name,
+      wingetId: app.winget_id,
+      intuneAppId: app.intune_app_id,
+      fromVersion: app.current_version,
+      toVersion: app.latest_version,
+      isCritical: app.is_critical,
+    })),
+  };
+}
 
 // Discord color values (must be integer)
 const DISCORD_BRAND_COLOR = 0x8b5cf6;
@@ -142,7 +190,7 @@ export function formatSlackMessage(payload: NotificationPayload): SlackPayload {
     }
   );
 
-  return { blocks };
+  return { blocks, data: buildWebhookData(payload) };
 }
 
 /**
@@ -240,6 +288,7 @@ export function formatTeamsMessage(payload: NotificationPayload): TeamsPayload {
 
   return {
     type: 'message',
+    data: buildWebhookData(payload),
     attachments: [
       {
         contentType: 'application/vnd.microsoft.card.adaptive',
@@ -377,14 +426,18 @@ export function formatDiscordMessage(payload: NotificationPayload): DiscordPaylo
     });
   }
 
-  return { embeds };
+  return { embeds, data: buildWebhookData(payload) };
 }
 
 /**
  * Format notification payload for custom webhooks (raw JSON)
+ * Keeps the original NotificationPayload fields for backward compatibility
+ * and adds the machine-readable data object
  */
-export function formatCustomPayload(payload: NotificationPayload): NotificationPayload {
-  return payload;
+export function formatCustomPayload(
+  payload: NotificationPayload
+): NotificationPayload & { data: WebhookData } {
+  return { ...payload, data: buildWebhookData(payload) };
 }
 
 /**
@@ -392,6 +445,7 @@ export function formatCustomPayload(payload: NotificationPayload): NotificationP
  */
 export function formatSlackTestMessage(payload: WebhookTestPayload): SlackPayload {
   return {
+    data: payload,
     blocks: [
       {
         type: 'header',
@@ -434,6 +488,7 @@ export function formatSlackTestMessage(payload: WebhookTestPayload): SlackPayloa
 export function formatTeamsTestMessage(payload: WebhookTestPayload): TeamsPayload {
   return {
     type: 'message',
+    data: payload,
     attachments: [
       {
         contentType: 'application/vnd.microsoft.card.adaptive',
@@ -479,6 +534,7 @@ export function formatTeamsTestMessage(payload: WebhookTestPayload): TeamsPayloa
  */
 export function formatDiscordTestMessage(payload: WebhookTestPayload): DiscordPayload {
   return {
+    data: payload,
     embeds: [
       {
         title: 'IntuneGet Webhook Test',

@@ -113,7 +113,7 @@ export function formatTestPayload(
       return formatDiscordTestMessage(testPayload);
     case 'custom':
     default:
-      return testPayload;
+      return { ...testPayload, data: testPayload };
   }
 }
 

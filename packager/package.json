@@ -1,6 +1,6 @@
 {
   "name": "@ugurkocde/intuneget-packager",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Local Windows packager service for IntuneGet - enables true self-hosting without GitHub Actions dependency",
   "main": "dist/index.js",
   "bin": {

@@ -28,6 +28,17 @@ export const maxDuration = 60;
 const MAX_VERSIONS = 25;
 // Concurrent managedDevices fetches across version ids (avoids tripping 429).
 const CONCURRENCY = 4;
+// Overall budget for the Graph fan-out. Must leave headroom under maxDuration
+// so a throttled tenant gets a partial device list instead of a hung request.
+const SCAN_BUDGET_MS = 40_000;
+
+/** Thrown when the fan-out runs out of scan budget mid-flight. */
+class ScanBudgetExceededError extends Error {
+  constructor() {
+    super('Device scan budget exhausted');
+    this.name = 'ScanBudgetExceededError';
+  }
+}
 
 interface GraphManagedDevice {
   id: string;
@@ -48,7 +59,8 @@ interface GraphFetchError extends Error {
 async function fetchDevicesForDetectedApp(
   detectedAppId: string,
   token: string,
-  tenantId: string
+  tenantId: string,
+  deadlineAt: number
 ): Promise<GraphManagedDevice[]> {
   const devices: GraphManagedDevice[] = [];
   let nextUrl: string | null =
@@ -56,12 +68,21 @@ async function fetchDevicesForDetectedApp(
     `?$select=id,deviceName,operatingSystem`;
 
   while (nextUrl) {
-    const response: Response = await fetchWithRetry(nextUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    if (Date.now() >= deadlineAt) {
+      throw new ScanBudgetExceededError();
+    }
+
+    const response: Response = await fetchWithRetry(
+      nextUrl,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       },
-    });
+      3,
+      deadlineAt
+    );
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -161,13 +182,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Fan out across version ids with a small concurrency cap, deduplicating
-    // devices by id (a device may run more than one version of the app).
+    // devices by id (a device may run more than one version of the app). The
+    // whole fan-out is bounded by SCAN_BUDGET_MS; running out of budget on a
+    // throttled tenant degrades to a partial device list instead of a hang.
+    const scanDeadline = Date.now() + SCAN_BUDGET_MS;
     const deviceMap = new Map<string, DeviceListItem>();
+    let partial = false;
     try {
       for (let i = 0; i < versionIds.length; i += CONCURRENCY) {
+        if (Date.now() >= scanDeadline) {
+          partial = true;
+          break;
+        }
         const chunk = versionIds.slice(i, i + CONCURRENCY);
         const chunkResults = await Promise.all(
-          chunk.map((id) => fetchDevicesForDetectedApp(id, token, tenantId))
+          chunk.map((id) => fetchDevicesForDetectedApp(id, token, tenantId, scanDeadline))
         );
         for (const deviceList of chunkResults) {
           for (const device of deviceList) {
@@ -182,24 +211,42 @@ export async function GET(request: NextRequest) {
       }
     } catch (err) {
       const graphError = err as GraphFetchError;
-      if (
-        graphError.status === 403 &&
-        graphError.bodyText?.includes('DeviceManagementManagedDevices')
-      ) {
+      const budgetExhausted =
+        err instanceof ScanBudgetExceededError ||
+        (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) ||
+        Date.now() >= scanDeadline;
+      if (budgetExhausted) {
+        // Return whatever was collected before the budget ran out.
+        partial = true;
+      } else {
+        if (
+          graphError.status === 403 &&
+          graphError.bodyText?.includes('DeviceManagementManagedDevices')
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                'Missing required permission: DeviceManagementManagedDevices.Read.All. Please add this permission to your Azure AD app registration and grant admin consent.',
+              permissionRequired: 'DeviceManagementManagedDevices.Read.All',
+            },
+            { status: 403 }
+          );
+        }
+        if (graphError.status === 429) {
+          return NextResponse.json(
+            {
+              error:
+                'Microsoft Graph is throttling requests for this tenant. Please wait a minute and try again.',
+            },
+            { status: 429 }
+          );
+        }
+        console.error('Error fetching detected app devices:', err);
         return NextResponse.json(
-          {
-            error:
-              'Missing required permission: DeviceManagementManagedDevices.Read.All. Please add this permission to your Azure AD app registration and grant admin consent.',
-            permissionRequired: 'DeviceManagementManagedDevices.Read.All',
-          },
-          { status: 403 }
+          { error: 'Failed to fetch devices from Intune' },
+          { status: graphError.status && graphError.status >= 400 ? graphError.status : 502 }
         );
       }
-      console.error('Error fetching detected app devices:', err);
-      return NextResponse.json(
-        { error: 'Failed to fetch devices from Intune' },
-        { status: graphError.status && graphError.status >= 400 ? graphError.status : 502 }
-      );
     }
 
     const devices = [...deviceMap.values()].sort((a, b) =>
@@ -211,6 +258,7 @@ export async function GET(request: NextRequest) {
       total: devices.length,
       summedDeviceCount,
       truncated,
+      partial,
     } as DetectedAppDevicesResponse);
   } catch (error) {
     console.error('Error in detected-app-devices route:', error);

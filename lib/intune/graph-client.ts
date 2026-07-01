@@ -30,11 +30,16 @@ const tokenInflight = new Map<string, Promise<string | null>>();
  * Each request is bounded by a per-request timeout (and any caller-supplied
  * signal), so a stalled Graph connection is aborted and retried rather than
  * hanging the function until its maxDuration limit.
+ *
+ * When `deadlineAt` (epoch ms) is provided, retry sleeps never run past it:
+ * instead the last retryable response is returned (or the last error thrown)
+ * so the caller can degrade to partial results within its own scan budget.
  */
 export async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  maxRetries = 3
+  maxRetries = 3,
+  deadlineAt?: number
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const signals = [AbortSignal.timeout(PER_REQUEST_TIMEOUT_MS)];
@@ -48,10 +53,13 @@ export async function fetchWithRetry(
     } catch (err) {
       // Per-request timeout / abort or a transient network error: retry within
       // the attempt budget, then surface the error on the final attempt.
-      if (attempt === maxRetries) {
+      const delayMs = Math.min(Math.pow(2, attempt) * 1000, 30000);
+      if (
+        attempt === maxRetries ||
+        (deadlineAt !== undefined && Date.now() + delayMs >= deadlineAt)
+      ) {
         throw err;
       }
-      const delayMs = Math.min(Math.pow(2, attempt) * 1000, 30000);
       console.warn(
         `Graph API request error on attempt ${attempt + 1}/${maxRetries + 1}, retrying in ${delayMs}ms`
       );
@@ -65,9 +73,6 @@ export async function fetchWithRetry(
       return response;
     }
 
-    // Consume body to prevent memory leaks in serverless
-    await response.text().catch(() => {});
-
     const retryAfter = response.headers.get('Retry-After');
     let delayMs: number;
     if (retryAfter) {
@@ -77,6 +82,15 @@ export async function fetchWithRetry(
       delayMs = Math.pow(2, attempt) * 1000;
     }
     delayMs = Math.min(delayMs, 30000);
+
+    // Sleeping would overrun the caller's budget: hand the retryable response
+    // back (body unconsumed) and let the caller decide.
+    if (deadlineAt !== undefined && Date.now() + delayMs >= deadlineAt) {
+      return response;
+    }
+
+    // Consume body to prevent memory leaks in serverless
+    await response.text().catch(() => {});
 
     console.warn(
       `Graph API ${status} on attempt ${attempt + 1}/${maxRetries + 1}, retrying in ${delayMs}ms`
