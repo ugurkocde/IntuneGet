@@ -104,17 +104,20 @@ export async function GET(request: NextRequest) {
       job.installer_type || '',
       job.status,
       job.intune_app_id || '',
-      (job.error_message || '').replace(/"/g, '""'),
+      // escapeCSV below handles quote-doubling uniformly for every column.
+      job.error_message || '',
       job.created_at,
       job.completed_at || '',
     ]);
 
     // Escape CSV values
     const escapeCSV = (value: string): string => {
-      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-        return `"${value}"`;
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        // RFC 4180: wrap in quotes and double any embedded quotes.
+        return `"${str.replace(/"/g, '""')}"`;
       }
-      return value;
+      return str;
     };
 
     const csvContent = [

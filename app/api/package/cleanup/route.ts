@@ -96,8 +96,19 @@ export async function POST(request: NextRequest) {
 /**
  * GET handler for checking cleanup status / stats
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Same secret gate as POST: these are system-wide job stats, not per-user.
+    const authHeader = request.headers.get('Authorization');
+    const cleanupSecret = process.env.CLEANUP_SECRET || process.env.CALLBACK_SECRET;
+
+    if (cleanupSecret && authHeader !== `Bearer ${cleanupSecret}`) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const supabase = createServerClient();
 
     // Get count of jobs by status

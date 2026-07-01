@@ -103,7 +103,12 @@ export function BatchDeploymentWizard({ initialApp, onComplete }: BatchDeploymen
   const canProceed = () => {
     switch (currentStep) {
       case 'app':
-        return selectedApp && selectedApp.winget_id && selectedApp.display_name && selectedApp.version;
+        // Accept either a picked app or a fully filled manual entry; handleNext
+        // promotes manualApp into selectedApp before advancing.
+        return Boolean(
+          (selectedApp && selectedApp.winget_id && selectedApp.display_name && selectedApp.version) ||
+          (manualApp.winget_id && manualApp.display_name && manualApp.version)
+        );
       case 'tenants':
         return selectedTenantIds.length > 0;
       case 'review':

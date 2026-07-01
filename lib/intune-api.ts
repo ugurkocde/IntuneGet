@@ -457,6 +457,48 @@ export async function getEntraIDGroups(
 }
 
 /**
+ * Fetch every page of a Graph collection by following @odata.nextLink.
+ * Graph paginates list endpoints; reading only the first page silently
+ * truncates results (e.g. a category/filter dropdown missing entries).
+ */
+async function fetchAllGraphPages<T>(
+  initialUrl: string,
+  accessToken: string,
+  errorMessage: string,
+  extraHeaders?: Record<string, string>
+): Promise<T[]> {
+  const results: T[] = [];
+  let nextUrl: string | undefined = initialUrl;
+
+  while (nextUrl) {
+    const response: Response = await fetch(nextUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...extraHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      // Carry the HTTP status so callers can distinguish a permission error
+      // (403) from a genuinely empty list and surface an actionable message.
+      const err = new Error(`${errorMessage} (${response.status})`) as Error & {
+        status?: number;
+      };
+      err.status = response.status;
+      throw err;
+    }
+
+    const data: GraphApiResponse<T> = await response.json();
+    if (data.value) {
+      results.push(...data.value);
+    }
+    nextUrl = data['@odata.nextLink'];
+  }
+
+  return results;
+}
+
+/**
  * Get Intune mobile app categories
  */
 export async function getMobileAppCategories(
@@ -465,18 +507,12 @@ export async function getMobileAppCategories(
   const url = new URL(`${GRAPH_API_BASE}/deviceAppManagement/mobileAppCategories`);
   url.searchParams.set('$select', 'id,displayName,lastModifiedDateTime');
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to get Intune app categories');
-  }
-
-  const data: GraphApiResponse<IntuneMobileAppCategory> = await response.json();
-  return (data.value || [])
+  const categories = await fetchAllGraphPages<IntuneMobileAppCategory>(
+    url.toString(),
+    accessToken,
+    'Failed to get Intune app categories'
+  );
+  return categories
     .filter((category) => Boolean(category.id && category.displayName))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
@@ -491,24 +527,12 @@ export async function getAssignmentFilters(
   url.searchParams.set('$select', 'id,displayName,description,platform,rule');
   url.searchParams.set('$orderby', 'displayName');
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    // Carry the HTTP status so callers can distinguish a permission error (403)
-    // from a genuinely empty filter list and surface an actionable message.
-    const err = new Error(
-      `Failed to get Intune assignment filters (${response.status})`
-    ) as Error & { status?: number };
-    err.status = response.status;
-    throw err;
-  }
-
-  const data: GraphApiResponse<IntuneAssignmentFilter> = await response.json();
-  return (data.value || [])
+  const filters = await fetchAllGraphPages<IntuneAssignmentFilter>(
+    url.toString(),
+    accessToken,
+    'Failed to get Intune assignment filters'
+  );
+  return filters
     .filter((filter) => Boolean(filter.id && filter.displayName))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
@@ -645,21 +669,11 @@ export async function getAppCategories(
   accessToken: string,
   appId: string
 ): Promise<IntuneMobileAppCategory[]> {
-  const response = await fetch(
+  return await fetchAllGraphPages<IntuneMobileAppCategory>(
     `${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${appId}/categories`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
+    accessToken,
+    'Failed to get app categories'
   );
-
-  if (!response.ok) {
-    throw new Error('Failed to get app categories');
-  }
-
-  const data: GraphApiResponse<IntuneMobileAppCategory> = await response.json();
-  return data.value || [];
 }
 
 /**

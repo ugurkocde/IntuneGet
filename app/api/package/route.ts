@@ -604,9 +604,19 @@ export async function GET(request: NextRequest) {
 
   try {
     if (jobId) {
+      const user = await parseAccessToken(request.headers.get('Authorization'));
+      if (!user) {
+        return NextResponse.json(
+          { error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+
       const job = await db.jobs.getById(jobId);
 
-      if (!job) {
+      // Return 404 (not 403) on a foreign job so job existence isn't leaked
+      // to a caller who doesn't own it.
+      if (!job || (job as { user_id?: string }).user_id !== user.userId) {
         return NextResponse.json(
           { error: 'Job not found' },
           { status: 404 }
