@@ -1,6 +1,6 @@
 /**
  * MSP Member Management API Routes
- * PATCH - Update member role
+ * PATCH - Update member role and/or access mode
  * DELETE - Remove member from organization
  */
 
@@ -26,7 +26,7 @@ interface RouteParams {
 
 /**
  * PATCH /api/msp/members/[id]
- * Update a member's role
+ * Update a member's role and/or access mode
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
@@ -58,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { role: newRole } = validation.data;
+    const { role: newRole, access_mode: newAccessMode } = validation.data;
 
     const supabase = createServerClient();
 
@@ -89,7 +89,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Get target member
     const { data: targetMember, error: targetError } = await supabase
       .from('msp_user_memberships')
-      .select('id, user_id, user_email, role, msp_organization_id')
+      .select('id, user_id, user_email, role, access_mode, msp_organization_id')
       .eq('id', memberId)
       .single();
 
@@ -108,10 +108,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Cannot modify own role
+    // Cannot modify own role or access mode
     if (targetMember.user_id === user.userId) {
       return NextResponse.json(
-        { error: 'You cannot change your own role' },
+        { error: 'You cannot change your own role or access mode' },
         { status: 400 }
       );
     }
@@ -124,62 +124,86 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if actor can assign the new role
-    if (!canModifyRole(actorRole, newRole)) {
-      return NextResponse.json(
-        { error: 'You cannot assign a role equal to or higher than your own' },
-        { status: 403 }
-      );
+    if (newRole !== undefined) {
+      // Check if actor can assign the new role
+      if (!canModifyRole(actorRole, newRole)) {
+        return NextResponse.json(
+          { error: 'You cannot assign a role equal to or higher than your own' },
+          { status: 403 }
+        );
+      }
+
+      // Cannot change anyone to owner (owners are only the creator)
+      if (newRole === 'owner') {
+        return NextResponse.json(
+          { error: 'Cannot assign owner role' },
+          { status: 400 }
+        );
+      }
     }
 
-    // Cannot change anyone to owner (owners are only the creator)
-    if (newRole === 'owner') {
+    // Owners always keep full access
+    if (newAccessMode === 'customer_only' && (newRole ?? targetMember.role) === 'owner') {
       return NextResponse.json(
-        { error: 'Cannot assign owner role' },
+        { error: 'The organization owner must have full access' },
         { status: 400 }
       );
     }
 
-    // Update the role
+    // Update the role and/or access mode
+    const updatePayload: {
+      role?: MspRole;
+      access_mode?: 'full' | 'customer_only';
+      updated_at: string;
+    } = {
+      updated_at: new Date().toISOString(),
+    };
+    if (newRole !== undefined) {
+      updatePayload.role = newRole;
+    }
+    if (newAccessMode !== undefined) {
+      updatePayload.access_mode = newAccessMode;
+    }
+
     const { error: updateError } = await supabase
       .from('msp_user_memberships')
-      .update({
-        role: newRole,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', memberId);
 
     if (updateError) {
       return NextResponse.json(
-        { error: 'Failed to update member role' },
+        { error: 'Failed to update member' },
         { status: 500 }
       );
     }
 
     // Log the role change
-    try {
-      await logRoleChanged(
-        {
-          organization_id: actorMembership.msp_organization_id,
-          user_id: user.userId,
-          user_email: user.userEmail,
-          ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
-          user_agent: request.headers.get('user-agent') || undefined,
-        },
-        memberId,
-        targetMember.user_email,
-        targetMember.role,
-        newRole
-      );
-    } catch (auditError) {
-      // Audit logging failed - continue
+    if (newRole !== undefined) {
+      try {
+        await logRoleChanged(
+          {
+            organization_id: actorMembership.msp_organization_id,
+            user_id: user.userId,
+            user_email: user.userEmail,
+            ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+            user_agent: request.headers.get('user-agent') || undefined,
+          },
+          memberId,
+          targetMember.user_email,
+          targetMember.role,
+          newRole
+        );
+      } catch (auditError) {
+        // Audit logging failed - continue
+      }
     }
 
     return NextResponse.json({
       success: true,
       member: {
         id: memberId,
-        role: newRole,
+        role: newRole ?? targetMember.role,
+        access_mode: newAccessMode ?? targetMember.access_mode,
       },
     });
   } catch (error) {

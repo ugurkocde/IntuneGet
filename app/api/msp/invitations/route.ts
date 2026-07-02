@@ -38,6 +38,7 @@ interface InvitationListItem {
   id: string;
   email: string;
   role: MspRole;
+  access_mode: 'full' | 'customer_only';
   invited_by_email: string | null;
   expires_at: string;
   accepted_at: string | null;
@@ -49,6 +50,7 @@ interface CreatedInvitation {
   id: string;
   email: string;
   role: MspRole;
+  access_mode: 'full' | 'customer_only';
   expires_at: string;
   created_at: string;
 }
@@ -115,7 +117,7 @@ export async function GET(request: NextRequest) {
     // Get invitations
     const { data: invitations, error: invitationsError } = await supabase
       .from('msp_invitations')
-      .select('id, email, role, invited_by_email, expires_at, accepted_at, created_at')
+      .select('id, email, role, access_mode, invited_by_email, expires_at, accepted_at, created_at')
       .eq('organization_id', typedMembership.msp_organization_id)
       .order('created_at', { ascending: false });
 
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, role } = validation.data;
+    const { email, role, access_mode } = validation.data;
 
     const supabase = createServerClient();
 
@@ -275,6 +277,7 @@ export async function POST(request: NextRequest) {
       organization_id: typedMembership.msp_organization_id,
       email,
       role: role as MspInvitationInsert['role'],
+      access_mode,
       invited_by_user_id: user.userId,
       invited_by_email: user.userEmail,
       token,
@@ -284,7 +287,7 @@ export async function POST(request: NextRequest) {
     const { data: invitation, error: insertError } = await supabase
       .from('msp_invitations')
       .insert(invitationData)
-      .select('id, email, role, expires_at, created_at')
+      .select('id, email, role, access_mode, expires_at, created_at')
       .single();
 
     if (insertError) {

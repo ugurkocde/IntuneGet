@@ -40,6 +40,7 @@ jobs:
       SOURCE_INTUNE_APP_ID: ${{ github.event.client_payload.config.sourceIntuneAppId }}
       AUTO_SUPERSEDE: ${{ github.event.client_payload.config.autoSupersede }}
       SUPERSEDENCE_TYPE: ${{ github.event.client_payload.config.supersedenceType }}
+      FORCE_CREATE: ${{ github.event.client_payload.config.forceCreate }}
       INTUNEWINAPPUTIL_URL: https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe
       INTUNEWINAPPUTIL_SHA256: C1BA45B5CB939E84AF064BB7FF4B38FB3DFE33C8DC1078FD9B157672EAE671F6
       PSADT_TEMPLATE_URL: https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip
@@ -935,7 +936,20 @@ jobs:
             throw
           }
 
+      # Tenant-wide duplicate guard: skips deployment (duplicate_skipped callback)
+      # when the same app was already deployed to this tenant via IntuneGet by
+      # anyone. Non-fatal on Graph errors; bypassed when forceCreate is set.
+      - name: Check for duplicate app
+        env:
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+          INPUT_DISPLAY_NAME: ${{ github.event.client_payload.app.displayName }}
+          INPUT_WINGET_ID: ${{ github.event.client_payload.app.wingetId }}
+          INPUT_FORCE_CREATE: ${{ github.event.client_payload.config.forceCreate }}
+        run: |
+          & "$env:GITHUB_WORKSPACE\intuneget\.github\scripts\Check-DuplicateApp.ps1"
+
       - name: Upload to Intune
+        if: env.DUPLICATE_FOUND != 'true'
         env:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
@@ -1648,7 +1662,7 @@ jobs:
           }
 
       - name: Apply assignments
-        if: success()
+        if: success() && env.DUPLICATE_FOUND != 'true'
         env:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
@@ -1727,7 +1741,7 @@ jobs:
           Write-Host "Applied $($graphAssignments.Count) assignment(s) to app"
 
       - name: Apply categories
-        if: success()
+        if: success() && env.DUPLICATE_FOUND != 'true'
         env:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
@@ -1769,7 +1783,7 @@ jobs:
           Write-Host "Applied $($categoryIds.Count) category(s) to app"
 
       - name: Apply app relationships
-        if: success()
+        if: success() && env.DUPLICATE_FOUND != 'true'
         env:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
@@ -1871,7 +1885,7 @@ jobs:
           }
 
       - name: Send success callback
-        if: success()
+        if: success() && env.DUPLICATE_FOUND != 'true'
         env:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |

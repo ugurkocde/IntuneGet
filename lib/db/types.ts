@@ -111,6 +111,11 @@ export interface DatabaseAdapter {
     getByUserId(userId: string, limit?: number): Promise<PackagingJob[]>;
 
     /**
+     * Get jobs for every user in a tenant (tenant-wide deployments view)
+     */
+    getByTenantId(tenantId: string, limit?: number): Promise<PackagingJob[]>;
+
+    /**
      * Create a new job
      */
     create(job: Partial<PackagingJob>): Promise<PackagingJob>;

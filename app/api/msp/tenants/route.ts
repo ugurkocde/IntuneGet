@@ -22,25 +22,43 @@ import type {
  */
 interface MembershipWithOrg {
   msp_organization_id: string;
+  access_mode: 'full' | 'customer_only';
   msp_organizations: {
     is_active: boolean;
+    primary_tenant_id: string;
   };
 }
 
 /**
- * Get the user's MSP organization ID (only for active organizations)
+ * Membership context needed for tenant listing and access filtering
  */
-async function getUserMspOrgId(userId: string): Promise<string | null> {
+interface UserMspMembership {
+  mspOrgId: string;
+  accessMode: 'full' | 'customer_only';
+  primaryTenantId: string;
+}
+
+/**
+ * Get the user's MSP membership context (only for active organizations)
+ */
+async function getUserMspMembership(userId: string): Promise<UserMspMembership | null> {
   const supabase = createServerClient();
 
-  const { data: membership } = await supabase
+  const { data } = await supabase
     .from('msp_user_memberships')
-    .select('msp_organization_id, msp_organizations!inner(is_active)')
+    .select('msp_organization_id, access_mode, msp_organizations!inner(is_active, primary_tenant_id)')
     .eq('user_id', userId)
     .eq('msp_organizations.is_active', true)
     .single();
 
-  return (membership as MembershipWithOrg | null)?.msp_organization_id || null;
+  const membership = data as unknown as MembershipWithOrg | null;
+  if (!membership) return null;
+
+  return {
+    mspOrgId: membership.msp_organization_id,
+    accessMode: membership.access_mode || 'full',
+    primaryTenantId: membership.msp_organizations.primary_tenant_id,
+  };
 }
 
 /**
@@ -57,8 +75,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const mspOrgId = await getUserMspOrgId(user.userId);
-    if (!mspOrgId) {
+    const membership = await getUserMspMembership(user.userId);
+    if (!membership) {
       return NextResponse.json(
         { error: 'Not a member of any MSP organization' },
         { status: 403 }
@@ -68,10 +86,10 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Get all managed tenants for this MSP
-    const { data: tenants, error: tenantsError } = await supabase
+    const { data: allTenants, error: tenantsError } = await supabase
       .from('msp_managed_tenants')
       .select('*')
-      .eq('msp_organization_id', mspOrgId)
+      .eq('msp_organization_id', membership.mspOrgId)
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
@@ -81,6 +99,13 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Members limited to customer tenants never see the MSP's primary tenant
+    const tenants = membership.accessMode === 'customer_only'
+      ? (allTenants || []).filter(
+          (t: MspManagedTenant) => t.tenant_id !== membership.primaryTenantId
+        )
+      : allTenants;
 
     // Collect all tenant IDs for batch query
     const tenantIds = (tenants || [])
@@ -163,13 +188,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mspOrgId = await getUserMspOrgId(user.userId);
-    if (!mspOrgId) {
+    const membership = await getUserMspMembership(user.userId);
+    if (!membership) {
       return NextResponse.json(
         { error: 'Not a member of any MSP organization' },
         { status: 403 }
       );
     }
+    const mspOrgId = membership.mspOrgId;
 
     // Parse request body
     const body: AddTenantRequest = await request.json();
@@ -263,13 +289,14 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const mspOrgId = await getUserMspOrgId(user.userId);
-    if (!mspOrgId) {
+    const membership = await getUserMspMembership(user.userId);
+    if (!membership) {
       return NextResponse.json(
         { error: 'Not a member of any MSP organization' },
         { status: 403 }
       );
     }
+    const mspOrgId = membership.mspOrgId;
 
     // Get tenant record ID from query params
     const { searchParams } = new URL(request.url);

@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
+import { useMspOptional } from '@/hooks/useMspOptional';
 import { ProgressStepper } from '@/components/ProgressStepper';
 import { ErrorDisplay } from '@/components/ErrorDisplay';
 import { EspProfileSelector } from '@/components/EspProfileSelector';
@@ -47,6 +48,7 @@ import type { PackageAssignment } from '@/types/upload';
 interface PackagingJob {
   id: string;
   user_id: string;
+  user_email?: string | null;
   winget_id: string;
   version: string;
   display_name: string;
@@ -101,6 +103,7 @@ export default function UploadsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, getAccessToken } = useMicrosoftAuth();
+  const { isMspUser, selectedTenantId } = useMspOptional();
   const prefersReducedMotion = useReducedMotion();
 
   const [jobs, setJobs] = useState<PackagingJob[]>([]);
@@ -120,6 +123,9 @@ export default function UploadsPage() {
     ? (urlStatus === 'pending' ? 'active' : urlStatus as 'all' | 'active' | 'completed' | 'failed')
     : 'all';
   const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'failed'>(initialFilter);
+  // 'mine' shows the signed-in user's deployments; 'tenant' shows everyone's in
+  // the tenant so a team can avoid deploying the same app twice.
+  const [viewScope, setViewScope] = useState<'mine' | 'tenant'>('mine');
 
   const fetchJobs = useCallback(async (showRefreshing = false) => {
     if (!user?.id) return;
@@ -130,8 +136,15 @@ export default function UploadsPage() {
 
     try {
       const accessToken = await getAccessToken();
-      const response = await fetch('/api/package', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const url = viewScope === 'tenant' ? '/api/package?scope=tenant' : '/api/package';
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          // Scope to the MSP-selected customer tenant when one is active, so the
+          // tenant view matches the rest of the app (and customer-only members
+          // are not resolved to the primary tenant and rejected).
+          ...(isMspUser && selectedTenantId ? { 'X-MSP-Tenant-Id': selectedTenantId } : {}),
+        },
       });
 
       if (!response.ok) {
@@ -153,7 +166,7 @@ export default function UploadsPage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [user?.id, getAccessToken]);
+  }, [user?.id, getAccessToken, viewScope, isMspUser, selectedTenantId]);
 
   // Initial load
   useEffect(() => {
@@ -459,6 +472,33 @@ export default function UploadsPage() {
         />
       </StatCardGrid>
 
+      {/* Scope toggle: my deployments vs everyone in the tenant */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.15 }}
+        className="flex items-center gap-2"
+        role="tablist"
+        aria-label="Choose whose deployments to show"
+      >
+        {(['mine', 'tenant'] as const).map((scope) => (
+          <button
+            key={scope}
+            role="tab"
+            aria-selected={viewScope === scope}
+            onClick={() => setViewScope(scope)}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:outline-none',
+              viewScope === scope
+                ? 'bg-overlay/10 text-text-primary border border-accent-cyan/30'
+                : 'bg-overlay/5 text-text-secondary hover:text-text-primary hover:bg-overlay/10 border border-overlay/5'
+            )}
+          >
+            {scope === 'mine' ? <T>My deployments</T> : <T>All in tenant</T>}
+          </button>
+        ))}
+      </motion.div>
+
       {/* Filters */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -534,6 +574,7 @@ export default function UploadsPage() {
                 isCancelling={cancellingJobId === job.id}
                 onForceRedeploy={handleForceRedeploy}
                 isRedeploying={redeployingJobId === job.id}
+                showOwner={viewScope === 'tenant'}
               />
             ))}
           </AnimatePresence>
@@ -551,6 +592,7 @@ function UploadJobCard({
   isCancelling,
   onForceRedeploy,
   isRedeploying,
+  showOwner,
 }: {
   job: PackagingJob;
   index: number;
@@ -559,6 +601,7 @@ function UploadJobCard({
   isCancelling?: boolean;
   onForceRedeploy: (job: PackagingJob) => void;
   isRedeploying?: boolean;
+  showOwner?: boolean;
 }) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -695,6 +738,11 @@ function UploadJobCard({
                 )}
                 <span className="text-overlay/20"> | </span>{job.architecture}
               </p>
+              {showOwner && job.user_email && (
+                <p className="text-text-muted text-xs mt-0.5">
+                  <T>Deployed by <Var>{job.user_email}</Var></T>
+                </p>
+              )}
               {/* Assignments */}
               {job.package_config?.assignments && job.package_config.assignments.length > 0 && (
                 <div className="flex items-center gap-2 mt-2">

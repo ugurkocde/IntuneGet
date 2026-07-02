@@ -17,6 +17,7 @@ import { parseAccessToken } from '@/lib/auth-utils';
 import { getFeatureFlags } from '@/lib/features';
 import { isValidInstallerUrl } from '@/lib/custom-app';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
+import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { checkStoredConsent } from '@/lib/msp/consent-cache';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
@@ -67,47 +68,18 @@ export async function POST(request: NextRequest) {
     const userEmail = user.userEmail;
     const tokenTenantId = user.tenantId;
 
-    // Check for MSP tenant override header
+    // Check for MSP tenant override header and enforce tenant access checks
+    // (membership, managed tenant consent, and customer-only access mode)
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
-    let tenantId = tokenTenantId;
+    const { tenantId, errorResponse: tenantError } = await resolveTargetTenantId({
+      supabase: createServerClient(),
+      userId,
+      tokenTenantId,
+      requestedTenantId: mspTenantId,
+    });
 
-    // If MSP tenant ID is provided, validate that user has access to it
-    if (mspTenantId && mspTenantId !== tokenTenantId) {
-      const supabaseValidation = createServerClient();
-
-      // Check if user is a member of an MSP organization
-      const { data: membership } = await supabaseValidation
-        .from('msp_user_memberships')
-        .select('msp_organization_id')
-        .eq('user_id', userId)
-        .single();
-
-      if (!membership) {
-        return NextResponse.json(
-          { error: 'Not authorized to deploy to other tenants' },
-          { status: 403 }
-        );
-      }
-
-      // Check if the target tenant is managed by this MSP organization
-      const { data: managedTenant } = await supabaseValidation
-        .from('msp_managed_tenants')
-        .select('id')
-        .eq('msp_organization_id', membership.msp_organization_id)
-        .eq('tenant_id', mspTenantId)
-        .eq('consent_status', 'granted')
-        .eq('is_active', true)
-        .single();
-
-      if (!managedTenant) {
-        return NextResponse.json(
-          { error: 'Target tenant is not managed by your MSP organization or has not granted consent' },
-          { status: 403 }
-        );
-      }
-
-      // Use the MSP-specified tenant
-      tenantId = mspTenantId;
+    if (tenantError) {
+      return tenantError;
     }
 
     // Verify admin consent for the target tenant before accepting jobs
@@ -635,6 +607,25 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    // scope=tenant shows every user's deployments in the tenant (so a team on
+    // one tenant can see each other's IntuneGet apps and avoid duplicates).
+    const scope = searchParams.get('scope');
+    if (scope === 'tenant') {
+      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+      const { tenantId, errorResponse } = await resolveTargetTenantId({
+        supabase: createServerClient(),
+        userId: user.userId,
+        tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
+      if (errorResponse) {
+        return errorResponse;
+      }
+
+      const tenantJobs = await db.jobs.getByTenantId(tenantId, 50);
+      return NextResponse.json({ jobs: tenantJobs, scope: 'tenant' });
     }
 
     const jobs = await db.jobs.getByUserId(user.userId, 50);

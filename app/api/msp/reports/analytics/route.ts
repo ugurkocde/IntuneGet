@@ -14,7 +14,7 @@ type MspUserMembershipRow = Database['public']['Tables']['msp_user_memberships']
 type MspManagedTenantRow = Database['public']['Tables']['msp_managed_tenants']['Row'];
 
 // Type for membership query result
-type MembershipQueryResult = Pick<MspUserMembershipRow, 'msp_organization_id' | 'role'>;
+type MembershipQueryResult = Pick<MspUserMembershipRow, 'msp_organization_id' | 'role' | 'access_mode'>;
 
 // Type for managed tenant query result (tenant_id can be null in DB but we filter for granted consent)
 interface ManagedTenantQueryResult {
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
     // Get user's membership and verify they belong to an organization
     const { data: membership, error: membershipError } = await supabase
       .from('msp_user_memberships')
-      .select('msp_organization_id, role')
+      .select('msp_organization_id, role, access_mode')
       .eq('user_id', user.userId)
       .single() as { data: MembershipQueryResult | null; error: Error | null };
 
@@ -120,12 +120,30 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenant_id');
 
     // Get managed tenants for this organization
-    const { data: tenants } = await supabase
+    const { data: allTenants } = await supabase
       .from('msp_managed_tenants')
       .select('tenant_id, display_name')
       .eq('msp_organization_id', membership.msp_organization_id)
       .eq('is_active', true)
       .eq('consent_status', 'granted') as { data: ManagedTenantQueryResult[] | null };
+
+    // Members limited to customer tenants never see the primary tenant's data.
+    // An explicit tenant_id filter for the primary tenant then fails the
+    // managed-tenant check below and returns 403.
+    let tenants = allTenants;
+    if (membership.access_mode === 'customer_only' && allTenants && allTenants.length > 0) {
+      const { data: org } = await supabase
+        .from('msp_organizations')
+        .select('primary_tenant_id')
+        .eq('id', membership.msp_organization_id)
+        .single();
+
+      if (org) {
+        tenants = allTenants.filter(
+          (t: ManagedTenantQueryResult) => t.tenant_id !== org.primary_tenant_id
+        );
+      }
+    }
 
     if (!tenants || tenants.length === 0) {
       return NextResponse.json({

@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
         organization: null,
         stats: null,
         isMspUser: false,
+        current_user: null,
       };
       return NextResponse.json(response);
     }
@@ -103,6 +104,10 @@ export async function GET(request: NextRequest) {
       organization,
       stats: stats as MspOrganizationStats | null,
       isMspUser: true,
+      current_user: {
+        role: membership.role,
+        access_mode: membership.access_mode || 'full',
+      },
     };
 
     return NextResponse.json(response);

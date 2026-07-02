@@ -27,6 +27,45 @@ export interface EncryptionInfo {
 
 type ProgressCallback = (percent: number, message: string) => Promise<void>;
 
+/**
+ * Marker appended to every app description so deployments are recognizable as
+ * IntuneGet-managed (same convention as the web app and hosted workflow).
+ */
+export const INTUNE_APP_SOURCE_MARKER = 'Source: IntuneGet.com';
+
+export interface DuplicateAppInfo {
+  matchType: 'exact';
+  existingAppId: string;
+  existingAppUrl: string;
+  existingVersion?: string;
+  createdAt?: string;
+}
+
+/**
+ * Thrown by uploadToIntune when the same app is already deployed to the tenant
+ * via IntuneGet (by any user) and the job does not carry forceCreate.
+ */
+export class DuplicateAppError extends Error {
+  readonly duplicateInfo: DuplicateAppInfo;
+
+  constructor(duplicateInfo: DuplicateAppInfo) {
+    super('Duplicate app already exists in Intune');
+    this.name = 'DuplicateAppError';
+    this.duplicateInfo = duplicateInfo;
+  }
+}
+
+/**
+ * Extract the forceCreate flag from the job's package_config (set by the web
+ * app's "Deploy as new app anyway" flow).
+ */
+export function extractForceCreate(packageConfig: unknown): boolean {
+  if (typeof packageConfig === 'object' && packageConfig !== null) {
+    return (packageConfig as Record<string, unknown>).forceCreate === true;
+  }
+  return false;
+}
+
 interface GraphMimeContent {
   '@odata.type': '#microsoft.graph.mimeContent';
   type: string;
@@ -158,6 +197,24 @@ export class IntuneUploader {
   ): Promise<IntuneAppResult> {
     const graphClient = new GraphClient(this.config, job.tenant_id);
 
+    // Step 0: Tenant-wide duplicate guard. Skipped when the job carries
+    // forceCreate; non-fatal on Graph errors so a throttled check never
+    // blocks a deployment.
+    if (!extractForceCreate(job.package_config)) {
+      let duplicate: DuplicateAppInfo | null = null;
+      try {
+        duplicate = await this.findDuplicateApp(graphClient, job);
+      } catch (error) {
+        this.logger.warn('Duplicate check failed, proceeding with deployment', {
+          jobId: job.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      if (duplicate) {
+        throw new DuplicateAppError(duplicate);
+      }
+    }
+
     // Step 1: Create Win32 LOB App (5%)
     await onProgress?.(5, 'Creating app in Intune...');
     const app = await this.createWin32App(graphClient, job);
@@ -287,6 +344,78 @@ export class IntuneUploader {
   }
 
   /**
+   * Find an app already deployed to this tenant via IntuneGet that matches the
+   * job. Same matching contract as .github/scripts/Check-DuplicateApp.ps1:
+   * exact display name plus an IntuneGet fingerprint in the description - a
+   * "Winget: <id>" marker naming the same winget id, or the source marker for
+   * apps deployed with a catalog description. A marker naming a different
+   * winget id is a different app, not a duplicate.
+   */
+  private async findDuplicateApp(
+    graphClient: GraphClient,
+    job: PackagingJob
+  ): Promise<DuplicateAppInfo | null> {
+    interface GraphWin32App {
+      id: string;
+      displayName?: string;
+      description?: string | null;
+      displayVersion?: string | null;
+      createdDateTime?: string;
+    }
+    interface GraphAppPage {
+      value?: GraphWin32App[];
+      '@odata.nextLink'?: string;
+    }
+
+    const displayNameLower = job.display_name.toLowerCase();
+    let nextPath: string | null =
+      `/deviceAppManagement/mobileApps?$filter=isof('microsoft.graph.win32LobApp')` +
+      `&$select=id,displayName,description,displayVersion,createdDateTime`;
+
+    while (nextPath) {
+      const page: GraphAppPage = await graphClient.get<GraphAppPage>(nextPath);
+      for (const app of page.value ?? []) {
+        if (app.displayName?.toLowerCase() !== displayNameLower || !app.description) {
+          continue;
+        }
+        const wingetMarker = app.description.match(/Winget:\s*(\S+)/);
+        if (wingetMarker) {
+          if (
+            job.winget_id &&
+            wingetMarker[1].toLowerCase() === job.winget_id.toLowerCase()
+          ) {
+            return this.toDuplicateInfo(app);
+          }
+          continue;
+        }
+        if (app.description.includes(INTUNE_APP_SOURCE_MARKER)) {
+          return this.toDuplicateInfo(app);
+        }
+      }
+      // nextLink is absolute; GraphClient.get expects a path
+      nextPath = page['@odata.nextLink']
+        ? page['@odata.nextLink'].replace('https://graph.microsoft.com/beta', '')
+        : null;
+    }
+
+    return null;
+  }
+
+  private toDuplicateInfo(app: {
+    id: string;
+    displayVersion?: string | null;
+    createdDateTime?: string;
+  }): DuplicateAppInfo {
+    return {
+      matchType: 'exact',
+      existingAppId: app.id,
+      existingAppUrl: `https://intune.microsoft.com/#view/Microsoft_Intune_Apps/SettingsMenu/~/0/appId/${app.id}`,
+      existingVersion: app.displayVersion ?? undefined,
+      createdAt: app.createdDateTime,
+    };
+  }
+
+  /**
    * Create Win32 LOB App in Intune
    */
   private async createWin32App(
@@ -294,10 +423,17 @@ export class IntuneUploader {
     job: PackagingJob
   ): Promise<{ id: string }> {
     const commands = this.buildCommandLines(job);
-    const description = extractPackageDescription(
+    const baseDescription = extractPackageDescription(
       job.package_config,
-      `${job.display_name} ${job.version} - Deployed via IntuneGet`
+      `${job.display_name} ${job.version} - Deployed via IntuneGet from Winget: ${job.winget_id}`
     );
+    // Append the source marker (same convention as the web app and hosted
+    // workflow) so tenant-wide duplicate detection recognizes this app
+    const description = baseDescription
+      .toLowerCase()
+      .includes(INTUNE_APP_SOURCE_MARKER.toLowerCase())
+      ? baseDescription
+      : `${baseDescription}\n${INTUNE_APP_SOURCE_MARKER}`;
     const largeIcon = await this.fetchLargeIcon(job);
     const appBody: Record<string, unknown> = {
       '@odata.type': '#microsoft.graph.win32LobApp',

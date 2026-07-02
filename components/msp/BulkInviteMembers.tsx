@@ -2,9 +2,15 @@
 
 import { useState } from 'react';
 import { Users, Loader2, X, Check, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { RoleSelector } from './RoleSelector';
-import { type MspRole } from '@/lib/msp-permissions';
+import {
+  type MspRole,
+  type AccessMode,
+  getAccessModeDisplayName,
+  getAccessModeDescription,
+} from '@/lib/msp-permissions';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,6 +33,7 @@ export function BulkInviteMembers({
 }: BulkInviteMembersProps) {
   const [emailsText, setEmailsText] = useState('');
   const [role, setRole] = useState<MspRole>('operator');
+  const [accessMode, setAccessMode] = useState<AccessMode>('full');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<InviteResult[] | null>(null);
@@ -85,6 +92,7 @@ export function BulkInviteMembers({
             body: JSON.stringify({
               email,
               role,
+              access_mode: accessMode,
             }),
           });
 
@@ -136,6 +144,7 @@ export function BulkInviteMembers({
   const handleClose = () => {
     setEmailsText('');
     setRole('operator');
+    setAccessMode('full');
     setError(null);
     setResults(null);
     onCancel?.();
@@ -271,6 +280,33 @@ export function BulkInviteMembers({
             disabled={isSubmitting}
             excludeOwner
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Tenant Access (applies to all)
+          </label>
+          <div className="flex gap-1 p-1 bg-overlay/5 rounded-lg">
+            {(['full', 'customer_only'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAccessMode(mode)}
+                disabled={isSubmitting}
+                className={cn(
+                  'flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                  accessMode === mode
+                    ? 'bg-bg-elevated text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-primary'
+                )}
+              >
+                {getAccessModeDisplayName(mode)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            {getAccessModeDescription(accessMode)}
+          </p>
         </div>
 
         {error && (

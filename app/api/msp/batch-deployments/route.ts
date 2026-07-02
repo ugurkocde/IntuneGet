@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     // Get user's membership
     const { data: membership, error: membershipError } = await supabase
       .from('msp_user_memberships')
-      .select('msp_organization_id, role')
+      .select('msp_organization_id, role, access_mode')
       .eq('user_id', user.userId)
       .single();
 
@@ -156,6 +156,22 @@ export async function POST(request: NextRequest) {
     }
 
     const concurrencyLimit = Math.min(10, Math.max(1, body.concurrency_limit || 3));
+
+    // Members limited to customer tenants cannot deploy to the MSP's primary tenant
+    if (membership.access_mode === 'customer_only') {
+      const { data: org } = await supabase
+        .from('msp_organizations')
+        .select('primary_tenant_id')
+        .eq('id', membership.msp_organization_id)
+        .single();
+
+      if (org && body.tenant_ids.includes(org.primary_tenant_id)) {
+        return NextResponse.json(
+          { error: 'Your MSP membership is limited to customer tenants. Remove your organization\'s primary tenant from the selection.' },
+          { status: 403 }
+        );
+      }
+    }
 
     // Verify all tenant_ids belong to this organization and have consent
     const { data: tenants } = await supabase

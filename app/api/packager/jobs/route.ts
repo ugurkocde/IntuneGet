@@ -138,7 +138,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { jobId, packagerId, status, progressPercent, progressMessage, error: errorMessage, intuneAppId, intuneAppUrl } = body;
+    const { jobId, packagerId, status, progressPercent, progressMessage, error: errorMessage, intuneAppId, intuneAppUrl, duplicateInfo } = body;
 
     if (!jobId || !packagerId) {
       return NextResponse.json(
@@ -179,6 +179,14 @@ export async function PATCH(request: NextRequest) {
     } else if (status === 'failed') {
       updateData.completed_at = now;
       if (errorMessage) updateData.error_message = errorMessage;
+    } else if (status === 'duplicate_skipped') {
+      // Same handling as the hosted callback route: link the existing app and
+      // keep duplicateInfo in error_details for the uploads UI; no
+      // upload_history record is written for a skip.
+      updateData.completed_at = now;
+      if (intuneAppId) updateData.intune_app_id = intuneAppId;
+      if (intuneAppUrl) updateData.intune_app_url = intuneAppUrl;
+      if (duplicateInfo) updateData.error_details = duplicateInfo;
     }
 
     // Update the job (only if owned by this packager)

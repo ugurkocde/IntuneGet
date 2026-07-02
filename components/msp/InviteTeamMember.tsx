@@ -2,9 +2,15 @@
 
 import { useState } from 'react';
 import { Send, Loader2, X, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { RoleSelector } from './RoleSelector';
-import { type MspRole } from '@/lib/msp-permissions';
+import {
+  type MspRole,
+  type AccessMode,
+  getAccessModeDisplayName,
+  getAccessModeDescription,
+} from '@/lib/msp-permissions';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,6 +27,7 @@ export function InviteTeamMember({
 }: InviteTeamMemberProps) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<MspRole>('operator');
+  const [accessMode, setAccessMode] = useState<AccessMode>('full');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
@@ -65,6 +72,7 @@ export function InviteTeamMember({
         body: JSON.stringify({
           email: email.trim(),
           role,
+          access_mode: accessMode,
         }),
       });
 
@@ -106,6 +114,7 @@ export function InviteTeamMember({
   const handleClose = () => {
     setEmail('');
     setRole('operator');
+    setAccessMode('full');
     setError(null);
     setAcceptUrl(null);
     setEmailSent(false);
@@ -135,7 +144,8 @@ export function InviteTeamMember({
               <div>
                 <p className="text-sm font-medium text-green-500">Email sent successfully</p>
                 <p className="text-sm text-text-secondary">
-                  An invitation email has been sent to <strong>{email}</strong>
+                  An invitation email has been sent to <strong>{email}</strong> with tenant access{' '}
+                  <strong>{getAccessModeDisplayName(accessMode)}</strong>.
                 </p>
               </div>
             </div>
@@ -146,7 +156,8 @@ export function InviteTeamMember({
         ) : acceptUrl ? (
           <>
             <p className="text-sm text-text-secondary mb-3">
-              Share this link with {email} to invite them to your organization:
+              Share this link with {email} to invite them to your organization with tenant access{' '}
+              <strong>{getAccessModeDisplayName(accessMode)}</strong>:
             </p>
 
             <div className="flex items-center gap-2">
@@ -230,6 +241,33 @@ export function InviteTeamMember({
             disabled={isSubmitting}
             excludeOwner
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">
+            Tenant Access
+          </label>
+          <div className="flex gap-1 p-1 bg-overlay/5 rounded-lg">
+            {(['full', 'customer_only'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAccessMode(mode)}
+                disabled={isSubmitting}
+                className={cn(
+                  'flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                  accessMode === mode
+                    ? 'bg-bg-elevated text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-primary'
+                )}
+              >
+                {getAccessModeDisplayName(mode)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            {getAccessModeDescription(accessMode)}
+          </p>
         </div>
 
         {/* Email Preview Toggle */}

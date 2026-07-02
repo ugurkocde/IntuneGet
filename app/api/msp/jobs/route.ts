@@ -17,8 +17,10 @@ type PackagingJobRow = Database['public']['Tables']['packaging_jobs']['Row'];
 // Type for membership query with joined organization
 interface MembershipWithOrg {
   msp_organization_id: MspUserMembershipRow['msp_organization_id'];
+  access_mode: MspUserMembershipRow['access_mode'];
   msp_organizations: {
     is_active: boolean;
+    primary_tenant_id: string;
   };
 }
 
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
     // Get user's MSP organization membership (only for active organizations)
     const { data: membership } = await supabase
       .from('msp_user_memberships')
-      .select('msp_organization_id, msp_organizations!inner(is_active)')
+      .select('msp_organization_id, access_mode, msp_organizations!inner(is_active, primary_tenant_id)')
       .eq('user_id', user.userId)
       .eq('msp_organizations.is_active', true)
       .single() as { data: MembershipWithOrg | null };
@@ -66,13 +68,22 @@ export async function GET(request: NextRequest) {
     const mspOrgId = membership.msp_organization_id;
 
     // Get all managed tenant IDs for this MSP
-    const { data: managedTenants } = await supabase
+    const { data: allManagedTenants } = await supabase
       .from('msp_managed_tenants')
       .select('tenant_id, display_name')
       .eq('msp_organization_id', mspOrgId)
       .eq('is_active', true)
       .eq('consent_status', 'granted')
       .not('tenant_id', 'is', null) as { data: ManagedTenantQueryResult[] | null };
+
+    // Members limited to customer tenants never see the primary tenant's jobs.
+    // An explicit tenantId filter for the primary tenant then fails the
+    // managed-tenant check below and returns 403.
+    const managedTenants = membership.access_mode === 'customer_only'
+      ? (allManagedTenants || []).filter(
+          (t) => t.tenant_id !== membership.msp_organizations.primary_tenant_id
+        )
+      : allManagedTenants;
 
     if (!managedTenants || managedTenants.length === 0) {
       const response: GetMspJobsResponse = {

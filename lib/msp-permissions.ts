@@ -9,6 +9,13 @@
 
 export type MspRole = 'owner' | 'admin' | 'operator' | 'viewer';
 
+/**
+ * Access mode for MSP members
+ * 'full' members can operate on every managed tenant including the MSP's
+ * primary tenant. 'customer_only' members are limited to customer tenants.
+ */
+export type AccessMode = 'full' | 'customer_only';
+
 // ============================================
 // Permission Definitions
 // ============================================
@@ -171,6 +178,28 @@ export function getRoleDescription(role: MspRole): string {
 }
 
 /**
+ * Get display name for an access mode
+ */
+export function getAccessModeDisplayName(accessMode: AccessMode): string {
+  const names: Record<AccessMode, string> = {
+    full: 'Full access',
+    customer_only: 'Customer tenants only',
+  };
+  return names[accessMode] || accessMode;
+}
+
+/**
+ * Get description for an access mode
+ */
+export function getAccessModeDescription(accessMode: AccessMode): string {
+  const descriptions: Record<AccessMode, string> = {
+    full: 'Can work in every managed tenant including your own organization',
+    customer_only: 'Can only work in customer tenants, not your own organization',
+  };
+  return descriptions[accessMode] || '';
+}
+
+/**
  * Get color class for role badge
  */
 export function getRoleColor(role: MspRole): string {
@@ -200,6 +229,20 @@ export function isValidRole(value: string): value is MspRole {
 export function parseRole(value: string | null | undefined, defaultRole: MspRole = 'viewer'): MspRole {
   if (!value) return defaultRole;
   return isValidRole(value) ? value : defaultRole;
+}
+
+/**
+ * Check if a string is a valid access mode
+ */
+export function isValidAccessMode(value: string): value is AccessMode {
+  return ['full', 'customer_only'].includes(value);
+}
+
+/**
+ * Check if an access mode allows operating on the MSP's primary tenant
+ */
+export function canAccessPrimaryTenant(accessMode: AccessMode): boolean {
+  return accessMode === 'full';
 }
 
 // ============================================

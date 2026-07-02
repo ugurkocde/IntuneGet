@@ -16,6 +16,7 @@ export function useMspOptional(): MspContextValue {
       organization: null,
       stats: null,
       isMspUser: false,
+      accessMode: 'full',
       isLoadingOrganization: false,
       managedTenants: [],
       isLoadingTenants: false,

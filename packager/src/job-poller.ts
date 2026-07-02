@@ -381,6 +381,11 @@ export class JobPoller {
           error: additionalData?.error_message as string | undefined,
           intuneAppId: additionalData?.intune_app_id as string | undefined,
           intuneAppUrl: additionalData?.intune_app_url as string | undefined,
+          duplicateInfo: additionalData?.duplicate_info as
+            | Record<string, unknown>
+            | undefined,
+          progressPercent: additionalData?.progress_percent as number | undefined,
+          progressMessage: additionalData?.progress_message as string | undefined,
         });
         this.logger.info('Job status updated via API', { jobId, status });
       } catch (error) {
@@ -415,12 +420,18 @@ export class JobPoller {
     if (status === 'uploading') {
       updateData.upload_started_at = new Date().toISOString();
       updateData.packaging_completed_at = new Date().toISOString();
-    } else if (status === 'deployed' || status === 'failed') {
+    } else if (status === 'deployed' || status === 'failed' || status === 'duplicate_skipped') {
       updateData.completed_at = new Date().toISOString();
     }
 
     if (additionalData) {
-      Object.assign(updateData, additionalData);
+      // duplicate_info is carried in the jobs table's error_details column
+      // (same place the hosted callback stores it for the uploads UI)
+      const { duplicate_info, ...rest } = additionalData;
+      Object.assign(updateData, rest);
+      if (duplicate_info !== undefined) {
+        updateData.error_details = duplicate_info;
+      }
     }
 
     const { data: updatedJob, error } = await this.supabase!

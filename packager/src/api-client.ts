@@ -163,6 +163,7 @@ export class ApiClient {
       error?: string;
       intuneAppId?: string;
       intuneAppUrl?: string;
+      duplicateInfo?: Record<string, unknown>;
     }
   ): Promise<JobUpdateResult> {
     try {
@@ -214,6 +215,9 @@ export class ApiClient {
       error?: string;
       intuneAppId?: string;
       intuneAppUrl?: string;
+      duplicateInfo?: Record<string, unknown>;
+      progressPercent?: number;
+      progressMessage?: string;
     }
   ): Promise<void> {
     await this.updateJob(jobId, {

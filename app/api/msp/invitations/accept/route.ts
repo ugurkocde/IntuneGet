@@ -24,7 +24,7 @@ interface InvitationWithOrganization extends MspInvitationRow {
   msp_organizations: MspOrganizationRow;
 }
 
-interface InvitationWithOrgName extends Pick<MspInvitationRow, 'email' | 'role' | 'expires_at' | 'accepted_at'> {
+interface InvitationWithOrgName extends Pick<MspInvitationRow, 'email' | 'role' | 'access_mode' | 'expires_at' | 'accepted_at'> {
   msp_organizations: { name: string } | null;
 }
 
@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
         user_name: user.userName,
         user_tenant_id: user.tenantId,
         role: invitation.role,
+        access_mode: invitation.access_mode || 'full',
       })
       .select()
       .single();
@@ -267,7 +268,7 @@ export async function GET(request: NextRequest) {
     // Find the invitation (without requiring auth)
     const { data: invitationData, error: invitationError } = await supabase
       .from('msp_invitations')
-      .select('email, role, expires_at, accepted_at, msp_organizations(name)')
+      .select('email, role, access_mode, expires_at, accepted_at, msp_organizations(name)')
       .eq('token', token)
       .single();
 
@@ -302,6 +303,7 @@ export async function GET(request: NextRequest) {
       valid: true,
       email: invitation.email,
       role: invitation.role,
+      access_mode: invitation.access_mode || 'full',
       organization_name: invitation.msp_organizations?.name || 'Unknown',
       expires_at: invitation.expires_at,
     });

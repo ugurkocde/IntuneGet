@@ -16,14 +16,22 @@ export function useSelectedTenant() {
     selectTenant,
     clearSelection,
     isMspUser,
+    accessMode,
+    organization,
   } = useMsp();
 
-  // Get active tenants that can be selected
+  // Get active tenants that can be selected. Members limited to customer
+  // tenants cannot select the MSP's primary tenant (the API already filters
+  // it out of the tenant list; this is defense in depth).
   const selectableTenants = useMemo(() => {
     return managedTenants.filter(
-      t => t.is_active && t.consent_status === 'granted' && t.tenant_id
+      t =>
+        t.is_active &&
+        t.consent_status === 'granted' &&
+        t.tenant_id &&
+        (accessMode !== 'customer_only' || t.tenant_id !== organization?.primary_tenant_id)
     );
-  }, [managedTenants]);
+  }, [managedTenants, accessMode, organization?.primary_tenant_id]);
 
   // Check if a specific tenant is selected
   const isSelected = useCallback((tenantId: string) => {

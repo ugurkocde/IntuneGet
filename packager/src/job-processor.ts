@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 import { spawn } from 'child_process';
 import { PackagerConfig } from './config.js';
 import { PackagingJob, JobPoller } from './job-poller.js';
-import { IntuneUploader, IntuneAppResult } from './intune-uploader.js';
+import { IntuneUploader, IntuneAppResult, DuplicateAppError } from './intune-uploader.js';
 import { createLogger, Logger } from './logger.js';
 
 interface PackagingResult {
@@ -91,20 +91,42 @@ export class JobProcessor {
 
       // Step 7: Upload to Intune (70-95%)
       await poller.updateJobProgress(job.id, 75, 'Uploading to Intune...');
-      const intuneApp = await this.uploader.uploadToIntune(
-        job,
-        result.encryptedContentPath,
-        result.encryptionInfo,
-        {
-          unencryptedSize: result.unencryptedContentSize,
-          encryptedSize: result.encryptedContentSize,
-        },
-        async (percent, message) => {
-          // Map upload progress (0-100) to overall progress (75-95)
-          const overallPercent = 75 + Math.floor(percent * 0.2);
-          await poller.updateJobProgress(job.id, overallPercent, message);
+      let intuneApp;
+      try {
+        intuneApp = await this.uploader.uploadToIntune(
+          job,
+          result.encryptedContentPath,
+          result.encryptionInfo,
+          {
+            unencryptedSize: result.unencryptedContentSize,
+            encryptedSize: result.encryptedContentSize,
+          },
+          async (percent, message) => {
+            // Map upload progress (0-100) to overall progress (75-95)
+            const overallPercent = 75 + Math.floor(percent * 0.2);
+            await poller.updateJobProgress(job.id, overallPercent, message);
+          }
+        );
+      } catch (error) {
+        if (error instanceof DuplicateAppError) {
+          // Same app already deployed to this tenant via IntuneGet (by any
+          // user): finish as duplicate_skipped instead of failing the job.
+          await poller.updateJobStatus(job.id, 'duplicate_skipped', {
+            intune_app_id: error.duplicateInfo.existingAppId,
+            intune_app_url: error.duplicateInfo.existingAppUrl,
+            duplicate_info: error.duplicateInfo,
+            progress_percent: 100,
+            progress_message: 'Duplicate app already exists in Intune',
+          });
+          this.logger.info('Job skipped as duplicate', {
+            jobId: job.id,
+            existingAppId: error.duplicateInfo.existingAppId,
+            displayName: job.display_name,
+          });
+          return;
         }
-      );
+        throw error;
+      }
 
       // Step 8: Mark as deployed (100%)
       await poller.updateJobStatus(job.id, 'deployed', {

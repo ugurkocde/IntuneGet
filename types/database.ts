@@ -548,6 +548,7 @@ export interface Database {
           user_name: string | null;
           user_tenant_id: string | null;
           role: 'owner' | 'admin' | 'operator' | 'viewer';
+          access_mode: 'full' | 'customer_only';
           created_at: string;
           updated_at: string;
         };
@@ -559,6 +560,7 @@ export interface Database {
           user_name?: string | null;
           user_tenant_id?: string | null;
           role?: 'owner' | 'admin' | 'operator' | 'viewer';
+          access_mode?: 'full' | 'customer_only';
           created_at?: string;
           updated_at?: string;
         };
@@ -570,6 +572,7 @@ export interface Database {
           user_name?: string | null;
           user_tenant_id?: string | null;
           role?: 'owner' | 'admin' | 'operator' | 'viewer';
+          access_mode?: 'full' | 'customer_only';
           created_at?: string;
           updated_at?: string;
         };
@@ -1391,6 +1394,7 @@ export interface Database {
           organization_id: string;
           email: string;
           role: 'owner' | 'admin' | 'operator' | 'viewer';
+          access_mode: 'full' | 'customer_only';
           invited_by_user_id: string;
           invited_by_email: string | null;
           token: string;
@@ -1403,6 +1407,7 @@ export interface Database {
           organization_id: string;
           email: string;
           role: 'owner' | 'admin' | 'operator' | 'viewer';
+          access_mode?: 'full' | 'customer_only';
           invited_by_user_id: string;
           invited_by_email?: string | null;
           token: string;
@@ -1415,6 +1420,7 @@ export interface Database {
           organization_id?: string;
           email?: string;
           role?: 'owner' | 'admin' | 'operator' | 'viewer';
+          access_mode?: 'full' | 'customer_only';
           invited_by_user_id?: string;
           invited_by_email?: string | null;
           token?: string;

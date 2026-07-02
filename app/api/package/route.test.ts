@@ -63,6 +63,13 @@ vi.mock('@/lib/supabase', () => ({
   createServerClient: vi.fn(),
 }));
 
+vi.mock('@/lib/msp/tenant-resolution', () => ({
+  resolveTargetTenantId: vi.fn(async ({ tokenTenantId }: { tokenTenantId: string }) => ({
+    tenantId: tokenTenantId,
+    errorResponse: null,
+  })),
+}));
+
 vi.mock('@/lib/graph-token', () => ({
   acquireGraphToken: vi.fn(),
 }));

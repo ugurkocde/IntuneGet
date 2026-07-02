@@ -8,6 +8,7 @@ import type {
   MspOrganizationStats,
   MspManagedTenantWithStats,
   MspContextValue,
+  MspAccessMode,
   CreateOrganizationRequest,
   AddTenantRequest,
   AddTenantResponse,
@@ -25,6 +26,7 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
   const [organization, setOrganization] = useState<MspOrganization | null>(null);
   const [stats, setStats] = useState<MspOrganizationStats | null>(null);
   const [isMspUser, setIsMspUser] = useState(false);
+  const [accessMode, setAccessMode] = useState<MspAccessMode>('full');
   const [isLoadingOrganization, setIsLoadingOrganization] = useState(true);
 
   // Tenants state
@@ -75,11 +77,13 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
       setOrganization(data.organization);
       setStats(data.stats);
       setIsMspUser(data.isMspUser);
+      setAccessMode(data.current_user?.access_mode || 'full');
     } catch (error) {
       console.error('Error fetching MSP organization:', error);
       setOrganization(null);
       setStats(null);
       setIsMspUser(false);
+      setAccessMode('full');
     } finally {
       setIsLoadingOrganization(false);
     }
@@ -250,6 +254,7 @@ export function MspProvider({ children }: { children: React.ReactNode }) {
     organization,
     stats,
     isMspUser,
+    accessMode,
     isLoadingOrganization,
     managedTenants,
     isLoadingTenants,

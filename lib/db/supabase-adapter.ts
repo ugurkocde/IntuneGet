@@ -172,6 +172,25 @@ export const supabaseDb: DatabaseAdapter = {
       return (data as unknown as PackagingJob[]) || [];
     },
 
+    async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
+      const supabase = createServerClient();
+
+      // Every user's jobs in this tenant, most recent first, no age cutoff.
+      const { data, error } = await supabase
+        .from('packaging_jobs')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (isError(error)) {
+        console.error('Error fetching jobs by tenant ID:', error);
+        throw error;
+      }
+
+      return (data as unknown as PackagingJob[]) || [];
+    },
+
     /**
      * Create a new job
      */

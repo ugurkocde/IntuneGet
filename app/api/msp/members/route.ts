@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     // Get all members of the organization
     const { data: members, error: membersError } = await supabase
       .from('msp_user_memberships')
-      .select('id, user_id, user_email, user_name, role, created_at')
+      .select('id, user_id, user_email, user_name, role, access_mode, created_at')
       .eq('msp_organization_id', userMembership.msp_organization_id)
       .order('created_at', { ascending: true });
 

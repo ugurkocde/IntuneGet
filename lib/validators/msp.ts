@@ -25,6 +25,10 @@ export const invitationSchema = z.object({
     .refine((val) => val !== 'owner', {
       message: 'Cannot invite users as owner',
     }),
+  access_mode: z
+    .enum(['full', 'customer_only'])
+    .optional()
+    .default('full'),
 });
 
 export type InvitationInput = z.infer<typeof invitationSchema>;
@@ -33,13 +37,21 @@ export type InvitationInput = z.infer<typeof invitationSchema>;
 // Member Management
 // ============================================
 
-export const updateMemberRoleSchema = z.object({
-  role: z
-    .string()
-    .refine((val): val is MspRole => isValidRole(val), {
-      message: 'Role must be owner, admin, operator, or viewer',
-    }),
-});
+export const updateMemberRoleSchema = z
+  .object({
+    role: z
+      .string()
+      .refine((val): val is MspRole => isValidRole(val), {
+        message: 'Role must be owner, admin, operator, or viewer',
+      })
+      .optional(),
+    access_mode: z
+      .enum(['full', 'customer_only'])
+      .optional(),
+  })
+  .refine((data) => data.role !== undefined || data.access_mode !== undefined, {
+    message: 'Either role or access_mode must be provided',
+  });
 
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 

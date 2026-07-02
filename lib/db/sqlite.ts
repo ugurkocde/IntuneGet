@@ -182,6 +182,19 @@ export const sqliteDb: DatabaseAdapter = {
       return rows.map(parseJobRow);
     },
 
+    async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
+      const database = getDb();
+      // Every user's jobs in this tenant, most recent first, no age cutoff.
+      const stmt = database.prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE tenant_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `);
+      const rows = stmt.all(tenantId, limit) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
     /**
      * Create a new job
      */

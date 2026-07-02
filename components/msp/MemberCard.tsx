@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { User, MoreVertical, Trash2, Shield, Crown, Loader2 } from 'lucide-react';
+import { User, MoreVertical, Trash2, Shield, Crown, Loader2, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RoleSelector } from './RoleSelector';
 import {
   type MspRole,
+  type AccessMode,
   getRoleDisplayName,
   getRoleColor,
+  getAccessModeDisplayName,
   hasPermission,
   canModifyRole,
 } from '@/lib/msp-permissions';
@@ -20,6 +22,7 @@ interface Member {
   user_email: string;
   user_name: string | null;
   role: MspRole;
+  access_mode?: AccessMode;
   created_at: string;
   is_current_user?: boolean;
 }
@@ -28,6 +31,7 @@ interface MemberCardProps {
   member: Member;
   currentUserRole: MspRole;
   onRoleChange?: (memberId: string, newRole: MspRole) => void;
+  onAccessModeChange?: (memberId: string, newAccessMode: AccessMode) => void;
   onRemove?: (memberId: string) => void;
 }
 
@@ -35,15 +39,19 @@ export function MemberCard({
   member,
   currentUserRole,
   onRoleChange,
+  onAccessModeChange,
   onRemove,
 }: MemberCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
   const [isChangingRole, setIsChangingRole] = useState(false);
+  const [isChangingAccessMode, setIsChangingAccessMode] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
 
   const { getAccessToken } = useMicrosoftAuth();
   const { toast } = useToast();
+
+  const accessMode: AccessMode = member.access_mode || 'full';
 
   const canEditRole = hasPermission(currentUserRole, 'change_roles') &&
     !member.is_current_user &&
@@ -88,6 +96,45 @@ export function MemberCard({
       });
     } finally {
       setIsChangingRole(false);
+    }
+  };
+
+  const handleAccessModeToggle = async () => {
+    const newAccessMode: AccessMode = accessMode === 'full' ? 'customer_only' : 'full';
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    setIsChangingAccessMode(true);
+    try {
+      const response = await fetch(`/api/msp/members/${member.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ access_mode: newAccessMode }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to change tenant access');
+      }
+
+      toast({
+        title: 'Tenant access updated',
+        description: `${member.user_email}'s tenant access has been changed to ${getAccessModeDisplayName(newAccessMode)}.`,
+      });
+
+      onAccessModeChange?.(member.id, newAccessMode);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to change tenant access',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsChangingAccessMode(false);
     }
   };
 
@@ -178,25 +225,59 @@ export function MemberCard({
         </p>
       </div>
 
-      {/* Role */}
-      <div className="flex-shrink-0 w-32">
+      {/* Role and tenant access */}
+      <div className="flex-shrink-0 w-32 space-y-1.5">
         {canEditRole ? (
-          <RoleSelector
-            value={member.role}
-            onChange={handleRoleChange}
-            actorRole={currentUserRole}
-            disabled={isChangingRole}
-            excludeOwner
-          />
+          <>
+            <RoleSelector
+              value={member.role}
+              onChange={handleRoleChange}
+              actorRole={currentUserRole}
+              disabled={isChangingRole}
+              excludeOwner
+            />
+            <button
+              type="button"
+              onClick={handleAccessModeToggle}
+              disabled={isChangingAccessMode}
+              title={
+                accessMode === 'customer_only'
+                  ? 'Limited to customer tenants. Click to grant full access.'
+                  : 'Has full tenant access. Click to limit to customer tenants.'
+              }
+              className={cn(
+                'w-full flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors',
+                isChangingAccessMode && 'opacity-50 cursor-wait',
+                accessMode === 'customer_only'
+                  ? 'text-orange-500 bg-orange-500/10 border-orange-500/20 hover:bg-orange-500/20'
+                  : 'text-text-muted bg-overlay/5 border-overlay/10 hover:bg-overlay/10'
+              )}
+            >
+              {isChangingAccessMode ? (
+                <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+              ) : (
+                <Building2 className="w-3 h-3 flex-shrink-0" />
+              )}
+              <span className="truncate">{getAccessModeDisplayName(accessMode)}</span>
+            </button>
+          </>
         ) : (
-          <span
-            className={cn(
-              'inline-flex items-center px-2.5 py-1 text-sm rounded-full font-medium',
-              getRoleColor(member.role)
+          <>
+            <span
+              className={cn(
+                'inline-flex items-center px-2.5 py-1 text-sm rounded-full font-medium',
+                getRoleColor(member.role)
+              )}
+            >
+              {getRoleDisplayName(member.role)}
+            </span>
+            {accessMode === 'customer_only' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium text-orange-500 bg-orange-500/10">
+                <Building2 className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{getAccessModeDisplayName(accessMode)}</span>
+              </span>
             )}
-          >
-            {getRoleDisplayName(member.role)}
-          </span>
+          </>
         )}
       </div>
 

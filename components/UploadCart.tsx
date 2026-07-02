@@ -60,10 +60,14 @@ export function UploadCart() {
   const toggleCart = useCartStore((state) => state.toggleCart);
   const closeCart = useCartStore((state) => state.closeCart);
   const removeItem = useCartStore((state) => state.removeItem);
+  const updateItem = useCartStore((state) => state.updateItem);
   const clearCart = useCartStore((state) => state.clearCart);
   const [isDeploying, setIsDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  // winget id -> email of whoever already deployed it in this tenant, so we can
+  // warn before a teammate's app is deployed a second time.
+  const [tenantDeployedBy, setTenantDeployedBy] = useState<Map<string, string | null>>(new Map());
 
   const { isAuthenticated, getAccessToken, signIn, requestAdminConsent } = useMicrosoftAuth();
   const { isMspUser, selectedTenantId } = useMspOptional();
@@ -82,6 +86,37 @@ export function UploadCart() {
       verify();
     }
   }, [isOpen, isAuthenticated, permissionStatus, verify]);
+
+  // Load tenant-wide deployments when the cart opens so we can flag apps a
+  // teammate already deployed (non-fatal: on any failure we just skip warnings).
+  useEffect(() => {
+    if (!isOpen || !isAuthenticated || items.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) return;
+        const response = await fetch('/api/intune/apps/deployed?scope=tenant', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(isMspUser && selectedTenantId ? { 'X-MSP-Tenant-Id': selectedTenantId } : {}),
+          },
+        });
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        const map = new Map<string, string | null>();
+        for (const d of (data.tenantDeployments || []) as { wingetId: string; deployedBy: string | null }[]) {
+          map.set(d.wingetId, d.deployedBy);
+        }
+        if (!cancelled) setTenantDeployedBy(map);
+      } catch {
+        // Non-fatal: no warnings shown
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isAuthenticated, items.length, getAccessToken, isMspUser, selectedTenantId]);
 
   // Escape key handler for sidebar
   useEffect(() => {
@@ -314,6 +349,30 @@ export function UploadCart() {
                           </span>
                         )}
                       </div>
+
+                      {/* Teammate-duplicate warning: this app was already
+                          deployed to the tenant by someone. Deploying again
+                          would create a second Intune app unless forced. */}
+                      {tenantDeployedBy.has(item.wingetId) && !item.forceCreate && (
+                        <div className="mt-3 flex items-start gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                          <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                          <div className="text-xs flex-1">
+                            <p className="text-amber-300 font-medium">Already deployed in this tenant</p>
+                            <p className="text-amber-200/70 mt-0.5">
+                              {tenantDeployedBy.get(item.wingetId)
+                                ? `Deployed by ${tenantDeployedBy.get(item.wingetId)}. Deploying again is skipped unless you deploy as a new app.`
+                                : 'Deploying again is skipped unless you deploy as a new app.'}
+                            </p>
+                            <button
+                              onClick={() => updateItem(item.id, { forceCreate: true })}
+                              disabled={isDeploying}
+                              className="mt-1.5 text-amber-300 hover:text-amber-200 font-medium underline underline-offset-2"
+                            >
+                              Deploy as new app anyway
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

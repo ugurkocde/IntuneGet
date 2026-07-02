@@ -82,10 +82,21 @@ try {
 
     Write-Host "Found $($nameMatches.Count) app(s) matching name '$displayName'"
 
-    # Check for exact match: name + IntuneGet fingerprint in description
+    # Check for exact match: name + IntuneGet fingerprint in description.
+    # Apps deployed with a default description carry "Winget: <id>"; apps
+    # deployed with a catalog description carry only "Source: IntuneGet.com".
+    # A marker naming a DIFFERENT winget id is a different app, not a duplicate.
     $exactMatch = $null
     foreach ($app in $nameMatches) {
-        if ($app.description -and $app.description -match "Winget:\s*$([regex]::Escape($wingetId))") {
+        if (-not $app.description) { continue }
+        if ($app.description -match "Winget:\s*(\S+)") {
+            if ($wingetId -and $Matches[1] -ieq $wingetId) {
+                $exactMatch = $app
+                break
+            }
+            continue
+        }
+        if ($app.description -match [regex]::Escape("Source: IntuneGet.com")) {
             $exactMatch = $app
             break
         }

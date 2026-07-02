@@ -91,6 +91,11 @@ export interface MspManagedTenantWithStats extends MspManagedTenant {
 }
 
 /**
+ * Access mode for MSP members
+ */
+export type MspAccessMode = 'full' | 'customer_only';
+
+/**
  * MSP User Membership - a user belonging to an MSP organization
  */
 export interface MspUserMembership {
@@ -101,6 +106,7 @@ export interface MspUserMembership {
   user_name: string | null;
   user_tenant_id: string | null;
   role: 'owner' | 'admin' | 'operator' | 'viewer';
+  access_mode: MspAccessMode;
   created_at: string;
   updated_at: string;
 }
@@ -116,6 +122,10 @@ export interface GetOrganizationResponse {
   organization: MspOrganization | null;
   stats: MspOrganizationStats | null;
   isMspUser: boolean;
+  current_user: {
+    role: 'owner' | 'admin' | 'operator' | 'viewer';
+    access_mode: MspAccessMode;
+  } | null;
 }
 
 /**
@@ -221,6 +231,9 @@ export interface MspContextState {
   stats: MspOrganizationStats | null;
   isMspUser: boolean;
   isLoadingOrganization: boolean;
+
+  // Caller's access mode within the organization
+  accessMode: MspAccessMode;
 
   // Managed tenants
   managedTenants: MspManagedTenantWithStats[];

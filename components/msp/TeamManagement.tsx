@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { MemberCard } from './MemberCard';
 import { InviteTeamMember } from './InviteTeamMember';
 import { BulkInviteMembers } from './BulkInviteMembers';
-import { type MspRole, hasPermission, getRoleDisplayName } from '@/lib/msp-permissions';
+import { type MspRole, type AccessMode, hasPermission, getRoleDisplayName, getAccessModeDisplayName } from '@/lib/msp-permissions';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,6 +17,7 @@ interface Member {
   user_email: string;
   user_name: string | null;
   role: MspRole;
+  access_mode?: AccessMode;
   created_at: string;
   is_current_user?: boolean;
 }
@@ -25,6 +26,7 @@ interface Invitation {
   id: string;
   email: string;
   role: MspRole;
+  access_mode?: AccessMode;
   invited_by_email: string;
   expires_at: string;
   accepted_at: string | null;
@@ -136,6 +138,12 @@ export function TeamManagement() {
     );
   };
 
+  const handleMemberAccessModeChange = (memberId: string, newAccessMode: AccessMode) => {
+    setMembers((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, access_mode: newAccessMode } : m))
+    );
+  };
+
   const handleMemberRemove = (memberId: string) => {
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
   };
@@ -179,6 +187,7 @@ export function TeamManagement() {
         body: JSON.stringify({
           email: invitation.email,
           role: invitation.role,
+          access_mode: invitation.access_mode || 'full',
         }),
       });
 
@@ -376,6 +385,7 @@ export function TeamManagement() {
                 member={member}
                 currentUserRole={currentUserRole}
                 onRoleChange={handleMemberRoleChange}
+                onAccessModeChange={handleMemberAccessModeChange}
                 onRemove={handleMemberRemove}
               />
             ))
@@ -413,6 +423,11 @@ export function TeamManagement() {
                   <p className="font-medium text-text-primary">{invitation.email}</p>
                   <p className="text-sm text-text-muted">
                     Invited as {getRoleDisplayName(invitation.role)} by {invitation.invited_by_email.split('@')[0]}
+                    {invitation.access_mode === 'customer_only' && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded-full font-medium text-orange-500 bg-orange-500/10">
+                        {getAccessModeDisplayName('customer_only')}
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-text-muted mt-1">
                     Expires {formatDate(invitation.expires_at)}
