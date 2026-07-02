@@ -9,14 +9,14 @@ import { T } from "gt-next";
 export const metadata: Metadata = {
   title: "Pricing | IntuneGet - Free Intune App Deployment Tool",
   description:
-    "IntuneGet is completely free. Deploy 10,000+ Winget apps to Microsoft Intune at no cost. See how IntuneGet compares to manual deployment.",
+    "IntuneGet is completely free. Deploy 13,000+ Winget apps to Microsoft Intune at no cost. See how IntuneGet compares to manual deployment.",
   alternates: {
     canonical: "https://intuneget.com/pricing",
   },
   openGraph: {
     title: "IntuneGet Pricing - Free & Open Source",
     description:
-      "IntuneGet is completely free. Deploy 10,000+ Winget apps to Microsoft Intune at no cost. See how it compares to paid alternatives.",
+      "IntuneGet is completely free. Deploy 13,000+ Winget apps to Microsoft Intune at no cost. See how it compares to paid alternatives.",
   },
 };
 
@@ -44,7 +44,7 @@ const pricingJsonLd = {
   "@type": "Product",
   name: "IntuneGet",
   description:
-    "Free, open-source Intune app deployment tool. Deploy 10,000+ Winget apps to Microsoft Intune.",
+    "Free, open-source Intune app deployment tool. Deploy 13,000+ Winget apps to Microsoft Intune.",
   brand: {
     "@type": "Brand",
     name: "IntuneGet",
@@ -72,7 +72,7 @@ const comparisonData: ComparisonRow[] = [
   },
   {
     feature: "Supported Apps",
-    intuneGet: "10,000+ (Winget)",
+    intuneGet: "13,000+ (Winget)",
     manual: "Unlimited (manual work)",
   },
   {
@@ -154,7 +154,7 @@ export default function PricingPage() {
             <T>Free. No Catch.</T>
           </h1>
           <p className="text-lg md:text-xl text-text-secondary max-w-2xl mx-auto">
-            <T>IntuneGet is 100% free and open source. Deploy 10,000+ Winget apps
+            <T>IntuneGet is 100% free and open source. Deploy 13,000+ Winget apps
             to Microsoft Intune without spending a cent.</T>
           </p>
         </div>
@@ -174,7 +174,7 @@ export default function PricingPage() {
             </p>
             <ul className="text-left space-y-3 mb-8">
               {[
-                "10,000+ Winget applications",
+                "13,000+ Winget applications",
                 "Unlimited deployments",
                 "Unlimited users / seats",
                 "Self-hosting with Docker",

@@ -26,7 +26,7 @@ const softwareApplicationJsonLd = {
   softwareVersion: "0.5.2",
   datePublished: "2024-01-01",
   description:
-    "IntuneGet is the leading free, open-source tool for deploying 10,000+ Winget applications to Microsoft Intune. No scripting required, 5-minute setup, and trusted by IT teams worldwide.",
+    "IntuneGet is the leading free, open-source tool for deploying 13,000+ Winget applications to Microsoft Intune. No scripting required, 5-minute setup, and trusted by IT teams worldwide.",
   isAccessibleForFree: true,
   license: "https://opensource.org/licenses",
   author: {
@@ -43,7 +43,7 @@ const softwareApplicationJsonLd = {
   featureList: [
     "Winget to Intune Integration",
     "Automatic Application Packaging",
-    "10,000+ Supported Applications",
+    "13,000+ Supported Applications",
     "No Scripting Required",
     "Self-Hosting Support via Docker",
     "Microsoft Entra ID Authentication",
@@ -69,7 +69,7 @@ const howToJsonLd = {
     {
       "@type": "HowToStep",
       name: "Select Applications",
-      text: "Choose the applications you want to deploy from Winget's extensive repository of 10,000+ packages. Use the search interface to find apps by name.",
+      text: "Choose the applications you want to deploy from Winget's extensive repository of 13,000+ packages. Use the search interface to find apps by name.",
       position: 1,
     },
     {

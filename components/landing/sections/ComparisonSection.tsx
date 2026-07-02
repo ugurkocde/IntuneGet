@@ -39,7 +39,7 @@ function MobileCellContent({ value }: { value: string | boolean }) {
 
 const comparisonData: ComparisonRow[] = [
   { feature: "Price", intuneGet: "Free", manual: "Free (your time)" },
-  { feature: "Apps Supported", intuneGet: "10,000+", manual: "Unlimited" },
+  { feature: "Apps Supported", intuneGet: "13,000+", manual: "Unlimited" },
   { feature: "Setup Time", intuneGet: "5 minutes", manual: "Varies" },
   { feature: "Time per Deployment", intuneGet: "~5 minutes", manual: "8+ hours" },
   { feature: "IntuneWin Packaging", intuneGet: "Automatic", manual: "Manual" },

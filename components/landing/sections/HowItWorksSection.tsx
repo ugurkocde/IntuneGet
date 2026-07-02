@@ -12,7 +12,7 @@ const steps = [
     number: "01",
     title: "Select Applications",
     timeEstimate: "30 seconds",
-    description: "Choose the applications you want to deploy from Winget's extensive repository of 10,000+ packages.",
+    description: "Choose the applications you want to deploy from Winget's extensive repository of 13,000+ packages.",
   },
   {
     number: "02",

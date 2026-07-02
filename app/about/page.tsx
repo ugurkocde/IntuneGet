@@ -134,7 +134,7 @@ export default function AboutPage() {
               <p>
                 <T>That idea became IntuneGet. What started as a script on my
                 workstation evolved into a full web application that any IT team
-                can use. Today, IntuneGet supports over 10,000 Winget applications
+                can use. Today, IntuneGet supports over 13,000 Winget applications
                 and lets you deploy them to Intune in minutes instead of hours.</T>
               </p>
               <p>
@@ -224,7 +224,7 @@ export default function AboutPage() {
           <dl className="grid sm:grid-cols-2 gap-4">
             {[
               { label: "Type", value: "Free, open-source Intune app deployment tool" },
-              { label: "Apps Supported", value: "10,000+ from Winget repository" },
+              { label: "Apps Supported", value: "13,000+ from Winget repository" },
               { label: "Deployment Time", value: "~5 minutes per app" },
               { label: "Cost", value: "$0 (free, open source)" },
               { label: "Platform", value: "Web-based (self-host or hosted)" },

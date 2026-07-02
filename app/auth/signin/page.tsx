@@ -295,7 +295,7 @@ function SignInContent() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
-            <span className="gradient-text-cyan"><T>10,000 Apps.</T></span>
+            <span className="gradient-text-cyan"><T><Var>{appsSupported.toLocaleString()}</Var> Apps.</T></span>
             <br />
             <span className="text-text-primary"><T>One Click.</T></span>
           </motion.h2>

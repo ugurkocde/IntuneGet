@@ -6,7 +6,7 @@ import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 
 const stats = [
   {
-    value: 10000,
+    value: 13000,
     suffix: "+",
     label: "Apps Available",
     description: "In Winget repository",
