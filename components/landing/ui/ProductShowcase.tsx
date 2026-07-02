@@ -85,7 +85,7 @@ export function ProductShowcase({ className = "", compact = false }: ProductShow
               )}>
                 <Search className={cn("text-text-muted", compact ? "w-4 h-4" : "w-5 h-5")} />
                 <span className={cn("text-text-muted", compact ? "text-xs" : "text-sm md:text-base")}>
-                  Search 10,000+ apps...
+                  Search 13,000+ apps...
                 </span>
               </div>
 

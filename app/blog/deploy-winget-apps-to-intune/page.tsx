@@ -170,7 +170,7 @@ const faqJsonLd = {
       name: "What is the difference between IntuneGet and Intune's built-in Winget catalog?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Intune's built-in Winget catalog provides a subset of Winget apps through the Intune portal. IntuneGet offers access to the full 10,000+ Winget repository, provides automatic IntuneWin packaging, generates detection rules, supports automated updates, and includes AI-powered app discovery. IntuneGet gives IT admins more control over the packaging and deployment process.",
+        text: "Intune's built-in Winget catalog provides a subset of Winget apps through the Intune portal. IntuneGet offers access to the full 13,000+ Winget repository, provides automatic IntuneWin packaging, generates detection rules, supports automated updates, and includes AI-powered app discovery. IntuneGet gives IT admins more control over the packaging and deployment process.",
       },
     },
     {
@@ -265,7 +265,7 @@ export default function DeployWingetAppsToIntunePage() {
                 <T>Winget to Intune deployment is the process of taking applications from
                 the Windows Package Manager (Winget) repository and packaging them for
                 distribution through Microsoft Intune. Winget maintains a repository
-                of over 10,000 application packages with verified installers, version
+                of over 13,000 application packages with verified installers, version
                 metadata, and hash validation. Intune, as Microsoft&apos;s cloud-based
                 endpoint management platform, requires applications in a specific
                 format -- the <code>.intunewin</code> package -- with detection rules
@@ -298,7 +298,7 @@ export default function DeployWingetAppsToIntunePage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan mt-2.5 flex-shrink-0" />
                   <span>
                     <T><strong className="text-text-primary">Centralized app repository:</strong>{" "}
-                    Over 10,000 verified packages in a single searchable catalog, eliminating
+                    Over 13,000 verified packages in a single searchable catalog, eliminating
                     the need to hunt for installers across vendor websites.</T>
                   </span>
                 </li>
@@ -378,7 +378,7 @@ export default function DeployWingetAppsToIntunePage() {
               </h3>
               <p className="text-text-secondary leading-relaxed">
                 <T>Use the search bar to find applications from the full Winget repository
-                of 10,000+ packages. IntuneGet supports partial and fuzzy search -- type
+                of 13,000+ packages. IntuneGet supports partial and fuzzy search -- type
                 &quot;chr&quot; to find Google Chrome, or &quot;code&quot; to find Visual Studio Code. For
                 applications that are difficult to find by name, IntuneGet includes
                 AI-powered app discovery that uses OpenAI to match your search query to
@@ -609,7 +609,7 @@ IntuneWinAppUtil.exe -c C:\\IntunePackaging\\Chrome -s ChromeSetup.msi -o C:\\In
                     </tr>
                     <tr className="border-b border-overlay/[0.06]">
                       <td className="p-3 font-medium text-text-primary"><T>Available Apps</T></td>
-                      <td className="p-3"><T>10,000+ (full Winget repo)</T></td>
+                      <td className="p-3"><T>13,000+ (full Winget repo)</T></td>
                       <td className="p-3"><T>Unlimited</T></td>
                       <td className="p-3"><T>Subset of Winget</T></td>
                     </tr>
@@ -788,7 +788,7 @@ IntuneWinAppUtil.exe -c C:\\IntunePackaging\\Chrome -s ChromeSetup.msi -o C:\\In
                   <p className="text-text-secondary leading-relaxed">
                     <T>Intune&apos;s built-in Winget catalog provides a subset of Winget apps
                     through the Intune portal. IntuneGet offers access to the full
-                    10,000+ Winget repository, provides automatic IntuneWin packaging,
+                    13,000+ Winget repository, provides automatic IntuneWin packaging,
                     generates detection rules, supports automated updates, and includes
                     AI-powered app discovery. IntuneGet gives IT admins more control
                     over the packaging and deployment process.</T>

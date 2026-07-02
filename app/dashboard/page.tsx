@@ -227,7 +227,7 @@ export default function DashboardPage() {
                 <QuickStartStep
                   number={1}
                   title={<T>Browse the App Catalog</T>}
-                  description={<T>Search from 10,000+ Winget packages</T>}
+                  description={<T>Search from 13,000+ Winget packages</T>}
                   href="/dashboard/apps"
                 />
                 <QuickStartStep

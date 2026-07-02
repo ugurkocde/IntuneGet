@@ -328,7 +328,7 @@ export default function SccmToIntuneMigrationWingetPage() {
                 SCCM to Intune app migration. Instead of manually downloading
                 installers from vendor websites, creating IntuneWin packages, and
                 writing detection rules for each application, Winget provides a
-                standardized catalog of over 10,000 applications with verified
+                standardized catalog of over 13,000 applications with verified
                 installers, version metadata, and hash validation. The key
                 insight is that a large percentage of your SCCM app catalog
                 likely consists of common third-party applications that already
@@ -379,7 +379,7 @@ export default function SccmToIntuneMigrationWingetPage() {
                     </strong>{" "}
                     Every Winget package follows the same manifest schema. Once
                     you have a workflow for converting Winget packages to Intune
-                    apps, it works the same way for all 10,000+ packages.</T>
+                    apps, it works the same way for all 13,000+ packages.</T>
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
@@ -554,7 +554,7 @@ Write-Host "Results saved to C:\\Migration\\WingetMatchResults.csv"`}</code>
                       Full Winget catalog access:
                     </strong>{" "}
                     Search and deploy from the complete Winget repository of
-                    10,000+ packages, unlike the limited subset available in
+                    13,000+ packages, unlike the limited subset available in
                     Intune&apos;s built-in Winget catalog.</T>
                   </span>
                 </li>

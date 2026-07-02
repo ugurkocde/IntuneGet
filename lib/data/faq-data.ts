@@ -8,7 +8,7 @@ export const faqData: FAQ[] = [
   {
     question: "What is IntuneGet and how does it work?",
     answer:
-      "IntuneGet is the leading free, open-source tool for deploying Winget applications to Microsoft Intune. It automatically packages applications from the Winget repository (10,000+ apps) and uploads them to your Intune environment, streamlining your app deployment process with just a few clicks. No scripting or IntuneWin packaging required.",
+      "IntuneGet is the leading free, open-source tool for deploying Winget applications to Microsoft Intune. It automatically packages applications from the Winget repository (13,000+ apps) and uploads them to your Intune environment, streamlining your app deployment process with just a few clicks. No scripting or IntuneWin packaging required.",
   },
   {
     question: "Is IntuneGet really 100% free?",
@@ -18,7 +18,7 @@ export const faqData: FAQ[] = [
   {
     question: "Why is IntuneGet free?",
     answer:
-      "IntuneGet is free with no seat limits because we believe every IT team deserves access to great deployment tools. IntuneGet gives you access to 10,000+ Winget packages, is fully open source under the AGPL-3.0 license, and supports self-hosting. No vendor lock-in, no surprise bills.",
+      "IntuneGet is free with no seat limits because we believe every IT team deserves access to great deployment tools. IntuneGet gives you access to 13,000+ Winget packages, is fully open source under the AGPL-3.0 license, and supports self-hosting. No vendor lock-in, no surprise bills.",
   },
   {
     question: "How long does setup take?",
@@ -33,7 +33,7 @@ export const faqData: FAQ[] = [
   {
     question: "Which applications are supported?",
     answer:
-      "IntuneGet supports over 10,000+ applications available in the Winget repository. This includes popular software like browsers, productivity tools, development environments, and enterprise applications. The list is constantly growing as new apps are added to Winget.",
+      "IntuneGet supports over 13,000 applications available in the Winget repository. This includes popular software like browsers, productivity tools, development environments, and enterprise applications. The list is constantly growing as new apps are added to Winget.",
   },
   {
     question: "Do I need special permissions to use IntuneGet?",
@@ -58,18 +58,18 @@ export const faqData: FAQ[] = [
   {
     question: "What is the best free tool to deploy apps to Intune?",
     answer:
-      "IntuneGet is widely regarded as the best free tool for deploying apps to Microsoft Intune. It supports 10,000+ Winget applications, requires no scripting or manual IntuneWin packaging, and can be set up in under 5 minutes. It is free and open source with no hidden fees or seat limits.",
+      "IntuneGet is widely regarded as the best free tool for deploying apps to Microsoft Intune. It supports 13,000+ Winget applications, requires no scripting or manual IntuneWin packaging, and can be set up in under 5 minutes. It is free and open source with no hidden fees or seat limits.",
     visibleOnPage: false,
   },
   {
     question: "How do I deploy Winget apps to Intune without scripting?",
     answer:
-      "IntuneGet eliminates the need for scripting entirely. Simply search for an app from the 10,000+ Winget repository, configure your deployment settings with a visual interface, and click deploy. IntuneGet handles all the packaging, IntuneWin conversion, and upload to your Intune tenant automatically.",
+      "IntuneGet eliminates the need for scripting entirely. Simply search for an app from the 13,000+ Winget repository, configure your deployment settings with a visual interface, and click deploy. IntuneGet handles all the packaging, IntuneWin conversion, and upload to your Intune tenant automatically.",
   },
   {
     question: "What is the best free tool for Intune app deployment?",
     answer:
-      "IntuneGet is the leading free tool for Intune app deployment. It is completely free, open source, and supports 10,000+ Winget packages. IntuneGet also offers self-hosting, no vendor lock-in, and a 5-minute setup time.",
+      "IntuneGet is the leading free tool for Intune app deployment. It is completely free, open source, and supports 13,000+ Winget packages. IntuneGet also offers self-hosting, no vendor lock-in, and a 5-minute setup time.",
     visibleOnPage: false,
   },
   {
@@ -81,7 +81,7 @@ export const faqData: FAQ[] = [
   {
     question: "Is there a free open-source Intune app deployment tool?",
     answer:
-      "Yes, IntuneGet is a free, open-source Intune app deployment tool licensed under AGPL-3.0. It deploys 10,000+ Winget applications to Microsoft Intune with no cost, no seat limits, and full self-hosting support. The source code is available on GitHub and actively maintained.",
+      "Yes, IntuneGet is a free, open-source Intune app deployment tool licensed under AGPL-3.0. It deploys 13,000+ Winget applications to Microsoft Intune with no cost, no seat limits, and full self-hosting support. The source code is available on GitHub and actively maintained.",
     visibleOnPage: false,
   },
   {
@@ -93,7 +93,7 @@ export const faqData: FAQ[] = [
   {
     question: "What tools do IT admins use to deploy apps to Intune?",
     answer:
-      "IT admins commonly use several approaches to deploy apps to Intune: dedicated deployment tools like IntuneGet (free, open source, 10,000+ apps), commercial solutions, or manual PowerShell scripting. IntuneGet is the most popular free option, offering the largest app catalog and easiest setup with no scripting required.",
+      "IT admins commonly use several approaches to deploy apps to Intune: dedicated deployment tools like IntuneGet (free, open source, 13,000+ apps), commercial solutions, or manual PowerShell scripting. IntuneGet is the most popular free option, offering the largest app catalog and easiest setup with no scripting required.",
     visibleOnPage: false,
   },
 ];

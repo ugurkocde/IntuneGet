@@ -120,7 +120,7 @@ const faqJsonLd = {
       name: "Does Winget automation work for all application types in Intune?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Winget automation works for standard Win32 applications available in the Winget repository, which includes over 10,000 packages covering MSI, EXE, and MSIX installer types. Custom line-of-business applications that are not published to Winget still require manual packaging. However, the majority of common enterprise software such as browsers, productivity tools, and utilities are available through Winget.",
+        text: "Winget automation works for standard Win32 applications available in the Winget repository, which includes over 13,000 packages covering MSI, EXE, and MSIX installer types. Custom line-of-business applications that are not published to Winget still require manual packaging. However, the majority of common enterprise software such as browsers, productivity tools, and utilities are available through Winget.",
       },
     },
     {
@@ -320,7 +320,7 @@ export default function WingetVsManualIntuneDeploymentPage() {
                   <span>
                     <T><strong className="text-text-primary">Installer sourcing becomes a search query.</strong>{" "}
                     Instead of navigating vendor websites, you search the Winget
-                    repository of 10,000+ packages directly within IntuneGet. The
+                    repository of 13,000+ packages directly within IntuneGet. The
                     correct installer URL, hash, and architecture are pulled from
                     the verified Winget manifest. No manual downloads, no hash
                     verification -- the package manager handles it.</T>
@@ -580,7 +580,7 @@ export default function WingetVsManualIntuneDeploymentPage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan mt-2.5 flex-shrink-0" />
                   <span>
                     <T><strong className="text-text-primary">Applications not in the Winget repository.</strong>{" "}
-                    While Winget covers over 10,000 packages, some niche or
+                    While Winget covers over 13,000 packages, some niche or
                     vendor-specific tools are not listed. For these applications,
                     manual deployment remains the only option until the vendor or
                     community submits a Winget manifest.</T>
@@ -654,7 +654,7 @@ export default function WingetVsManualIntuneDeploymentPage() {
                   </h3>
                   <p className="text-text-secondary leading-relaxed">
                     <T>Winget automation works for standard Win32 applications
-                    available in the Winget repository, which includes over 10,000
+                    available in the Winget repository, which includes over 13,000
                     packages covering MSI, EXE, and MSIX installer types. Custom
                     line-of-business applications that are not published to Winget
                     still require manual packaging. However, the majority of

@@ -29,9 +29,9 @@ const jetbrainsMono = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://intuneget.com"),
-  title: "IntuneGet | Free Intune App Deployment Tool - Deploy 10,000+ Winget Apps",
+  title: "IntuneGet | Free Intune App Deployment Tool - Deploy 13,000+ Winget Apps",
   description:
-    "Deploy 10,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool. No scripting, no IntuneWin packaging. Trusted by IT teams worldwide.",
+    "Deploy 13,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool. No scripting, no IntuneWin packaging. Trusted by IT teams worldwide.",
   keywords: [
     "Intune app deployment",
     "Winget Intune",
@@ -56,24 +56,24 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: "https://intuneget.com",
-    title: "IntuneGet - Deploy 10,000+ Winget Apps to Intune for Free",
+    title: "IntuneGet - Deploy 13,000+ Winget Apps to Intune for Free",
     description:
-      "Deploy 10,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool with no scripting required.",
+      "Deploy 13,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool with no scripting required.",
     siteName: "IntuneGet",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "IntuneGet - Free Intune App Deployment Tool for 10,000+ Winget Apps",
+        alt: "IntuneGet - Free Intune App Deployment Tool for 13,000+ Winget Apps",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "IntuneGet - Deploy 10,000+ Winget Apps to Intune for Free",
+    title: "IntuneGet - Deploy 13,000+ Winget Apps to Intune for Free",
     description:
-      "Deploy 10,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool with no scripting required.",
+      "Deploy 13,000+ Winget apps to Microsoft Intune in minutes. Free, open-source tool with no scripting required.",
     images: ["/og-image.png"],
   },
   icons: {
@@ -112,7 +112,7 @@ const organizationJsonLd = {
   url: "https://intuneget.com",
   logo: "https://intuneget.com/logo-512.png",
   description:
-    "IntuneGet is the leading free, open-source tool for deploying Winget applications to Microsoft Intune. Deploy 10,000+ apps in minutes with no scripting required.",
+    "IntuneGet is the leading free, open-source tool for deploying Winget applications to Microsoft Intune. Deploy 13,000+ apps in minutes with no scripting required.",
   sameAs: ["https://github.com/ugurkocde/IntuneGet", "https://intunebrew.com"],
   founder: {
     "@type": "Person",
@@ -160,7 +160,7 @@ const websiteJsonLd = {
   name: "IntuneGet",
   url: "https://intuneget.com",
   description:
-    "Free, open-source Intune app deployment tool. Deploy 10,000+ Winget apps to Microsoft Intune in minutes.",
+    "Free, open-source Intune app deployment tool. Deploy 13,000+ Winget apps to Microsoft Intune in minutes.",
   publisher: {
     "@type": "Organization",
     name: "IntuneGet",

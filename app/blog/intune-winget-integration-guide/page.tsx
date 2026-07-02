@@ -136,7 +136,7 @@ const faqJsonLd = {
       name: "How many apps are available in the Intune Winget catalog vs the full Winget repository?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The full Winget repository contains over 10,000 application packages. Intune's built-in Winget catalog exposes a curated subset of these packages. IntuneGet provides access to the entire Winget repository, allowing IT admins to deploy any package available in Winget to Intune as a fully managed Win32 application.",
+        text: "The full Winget repository contains over 13,000 application packages. Intune's built-in Winget catalog exposes a curated subset of these packages. IntuneGet provides access to the entire Winget repository, allowing IT admins to deploy any package available in Winget to Intune as a fully managed Win32 application.",
       },
     },
   ],
@@ -190,7 +190,7 @@ export default function IntuneWingetIntegrationGuidePage() {
                 creating IntuneWin packages, writing detection rules by hand, and
                 repeating the entire process every time a new version shipped.
                 Winget changes the equation by providing a standardized, version-tracked
-                repository of over 10,000 applications -- but understanding exactly
+                repository of over 13,000 applications -- but understanding exactly
                 how this integration works, where it falls short, and how to get
                 the most out of it requires a deeper look at the architecture and
                 tooling involved.</T>
@@ -247,7 +247,7 @@ export default function IntuneWingetIntegrationGuidePage() {
                 application: its publisher, version history, installer URLs,
                 SHA256 hashes, silent install switches, and supported
                 architectures. As of early 2026, the repository contains over
-                10,000 unique application packages spanning productivity tools,
+                13,000 unique application packages spanning productivity tools,
                 developer utilities, security software, and enterprise
                 applications.</T>
               </p>
@@ -484,7 +484,7 @@ winget upgrade --all --silent`}</code>
                 than relying on the native Winget app type with its endpoint
                 dependencies and limited catalog, IntuneGet uses the Winget
                 repository as the application source and packages everything as
-                Win32 apps for Intune. This gives you access to the entire 10,000+
+                Win32 apps for Intune. This gives you access to the entire 13,000+
                 Winget catalog while retaining all of Intune&apos;s Win32 management
                 features.</T>
               </p>
@@ -689,7 +689,7 @@ winget upgrade --all --silent`}</code>
                 <T>Applications not in the Winget repository</T>
               </h3>
               <p className="text-text-secondary leading-relaxed">
-                <T>Winget contains over 10,000 packages, but it does not cover every
+                <T>Winget contains over 13,000 packages, but it does not cover every
                 application. Proprietary enterprise software, niche vertical
                 applications, and internally developed tools will not be found in
                 the Winget catalog. For these applications, you will still need to
@@ -822,7 +822,7 @@ winget upgrade --all --silent`}</code>
                     <T>How many apps are available in the Intune Winget catalog vs the full Winget repository?</T>
                   </h3>
                   <p className="text-text-secondary leading-relaxed">
-                    <T>The full Winget repository contains over 10,000 application
+                    <T>The full Winget repository contains over 13,000 application
                     packages. Intune&apos;s built-in Winget catalog exposes a curated
                     subset of these packages. The exact number in the built-in
                     catalog varies as Microsoft continues to expand it, but it

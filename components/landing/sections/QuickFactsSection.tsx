@@ -4,7 +4,7 @@ import { FadeIn } from "../animations/FadeIn";
 
 const facts = [
   { label: "Type", value: "Free, open-source Intune app deployment tool" },
-  { label: "Apps Supported", value: "10,000+ from Winget repository" },
+  { label: "Apps Supported", value: "13,000+ from Winget repository" },
   { label: "Deployment Time", value: "~5 minutes per app" },
   { label: "Cost", value: "$0 (free, open source)" },
   { label: "Platform", value: "Web-based (self-host or hosted)" },
