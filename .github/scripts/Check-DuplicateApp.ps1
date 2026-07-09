@@ -55,7 +55,9 @@ try {
 
     # Query Win32 apps from Graph API
     $filter = "isof('microsoft.graph.win32LobApp')"
-    $select = "id,displayName,description,displayVersion,createdDateTime,publishingState,committedContentVersion"
+    # Keep the collection projection limited to mobileApp base properties.
+    # Graph rejects Win32-only fields in $select against this base collection.
+    $select = "id,displayName,description"
     $baseUrl = "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps"
     $url = "${baseUrl}?`$filter=${filter}&`$select=${select}"
 
@@ -72,13 +74,7 @@ try {
 
     Write-Host "Found $($allApps.Count) Win32 app(s) in tenant"
 
-    # Only committed, published apps are deployable duplicates. Failed or
-    # partially-created apps from an earlier upload must not block a safe retry.
-    $nameMatches = $allApps | Where-Object {
-        $_.displayName -ieq $displayName -and
-        $_.publishingState -eq 'published' -and
-        -not [string]::IsNullOrWhiteSpace([string]$_.committedContentVersion)
-    }
+    $nameMatches = @($allApps | Where-Object { $_.displayName -ieq $displayName })
 
     if ($nameMatches.Count -eq 0) {
         Write-Host "No apps found with name '$displayName' - proceeding with deployment"
@@ -95,17 +91,32 @@ try {
     $exactMatch = $null
     foreach ($app in $nameMatches) {
         if (-not $app.description) { continue }
+        $isFingerprintMatch = $false
         if ($app.description -match "Winget:\s*(\S+)") {
             if ($wingetId -and $Matches[1] -ieq $wingetId) {
-                $exactMatch = $app
-                break
+                $isFingerprintMatch = $true
             }
+        } elseif ($app.description -match [regex]::Escape("Source: IntuneGet.com")) {
+            $isFingerprintMatch = $true
+        }
+
+        if (-not $isFingerprintMatch) { continue }
+
+        # Fetch the polymorphic resource without $select before reading
+        # Win32-only properties such as displayVersion and committedContentVersion.
+        $detailUrl = "$baseUrl/$($app.id)"
+        $appDetails = Invoke-RestMethod -Uri $detailUrl -Headers $headers -Method Get -ErrorAction Stop
+
+        # Only committed, published apps are deployable duplicates. Failed or
+        # partially-created apps from an earlier upload must not block a safe retry.
+        if ($appDetails.publishingState -ne 'published' -or
+            [string]::IsNullOrWhiteSpace([string]$appDetails.committedContentVersion)) {
+            Write-Host "Ignoring incomplete matching app $($app.id) (state: $($appDetails.publishingState))"
             continue
         }
-        if ($app.description -match [regex]::Escape("Source: IntuneGet.com")) {
-            $exactMatch = $app
-            break
-        }
+
+        $exactMatch = $appDetails
+        break
     }
 
     if ($exactMatch) {

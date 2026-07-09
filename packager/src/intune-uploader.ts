@@ -8,6 +8,14 @@ import { PackagerConfig } from './config.js';
 import { PackagingJob } from './job-poller.js';
 import { GraphClient } from './graph-client.js';
 import { createLogger, Logger } from './logger.js';
+import {
+  findDuplicateIntuneApp,
+  INTUNE_APP_SOURCE_MARKER,
+  type DuplicateAppInfo,
+} from './duplicate-app.js';
+
+export { INTUNE_APP_SOURCE_MARKER } from './duplicate-app.js';
+export type { DuplicateAppInfo } from './duplicate-app.js';
 
 export interface IntuneAppResult {
   id: string;
@@ -26,20 +34,6 @@ export interface EncryptionInfo {
 }
 
 type ProgressCallback = (percent: number, message: string) => Promise<void>;
-
-/**
- * Marker appended to every app description so deployments are recognizable as
- * IntuneGet-managed (same convention as the web app and hosted workflow).
- */
-export const INTUNE_APP_SOURCE_MARKER = 'Source: IntuneGet.com';
-
-export interface DuplicateAppInfo {
-  matchType: 'exact';
-  existingAppId: string;
-  existingAppUrl: string;
-  existingVersion?: string;
-  createdAt?: string;
-}
 
 /**
  * Thrown by uploadToIntune when the same app is already deployed to the tenant
@@ -197,19 +191,10 @@ export class IntuneUploader {
   ): Promise<IntuneAppResult> {
     const graphClient = new GraphClient(this.config, job.tenant_id);
 
-    // Step 0: Tenant-wide duplicate guard. Skipped when the job carries
-    // forceCreate; non-fatal on Graph errors so a throttled check never
-    // blocks a deployment.
+    // Step 0: Tenant-wide duplicate guard. Fail closed on Graph errors so an
+    // unavailable check cannot create an unintended second app.
     if (!extractForceCreate(job.package_config)) {
-      let duplicate: DuplicateAppInfo | null = null;
-      try {
-        duplicate = await this.findDuplicateApp(graphClient, job);
-      } catch (error) {
-        this.logger.warn('Duplicate check failed, proceeding with deployment', {
-          jobId: job.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      const duplicate = await findDuplicateIntuneApp(graphClient, job);
       if (duplicate) {
         throw new DuplicateAppError(duplicate);
       }
@@ -340,85 +325,6 @@ export class IntuneUploader {
     return {
       install: `Invoke-AppDeployToolkit.exe${deployModeFlag}`,
       uninstall: `Invoke-AppDeployToolkit.exe -DeploymentType Uninstall${deployModeFlag}`,
-    };
-  }
-
-  /**
-   * Find an app already deployed to this tenant via IntuneGet that matches the
-   * job. Same matching contract as .github/scripts/Check-DuplicateApp.ps1:
-   * exact display name plus an IntuneGet fingerprint in the description - a
-   * "Winget: <id>" marker naming the same winget id, or the source marker for
-   * apps deployed with a catalog description. A marker naming a different
-   * winget id is a different app, not a duplicate.
-   */
-  private async findDuplicateApp(
-    graphClient: GraphClient,
-    job: PackagingJob
-  ): Promise<DuplicateAppInfo | null> {
-    interface GraphWin32App {
-      id: string;
-      displayName?: string;
-      description?: string | null;
-      displayVersion?: string | null;
-      createdDateTime?: string;
-      publishingState?: string | null;
-      committedContentVersion?: string | null;
-    }
-    interface GraphAppPage {
-      value?: GraphWin32App[];
-      '@odata.nextLink'?: string;
-    }
-
-    const displayNameLower = job.display_name.toLowerCase();
-    let nextPath: string | null =
-      `/deviceAppManagement/mobileApps?$filter=isof('microsoft.graph.win32LobApp')` +
-      `&$select=id,displayName,description,displayVersion,createdDateTime,publishingState,committedContentVersion`;
-
-    while (nextPath) {
-      const page: GraphAppPage = await graphClient.get<GraphAppPage>(nextPath);
-      for (const app of page.value ?? []) {
-        if (
-          app.displayName?.toLowerCase() !== displayNameLower ||
-          !app.description ||
-          app.publishingState !== 'published' ||
-          !app.committedContentVersion
-        ) {
-          continue;
-        }
-        const wingetMarker = app.description.match(/Winget:\s*(\S+)/);
-        if (wingetMarker) {
-          if (
-            job.winget_id &&
-            wingetMarker[1].toLowerCase() === job.winget_id.toLowerCase()
-          ) {
-            return this.toDuplicateInfo(app);
-          }
-          continue;
-        }
-        if (app.description.includes(INTUNE_APP_SOURCE_MARKER)) {
-          return this.toDuplicateInfo(app);
-        }
-      }
-      // nextLink is absolute; GraphClient.get expects a path
-      nextPath = page['@odata.nextLink']
-        ? page['@odata.nextLink'].replace('https://graph.microsoft.com/beta', '')
-        : null;
-    }
-
-    return null;
-  }
-
-  private toDuplicateInfo(app: {
-    id: string;
-    displayVersion?: string | null;
-    createdDateTime?: string;
-  }): DuplicateAppInfo {
-    return {
-      matchType: 'exact',
-      existingAppId: app.id,
-      existingAppUrl: `https://intune.microsoft.com/#view/Microsoft_Intune_Apps/SettingsMenu/~/0/appId/${app.id}`,
-      existingVersion: app.displayVersion ?? undefined,
-      createdAt: app.createdDateTime,
     };
   }
 
