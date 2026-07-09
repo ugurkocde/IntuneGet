@@ -7,7 +7,8 @@
     and wingetId. If a duplicate is found, sends a duplicate_skipped callback and sets
     DUPLICATE_FOUND=true in the environment. If forceCreate is enabled, skips the check.
 
-    This script is non-fatal: API errors are logged as warnings and deployment proceeds.
+    API errors stop the deployment before app creation so a transient duplicate
+    check failure cannot create a second app.
 
 .NOTES
     Env vars consumed:
@@ -54,7 +55,7 @@ try {
 
     # Query Win32 apps from Graph API
     $filter = "isof('microsoft.graph.win32LobApp')"
-    $select = "id,displayName,description,displayVersion,createdDateTime"
+    $select = "id,displayName,description,displayVersion,createdDateTime,publishingState,committedContentVersion"
     $baseUrl = "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps"
     $url = "${baseUrl}?`$filter=${filter}&`$select=${select}"
 
@@ -71,8 +72,13 @@ try {
 
     Write-Host "Found $($allApps.Count) Win32 app(s) in tenant"
 
-    # Filter for exact displayName match (case-insensitive)
-    $nameMatches = $allApps | Where-Object { $_.displayName -ieq $displayName }
+    # Only committed, published apps are deployable duplicates. Failed or
+    # partially-created apps from an earlier upload must not block a safe retry.
+    $nameMatches = $allApps | Where-Object {
+        $_.displayName -ieq $displayName -and
+        $_.publishingState -eq 'published' -and
+        -not [string]::IsNullOrWhiteSpace([string]$_.committedContentVersion)
+    }
 
     if ($nameMatches.Count -eq 0) {
         Write-Host "No apps found with name '$displayName' - proceeding with deployment"
@@ -145,9 +151,22 @@ try {
     }
 }
 catch {
-    # Non-fatal: log warning and proceed with deployment
-    Write-Host "::warning::Duplicate check failed: $($_.Exception.Message)"
-    Write-Host "Proceeding with deployment (duplicate check is non-blocking)"
-    echo "DUPLICATE_FOUND=false" >> $env:GITHUB_ENV
-    exit 0
+    $errorMessage = $_.Exception.Message
+    Write-Host "::error::Duplicate check failed: $errorMessage"
+    Send-Callback -Body @{
+        jobId = $env:JOB_ID
+        status = "failed"
+        message = "Could not verify whether this app already exists in Intune. Retry when Microsoft Graph is available."
+        progress = 0
+        errorStage = "upload"
+        errorCategory = "intune_api"
+        errorCode = "DUPLICATE_CHECK_FAILED"
+        errorDetails = @{ operation = "duplicate_check"; error = $errorMessage }
+        retryable = $true
+        runId = "$env:GITHUB_RUN_ID"
+        runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+    } -CallbackUrl $env:CALLBACK_URL -CallbackSecret $env:CALLBACK_SECRET -MaxRetries 5 | Out-Null
+    $env:ERROR_SENT = "true"
+    echo "ERROR_SENT=true" >> $env:GITHUB_ENV
+    throw
 }

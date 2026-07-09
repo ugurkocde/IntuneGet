@@ -9,92 +9,68 @@ import { getDatabase } from '@/lib/db';
 import { verifyCallbackSignature } from '@/lib/callback-signature';
 import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
-import { acquireGraphToken } from '@/lib/graph-token';
-import { applyAppRelationships } from '@/lib/intune-api';
-import type { AppRelationship } from '@/types/intune';
-
-interface PackageCallbackBody {
-  jobId: string;
-  status: 'packaging' | 'uploading' | 'deployed' | 'failed' | 'duplicate_skipped';
-  message?: string;
-  progress?: number;
-
-  // Success fields (deployed / duplicate_skipped status)
-  intuneAppId?: string;
-  intuneAppUrl?: string;
-
-  // Duplicate detection fields
-  duplicateInfo?: {
-    matchType: 'exact' | 'partial';
-    existingAppId: string;
-    existingVersion?: string;
-    createdAt?: string;
-  };
-
-  // Warnings for partial success (e.g., deployed but assignments failed)
-  warnings?: string[];
-
-  // GitHub Actions run info
-  runId?: string;
-  runUrl?: string;
-
-  // Enhanced error fields
-  errorStage?: 'download' | 'package' | 'upload' | 'authenticate' | 'finalize' | 'unknown';
-  errorCategory?: 'network' | 'validation' | 'permission' | 'installer' | 'intune_api' | 'system';
-  errorCode?: string;
-  errorDetails?: Record<string, unknown>;
-}
+import {
+  packageCallbackSchema,
+  sanitizeErrorDetails,
+  shouldApplyCallback,
+} from '@/lib/package-callback';
 
 export async function POST(request: NextRequest) {
   try {
-    // Read the raw body for signature verification
     const body = await request.text();
     const signature = request.headers.get('X-Signature');
     const callbackSecret = process.env.CALLBACK_SECRET;
 
-    // Verify HMAC signature
-    if (callbackSecret) {
-      if (!verifyCallbackSignature(body, signature, callbackSecret)) {
-        return NextResponse.json(
-          { error: 'Invalid signature' },
-          { status: 401 }
-        );
-      }
+    if (!callbackSecret && process.env.NODE_ENV === 'production') {
+      console.error('[Callback] CALLBACK_SECRET is required in production');
+      return NextResponse.json({ error: 'Callback verification is unavailable' }, { status: 503 });
     }
 
-    // Parse the verified body
-    const data: PackageCallbackBody = JSON.parse(body);
+    if (callbackSecret && !verifyCallbackSignature(body, signature, callbackSecret)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
 
-    // Validate required fields
-    if (!data.jobId) {
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(body);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const parsed = packageCallbackSchema.safeParse(parsedJson);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'jobId is required' },
-        { status: 400 }
+        { error: 'Invalid callback payload', issues: parsed.error.issues },
+        { status: 400 },
       );
     }
-
-    if (!data.status) {
-      return NextResponse.json(
-        { error: 'status is required' },
-        { status: 400 }
-      );
-    }
-
+    const data = parsed.data;
     const db = getDatabase();
+    const currentJob = await db.jobs.getById(data.jobId);
+    if (!currentJob) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
 
-    // Build update object based on status
-    const updateData: Record<string, unknown> = {
+    if (!shouldApplyCallback(currentJob.status, data.status, currentJob.updated_at, data.heartbeatAt)) {
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        reason: 'stale_or_terminal_callback',
+        job: currentJob,
+      });
+    }
+
+    const updateData: Partial<typeof currentJob> = {
       status: data.status,
-      status_message: data.message,
+      status_message: data.message ?? currentJob.status_message,
     };
 
     if (data.progress !== undefined) {
       updateData.progress_percent = data.progress;
     }
 
-    // Add GitHub run info if provided
     if (data.runId) {
-      updateData.github_run_id = data.runId;
+      updateData.github_run_id = String(data.runId);
     }
     if (data.runUrl) {
       updateData.github_run_url = data.runUrl;
@@ -107,39 +83,8 @@ export async function POST(request: NextRequest) {
       updateData.completed_at = new Date().toISOString();
       updateData.progress_percent = 100;
 
-      // Store warnings for partial success (e.g., assignments/categories failed)
       if (data.warnings && data.warnings.length > 0) {
         updateData.warnings = data.warnings;
-      }
-
-      // Get job details for upload history
-      const job = await db.jobs.getById(data.jobId);
-
-      if (job && data.intuneAppId) {
-        // Add to upload history
-        await db.uploadHistory.create({
-          packaging_job_id: data.jobId,
-          user_id: job.user_id,
-          winget_id: job.winget_id,
-          version: job.version,
-          display_name: job.display_name,
-          publisher: job.publisher,
-          intune_app_id: data.intuneAppId,
-          intune_app_url: data.intuneAppUrl,
-          intune_tenant_id: job.tenant_id,
-        });
-
-        // ESP profiles are now applied in the GitHub Actions workflow directly
-        // (same step as assignments and categories) for reliability.
-
-        // Apply app relationships (dependencies/supersedence) if configured
-        const packageConfig = job.package_config as Record<string, unknown> | undefined;
-        const relationships = packageConfig?.relationships as AppRelationship[] | undefined;
-        if (relationships && relationships.length > 0 && job.tenant_id) {
-          applyRelationshipsAfterDeploy(job.tenant_id, data.intuneAppId, relationships).catch((err) => {
-            console.error('[Callback] Relationship application error:', err);
-          });
-        }
       }
     }
 
@@ -150,26 +95,8 @@ export async function POST(request: NextRequest) {
       updateData.completed_at = new Date().toISOString();
       updateData.progress_percent = 100;
 
-      // Store duplicate info in error_details for UI display
       if (data.duplicateInfo) {
         updateData.error_details = data.duplicateInfo;
-      }
-
-      // Do NOT create uploadHistory record (no new app was created)
-
-      // ESP profiles are now applied in the GitHub Actions workflow directly.
-      // Still apply relationships to the existing app if configured.
-      if (data.intuneAppId) {
-        const job = await db.jobs.getById(data.jobId);
-        if (job) {
-          const packageConfig = job.package_config as Record<string, unknown> | undefined;
-          const relationships = packageConfig?.relationships as AppRelationship[] | undefined;
-          if (relationships && relationships.length > 0 && job.tenant_id) {
-            applyRelationshipsAfterDeploy(job.tenant_id, data.intuneAppId, relationships).catch((err) => {
-              console.error('[Callback] Relationship application error (duplicate_skipped):', err);
-            });
-          }
-        }
       }
     }
 
@@ -178,7 +105,6 @@ export async function POST(request: NextRequest) {
       updateData.error_message = data.message || 'Unknown error';
       updateData.completed_at = new Date().toISOString();
 
-      // Save enhanced error fields if provided
       if (data.errorStage) {
         updateData.error_stage = data.errorStage;
       }
@@ -189,7 +115,11 @@ export async function POST(request: NextRequest) {
         updateData.error_code = data.errorCode;
       }
       if (data.errorDetails) {
-        updateData.error_details = data.errorDetails;
+        updateData.error_details = {
+          ...sanitizeErrorDetails(data.errorDetails),
+          retryable: data.retryable,
+          retryAfterSeconds: data.retryAfterSeconds,
+        };
       }
 
       console.error(`Job ${data.jobId} failed: ${data.message}`, {
@@ -199,25 +129,49 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update the job in database
-    const updatedJob = await db.jobs.update(data.jobId, updateData);
+    // Optimistic status condition prevents a cancellation or another terminal
+    // callback from being overwritten between the read and the update.
+    const updatedJob = await db.jobs.update(data.jobId, updateData, { status: currentJob.status });
 
     if (!updatedJob) {
-      return NextResponse.json(
-        { error: 'Failed to update job status' },
-        { status: 500 }
-      );
+      const latestJob = await db.jobs.getById(data.jobId);
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        reason: 'job_changed_during_callback',
+        job: latestJob,
+      });
+    }
+
+    // Side effects run only after the state transition succeeds, making callback
+    // retries idempotent and preventing duplicate history rows.
+    if (data.status === 'deployed' && data.intuneAppId) {
+      try {
+        await db.uploadHistory.create({
+          packaging_job_id: data.jobId,
+          user_id: currentJob.user_id,
+          winget_id: currentJob.winget_id,
+          version: currentJob.version,
+          display_name: currentJob.display_name,
+          publisher: currentJob.publisher,
+          intune_app_id: data.intuneAppId,
+          intune_app_url: data.intuneAppUrl,
+          intune_tenant_id: currentJob.tenant_id,
+        });
+      } catch (historyError) {
+        // The terminal job state is authoritative. Do not ask the workflow to
+        // retry a callback that can no longer repeat this side effect.
+        console.error(`[Callback] Failed to create upload history for ${data.jobId}:`, historyError);
+      }
     }
 
     // Check if this job belongs to a batch deployment item
     if (data.status === 'deployed' || data.status === 'failed' || data.status === 'duplicate_skipped') {
       const jobStatus = data.status === 'failed' ? 'failed' : 'completed';
-      // Fire and forget - don't block the callback response
       onJobCompleted(data.jobId, jobStatus, data.message).catch((err) => {
         console.error('[Callback] Batch orchestrator error:', err);
       });
 
-      // Clean up auto-update tracking if this was an auto-update job
       handleAutoUpdateJobCompletion(data.jobId, data.status, data.message).catch((err) => {
         console.error('[Callback] Auto-update cleanup error:', err);
       });
@@ -227,26 +181,12 @@ export async function POST(request: NextRequest) {
       success: true,
       job: updatedJob,
     });
-  } catch {
+  } catch (error) {
+    console.error('[Callback] Unhandled callback error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
-  }
-}
-
-/**
- * Apply app relationships (dependencies/supersedence) after deployment using service principal credentials.
- */
-async function applyRelationshipsAfterDeploy(
-  tenantId: string,
-  intuneAppId: string,
-  relationships: AppRelationship[]
-): Promise<void> {
-  const tokenResult = await acquireGraphToken(tenantId);
-  const warnings = await applyAppRelationships(tokenResult.accessToken, intuneAppId, relationships);
-  if (warnings.length > 0) {
-    console.warn('[Callback] Relationship warnings:', warnings);
   }
 }
 

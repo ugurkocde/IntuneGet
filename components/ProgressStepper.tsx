@@ -64,7 +64,7 @@ export function ProgressStepper({
                   }
                   title={stage.description}
                   className={cn(
-                    'w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm flex-shrink-0',
+                    'w-9 h-9 rounded-full flex items-center justify-center transition-[background-color,border-color,box-shadow] duration-300 shadow-sm flex-shrink-0',
                     isFailedStage && 'bg-status-error/20 border-2 border-status-error',
                     isJobCompleted && 'bg-status-success/20 border-2 border-status-success',
                     !isJobFailed && !isJobCompleted && isCompleted && 'bg-status-success/20 border-2 border-status-success',
@@ -141,7 +141,7 @@ export function ProgressStepper({
 
       {/* Status Message and Time */}
       <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" aria-live="polite" aria-atomic="true">
           {isActive && !prefersReducedMotion && (
             <span className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse flex-shrink-0" />
           )}
@@ -159,7 +159,7 @@ export function ProgressStepper({
                 </span>
               : isJobFailed
                 ? (statusMessage || 'Failed')
-                : (statusMessage || currentStage?.description || 'Processing...')}
+                : (statusMessage || currentStage?.description || 'Processing…')}
           </span>
         </div>
         <div className="flex items-center gap-2 text-text-muted">
@@ -175,7 +175,13 @@ export function ProgressStepper({
       {/* Progress Bar with inline percentage - hidden for failed jobs */}
       {!isJobFailed && (
         <div className="flex items-center gap-2">
-          <div className={cn(
+          <div
+            role="progressbar"
+            aria-label="Deployment progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.max(0, Math.min(100, progress))}
+            className={cn(
             'flex-1 h-2.5 rounded-full overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]',
             isJobCompleted ? 'bg-status-success/10' : 'bg-bg-elevated'
           )}>

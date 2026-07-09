@@ -334,7 +334,7 @@ export function AutoUpdateHistory({
                                     asChild
                                   >
                                     <a
-                                      href={`/dashboard/uploads?job=${item.packaging_job_id}`}
+                                      href={`/dashboard/uploads?jobs=${item.packaging_job_id}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                     >

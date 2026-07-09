@@ -91,13 +91,17 @@ const errorCodeMessages: Record<string, string> = {
   AUTH_FAILED: 'Failed to acquire authentication token',
   AUTH_INVALID_CREDENTIALS: 'Service principal credentials are invalid',
   AUTH_NO_CONSENT: 'Admin consent has not been granted for the required permissions',
-  INTUNE_UNAUTHORIZED: 'Authentication token expired (401)',
+  INTUNE_UNAUTHORIZED: 'Microsoft Graph rejected the service principal credentials (401)',
   INTUNE_FORBIDDEN: 'Access denied (403) - missing DeviceManagementApps.ReadWrite.All permission',
+  INTUNE_SERVICE_TRANSIENT: 'Intune returned a temporary backend error. A safe retry is recommended.',
+  INTUNE_BAD_REQUEST: 'Intune rejected the app or content request. Review the workflow log for the rejected field.',
   INTUNE_API_ERROR: 'The Intune API returned an unexpected error',
   AZURE_STORAGE_URI_FAILED: 'Failed to get Azure Storage URI from Intune',
   AZURE_AUTH_FAILED: 'Azure Storage authentication failed',
   AZURE_UPLOAD_FAILED: 'Failed to upload package to Azure Storage',
   INTUNE_COMMIT_FAILED: 'Failed to commit the uploaded file to Intune',
+  WORKFLOW_DISPATCH_FAILED: 'The packaging workflow could not be started. No upload was performed.',
+  DUPLICATE_CHECK_FAILED: 'Intune could not confirm whether this app already exists. Retry when Microsoft Graph is available.',
   UNEXPECTED_ERROR: 'An unexpected error occurred during the pipeline',
 };
 

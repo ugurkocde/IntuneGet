@@ -14,6 +14,10 @@ function isError(error: PostgrestError | null): error is PostgrestError {
   return error !== null;
 }
 
+function isMissingArchiveColumn(error: PostgrestError | null): boolean {
+  return Boolean(error?.message?.includes('archived_at'));
+}
+
 /**
  * Helper type for query results
  */
@@ -121,7 +125,7 @@ export const supabaseDb: DatabaseAdapter = {
         throw error;
       }
 
-      return data || [];
+      return (data || []).filter((job) => !job.archived_at);
     },
 
     /**
@@ -169,7 +173,7 @@ export const supabaseDb: DatabaseAdapter = {
         throw error;
       }
 
-      return (data as unknown as PackagingJob[]) || [];
+      return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
@@ -188,7 +192,7 @@ export const supabaseDb: DatabaseAdapter = {
         throw error;
       }
 
-      return (data as unknown as PackagingJob[]) || [];
+      return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
     /**
@@ -380,9 +384,18 @@ export const supabaseDb: DatabaseAdapter = {
       // Fetch counts for each status
       for (const status of Object.keys(stats)) {
         const query = getPackagingJobsQuery(supabase);
-        const { count, error } = await query
+        let { count, error } = await query
           .select('*', { count: 'exact', head: true })
-          .eq('status', status);
+          .eq('status', status)
+          .is('archived_at', null);
+
+        // Deploys can briefly run before migration 033 is applied. Keep reads
+        // available during that window; archiving activates once the column exists.
+        if (isMissingArchiveColumn(error)) {
+          ({ count, error } = await getPackagingJobsQuery(supabase)
+            .select('*', { count: 'exact', head: true })
+            .eq('status', status));
+        }
 
         if (!isError(error) && count !== null) {
           stats[status as keyof JobStats] = count;
@@ -393,25 +406,18 @@ export const supabaseDb: DatabaseAdapter = {
     },
 
     /**
-     * Delete a single job by ID.
-     * Clears FK references in msp_batch_deployment_items before deleting.
+     * Soft-archive a single job by ID so upload-history references remain valid.
      */
     async deleteById(id: string): Promise<boolean> {
       const supabase = createServerClient();
 
-      // Clear FK reference in msp_batch_deployment_items (no ON DELETE clause)
-      await supabase
-        .from('msp_batch_deployment_items')
-        .update({ packaging_job_id: null })
-        .eq('packaging_job_id', id);
-
       const { error } = await supabase
         .from('packaging_jobs')
-        .delete()
+        .update({ archived_at: new Date().toISOString() })
         .eq('id', id);
 
       if (isError(error)) {
-        console.error('Error deleting job:', error);
+        console.error('Error archiving job:', error);
         throw error;
       }
 
@@ -419,43 +425,21 @@ export const supabaseDb: DatabaseAdapter = {
     },
 
     /**
-     * Bulk-delete jobs matching a user ID and a set of statuses.
-     * Clears FK references in msp_batch_deployment_items before deleting.
+     * Bulk-archive jobs matching a user ID and a set of statuses.
      */
     async deleteByUserIdAndStatuses(userId: string, statuses: string[]): Promise<number> {
       const supabase = createServerClient();
 
-      // Find IDs to delete first
-      const { data: jobsToDelete, error: fetchError } = await supabase
-        .from('packaging_jobs')
-        .select('id')
-        .eq('user_id', userId)
-        .in('status', statuses);
-
-      if (isError(fetchError)) {
-        console.error('Error fetching jobs for deletion:', fetchError);
-        throw fetchError;
-      }
-
-      const jobIds = (jobsToDelete as unknown as Array<{ id: string }>)?.map((j) => j.id) ?? [];
-      if (jobIds.length === 0) return 0;
-
-      // Clear FK references in msp_batch_deployment_items
-      await supabase
-        .from('msp_batch_deployment_items')
-        .update({ packaging_job_id: null })
-        .in('packaging_job_id', jobIds);
-
-      // Now delete the jobs
       const { data, error } = await supabase
         .from('packaging_jobs')
-        .delete()
+        .update({ archived_at: new Date().toISOString() })
         .eq('user_id', userId)
         .in('status', statuses)
+        .is('archived_at', null)
         .select('id');
 
       if (isError(error)) {
-        console.error('Error bulk-deleting jobs:', error);
+        console.error('Error bulk-archiving jobs:', error);
         throw error;
       }
 

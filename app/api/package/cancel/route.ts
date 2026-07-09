@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If dismiss flag is set and job is in a terminal state, delete the row
+    // If dismiss is set for a terminal job, soft-archive it. The row remains
+    // available to upload history and update-policy audit references.
     const terminalStatuses = ['completed', 'failed', 'cancelled', 'duplicate_skipped', 'deployed'];
     if (dismiss && terminalStatuses.includes(typedJob.status)) {
       // Run auto-update cleanup before deleting (defense-in-depth for stuck jobs)
@@ -91,9 +92,9 @@ export async function POST(request: NextRequest) {
       await db.jobs.deleteById(jobId);
       return NextResponse.json({
         success: true,
-        message: 'Job dismissed and removed',
+        message: 'Job dismissed',
         jobId,
-        deleted: true,
+        archived: true,
       });
     }
 
@@ -125,17 +126,36 @@ export async function POST(request: NextRequest) {
     // Attempt to cancel GitHub workflow if run ID exists and job is still active
     let githubCancelResult = null;
     const isActiveJob = CANCELLABLE_STATUSES.includes(typedJob.status);
-    if (isActiveJob && typedJob.github_run_id && isGitHubActionsConfigured()) {
+    if (isActiveJob && isGitHubActionsConfigured()) {
+      if (!typedJob.github_run_id) {
+        return NextResponse.json(
+          {
+            error: 'This workflow run could not be identified, so cancellation cannot be confirmed. Refresh and try again shortly.',
+            retryable: true,
+          },
+          { status: 409 },
+        );
+      }
+
       githubCancelResult = await cancelWorkflowRun(typedJob.github_run_id);
+      if (!githubCancelResult.success) {
+        const status = githubCancelResult.status === 'error' ? 502 : 409;
+        return NextResponse.json(
+          {
+            error: githubCancelResult.message,
+            githubCancelled: false,
+            retryable: githubCancelResult.status === 'error',
+          },
+          { status },
+        );
+      }
     }
 
-    // Update job status to cancelled in database
-    // We update regardless of GitHub result - the user wants this cancelled/dismissed
+    // Update the database only after GitHub accepted cancellation (or when the
+    // job is handled by the local packager and no GitHub run exists).
     let errorMessage = 'Job cancelled by user';
     if (!isActiveJob) {
       errorMessage = `Job dismissed by user (was ${typedJob.status})`;
-    } else if (githubCancelResult && !githubCancelResult.success) {
-      errorMessage = `Job cancelled by user. GitHub workflow: ${githubCancelResult.message}`;
     }
 
     // Use token email, or fall back to job's stored user_email

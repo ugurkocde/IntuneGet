@@ -105,7 +105,7 @@ export function RecentFailuresTable({ data }: RecentFailuresTableProps) {
               </td>
               <td className="py-3 px-4 text-right">
                 <a
-                  href={`/dashboard/uploads?job=${failure.id}`}
+                  href={`/dashboard/uploads?jobs=${failure.id}`}
                   className="inline-flex items-center gap-1 text-accent-cyan hover:text-accent-cyan-bright text-sm"
                 >
                   View

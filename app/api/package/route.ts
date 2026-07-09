@@ -27,6 +27,7 @@ import {
   STALE_JOB_TIMEOUT_MINUTES,
   INTERMEDIATE_STATES,
   STALE_JOB_ERROR_MESSAGE,
+  keepActuallyStaleJobs,
 } from '@/lib/stale-jobs';
 import type { PackagingJob } from '@/lib/db/types';
 import type { CartItem, Win32CartItem, StoreCartItem } from '@/types/upload';
@@ -388,7 +389,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Phase 2: Dispatch all GitHub Actions workflows in parallel
+        // Phase 2: Dispatch workflows. Upload execution is serialized per tenant
+        // by the workflow concurrency group, preventing Intune URI/SAS bursts.
         const isBatch = pendingDispatches.length > 1;
 
         const dispatchResults = await Promise.allSettled(
@@ -449,7 +451,8 @@ export async function POST(request: NextRequest) {
         );
 
         // Collect results from parallel dispatches
-        dispatchResults.forEach((result, idx) => {
+        for (let idx = 0; idx < dispatchResults.length; idx++) {
+          const result = dispatchResults[idx];
           if (result.status === 'fulfilled') {
             const { item, jobId, createdAt } = result.value;
             jobs.push({
@@ -466,12 +469,26 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
+            const dispatchError = result.reason instanceof Error ? result.reason.message : 'Unknown error';
+            if (dispatch) {
+              await db.jobs.update(dispatch.jobId, {
+                status: 'failed',
+                progress_percent: 0,
+                error_stage: 'authenticate',
+                error_category: 'network',
+                error_code: 'WORKFLOW_DISPATCH_FAILED',
+                error_message: dispatchError,
+                completed_at: new Date().toISOString(),
+              }).catch((updateError) => {
+                console.error(`Failed to mark dispatch ${dispatch.jobId} as failed:`, updateError);
+              });
+            }
             errors.push({
               wingetId: dispatch?.item.wingetId || 'unknown',
-              error: result.reason instanceof Error ? result.reason.message : 'Unknown error',
+              error: dispatchError,
             });
           }
-        });
+        }
       }
     }
 
@@ -515,13 +532,15 @@ async function healStaleJobs(
 ): Promise<PackagingJob[]> {
   const cutoff = Date.now() - STALE_JOB_TIMEOUT_MINUTES * 60 * 1000;
 
-  const staleJobs = jobs
+  const staleCandidates = jobs
     .filter((job) => {
       if (!INTERMEDIATE_STATES.includes(job.status)) return false;
       const lastActivity = job.updated_at || job.created_at;
       return new Date(lastActivity).getTime() < cutoff;
     })
     .slice(0, STALE_HEAL_BATCH_SIZE);
+
+  const staleJobs = await keepActuallyStaleJobs(staleCandidates);
 
   if (staleJobs.length === 0) {
     return jobs;

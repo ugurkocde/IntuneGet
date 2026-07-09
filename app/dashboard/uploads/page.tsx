@@ -186,7 +186,8 @@ export default function UploadsPage() {
     fetchJobs();
   }, [fetchJobs]);
 
-  // Auto-refresh for active jobs
+  // Auto-refresh active jobs without hammering the API. Browsers in the
+  // background poll less often and a manual refresh remains available.
   useEffect(() => {
     const hasActiveJobs = jobs.some((job) =>
       ['queued', 'packaging', 'uploading'].includes(job.status)
@@ -196,7 +197,7 @@ export default function UploadsPage() {
 
     const interval = setInterval(() => {
       fetchJobs();
-    }, 2000); // Poll every 2 seconds for active jobs
+    }, document.visibilityState === 'visible' ? 5000 : 15000);
 
     return () => clearInterval(interval);
   }, [jobs, fetchJobs, sessionExpired]);
@@ -298,9 +299,13 @@ export default function UploadsPage() {
     }
   };
 
-  const handleForceRedeploy = async (job: PackagingJob) => {
+  const handleRedeploy = async (job: PackagingJob, forceCreate = false) => {
     const accessToken = await getAccessToken();
     if (!accessToken) return;
+    if (!job.package_config) {
+      setError('The original package configuration is unavailable. Create a new deployment from the catalog.');
+      return;
+    }
 
     setRedeployingJobId(job.id);
     try {
@@ -312,7 +317,7 @@ export default function UploadsPage() {
         },
         body: JSON.stringify({
           items: [job.package_config],
-          forceCreate: true,
+          forceCreate,
         }),
       });
 
@@ -329,7 +334,7 @@ export default function UploadsPage() {
       await fetchJobs();
       setFilter('active');
     } catch (err) {
-      console.error('Failed to force redeploy:', err);
+      console.error('Failed to redeploy:', err);
       setError(err instanceof Error ? err.message : 'Failed to redeploy');
     } finally {
       setRedeployingJobId(null);
@@ -355,7 +360,7 @@ export default function UploadsPage() {
       ['queued', 'packaging', 'uploading'].includes(j.status)
     ).length,
     completed: jobs.filter((j) => ['completed', 'deployed', 'duplicate_skipped'].includes(j.status)).length,
-    failed: jobs.filter((j) => ['failed', 'cancelled'].includes(j.status)).length,
+    failed: jobs.filter((j) => j.status === 'failed').length,
   };
 
   const filterButtons = ['all', 'active', 'completed', 'failed'] as const;
@@ -408,7 +413,7 @@ export default function UploadsPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle><T>Clear Upload History?</T></AlertDialogTitle>
                     <AlertDialogDescription>
-                      <T>This will permanently remove all completed, failed, cancelled, and deployed jobs from your history. Active jobs (queued, packaging, uploading) will not be affected.</T>
+                      <T>This hides completed, failed, cancelled, and deployed jobs from this page. Deployment audit and update records are preserved. Active jobs are not affected.</T>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -468,6 +473,7 @@ export default function UploadsPage() {
       <AnimatePresence>
         {error && (
           <motion.div
+            role="alert"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -538,7 +544,7 @@ export default function UploadsPage() {
             aria-selected={viewScope === scope}
             onClick={() => setViewScope(scope)}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:outline-none',
+              'px-4 py-2 rounded-lg text-sm font-medium transition-[background-color,color,border-color] duration-200 focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:outline-none',
               viewScope === scope
                 ? 'bg-overlay/10 text-text-primary border border-accent-cyan/30'
                 : 'bg-overlay/5 text-text-secondary hover:text-text-primary hover:bg-overlay/10 border border-overlay/5'
@@ -566,7 +572,7 @@ export default function UploadsPage() {
             tabIndex={filter === f ? 0 : -1}
             onClick={() => setFilter(f)}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:outline-none',
+              'px-4 py-2 rounded-lg text-sm font-medium transition-[background-color,color,border-color] duration-200 focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:outline-none',
               filter === f
                 ? 'bg-gradient-to-r from-accent-cyan to-accent-violet text-bg-elevated'
                 : 'bg-overlay/5 text-text-secondary hover:text-text-primary hover:bg-overlay/10 border border-overlay/5'
@@ -622,7 +628,7 @@ export default function UploadsPage() {
                 isHighlighted={highlightedJobIds.includes(job.id)}
                 onCancel={handleCancelJob}
                 isCancelling={cancellingJobId === job.id}
-                onForceRedeploy={handleForceRedeploy}
+                onRedeploy={handleRedeploy}
                 isRedeploying={redeployingJobId === job.id}
                 showOwner={viewScope === 'tenant'}
               />
@@ -640,7 +646,7 @@ function UploadJobCard({
   isHighlighted,
   onCancel,
   isCancelling,
-  onForceRedeploy,
+  onRedeploy,
   isRedeploying,
   showOwner,
 }: {
@@ -649,7 +655,7 @@ function UploadJobCard({
   isHighlighted?: boolean;
   onCancel: (jobId: string, dismiss?: boolean) => void;
   isCancelling?: boolean;
-  onForceRedeploy: (job: PackagingJob) => void;
+  onRedeploy: (job: PackagingJob, forceCreate?: boolean) => void;
   isRedeploying?: boolean;
   showOwner?: boolean;
 }) {
@@ -717,7 +723,7 @@ function UploadJobCard({
   const config = statusConfig[job.status] || statusConfig.queued;
   const StatusIcon = config.icon;
   const isActive = ['queued', 'packaging', 'uploading'].includes(job.status);
-  const isStale = isActive && (Date.now() - new Date(job.updated_at).getTime()) > 30 * 60 * 1000;
+  const isStale = isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
   // Allow cancelling active jobs or dismissing completed/failed jobs
   const isCancellable = ['queued', 'packaging', 'uploading'].includes(job.status);
   const isDismissable = ['completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
@@ -745,7 +751,7 @@ function UploadJobCard({
       layout
       variants={itemVariants}
       className={cn(
-        'glass-light border border-l-[3px] rounded-xl p-6 transition-all contain-layout',
+        'glass-light border border-l-[3px] rounded-xl p-6 transition-[border-color,box-shadow,background-color] contain-layout',
         config.border,
         isHighlighted
           ? 'border-accent-cyan/50 border-l-accent-cyan ring-1 ring-accent-cyan/20 shadow-glow-cyan'
@@ -851,7 +857,7 @@ function UploadJobCard({
                       </AlertDialogTitle>
                       <AlertDialogDescription>
                         {isDismissable
-                          ? <T>Are you sure you want to dismiss <Var>{job.display_name}</Var> from your list? This will permanently remove it.</T>
+                          ? <T>Dismiss <Var>{job.display_name}</Var> from this list? Its deployment audit and update records will be preserved.</T>
                           : <T>Are you sure you want to cancel the upload for <Var>{job.display_name}</Var>? This action cannot be undone.</T>
                         }
                       </AlertDialogDescription>
@@ -893,7 +899,7 @@ function UploadJobCard({
               {isStale && (
                 <span
                   className="px-2 py-1 rounded-full text-xs font-medium bg-status-warning/10 text-status-warning cursor-help"
-                  title="This job has been inactive for over 30 minutes. The pipeline may have stalled. Consider cancelling and retrying."
+                  title="This job has been inactive for over 75 minutes. The workflow may have stalled. Refresh before cancelling or retrying."
                 >
                   <T>Stale</T>
                 </span>
@@ -913,6 +919,21 @@ function UploadJobCard({
             />
           )}
 
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+            <span title={job.id} translate="no">Support ID: {job.id.slice(0, 8)}</span>
+            {job.github_run_url && (
+              <a
+                href={job.github_run_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+              >
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <T>View workflow run</T>
+              </a>
+            )}
+          </div>
+
           {/* Error message */}
           {job.status === 'failed' && (job.error_message || job.error_code) && (
             <ErrorDisplay
@@ -931,11 +952,11 @@ function UploadJobCard({
                 size="sm"
                 variant="outline"
                 className="border-accent-cyan/30 text-accent-cyan bg-accent-cyan/5 hover:bg-accent-cyan/10"
-                onClick={() => onForceRedeploy(job)}
+                onClick={() => onRedeploy(job, false)}
                 disabled={isRedeploying}
               >
                 {isRedeploying ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
-                <T>Retry Deployment</T>
+                <T>Retry safely</T>
               </Button>
             </div>
           )}
@@ -994,7 +1015,7 @@ function UploadJobCard({
                       size="sm"
                       variant="outline"
                       className="border-accent-cyan/30 text-accent-cyan hover:bg-accent-cyan/10 hover:border-accent-cyan/50 text-xs"
-                      onClick={() => onForceRedeploy(job)}
+                      onClick={() => onRedeploy(job, true)}
                       disabled={isRedeploying}
                     >
                       {isRedeploying ? (

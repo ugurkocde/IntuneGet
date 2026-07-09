@@ -361,6 +361,8 @@ export class IntuneUploader {
       description?: string | null;
       displayVersion?: string | null;
       createdDateTime?: string;
+      publishingState?: string | null;
+      committedContentVersion?: string | null;
     }
     interface GraphAppPage {
       value?: GraphWin32App[];
@@ -370,12 +372,17 @@ export class IntuneUploader {
     const displayNameLower = job.display_name.toLowerCase();
     let nextPath: string | null =
       `/deviceAppManagement/mobileApps?$filter=isof('microsoft.graph.win32LobApp')` +
-      `&$select=id,displayName,description,displayVersion,createdDateTime`;
+      `&$select=id,displayName,description,displayVersion,createdDateTime,publishingState,committedContentVersion`;
 
     while (nextPath) {
       const page: GraphAppPage = await graphClient.get<GraphAppPage>(nextPath);
       for (const app of page.value ?? []) {
-        if (app.displayName?.toLowerCase() !== displayNameLower || !app.description) {
+        if (
+          app.displayName?.toLowerCase() !== displayNameLower ||
+          !app.description ||
+          app.publishingState !== 'published' ||
+          !app.committedContentVersion
+        ) {
           continue;
         }
         const wingetMarker = app.description.match(/Winget:\s*(\S+)/);

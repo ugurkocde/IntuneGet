@@ -12,6 +12,7 @@ import {
   STALE_JOB_TIMEOUT_MINUTES,
   INTERMEDIATE_STATES,
   STALE_JOB_ERROR_MESSAGE,
+  keepActuallyStaleJobs,
 } from '@/lib/stale-jobs';
 
 export async function GET(request: Request) {
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
     // Find stale jobs (include auto-update fields for cleanup)
     const { data: staleJobs, error: fetchError } = await supabase
       .from('packaging_jobs')
-      .select('id, status, winget_id, updated_at, created_at, is_auto_update, auto_update_policy_id')
+      .select('id, status, winget_id, updated_at, created_at, github_run_id, is_auto_update, auto_update_policy_id')
       .in('status', INTERMEDIATE_STATES)
       .lt('updated_at', cutoffTime);
 
@@ -52,7 +53,9 @@ export async function GET(request: Request) {
       );
     }
 
-    if (!staleJobs || staleJobs.length === 0) {
+    const confirmedStaleJobs = await keepActuallyStaleJobs(staleJobs || []);
+
+    if (confirmedStaleJobs.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No stale jobs found',
@@ -61,7 +64,7 @@ export async function GET(request: Request) {
     }
 
     // Mark stale jobs as failed
-    const jobIds = staleJobs.map((job) => job.id);
+    const jobIds = confirmedStaleJobs.map((job) => job.id);
 
     const { error: updateError } = await supabase
       .from('packaging_jobs')
@@ -81,7 +84,7 @@ export async function GET(request: Request) {
     }
 
     // Clean up auto-update tracking for stale auto-update jobs
-    const autoUpdateJobs = staleJobs.filter((job) => job.is_auto_update);
+    const autoUpdateJobs = confirmedStaleJobs.filter((job) => job.is_auto_update);
     if (autoUpdateJobs.length > 0) {
       const timeoutMessage = `Job timed out after ${STALE_JOB_TIMEOUT_MINUTES} minutes without progress`;
       const cleanupResults = await Promise.allSettled(
@@ -103,9 +106,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Marked ${staleJobs.length} stale job(s) as failed`,
-      cleaned: staleJobs.length,
-      jobs: staleJobs.map((job) => ({
+      message: `Marked ${confirmedStaleJobs.length} stale job(s) as failed`,
+      cleaned: confirmedStaleJobs.length,
+      jobs: confirmedStaleJobs.map((job) => ({
         id: job.id,
         previousStatus: job.status,
         wingetId: job.winget_id,

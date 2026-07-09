@@ -277,6 +277,7 @@ export interface Database {
           completed_at: string | null;
           cancelled_at: string | null;
           cancelled_by: string | null;
+          archived_at: string | null;
           is_auto_update: boolean;
           auto_update_policy_id: string | null;
         };
@@ -320,6 +321,7 @@ export interface Database {
           completed_at?: string | null;
           cancelled_at?: string | null;
           cancelled_by?: string | null;
+          archived_at?: string | null;
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
         };
@@ -363,6 +365,7 @@ export interface Database {
           completed_at?: string | null;
           cancelled_at?: string | null;
           cancelled_by?: string | null;
+          archived_at?: string | null;
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
         };

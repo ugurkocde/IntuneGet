@@ -1,6 +1,6 @@
 /**
  * Clear History API Route
- * Bulk-deletes terminal packaging jobs for the authenticated user
+ * Soft-archives terminal packaging jobs for the authenticated user
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -40,11 +40,11 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getDatabase();
-    const deletedCount = await db.jobs.deleteByUserIdAndStatuses(user.userId, statuses);
+    const archivedCount = await db.jobs.deleteByUserIdAndStatuses(user.userId, statuses);
 
     return NextResponse.json({
       success: true,
-      deletedCount,
+      archivedCount,
     });
   } catch {
     return NextResponse.json(

@@ -69,11 +69,17 @@ function initializeSchema(db: Database.Database): void {
       encryption_info TEXT,
       intune_app_id TEXT,
       intune_app_url TEXT,
+      app_source TEXT DEFAULT 'win32',
       status TEXT NOT NULL DEFAULT 'queued',
       status_message TEXT,
       progress_percent INTEGER DEFAULT 0,
       progress_message TEXT,
       error_message TEXT,
+      error_stage TEXT,
+      error_category TEXT,
+      error_code TEXT,
+      error_details TEXT,
+      warnings TEXT,
       packager_id TEXT,
       packager_heartbeat_at TEXT,
       claimed_at TEXT,
@@ -83,10 +89,29 @@ function initializeSchema(db: Database.Database): void {
       completed_at TEXT,
       cancelled_at TEXT,
       cancelled_by TEXT,
+      archived_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  const existingColumns = new Set(
+    (db.pragma('table_info(packaging_jobs)') as Array<{ name: string }>).map((column) => column.name),
+  );
+  const compatibleColumns: Record<string, string> = {
+    app_source: "TEXT DEFAULT 'win32'",
+    error_stage: 'TEXT',
+    error_category: 'TEXT',
+    error_code: 'TEXT',
+    error_details: 'TEXT',
+    warnings: 'TEXT',
+    archived_at: 'TEXT',
+  };
+  for (const [column, definition] of Object.entries(compatibleColumns)) {
+    if (!existingColumns.has(column)) {
+      db.exec(`ALTER TABLE packaging_jobs ADD COLUMN ${column} ${definition}`);
+    }
+  }
 
   // Create index for status queries
   db.exec(`
@@ -130,6 +155,8 @@ function parseJobRow(row: Record<string, unknown>): PackagingJob {
     detection_rules: row.detection_rules ? JSON.parse(row.detection_rules as string) : null,
     package_config: row.package_config ? JSON.parse(row.package_config as string) : null,
     encryption_info: row.encryption_info ? JSON.parse(row.encryption_info as string) : null,
+    error_details: row.error_details ? JSON.parse(row.error_details as string) : null,
+    warnings: row.warnings ? JSON.parse(row.warnings as string) : null,
   } as PackagingJob;
 }
 
@@ -146,7 +173,7 @@ export const sqliteDb: DatabaseAdapter = {
       const order = ascending ? 'ASC' : 'DESC';
       const stmt = database.prepare(`
         SELECT * FROM packaging_jobs
-        WHERE status = ?
+        WHERE status = ? AND archived_at IS NULL
         ORDER BY created_at ${order}
         LIMIT ?
       `);
@@ -174,7 +201,7 @@ export const sqliteDb: DatabaseAdapter = {
       // Uploads (all activities) view shows older completed deployments too.
       const stmt = database.prepare(`
         SELECT * FROM packaging_jobs
-        WHERE user_id = ?
+        WHERE user_id = ? AND archived_at IS NULL
         ORDER BY created_at DESC
         LIMIT ?
       `);
@@ -187,7 +214,7 @@ export const sqliteDb: DatabaseAdapter = {
       // Every user's jobs in this tenant, most recent first, no age cutoff.
       const stmt = database.prepare(`
         SELECT * FROM packaging_jobs
-        WHERE tenant_id = ?
+        WHERE tenant_id = ? AND archived_at IS NULL
         ORDER BY created_at DESC
         LIMIT ?
       `);
@@ -208,9 +235,9 @@ export const sqliteDb: DatabaseAdapter = {
           id, user_id, user_email, tenant_id, winget_id, version, display_name,
           publisher, architecture, installer_type, installer_url, installer_sha256,
           install_command, uninstall_command, install_scope, detection_rules,
-          package_config, status, progress_percent, created_at, updated_at
+          package_config, app_source, status, progress_percent, created_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `);
 
@@ -232,6 +259,7 @@ export const sqliteDb: DatabaseAdapter = {
         job.install_scope || null,
         job.detection_rules ? JSON.stringify(job.detection_rules) : null,
         job.package_config ? JSON.stringify(job.package_config) : null,
+        job.app_source || 'win32',
         job.status || 'queued',
         job.progress_percent || 0,
         now,
@@ -383,6 +411,7 @@ export const sqliteDb: DatabaseAdapter = {
       const stmt = database.prepare(`
         SELECT status, COUNT(*) as count
         FROM packaging_jobs
+        WHERE archived_at IS NULL
         GROUP BY status
       `);
       const rows = stmt.all() as Array<{ status: string; count: number }>;
@@ -405,44 +434,28 @@ export const sqliteDb: DatabaseAdapter = {
       return stats;
     },
 
-    /**
-     * Delete a single job by ID
-     */
+    /** Soft-archive a single job by ID. */
     async deleteById(id: string): Promise<boolean> {
       const database = getDb();
-      // Clear FK reference in msp_batch_deployment_items if the table exists
-      try {
-        database.prepare('UPDATE msp_batch_deployment_items SET packaging_job_id = NULL WHERE packaging_job_id = ?').run(id);
-      } catch {
-        // Table may not exist in self-hosted mode
-      }
-      const stmt = database.prepare('DELETE FROM packaging_jobs WHERE id = ?');
-      const result = stmt.run(id);
+      const now = new Date().toISOString();
+      const stmt = database.prepare(
+        'UPDATE packaging_jobs SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL',
+      );
+      const result = stmt.run(now, now, id);
       return result.changes > 0;
     },
 
-    /**
-     * Bulk-delete jobs matching a user ID and a set of statuses
-     */
+    /** Bulk-archive jobs matching a user ID and a set of statuses. */
     async deleteByUserIdAndStatuses(userId: string, statuses: string[]): Promise<number> {
       const database = getDb();
       const placeholders = statuses.map(() => '?').join(', ');
-      // Clear FK references in msp_batch_deployment_items if the table exists
-      try {
-        database.prepare(`
-          UPDATE msp_batch_deployment_items SET packaging_job_id = NULL
-          WHERE packaging_job_id IN (
-            SELECT id FROM packaging_jobs WHERE user_id = ? AND status IN (${placeholders})
-          )
-        `).run(userId, ...statuses);
-      } catch {
-        // Table may not exist in self-hosted mode
-      }
       const stmt = database.prepare(`
-        DELETE FROM packaging_jobs
-        WHERE user_id = ? AND status IN (${placeholders})
+        UPDATE packaging_jobs
+        SET archived_at = ?, updated_at = ?
+        WHERE user_id = ? AND status IN (${placeholders}) AND archived_at IS NULL
       `);
-      const result = stmt.run(userId, ...statuses);
+      const now = new Date().toISOString();
+      const result = stmt.run(now, now, userId, ...statuses);
       return result.changes;
     },
   },
