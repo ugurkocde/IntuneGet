@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22.23.1"
   GITHUB_RAW_BASE: "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests"
 
 permissions:
@@ -45,7 +45,7 @@ permissions:
 jobs:
   # ── Job 1: Plan ──────────────────────────────────────────────────────
   # Fast job that counts apps and generates a matrix of 500-app shards.
-  # Uses native fetch (Node 20) so no npm ci is needed.
+  # Uses native fetch (Node 22) so no npm ci is needed.
   plan:
     runs-on: ubuntu-24.04
     outputs:
