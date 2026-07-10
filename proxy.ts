@@ -3,7 +3,7 @@ import { createNextMiddleware } from 'gt-next/middleware';
 
 const PROTECTED_ROUTES = ['/dashboard'];
 
-// gt-next locale middleware in cookie-only mode (no path-based locale routing).
+// gt-next locale proxy in cookie-only mode (no path-based locale routing).
 // It resolves the UI locale once per request and writes it to the gt locale
 // cookie, so the server-rendered locale and the client provider read the same
 // value. Without this the locale was re-derived independently on the server
@@ -11,7 +11,7 @@ const PROTECTED_ROUTES = ['/dashboard'];
 // flip in client-rendered sections like Uploads (issue #136).
 const gtMiddleware = createNextMiddleware({ localeRouting: false });
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protect dashboard routes: redirect to sign-in if no auth hint cookie

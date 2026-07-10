@@ -1,4 +1,4 @@
-import { withGTConfig } from "gt-next/config";
+const { withGTConfig } = require("gt-next/config");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -36,4 +36,4 @@ const nextConfig = {
   },
 };
 
-export default withGTConfig(nextConfig);
+module.exports = withGTConfig(nextConfig);

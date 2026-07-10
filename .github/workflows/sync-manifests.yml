@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: "22.23.1"
+  NODE_VERSION: "26.5.0"
   GITHUB_RAW_BASE: "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests"
 
 permissions:

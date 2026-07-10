@@ -949,11 +949,13 @@ export interface Database {
           payload: Record<string, unknown>;
           status: 'pending' | 'success' | 'failed';
           attempts: number;
+          max_attempts: number;
           response_status: number | null;
           response_body: string | null;
           error_message: string | null;
           created_at: string;
           delivered_at: string | null;
+          next_retry_at: string | null;
         };
         Insert: {
           id?: string;
@@ -962,11 +964,13 @@ export interface Database {
           payload: Record<string, unknown>;
           status?: 'pending' | 'success' | 'failed';
           attempts?: number;
+          max_attempts?: number;
           response_status?: number | null;
           response_body?: string | null;
           error_message?: string | null;
           created_at?: string;
           delivered_at?: string | null;
+          next_retry_at?: string | null;
         };
         Update: {
           id?: string;
@@ -975,11 +979,13 @@ export interface Database {
           payload?: Record<string, unknown>;
           status?: 'pending' | 'success' | 'failed';
           attempts?: number;
+          max_attempts?: number;
           response_status?: number | null;
           response_body?: string | null;
           error_message?: string | null;
           created_at?: string;
           delivered_at?: string | null;
+          next_retry_at?: string | null;
         };
         Relationships: GenericRelationship[];
       };
@@ -1559,6 +1565,7 @@ export interface Database {
           sccm_install_command: string | null;
           sccm_uninstall_command: string | null;
           sccm_install_behavior: string | null;
+          sccm_admin_categories: string[] | null;
           match_status: string;
           match_confidence: number | null;
           matched_winget_id: string | null;
@@ -1595,6 +1602,7 @@ export interface Database {
           sccm_install_command?: string | null;
           sccm_uninstall_command?: string | null;
           sccm_install_behavior?: string | null;
+          sccm_admin_categories?: string[] | null;
           match_status?: string;
           match_confidence?: number | null;
           matched_winget_id?: string | null;
@@ -1631,6 +1639,7 @@ export interface Database {
           sccm_install_command?: string | null;
           sccm_uninstall_command?: string | null;
           sccm_install_behavior?: string | null;
+          sccm_admin_categories?: string[] | null;
           match_status?: string;
           match_confidence?: number | null;
           matched_winget_id?: string | null;

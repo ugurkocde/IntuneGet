@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useLocaleSelector } from "gt-next/client";
+import { useLocaleSelector } from "gt-next";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Globe, ChevronDown } from "lucide-react";

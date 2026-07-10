@@ -13,6 +13,10 @@ import type {
   WebhookConfiguration,
   WebhookConfigurationUpdate,
 } from '@/types/notifications';
+import type { Database } from '@/types/database';
+
+type WebhookConfigurationDatabaseUpdate =
+  Database['public']['Tables']['webhook_configurations']['Update'];
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -129,7 +133,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Build update data
-    const updateData: Record<string, unknown> = {
+    const updateData: WebhookConfigurationDatabaseUpdate = {
       updated_at: new Date().toISOString(),
     };
 

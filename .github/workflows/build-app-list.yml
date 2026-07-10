@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '22.23.1'
+  NODE_VERSION: '26.5.0'
   WINGET_INDEX_URL: 'https://raw.githubusercontent.com/svrooij/winget-pkgs-index/main/index.v2.json'
 
 permissions:

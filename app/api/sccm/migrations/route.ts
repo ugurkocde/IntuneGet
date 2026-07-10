@@ -17,6 +17,7 @@ import type { Database } from '@/types/database';
 
 // Database row type - use the type from the Database schema
 type MigrationRow = Database['public']['Tables']['sccm_migrations']['Row'];
+type MigrationUpdate = Database['public']['Tables']['sccm_migrations']['Update'];
 
 /**
  * Format migration row to API response format
@@ -277,7 +278,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Build update object
-    const updates: Record<string, unknown> = {
+    const updates: MigrationUpdate = {
       updated_at: new Date().toISOString(),
     };
 

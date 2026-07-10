@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { AppUpdatePolicy, UpdatePolicyType } from '@/types/update-policies';
+import type { Database } from '@/types/database';
+
+type AppUpdatePolicyUpdate = Database['public']['Tables']['app_update_policies']['Update'];
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -132,7 +135,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Build update data
-    const updateData: Record<string, unknown> = {
+    const updateData: AppUpdatePolicyUpdate = {
       updated_at: new Date().toISOString(),
     };
 

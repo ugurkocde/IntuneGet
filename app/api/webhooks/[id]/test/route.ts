@@ -8,6 +8,10 @@ import { createServerClient } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { sendTestWebhook } from '@/lib/webhooks/service';
 import type { WebhookConfiguration } from '@/types/notifications';
+import type { Database } from '@/types/database';
+
+type WebhookConfigurationUpdate =
+  Database['public']['Tables']['webhook_configurations']['Update'];
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const result = await sendTestWebhook(webhook as WebhookConfiguration);
 
     // Update webhook status based on result
-    const statusUpdate: Record<string, unknown> = {
+    const statusUpdate: WebhookConfigurationUpdate = {
       updated_at: new Date().toISOString(),
     };
 

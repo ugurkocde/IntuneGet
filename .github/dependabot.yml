@@ -22,15 +22,12 @@ updates:
     groups:
       npm-production:
         dependency-type: production
-        update-types: [minor, patch]
+        update-types: [major, minor, patch]
         patterns: ["*"]
       npm-development:
         dependency-type: development
-        update-types: [minor, patch]
+        update-types: [major, minor, patch]
         patterns: ["*"]
-    ignore:
-      - dependency-name: "*"
-        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /packager
@@ -42,11 +39,8 @@ updates:
       timezone: Europe/Berlin
     groups:
       packager-dependencies:
-        update-types: [minor, patch]
+        update-types: [major, minor, patch]
         patterns: ["*"]
-    ignore:
-      - dependency-name: "*"
-        update-types: [version-update:semver-major]
 
   - package-ecosystem: docker
     directory: /
@@ -56,6 +50,3 @@ updates:
       day: monday
       time: "06:45"
       timezone: Europe/Berlin
-    ignore:
-      - dependency-name: "node"
-        update-types: [version-update:semver-major]
