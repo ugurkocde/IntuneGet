@@ -47,7 +47,7 @@
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
     "node-fetch": "^3.3.2",
-    "uuid": "^9.0.1"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
