@@ -371,7 +371,6 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
         detectionRules: rules,
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath]);
 
   const handleAddToCart = async () => {

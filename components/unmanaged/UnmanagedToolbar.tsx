@@ -91,7 +91,6 @@ export function UnmanagedToolbar({
     if (filters.search !== localSearch) {
       setLocalSearch(filters.search);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.search]);
 
   // Notify parent when debounced value changes
@@ -99,7 +98,6 @@ export function UnmanagedToolbar({
     if (debouncedSearch !== filters.search) {
       onFiltersChange({ ...filters, search: debouncedSearch });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
 
   const handleSortChange = (sortBy: UnmanagedAppsFilters['sortBy']) => {

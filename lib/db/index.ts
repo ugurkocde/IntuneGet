@@ -45,13 +45,11 @@ export function getDatabase(): DatabaseAdapter {
 
   if (mode === 'sqlite') {
     // Dynamically import SQLite adapter to avoid bundling it in non-SQLite environments
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { sqliteDb } = require('./sqlite');
     databaseInstance = sqliteDb;
     console.log('[Database] Using SQLite mode');
   } else {
     // Use Supabase adapter
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { supabaseDb } = require('./supabase-adapter');
     databaseInstance = supabaseDb;
     console.log('[Database] Using Supabase mode');

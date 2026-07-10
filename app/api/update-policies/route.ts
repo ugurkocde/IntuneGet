@@ -161,7 +161,6 @@ export async function POST(request: NextRequest) {
       }
 
       // Read the user's global carry-over setting (same source as the trigger route)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: userSettingsRow } = await (supabase as any)
         .from('user_settings')
         .select('settings')

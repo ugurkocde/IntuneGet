@@ -43,7 +43,6 @@ export function EspProfileSelector({
       setEnabled(true);
     }
     // Only react to espProfiles changes, not enabled
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [espProfiles.length]);
 
   const {

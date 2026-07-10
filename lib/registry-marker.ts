@@ -35,7 +35,6 @@ export function normalizeMarkerPath(input?: string | null): string {
   let path = input.trim().replace(/\//g, '\\').replace(/\\+/g, '\\');
   path = path.replace(/^\\+|\\+$/g, '');
   path = path.replace(/^(HKLM|HKCU|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER):?(\\|$)/i, '');
-  // eslint-disable-next-line no-control-regex
   path = path.replace(/[*?"'<>|\x00-\x1f]/g, '');
 
   const segments = path

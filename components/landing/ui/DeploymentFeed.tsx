@@ -181,7 +181,6 @@ const AppRow = memo(function AppRow({ item, compact = false, isMobile = false, m
               compact ? "h-6 w-6" : "h-7 w-7"
             )}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={item.app.icon}
               alt={item.app.alt}
@@ -314,7 +313,6 @@ function StaticAppRow({
             compact ? "h-6 w-6" : "h-7 w-7"
           )}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={app.icon}
             alt={app.alt}

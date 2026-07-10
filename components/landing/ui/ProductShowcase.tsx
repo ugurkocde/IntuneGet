@@ -175,7 +175,6 @@ export function ProductShowcase({ className = "", compact = false }: ProductShow
                   "bg-overlay/[0.06] rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform",
                   compact ? "w-8 h-8" : "w-10 h-10 md:w-12 md:h-12"
                 )}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={app.icon}
                     alt={app.alt}

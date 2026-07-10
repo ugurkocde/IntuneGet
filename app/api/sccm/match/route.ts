@@ -54,7 +54,6 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify migration ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: migration, error: migrationError } = await (supabase as any)
       .from('sccm_migrations')
       .select('id, status')
@@ -70,14 +69,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Update migration status to matching
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from('sccm_migrations')
       .update({ status: 'matching', updated_at: new Date().toISOString() })
       .eq('id', body.migrationId);
 
     // Build query for apps to match
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from('sccm_apps')
       .select('*')
@@ -103,7 +100,6 @@ export async function POST(request: NextRequest) {
 
     if (!apps || apps.length === 0) {
       // Update migration status back to ready
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('sccm_migrations')
         .update({ status: 'ready', updated_at: new Date().toISOString() })
@@ -170,7 +166,6 @@ export async function POST(request: NextRequest) {
 
       // Update each app
       for (const update of updates) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('sccm_apps')
           .update(update)
@@ -197,7 +192,6 @@ export async function POST(request: NextRequest) {
     );
 
     // Update migration status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from('sccm_migrations')
       .update({
@@ -254,7 +248,6 @@ export async function PATCH(request: NextRequest) {
     const supabase = createServerClient();
 
     // Verify app ownership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: app, error: appError } = await (supabase as any)
       .from('sccm_apps')
       .select('id, migration_id, display_name, match_status, matched_winget_id')
@@ -293,7 +286,6 @@ export async function PATCH(request: NextRequest) {
       updates.match_status = 'excluded';
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updated, error: updateError } = await (supabase as any)
       .from('sccm_apps')
       .update(updates)
@@ -368,7 +360,6 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     // Build query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from('sccm_apps')
       .select('*', { count: 'exact' })

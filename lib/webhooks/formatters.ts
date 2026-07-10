@@ -34,11 +34,8 @@ export interface WebhookData {
 type WebhookPayloadData = WebhookData | WebhookTestPayload;
 
 // Use flexible types for external webhook payloads
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SlackPayload = { blocks: any[]; data: WebhookPayloadData };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TeamsPayload = { type: string; attachments: any[]; data: WebhookPayloadData };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DiscordPayload = { embeds: any[]; data: WebhookPayloadData };
 
 /**
@@ -78,7 +75,6 @@ export function formatSlackMessage(payload: NotificationPayload): SlackPayload {
   const criticalUpdates = updates.filter((u) => u.is_critical);
   const regularUpdates = updates.filter((u) => !u.is_critical);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const blocks: any[] = [
     // Header
     {
@@ -196,7 +192,6 @@ export function formatSlackMessage(payload: NotificationPayload): SlackPayload {
 /**
  * Format a single app update for Slack
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatSlackAppBlock(app: AppUpdate): any {
   return {
     type: 'section',
@@ -215,7 +210,6 @@ export function formatTeamsMessage(payload: NotificationPayload): TeamsPayload {
   const criticalUpdates = updates.filter((u) => u.is_critical);
   const regularUpdates = updates.filter((u) => !u.is_critical);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const body: any[] = [
     // Header
     {

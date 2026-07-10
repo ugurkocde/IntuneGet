@@ -60,7 +60,6 @@ export function InventoryFilters({
     if (search !== localSearch) {
       setLocalSearch(search);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Notify parent when debounced value changes
@@ -68,7 +67,6 @@ export function InventoryFilters({
     if (debouncedSearch !== search) {
       onSearchChange(debouncedSearch);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
 
   // "/" keyboard shortcut to focus search

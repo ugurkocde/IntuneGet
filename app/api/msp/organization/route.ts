@@ -36,7 +36,6 @@ interface MembershipWithOrganization extends MspUserMembershipRow {
  * Type-safe table accessor for Supabase operations
  * Casts to any to work around Supabase client overload conflicts
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getTable(supabase: SupabaseClient<Database>, table: string): any {
   return supabase.from(table as keyof Database['public']['Tables']);
 }

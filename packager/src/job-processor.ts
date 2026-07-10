@@ -830,7 +830,6 @@ ${steps}
     let markerPath = input.trim().replace(/\//g, '\\').replace(/\\+/g, '\\');
     markerPath = markerPath.replace(/^\\+|\\+$/g, '');
     markerPath = markerPath.replace(/^(HKLM|HKCU|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER):?(\\|$)/i, '');
-    // eslint-disable-next-line no-control-regex
     markerPath = markerPath.replace(/[*?"'<>|\x00-\x1f]/g, '');
 
     const segments = markerPath

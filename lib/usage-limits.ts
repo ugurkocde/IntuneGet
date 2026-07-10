@@ -60,7 +60,6 @@ export async function getOrganizationUsage(
   // Get organization tier
   // Note: subscription_tier column may not exist in all deployments
   // Use dynamic query to avoid TypeScript errors
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: org } = await (supabase as any)
     .from('msp_organizations')
     .select('subscription_tier')

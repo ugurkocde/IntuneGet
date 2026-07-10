@@ -117,7 +117,6 @@ export async function POST(request: NextRequest) {
 
     // Read the user's global update settings once for the whole batch - they
     // do not change mid-request and per-item reads add up across 10 apps
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: userSettingsRow, error: userSettingsError } = await (supabase as any)
       .from('user_settings')
       .select('settings')

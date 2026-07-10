@@ -116,7 +116,6 @@ export default function MigratePage({ params }: PageProps) {
     // Refetch whenever migration options change so the preview reflects the
     // detection/command/winget-defaults toggles the user is looking at.
     fetchPreview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options]);
 
   const handleMigrate = async () => {
