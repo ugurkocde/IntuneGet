@@ -12,6 +12,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { createClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 
@@ -51,6 +53,10 @@ const GENERIC_DOMAINS = new Set([
 // Minimum response sizes to filter out default/placeholder images
 const MIN_GITHUB_AVATAR_BYTES = 1000;
 const MIN_FAVICON_BYTES = 600;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_HTML_BYTES = 1024 * 1024;
+const MAX_REDIRECTS = 5;
+const MAX_INPUT_PIXELS = 4096 * 4096;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('SUPABASE_URL and SUPABASE_SERVICE_KEY are required');
@@ -62,19 +68,84 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 /**
  * Fetch with timeout support.
  */
-async function fetchWithTimeout(url, timeoutMs = 10000) {
+function isBlockedAddress(address) {
+  if (net.isIP(address) === 4) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224;
+  }
+  if (net.isIP(address) === 6) {
+    const normalized = address.toLowerCase();
+    return normalized === '::1' || normalized === '::' ||
+      normalized.startsWith('fc') || normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') || normalized.startsWith('feb') ||
+      normalized.startsWith('::ffff:127.') || normalized.startsWith('::ffff:10.') ||
+      normalized.startsWith('::ffff:192.168.') || normalized.startsWith('::ffff:169.254.');
+  }
+  return true;
+}
+
+async function assertSafeUrl(rawUrl) {
+  const parsed = new URL(rawUrl);
+  if (parsed.protocol !== 'https:') throw new Error('Only HTTPS URLs are allowed');
+  if (parsed.username || parsed.password) throw new Error('Credential-bearing URLs are not allowed');
+  if (parsed.hostname === 'localhost' || parsed.hostname.endsWith('.localhost')) throw new Error('Localhost is not allowed');
+  const addresses = await dns.lookup(parsed.hostname, { all: true, verbatim: true });
+  if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
+    throw new Error('Private, local, or reserved network target is not allowed');
+  }
+  return parsed;
+}
+
+async function fetchWithTimeout(url, timeoutMs = 10000, redirectCount = 0) {
+  const safeUrl = await assertSafeUrl(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, {
+    const res = await fetch(safeUrl, {
       signal: controller.signal,
-      redirect: 'follow',
+      redirect: 'manual',
       headers: { 'User-Agent': 'IntuneGet-IconFetcher/1.0' },
     });
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      if (redirectCount >= MAX_REDIRECTS) throw new Error('Too many redirects');
+      const nextUrl = new URL(res.headers.get('location'), safeUrl).toString();
+      return fetchWithTimeout(nextUrl, timeoutMs, redirectCount + 1);
+    }
     return res;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function readLimited(response, maxBytes) {
+  const declared = Number.parseInt(response.headers.get('content-length') || '0', 10);
+  if (declared > maxBytes) throw new Error(`Response exceeds ${maxBytes} bytes`);
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error(`Response exceeds ${maxBytes} bytes`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total);
+}
+
+async function readImage(response) {
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  if (!contentType.startsWith('image/')) return null;
+  return readLimited(response, MAX_IMAGE_BYTES);
 }
 
 /**
@@ -86,7 +157,7 @@ async function resizeAndSave(sourceBuffer, outputDir) {
 
   let sourceDim = 0;
   try {
-    const meta = await sharp(sourceBuffer).metadata();
+    const meta = await sharp(sourceBuffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' }).metadata();
     sourceDim = Math.min(meta.width || 0, meta.height || 0);
   } catch {
     // metadata read failed — fall through and let resize attempts log their own errors
@@ -105,7 +176,7 @@ async function resizeAndSave(sourceBuffer, outputDir) {
       continue;
     }
     try {
-      await sharp(sourceBuffer)
+      await sharp(sourceBuffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' })
         .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .png()
         .toFile(targetPath);
@@ -128,7 +199,8 @@ async function tryGitHubAvatar(publisher) {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
 
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const buffer = await readImage(res);
+    if (!buffer) return null;
     if (buffer.length < MIN_GITHUB_AVATAR_BYTES) {
       // Too small -- likely the default gravatar
       return null;
@@ -175,7 +247,8 @@ async function tryMicrosoftStore(wingetId) {
 
     const imgRes = await fetchWithTimeout(fullUrl, 15000);
     if (!imgRes.ok) return null;
-    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    const buffer = await readImage(imgRes);
+    if (!buffer) return null;
     if (buffer.length < 1000) return null;
     return buffer;
   } catch {
@@ -207,7 +280,7 @@ async function tryHomepageImage(homepage) {
     if (!res.ok) return null;
     const ctype = res.headers.get('content-type') || '';
     if (!ctype.toLowerCase().includes('html')) return null;
-    html = await res.text();
+    html = (await readLimited(res, MAX_HTML_BYTES)).toString('utf8');
   } catch {
     return null;
   }
@@ -262,7 +335,8 @@ async function tryHomepageImage(homepage) {
     try {
       const imgRes = await fetchWithTimeout(absUrl, 15000);
       if (!imgRes.ok) continue;
-      buf = Buffer.from(await imgRes.arrayBuffer());
+      buf = await readImage(imgRes);
+      if (!buf) continue;
       if (buf.length < 1000) continue;
     } catch {
       continue;
@@ -270,7 +344,7 @@ async function tryHomepageImage(homepage) {
 
     // Validate dimensions/aspect via sharp metadata so we don't ship a banner.
     try {
-      const meta = await sharp(buf).metadata();
+      const meta = await sharp(buf, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' }).metadata();
       const w = meta.width || 0;
       const h = meta.height || 0;
       if (w < 64 || h < 64) continue;
@@ -307,7 +381,8 @@ async function tryFavicon(homepage) {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return null;
 
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const buffer = await readImage(res);
+    if (!buffer) return null;
     if (buffer.length < MIN_FAVICON_BYTES) {
       // Too small -- Google returns a ~500-byte default globe for unknown domains
       return null;
@@ -325,13 +400,24 @@ async function fetchAppsNeedingIcons(limit) {
   const PAGE_SIZE = 1000;
   const apps = [];
   let offset = 0;
+  let cursor = null;
+  let cursorReset = false;
+
+  if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
+    const { data } = await supabase
+      .from('curated_sync_status')
+      .select('metadata')
+      .eq('id', 'extract-icons-web-cursor')
+      .maybeSingle();
+    cursor = data?.metadata?.last_winget_id || null;
+  }
 
   while (apps.length < limit) {
     const batchSize = Math.min(PAGE_SIZE, limit - apps.length);
     let query = supabase
       .from('curated_apps')
       .select('winget_id, name, publisher, homepage, icon_source')
-      .range(offset, offset + batchSize - 1);
+      .order('winget_id', { ascending: true });
 
     if (MISSING_SIZES_ONLY) {
       // Top-up mode: only apps that already have an icon from a web source.
@@ -350,6 +436,13 @@ async function fetchAppsNeedingIcons(limit) {
         .order('winget_id', { ascending: true });
     } else {
       query = query.or('has_icon.is.null,has_icon.eq.false');
+      if (cursor) query = query.gt('winget_id', cursor);
+    }
+
+    if (MISSING_SIZES_ONLY || BINARY_GAP_FILL) {
+      query = query.range(offset, offset + batchSize - 1);
+    } else {
+      query = query.limit(batchSize);
     }
 
     const { data, error } = await query;
@@ -359,9 +452,15 @@ async function fetchAppsNeedingIcons(limit) {
       process.exit(1);
     }
 
+    if (data.length === 0 && cursor && !cursorReset) {
+      cursor = null;
+      cursorReset = true;
+      continue;
+    }
     if (data.length === 0) break;
     apps.push(...data);
     offset += data.length;
+    if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) cursor = data[data.length - 1].winget_id;
 
     // If we got fewer than requested, there are no more rows
     if (data.length < batchSize) break;
@@ -443,7 +542,7 @@ async function main() {
       // place is the right call -- they at least show the user something.
       if (buffer) {
         try {
-          const meta = await sharp(buffer).metadata();
+          const meta = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' }).metadata();
           const minDim = Math.min(meta.width || 0, meta.height || 0);
           if (minDim < 256) {
             buffer = null;
@@ -523,6 +622,16 @@ async function main() {
   console.log(`Total processed: ${apps.length}`);
 
   fs.writeFileSync('web-icon-results.json', JSON.stringify(results, null, 2));
+
+  if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
+    const nextCursor = apps.length > 0 ? apps[apps.length - 1].winget_id : null;
+    const { error: cursorError } = await supabase.from('curated_sync_status').upsert({
+      id: 'extract-icons-web-cursor',
+      metadata: { last_winget_id: nextCursor },
+      updated_at: new Date().toISOString(),
+    });
+    if (cursorError) throw new Error(`Failed to persist web icon cursor: ${cursorError.message}`);
+  }
 
   // Write counts for GitHub Actions output
   const outputFile = process.env.GITHUB_OUTPUT;

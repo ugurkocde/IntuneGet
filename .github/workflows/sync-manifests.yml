@@ -1,11 +1,6 @@
 name: Sync Winget Manifests
 
 on:
-  # Automatically run after Build Curated App List completes
-  workflow_run:
-    workflows: ["Build Curated App List"]
-    types: [completed]
-    branches: [main, master]
   schedule:
     # Run daily at 02:00 UTC
     - cron: "0 2 * * *"
@@ -44,22 +39,23 @@ env:
   NODE_VERSION: "20"
   GITHUB_RAW_BASE: "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests"
 
+permissions:
+  contents: read
+
 jobs:
   # ── Job 1: Plan ──────────────────────────────────────────────────────
-  # Fast job that counts apps and generates a matrix of 2000-app shards.
+  # Fast job that counts apps and generates a matrix of 500-app shards.
   # Uses native fetch (Node 20) so no npm ci is needed.
   plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      expected_shards: ${{ steps.generate.outputs.expected_shards }}
+    timeout-minutes: 10
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -79,20 +75,22 @@ jobs:
           const appIds = process.env.APP_IDS;
           const appLimit = parseInt(process.env.APP_LIMIT || '0', 10);
           const syncMode = process.env.SYNC_MODE || 'all';
-          const CHUNK_SIZE = 1000;
+          const CHUNK_SIZE = 500;
+          const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 
           async function run() {
+            if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Supabase credentials are required');
             let total = 0;
 
             if (appIds !== 'all') {
-              total = appIds.split(',').length;
+              const requestedIds = [...new Set(appIds.split(',').map(id => id.trim()).filter(Boolean))];
+              if (requestedIds.length === 0 || requestedIds.some(id => !idPattern.test(id))) {
+                throw new Error('One or more requested WinGet IDs are invalid');
+              }
+              total = requestedIds.length;
             } else {
               // Query count via Supabase REST API (no npm needed)
               let url = `${SUPABASE_URL}/rest/v1/curated_apps?select=winget_id`;
-              if (syncMode === 'incremental' || syncMode === 'new_only') {
-                url += '&latest_version=is.null';
-              }
-
               const res = await fetch(url, {
                 headers: {
                   'apikey': SUPABASE_KEY,
@@ -102,10 +100,15 @@ jobs:
                 }
               });
 
+              if (!res.ok) {
+                throw new Error(`Supabase count query failed: ${res.status} ${await res.text()}`);
+              }
+
               const contentRange = res.headers.get('content-range');
               if (contentRange && contentRange.includes('/')) {
                 total = parseInt(contentRange.split('/')[1], 10);
               }
+              if (!Number.isFinite(total)) throw new Error('Supabase did not return a valid catalog count');
             }
 
             // Apply total limit
@@ -143,9 +146,10 @@ jobs:
             console.log(`Matrix: ${matrix}`);
 
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${matrix}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `expected_shards=${chunks.length}\n`);
 
             // Mark sync as running
-            await fetch(`${SUPABASE_URL}/rest/v1/curated_sync_status`, {
+            const statusResponse = await fetch(`${SUPABASE_URL}/rest/v1/curated_sync_status`, {
               method: 'POST',
               headers: {
                 'apikey': SUPABASE_KEY,
@@ -161,18 +165,21 @@ jobs:
                 updated_at: new Date().toISOString()
               })
             });
+            if (!statusResponse.ok) {
+              throw new Error(`Could not mark sync running: ${statusResponse.status} ${await statusResponse.text()}`);
+            }
           }
 
           run().catch(err => { console.error('Plan failed:', err); process.exit(1); });
           PLANEOF
 
   # ── Job 2: Sync (matrix) ─────────────────────────────────────────────
-  # Each shard processes a 2000-app slice in parallel.
+  # Each shard processes a 500-app slice in parallel.
   # Shards work on non-overlapping slices so there are no DB conflicts.
   sync:
     needs: plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
       fail-fast: false
@@ -180,21 +187,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
       - name: Install dependencies
-        # Use npm install (not npm ci) so Sharp's platform-specific transitive
-        # deps (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even
-        # when package-lock.json was generated on a different OS/CPU.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: "Sync shard ${{ matrix.shard }}/${{ matrix.total_shards }}"
         env:
@@ -226,6 +230,7 @@ jobs:
           const supabase = createClient(supabaseUrl, supabaseKey);
           const GITHUB_RAW_BASE = process.env.GITHUB_RAW_BASE;
           const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+          const MAX_MANIFEST_BYTES = 5 * 1024 * 1024;
 
           function fetchUrl(url, retries = 5) {
             return new Promise((resolve, reject) => {
@@ -243,6 +248,7 @@ jobs:
                     // Use Retry-After header, cap at 30s to avoid extremely long waits
                     const retryAfter = Math.min(parseInt(res.headers['retry-after'] || '3', 10), 30);
                     if (retriesLeft > 0) {
+                      res.resume();
                       setTimeout(() => attempt(retriesLeft - 1), retryAfter * 1000);
                       return;
                     }
@@ -253,6 +259,7 @@ jobs:
                   }
                   if (res.statusCode !== 200) {
                     if (retriesLeft > 0 && res.statusCode >= 500) {
+                      res.resume();
                       setTimeout(() => attempt(retriesLeft - 1), 1000);
                       return;
                     }
@@ -262,7 +269,16 @@ jobs:
                   }
 
                   let data = '';
-                  res.on('data', chunk => data += chunk);
+                  let bytes = 0;
+                  res.on('data', chunk => {
+                    bytes += chunk.length;
+                    if (bytes > MAX_MANIFEST_BYTES) {
+                      res.destroy();
+                      reject(new Error(`Response exceeded ${MAX_MANIFEST_BYTES} bytes`));
+                      return;
+                    }
+                    data += chunk;
+                  });
                   res.on('end', () => resolve(data));
                 }).on('error', (err) => {
                   if (retriesLeft > 0) {
@@ -408,23 +424,45 @@ jobs:
                 .order('popularity_rank', { ascending: true, nullsFirst: false })
                 .range(appOffset, appOffset + chunkSize - 1);
 
-              if (syncMode === 'incremental' || syncMode === 'new_only') {
-                query = query.is('latest_version', null);
-              }
-
               const { data, error } = await query;
               if (error) throw error;
               apps = data || [];
             } else {
-              apps = appIds.split(',').map(id => ({ winget_id: id.trim() }));
+              const targetIds = appIds.split(',').map(id => id.trim()).filter(Boolean);
+              const { data, error } = await supabase
+                .from('curated_apps')
+                .select('winget_id, latest_version, description')
+                .in('winget_id', targetIds);
+              if (error) throw error;
+              apps = data || [];
             }
 
-            const shardCount = parseInt(totalShards, 10) || 1;
-            // Scale batch size down and delay up when running multiple shards
-            // to stay within GitHub's secondary rate limits (~100 concurrent requests)
-            const batchSize = GITHUB_TOKEN ? Math.max(5, Math.floor(20 / shardCount)) : 5;
-            const batchDelay = GITHUB_TOKEN ? Math.max(500, 500 * shardCount) : 3000;
+            // Versions come from the trusted package index stored in curated_apps,
+            // so GitHub API enumeration is only a fallback for legacy null rows.
+            const batchSize = 10;
+            const batchDelay = 750;
             const delay = ms => new Promise(r => setTimeout(r, ms));
+
+            // Load existing version history up front to avoid one Supabase query
+            // per app. Chunked .in() calls keep URLs below gateway limits.
+            const existingVersions = new Set();
+            const previousVersionByApp = new Map();
+            for (let i = 0; i < apps.length; i += 100) {
+              const ids = apps.slice(i, i + 100).map(app => app.winget_id);
+              if (ids.length === 0) continue;
+              const { data, error } = await supabase
+                .from('version_history')
+                .select('winget_id, version, detected_at')
+                .in('winget_id', ids)
+                .order('detected_at', { ascending: false });
+              if (error) throw error;
+              for (const row of data || []) {
+                existingVersions.add(`${row.winget_id}\u0000${row.version}`);
+                if (!previousVersionByApp.has(row.winget_id)) {
+                  previousVersionByApp.set(row.winget_id, row.version);
+                }
+              }
+            }
 
             console.log(`\n========================================`);
             console.log(`  Sync Winget Manifests - Shard ${shard}/${totalShards}`);
@@ -454,25 +492,21 @@ jobs:
 
               await Promise.all(batch.map(async (app) => {
                 try {
-                  const versions = await fetchVersions(app.winget_id);
+                  let latestVersion = app.latest_version;
+                  if (!latestVersion) {
+                    const versions = await fetchVersions(app.winget_id);
+                    latestVersion = versions[0];
+                  }
+                  if (!latestVersion) throw new Error('No latest version available from index or upstream');
 
-                  if (versions.length === 0) {
+                  if (syncMode === 'new_only' && previousVersionByApp.has(app.winget_id)) {
                     skipped++;
-                    skippedNoVersions++;
+                    skippedExisting++;
                     return;
                   }
 
-                  const latestVersion = versions[0];
-
                   if (!forceRefresh) {
-                    const { data: existing } = await supabase
-                      .from('version_history')
-                      .select('version')
-                      .eq('winget_id', app.winget_id)
-                      .eq('version', latestVersion)
-                      .single();
-
-                    if (existing) {
+                    if (existingVersions.has(`${app.winget_id}\u0000${latestVersion}`)) {
                       // Version already synced, but heal a still-missing
                       // description (e.g. the locale fetch failed when this
                       // version was first synced) instead of waiting for the
@@ -577,13 +611,17 @@ jobs:
                     .eq('winget_id', app.winget_id);
 
                   if (caError) {
-                    console.error(`  [WARN] ${app.winget_id}: curated_apps update failed - ${caError.message}`);
+                    console.error(`  [FAIL] ${app.winget_id}: curated_apps update failed - ${caError.message}`);
+                    failed++;
+                    failedApps.push({ id: app.winget_id, reason: `DB: ${caError.message}` });
+                    return;
                   }
 
-                  if (app.latest_version && app.latest_version !== latestVersion) {
+                  const previousVersion = previousVersionByApp.get(app.winget_id);
+                  if (previousVersion && previousVersion !== latestVersion) {
                     newVersions.push({
                       winget_id: app.winget_id,
-                      old_version: app.latest_version,
+                      old_version: previousVersion,
                       new_version: latestVersion
                     });
                   }
@@ -664,10 +702,11 @@ jobs:
 
       - name: Upload shard results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sync-results-shard-${{ matrix.shard }}
           path: sync-results.json
+          if-no-files-found: error
           retention-days: 1
 
   # ── Job 3: Summary ───────────────────────────────────────────────────
@@ -675,19 +714,25 @@ jobs:
   summary:
     needs: [plan, sync]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Download all shard results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: sync-results-shard-*
           path: results
@@ -698,12 +743,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SYNC_MODE: ${{ github.event.inputs.mode || 'all' }}
+          EXPECTED_SHARDS: ${{ needs.plan.outputs.expected_shards }}
         run: |
           node << 'SUMMARYEOF'
           const fs = require('fs');
           const path = require('path');
 
           const resultsDir = './results';
+          const expectedShards = Number.parseInt(process.env.EXPECTED_SHARDS || '0', 10);
           let totalSynced = 0, totalFailed = 0, totalSkipped = 0, totalHealed = 0;
           let allNewVersions = [];
           let shardsFound = 0;
@@ -742,13 +789,19 @@ jobs:
             newVersions: allNewVersions
           }));
 
+          const complete = expectedShards > 0 && shardsFound === expectedShards;
+          if (!complete) {
+            totalFailed += Math.max(1, expectedShards - shardsFound);
+            console.error(`Incomplete sync: expected ${expectedShards} shard artifacts, found ${shardsFound}`);
+          }
+
           // Update sync status in Supabase
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
           const syncMode = process.env.SYNC_MODE || 'all';
 
           async function updateStatus() {
-            await fetch(`${SUPABASE_URL}/rest/v1/curated_sync_status`, {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/curated_sync_status`, {
               method: 'POST',
               headers: {
                 'apikey': SUPABASE_KEY,
@@ -759,7 +812,7 @@ jobs:
               body: JSON.stringify({
                 id: 'sync-manifests',
                 last_run_completed_at: new Date().toISOString(),
-                last_run_status: totalFailed > 0 && totalSynced === 0 ? 'failed' : 'success',
+                last_run_status: complete && totalFailed === 0 ? 'success' : (totalSynced > 0 ? 'partial' : 'failed'),
                 items_processed: totalSynced,
                 error_message: totalFailed > 0 ? `${totalFailed} apps failed to sync` : null,
                 metadata: {
@@ -768,14 +821,25 @@ jobs:
                   failed: totalFailed,
                   skipped: totalSkipped,
                   shards: shardsFound,
+                  expected_shards: expectedShards,
                   new_versions: allNewVersions.length
                 },
                 updated_at: new Date().toISOString()
               })
             });
+            if (!response.ok) {
+              throw new Error(`Sync status update failed: ${response.status} ${await response.text()}`);
+            }
           }
 
-          updateStatus().catch(err => console.error('Failed to update sync status:', err));
+          updateStatus()
+            .then(() => {
+              if (!complete || totalFailed > 0) process.exit(1);
+            })
+            .catch(err => {
+              console.error('Failed to update sync status:', err);
+              process.exit(1);
+            });
           SUMMARYEOF
 
       - name: Create summary
@@ -825,23 +889,26 @@ jobs:
   # snapshot and publish it on the rolling `catalog-latest` release so
   # self-hosted (Supabase-less) instances can download the catalog.
   snapshot:
-    needs: [plan, sync]
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
-    runs-on: ubuntu-latest
+    needs: [plan, sync, summary]
+    if: ${{ needs.plan.result == 'success' && needs.sync.result == 'success' && needs.summary.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build catalog snapshot
         env:

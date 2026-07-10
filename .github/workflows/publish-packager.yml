@@ -3,61 +3,100 @@ name: Publish Packager to npm
 on:
   push:
     tags:
-      - 'packager-v*'
+      - "packager-v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 1.0.0)'
+        description: Version to publish; must match packager/package.json
         required: true
         type: string
 
+concurrency:
+  group: npm-packager-publish
+  cancel-in-progress: false
+
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
     defaults:
       run:
         working-directory: packager
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: packager/package-lock.json
+
+      - name: Validate requested version
+        id: validate
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            requested=${GITHUB_REF_NAME#packager-v}
+          else
+            requested=$INPUT_VERSION
+          fi
+          if [[ ! "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version: $requested" >&2
+            exit 1
+          fi
+          if [[ "$requested" != "$package_version" ]]; then
+            echo "Requested version $requested does not match packager/package.json $package_version" >&2
+            exit 1
+          fi
+          echo "version=$requested" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Build
         run: npm run build
 
-      - name: Update version (if manual dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        run: npm version ${{ inputs.version }} --no-git-tag-version
+      - name: Inspect package contents
+        run: npm pack --dry-run
 
-      - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm with provenance
+        run: npm publish --access public --provenance
 
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
       - name: Create GitHub Release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@2bb465e97f322d3cb2a965294d483e0d26a67aa9 # v3.0.1
         with:
           name: IntuneGet Packager ${{ github.ref_name }}
           body: |
-            ## IntuneGet Packager Release
+            ## IntuneGet Packager ${{ github.ref_name }}
 
-            Install or update:
+            This release publishes the matching, provenance-attested npm package.
+
             ```bash
-            npm install -g @ugurkocde/intuneget-packager
+            npm install -g @ugurkocde/intuneget-packager@${{ needs.publish.outputs.version }}
             ```
 
-            See [packager/README.md](https://github.com/${{ github.repository }}/blob/main/packager/README.md) for documentation.
+            See [packager/README.md](https://github.com/${{ github.repository }}/blob/main/packager/README.md) for installation, configuration, and compatibility details.
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

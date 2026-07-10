@@ -6,11 +6,15 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   package-and-deploy:
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 60
+    concurrency:
+      group: package-${{ github.event.client_payload.job.tenantId }}-${{ github.event.client_payload.app.wingetId }}
+      cancel-in-progress: false
     env:
       # Map client_payload to environment variables for use in steps
       # Payload is grouped into: job, app, installer, config (GitHub limits to 10 top-level properties)
@@ -48,13 +52,18 @@ jobs:
 
     steps:
       - name: Checkout private repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Checkout public repository for scripts
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ugurkocde/IntuneGet
+          # Update only after reviewing the referenced scripts in this commit.
+          ref: aa05f4240502b57a0edcdf015e182283447fd68d
           path: intuneget
+          persist-credentials: false
 
       - name: Capture IntuneGet ref
         run: |
@@ -318,6 +327,25 @@ jobs:
 
           Write-Host "Installer filename resolver validation passed."
 
+      - name: Validate dispatch payload and callback boundary
+        env:
+          CALLBACK_ALLOWED_ORIGIN: ${{ vars.CALLBACK_ALLOWED_ORIGIN }}
+        run: |
+          if ($env:JOB_ID -notmatch '^[A-Za-z0-9_-]{8,128}$') { throw 'Invalid job ID' }
+          if ($env:TENANT_ID -notmatch '^[0-9a-fA-F-]{36}$') { throw 'Invalid tenant ID' }
+          if ($env:WINGET_ID -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._+-]*$') { throw 'Invalid WinGet ID' }
+          if ($env:INSTALLER_SHA256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'A valid installer SHA256 is required' }
+
+          $callback = [Uri]$env:CALLBACK_URL
+          $installer = [Uri]$env:INSTALLER_URL
+          if ($callback.Scheme -ne 'https') { throw 'Callback URL must use HTTPS' }
+          if ($installer.Scheme -ne 'https') { throw 'Installer URL must use HTTPS' }
+          if ([string]::IsNullOrWhiteSpace($env:CALLBACK_ALLOWED_ORIGIN)) { throw 'CALLBACK_ALLOWED_ORIGIN repository variable is required' }
+          $allowed = [Uri]$env:CALLBACK_ALLOWED_ORIGIN
+          if ($callback.GetLeftPart([UriPartial]::Authority) -ne $allowed.GetLeftPart([UriPartial]::Authority)) {
+            throw 'Callback URL is outside the configured trusted origin'
+          }
+
       - name: Send initial status callback
         env:
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
@@ -446,13 +474,8 @@ jobs:
           New-Item -ItemType Directory -Path $installerDir -Force
 
           $hashValidationMode = "$env:HASH_VALIDATION_MODE".Trim().ToLowerInvariant()
-          if ([string]::IsNullOrWhiteSpace($hashValidationMode)) {
-            $hashValidationMode = "smart"
-          }
-          if (@("strict", "smart", "off") -notcontains $hashValidationMode) {
-            Write-Host "Unknown HASH_VALIDATION_MODE '$hashValidationMode'. Falling back to 'smart'."
-            $hashValidationMode = "smart"
-          }
+          if ([string]::IsNullOrWhiteSpace($hashValidationMode)) { $hashValidationMode = 'strict' }
+          if ($hashValidationMode -ne 'strict') { throw 'Only strict installer hash validation is supported' }
           Write-Host "Hash validation mode: $hashValidationMode"
 
           $url = $env:INSTALLER_URL
@@ -631,9 +654,7 @@ jobs:
           $isLikelyRollingUrl = $isRollingDomain -or $hasRollingToken -or $urlEndsWithDownload -or ($isGenericFileName -and -not $containsVersion)
 
           $expectedHash = "$env:INSTALLER_SHA256".Trim().ToUpperInvariant()
-          if ($hashValidationMode -eq "off") {
-            Write-Host "SHA256 verification is disabled by HASH_VALIDATION_MODE=off"
-          } elseif ($expectedHash -and $expectedHash -ne "") {
+          if ($expectedHash -and $expectedHash -ne "") {
             if ($expectedHash -notmatch '^[A-F0-9]{64}$') {
               Send-ErrorCallback -Stage 'download' -Category 'validation' -Code 'INVALID_EXPECTED_HASH' `
                 -Message "Invalid expected SHA256 hash format in payload" `
@@ -668,46 +689,6 @@ jobs:
             }
 
             if ($actualHash -ne $expectedHash) {
-              $allowMismatch = $false
-              $mismatchReason = "strict mode"
-
-              if ($hashValidationMode -eq "smart") {
-                $allowMismatch = $true
-                if ($isLikelyRollingUrl) {
-                  if ($isRollingDomain) {
-                    $mismatchReason = "known rolling URL domain"
-                  } else {
-                    $mismatchReason = "rolling URL heuristic"
-                  }
-                } else {
-                  $mismatchReason = "smart mode - hash mismatch allowed with warning"
-                }
-              }
-
-              if ($allowMismatch) {
-                Write-Host "========================================"
-                Write-Host "WARNING: SHA256 hash mismatch (allowed in smart mode)"
-                Write-Host "  Domain:   $urlHost"
-                Write-Host "  Reason:   $mismatchReason"
-                Write-Host "  Expected: $expectedHash"
-                Write-Host "  Got:      $actualHash"
-                Write-Host "========================================"
-
-                Send-Callback -Body @{
-                  jobId = $env:JOB_ID
-                  status = "packaging"
-                  message = "Installer hash changed upstream; continuing in smart mode"
-                  progress = 25
-                  warningCode = "HASH_MISMATCH_ALLOWED"
-                  warningDetails = @{
-                    expectedHash = $expectedHash
-                    actualHash = $actualHash
-                    url = $url
-                    mode = $hashValidationMode
-                    reason = $mismatchReason
-                  }
-                } -CallbackUrl $env:CALLBACK_URL -CallbackSecret $env:CALLBACK_SECRET | Out-Null
-              } else {
                 Write-Host "========================================"
                 Write-Host "ERROR: SHA256 hash mismatch!"
                 Write-Host "  Expected: $expectedHash"
@@ -721,12 +702,11 @@ jobs:
                   -Message "SHA256 hash mismatch - the installer has been updated since the manifest was created" `
                   -Details @{ expectedHash = $expectedHash; actualHash = $actualHash; url = $url; mode = $hashValidationMode }
                 throw "SHA256 mismatch! Expected: $expectedHash, Got: $actualHash"
-              }
             } else {
               Write-Host "SHA256 verified successfully"
             }
           } else {
-            Write-Host "No expected SHA256 provided in payload - skipping hash verification"
+            throw 'A trusted expected SHA256 is required'
           }
 
           echo "INSTALLER_PATH=$installerFullPath" >> $env:GITHUB_ENV
@@ -883,8 +863,7 @@ jobs:
 
       - name: Authenticate to Microsoft Graph
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
           . "$env:GITHUB_WORKSPACE\Send-ErrorCallback.ps1"
@@ -892,9 +871,15 @@ jobs:
           try {
           $tenantId = $env:TENANT_ID
           Write-Host "::add-mask::$tenantId"
+          if (-not $env:ACTIONS_ID_TOKEN_REQUEST_URL -or -not $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
+            throw 'GitHub OIDC token endpoint is unavailable'
+          }
+          $oidcUrl = "$env:ACTIONS_ID_TOKEN_REQUEST_URL&audience=$([Uri]::EscapeDataString('api://AzureADTokenExchange'))"
+          $oidcResponse = Invoke-RestMethod -Uri $oidcUrl -Headers @{ Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" }
           $body = @{
             client_id = $env:AZURE_CLIENT_ID
-            client_secret = $env:AZURE_CLIENT_SECRET
+            client_assertion = $oidcResponse.value
+            client_assertion_type = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
             scope = "https://graph.microsoft.com/.default"
             grant_type = "client_credentials"
           }
@@ -1800,6 +1785,7 @@ jobs:
           }
 
           . "$env:GITHUB_WORKSPACE\Send-Callback.ps1"
+          . "$env:GITHUB_WORKSPACE\Send-ErrorCallback.ps1"
 
           Send-Callback -Body @{
             jobId = $env:JOB_ID
@@ -1880,8 +1866,10 @@ jobs:
             Write-Host "Applied $($graphRelationships.Count) app relationship(s) to app"
           } catch {
             $errMsg = $_.Exception.Message
-            Write-Host "::warning::Failed to apply app relationships: $errMsg"
-            Write-Host "::warning::App was deployed to Intune but relationships could not be applied. The admin can apply them manually."
+            Send-ErrorCallback -Stage 'finalize' -Category 'intune_api' -Code 'RELATIONSHIPS_FAILED' `
+              -Message "App deployed, but requested relationships could not be applied" `
+              -Details @{ appId = $env:INTUNE_APP_ID; error = $errMsg }
+            throw
           }
 
       - name: Send success callback

@@ -1,0 +1,5 @@
+# Changes to automation and deployment paths require maintainer review.
+/.github/ @ugurkocde
+/Dockerfile @ugurkocde
+/packager/ @ugurkocde
+/scripts/build-catalog-snapshot.mjs @ugurkocde

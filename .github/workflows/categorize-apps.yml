@@ -44,24 +44,23 @@ env:
 
 jobs:
   categorize-apps:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
-        # Use npm install (not npm ci) so Sharp's platform-specific transitive
-        # deps (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even
-        # when package-lock.json was generated on a different OS/CPU.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Categorize apps with OpenAI
         env:
@@ -95,6 +94,8 @@ jobs:
           INPUT_TOKENS=$(jq -r '.usage.inputTokens' categorize-stats.json)
           OUTPUT_TOKENS=$(jq -r '.usage.outputTokens' categorize-stats.json)
           TOTAL_TOKENS=$(jq -r '.usage.totalTokens' categorize-stats.json)
+          LOW_CONFIDENCE=$(jq -r '.skippedLowConfidence // 0' categorize-stats.json)
+          FAILED_BATCHES=$(jq -r '.failedBatches | length' categorize-stats.json)
 
           echo "## Category Backfill Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -105,6 +106,8 @@ jobs:
           echo "- **Batch size:** $BATCH_SIZE" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Processed:** $PROCESSED" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Updated:** $UPDATED" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skipped (low confidence):** $LOW_CONFIDENCE" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Failed batches:** $FAILED_BATCHES" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Input tokens:** $INPUT_TOKENS" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Output tokens:** $OUTPUT_TOKENS" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Total tokens:** $TOTAL_TOKENS" >> "$GITHUB_STEP_SUMMARY"

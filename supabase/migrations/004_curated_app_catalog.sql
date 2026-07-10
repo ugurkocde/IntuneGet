@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS curated_sync_status (
   id TEXT PRIMARY KEY,                       -- workflow name
   last_run_started_at TIMESTAMPTZ,
   last_run_completed_at TIMESTAMPTZ,
-  last_run_status TEXT,                      -- pending, running, success, failed
+  last_run_status TEXT,                      -- pending, running, success, partial, failed
   items_processed INTEGER DEFAULT 0,
   error_message TEXT,
   metadata JSONB DEFAULT '{}',               -- Additional workflow-specific data

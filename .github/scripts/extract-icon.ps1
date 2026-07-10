@@ -273,19 +273,11 @@ function Extract-IconFromMsi {
             }
         }
 
-        # Method 2: Fall back to msiexec if 7-Zip failed or not available
+        # Never invoke msiexec for community-controlled packages. Administrative
+        # installs can execute MSI custom actions; 7-Zip and direct MSI table
+        # parsing below are deliberately non-executing extraction paths.
         if (-not $extracted) {
-            Write-Host "Trying msiexec extraction..."
-            $process = Start-Process -FilePath "msiexec.exe" `
-                -ArgumentList "/a `"$MsiPath`" /qn TARGETDIR=`"$tempExtract`"" `
-                -Wait -PassThru -NoNewWindow
-
-            if ($process.ExitCode -eq 0) {
-                Write-Host "msiexec extraction successful"
-                $extracted = $true
-            } else {
-                Write-Host "msiexec extraction failed with exit code: $($process.ExitCode)"
-            }
+            Write-Host "7-Zip could not safely extract this MSI; trying direct MSI table parsing only"
         }
 
         if ($extracted) {

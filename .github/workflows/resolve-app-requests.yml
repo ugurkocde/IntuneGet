@@ -17,10 +17,11 @@ permissions:
 
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Resolve open app-request issues
-        uses: actions/github-script@v7
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -41,31 +42,36 @@ jobs:
               const key = process.env.SUPABASE_SERVICE_KEY;
               if (!url || !key) {
                 core.warning('Supabase secrets not configured; skipping suggestion status sync');
-                return;
+                throw new Error('Supabase secrets not configured');
               }
-              const response = await fetch(
-                `${url}/rest/v1/app_suggestions?github_issue_number=eq.${issueNumber}`,
-                {
-                  method: 'PATCH',
-                  headers: {
-                    apikey: key,
-                    Authorization: `Bearer ${key}`,
-                    'Content-Type': 'application/json',
-                    Prefer: 'return=minimal',
-                  },
-                  body: JSON.stringify({
-                    status,
-                    reviewed_at: new Date().toISOString(),
-                    reviewed_by: 'resolve-app-requests',
-                  }),
-                }
-              );
-              if (!response.ok) {
-                core.warning(`Failed to update suggestion for issue #${issueNumber}: ${response.status}`);
+              for (let attempt = 1; attempt <= 3; attempt += 1) {
+                const response = await fetch(
+                  `${url}/rest/v1/app_suggestions?github_issue_number=eq.${issueNumber}`,
+                  {
+                    method: 'PATCH',
+                    signal: AbortSignal.timeout(15_000),
+                    headers: {
+                      apikey: key,
+                      Authorization: `Bearer ${key}`,
+                      'Content-Type': 'application/json',
+                      Prefer: 'return=minimal',
+                    },
+                    body: JSON.stringify({
+                      status,
+                      reviewed_at: new Date().toISOString(),
+                      reviewed_by: 'resolve-app-requests',
+                    }),
+                  }
+                );
+                if (response.ok) return;
+                if (attempt === 3) throw new Error(`Supabase update failed with status ${response.status}`);
+                await new Promise(resolve => setTimeout(resolve, attempt * 1000));
               }
             };
 
+            let resolutionFailures = 0;
             for (const issue of issues) {
+              try {
               const bodyMatch = (issue.body || '').match(/\*\*WinGet ID:\*\*\s*`([^`]+)`/);
               const titleMatch = (issue.title || '').match(/^App Request:\s*(.+)$/);
               const wingetId = (bodyMatch?.[1] || titleMatch?.[1] || '').trim();
@@ -97,16 +103,20 @@ jobs:
 
               if (exists) {
                 const comment = [
+                  '<!-- intuneget-app-request-resolution -->',
                   `\`${wingetId}\` exists in the winget community repository, and the IntuneGet catalog ingests every winget package automatically - new packages appear within a day of being added upstream. Search the catalog for it; if it is not there yet, it will be after the next sync.`,
                   '',
                   'Closing as fulfilled. If the app is still missing from the catalog after a couple of days, comment here and the issue can be reopened.',
                 ].join('\n');
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: comment,
+                await updateSuggestion(issue.number, 'implemented');
+                const comments = await github.paginate(github.rest.issues.listComments, {
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, per_page: 100,
                 });
+                if (!comments.some(item => item.body?.includes('intuneget-app-request-resolution'))) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body: comment,
+                  });
+                }
                 await github.rest.issues.update({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -114,22 +124,25 @@ jobs:
                   state: 'closed',
                   state_reason: 'completed',
                 });
-                await updateSuggestion(issue.number, 'implemented');
                 core.info(`#${issue.number}: ${wingetId} exists - closed as fulfilled`);
               } else {
                 const comment = [
+                  '<!-- intuneget-app-request-resolution -->',
                   `No package with the id \`${wingetId}\` exists in the winget community repository (ids are case sensitive), so IntuneGet cannot package it - the catalog can only offer what winget provides.`,
                   '',
                   'To get this app into IntuneGet:',
                   `1. Find the exact id with \`winget search <app name>\` and submit a new suggestion with that id, or`,
                   '2. If the app is not in winget at all, submit a manifest to https://github.com/microsoft/winget-pkgs first - IntuneGet picks it up automatically once merged.',
                 ].join('\n');
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: comment,
+                await updateSuggestion(issue.number, 'rejected');
+                const comments = await github.paginate(github.rest.issues.listComments, {
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, per_page: 100,
                 });
+                if (!comments.some(item => item.body?.includes('intuneget-app-request-resolution'))) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body: comment,
+                  });
+                }
                 await github.rest.issues.update({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -137,10 +150,16 @@ jobs:
                   state: 'closed',
                   state_reason: 'not_planned',
                 });
-                await updateSuggestion(issue.number, 'rejected');
                 core.info(`#${issue.number}: ${wingetId} not found in winget-pkgs - closed as not planned`);
+              }
+              } catch (error) {
+                core.warning(`#${issue.number}: resolution failed: ${error.message}`);
+                resolutionFailures += 1;
               }
 
               // Stay friendly to API rate limits
               await new Promise((resolve) => setTimeout(resolve, 2000));
+            }
+            if (resolutionFailures > 0) {
+              core.setFailed(`${resolutionFailures} app request(s) could not be resolved`);
             }

@@ -10,6 +10,7 @@ const DRY_RUN = `${process.env.CATEGORIZE_DRY_RUN || 'false'}`.toLowerCase() ===
 const MAX_DESCRIPTION_LENGTH = 280;
 const RETRIES = 3;
 const RETRY_DELAY_MS = 1200;
+const MIN_CONFIDENCE = 0.55;
 
 const ALLOWED_CATEGORIES = [
   'developer-tools',
@@ -200,6 +201,7 @@ async function callOpenAI(batch) {
   for (let attempt = 1; attempt <= RETRIES; attempt += 1) {
     const response = await fetch(OPENAI_API_URL, {
       method: 'POST',
+      signal: AbortSignal.timeout(60_000),
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
@@ -209,7 +211,7 @@ async function callOpenAI(batch) {
 
     if (!response.ok) {
       const body = await response.text();
-      const retriable = response.status >= 429 || response.status >= 500;
+      const retriable = response.status === 429 || response.status >= 500;
       if (attempt < RETRIES && retriable) {
         await sleep(RETRY_DELAY_MS * attempt);
         continue;
@@ -231,6 +233,15 @@ async function callOpenAI(batch) {
     }
 
     const items = Array.isArray(decoded?.classifications) ? decoded.classifications : [];
+    const expectedIds = new Set(batch.map((app) => app.winget_id));
+    const returnedIds = new Set(items.map((item) => item?.winget_id).filter(Boolean));
+    if (
+      items.length !== batch.length ||
+      returnedIds.size !== expectedIds.size ||
+      [...expectedIds].some((id) => !returnedIds.has(id))
+    ) {
+      throw new Error('OpenAI response did not contain exactly one classification for every requested winget_id');
+    }
     return {
       classifications: items,
       usage: parsed.usage || {},
@@ -281,14 +292,6 @@ async function fetchApps(supabase) {
   return results.slice(0, LIMIT);
 }
 
-function buildFallbackMap(batch) {
-  const map = new Map();
-  for (const app of batch) {
-    map.set(app.winget_id, { category: 'other', confidence: 0 });
-  }
-  return map;
-}
-
 async function applyUpdates(supabase, updates) {
   let updated = 0;
   for (const item of updates) {
@@ -304,11 +307,11 @@ async function applyUpdates(supabase, updates) {
       query = query.is('category', null);
     }
 
-    const { error } = await query;
+    const { data, error } = await query.select('winget_id');
     if (error) {
       throw new Error(`Failed to update ${item.winget_id}: ${error.message}`);
     }
-    updated += 1;
+    updated += data?.length || 0;
   }
   return updated;
 }
@@ -343,17 +346,22 @@ async function main() {
   let totalUpdated = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let skippedLowConfidence = 0;
+  const failedBatches = [];
 
   for (let i = 0; i < chunks.length; i += 1) {
     const batch = chunks[i];
-    const fallbackMap = buildFallbackMap(batch);
-
     let response;
     try {
       response = await callOpenAI(batch);
     } catch (error) {
-      console.warn(`Batch ${i + 1}/${chunks.length} failed, defaulting to "other": ${error.message}`);
-      response = { classifications: [], usage: {} };
+      console.error(`Batch ${i + 1}/${chunks.length} failed and will be retried on a later run: ${error.message}`);
+      failedBatches.push({
+        batch: i + 1,
+        winget_ids: batch.map((app) => app.winget_id),
+        error: error.message,
+      });
+      continue;
     }
 
     totalInputTokens += Number(response.usage?.input_tokens || 0);
@@ -372,14 +380,17 @@ async function main() {
       });
     }
 
-    const batchUpdates = batch.map((app) => ({
-      winget_id: app.winget_id,
-      category: modelMap.get(app.winget_id)?.category || fallbackMap.get(app.winget_id).category,
-      confidence:
-        modelMap.get(app.winget_id)?.confidence == null
-          ? fallbackMap.get(app.winget_id).confidence
-          : modelMap.get(app.winget_id).confidence,
-    }));
+    const batchUpdates = batch
+      .map((app) => ({
+        winget_id: app.winget_id,
+        category: modelMap.get(app.winget_id)?.category,
+        confidence: modelMap.get(app.winget_id)?.confidence,
+      }))
+      .filter((item) => {
+        const accepted = item.category && item.confidence != null && item.confidence >= MIN_CONFIDENCE;
+        if (!accepted) skippedLowConfidence += 1;
+        return accepted;
+      });
 
     console.log(`\n--- Batch ${i + 1}/${chunks.length} (${batchUpdates.length} apps) ---`);
     for (const item of batchUpdates) {
@@ -415,10 +426,17 @@ async function main() {
       outputTokens: totalOutputTokens,
       totalTokens: totalInputTokens + totalOutputTokens,
     },
+    minimumConfidence: MIN_CONFIDENCE,
+    skippedLowConfidence,
+    failedBatches,
     sample: assignments.slice(0, 25),
   };
 
   fs.writeFileSync('./categorize-stats.json', JSON.stringify(stats, null, 2));
+
+  if (failedBatches.length > 0) {
+    throw new Error(`${failedBatches.length} categorization batch(es) failed; no fallback categories were persisted`);
+  }
 
   const otherCount = stats.categoryCounts['other'] || 0;
   const otherPct = stats.processed > 0 ? ((otherCount / stats.processed) * 100).toFixed(1) : '0.0';

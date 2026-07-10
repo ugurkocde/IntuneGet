@@ -62,7 +62,7 @@ jobs:
   # Runs on Ubuntu -- fast and cheap
   # ============================================================
   extract-web-icons:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -74,23 +74,20 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        # Use npm install (not npm ci) so platform-specific transitive deps
-        # of sharp (e.g. @emnapi/* on linux-x64) can be resolved on the fly.
-        # The committed lock file is generated on macOS and doesn't list them.
-        run: npm install --no-audit --no-fund --no-save sharp
+        run: npm ci --no-audit --no-fund
 
       - name: Fetch web icons
         id: fetch-web-icons
@@ -107,6 +104,8 @@ jobs:
         id: commit-web-icons
         if: steps.fetch-web-icons.outputs.total_hits != '0'
         shell: bash
+        env:
+          GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -148,7 +147,8 @@ jobs:
 
             PUSH_SUCCESS=false
             for i in 1 2 3; do
-              if git pull --rebase --autostash origin main && git push origin main; then
+              if git pull --rebase --autostash origin main && \
+                 git push "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main; then
                 PUSH_SUCCESS=true
                 break
               fi
@@ -182,7 +182,8 @@ jobs:
           const committedApps = process.env.COMMITTED_APPS ? process.env.COMMITTED_APPS.split(',').filter(Boolean) : [];
 
           if (!supabaseUrl || !supabaseKey || committedApps.length === 0) {
-            console.log('No apps to update');
+            if (!supabaseUrl || !supabaseKey) throw new Error('Supabase credentials are required');
+            console.log('No committed apps to update');
             process.exit(0);
           }
 
@@ -219,7 +220,9 @@ jobs:
               items_processed: toUpdate.length,
               metadata: {
                 github_avatars: toUpdate.filter(r => r.icon_source === 'github_avatar').length,
-                favicons: toUpdate.filter(r => r.icon_source === 'favicon').length
+                favicons: toUpdate.filter(r => r.icon_source === 'favicon').length,
+                microsoft_store: toUpdate.filter(r => r.icon_source === 'microsoft_store').length,
+                homepage_images: toUpdate.filter(r => r.icon_source === 'homepage_image').length
               },
               updated_at: new Date().toISOString()
             });
@@ -242,9 +245,13 @@ jobs:
             SUCCESS=$(jq '[.[] | select(.status == "success")] | length' web-icon-results.json)
             GITHUB=$(jq '[.[] | select(.icon_source == "github_avatar")] | length' web-icon-results.json)
             FAVICON=$(jq '[.[] | select(.icon_source == "favicon")] | length' web-icon-results.json)
+            STORE=$(jq '[.[] | select(.icon_source == "microsoft_store")] | length' web-icon-results.json)
+            HOMEPAGE=$(jq '[.[] | select(.icon_source == "homepage_image")] | length' web-icon-results.json)
             TOTAL=$(jq 'length' web-icon-results.json)
             echo "- **GitHub avatars:** $GITHUB" >> $GITHUB_STEP_SUMMARY
             echo "- **Favicons:** $FAVICON" >> $GITHUB_STEP_SUMMARY
+            echo "- **Microsoft Store:** $STORE" >> $GITHUB_STEP_SUMMARY
+            echo "- **Homepage images:** $HOMEPAGE" >> $GITHUB_STEP_SUMMARY
             echo "- **Total success:** $SUCCESS" >> $GITHUB_STEP_SUMMARY
             echo "- **Total processed:** $TOTAL" >> $GITHUB_STEP_SUMMARY
           fi
@@ -254,7 +261,7 @@ jobs:
   # Runs on Windows -- slower but highest quality
   # ============================================================
   extract-binary-icons:
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs: [extract-web-icons]
     timeout-minutes: 180
     if: >
@@ -265,27 +272,24 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Pull latest (includes web icons)
         run: git pull origin main
         shell: bash
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        # Use npm install (not npm ci) so platform-specific transitive deps
-        # (e.g. @emnapi/* sharp natives on this runner) can be resolved on the
-        # fly when the lock file was generated on a different platform.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
         shell: pwsh
 
       - name: Install ImageMagick and 7-Zip
@@ -375,23 +379,23 @@ jobs:
             }
 
             const wingetIds = apps.map(a => a.winget_id);
-            const installerUrlMap = {};
+            const installerMap = {};
             if (wingetIds.length > 0) {
               const { data: vhRows } = await supabase
                 .from('version_history')
-                .select('winget_id, installer_url')
+                .select('winget_id, installer_url, installer_sha256')
                 .in('winget_id', wingetIds)
                 .not('installer_url', 'is', null)
                 .order('detected_at', { ascending: false });
 
               if (vhRows) {
                 for (const row of vhRows) {
-                  if (!installerUrlMap[row.winget_id]) {
-                    installerUrlMap[row.winget_id] = row.installer_url;
+                  if (!installerMap[row.winget_id] && row.installer_url && row.installer_sha256) {
+                    installerMap[row.winget_id] = { url: row.installer_url, sha256: row.installer_sha256 };
                   }
                 }
               }
-              console.log(`Found ${Object.keys(installerUrlMap).length} cached installer URLs from version_history`);
+              console.log(`Found ${Object.keys(installerMap).length} installer URLs with trusted hashes from version_history`);
             }
 
             const appsToProcess = [];
@@ -403,7 +407,8 @@ jobs:
                   fs.existsSync(path.join(iconDir, `icon-${s}.png`))
                 );
                 if (allPresent) continue;
-                app.cached_installer_url = installerUrlMap[app.winget_id] || null;
+                app.cached_installer_url = installerMap[app.winget_id]?.url || null;
+                app.cached_installer_sha256 = installerMap[app.winget_id]?.sha256 || null;
                 appsToProcess.push(app);
               } else {
                 const iconPath = `${iconDir}/icon-64.png`;
@@ -413,7 +418,8 @@ jobs:
                     console.log(`Skipping ${app.winget_id} (${attempts} failed attempts)`);
                     continue;
                   }
-                  app.cached_installer_url = installerUrlMap[app.winget_id] || null;
+                  app.cached_installer_url = installerMap[app.winget_id]?.url || null;
+                  app.cached_installer_sha256 = installerMap[app.winget_id]?.sha256 || null;
                   appsToProcess.push(app);
                 }
               }
@@ -439,8 +445,6 @@ jobs:
       - name: Extract icons
         if: steps.get-apps.outputs.app_count != '0'
         env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
         shell: pwsh
         run: |
@@ -546,6 +550,19 @@ jobs:
                 continue
               }
 
+              if (-not $app.cached_installer_sha256 -or $app.cached_installer_sha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+                Write-Warning "No trusted SHA256 is available for $wingetId"
+                $failureReason = 'missing_trusted_installer_hash'
+                $failed++
+                $results += @{
+                  winget_id = $wingetId
+                  status = 'failed'
+                  error = 'A trusted installer hash is required before binary parsing'
+                  failure_reason = $failureReason
+                }
+                continue
+              }
+
               $extension = if ($installerUrl -match '\.msi(\?|$)') { '.msi' }
                           elseif ($installerUrl -match '\.msixbundle(\?|$)') { '.msixbundle' }
                           elseif ($installerUrl -match '\.msix(\?|$)') { '.msix' }
@@ -556,7 +573,8 @@ jobs:
 
               Write-Host "Downloading installer from $installerUrl"
               try {
-                Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 90
+                & "$env:GITHUB_WORKSPACE\.github\scripts\save-safe-download.ps1" `
+                  -Uri $installerUrl -Destination $installerPath -MaxBytes 524288000 -MaxRedirects 5 -TimeoutSeconds 90
               } catch {
                 Write-Warning "Download failed or timed out for ${wingetId}: $_"
                 $failureReason = 'download_timeout'
@@ -595,6 +613,20 @@ jobs:
                   winget_id = $wingetId
                   status = 'failed'
                   error = "Installer too large: ${fileSizeMB}MB"
+                  failure_reason = $failureReason
+                }
+                continue
+              }
+
+              $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash
+              if ($actualHash -ine $app.cached_installer_sha256) {
+                Write-Warning "SHA256 mismatch for $wingetId"
+                $failureReason = 'installer_hash_mismatch'
+                $failed++
+                $results += @{
+                  winget_id = $wingetId
+                  status = 'failed'
+                  error = "Installer SHA256 did not match the trusted manifest"
                   failure_reason = $failureReason
                 }
                 continue
@@ -663,7 +695,7 @@ jobs:
           Write-Host "Extracted: $extracted"
           Write-Host "Failed: $failed"
 
-          $results | ConvertTo-Json -Depth 10 | Out-File "icon-results.json" -Encoding UTF8
+          ConvertTo-Json -InputObject @($results) -Depth 10 | Out-File "icon-results.json" -Encoding utf8NoBOM
 
           echo "extracted=$extracted" >> $env:GITHUB_OUTPUT
           echo "failed=$failed" >> $env:GITHUB_OUTPUT
@@ -674,6 +706,8 @@ jobs:
         id: commit-icons
         if: steps.get-apps.outputs.app_count != '0'
         shell: bash
+        env:
+          GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -715,7 +749,8 @@ jobs:
 
             PUSH_SUCCESS=false
             for i in 1 2 3; do
-              if git pull --rebase --autostash origin main && git push origin main; then
+              if git pull --rebase --autostash origin main && \
+                 git push "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main; then
                 PUSH_SUCCESS=true
                 break
               fi
@@ -749,8 +784,7 @@ jobs:
           const committedApps = process.env.COMMITTED_APPS ? process.env.COMMITTED_APPS.split(',').filter(Boolean) : [];
 
           if (!supabaseUrl || !supabaseKey) {
-            console.log('Supabase credentials not configured, skipping database update');
-            process.exit(0);
+            throw new Error('Supabase credentials are required');
           }
 
           const supabase = createClient(supabaseUrl, supabaseKey);

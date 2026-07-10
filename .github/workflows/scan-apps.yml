@@ -2,431 +2,225 @@ name: Scan App Installations
 
 on:
   schedule:
-    # Run weekly on Wednesdays at 03:00 UTC
-    - cron: '0 3 * * 3'
+    - cron: "0 3 * * 3"
   workflow_dispatch:
     inputs:
       app_ids:
-        description: 'Specific app IDs to scan (comma-separated, or "all")'
+        description: Specific app IDs to scan (comma-separated, or "all")
         required: false
-        default: 'all'
+        default: all
       max_apps:
-        description: 'Maximum number of apps to scan'
+        description: Maximum number of apps to scan
         required: false
-        default: '20'
+        default: "20"
       trigger_source:
-        description: 'Source that triggered this workflow'
+        description: Source that triggered this workflow
         required: false
-        default: 'manual'
+        default: manual
 
-# Prevent concurrent scans - only one scan at a time
+permissions:
+  contents: read
+
 concurrency:
   group: scan-apps
   cancel-in-progress: false
 
-env:
-  MAX_APPS: ${{ github.event.inputs.max_apps || '10' }}
-  # Per-app timeout in seconds (15 minutes max per app)
-  APP_TIMEOUT_SECONDS: 900
-
 jobs:
-  scan-apps:
-    runs-on: windows-latest
-    timeout-minutes: 240
-
+  select:
+    name: Select apps
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      app_count: ${{ steps.select.outputs.app_count }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: npm
 
       - name: Install dependencies
-        # Use npm install (not npm ci) so Sharp's platform-specific transitive
-        # deps (@emnapi/runtime, @emnapi/core, etc.) resolve correctly even
-        # when package-lock.json was generated on a different OS/CPU.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
-      - name: Install WinGet
-        shell: pwsh
-        run: |
-          # Check if winget is available
-          $winget = Get-Command winget -ErrorAction SilentlyContinue
-
-          if (-not $winget) {
-            Write-Host "Installing WinGet..."
-
-            # Download and install App Installer (includes WinGet)
-            $progressPreference = 'SilentlyContinue'
-            $url = "https://aka.ms/getwinget"
-            $installerPath = "$env:TEMP\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
-
-            Invoke-WebRequest -Uri $url -OutFile $installerPath
-            Add-AppxPackage -Path $installerPath
-
-            # Refresh path
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          }
-
-          winget --version
-
-      - name: Get apps to scan
-        id: get-apps
+      - name: Select least-recently-scanned apps
+        id: select
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
-          MAX_APPS: ${{ env.MAX_APPS }}
-        shell: bash
+          MAX_APPS: ${{ github.event.inputs.max_apps || '20' }}
         run: |
-          node << 'EOF'
-          const fs = require('fs');
+          node <<'NODE'
+          const fs = require('node:fs');
           const { createClient } = require('@supabase/supabase-js');
 
-          const supabaseUrl = process.env.SUPABASE_URL;
-          const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-          const appIds = process.env.APP_IDS || 'all';
-          const maxApps = parseInt(process.env.MAX_APPS) || 10;
+          const url = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_SERVICE_KEY;
+          if (!url || !key) throw new Error('Supabase credentials are required');
 
-          if (!supabaseUrl || !supabaseKey) {
-            console.error('Supabase credentials not configured');
-            process.exit(1);
-          }
+          const maxApps = Math.max(1, Math.min(50, Number.parseInt(process.env.MAX_APPS || '10', 10)));
+          const requested = (process.env.APP_IDS || 'all').split(',').map(v => v.trim()).filter(Boolean);
+          const specific = requested.length > 0 && requested[0] !== 'all';
+          const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+          if (specific && requested.some(id => !idPattern.test(id))) throw new Error('One or more app IDs are invalid');
 
-          const supabase = createClient(supabaseUrl, supabaseKey);
-
-          async function getApps() {
+          const supabase = createClient(url, key);
+          async function main() {
             let query = supabase
               .from('curated_apps')
-              .select('winget_id, name, publisher, latest_version, popularity_rank');
+              .select('winget_id, name, publisher, latest_version, popularity_rank')
+              .not('latest_version', 'is', null);
+            if (specific) query = query.in('winget_id', requested);
+            else query = query.order('popularity_rank', { ascending: true, nullsFirst: false }).limit(Math.max(500, maxApps * 20));
+            const { data: candidates, error } = await query;
+            if (error) throw error;
+            if (!candidates?.length) throw new Error('No matching apps were found');
 
-            // Filter by specific app IDs if provided
-            if (appIds !== 'all') {
-              const targetIds = appIds.split(',').map(id => id.trim());
-              query = query.in('winget_id', targetIds);
+            const lastScanned = new Map();
+            for (let i = 0; i < candidates.length; i += 100) {
+              const ids = candidates.slice(i, i + 100).map(app => app.winget_id);
+              const { data, error: scanError } = await supabase
+                .from('installation_snapshots')
+                .select('winget_id, scanned_at')
+                .in('winget_id', ids)
+                .order('scanned_at', { ascending: false });
+              if (scanError) throw scanError;
+              for (const row of data || []) if (!lastScanned.has(row.winget_id)) lastScanned.set(row.winget_id, row.scanned_at);
             }
 
-            // Order by popularity rank (lower is more popular)
-            query = query.order('popularity_rank', { ascending: true, nullsFirst: false });
-
-            // Limit to max apps
-            query = query.limit(maxApps);
-
-            const { data: apps, error } = await query;
-
-            if (error) {
-              console.error('Failed to fetch apps:', error.message);
-              process.exit(1);
-            }
-
-            console.log(`Selected ${apps.length} apps for scanning`);
-
-            // Save apps to process
-            fs.writeFileSync('apps-to-scan.json', JSON.stringify(apps, null, 2));
-
-            // Output count for GitHub Actions
-            const outputFile = process.env.GITHUB_OUTPUT;
-            if (outputFile) {
-              fs.appendFileSync(outputFile, `app_count=${apps.length}\n`);
-            }
+            candidates.sort((a, b) => {
+              const aTime = lastScanned.has(a.winget_id) ? Date.parse(lastScanned.get(a.winget_id)) : 0;
+              const bTime = lastScanned.has(b.winget_id) ? Date.parse(lastScanned.get(b.winget_id)) : 0;
+              return aTime - bTime || (a.popularity_rank ?? Number.MAX_SAFE_INTEGER) - (b.popularity_rank ?? Number.MAX_SAFE_INTEGER);
+            });
+            const apps = candidates.slice(0, maxApps).map(app => ({
+              winget_id: app.winget_id,
+              expected_version: app.latest_version,
+            }));
+            const matrix = JSON.stringify({ include: apps });
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${matrix}\napp_count=${apps.length}\n`);
+            console.log(`Selected ${apps.length} app(s): ${apps.map(a => a.winget_id).join(', ')}`);
           }
+          main().catch(error => { console.error(error); process.exit(1); });
+          NODE
 
-          getApps().catch(err => {
-            console.error('Error:', err);
-            process.exit(1);
-          });
-          EOF
+  scan:
+    name: Scan ${{ matrix.winget_id }}
+    needs: select
+    if: needs.select.outputs.app_count != '0'
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix: ${{ fromJson(needs.select.outputs.matrix) }}
+    runs-on: windows-2025
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout scanner code without credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-      - name: Scan apps
-        if: steps.get-apps.outputs.app_count != '0'
-        continue-on-error: true
-        env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Ensure WinGet is available
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
-
-          # Load apps to scan
-          $apps = Get-Content "apps-to-scan.json" | ConvertFrom-Json
-
-          $scanned = 0
-          $failed = 0
-          $skipped = 0
-          $results = @()
-
-          # Per-app timeout (default 15 minutes)
-          $appTimeoutSeconds = [int]($env:APP_TIMEOUT_SECONDS ?? 900)
-
-          # Minimum free disk space in GB before skipping an app
-          $minDiskSpaceGB = 5
-          # Maximum memory usage in MB before skipping an app
-          $maxMemoryMB = 6000
-
-          # Known problematic apps that tend to hang or cause issues
-          $problematicApps = @(
-            # Add any apps that consistently cause problems here
-          )
-
-          # Helper: save results incrementally so partial progress survives runner crashes
-          function Save-Results {
-            param($ResultsList)
-            $resultsArray = @($ResultsList)
-            $jsonContent = ConvertTo-Json -InputObject $resultsArray -Depth 20 -Compress:$false
-            [System.IO.File]::WriteAllText("$PWD\scan-results.json", $jsonContent, (New-Object System.Text.UTF8Encoding $false))
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            throw 'WinGet is not available on this runner image'
           }
+          winget --version
 
-          foreach ($app in $apps) {
-            $wingetId = $app.winget_id
-            Write-Host "`n========================================" -ForegroundColor Cyan
-            Write-Host "Scanning: $wingetId" -ForegroundColor Cyan
-            Write-Host "========================================" -ForegroundColor Cyan
+      - name: Scan app in isolated runner
+        id: scan
+        continue-on-error: true
+        shell: pwsh
+        env:
+          WINGET_ID: ${{ matrix.winget_id }}
+          EXPECTED_VERSION: ${{ matrix.expected_version }}
+          APP_TIMEOUT_SECONDS: "900"
+        run: .github/scripts/scan-app.ps1 -WingetId $env:WINGET_ID -ExpectedVersion $env:EXPECTED_VERSION -OutputPath scan-result.json
 
-            # Skip known problematic apps
-            if ($wingetId -in $problematicApps) {
-              Write-Host "Skipping known problematic app: $wingetId" -ForegroundColor Yellow
-              $skipped++
-              continue
-            }
+      - name: Upload scan result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scan-result-${{ matrix.winget_id }}
+          path: scan-result.json
+          if-no-files-found: error
+          retention-days: 2
 
-            # Check available disk space
-            $disk = Get-PSDrive -Name C
-            $freeDiskGB = [math]::Round($disk.Free / 1GB, 2)
-            Write-Host "Free disk space: ${freeDiskGB} GB"
-            if ($freeDiskGB -lt $minDiskSpaceGB) {
-              Write-Warning "Disk space below ${minDiskSpaceGB} GB, skipping remaining apps"
-              $skipped += ($apps.Count - $scanned - $failed - $skipped)
-              break
-            }
+      - name: Propagate scanner failure
+        if: steps.scan.outcome == 'failure'
+        shell: pwsh
+        run: throw 'Scanner failed; the diagnostic result artifact was preserved'
 
-            # Check memory usage
-            $memInfo = Get-Process -Id $PID | Select-Object WorkingSet64
-            $memMB = [math]::Round($memInfo.WorkingSet64 / 1MB, 0)
-            Write-Host "Memory before scan: ${memMB} MB"
-            if ($memMB -gt $maxMemoryMB) {
-              Write-Warning "Memory usage above ${maxMemoryMB} MB, skipping remaining apps"
-              $skipped += ($apps.Count - $scanned - $failed - $skipped)
-              break
-            }
+  upload:
+    name: Validate and upload results
+    needs: [select, scan]
+    if: always() && needs.select.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-            $startTime = Get-Date
-            $scanResult = @{
-              winget_id = $wingetId
-              version = $null
-              status = 'pending'
-              error = $null
-              registry_changes = @{ added = @(); app_registry_entry = $null }
-              file_changes = @{ added = @(); file_count = 0 }
-              shortcuts_created = @()
-              services_created = @()
-              install_path = $null
-              uninstall_string = $null
-              quiet_uninstall_string = $null
-              installed_size_bytes = 0
-            }
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: npm
 
-            try {
-              # Take baseline (lightweight - just counts existing keys/services/shortcuts)
-              Write-Host "Capturing baseline..."
-              $baseline = & "$env:GITHUB_WORKSPACE\.github\scripts\snapshot.ps1" -Mode "baseline"
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
 
-              # Install the app with timeout
-              Write-Host "Installing $wingetId (timeout: $appTimeoutSeconds seconds)..."
+      - name: Download scan results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: scan-result-*
+          path: scan-results
 
-              $installJob = Start-Job -ScriptBlock {
-                param($id)
-                winget install --id $id --silent --accept-package-agreements --accept-source-agreements 2>&1
-              } -ArgumentList $wingetId
-
-              $installCompleted = Wait-Job -Job $installJob -Timeout $appTimeoutSeconds
-
-              if (-not $installCompleted) {
-                Write-Warning "Installation timed out after $appTimeoutSeconds seconds"
-                Stop-Job -Job $installJob
-                Remove-Job -Job $installJob -Force
-
-                # Try to kill any hanging winget processes
-                Get-Process -Name "winget*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
-                throw "Installation timed out after $appTimeoutSeconds seconds"
-              }
-
-              $installOutput = Receive-Job -Job $installJob
-              $installExitCode = $installJob.ChildJobs[0].JobStateInfo.Reason.ExitCode
-              Remove-Job -Job $installJob -Force
-
-              Write-Host "Installation output: $installOutput"
-
-              # Check if install succeeded (winget returns 0 on success, or -1978335189 for already installed)
-              if ($installExitCode -ne 0 -and $installExitCode -ne $null) {
-                # Check if it's just "already installed" error
-                if ($installOutput -match "already installed" -or $installExitCode -eq -1978335189) {
-                  Write-Host "App already installed, continuing with analysis..."
-                } else {
-                  throw "WinGet install failed with exit code $installExitCode"
-                }
-              }
-
-              # Wait for installation to settle
-              Start-Sleep -Seconds 5
-
-              # Analyze changes (lightweight - finds new uninstall entry, scans only that directory)
-              Write-Host "Analyzing installation changes..."
-              $appNameHint = $wingetId.Split('.')[-1]  # Use last part of ID as hint
-              $changes = & "$env:GITHUB_WORKSPACE\.github\scripts\snapshot.ps1" -Mode "analyze" -Baseline $baseline -AppName $appNameHint
-
-              # Populate scan result from analysis
-              $scanResult.version = $changes.version ?? "unknown"
-              $scanResult.install_path = $changes.install_path
-              $scanResult.uninstall_string = $changes.uninstall_string
-              $scanResult.quiet_uninstall_string = $changes.quiet_uninstall_string
-              $scanResult.file_changes = @{
-                added = $changes.files
-                file_count = $changes.file_count
-              }
-              $scanResult.shortcuts_created = $changes.shortcuts_created
-              $scanResult.services_created = $changes.services_created
-              $scanResult.installed_size_bytes = $changes.total_size_bytes
-              $scanResult.registry_changes = @{
-                added = $changes.all_new_entries
-                app_registry_entry = $changes.app_registry_entry
-              }
-              $scanResult.status = 'completed'
-
-              # Debug: Show what was detected
-              Write-Host "Detection summary:"
-              Write-Host "  - Version: $($scanResult.version)"
-              Write-Host "  - Install path: $($scanResult.install_path)"
-              Write-Host "  - Files: $($changes.file_count)"
-              Write-Host "  - Shortcuts: $($changes.shortcuts_created.Count)"
-              Write-Host "  - Services: $($changes.services_created.Count)"
-              Write-Host "  - Registry detection: $($changes.app_registry_entry.detection_method ?? 'none')"
-
-              $scanned++
-              Write-Host "Successfully scanned $wingetId" -ForegroundColor Green
-
-              # Uninstall the app with timeout
-              Write-Host "Uninstalling $wingetId..."
-              $uninstallJob = Start-Job -ScriptBlock {
-                param($id)
-                winget uninstall --id $id --silent 2>&1
-              } -ArgumentList $wingetId
-
-              $uninstallCompleted = Wait-Job -Job $uninstallJob -Timeout 300  # 5 min timeout for uninstall
-              if (-not $uninstallCompleted) {
-                Write-Warning "Uninstall timed out, forcing cleanup..."
-                Stop-Job -Job $uninstallJob
-              }
-              Remove-Job -Job $uninstallJob -Force -ErrorAction SilentlyContinue
-
-              Start-Sleep -Seconds 3
-
-            } catch {
-              $scanResult.status = 'failed'
-              $scanResult.error = $_.ToString()
-              Write-Warning "Failed to scan $wingetId : $_"
-              $failed++
-
-              # Try to uninstall anyway
-              try {
-                $cleanupJob = Start-Job -ScriptBlock {
-                  param($id)
-                  winget uninstall --id $id --silent 2>&1
-                } -ArgumentList $wingetId
-                Wait-Job -Job $cleanupJob -Timeout 120 | Out-Null
-                Remove-Job -Job $cleanupJob -Force -ErrorAction SilentlyContinue
-              } catch {}
-            }
-
-            $endTime = Get-Date
-            $scanResult.scan_duration_seconds = [int]($endTime - $startTime).TotalSeconds
-
-            $results += $scanResult
-
-            # Save results incrementally after each app (survives runner crashes)
-            Save-Results $results
-
-            # Force garbage collection to free memory between apps
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
-
-            # Log memory usage after cleanup
-            $memInfo = Get-Process -Id $PID | Select-Object WorkingSet64
-            Write-Host "Memory after cleanup: $('{0:N0}' -f ($memInfo.WorkingSet64 / 1MB)) MB"
-
-            # Small delay between apps
-            Start-Sleep -Seconds 5
-          }
-
-          Write-Host "`n=== Scan Summary ===" -ForegroundColor Cyan
-          Write-Host "Scanned: $scanned"
-          Write-Host "Failed: $failed"
-          Write-Host "Skipped: $skipped"
-          Write-Host "Results count: $($results.Count)"
-
-          # Debug: Show what we're about to write
-          if ($results.Count -eq 0) {
-            Write-Host "Warning: No results to save, creating empty array"
-            $results = @()
-          }
-
-          # Save results (ensure it's always an array, even with single item)
-          # Use explicit array wrapping and avoid BOM issues
-          $resultsArray = @($results)
-          Write-Host "Saving $($resultsArray.Count) results as JSON array"
-          $jsonContent = ConvertTo-Json -InputObject $resultsArray -Depth 20 -Compress:$false
-          [System.IO.File]::WriteAllText("$PWD\scan-results.json", $jsonContent, (New-Object System.Text.UTF8Encoding $false))
-
-          # Verify file was written
-          if (Test-Path "scan-results.json") {
-            $fileContent = Get-Content "scan-results.json" -Raw
-            Write-Host "Saved scan-results.json ($($fileContent.Length) chars)"
-            Write-Host "First 200 chars: $($fileContent.Substring(0, [Math]::Min(200, $fileContent.Length)))"
-          }
-
-          echo "scanned=$scanned" >> $env:GITHUB_OUTPUT
-          echo "failed=$failed" >> $env:GITHUB_OUTPUT
-
-      - name: Upload results to Supabase
-        if: steps.get-apps.outputs.app_count != '0' && hashFiles('scan-results.json') != ''
-        shell: bash
+      - name: Upload validated results to Supabase
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EXPECTED_COUNT: ${{ needs.select.outputs.app_count }}
         run: |
-          node << 'EOF'
-          const fs = require('fs');
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
           const { createClient } = require('@supabase/supabase-js');
+          const url = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_SERVICE_KEY;
+          if (!url || !key) throw new Error('Supabase credentials are required');
 
-          const supabaseUrl = process.env.SUPABASE_URL;
-          const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+          const files = fs.existsSync('scan-results')
+            ? fs.readdirSync('scan-results', { recursive: true }).filter(name => name.endsWith('.json'))
+            : [];
+          const results = files.map(file => JSON.parse(fs.readFileSync(path.join('scan-results', file), 'utf8')));
+          const expected = Number.parseInt(process.env.EXPECTED_COUNT || '0', 10);
+          if (results.length !== expected) throw new Error(`Expected ${expected} result artifacts, found ${results.length}`);
 
-          if (!supabaseUrl || !supabaseKey) {
-            console.log('Supabase credentials not configured');
-            process.exit(0);
-          }
-
-          const supabase = createClient(supabaseUrl, supabaseKey);
-
-          async function uploadResults() {
-            const results = JSON.parse(fs.readFileSync('scan-results.json', 'utf8'));
-
+          const supabase = createClient(url, key);
+          async function main() {
             let uploaded = 0;
-            let failed = 0;
-
             for (const result of results) {
-              if (result.status !== 'completed') {
-                failed++;
-                continue;
+              if (!result.winget_id || !result.version || !['completed', 'failed', 'skipped'].includes(result.status)) {
+                throw new Error(`Invalid scan result: ${JSON.stringify(result).slice(0, 300)}`);
               }
-
               const record = {
                 winget_id: result.winget_id,
                 version: result.version,
-                scanned_at: new Date().toISOString(),
+                scanned_at: result.scanned_at,
                 scan_duration_seconds: result.scan_duration_seconds,
                 scan_status: result.status,
                 scan_error: result.error,
@@ -438,78 +232,43 @@ jobs:
                 uninstall_string: result.uninstall_string,
                 quiet_uninstall_string: result.quiet_uninstall_string,
                 installed_size_bytes: result.installed_size_bytes,
-                os_version: process.env.OS || 'Windows',
-                architecture: 'x64',
-                updated_at: new Date().toISOString()
+                os_version: result.os_version,
+                architecture: result.architecture,
+                updated_at: new Date().toISOString(),
               };
-
-              const { error } = await supabase
-                .from('installation_snapshots')
-                .upsert(record, { onConflict: 'winget_id,version' });
-
-              if (error) {
-                console.error(`Failed to upload ${result.winget_id}:`, error.message);
-                failed++;
-              } else {
-                uploaded++;
-              }
+              const { error } = await supabase.from('installation_snapshots').upsert(record, { onConflict: 'winget_id,version' });
+              if (error) throw error;
+              uploaded++;
             }
 
-            // Update sync status
-            await supabase.from('curated_sync_status').upsert({
+            const completed = results.filter(r => r.status === 'completed').length;
+            const failed = results.filter(r => r.status === 'failed').length;
+            const skipped = results.filter(r => r.status === 'skipped').length;
+            const status = failed === 0 && skipped === 0 ? 'success' : completed > 0 || skipped > 0 ? 'partial' : 'failed';
+            const { error: statusError } = await supabase.from('curated_sync_status').upsert({
               id: 'scan-apps',
               last_run_completed_at: new Date().toISOString(),
-              last_run_status: failed > 0 && uploaded === 0 ? 'failed' : 'success',
-              items_processed: uploaded,
-              error_message: failed > 0 ? `${failed} scans failed` : null,
-              metadata: {
-                total: results.length,
-                uploaded,
-                failed
-              },
-              updated_at: new Date().toISOString()
+              last_run_status: status,
+              items_processed: completed,
+              error_message: failed || skipped ? `${failed} failed, ${skipped} skipped` : null,
+              metadata: { total: results.length, uploaded, completed, failed, skipped },
+              updated_at: new Date().toISOString(),
             });
+            if (statusError) throw statusError;
 
-            console.log(`Uploaded ${uploaded} scan results, ${failed} failed`);
+            fs.writeFileSync('scan-summary.json', JSON.stringify({ completed, failed, skipped, results }, null, 2));
+            if (failed > 0) process.exitCode = 1;
           }
+          main().catch(error => { console.error(error); process.exit(1); });
+          NODE
 
-          uploadResults()
-            .then(() => {
-              console.log('Upload complete');
-              process.exit(0);
-            })
-            .catch(err => {
-              console.error('Upload failed:', err);
-              process.exit(1);
-            });
-          EOF
-
-      - name: Create summary
+      - name: Write workflow summary
+        if: always() && hashFiles('scan-summary.json') != ''
         run: |
-          if (Test-Path scan-results.json) {
-            $results = Get-Content scan-results.json | ConvertFrom-Json
-            $completed = ($results | Where-Object { $_.status -eq 'completed' }).Count
-            $failed = ($results | Where-Object { $_.status -eq 'failed' }).Count
-
-            @"
-          ## App Scan Summary
-
-          - **Successfully scanned:** $completed
-          - **Failed:** $failed
-          - **Total processed:** $($results.Count)
-
-          ### Scan Details
-          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
-
-            foreach ($r in $results | Select-Object -First 20) {
-              $icon = if ($r.status -eq 'completed') { ':white_check_mark:' } else { ':x:' }
-              $registryCount = ($r.registry_changes.added).Count
-              $fileCount = ($r.file_changes.added).Count
-              $shortcutCount = ($r.shortcuts_created).Count
-
-              @"
-          | $icon | $($r.winget_id) | $($r.version ?? 'N/A') | $registryCount registry | $fileCount files | $shortcutCount shortcuts |
-          "@ | Out-File -Append $env:GITHUB_STEP_SUMMARY
-            }
-          }
-        shell: pwsh
+          echo "## App Scan Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Completed:** $(jq -r .completed scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Failed:** $(jq -r .failed scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skipped:** $(jq -r .skipped scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.results[] | "- `\(.winget_id)` — \(.status)\(if .error then ": " + .error else "" end)"' scan-summary.json >> "$GITHUB_STEP_SUMMARY"
