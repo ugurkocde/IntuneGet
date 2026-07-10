@@ -23,7 +23,7 @@
     "@azure/msal-browser": "^5.6.2",
     "@azure/msal-node": "^5.1.1",
     "@azure/msal-react": "^5.2.0",
-    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-dialog": "^1.1.19",
     "@radix-ui/react-dropdown-menu": "^2.1.2",
     "@radix-ui/react-scroll-area": "^1.2.0",
     "@radix-ui/react-select": "^2.1.2",
