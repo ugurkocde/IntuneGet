@@ -6,6 +6,7 @@ export { CapabilityCard } from "./CapabilityCard";
 export { CategoryHeader } from "./CategoryHeader";
 export { CategoryRow, CategoryRowItem } from "./CategoryRow";
 export { LogoBar } from "./LogoBar";
+export { LandingCatalogSearch } from "./LandingCatalogSearch";
 export { GitHubStatsBar } from "./GitHubStatsBar";
 export { ProductShowcase } from "./ProductShowcase";
 export { DeploymentFeed } from "./DeploymentFeed";

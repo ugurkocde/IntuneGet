@@ -7,6 +7,7 @@ import { T, Var } from "gt-next";
 import { Button } from '@/components/ui/button';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { markConsentGranted, markConsentPending, verifyConsentApiDetailed } from '@/components/AdminConsentBanner';
+import { readPostAuthRedirect } from '@/lib/auth/post-auth-redirect';
 
 function ConsentCallbackContent() {
   const router = useRouter();
@@ -20,6 +21,7 @@ function ConsentCallbackContent() {
   // misconfiguration rather than the user's role.
   const [errorKind, setErrorKind] = useState<'role' | 'verification'>('role');
   const [statusMessage, setStatusMessage] = useState('Processing admin consent...');
+  const onboardingSuccessUrl = `/onboarding?step=3&callbackUrl=${encodeURIComponent(readPostAuthRedirect())}`;
 
   /**
    * Verify consent via API after sign-in.
@@ -114,7 +116,7 @@ function ConsentCallbackContent() {
           setStatus('success');
           setStatusMessage('Your organization is now connected.');
           setTimeout(() => {
-            if (!cancelled) router.push('/onboarding?step=3');
+            if (!cancelled) router.push(onboardingSuccessUrl);
           }, 1500);
         } else {
           handleVerificationFailure(result);
@@ -138,7 +140,7 @@ function ConsentCallbackContent() {
             setStatus('success');
             setStatusMessage('Your organization is now connected.');
             setTimeout(() => {
-              if (!cancelled) router.push('/onboarding?step=3');
+              if (!cancelled) router.push(onboardingSuccessUrl);
             }, 1500);
           } else {
             handleVerificationFailure(result);
@@ -164,7 +166,7 @@ function ConsentCallbackContent() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, signIn, isAuthenticated, router, verifyConsentAfterSignIn]);
+  }, [searchParams, signIn, isAuthenticated, router, verifyConsentAfterSignIn, onboardingSuccessUrl]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-deepest">

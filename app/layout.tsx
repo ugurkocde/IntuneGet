@@ -232,8 +232,9 @@ export default async function RootLayout({
       return;
     }
 
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.classList.toggle("dark", prefersDark);
+    // First-time visitors always start in light mode. Explicit local or
+    // account preferences still take precedence on later visits.
+    document.documentElement.classList.remove("dark");
   } catch (error) {
     if (typeof console !== "undefined" && console.warn) {
       console.warn("Failed to initialize theme preference:", error);

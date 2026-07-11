@@ -18,11 +18,13 @@ import { FadeIn } from '@/components/landing/animations/FadeIn';
 interface OnboardingWizardProps {
   userName: string | null | undefined;
   initialStep?: OnboardingStep;
+  callbackUrl?: string;
 }
 
 export function OnboardingWizard({
   userName,
   initialStep,
+  callbackUrl,
 }: OnboardingWizardProps) {
   const { getAccessToken } = useMicrosoftAuth();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(
@@ -201,7 +203,7 @@ export function OnboardingWizard({
         )}
         {currentStep === 3 && (
           <FadeIn key="step-3" animateOnMount direction="up">
-            <SuccessStep userName={userName} />
+            <SuccessStep userName={userName} callbackUrl={callbackUrl} />
           </FadeIn>
         )}
       </div>

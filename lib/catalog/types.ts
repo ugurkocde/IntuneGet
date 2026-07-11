@@ -82,6 +82,9 @@ export interface CuratedAppFullRow {
   is_locale_variant?: boolean;
   parent_winget_id?: string | null;
   locale_code?: string | null;
+  is_verified?: boolean;
+  app_source?: string | null;
+  store_package_id?: string | null;
   [key: string]: unknown;
 }
 
