@@ -5,7 +5,6 @@ import {
   CapabilitiesSection,
   ComparisonSection,
   HowItWorksSection,
-  ProductSection,
   MSPSection,
   FAQSectionAnimated,
   CTASection,
@@ -156,7 +155,6 @@ export default async function LandingPage() {
         <main id="main-content" className="flex-1">
           <HeroSection initialStats={stats} initialGitHubStars={github.stars} />
           <HowItWorksSection />
-          <ProductSection />
           <CapabilitiesSection />
           <ComparisonSection />
           <MSPSection />

@@ -12,7 +12,6 @@ export {
   Footer,
   TrustSection,
   ComparisonSection,
-  ProductSection,
   MSPSection,
 } from "./sections";
 
@@ -30,7 +29,6 @@ export {
 // UI components
 export {
   Badge,
-  FeatureCard,
   GridBackground,
   GradientOrb,
   CapabilityCard,

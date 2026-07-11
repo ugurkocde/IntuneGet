@@ -6,5 +6,4 @@ export { CTASection } from "./CTASection";
 export { Footer } from "./Footer";
 export { TrustSection } from "./TrustSection";
 export { ComparisonSection } from "./ComparisonSection";
-export { ProductSection } from "./ProductSection";
 export { MSPSection } from "./MSPSection";

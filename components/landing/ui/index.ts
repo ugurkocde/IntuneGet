@@ -1,5 +1,4 @@
 export { Badge } from "./Badge";
-export { FeatureCard } from "./FeatureCard";
 export { GridBackground } from "./GridBackground";
 export { GradientOrb } from "./GradientOrb";
 export { CapabilityCard } from "./CapabilityCard";
@@ -9,4 +8,3 @@ export { LogoBar } from "./LogoBar";
 export { LandingCatalogSearch } from "./LandingCatalogSearch";
 export { GitHubStatsBar } from "./GitHubStatsBar";
 export { ProductShowcase } from "./ProductShowcase";
-export { DeploymentFeed } from "./DeploymentFeed";
