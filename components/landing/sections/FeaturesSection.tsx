@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
-  Webhook,
+  type LucideIcon,
 } from "lucide-react";
 import { FadeIn } from "../animations/FadeIn";
 
@@ -85,6 +85,24 @@ const capabilityRail = [
   { label: "Exact catalog IDs", icon: Check },
   { label: "Update history", icon: History },
   { label: "Clear recovery paths", icon: ShieldCheck },
+];
+
+type NotificationChannel =
+  | { kind: "icon"; label: string; icon: LucideIcon }
+  | { kind: "image"; label: string; image: string };
+
+const notificationChannels: NotificationChannel[] = [
+  { kind: "icon", label: "Email", icon: Mail },
+  {
+    kind: "image",
+    label: "Teams",
+    image: "/icons/Microsoft.Teams/icon-64.png",
+  },
+  {
+    kind: "image",
+    label: "Slack",
+    image: "/icons/SlackTechnologies.Slack/icon-64.png",
+  },
 ];
 
 const cardClassName =
@@ -297,24 +315,30 @@ export function CapabilitiesSection() {
                 className="mt-5 grid grid-cols-3 gap-2"
                 aria-label="Notification channels"
               >
-                {[
-                  { label: "Email", icon: Mail },
-                  { label: "Teams", icon: Webhook },
-                  { label: "Slack", icon: Webhook },
-                ].map(({ label, icon: Icon }) => (
+                {notificationChannels.map((channel) => (
                   <li
-                    key={label}
+                    key={channel.label}
                     className="flex min-w-0 flex-col items-center gap-2 rounded-xl border border-overlay/10 bg-bg-surface/60 px-2 py-3 text-center"
                   >
-                    <Icon
-                      className="h-5 w-5 text-accent-cyan"
-                      aria-hidden="true"
-                    />
+                    {channel.kind === "image" ? (
+                      <Image
+                        src={channel.image}
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="h-6 w-6 object-contain"
+                      />
+                    ) : (
+                      <channel.icon
+                        className="h-5 w-5 text-accent-cyan"
+                        aria-hidden="true"
+                      />
+                    )}
                     <span
                       className="text-xs font-medium text-text-secondary"
                       translate="no"
                     >
-                      {label}
+                      {channel.label}
                     </span>
                   </li>
                 ))}
