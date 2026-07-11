@@ -122,6 +122,7 @@ export function LocaleSwitcher() {
                       setLocale(loc);
                       setIsOpen(false);
                     }}
+                    aria-current={isActive ? "true" : undefined}
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm transition-all duration-150",
                       isActive

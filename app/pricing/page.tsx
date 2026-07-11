@@ -9,14 +9,14 @@ import { T } from "gt-next";
 export const metadata: Metadata = {
   title: "Pricing | IntuneGet - Free Intune App Deployment Tool",
   description:
-    "IntuneGet is completely free. Deploy 13,000+ Winget apps to Microsoft Intune at no cost. See how IntuneGet compares to manual deployment.",
+    "IntuneGet is completely free. Deploy the full Winget catalog to Microsoft Intune at no cost. See how IntuneGet compares to manual deployment.",
   alternates: {
     canonical: "https://intuneget.com/pricing",
   },
   openGraph: {
     title: "IntuneGet Pricing - Free & Open Source",
     description:
-      "IntuneGet is completely free. Deploy 13,000+ Winget apps to Microsoft Intune at no cost. See how it compares to paid alternatives.",
+      "IntuneGet is completely free. Deploy the full Winget catalog to Microsoft Intune at no cost. See how it compares to paid alternatives.",
   },
 };
 
@@ -44,7 +44,7 @@ const pricingJsonLd = {
   "@type": "Product",
   name: "IntuneGet",
   description:
-    "Free, open-source Intune app deployment tool. Deploy 13,000+ Winget apps to Microsoft Intune.",
+    "Free, open-source Intune app deployment tool. Deploy the full Winget catalog to Microsoft Intune.",
   brand: {
     "@type": "Brand",
     name: "IntuneGet",
@@ -72,8 +72,8 @@ const comparisonData: ComparisonRow[] = [
   },
   {
     feature: "Supported Apps",
-    intuneGet: "13,000+ (Winget)",
-    manual: "Unlimited (manual work)",
+    intuneGet: "Full Winget catalog",
+    manual: "Anything you package yourself",
   },
   {
     feature: "Setup Time",
@@ -83,7 +83,7 @@ const comparisonData: ComparisonRow[] = [
   {
     feature: "Time per Deployment",
     intuneGet: "~5 minutes",
-    manual: "8+ hours",
+    manual: "Hours per app",
   },
   {
     feature: "IntuneWin Packaging",
@@ -154,8 +154,8 @@ export default function PricingPage() {
             <T>Free. No Catch.</T>
           </h1>
           <p className="text-lg md:text-xl text-text-secondary max-w-2xl mx-auto">
-            <T>IntuneGet is 100% free and open source. Deploy 13,000+ Winget apps
-            to Microsoft Intune without spending a cent.</T>
+            <T>IntuneGet is 100% free and open source. Deploy the full Winget
+            catalog to Microsoft Intune without spending a cent.</T>
           </p>
         </div>
 
@@ -174,7 +174,7 @@ export default function PricingPage() {
             </p>
             <ul className="text-left space-y-3 mb-8">
               {[
-                "13,000+ Winget applications",
+                "The full Winget catalog of applications",
                 "Unlimited deployments",
                 "Unlimited users / seats",
                 "Self-hosting with Docker",

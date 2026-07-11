@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { T } from "gt-next";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronDown, HelpCircle } from "lucide-react";
@@ -25,10 +26,17 @@ export function FAQSectionAnimated() {
   };
 
   return (
-    <section className="relative w-full py-20 md:py-28 overflow-hidden">
-      <div className="container relative px-4 md:px-6 mx-auto max-w-4xl">
+    <section
+      id="faq"
+      className="relative w-full py-20 md:py-28 scroll-mt-20 md:scroll-mt-24 overflow-hidden"
+    >
+      <div className="container relative px-4 md:px-6 mx-auto max-w-4xl md:max-w-6xl">
+        <div className="grid md:grid-cols-[1fr_1.6fr] md:gap-12">
         {/* Section header */}
-        <StaggerContainer className="text-center mb-12 md:mb-16" staggerDelay={0.1}>
+        <StaggerContainer
+          className="text-center md:text-left mb-12 md:mb-0 md:sticky md:top-24 self-start"
+          staggerDelay={0.1}
+        >
           <StaggerItem>
             <Badge
               icon={<HelpCircle className="h-3.5 w-3.5" />}
@@ -44,13 +52,14 @@ export function FAQSectionAnimated() {
             </h2>
           </StaggerItem>
           <StaggerItem>
-            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto md:mx-0">
               <T id="faq.subheading">Get answers to the most common questions about IntuneGet and how it can transform your app deployment workflow.</T>
             </p>
           </StaggerItem>
         </StaggerContainer>
 
         {/* FAQ items */}
+        <div>
         <StaggerContainer className="space-y-4" staggerDelay={0.1}>
           {faqItems.map((faq, index) => (
             <StaggerItem key={index}>
@@ -63,28 +72,30 @@ export function FAQSectionAnimated() {
                     : "border-overlay/10 hover:border-overlay/15"
                 )}
               >
-                <motion.button
-                  onClick={() => toggleFAQ(index)}
-                  aria-expanded={openIndex === index}
-                  aria-controls={`faq-answer-animated-${index}`}
-                  className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 rounded-2xl hover:bg-overlay/[0.03] transition-colors"
-                  whileTap={shouldReduceMotion ? {} : { scale: 0.995 }}
-                >
-                  <h3 id={`faq-question-animated-${index}`} className="text-base sm:text-lg font-semibold text-text-primary pr-4">
-                    <T>{faq.question}</T>
-                  </h3>
-                  <motion.div
-                    className="flex-shrink-0 text-text-muted"
-                    animate={{
-                      rotate: openIndex === index ? 180 : 0,
-                    }}
-                    transition={{
-                      duration: shouldReduceMotion ? 0 : 0.2,
-                    }}
+                <h3 id={`faq-question-animated-${index}`}>
+                  <motion.button
+                    onClick={() => toggleFAQ(index)}
+                    aria-expanded={openIndex === index}
+                    aria-controls={`faq-answer-animated-${index}`}
+                    className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 rounded-2xl hover:bg-overlay/[0.03] transition-colors"
+                    whileTap={shouldReduceMotion ? {} : { scale: 0.995 }}
                   >
-                    <ChevronDown className="h-5 w-5" />
-                  </motion.div>
-                </motion.button>
+                    <span className="text-base sm:text-lg font-semibold text-text-primary pr-4">
+                      <T>{faq.question}</T>
+                    </span>
+                    <motion.div
+                      className="flex-shrink-0 text-text-muted"
+                      animate={{
+                        rotate: openIndex === index ? 180 : 0,
+                      }}
+                      transition={{
+                        duration: shouldReduceMotion ? 0 : 0.2,
+                      }}
+                    >
+                      <ChevronDown className="h-5 w-5" />
+                    </motion.div>
+                  </motion.button>
+                </h3>
 
                 <AnimatePresence initial={false}>
                   {openIndex === index && (
@@ -105,6 +116,14 @@ export function FAQSectionAnimated() {
                         <p className="text-text-secondary leading-relaxed">
                           <T>{faq.answer}</T>
                         </p>
+                        {faq.linkHref && faq.linkLabel && (
+                          <Link
+                            href={faq.linkHref}
+                            className="mt-3 inline-block text-sm font-medium text-accent-cyan hover:underline"
+                          >
+                            <T>{faq.linkLabel}</T>
+                          </Link>
+                        )}
                       </div>
                     </motion.div>
                   )}
@@ -132,6 +151,8 @@ export function FAQSectionAnimated() {
             </motion.a>
           </div>
         </FadeIn>
+        </div>
+        </div>
       </div>
     </section>
   );

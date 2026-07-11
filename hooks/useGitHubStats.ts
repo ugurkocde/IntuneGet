@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface GitHubStats {
   stars: number;
@@ -8,6 +8,12 @@ interface GitHubStats {
   contributors: number;
   isLoading: boolean;
   error: Error | null;
+}
+
+export interface GitHubStatValues {
+  stars: number;
+  forks: number;
+  contributors: number;
 }
 
 // Default fallback values to prevent layout shift
@@ -57,15 +63,26 @@ function setCachedStats(stats: typeof DEFAULT_STATS): void {
   }
 }
 
-export function useGitHubStats(): GitHubStats {
+export function useGitHubStats(initial?: Partial<GitHubStatValues>): GitHubStats {
   // Initial state must be deterministic: the server cannot read localStorage,
   // so seeding from cache here would make hydration text mismatch for
   // returning visitors. The effect below applies the cache after mount.
-  const [stats, setStats] = useState<typeof DEFAULT_STATS>(DEFAULT_STATS);
-  const [isLoading, setIsLoading] = useState(true);
+  // Server-rendered pages can pass `initial` (fetched server-side); in that
+  // case the values are used as-is and the client fetch is skipped entirely.
+  const [stats, setStats] = useState<typeof DEFAULT_STATS>({
+    ...DEFAULT_STATS,
+    ...initial,
+  });
+  const [isLoading, setIsLoading] = useState(initial === undefined);
   const [error, setError] = useState<Error | null>(null);
+  const hasInitialRef = useRef(initial !== undefined);
 
   useEffect(() => {
+    // Server-seeded values are authoritative: skip cache and client fetch
+    if (hasInitialRef.current) {
+      return;
+    }
+
     // Check cache first
     const cached = getCachedStats();
     if (cached) {

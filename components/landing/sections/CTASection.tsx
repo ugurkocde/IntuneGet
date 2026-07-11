@@ -1,17 +1,21 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, Star, BookOpen } from "lucide-react";
-import { Github } from "@/components/icons/brand-icons";
+import { ArrowRight, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { T } from "gt-next";
 import { FadeIn } from "../animations/FadeIn";
 import { GitHubStatsBar } from "../ui/GitHubStatsBar";
 import { springPresets } from "@/lib/animations/variants";
+import type { GitHubStatValues } from "@/hooks/useGitHubStats";
 
 const MotionLink = motion.create(Link);
 
-export function CTASection() {
+interface CTASectionProps {
+  initialGitHubStats?: GitHubStatValues;
+}
+
+export function CTASection({ initialGitHubStats }: CTASectionProps) {
   const shouldReduceMotion = useReducedMotion();
 
   return (
@@ -49,24 +53,9 @@ export function CTASection() {
                 whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
                 transition={springPresets.snappy}
               >
-                <T id="cta.primary">Start Deploying — It's Free</T>
+                <T id="cta.primary">Start Deploying Free</T>
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </MotionLink>
-
-              {/* Secondary CTA - GitHub */}
-              <motion.a
-                href="https://github.com/ugurkocde/IntuneGet"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-text-secondary bg-bg-elevated border border-overlay/10 rounded-xl hover:bg-overlay/[0.04] hover:border-overlay/15 transition-all duration-300 shadow-soft"
-                whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
-                whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
-                transition={springPresets.snappy}
-              >
-                <Github className="h-5 w-5" />
-                <T id="cta.github">Star on GitHub</T>
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-              </motion.a>
             </div>
           </FadeIn>
 
@@ -81,7 +70,7 @@ export function CTASection() {
                 <T id="cta.docs">Read the Documentation</T>
               </Link>
             </div>
-            <GitHubStatsBar className="pt-4" />
+            <GitHubStatsBar className="pt-4" initialStats={initialGitHubStats} />
           </FadeIn>
 
         </div>

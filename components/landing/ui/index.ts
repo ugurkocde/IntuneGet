@@ -9,4 +9,3 @@ export { LogoBar } from "./LogoBar";
 export { GitHubStatsBar } from "./GitHubStatsBar";
 export { ProductShowcase } from "./ProductShowcase";
 export { DeploymentFeed } from "./DeploymentFeed";
-export { SectionDivider } from "./SectionDivider";

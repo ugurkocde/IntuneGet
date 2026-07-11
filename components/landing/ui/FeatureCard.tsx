@@ -36,7 +36,7 @@ export function FeatureCard({
           ? {}
           : {
               y: -8,
-              boxShadow: "0 0 30px rgba(34, 211, 238, 0.15), 0 0 60px rgba(34, 211, 238, 0.1)",
+              boxShadow: "0 0 30px rgba(8, 145, 178, 0.15), 0 0 60px rgba(8, 145, 178, 0.1)",
               transition: springPresets.snappy,
             }
       }

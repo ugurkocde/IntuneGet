@@ -12,7 +12,7 @@ interface LandingStats {
   error: Error | null;
 }
 
-interface LandingStatValues {
+export interface LandingStatValues {
   signinClicks: number;
   appsDeployed: number;
   appsSupported: number;
@@ -35,9 +35,11 @@ const POLL_INTERVAL_HIDDEN_MS = 60000;
 const POLL_MAX_BACKOFF_MS = 60000;
 const MAX_FAILURE_BACKOFF_STEPS = 3;
 
-export function useLandingStats(): LandingStats {
-  const [stats, setStats] = useState<LandingStatValues>(DEFAULT_STATS);
-  const [isLoading, setIsLoading] = useState(true);
+export function useLandingStats(initial?: LandingStatValues): LandingStats {
+  // Server-rendered pages pass the freshly fetched values so the client never
+  // flashes the DEFAULT_STATS placeholders; polling/realtime still refresh them.
+  const [stats, setStats] = useState<LandingStatValues>(initial ?? DEFAULT_STATS);
+  const [isLoading, setIsLoading] = useState(initial === undefined);
   const [error, setError] = useState<Error | null>(null);
   const realtimeConnectedRef = useRef(false);
   const pollingFailureCountRef = useRef(0);

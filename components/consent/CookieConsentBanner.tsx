@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import * as React from 'react';
 import { Cookie, ShieldCheck } from 'lucide-react';
+import { T, useGT } from 'gt-next';
 import { Button } from '@/components/ui/button';
 import {
   getAnalyticsConsent,
@@ -17,6 +18,7 @@ interface CookieConsentBannerProps {
 export function CookieConsentBanner({
   plausibleDomain,
 }: CookieConsentBannerProps) {
+  const t = useGT();
   const [isVisible, setIsVisible] = React.useState(false);
   const [isReady, setIsReady] = React.useState(false);
 
@@ -50,47 +52,56 @@ export function CookieConsentBanner({
   if (!isReady || !isVisible) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-50 sm:right-4 sm:left-auto sm:w-[420px] lg:w-[480px]">
-      <div className="glass-light rounded-xl border border-overlay/10 bg-bg-elevated p-4 shadow-soft-md animate-fade-up">
-        <div className="space-y-3">
+    <div
+      role="region"
+      aria-label={t('Analytics consent')}
+      className="fixed inset-x-4 bottom-4 z-50 sm:right-4 sm:left-auto sm:w-[420px] lg:w-[480px]"
+    >
+      <div className="glass-light rounded-xl border border-overlay/10 bg-bg-elevated p-3 sm:p-4 shadow-soft-md animate-fade-up">
+        <div className="space-y-2.5 sm:space-y-3">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-lg bg-accent-cyan/10 p-2 text-accent-cyan">
+            <div className="mt-0.5 hidden rounded-lg bg-accent-cyan/10 p-2 text-accent-cyan sm:block">
               <Cookie className="h-4 w-4" />
             </div>
             <div>
               <p className="text-sm font-medium text-text-primary">
-                Help us improve the app with anonymous usage analytics
+                <T id="consent.heading">Help us improve the app with anonymous usage analytics</T>
               </p>
-              <p className="mt-1 text-xs text-text-muted">
-                We use Plausible for privacy-friendly aggregate insights. No
-                personal data, cookies, or fingerprinting.
+              <p className="mt-1 hidden text-xs text-text-muted sm:block">
+                <T id="consent.description">
+                  We use Plausible for privacy-friendly aggregate insights. No
+                  personal data, cookies, or fingerprinting.
+                </T>{' '}
+                <Link href="/privacy" className="underline hover:text-text-secondary">
+                  <T id="consent.learn-more">Learn more</T>
+                </Link>
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row">
-              <Button
-                onClick={handleAccept}
-                size="sm"
-                className="w-full sm:w-auto bg-accent-cyan text-black font-medium hover:bg-accent-cyan-bright"
-              >
-                <ShieldCheck className="w-4 h-4 mr-2" />
-                Accept analytics
-              </Button>
-              <Button
-                onClick={handleDecline}
-                size="sm"
-                variant="outline"
-                className="w-full sm:w-auto border-overlay/20"
-              >
-                Decline
-              </Button>
-            </div>
-
-            <Button asChild variant="ghost" size="sm" className="w-full sm:w-auto">
-              <Link href="/privacy">Learn more</Link>
+          <div className="flex flex-row items-center gap-2">
+            <Button
+              onClick={handleAccept}
+              size="sm"
+              className="flex-1 sm:flex-none bg-accent-cyan text-black font-medium hover:bg-accent-cyan-bright"
+            >
+              <ShieldCheck className="w-4 h-4 mr-2" />
+              <T id="consent.accept">Accept analytics</T>
             </Button>
+            <Button
+              onClick={handleDecline}
+              size="sm"
+              variant="outline"
+              className="flex-1 sm:flex-none border-overlay/20"
+            >
+              <T id="consent.decline">Decline</T>
+            </Button>
+            <Link
+              href="/privacy"
+              className="ml-auto text-xs text-text-muted underline hover:text-text-secondary sm:hidden"
+            >
+              <T id="consent.learn-more-mobile">Learn more</T>
+            </Link>
           </div>
         </div>
       </div>

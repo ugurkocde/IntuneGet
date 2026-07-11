@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useInView, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CheckCircle, Loader2, Circle } from "lucide-react";
 import { springPresets } from "@/lib/animations/variants";
@@ -24,10 +24,10 @@ const DEFAULT_TICK_INTERVAL_MS = 80;
 const HERO_CALM_TICK_INTERVAL_MS = 100;
 
 const STAGE_LABELS = [
-  { label: "Downloaded", shortLabel: "Downloaded", activeLabel: "Downloading...", activeShortLabel: "Downloading..." },
-  { label: "Packaged", shortLabel: "Packaged", activeLabel: "Packaging...", activeShortLabel: "Packaging..." },
-  { label: "Uploaded", shortLabel: "Uploaded", activeLabel: "Uploading...", activeShortLabel: "Uploading..." },
-  { label: "Deployed", shortLabel: "Deployed", activeLabel: "Deploying...", activeShortLabel: "Deploying..." },
+  { label: "Downloaded", shortLabel: "Downloaded", activeLabel: "Downloading…", activeShortLabel: "Downloading…" },
+  { label: "Packaged", shortLabel: "Packaged", activeLabel: "Packaging…", activeShortLabel: "Packaging…" },
+  { label: "Uploaded", shortLabel: "Uploaded", activeLabel: "Uploading…", activeShortLabel: "Uploading…" },
+  { label: "Deployed", shortLabel: "Deployed", activeLabel: "Deploying…", activeShortLabel: "Deploying…" },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -184,6 +184,8 @@ const AppRow = memo(function AppRow({ item, compact = false, isMobile = false, m
             <img
               src={item.app.icon}
               alt={item.app.alt}
+              width={20}
+              height={20}
               className={cn("object-contain", compact ? "h-4 w-4" : "h-5 w-5")}
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";
@@ -258,7 +260,7 @@ function DeploymentFeedStatic({ className = "", mode = "default" }: { className?
   const mobileApps = APP_POOL.slice(0, 3);
 
   return (
-    <div className={cn("relative mx-auto w-full max-w-4xl", className)}>
+    <div aria-hidden="true" className={cn("relative mx-auto w-full max-w-4xl", className)}>
       <div className="relative overflow-hidden rounded-xl border border-overlay/[0.06] bg-bg-elevated shadow-soft-xl">
         {/* Browser chrome */}
         <div className="flex items-center gap-2 border-b border-overlay/10 bg-bg-surface px-3 py-2">
@@ -316,6 +318,8 @@ function StaticAppRow({
           <img
             src={app.icon}
             alt={app.alt}
+            width={20}
+            height={20}
             className={cn("object-contain", compact ? "h-4 w-4" : "h-5 w-5")}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
@@ -358,6 +362,9 @@ export function DeploymentFeed({ className = "", mode = "default" }: DeploymentF
   const shouldReduceMotion = useReducedMotion();
   const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(containerRef, { amount: 0.1 });
 
   const queueRef = useRef<AppDefinition[]>([]);
   const lastAppNameRef = useRef<string>("");
@@ -432,18 +439,18 @@ export function DeploymentFeed({ className = "", mode = "default" }: DeploymentF
   };
 
   useEffect(() => {
-    if (shouldReduceMotion) return;
+    if (shouldReduceMotion || !isInView) return;
 
     const intervalId = setInterval(() => tickRef.current?.(), tickIntervalMs);
     return () => clearInterval(intervalId);
-  }, [shouldReduceMotion, tickIntervalMs]);
+  }, [shouldReduceMotion, isInView, tickIntervalMs]);
 
   if (shouldReduceMotion) {
     return <DeploymentFeedStatic className={className} mode={mode} />;
   }
 
   return (
-    <div className={cn("relative mx-auto w-full max-w-4xl", className)}>
+    <div ref={containerRef} aria-hidden="true" className={cn("relative mx-auto w-full max-w-4xl", className)}>
       <motion.div
         className="relative overflow-hidden rounded-xl border border-overlay/[0.06] bg-bg-elevated shadow-soft-xl"
         initial={{ opacity: 0, y: 20 }}
@@ -490,7 +497,7 @@ export function DeploymentFeed({ className = "", mode = "default" }: DeploymentF
                 }}
               />
               <motion.div
-                className="absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-accent-violet/15 blur-3xl"
+                className="absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-accent-cyan/10 blur-3xl"
                 initial={{ opacity: 0.12, scale: 1 }}
                 animate={{
                   opacity: isMobile ? [0.08, 0.14, 0.08] : [0.1, 0.18, 0.1],

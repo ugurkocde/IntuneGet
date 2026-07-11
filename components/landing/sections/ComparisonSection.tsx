@@ -1,56 +1,118 @@
 "use client";
 
+import { useState } from "react";
 import { T } from "gt-next";
 import { Check, X } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { FadeIn } from "../animations/FadeIn";
 import { SlideIn } from "../animations/SlideIn";
-import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 import { scaleIn } from "@/lib/animations/variants";
 import { cn } from "@/lib/utils";
 
 interface ComparisonRow {
   feature: string;
   intuneGet: string | boolean;
+  paidTools: string | boolean;
   manual: string | boolean;
 }
 
-function CellContent({ value }: { value: string | boolean }) {
-  if (typeof value === "boolean") {
-    return value ? (
-      <Check className="w-5 h-5 text-emerald-500 mx-auto" aria-label="Included" />
-    ) : (
-      <X className="w-5 h-5 text-red-400 mx-auto" aria-label="Not included" />
-    );
-  }
-  return <span className="text-sm text-text-secondary"><T>{value}</T></span>;
-}
-
-function MobileCellContent({ value }: { value: string | boolean }) {
-  if (typeof value === "boolean") {
-    return value ? (
-      <Check className="w-4 h-4 text-emerald-500" aria-label="Included" />
-    ) : (
-      <X className="w-4 h-4 text-red-400" aria-label="Not included" />
-    );
-  }
-  return <span className="text-sm text-text-secondary"><T>{value}</T></span>;
-}
-
 const comparisonData: ComparisonRow[] = [
-  { feature: "Price", intuneGet: "Free", manual: "Free (your time)" },
-  { feature: "Apps Supported", intuneGet: "13,000+", manual: "Unlimited" },
-  { feature: "Setup Time", intuneGet: "5 minutes", manual: "Varies" },
-  { feature: "Time per Deployment", intuneGet: "~5 minutes", manual: "8+ hours" },
-  { feature: "IntuneWin Packaging", intuneGet: "Automatic", manual: "Manual" },
-  { feature: "Detection Rules", intuneGet: "Auto-generated", manual: "Manual" },
-  { feature: "Automatic Updates", intuneGet: true, manual: false },
-  { feature: "AI-Powered Discovery", intuneGet: true, manual: false },
-  { feature: "PSADT v4 Support", intuneGet: true, manual: false },
+  {
+    feature: "Price",
+    intuneGet: "Free and open source",
+    paidTools: "Per-device or per-year licensing",
+    manual: "Free (your time)",
+  },
+  {
+    feature: "App catalog",
+    intuneGet: "Full Winget catalog, pre-validated",
+    paidTools: "Vendor-curated catalog",
+    manual: "Anything you package yourself",
+  },
+  {
+    feature: "Time per deployment",
+    intuneGet: "About 5 minutes",
+    paidTools: "Minutes",
+    manual: "Hours per app",
+  },
+  {
+    feature: "IntuneWin packaging",
+    intuneGet: "Automatic",
+    paidTools: "Automatic",
+    manual: "Manual",
+  },
+  {
+    feature: "Detection rules",
+    intuneGet: "Auto-generated",
+    paidTools: "Auto-generated",
+    manual: "Manual",
+  },
+  {
+    feature: "Automatic updates",
+    intuneGet: true,
+    paidTools: true,
+    manual: false,
+  },
+  {
+    feature: "Self-hosting",
+    intuneGet: "Yes (Docker, SQLite)",
+    paidTools: false,
+    manual: "n/a",
+  },
+  {
+    feature: "Vendor lock-in",
+    intuneGet: "None (AGPL-3.0, export anytime)",
+    paidTools: "Contract-dependent",
+    manual: "None",
+  },
+  {
+    feature: "Support and SLAs",
+    intuneGet: "Community (GitHub)",
+    paidTools: "Dedicated support, SLAs",
+    manual: "None",
+  },
+  {
+    feature: "PSADT v4 support",
+    intuneGet: true,
+    paidTools: "Varies",
+    manual: "DIY",
+  },
 ];
+
+const MOBILE_PREVIEW_COUNT = 4;
+
+function CellValue({ value }: { value: string | boolean }) {
+  if (typeof value === "boolean") {
+    return value ? (
+      <span className="inline-flex">
+        <Check className="w-5 h-5 text-emerald-500" aria-hidden="true" />
+        <span className="sr-only">
+          <T id="comparison.included">Included</T>
+        </span>
+      </span>
+    ) : (
+      <span className="inline-flex">
+        <X className="w-5 h-5 text-red-400" aria-hidden="true" />
+        <span className="sr-only">
+          <T id="comparison.not-included">Not included</T>
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="text-sm text-text-secondary">
+      <T>{value}</T>
+    </span>
+  );
+}
 
 export function ComparisonSection() {
   const shouldReduceMotion = useReducedMotion();
+  const [expanded, setExpanded] = useState(false);
+
+  const mobileRows = expanded
+    ? comparisonData
+    : comparisonData.slice(0, MOBILE_PREVIEW_COUNT);
 
   return (
     <section className="relative w-full py-20 md:py-28 overflow-hidden bg-bg-surface">
@@ -58,7 +120,7 @@ export function ComparisonSection() {
         {/* Section header */}
         <div className="text-center mb-12 md:mb-16 space-y-4">
           <motion.div
-            initial={shouldReduceMotion ? { opacity: 0 } : "hidden"}
+            initial={shouldReduceMotion ? { opacity: 1 } : "hidden"}
             whileInView={shouldReduceMotion ? { opacity: 1 } : "visible"}
             viewport={{ once: true, amount: 0.3 }}
             variants={shouldReduceMotion ? undefined : scaleIn}
@@ -70,105 +132,156 @@ export function ComparisonSection() {
           </motion.div>
           <SlideIn direction="up" distance={30} duration={0.5} delay={0.1}>
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary">
-              <T id="comparison.heading">IntuneGet vs Manual Winget Deployment</T>
+              <T id="comparison.heading">How IntuneGet Compares</T>
             </h2>
           </SlideIn>
           <FadeIn delay={0.2}>
             <p className="mx-auto max-w-2xl text-lg text-text-secondary">
-              <T id="comparison.subheading">See how IntuneGet automates Winget app deployment compared to manual processes</T>
+              <T id="comparison.subheading">
+                Manual Win32 packaging means hours per app and scripting
+                expertise. IntuneGet packages and deploys in about 5 minutes -
+                here is how it stacks up against the alternatives.
+              </T>
             </p>
           </FadeIn>
         </div>
 
         {/* Mobile: stacked cards */}
         <div className="md:hidden">
-          <StaggerContainer className="space-y-3" staggerDelay={0.05}>
-            {comparisonData.map((row, index) => (
-              <StaggerItem key={row.feature} direction="none">
-                <div className="rounded-xl bg-bg-elevated border border-overlay/10 shadow-card overflow-hidden">
+          <FadeIn>
+            <div className="space-y-3">
+              {mobileRows.map((row) => (
+                <div
+                  key={row.feature}
+                  className="rounded-xl bg-bg-elevated border border-overlay/10 shadow-card overflow-hidden"
+                >
                   <div className="px-4 py-3 border-b border-overlay/10">
-                    <span className="text-sm font-medium text-text-primary"><T>{row.feature}</T></span>
+                    <span className="text-sm font-medium text-text-primary">
+                      <T>{row.feature}</T>
+                    </span>
                   </div>
-                  <div className="grid grid-cols-2 divide-x divide-overlay/10">
-                    <div className="px-4 py-3 bg-accent-cyan/5">
-                      <div className="text-[10px] font-medium text-accent-cyan uppercase tracking-wider mb-1">
+                  <div className="divide-y divide-overlay/10">
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 bg-accent-cyan/5">
+                      <span className="text-[10px] font-medium text-accent-cyan uppercase tracking-wider shrink-0">
                         IntuneGet
-                      </div>
-                      <div className="flex items-center">
-                        <MobileCellContent value={row.intuneGet} />
+                      </span>
+                      <div className="text-right">
+                        <CellValue value={row.intuneGet} />
                       </div>
                     </div>
-                    <div className="px-4 py-3">
-                      <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-1">
-                        <T id="comparison.manual">Manual</T>
+                    <div className="flex items-center justify-between gap-4 px-4 py-3">
+                      <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider shrink-0">
+                        <T id="comparison.paid-tools-short">Paid tools</T>
+                      </span>
+                      <div className="text-right">
+                        <CellValue value={row.paidTools} />
                       </div>
-                      <div className="flex items-center">
-                        <MobileCellContent value={row.manual} />
+                    </div>
+                    <div className="flex items-center justify-between gap-4 px-4 py-3">
+                      <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider shrink-0">
+                        <T id="comparison.manual-short">Manual</T>
+                      </span>
+                      <div className="text-right">
+                        <CellValue value={row.manual} />
                       </div>
                     </div>
                   </div>
                 </div>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((prev) => !prev)}
+              className="mt-4 w-full px-4 py-3 text-sm font-medium text-accent-cyan bg-bg-elevated border border-overlay/10 rounded-xl hover:bg-overlay/[0.04] transition-colors"
+            >
+              {expanded ? (
+                <T id="comparison.show-less">Show less</T>
+              ) : (
+                <T id="comparison.show-full">Show full comparison</T>
+              )}
+            </button>
+          </FadeIn>
         </div>
 
-        {/* Desktop: 3-column grid table */}
+        {/* Desktop: comparison table */}
         <FadeIn delay={0.3} className="hidden md:block">
-          {/* Table header */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="p-4">
-              <span className="sr-only">Feature</span>
-            </div>
-            <div className="p-4 text-center bg-accent-cyan/10 rounded-t-2xl border-2 border-b-0 border-accent-cyan/30">
-              <div className="font-bold text-text-primary">IntuneGet</div>
-              <div className="text-xs text-accent-cyan font-medium mt-1"><T id="comparison.recommended">Recommended</T></div>
-            </div>
-            <div className="p-4 text-center bg-bg-elevated rounded-t-2xl border border-b-0 border-overlay/10">
-              <div className="font-semibold text-text-secondary"><T id="comparison.manual-process">Manual Process</T></div>
-              <div className="text-xs text-text-muted mt-1"><T id="comparison.diy">DIY Approach</T></div>
-            </div>
-          </div>
-
-          {/* Table body */}
-          <StaggerContainer
-            className="bg-bg-elevated rounded-2xl border border-overlay/10 overflow-hidden shadow-card"
-            staggerDelay={0.05}
-          >
-            {comparisonData.map((row, index) => (
-              <StaggerItem key={row.feature} direction="none">
-                <div
-                  className={cn(
-                    "grid grid-cols-3 gap-4",
-                    index !== comparisonData.length - 1 && "border-b border-overlay/10"
-                  )}
-                >
-                  <div className="p-4 flex items-center">
-                    <span className="text-sm font-medium text-text-primary"><T>{row.feature}</T></span>
-                  </div>
-                  <div className="p-4 flex items-center justify-center bg-accent-cyan/5 border-x border-accent-cyan/10">
-                    <CellContent value={row.intuneGet} />
-                  </div>
-                  <div className="p-4 flex items-center justify-center">
-                    <CellContent value={row.manual} />
-                  </div>
-                </div>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
-
-          {/* Bottom highlight for IntuneGet column */}
-          <div className="grid grid-cols-3 gap-4 mt-0">
-            <div></div>
-            <div className="h-1 bg-gradient-to-r from-accent-cyan/50 via-accent-cyan to-accent-cyan/50 rounded-b-full"></div>
-            <div></div>
+          <div className="rounded-2xl bg-bg-elevated border border-overlay/10 shadow-card overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-overlay/10">
+                  <th scope="col" className="p-4 text-left">
+                    <span className="sr-only">
+                      <T id="comparison.col-feature">Feature</T>
+                    </span>
+                  </th>
+                  <th
+                    scope="col"
+                    className="p-4 text-center bg-accent-cyan/10 border-x-2 border-accent-cyan/30"
+                  >
+                    <div className="font-bold text-text-primary">IntuneGet</div>
+                    <div className="text-xs text-accent-cyan font-medium mt-1">
+                      <T id="comparison.recommended">Recommended</T>
+                    </div>
+                  </th>
+                  <th scope="col" className="p-4 text-center">
+                    <div className="font-semibold text-text-secondary">
+                      <T id="comparison.col-paid-tools">
+                        Paid packaging tools
+                      </T>
+                    </div>
+                  </th>
+                  <th scope="col" className="p-4 text-center">
+                    <div className="font-semibold text-text-secondary">
+                      <T id="comparison.col-manual">Manual / DIY</T>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonData.map((row, index) => (
+                  <tr
+                    key={row.feature}
+                    className={cn(
+                      index !== comparisonData.length - 1 &&
+                        "border-b border-overlay/10"
+                    )}
+                  >
+                    <th
+                      scope="row"
+                      className="p-4 text-left text-sm font-medium text-text-primary"
+                    >
+                      <T>{row.feature}</T>
+                    </th>
+                    <td className="p-4 bg-accent-cyan/5 border-x border-accent-cyan/10">
+                      <div className="flex items-center justify-center text-center">
+                        <CellValue value={row.intuneGet} />
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-center text-center">
+                        <CellValue value={row.paidTools} />
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-center text-center">
+                        <CellValue value={row.manual} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </FadeIn>
 
         {/* Bottom note */}
         <FadeIn delay={0.4}>
           <p className="text-center text-sm text-text-muted mt-8">
-            <T id="comparison.note">IntuneGet has no surprise bills, no seat limits, and no hidden fees. Your data stays yours - export anytime with no lock-in.</T>
+            <T id="comparison.note">
+              IntuneGet has no surprise bills, no seat limits, and no hidden
+              fees. Your data stays yours - export anytime with no lock-in.
+            </T>
           </p>
         </FadeIn>
       </div>

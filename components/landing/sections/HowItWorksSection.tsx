@@ -12,7 +12,7 @@ const steps = [
     number: "01",
     title: "Select Applications",
     timeEstimate: "30 seconds",
-    description: "Choose the applications you want to deploy from Winget's extensive repository of 13,000+ packages.",
+    description: "Choose the applications you want to deploy from the full Winget catalog.",
   },
   {
     number: "02",
@@ -23,7 +23,7 @@ const steps = [
   {
     number: "03",
     title: "Upload to Intune",
-    timeEstimate: "1-2 minutes",
+    timeEstimate: "About 1 minute",
     description: "Packaged applications are seamlessly uploaded to your Microsoft Intune environment, ready for deployment to your managed devices.",
   },
 ];
@@ -44,7 +44,7 @@ export function HowItWorksSection() {
     >
       <div className="container relative px-4 md:px-6 mx-auto max-w-7xl">
         {/* Section header */}
-        <div className="text-center mb-12 md:mb-16 space-y-4">
+        <div className="mb-12 md:mb-16 space-y-4">
           <FadeIn>
             <span className="inline-block font-mono text-xs tracking-wider text-accent-cyan uppercase mb-4">
               <T id="howitworks.badge">Process</T>
@@ -56,8 +56,8 @@ export function HowItWorksSection() {
             </h2>
           </FadeIn>
           <FadeIn delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-text-secondary">
-              <T id="howitworks.subheading">Three simple steps to deploy your first app in under 5 minutes</T>
+            <p className="max-w-2xl text-lg text-text-secondary">
+              <T id="howitworks.subheading">Three simple steps to deploy your first app in about 5 minutes</T>
             </p>
           </FadeIn>
         </div>

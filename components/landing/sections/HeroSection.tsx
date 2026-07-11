@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, Star, Users, Upload, BookOpen } from "lucide-react";
+import { ArrowRight, Package, Scale, Upload, BookOpen } from "lucide-react";
 import { Github } from "@/components/icons/brand-icons";
 import Link from "next/link";
 import { T, Var, useGT, useLocale } from "gt-next";
@@ -11,24 +11,27 @@ import { GradientOrb } from "../ui/GradientOrb";
 import { DeploymentFeed } from "../ui/DeploymentFeed";
 import { FadeIn } from "../animations/FadeIn";
 import { TextReveal } from "../animations/TextReveal";
-import { useGitHubStats } from "@/hooks/useGitHubStats";
-import { useLandingStats } from "@/hooks/useLandingStats";
+import { useLandingStats, type LandingStatValues } from "@/hooks/useLandingStats";
 import { springPresets } from "@/lib/animations/variants";
 
 const MotionLink = motion.create(Link);
 
-export function HeroSection() {
+interface HeroSectionProps {
+  initialStats?: LandingStatValues;
+  // Accepted for page.tsx plumbing compatibility; the hero no longer renders
+  // a star count (the header shows the live count instead).
+  initialGitHubStars?: number;
+}
+
+export function HeroSection({ initialStats }: HeroSectionProps) {
   const t = useGT();
   // gt-next locale is identical on server and client; the browser's implicit
   // locale is not, and a bare toLocaleString() breaks hydration for non-en users.
   // An empty locale string would make toLocaleString throw a RangeError.
   const localeTag = useLocale() || undefined;
-  const { stars } = useGitHubStats();
-  const { signinClicks, appsDeployed, appsSupported } = useLandingStats();
+  const { appsDeployed, appsSupported } = useLandingStats(initialStats);
   const shouldReduceMotion = useReducedMotion();
   const sectionRef = useRef<HTMLElement>(null);
-  const starsDisplay = stars.toLocaleString(localeTag);
-  const signinsDisplay = signinClicks.toLocaleString(localeTag);
   const appsDeployedDisplay = appsDeployed.toLocaleString(localeTag);
   const supportedAppsDisplay = appsSupported.toLocaleString(localeTag);
 
@@ -38,7 +41,7 @@ export function HeroSection() {
   const orbY2 = useTransform(scrollY, [0, 500], [0, -20]);
 
   return (
-    <section ref={sectionRef} className="relative w-full min-h-[100dvh] flex items-center overflow-hidden">
+    <section ref={sectionRef} className="relative w-full min-h-0 md:min-h-[92dvh] flex items-center overflow-hidden">
       {/* Background gradient orbs with parallax */}
       <motion.div style={{ y: shouldReduceMotion ? 0 : orbY1 }}>
         <GradientOrb
@@ -57,7 +60,7 @@ export function HeroSection() {
         />
       </motion.div>
 
-      <div className="container px-4 md:px-6 mx-auto max-w-6xl py-16 md:py-24 relative z-10">
+      <div className="container px-4 md:px-6 mx-auto max-w-6xl pt-28 pb-14 md:pt-28 md:pb-16 relative z-10">
         <div className="grid gap-8 items-center md:grid-cols-[0.95fr_1.05fr] lg:gap-12 lg:grid-cols-[0.9fr_1.1fr]">
           {/* Left column: text content */}
           <div className="flex flex-col items-center text-center md:items-start md:text-left space-y-5">
@@ -85,11 +88,19 @@ export function HeroSection() {
             {/* Subheadline with authoritative statement */}
             <FadeIn delay={0.1} animateOnMount duration={0.4} direction="up">
               <p className="max-w-lg text-lg md:text-xl text-text-secondary leading-relaxed">
-                <T id="hero.subheadline">
-                  Search <Var>{supportedAppsDisplay}</Var>+ Winget packages, package automatically, and
-                  deploy to Microsoft Intune without scripting. Built for IT teams
-                  that want speed without hidden costs.
-                </T>
+                {appsSupported > 0 ? (
+                  <T id="hero.subheadline">
+                    Search <Var>{supportedAppsDisplay}</Var>+ Winget packages, package automatically, and
+                    deploy to Microsoft Intune without scripting. No per-device
+                    licensing, no lock-in - free and open source.
+                  </T>
+                ) : (
+                  <T id="hero.subheadline.nocount">
+                    Search the full Winget catalog, package automatically, and
+                    deploy to Microsoft Intune without scripting. No per-device
+                    licensing, no lock-in - free and open source.
+                  </T>
+                )}
               </p>
             </FadeIn>
 
@@ -104,7 +115,7 @@ export function HeroSection() {
                     whileTap={shouldReduceMotion ? {} : { scale: 0.97 }}
                     transition={springPresets.snappy}
                   >
-                    <T id="hero.cta.deploy">Start Free Deployment</T>
+                    <T id="hero.cta.deploy">Start Deploying Free</T>
                     <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                   </MotionLink>
                   <MotionLink
@@ -120,27 +131,16 @@ export function HeroSection() {
                 </div>
                 <div className="flex items-center gap-4 text-sm">
                   <Link
-                    href="/#how-it-works"
-                    className="text-text-muted hover:text-text-secondary transition-colors"
-                  >
-                    <T id="hero.link.how">See How It Works</T>
-                  </Link>
-                  <motion.a
-                    href="https://github.com/ugurkocde/IntuneGet"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-secondary transition-colors"
-                    whileHover={shouldReduceMotion ? {} : { x: 2 }}
-                    transition={springPresets.snappy}
-                  >
-                    <Github className="h-4 w-4" />
-                    <T id="hero.link.github">View on GitHub</T>
-                  </motion.a>
-                  <Link
                     href="/docs/docker"
                     className="text-text-muted hover:text-text-secondary transition-colors"
                   >
                     <T id="hero.link.docker">Self-host with Docker</T>
+                  </Link>
+                  <Link
+                    href="/apps"
+                    className="text-text-muted hover:text-text-secondary transition-colors"
+                  >
+                    <T id="hero.link.catalog">Browse the catalog</T>
                   </Link>
                 </div>
               </div>
@@ -148,18 +148,22 @@ export function HeroSection() {
 
             {/* Trust strip */}
             <FadeIn delay={0.2} animateOnMount duration={0.4} direction="up">
-              <div className="flex items-center gap-4 text-sm text-text-muted">
+              <div className="flex flex-wrap items-center gap-4 text-sm text-text-muted">
+                {appsSupported > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-accent-cyan" />
+                    <T id="hero.stats.catalog"><Var>{supportedAppsDisplay}</Var>+ apps available</T>
+                  </span>
+                )}
+                {appsDeployed > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5 text-emerald-500" />
+                    <T id="hero.stats.deployed"><Var>{appsDeployedDisplay}</Var>+ apps deployed</T>
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5">
-                  <Star className="w-3.5 h-3.5 text-amber-500" />
-                  <T id="hero.stats.stars"><Var>{starsDisplay}</Var> stars</T>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-accent-cyan" />
-                  <T id="hero.stats.users"><Var>{signinsDisplay}</Var>+ active users</T>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5 text-emerald-500" />
-                  <T id="hero.stats.apps"><Var>{appsDeployedDisplay}</Var>+ apps uploaded</T>
+                  <Scale className="w-3.5 h-3.5 text-amber-500" />
+                  <T id="hero.stats.license">Open source, AGPL-3.0</T>
                 </span>
               </div>
             </FadeIn>

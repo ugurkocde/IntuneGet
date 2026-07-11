@@ -6,17 +6,14 @@ export {
   HeroSection,
   FeaturesSection,
   CapabilitiesSection,
-  AdvancedCapabilitiesSection,
   HowItWorksSection,
   FAQSectionAnimated,
   CTASection,
   Footer,
   TrustSection,
-  ProblemOutcomeSection,
   ComparisonSection,
-  MissionSection,
-  QuickFactsSection,
-  SupportedSolutionBanner,
+  ProductSection,
+  MSPSection,
 } from "./sections";
 
 // Animation primitives

@@ -28,11 +28,15 @@ export function ProductShowcase({ className = "", compact = false }: ProductShow
   const displayApps = compact ? apps.slice(0, 4) : apps;
 
   return (
-    <div className={cn(
-      "relative w-full mx-auto",
-      compact ? "max-w-4xl" : "max-w-5xl",
-      className
-    )}>
+    <div
+      aria-hidden="true"
+      inert
+      className={cn(
+        "relative w-full mx-auto",
+        compact ? "max-w-4xl" : "max-w-5xl",
+        className
+      )}
+    >
       {/* Main product screenshot mockup */}
       <motion.div
         className="relative bg-bg-elevated rounded-xl shadow-soft-xl border border-overlay/[0.06] overflow-hidden"
@@ -85,7 +89,7 @@ export function ProductShowcase({ className = "", compact = false }: ProductShow
               )}>
                 <Search className={cn("text-text-muted", compact ? "w-4 h-4" : "w-5 h-5")} />
                 <span className={cn("text-text-muted", compact ? "text-xs" : "text-sm md:text-base")}>
-                  Search 13,000+ apps...
+                  Search the Winget catalog…
                 </span>
               </div>
 
@@ -114,12 +118,12 @@ export function ProductShowcase({ className = "", compact = false }: ProductShow
                 </motion.div>
               )}
             </motion.div>
-            <button className={cn(
+            <div className={cn(
               "bg-accent-cyan text-white font-medium rounded-lg hover:bg-accent-cyan-dim transition-colors",
               compact ? "px-3 py-2 text-xs" : "px-4 md:px-5 py-2.5 md:py-3 text-sm md:text-base"
             )}>
               Search
-            </button>
+            </div>
           </div>
 
           {/* Stats bar */}
@@ -178,6 +182,8 @@ export function ProductShowcase({ className = "", compact = false }: ProductShow
                   <img
                     src={app.icon}
                     alt={app.alt}
+                    width={32}
+                    height={32}
                     className={cn("object-contain", compact ? "w-5 h-5" : "w-7 h-7 md:w-8 md:h-8")}
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = "none";

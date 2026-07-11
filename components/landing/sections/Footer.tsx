@@ -77,7 +77,7 @@ export function Footer() {
                 <span className="text-xl font-semibold text-text-primary">IntuneGet</span>
               </Link>
               <p className="text-sm text-text-muted mb-6 max-w-xs">
-                <T id="footer.brand-description">Deploy any app from Winget to Intune in minutes. Free, open source, and trusted by IT teams worldwide.</T>
+                <T id="footer.brand-description">Deploy any app from Winget to Intune in minutes. Free and open source under AGPL-3.0.</T>
               </p>
 
               {/* Social links */}
@@ -99,7 +99,7 @@ export function Footer() {
 
             {/* Product links */}
             <StaggerItem>
-              <h4 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.product">Product</T></h4>
+              <h3 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.product">Product</T></h3>
               <ul className="space-y-3">
                 {footerLinks.product.map((link) => (
                   <li key={link.label}>
@@ -117,7 +117,7 @@ export function Footer() {
 
             {/* Resources links */}
             <StaggerItem>
-              <h4 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.resources">Resources</T></h4>
+              <h3 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.resources">Resources</T></h3>
               <ul className="space-y-3">
                 {footerLinks.resources.map((link) => (
                   <li key={link.label}>
@@ -135,7 +135,7 @@ export function Footer() {
 
             {/* Company links */}
             <StaggerItem>
-              <h4 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.company">Company</T></h4>
+              <h3 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.company">Company</T></h3>
               <ul className="space-y-3">
                 {footerLinks.company.map((link) => (
                   <li key={link.label}>
@@ -163,7 +163,7 @@ export function Footer() {
 
             {/* Legal links */}
             <StaggerItem>
-              <h4 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.legal">Legal</T></h4>
+              <h3 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.legal">Legal</T></h3>
               <ul className="space-y-3">
                 {footerLinks.legal.map((link) => (
                   <li key={link.label}>
@@ -181,7 +181,7 @@ export function Footer() {
 
             {/* Ecosystem links */}
             <StaggerItem>
-              <h4 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.ecosystem">Ecosystem</T></h4>
+              <h3 className="text-sm font-semibold text-text-primary mb-4"><T id="footer.heading.ecosystem">Ecosystem</T></h3>
               <ul className="space-y-3">
                 {footerLinks.ecosystem.map((link) => (
                   <li key={link.label}>
