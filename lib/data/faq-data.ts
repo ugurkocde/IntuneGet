@@ -1,6 +1,7 @@
 export interface FAQ {
   question: string;
   answer: string;
+  category?: "getting-started" | "security" | "deployment" | "self-hosting";
   visibleOnPage?: boolean;
   linkHref?: string;
   linkLabel?: string;
@@ -9,11 +10,13 @@ export interface FAQ {
 export const faqData: FAQ[] = [
   {
     question: "Where is my data stored?",
+    category: "security",
     answer:
       "On the hosted version (intuneget.com), data is stored in the European Union, in Supabase's Frankfurt, Germany region (eu-central-1). We only keep the operational metadata needed to run the service, such as your account email, deployment history, app catalog, and team settings. We never store your app installers or your Intune credentials: authentication uses Microsoft Entra ID, access tokens stay in your browser, and packaged apps are uploaded directly to your own Intune tenant. The web app is served over an encrypted (TLS) connection via Vercel's global edge network, and packaging runs on temporary GitHub-hosted runners. If you need data to stay entirely on your own infrastructure or in a specific region, IntuneGet is open source and can be self-hosted with an embedded SQLite database.",
   },
   {
     question: "What permissions does IntuneGet request?",
+    category: "security",
     answer:
       "IntuneGet uses a single delegated permission, User.Read, to sign you in and read your basic profile - nothing else runs under your user identity. The app itself uses five application permissions that a Global Administrator grants once through admin consent. Two of them allow writes: DeviceManagementApps.ReadWrite.All to create and update the apps IntuneGet uploads to your tenant, and DeviceManagementServiceConfig.ReadWrite.All for Intune service configuration used during app setup. The other three are read-only, covering device configuration, managed device information, and group membership.",
     linkHref: "/security",
@@ -21,6 +24,7 @@ export const faqData: FAQ[] = [
   },
   {
     question: "What can IntuneGet see and do in my tenant?",
+    category: "security",
     answer:
       "IntuneGet can create and update the apps it deploys to your Intune tenant, read group membership so you can pick assignment groups, and read device and configuration data for deployment context and reporting. It cannot read your mail, your files, or any user data beyond the basic profile used for sign-in. Access tokens stay in your browser, and your app installers and Intune credentials are never stored.",
     linkHref: "/security",
@@ -28,41 +32,49 @@ export const faqData: FAQ[] = [
   },
   {
     question: "What happens if IntuneGet is discontinued?",
+    category: "self-hosting",
     answer:
       "Nothing breaks. Every app you deploy lives in your own Intune tenant, so your deployments keep working regardless of what happens to IntuneGet. The project is open source under the AGPL-3.0 license and fully self-hostable with Docker and an embedded SQLite database, so you can run your own instance for as long as you like. There is no vendor lock-in.",
   },
   {
     question: "What is IntuneGet and how does it work?",
+    category: "getting-started",
     answer:
       "IntuneGet is a free, open-source tool for deploying Winget applications to Microsoft Intune. It automatically packages applications from the full Winget catalog and uploads them to your Intune environment, streamlining your app deployment process with just a few clicks. No scripting or IntuneWin packaging required.",
   },
   {
     question: "Is IntuneGet really free, and why?",
+    category: "getting-started",
     answer:
       "Yes. IntuneGet is completely free and open source under the AGPL-3.0 license - no hidden fees, no premium tiers, no seat limits, and no credit card required. It is free because we believe every IT team deserves access to great deployment tools. Since the code is open, you can audit it, modify it to fit your needs, and self-host it on your own infrastructure. No vendor lock-in, no surprise bills.",
   },
   {
     question: "How long does setup take?",
+    category: "getting-started",
     answer:
       "Most users are up and running in about 5 minutes. Sign in with your Microsoft account, have a Global Administrator grant the one-time admin consent, and you're ready to start deploying apps. Our step-by-step onboarding guides you through the entire process.",
   },
   {
     question: "Which applications are supported?",
+    category: "deployment",
     answer:
       "IntuneGet supports the full Winget catalog - thousands of applications including popular browsers, productivity tools, development environments, and enterprise software. The catalog is constantly growing as new apps are added to Winget.",
   },
   {
     question: "Can I self-host IntuneGet?",
+    category: "self-hosting",
     answer:
       "Yes! IntuneGet is fully open source under the AGPL-3.0 license and can be self-hosted on your own infrastructure using Docker. It uses an embedded SQLite database with zero external dependencies. Check out our documentation for detailed setup instructions, or use our hosted service for a hassle-free experience.",
   },
   {
     question: "What support is available?",
+    category: "getting-started",
     answer:
       "As an open source project, support is provided through our GitHub community. You can file issues and get help from other users. We also have comprehensive documentation covering common use cases and troubleshooting.",
   },
   {
     question: "How do I deploy Winget apps to Intune without scripting?",
+    category: "deployment",
     answer:
       "IntuneGet eliminates the need for scripting entirely. Simply search for an app in the Winget catalog, configure your deployment settings with a visual interface, and click deploy. IntuneGet handles all the packaging, IntuneWin conversion, and upload to your Intune tenant automatically.",
   },
