@@ -26,6 +26,9 @@ const nextConfig = {
       },
     ],
     formats: ["image/avif", "image/webp"],
+    // Next 16 rejects Image quality values missing from this list with a 400
+    // in production; AppIcon renders icons at quality 90.
+    qualities: [75, 90],
   },
   async headers() {
     return [

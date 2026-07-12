@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { T } from "gt-next";
+import { T, useGT } from "gt-next";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
@@ -48,6 +48,7 @@ export function FAQSectionAnimated() {
   const [activeCategory, setActiveCategory] = useState<FAQCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const shouldReduceMotion = useReducedMotion();
+  const t = useGT();
 
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
@@ -99,7 +100,7 @@ export function FAQSectionAnimated() {
 
           <FadeIn className="mb-6 lg:mb-0" delay={0.1}>
             <nav
-              aria-label="FAQ categories"
+              aria-label={t("FAQ categories")}
               className="flex gap-2 overflow-x-auto pb-2 lg:sticky lg:top-24 lg:flex-col lg:overflow-visible lg:border-r lg:border-overlay/10 lg:pb-0 lg:pr-7"
             >
               {categories.map((category) => {
@@ -131,7 +132,9 @@ export function FAQSectionAnimated() {
             <FadeIn>
               <div className="rounded-3xl border border-overlay/10 bg-bg-elevated p-4 shadow-card sm:p-6">
                 <label className="relative block">
-                  <span className="sr-only">Search questions</span>
+                  <span className="sr-only">
+                    <T>Search questions</T>
+                  </span>
                   <Search
                     className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted"
                     aria-hidden="true"
@@ -140,7 +143,7 @@ export function FAQSectionAnimated() {
                     type="search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search questions"
+                    placeholder={t("Search questions")}
                     className="h-14 w-full rounded-xl border border-overlay/15 bg-bg-primary pl-12 pr-4 text-base text-text-primary outline-none transition focus:border-accent-cyan/60 focus:ring-4 focus:ring-accent-cyan/10"
                   />
                 </label>
@@ -244,10 +247,10 @@ export function FAQSectionAnimated() {
                   <div className="py-14 text-center">
                     <HelpCircle className="mx-auto h-8 w-8 text-text-muted" />
                     <p className="mt-3 font-medium text-text-primary">
-                      No matching questions
+                      <T>No matching questions</T>
                     </p>
                     <p className="mt-1 text-sm text-text-secondary">
-                      Try a different search or category.
+                      <T>Try a different search or category.</T>
                     </p>
                   </div>
                 )}

@@ -19,11 +19,23 @@ describe('getSafeInternalRedirect', () => {
     '//evil.example/dashboard',
     '/\\evil.example/dashboard',
     'javascript:alert(1)',
+    '/..//evil.example',
+    '/a/..//evil.example',
+    '/\t/evil.example',
   ])('rejects unsafe redirect value %s', (value) => {
     expect(getSafeInternalRedirect(value)).toBe('/dashboard');
   });
 
+  it('keeps percent-encoded characters as an internal path without decoding', () => {
+    expect(getSafeInternalRedirect('/%2F%2Fevil.example')).toBe('/%2F%2Fevil.example');
+    expect(getSafeInternalRedirect('/%5C%5Cevil.example')).toBe('/%5C%5Cevil.example');
+  });
+
   it('uses a safe fallback for missing values', () => {
     expect(getSafeInternalRedirect(null, '/dashboard/apps')).toBe('/dashboard/apps');
+  });
+
+  it('falls back to the default when the fallback itself is unsafe', () => {
+    expect(getSafeInternalRedirect(null, '//evil.example')).toBe('/dashboard');
   });
 });

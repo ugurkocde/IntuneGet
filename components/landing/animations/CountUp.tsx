@@ -55,14 +55,24 @@ export function CountUp({
   }, []);
 
   useEffect(() => {
-    if (isMounted && isInView && !shouldReduceMotion && !hasAnimated) {
-      const timer = setTimeout(() => {
-        springValue.set(end);
-        setHasAnimated(true);
-      }, delay * 1000);
-
-      return () => clearTimeout(timer);
+    if (!isMounted || !isInView || shouldReduceMotion) {
+      return;
     }
+
+    // After the initial 0-to-end animation, keep tracking `end` so live
+    // counter updates (polling/realtime) stay visible instead of freezing
+    // at the first animated value.
+    if (hasAnimated) {
+      springValue.set(end);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      springValue.set(end);
+      setHasAnimated(true);
+    }, delay * 1000);
+
+    return () => clearTimeout(timer);
   }, [isMounted, isInView, shouldReduceMotion, hasAnimated, springValue, end, delay]);
 
   const showAnimatedValue = isMounted && !shouldReduceMotion;

@@ -38,4 +38,19 @@ describe('findExactCatalogPackage', () => {
     expect(findExactCatalogPackage(packages, 'Chrome')).toBeNull();
     expect(findExactCatalogPackage(packages, 'google.chrome')).toBeNull();
   });
+
+  it('returns null for an empty package list', () => {
+    expect(findExactCatalogPackage([], 'Google.Chrome')).toBeNull();
+  });
+
+  it('returns null for an empty package id', () => {
+    expect(findExactCatalogPackage(packages, '')).toBeNull();
+  });
+
+  it('returns the first entry when the list contains duplicate ids', () => {
+    const duplicate: NormalizedPackage = { ...packages[0], name: 'Chrome (copy)' };
+    expect(findExactCatalogPackage([...packages, duplicate], 'Google.Chrome')).toBe(
+      packages[0],
+    );
+  });
 });

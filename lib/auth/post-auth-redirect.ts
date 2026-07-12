@@ -24,7 +24,12 @@ export function getSafeInternalRedirect(
     const base = 'https://intuneget.local';
     const parsed = new URL(value, base);
     if (parsed.origin !== base) return safeFallback;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    // Re-check the normalized result: dot-segment collapsing can turn a
+    // same-origin input like "/..//evil.com" into the protocol-relative
+    // path "//evil.com", which the router would send cross-origin.
+    const result = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (result.startsWith('//') || result.includes('\\')) return safeFallback;
+    return result;
   } catch {
     return safeFallback;
   }

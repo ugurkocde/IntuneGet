@@ -26,25 +26,26 @@ const GITHUB_HEADERS = {
  */
 export async function getGitHubRepoStats(): Promise<GitHubRepoStats> {
   try {
-    const repoResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`, {
-      headers: GITHUB_HEADERS,
-      next: { revalidate: 3600 },
-    });
+    const [repoResponse, contributorsResponse] = await Promise.all([
+      fetch(`https://api.github.com/repos/${GITHUB_REPO}`, {
+        headers: GITHUB_HEADERS,
+        next: { revalidate: 3600 },
+      }),
+      // Contributors count is read from the Link pagination header
+      fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/contributors?per_page=1&anon=true`,
+        {
+          headers: GITHUB_HEADERS,
+          next: { revalidate: 3600 },
+        }
+      ),
+    ]);
 
     if (!repoResponse.ok) {
       throw new Error('Failed to fetch GitHub repo stats');
     }
 
     const repoData = await repoResponse.json();
-
-    // Fetch contributors count via the Link pagination header
-    const contributorsResponse = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/contributors?per_page=1&anon=true`,
-      {
-        headers: GITHUB_HEADERS,
-        next: { revalidate: 3600 },
-      }
-    );
 
     let contributorsCount = FALLBACK_STATS.contributors;
     if (contributorsResponse.ok) {

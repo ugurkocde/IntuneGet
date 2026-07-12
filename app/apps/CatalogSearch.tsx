@@ -22,6 +22,7 @@ export function CatalogSearch() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -31,12 +32,14 @@ export function CatalogSearch() {
     if (trimmed.length < 2) {
       setResults(null);
       setIsLoading(false);
+      setError(false);
       return;
     }
 
     const controller = new AbortController();
     abortRef.current = controller;
     setIsLoading(true);
+    setError(false);
 
     const timer = setTimeout(async () => {
       try {
@@ -46,6 +49,7 @@ export function CatalogSearch() {
         );
         if (!res.ok) {
           setResults([]);
+          setError(true);
           return;
         }
         const json = await res.json();
@@ -53,6 +57,7 @@ export function CatalogSearch() {
       } catch {
         if (!controller.signal.aborted) {
           setResults([]);
+          setError(true);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -88,10 +93,17 @@ export function CatalogSearch() {
         <div>
           {results.length === 0 && !isLoading ? (
             <p className="text-sm text-text-muted">
-              <T>
-                No results for &quot;<Var>{query.trim()}</Var>&quot;. Try a
-                different name or browse the popular apps below.
-              </T>
+              {error ? (
+                <T>
+                  Catalog search is temporarily unavailable. Try again in a
+                  moment or browse the popular apps below.
+                </T>
+              ) : (
+                <T>
+                  No results for &quot;<Var>{query.trim()}</Var>&quot;. Try a
+                  different name or browse the popular apps below.
+                </T>
+              )}
             </p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
