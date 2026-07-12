@@ -8,23 +8,21 @@ import {
   ArrowRight,
   Clock3,
   ExternalLink,
-  GitFork,
   Globe2,
   Infinity as InfinityIcon,
   MonitorUp,
-  Star,
-  Users,
 } from "lucide-react";
 import { GithubMark } from "@/components/icons/brand-icons";
 import { springPresets } from "@/lib/animations/variants";
-import { useGitHubStats, type GitHubStatValues } from "@/hooks/useGitHubStats";
+import { type LandingStatValues } from "@/hooks/useLandingStats";
+import { useSharedLandingStats } from "@/components/providers/LandingStatsProvider";
 import { CountUp } from "../animations/CountUp";
 import { FadeIn } from "../animations/FadeIn";
 
 const MotionLink = motion.create(Link);
 
 interface CTASectionProps {
-  initialGitHubStats?: GitHubStatValues;
+  initialStats?: LandingStatValues;
 }
 
 const hostedBenefits = [
@@ -33,15 +31,9 @@ const hostedBenefits = [
   { icon: InfinityIcon, label: "No per-device fees" },
 ];
 
-export function CTASection({ initialGitHubStats }: CTASectionProps) {
+export function CTASection({ initialStats }: CTASectionProps) {
   const shouldReduceMotion = useReducedMotion();
-  const { stars, forks, contributors, isLoading } =
-    useGitHubStats(initialGitHubStats);
-  const communityStats = [
-    { icon: Star, value: stars, label: "Stars" },
-    { icon: GitFork, value: forks, label: "Forks" },
-    { icon: Users, value: contributors, label: "Contributors" },
-  ].filter((stat) => isLoading || stat.value > 0);
+  const { appsDeployed } = useSharedLandingStats(initialStats);
 
   return (
     <section
@@ -205,32 +197,15 @@ export function CTASection({ initialGitHubStats }: CTASectionProps) {
               </span>
             </a>
 
-            {communityStats.length > 0 && (
-              <div className="grid grid-cols-3 divide-x divide-overlay/10">
-                {communityStats.map((stat, index) => (
-                  <a
-                    key={stat.label}
-                    href="https://github.com/ugurkocde/IntuneGet"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex min-w-0 items-center justify-center gap-2 px-3 sm:min-w-32 sm:px-6"
-                  >
-                    <stat.icon className="hidden h-5 w-5 shrink-0 text-text-muted transition-colors group-hover:text-accent-cyan sm:block" />
-                    <span className="min-w-0">
-                      <span className="block text-lg font-bold leading-none text-text-primary">
-                        {isLoading ? (
-                          <span className="inline-block h-5 w-8 animate-pulse rounded bg-overlay/[0.06]" />
-                        ) : (
-                          <CountUp end={stat.value} delay={0.1 * index} />
-                        )}
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-text-muted">
-                        {stat.label}
-                      </span>
-                    </span>
-                  </a>
-                ))}
-              </div>
+            {appsDeployed > 0 && (
+              <p className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold leading-none text-text-primary tabular-nums">
+                  <CountUp end={appsDeployed} />
+                </span>
+                <span className="text-sm text-text-muted">
+                  <T>apps deployed to Intune tenants so far</T>
+                </span>
+              </p>
             )}
           </div>
         </FadeIn>

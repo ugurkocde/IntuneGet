@@ -16,6 +16,7 @@ import {
   formatAppCountLabel,
 } from "@/lib/stats/public-stats";
 import { getGitHubRepoStats } from "@/lib/stats/github-stats";
+import { LandingStatsProvider } from "@/components/providers/LandingStatsProvider";
 import packageJson from "../package.json";
 
 // Re-render the page (and refresh the SSR'd counters) at most every 5 minutes
@@ -150,20 +151,25 @@ export default async function LandingPage() {
           __html: JSON.stringify(howToJsonLd),
         }}
       />
-      <div className="flex flex-col min-h-screen bg-bg-deepest">
-        <Header />
-        <main id="main-content" className="flex-1">
-          <HeroSection initialStats={stats} initialGitHubStars={github.stars} />
-          <HowItWorksSection />
-          <CapabilitiesSection />
-          <ComparisonSection />
-          <MSPSection />
-          <TrustSection initialStats={stats} />
-          <FAQSectionAnimated />
-          <CTASection initialGitHubStats={github} />
-        </main>
-        <Footer />
-      </div>
+      <LandingStatsProvider
+        initialLandingStats={stats}
+        initialGitHubStats={github}
+      >
+        <div className="flex flex-col min-h-screen bg-bg-deepest">
+          <Header />
+          <main id="main-content" className="flex-1">
+            <HeroSection initialStats={stats} />
+            <HowItWorksSection />
+            <CapabilitiesSection />
+            <ComparisonSection />
+            <MSPSection />
+            <TrustSection initialStats={stats} />
+            <FAQSectionAnimated />
+            <CTASection initialStats={stats} />
+          </main>
+          <Footer />
+        </div>
+      </LandingStatsProvider>
     </>
   );
 }

@@ -12,7 +12,7 @@ import { ResourcesDropdown } from "./ResourcesDropdown";
 import { T, useGT, useLocale } from "gt-next";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
-import { useGitHubStats } from "@/hooks/useGitHubStats";
+import { useSharedGitHubStats } from "@/components/providers/LandingStatsProvider";
 import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
 import { useProfileStore } from "@/stores/profile-store";
 
@@ -43,7 +43,7 @@ export function Header() {
   // Star count is fetched client-side and hidden until loaded, so the
   // server-rendered markup never contains a number that could mismatch.
   const localeTag = useLocale() || undefined;
-  const { stars, isLoading: starsLoading } = useGitHubStats();
+  const { stars, isLoading: starsLoading } = useSharedGitHubStats();
   const starsDisplay = new Intl.NumberFormat(localeTag, {
     notation: "compact",
     maximumFractionDigits: 1,
@@ -205,7 +205,7 @@ export function Header() {
             {isAuthenticated ? (
               <Link
                 href="/dashboard"
-                aria-label="Go to dashboard"
+                aria-label={t("Go to dashboard")}
                 className="group"
               >
                 <UserAvatar size="sm" />

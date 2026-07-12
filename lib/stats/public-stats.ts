@@ -61,16 +61,15 @@ export async function getPublicLandingStats(): Promise<PublicLandingStats> {
 }
 
 /**
- * Formats an app count as a marketing-friendly label, floored to the nearest
- * 500 with en-US grouping (13,528 -> "13,500+"). Returns an empty string when
- * the count is 0 so callers can fall back to count-free phrasing.
+ * Formats an app count as the exact live value with en-US grouping
+ * (13,645 -> "13,645+"). One convention across every public surface: the
+ * hero, /apps, and JSON-LD all show the same number. Returns an empty string
+ * when the count is 0 so callers can fall back to count-free phrasing.
  */
 export function formatAppCountLabel(count: number): string {
   if (count <= 0) {
     return '';
   }
 
-  const floored = Math.floor(count / 500) * 500;
-  const displayCount = floored > 0 ? floored : count;
-  return `${displayCount.toLocaleString('en-US')}+`;
+  return `${count.toLocaleString('en-US')}+`;
 }

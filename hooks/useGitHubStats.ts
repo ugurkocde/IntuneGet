@@ -23,7 +23,6 @@ const DEFAULT_STATS = {
   contributors: 5,
 };
 
-const GITHUB_REPO = 'ugurkocde/IntuneGet';
 const CACHE_KEY = 'github_stats_cache';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -63,7 +62,20 @@ function setCachedStats(stats: typeof DEFAULT_STATS): void {
   }
 }
 
-export function useGitHubStats(initial?: Partial<GitHubStatValues>): GitHubStats {
+interface UseGitHubStatsOptions {
+  /**
+   * When false the hook keeps its seed values and performs no fetching.
+   * Used by the shared-stats context wrappers so a page-level provider can
+   * own the single live instance while consumers stay hook-order safe.
+   */
+  enabled?: boolean;
+}
+
+export function useGitHubStats(
+  initial?: Partial<GitHubStatValues>,
+  options: UseGitHubStatsOptions = {},
+): GitHubStats {
+  const { enabled = true } = options;
   // Initial state must be deterministic: the server cannot read localStorage,
   // so seeding from cache here would make hydration text mismatch for
   // returning visitors. The effect below applies the cache after mount.
@@ -73,13 +85,13 @@ export function useGitHubStats(initial?: Partial<GitHubStatValues>): GitHubStats
     ...DEFAULT_STATS,
     ...initial,
   });
-  const [isLoading, setIsLoading] = useState(initial === undefined);
+  const [isLoading, setIsLoading] = useState(initial === undefined && enabled);
   const [error, setError] = useState<Error | null>(null);
   const hasInitialRef = useRef(initial !== undefined);
 
   useEffect(() => {
     // Server-seeded values are authoritative: skip cache and client fetch
-    if (hasInitialRef.current) {
+    if (!enabled || hasInitialRef.current) {
       return;
     }
 
@@ -93,51 +105,15 @@ export function useGitHubStats(initial?: Partial<GitHubStatValues>): GitHubStats
 
     async function fetchStats() {
       try {
-        // Fetch repo data for stars and forks
-        const repoResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`, {
-          headers: {
-            Accept: 'application/vnd.github.v3+json',
-          },
-        });
-
-        if (!repoResponse.ok) {
+        // Same-origin route backed by the server-side fetch cache. Hitting
+        // api.github.com from the browser is rate-limited per client IP and
+        // fails via CORS in some environments; the server has neither problem.
+        const response = await fetch('/api/stats/github');
+        if (!response.ok) {
           throw new Error('Failed to fetch GitHub repo stats');
         }
 
-        const repoData = await repoResponse.json();
-
-        // Fetch contributors count
-        const contributorsResponse = await fetch(
-          `https://api.github.com/repos/${GITHUB_REPO}/contributors?per_page=1&anon=true`,
-          {
-            headers: {
-              Accept: 'application/vnd.github.v3+json',
-            },
-          }
-        );
-
-        let contributorsCount = DEFAULT_STATS.contributors;
-        if (contributorsResponse.ok) {
-          // Get total from Link header
-          const linkHeader = contributorsResponse.headers.get('Link');
-          if (linkHeader) {
-            const match = linkHeader.match(/page=(\d+)>; rel="last"/);
-            if (match) {
-              contributorsCount = parseInt(match[1], 10);
-            }
-          } else {
-            // If no pagination, count from response
-            const contributorsData = await contributorsResponse.json();
-            contributorsCount = Array.isArray(contributorsData) ? contributorsData.length : DEFAULT_STATS.contributors;
-          }
-        }
-
-        const newStats = {
-          stars: repoData.stargazers_count || DEFAULT_STATS.stars,
-          forks: repoData.forks_count || DEFAULT_STATS.forks,
-          contributors: contributorsCount,
-        };
-
+        const newStats = (await response.json()) as GitHubStatValues;
         setStats(newStats);
         setCachedStats(newStats);
       } catch (err) {
@@ -149,7 +125,7 @@ export function useGitHubStats(initial?: Partial<GitHubStatValues>): GitHubStats
     }
 
     fetchStats();
-  }, []);
+  }, [enabled]);
 
   return {
     ...stats,

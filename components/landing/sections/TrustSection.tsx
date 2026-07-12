@@ -18,7 +18,8 @@ import {
 import { T } from "gt-next";
 import { FadeIn } from "../animations/FadeIn";
 import { CountUp } from "../animations/CountUp";
-import { useLandingStats, type LandingStatValues } from "@/hooks/useLandingStats";
+import { type LandingStatValues } from "@/hooks/useLandingStats";
+import { useSharedLandingStats } from "@/components/providers/LandingStatsProvider";
 import { cn } from "@/lib/utils";
 
 interface TrustSectionProps {
@@ -98,7 +99,7 @@ function FlowConnector({
 }
 
 export function TrustSection({ initialStats }: TrustSectionProps) {
-  const { appsSupported, appsDeployed } = useLandingStats(initialStats);
+  const { appsSupported, appsDeployed } = useSharedLandingStats(initialStats);
 
   // Self-hosted deployments may not expose public counters, so omit empty data.
   const metrics = [

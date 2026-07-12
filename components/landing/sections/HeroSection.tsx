@@ -8,13 +8,11 @@ import { GradientOrb } from "../ui/GradientOrb";
 import { LandingCatalogSearch } from "../ui/LandingCatalogSearch";
 import { FadeIn } from "../animations/FadeIn";
 import { TextReveal } from "../animations/TextReveal";
-import { useLandingStats, type LandingStatValues } from "@/hooks/useLandingStats";
+import { type LandingStatValues } from "@/hooks/useLandingStats";
+import { useSharedLandingStats } from "@/components/providers/LandingStatsProvider";
 
 interface HeroSectionProps {
   initialStats?: LandingStatValues;
-  // Accepted for page.tsx plumbing compatibility; the hero no longer renders
-  // a star count (the header shows the live count instead).
-  initialGitHubStars?: number;
 }
 
 export function HeroSection({ initialStats }: HeroSectionProps) {
@@ -23,7 +21,7 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
   // locale is not, and a bare toLocaleString() breaks hydration for non-en users.
   // An empty locale string would make toLocaleString throw a RangeError.
   const localeTag = useLocale() || undefined;
-  const { appsSupported } = useLandingStats(initialStats);
+  const { appsSupported } = useSharedLandingStats(initialStats);
   const shouldReduceMotion = useReducedMotion();
   const sectionRef = useRef<HTMLElement>(null);
   const supportedAppsDisplay = appsSupported.toLocaleString(localeTag);

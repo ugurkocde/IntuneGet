@@ -35,11 +35,25 @@ const POLL_INTERVAL_HIDDEN_MS = 60000;
 const POLL_MAX_BACKOFF_MS = 60000;
 const MAX_FAILURE_BACKOFF_STEPS = 3;
 
-export function useLandingStats(initial?: LandingStatValues): LandingStats {
+interface UseLandingStatsOptions {
+  /**
+   * When false the hook keeps its seed values and performs no polling or
+   * realtime subscription. Used by the shared-stats context wrappers so a
+   * page-level provider can own the single live instance while consumers
+   * stay hook-order safe.
+   */
+  enabled?: boolean;
+}
+
+export function useLandingStats(
+  initial?: LandingStatValues,
+  options: UseLandingStatsOptions = {},
+): LandingStats {
+  const { enabled = true } = options;
   // Server-rendered pages pass the freshly fetched values so the client never
   // flashes the DEFAULT_STATS placeholders; polling/realtime still refresh them.
   const [stats, setStats] = useState<LandingStatValues>(initial ?? DEFAULT_STATS);
-  const [isLoading, setIsLoading] = useState(initial === undefined);
+  const [isLoading, setIsLoading] = useState(initial === undefined && enabled);
   const [error, setError] = useState<Error | null>(null);
   const realtimeConnectedRef = useRef(false);
   const pollingFailureCountRef = useRef(0);
@@ -89,6 +103,10 @@ export function useLandingStats(initial?: LandingStatValues): LandingStats {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     let timeoutId: number | null = null;
     let cancelled = false;
 
@@ -145,11 +163,11 @@ export function useLandingStats(initial?: LandingStatValues): LandingStats {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchStats]);
+  }, [enabled, fetchStats]);
 
   // Subscribe to realtime updates for site_counters
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
+    if (!enabled || !isSupabaseConfigured()) {
       return;
     }
 
@@ -209,7 +227,7 @@ export function useLandingStats(initial?: LandingStatValues): LandingStats {
         void supabase.removeChannel(channel);
       }
     };
-  }, [applyCounterUpdate, fetchStats]);
+  }, [enabled, applyCounterUpdate, fetchStats]);
 
   return {
     ...stats,
