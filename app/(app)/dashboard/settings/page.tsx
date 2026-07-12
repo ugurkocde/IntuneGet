@@ -24,7 +24,7 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { PageHeader } from '@/components/dashboard';
 import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { WebhookManager } from '@/components/settings/WebhookManager';
-import { useTheme } from '@/components/providers/ThemeProvider';
+import { useTheme } from '@/components/providers/theme-context';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { cn } from '@/lib/utils';
 import { useCartStore } from '@/stores/cart-store';

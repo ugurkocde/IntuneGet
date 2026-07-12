@@ -2,11 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { MicrosoftAuthProvider } from "@/components/providers/MicrosoftAuthProvider";
-import { QueryProvider } from "@/components/providers/QueryProvider";
-import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { UserSettingsProvider } from "@/components/providers/UserSettingsProvider";
-import { MspProvider } from "@/contexts/MspContext";
+import { PublicThemeProvider } from "@/components/providers/theme-context";
 import { CookieConsentBanner } from '@/components/consent/CookieConsentBanner';
 import { PlausibleLoader } from '@/components/analytics/PlausibleLoader';
 import { GTProvider, T } from "gt-next";
@@ -185,28 +181,24 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await getLocale();
+  // The heavy app providers (MSAL, react-query, user settings, MSP) live in
+  // app/(app)/layout.tsx so marketing/docs pages don't ship them. Public
+  // pages get the localStorage-backed PublicThemeProvider; the app group
+  // nests the settings-synced ThemeProvider inside it.
   const content = (
     <GTProvider>
-      <QueryProvider>
-        <MicrosoftAuthProvider>
-          <UserSettingsProvider>
-            <ThemeProvider>
-              <MspProvider>
-                <a
-                  href="#main-content"
-                  className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-bg-elevated focus:px-4 focus:py-2 focus:text-text-primary focus:shadow-soft-md"
-                >
-                  <T id="a11y.skipToContent">Skip to content</T>
-                </a>
-                {children}
-                <PlausibleLoader domain={PLAUSIBLE_DOMAIN} />
-                <CookieConsentBanner plausibleDomain={PLAUSIBLE_DOMAIN} />
-                <Toaster />
-              </MspProvider>
-            </ThemeProvider>
-          </UserSettingsProvider>
-        </MicrosoftAuthProvider>
-      </QueryProvider>
+      <PublicThemeProvider>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-bg-elevated focus:px-4 focus:py-2 focus:text-text-primary focus:shadow-soft-md"
+        >
+          <T id="a11y.skipToContent">Skip to content</T>
+        </a>
+        {children}
+        <PlausibleLoader domain={PLAUSIBLE_DOMAIN} />
+        <CookieConsentBanner plausibleDomain={PLAUSIBLE_DOMAIN} />
+        <Toaster />
+      </PublicThemeProvider>
     </GTProvider>
   );
 

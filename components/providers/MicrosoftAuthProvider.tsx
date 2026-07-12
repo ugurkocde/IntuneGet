@@ -3,6 +3,7 @@
 import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication } from "@azure/msal-browser";
 import { getMsalInstance } from "@/lib/msal-config";
+import { notifyAuthHintChanged } from "@/hooks/useAuthHint";
 import { useEffect, useState, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
@@ -44,6 +45,9 @@ export function MicrosoftAuthProvider({
         } else {
           document.cookie = "msal-auth-hint=; path=/; SameSite=Lax; max-age=0";
         }
+        // Let useAuthHint consumers (marketing Header) re-read the corrected
+        // cookie right away instead of waiting for a focus/visibility event.
+        notifyAuthHintChanged();
 
         setMsalInstance(instance);
         setIsInitialized(true);

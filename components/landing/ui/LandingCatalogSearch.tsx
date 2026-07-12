@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { T, useGT } from "gt-next";
 import { AppIcon } from "@/components/AppIcon";
-import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
+import { useAuthHint } from "@/hooks/useAuthHint";
 import { cn } from "@/lib/utils";
 
 interface CatalogResult {
@@ -54,7 +54,7 @@ export function LandingCatalogSearch() {
   const abortRef = useRef<AbortController | null>(null);
   const shouldReduceMotion = useReducedMotion();
   const t = useGT();
-  const { isAuthenticated } = useMicrosoftAuth();
+  const isAuthenticated = useAuthHint();
   const uploadSteps = [
     { number: "1", label: <T>Review settings</T> },
     { number: "2", label: <T>Package automatically</T> },

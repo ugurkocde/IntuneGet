@@ -1,24 +1,20 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useUserSettings } from "@/components/providers/UserSettingsProvider";
+import {
+  ThemeContext,
+  applyThemeClass,
+} from "@/components/providers/theme-context";
 import type { ThemeMode } from "@/types/user-settings";
 
-type ThemeContextValue = {
-  theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => Promise<void>;
-};
-
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-
-const THEME_CLASS = "dark";
-
-function applyThemeClass(theme: ThemeMode) {
-  if (typeof document === "undefined") return;
-
-  document.documentElement.classList.toggle(THEME_CLASS, theme === "dark");
-}
-
+/**
+ * Settings-synced theme provider for the app route group: theme changes
+ * persist to the signed-in user's account via UserSettingsProvider. Public
+ * pages use PublicThemeProvider from theme-context.tsx instead; keep this
+ * file out of any public-page import chain because useUserSettings pulls
+ * MSAL into the bundle.
+ */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { settings, setTheme: persistTheme } = useUserSettings();
   const [theme, setThemeState] = useState<ThemeMode>(settings.theme);
@@ -35,14 +31,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme() {
-  const context = useContext(ThemeContext);
-
-  if (!context) {
-    throw new Error("useTheme must be used within ThemeProvider");
-  }
-
-  return context;
 }

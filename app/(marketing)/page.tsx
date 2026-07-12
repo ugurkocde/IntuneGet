@@ -17,7 +17,7 @@ import {
 } from "@/lib/stats/public-stats";
 import { getGitHubRepoStats } from "@/lib/stats/github-stats";
 import { LandingStatsProvider } from "@/components/providers/LandingStatsProvider";
-import packageJson from "../package.json";
+import packageJson from "../../package.json";
 
 // Re-render the page (and refresh the SSR'd counters) at most every 5 minutes
 export const revalidate = 300;

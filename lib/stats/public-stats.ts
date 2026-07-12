@@ -1,4 +1,5 @@
 import 'server-only';
+import { unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { getCatalogSource } from '@/lib/catalog';
 
@@ -18,8 +19,20 @@ const ZERO_STATS: PublicLandingStats = {
  * Fetches the public landing page counters (sign-in clicks, deployed apps)
  * from Supabase plus the supported app count from the active catalog source.
  * Returns zeros when Supabase is not configured (self-hosted) or on any error.
+ *
+ * Cached for 30 seconds: the landing page renders dynamically on every
+ * request (gt-next cookie-mode locale) and /api/stats/public is polled every
+ * 8-20s per visitor, so without this cache every hit triggered a Supabase
+ * query plus a catalog stats scan. 30s keeps the live counters fresh while
+ * bounding backend load to ~2 queries/minute per server instance.
  */
-export async function getPublicLandingStats(): Promise<PublicLandingStats> {
+export const getPublicLandingStats = unstable_cache(
+  fetchPublicLandingStats,
+  ['public-landing-stats'],
+  { revalidate: 30 },
+);
+
+async function fetchPublicLandingStats(): Promise<PublicLandingStats> {
   // The catalog count does not depend on Supabase (self-hosted installs use
   // the local snapshot), so fetch it independently of the counters.
   let appsSupported = 0;

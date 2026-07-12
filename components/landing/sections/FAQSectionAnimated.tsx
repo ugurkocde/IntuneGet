@@ -129,7 +129,10 @@ export function FAQSectionAnimated() {
           </FadeIn>
 
           <div className="min-w-0">
-            <FadeIn>
+            {/* Low amount: the card is taller than a phone viewport, so a
+                higher threshold may never be crossed and the card stays
+                invisible on mobile. */}
+            <FadeIn amount={0.05}>
               <div className="rounded-3xl border border-overlay/10 bg-bg-elevated p-4 shadow-card sm:p-6">
                 <label className="relative block">
                   <span className="sr-only">
@@ -148,10 +151,7 @@ export function FAQSectionAnimated() {
                   />
                 </label>
 
-                <StaggerContainer
-                  className="mt-5 space-y-3"
-                  staggerDelay={0.05}
-                >
+                <div className="mt-5 space-y-3">
                   {filteredItems.map((faq, index) => {
                     const isOpen = openQuestion === faq.question;
                     const ItemIcon =
@@ -159,7 +159,22 @@ export function FAQSectionAnimated() {
                     const itemId = `faq-${faqItems.indexOf(faq)}`;
 
                     return (
-                      <StaggerItem key={faq.question}>
+                      // Each item animates itself on mount/scroll-in. A parent
+                      // stagger variant with once:true leaves items remounted
+                      // by category/search filtering stuck at opacity 0.
+                      <motion.div
+                        key={faq.question}
+                        initial={
+                          shouldReduceMotion ? false : { opacity: 0, y: 24 }
+                        }
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, amount: 0.1 }}
+                        transition={{
+                          duration: 0.5,
+                          delay: index * 0.05,
+                          ease: [0.25, 0.46, 0.45, 0.94],
+                        }}
+                      >
                         <div
                           className={cn(
                             "overflow-hidden rounded-xl border transition-all duration-300",
@@ -238,10 +253,10 @@ export function FAQSectionAnimated() {
                             )}
                           </AnimatePresence>
                         </div>
-                      </StaggerItem>
+                      </motion.div>
                     );
                   })}
-                </StaggerContainer>
+                </div>
 
                 {filteredItems.length === 0 && (
                   <div className="py-14 text-center">

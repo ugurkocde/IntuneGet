@@ -12,9 +12,23 @@ import { ResourcesDropdown } from "./ResourcesDropdown";
 import { T, useGT, useLocale } from "gt-next";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
+import dynamic from "next/dynamic";
 import { useSharedGitHubStats } from "@/components/providers/LandingStatsProvider";
-import { useMicrosoftAuth } from "@/hooks/useMicrosoftAuth";
-import { useProfileStore } from "@/stores/profile-store";
+import { useAuthHint } from "@/hooks/useAuthHint";
+
+// MSAL-backed avatar, loaded only for signed-in visitors so anonymous
+// visitors never download @azure/msal-browser on marketing pages.
+const AuthedAvatar = dynamic(
+  () => import("./AuthedAvatar").then((m) => m.AuthedAvatar),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="relative flex-shrink-0">
+        <div className="relative w-8 h-8 rounded-full bg-overlay/[0.06]" />
+      </div>
+    ),
+  }
+);
 
 const primaryNavLinks = [
   { href: "/apps", label: "Apps" },
@@ -36,9 +50,7 @@ export function Header() {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const shouldReduceMotion = useReducedMotion();
 
-  const { isAuthenticated, user, getAccessToken } = useMicrosoftAuth();
-  const { profileImage, fetchProfileImage, hasFetched } = useProfileStore();
-  const initials = user?.name?.charAt(0) || user?.email?.charAt(0) || "U";
+  const isAuthenticated = useAuthHint();
 
   // Star count is fetched client-side and hidden until loaded, so the
   // server-rendered markup never contains a number that could mismatch.
@@ -73,37 +85,6 @@ export function Header() {
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isMenuOpen]);
-
-  useEffect(() => {
-    if (isAuthenticated && !hasFetched) {
-      getAccessToken().then((token) => {
-        if (token) fetchProfileImage(token);
-      });
-    }
-  }, [isAuthenticated, hasFetched, getAccessToken, fetchProfileImage]);
-
-  const UserAvatar = ({ size = "sm" }: { size?: "sm" | "md" }) => (
-    <div className="relative flex-shrink-0">
-      <div className="absolute -inset-0.5 bg-gradient-to-br from-accent-cyan to-accent-cyan-dim rounded-full opacity-75 group-hover:opacity-100 transition-opacity" />
-      <div className={cn(
-        "relative rounded-full bg-overlay/[0.06] flex items-center justify-center overflow-hidden",
-        size === "sm" ? "w-8 h-8" : "w-9 h-9"
-      )}>
-        {profileImage ? (
-          <img
-            src={profileImage}
-            alt="Profile"
-            width={32}
-            height={32}
-            className="w-full h-full object-cover"
-            onError={() => useProfileStore.getState().setProfileImage(null)}
-          />
-        ) : (
-          <span className="text-sm font-semibold text-text-secondary">{initials}</span>
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <motion.header
@@ -208,7 +189,7 @@ export function Header() {
                 aria-label={t("Go to dashboard")}
                 className="group"
               >
-                <UserAvatar size="sm" />
+                <AuthedAvatar size="sm" />
               </Link>
             ) : (
               <Link
@@ -319,7 +300,7 @@ export function Header() {
                   onClick={() => setIsMenuOpen(false)}
                   className="group inline-flex items-center gap-3 px-4 py-3 rounded-lg mt-2 bg-text-primary hover:bg-text-primary/90 transition-all duration-200"
                 >
-                  <UserAvatar size="md" />
+                  <AuthedAvatar size="md" />
                   <span className="text-sm font-medium text-bg-elevated"><T id="nav.dashboard">Dashboard</T></span>
                 </Link>
               ) : (

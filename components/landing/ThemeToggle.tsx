@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useGT } from "gt-next";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/theme-context";
 
 export function ThemeToggle() {
   const t = useGT();
