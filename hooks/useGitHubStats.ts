@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface GitHubStats {
   stars: number;
@@ -10,6 +10,12 @@ interface GitHubStats {
   error: Error | null;
 }
 
+export interface GitHubStatValues {
+  stars: number;
+  forks: number;
+  contributors: number;
+}
+
 // Default fallback values to prevent layout shift
 const DEFAULT_STATS = {
   stars: 100,
@@ -17,7 +23,6 @@ const DEFAULT_STATS = {
   contributors: 5,
 };
 
-const GITHUB_REPO = 'ugurkocde/IntuneGet';
 const CACHE_KEY = 'github_stats_cache';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -57,15 +62,39 @@ function setCachedStats(stats: typeof DEFAULT_STATS): void {
   }
 }
 
-export function useGitHubStats(): GitHubStats {
+interface UseGitHubStatsOptions {
+  /**
+   * When false the hook keeps its seed values and performs no fetching.
+   * Used by the shared-stats context wrappers so a page-level provider can
+   * own the single live instance while consumers stay hook-order safe.
+   */
+  enabled?: boolean;
+}
+
+export function useGitHubStats(
+  initial?: Partial<GitHubStatValues>,
+  options: UseGitHubStatsOptions = {},
+): GitHubStats {
+  const { enabled = true } = options;
   // Initial state must be deterministic: the server cannot read localStorage,
   // so seeding from cache here would make hydration text mismatch for
   // returning visitors. The effect below applies the cache after mount.
-  const [stats, setStats] = useState<typeof DEFAULT_STATS>(DEFAULT_STATS);
-  const [isLoading, setIsLoading] = useState(true);
+  // Server-rendered pages can pass `initial` (fetched server-side); in that
+  // case the values are used as-is and the client fetch is skipped entirely.
+  const [stats, setStats] = useState<typeof DEFAULT_STATS>({
+    ...DEFAULT_STATS,
+    ...initial,
+  });
+  const [isLoading, setIsLoading] = useState(initial === undefined && enabled);
   const [error, setError] = useState<Error | null>(null);
+  const hasInitialRef = useRef(initial !== undefined);
 
   useEffect(() => {
+    // Server-seeded values are authoritative: skip cache and client fetch
+    if (!enabled || hasInitialRef.current) {
+      return;
+    }
+
     // Check cache first
     const cached = getCachedStats();
     if (cached) {
@@ -76,51 +105,15 @@ export function useGitHubStats(): GitHubStats {
 
     async function fetchStats() {
       try {
-        // Fetch repo data for stars and forks
-        const repoResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`, {
-          headers: {
-            Accept: 'application/vnd.github.v3+json',
-          },
-        });
-
-        if (!repoResponse.ok) {
+        // Same-origin route backed by the server-side fetch cache. Hitting
+        // api.github.com from the browser is rate-limited per client IP and
+        // fails via CORS in some environments; the server has neither problem.
+        const response = await fetch('/api/stats/github');
+        if (!response.ok) {
           throw new Error('Failed to fetch GitHub repo stats');
         }
 
-        const repoData = await repoResponse.json();
-
-        // Fetch contributors count
-        const contributorsResponse = await fetch(
-          `https://api.github.com/repos/${GITHUB_REPO}/contributors?per_page=1&anon=true`,
-          {
-            headers: {
-              Accept: 'application/vnd.github.v3+json',
-            },
-          }
-        );
-
-        let contributorsCount = DEFAULT_STATS.contributors;
-        if (contributorsResponse.ok) {
-          // Get total from Link header
-          const linkHeader = contributorsResponse.headers.get('Link');
-          if (linkHeader) {
-            const match = linkHeader.match(/page=(\d+)>; rel="last"/);
-            if (match) {
-              contributorsCount = parseInt(match[1], 10);
-            }
-          } else {
-            // If no pagination, count from response
-            const contributorsData = await contributorsResponse.json();
-            contributorsCount = Array.isArray(contributorsData) ? contributorsData.length : DEFAULT_STATS.contributors;
-          }
-        }
-
-        const newStats = {
-          stars: repoData.stargazers_count || DEFAULT_STATS.stars,
-          forks: repoData.forks_count || DEFAULT_STATS.forks,
-          contributors: contributorsCount,
-        };
-
+        const newStats = (await response.json()) as GitHubStatValues;
         setStats(newStats);
         setCachedStats(newStats);
       } catch (err) {
@@ -132,7 +125,7 @@ export function useGitHubStats(): GitHubStats {
     }
 
     fetchStats();
-  }, []);
+  }, [enabled]);
 
   return {
     ...stats,

@@ -64,24 +64,29 @@ export function CategoryHeader({
       </span>
 
       {/* Typing effect for title */}
-      <span className={cn("font-mono text-sm font-medium tracking-wider uppercase", colorStyles[color].text)}>
+      <span
+        aria-label={title}
+        className={cn("font-mono text-sm font-medium tracking-wider uppercase", colorStyles[color].text)}
+      >
         {shouldReduceMotion ? (
           title
         ) : (
-          characters.map((char, index) => (
-            <motion.span
-              key={index}
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{
-                duration: 0.05,
-                delay: delay + 0.3 + index * 0.03,
-              }}
-            >
-              {char}
-            </motion.span>
-          ))
+          <span aria-hidden="true">
+            {characters.map((char, index) => (
+              <motion.span
+                key={index}
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{
+                  duration: 0.05,
+                  delay: delay + 0.3 + index * 0.03,
+                }}
+              >
+                {char}
+              </motion.span>
+            ))}
+          </span>
         )}
       </span>
     </motion.div>

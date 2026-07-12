@@ -6,12 +6,17 @@ import { T, Var } from "gt-next";
 import { Button } from '@/components/ui/button';
 import { markOnboardingComplete } from '@/lib/onboarding-utils';
 import { markConsentGranted } from '@/components/AdminConsentBanner';
+import {
+  clearPostAuthRedirect,
+  getSafeInternalRedirect,
+} from '@/lib/auth/post-auth-redirect';
 
 interface SuccessStepProps {
   userName: string | null | undefined;
+  callbackUrl?: string;
 }
 
-export function SuccessStep({ userName }: SuccessStepProps) {
+export function SuccessStep({ userName, callbackUrl }: SuccessStepProps) {
   const router = useRouter();
   const firstName = userName?.split(' ')[0] || 'there';
 
@@ -19,7 +24,9 @@ export function SuccessStep({ userName }: SuccessStepProps) {
     // Mark both consent and onboarding as complete
     markConsentGranted();
     markOnboardingComplete();
-    router.push('/dashboard');
+    const destination = getSafeInternalRedirect(callbackUrl);
+    clearPostAuthRedirect();
+    router.push(destination);
   };
 
   const tips = [

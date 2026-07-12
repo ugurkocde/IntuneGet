@@ -54,14 +54,6 @@ function isThemeMode(value: unknown): value is ThemeMode {
   return value === "light" || value === "dark";
 }
 
-function getSystemPrefersDark(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) {
-    return false;
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
 function readBooleanStorageValue(key: string): boolean | null {
   if (typeof window === "undefined") return null;
 
@@ -141,7 +133,6 @@ function readLegacyUserSettings(): {
   const supersedePreviousAppValue = readBooleanStorageValue(SUPERSEDE_PREVIOUS_APP_KEY);
 
   const hasTheme = isThemeMode(themeValue);
-  const fallbackTheme = getSystemPrefersDark() ? "dark" : DEFAULT_USER_SETTINGS.theme;
   const hasSidebarCollapsed = sidebarValue !== null;
   const hasSelectedTenantId = !!selectedTenant;
   const hasCartAutoOpenOnAdd = cartAutoOpenOnAdd !== null;
@@ -154,7 +145,7 @@ function readLegacyUserSettings(): {
   return {
     settings: {
       ...DEFAULT_USER_SETTINGS,
-      theme: hasTheme ? themeValue : fallbackTheme,
+      theme: hasTheme ? themeValue : DEFAULT_USER_SETTINGS.theme,
       ...(hasSidebarCollapsed ? { sidebarCollapsed: sidebarValue === true } : {}),
       ...(hasSelectedTenantId ? { selectedTenantId: selectedTenant } : {}),
       ...(hasCartAutoOpenOnAdd ? { cartAutoOpenOnAdd } : {}),

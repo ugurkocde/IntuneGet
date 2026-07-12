@@ -2,18 +2,20 @@
 
 import { Star, GitFork, Users, ExternalLink } from "lucide-react";
 import { Github } from "@/components/icons/brand-icons";
-import { useGitHubStats } from "@/hooks/useGitHubStats";
+import { useGitHubStats, type GitHubStatValues } from "@/hooks/useGitHubStats";
 import { CountUp } from "../animations/CountUp";
 import { FadeIn } from "../animations/FadeIn";
 
 interface GitHubStatsBarProps {
   className?: string;
   showTitle?: boolean;
+  initialStats?: GitHubStatValues;
 }
 
-export function GitHubStatsBar({ className = "", showTitle = true }: GitHubStatsBarProps) {
-  const { stars, forks, contributors, isLoading } = useGitHubStats();
+export function GitHubStatsBar({ className = "", showTitle = true, initialStats }: GitHubStatsBarProps) {
+  const { stars, forks, contributors, isLoading } = useGitHubStats(initialStats);
 
+  // Hide zero-valued tiles (self-hosted deployments without live stats)
   const stats = [
     {
       icon: Star,
@@ -33,10 +35,10 @@ export function GitHubStatsBar({ className = "", showTitle = true }: GitHubStats
       icon: Users,
       value: contributors,
       label: "Contributors",
-      color: "text-violet-500",
-      bgColor: "bg-violet-500/10",
+      color: "text-accent-cyan",
+      bgColor: "bg-accent-cyan/10",
     },
-  ];
+  ].filter((stat) => stat.value > 0);
 
   return (
     <FadeIn className={className}>

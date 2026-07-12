@@ -22,6 +22,7 @@ import {
   ListChecks,
   Check,
   Plus,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppSearch } from '@/components/AppSearch';
@@ -39,6 +40,7 @@ import {
   useStoreManifest,
   useCategories,
   useInfinitePackages,
+  useCatalogPackage,
 } from '@/hooks/use-packages';
 import { useDeployedPackages } from '@/hooks/use-deployed-packages';
 import { useDeployedConfig } from '@/hooks/use-deployed-config';
@@ -47,6 +49,7 @@ import { useCartStore } from '@/stores/cart-store';
 import type { NormalizedPackage } from '@/types/winget';
 import { getCategoryLabel } from '@/lib/category-utils';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
+import { findExactCatalogPackage } from '@/lib/catalog/exact-package';
 
 const PREFERRED_COLLECTION_CATEGORIES = [
   'developer-tools',
@@ -74,10 +77,13 @@ const SORT_OPTIONS = [
 
 export default function AppCatalogPage() {
   const searchParams = useSearchParams();
+  const [deploymentIntentId] = useState(() => searchParams.get('deploy')?.trim() || null);
 
   // Initialize state from URL params
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   const [selectedPackage, setSelectedPackage] = useState<NormalizedPackage | null>(null);
+  const [deploymentIntentError, setDeploymentIntentError] = useState<string | null>(null);
+  const processedDeploymentIntentRef = useRef<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(searchParams.get('category') || null);
   const validSorts = ['popular', 'name', 'newest'] as const;
   const sortParam = searchParams.get('sort');
@@ -216,6 +222,11 @@ export default function AppCatalogPage() {
     fetchNextPage,
   } = useInfinitePackages(20, selectedCategory, sortBy);
   const { deployedSet } = useDeployedPackages();
+  const {
+    data: deploymentIntentData,
+    isLoading: isLoadingDeploymentIntent,
+    isFetching: isFetchingDeploymentIntent,
+  } = useCatalogPackage(deploymentIntentId);
 
   const isSelectedDeployed = selectedPackage ? deployedSet.has(selectedPackage.id) : false;
   const { deployedConfig, intuneAppId, isLoading: isLoadingDeployedConfig } = useDeployedConfig(
@@ -265,6 +276,36 @@ export default function AppCatalogPage() {
 
   const showInitialLoading = hasSearched && isSearching && searchPackages.length === 0;
   const showEmptyState = hasSearched && !isSearching && !isFetching && searchPackages.length === 0;
+
+  useEffect(() => {
+    if (
+      !deploymentIntentId ||
+      processedDeploymentIntentRef.current === deploymentIntentId ||
+      isLoadingDeploymentIntent ||
+      isFetchingDeploymentIntent
+    ) {
+      return;
+    }
+
+    processedDeploymentIntentRef.current = deploymentIntentId;
+    const exactPackage = findExactCatalogPackage(
+      deploymentIntentData?.package ? [deploymentIntentData.package] : [],
+      deploymentIntentId,
+    );
+
+    if (exactPackage) {
+      setDeploymentIntentError(null);
+      setSelectedPackage(exactPackage);
+      return;
+    }
+
+    setDeploymentIntentError(deploymentIntentId);
+  }, [
+    deploymentIntentData?.package,
+    deploymentIntentId,
+    isFetchingDeploymentIntent,
+    isLoadingDeploymentIntent,
+  ]);
 
   const loadedCount = showSearchResults ? searchPackages.length : allPackages.length;
   const activeCategoryLabel = selectedCategory ? getCategoryLabel(selectedCategory) : null;
@@ -734,6 +775,36 @@ export default function AppCatalogPage() {
         </section>
       </div>
 
+      {deploymentIntentError && (
+        <div
+          role="alert"
+          className="flex flex-col gap-4 rounded-2xl border border-status-warning/25 bg-status-warning/[0.08] p-5 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex min-w-0 items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="font-semibold text-text-primary"><T>This app is no longer available</T></p>
+              <p className="mt-1 text-sm text-text-secondary">
+                <T>The selected package could not be found in the supported catalog. No alternative package was selected.</T>
+              </p>
+              <code translate="no" className="mt-2 block break-all text-xs text-text-muted">
+                {deploymentIntentError}
+              </code>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDeploymentIntentError(null);
+              setSearchQuery('');
+            }}
+            className="min-h-11 shrink-0 rounded-xl border border-overlay/10 bg-bg-elevated px-4 text-sm font-medium text-text-primary transition-colors hover:bg-overlay/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+          >
+            <T>Browse supported apps</T>
+          </button>
+        </div>
+      )}
+
       {showInitialLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
@@ -916,6 +987,28 @@ export default function AppCatalogPage() {
       {isCustomAppModalOpen && (
         <CustomAppModal onClose={() => setIsCustomAppModalOpen(false)} />
       )}
+
+      {deploymentIntentId &&
+        processedDeploymentIntentRef.current !== deploymentIntentId &&
+        (isLoadingDeploymentIntent || isFetchingDeploymentIntent) && (
+          <div
+            className="fixed inset-0 z-50 overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Loading selected catalog app"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true" />
+            <div className="absolute bottom-0 right-0 top-0 flex w-full max-w-2xl items-center justify-center border-l border-overlay/5 bg-bg-surface shadow-2xl">
+              <div className="px-6 text-center" role="status" aria-live="polite">
+                <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-accent-cyan motion-reduce:animate-none" aria-hidden="true" />
+                <p className="font-medium text-text-primary"><T>Opening your selected app</T></p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  <T>Confirming the exact package in the supported catalog…</T>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
       {selectedPackage && ((isSelectedStoreApp && !isLoadingStoreManifest) || (!isSelectedStoreApp && !isLoadingInstallers && selectedInstallers.length > 0)) && !(isSelectedDeployed && isLoadingDeployedConfig) && (
         <PackageConfig

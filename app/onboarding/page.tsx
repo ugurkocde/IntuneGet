@@ -6,12 +6,19 @@ import { Loader2 } from 'lucide-react';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
 import { OnboardingStep } from '@/lib/onboarding-utils';
+import {
+  getSafeInternalRedirect,
+  readPostAuthRedirect,
+} from '@/lib/auth/post-auth-redirect';
 
 function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated, user } = useMicrosoftAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const callbackUrl = getSafeInternalRedirect(
+    searchParams.get('callbackUrl') || readPostAuthRedirect(),
+  );
 
   // Get initial step from URL if provided (e.g., ?step=3 from consent callback)
   const stepParam = searchParams.get('step');
@@ -31,9 +38,10 @@ function OnboardingContent() {
   // Redirect to sign-in if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/auth/signin?callbackUrl=/onboarding');
+      const onboardingUrl = `/onboarding?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(onboardingUrl)}`);
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [callbackUrl, isLoading, isAuthenticated, router]);
 
   // Show loading while checking auth
   if (isLoading || !isAuthenticated) {
@@ -47,7 +55,13 @@ function OnboardingContent() {
     );
   }
 
-  return <OnboardingWizard userName={user?.name} initialStep={initialStep} />;
+  return (
+    <OnboardingWizard
+      userName={user?.name}
+      initialStep={initialStep}
+      callbackUrl={callbackUrl}
+    />
+  );
 }
 
 export default function OnboardingPage() {

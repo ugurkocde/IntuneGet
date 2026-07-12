@@ -1,175 +1,336 @@
 "use client";
 
+import Link from "next/link";
+import {
+  ArrowRight,
+  BadgeDollarSign,
+  Boxes,
+  Check,
+  LifeBuoy,
+  PackageCheck,
+  RefreshCw,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 import { T } from "gt-next";
-import { Check, X } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
 import { FadeIn } from "../animations/FadeIn";
 import { SlideIn } from "../animations/SlideIn";
-import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
-import { scaleIn } from "@/lib/animations/variants";
 import { cn } from "@/lib/utils";
 
 interface ComparisonRow {
   feature: string;
-  intuneGet: string | boolean;
-  manual: string | boolean;
+  icon: LucideIcon;
+  intuneGet: string;
+  paidTools: string;
+  manual: string;
 }
 
-function CellContent({ value }: { value: string | boolean }) {
-  if (typeof value === "boolean") {
-    return value ? (
-      <Check className="w-5 h-5 text-emerald-500 mx-auto" aria-label="Included" />
-    ) : (
-      <X className="w-5 h-5 text-red-400 mx-auto" aria-label="Not included" />
-    );
-  }
-  return <span className="text-sm text-text-secondary"><T>{value}</T></span>;
-}
-
-function MobileCellContent({ value }: { value: string | boolean }) {
-  if (typeof value === "boolean") {
-    return value ? (
-      <Check className="w-4 h-4 text-emerald-500" aria-label="Included" />
-    ) : (
-      <X className="w-4 h-4 text-red-400" aria-label="Not included" />
-    );
-  }
-  return <span className="text-sm text-text-secondary"><T>{value}</T></span>;
+interface ComparisonOption {
+  key: "intuneGet" | "paidTools" | "manual";
+  name: string;
+  positioning: string;
+  description: string;
+  featured?: boolean;
 }
 
 const comparisonData: ComparisonRow[] = [
-  { feature: "Price", intuneGet: "Free", manual: "Free (your time)" },
-  { feature: "Apps Supported", intuneGet: "13,000+", manual: "Unlimited" },
-  { feature: "Setup Time", intuneGet: "5 minutes", manual: "Varies" },
-  { feature: "Time per Deployment", intuneGet: "~5 minutes", manual: "8+ hours" },
-  { feature: "IntuneWin Packaging", intuneGet: "Automatic", manual: "Manual" },
-  { feature: "Detection Rules", intuneGet: "Auto-generated", manual: "Manual" },
-  { feature: "Automatic Updates", intuneGet: true, manual: false },
-  { feature: "AI-Powered Discovery", intuneGet: true, manual: false },
-  { feature: "PSADT v4 Support", intuneGet: true, manual: false },
+  {
+    feature: "Cost",
+    icon: BadgeDollarSign,
+    intuneGet: "Free and open source",
+    paidTools: "Subscription licensing",
+    manual: "Your team's time",
+  },
+  {
+    feature: "App catalog",
+    icon: Boxes,
+    intuneGet: "Supported Winget catalog",
+    paidTools: "Vendor-curated catalog",
+    manual: "Anything you package",
+  },
+  {
+    feature: "Time per app",
+    icon: Timer,
+    intuneGet: "About 5 minutes",
+    paidTools: "Minutes",
+    manual: "Often hours",
+  },
+  {
+    feature: "Packaging and detection",
+    icon: PackageCheck,
+    intuneGet: "Generated automatically",
+    paidTools: "Generated automatically",
+    manual: "Built and tested by you",
+  },
+  {
+    feature: "Updates",
+    icon: RefreshCw,
+    intuneGet: "Flexible update policies",
+    paidTools: "Vendor-managed options",
+    manual: "You own the workflow",
+  },
+  {
+    feature: "Support",
+    icon: LifeBuoy,
+    intuneGet: "Community on GitHub",
+    paidTools: "Commercial support and SLAs",
+    manual: "Internal expertise",
+  },
+];
+
+const comparisonOptions: ComparisonOption[] = [
+  {
+    key: "intuneGet",
+    name: "IntuneGet",
+    positioning: "Best balance",
+    description: "Fast, transparent, and self-hostable.",
+    featured: true,
+  },
+  {
+    key: "paidTools",
+    name: "Paid packaging tools",
+    positioning: "Commercial assurance",
+    description: "Best when a vendor SLA is essential.",
+  },
+  {
+    key: "manual",
+    name: "Manual / DIY",
+    positioning: "Maximum control",
+    description: "Best for bespoke packaging workflows.",
+  },
 ];
 
 export function ComparisonSection() {
-  const shouldReduceMotion = useReducedMotion();
-
   return (
-    <section className="relative w-full py-20 md:py-28 overflow-hidden bg-bg-surface">
-      <div className="container relative px-4 md:px-6 mx-auto max-w-5xl">
-        {/* Section header */}
-        <div className="text-center mb-12 md:mb-16 space-y-4">
-          <motion.div
-            initial={shouldReduceMotion ? { opacity: 0 } : "hidden"}
-            whileInView={shouldReduceMotion ? { opacity: 1 } : "visible"}
-            viewport={{ once: true, amount: 0.3 }}
-            variants={shouldReduceMotion ? undefined : scaleIn}
-            transition={shouldReduceMotion ? { duration: 0 } : undefined}
-          >
-            <span className="inline-block font-mono text-xs tracking-wider text-accent-cyan uppercase mb-4">
-              <T id="comparison.badge">Comparison</T>
+    <section
+      id="comparison"
+      className="relative w-full overflow-hidden bg-bg-surface py-20 md:py-28"
+    >
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-70"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent-cyan) 10%, transparent), transparent 62%)",
+        }}
+      />
+
+      <div className="container relative mx-auto max-w-6xl px-4 md:px-6">
+        <div className="mx-auto mb-10 max-w-3xl text-center md:mb-14">
+          <FadeIn>
+            <span className="mb-4 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-accent-cyan">
+              <span className="h-px w-5 bg-accent-cyan/60" aria-hidden="true" />
+              <T id="comparison.badge">Compare your options</T>
+              <span className="h-px w-5 bg-accent-cyan/60" aria-hidden="true" />
             </span>
-          </motion.div>
-          <SlideIn direction="up" distance={30} duration={0.5} delay={0.1}>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary">
-              <T id="comparison.heading">IntuneGet vs Manual Winget Deployment</T>
+          </FadeIn>
+          <SlideIn direction="up" distance={24} duration={0.5} delay={0.05}>
+            <h2 className="text-3xl font-bold tracking-tight text-text-primary md:text-4xl lg:text-5xl">
+              <T id="comparison.heading">
+                Choose the workflow that fits your team
+              </T>
             </h2>
           </SlideIn>
-          <FadeIn delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-text-secondary">
-              <T id="comparison.subheading">See how IntuneGet automates Winget app deployment compared to manual processes</T>
+          <FadeIn delay={0.12}>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-text-secondary md:text-lg">
+              <T id="comparison.subheading">
+                The same Intune destination, with very different trade-offs in
+                time, control, cost, and support.
+              </T>
             </p>
           </FadeIn>
         </div>
 
-        {/* Mobile: stacked cards */}
-        <div className="md:hidden">
-          <StaggerContainer className="space-y-3" staggerDelay={0.05}>
-            {comparisonData.map((row, index) => (
-              <StaggerItem key={row.feature} direction="none">
-                <div className="rounded-xl bg-bg-elevated border border-overlay/10 shadow-card overflow-hidden">
-                  <div className="px-4 py-3 border-b border-overlay/10">
-                    <span className="text-sm font-medium text-text-primary"><T>{row.feature}</T></span>
-                  </div>
-                  <div className="grid grid-cols-2 divide-x divide-overlay/10">
-                    <div className="px-4 py-3 bg-accent-cyan/5">
-                      <div className="text-[10px] font-medium text-accent-cyan uppercase tracking-wider mb-1">
-                        IntuneGet
-                      </div>
-                      <div className="flex items-center">
-                        <MobileCellContent value={row.intuneGet} />
-                      </div>
-                    </div>
-                    <div className="px-4 py-3">
-                      <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-1">
-                        <T id="comparison.manual">Manual</T>
-                      </div>
-                      <div className="flex items-center">
-                        <MobileCellContent value={row.manual} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
-        </div>
-
-        {/* Desktop: 3-column grid table */}
-        <FadeIn delay={0.3} className="hidden md:block">
-          {/* Table header */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="p-4">
-              <span className="sr-only">Feature</span>
-            </div>
-            <div className="p-4 text-center bg-accent-cyan/10 rounded-t-2xl border-2 border-b-0 border-accent-cyan/30">
-              <div className="font-bold text-text-primary">IntuneGet</div>
-              <div className="text-xs text-accent-cyan font-medium mt-1"><T id="comparison.recommended">Recommended</T></div>
-            </div>
-            <div className="p-4 text-center bg-bg-elevated rounded-t-2xl border border-b-0 border-overlay/10">
-              <div className="font-semibold text-text-secondary"><T id="comparison.manual-process">Manual Process</T></div>
-              <div className="text-xs text-text-muted mt-1"><T id="comparison.diy">DIY Approach</T></div>
-            </div>
-          </div>
-
-          {/* Table body */}
-          <StaggerContainer
-            className="bg-bg-elevated rounded-2xl border border-overlay/10 overflow-hidden shadow-card"
-            staggerDelay={0.05}
-          >
-            {comparisonData.map((row, index) => (
-              <StaggerItem key={row.feature} direction="none">
-                <div
+        {/* Mobile: one complete card per workflow keeps the options scannable. */}
+        <div className="grid gap-4 md:hidden">
+          {comparisonOptions.map((option, optionIndex) => (
+            <FadeIn key={option.key} delay={0.08 * optionIndex}>
+              <article
+                className={cn(
+                  "overflow-hidden rounded-2xl border bg-bg-elevated shadow-card",
+                  option.featured
+                    ? "border-accent-cyan/40 ring-1 ring-accent-cyan/15"
+                    : "border-overlay/10"
+                )}
+              >
+                <header
                   className={cn(
-                    "grid grid-cols-3 gap-4",
-                    index !== comparisonData.length - 1 && "border-b border-overlay/10"
+                    "flex items-start justify-between gap-4 border-b px-5 py-4",
+                    option.featured
+                      ? "border-accent-cyan/20 bg-accent-cyan/[0.07]"
+                      : "border-overlay/10"
                   )}
                 >
-                  <div className="p-4 flex items-center">
-                    <span className="text-sm font-medium text-text-primary"><T>{row.feature}</T></span>
+                  <div>
+                    <h3 className="flex items-center gap-2 font-semibold text-text-primary">
+                      {option.featured && (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-cyan text-bg-deepest">
+                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                      )}
+                      <T>{option.name}</T>
+                    </h3>
+                    <p className="mt-1 text-sm text-text-muted">
+                      <T>{option.description}</T>
+                    </p>
                   </div>
-                  <div className="p-4 flex items-center justify-center bg-accent-cyan/5 border-x border-accent-cyan/10">
-                    <CellContent value={row.intuneGet} />
-                  </div>
-                  <div className="p-4 flex items-center justify-center">
-                    <CellContent value={row.manual} />
-                  </div>
-                </div>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider",
+                      option.featured
+                        ? "bg-accent-cyan/15 text-accent-cyan"
+                        : "bg-overlay/[0.05] text-text-muted"
+                    )}
+                  >
+                    <T>{option.positioning}</T>
+                  </span>
+                </header>
+                <dl className="divide-y divide-overlay/10 px-5">
+                  {comparisonData.map((row) => {
+                    const DecisionIcon = row.icon;
 
-          {/* Bottom highlight for IntuneGet column */}
-          <div className="grid grid-cols-3 gap-4 mt-0">
-            <div></div>
-            <div className="h-1 bg-gradient-to-r from-accent-cyan/50 via-accent-cyan to-accent-cyan/50 rounded-b-full"></div>
-            <div></div>
+                    return (
+                      <div
+                        key={row.feature}
+                        className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-4 py-3.5"
+                      >
+                        <dt className="flex items-center gap-2 text-xs font-medium text-text-muted">
+                          <DecisionIcon
+                            className="h-4 w-4 shrink-0 text-accent-cyan"
+                            strokeWidth={1.8}
+                            aria-hidden="true"
+                          />
+                          <T>{row.feature}</T>
+                        </dt>
+                        <dd className="text-right text-sm font-medium leading-snug text-text-primary">
+                          <T>{row[option.key]}</T>
+                        </dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </article>
+            </FadeIn>
+          ))}
+        </div>
+
+        {/* Desktop: a compact decision matrix with an intentionally quiet hierarchy. */}
+        <FadeIn delay={0.18} className="hidden md:block">
+          <div className="overflow-hidden rounded-3xl border border-overlay/10 bg-bg-elevated shadow-card">
+            <table className="w-full table-fixed border-collapse">
+              <caption className="sr-only">
+                <T>
+                  Comparison of IntuneGet, paid packaging tools, and manual app
+                  packaging for Microsoft Intune
+                </T>
+              </caption>
+              <thead>
+                <tr className="border-b border-overlay/10 align-top">
+                  <th scope="col" className="w-[22%] p-5 text-left lg:p-6">
+                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+                      <T>Decision factor</T>
+                    </span>
+                  </th>
+                  {comparisonOptions.map((option) => (
+                    <th
+                      key={option.key}
+                      scope="col"
+                      className={cn(
+                        "relative w-[26%] p-5 text-left lg:p-6",
+                        option.featured && "bg-accent-cyan/[0.07]"
+                      )}
+                    >
+                      {option.featured && (
+                        <span
+                          className="absolute inset-x-0 top-0 h-1 bg-accent-cyan"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <div className="flex flex-col items-start gap-2">
+                        <span className="font-semibold text-text-primary">
+                          <T>{option.name}</T>
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                            option.featured
+                              ? "bg-accent-cyan/15 text-accent-cyan"
+                              : "bg-overlay/[0.05] text-text-muted"
+                          )}
+                        >
+                          <T>{option.positioning}</T>
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs font-normal leading-relaxed text-text-muted">
+                        <T>{option.description}</T>
+                      </p>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonData.map((row, rowIndex) => {
+                  const DecisionIcon = row.icon;
+
+                  return (
+                    <tr
+                      key={row.feature}
+                      className={cn(
+                        rowIndex !== comparisonData.length - 1 &&
+                          "border-b border-overlay/10"
+                      )}
+                    >
+                      <th
+                        scope="row"
+                        className="p-5 text-left text-sm font-semibold text-text-primary lg:px-6"
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-cyan/[0.08] text-accent-cyan ring-1 ring-inset ring-accent-cyan/10">
+                            <DecisionIcon
+                              className="h-4 w-4"
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
+                          </span>
+                          <T>{row.feature}</T>
+                        </span>
+                      </th>
+                      {comparisonOptions.map((option) => (
+                        <td
+                          key={option.key}
+                          className={cn(
+                            "p-5 text-sm leading-relaxed text-text-secondary lg:px-6",
+                            option.featured &&
+                              "bg-accent-cyan/[0.045] font-medium text-text-primary"
+                          )}
+                        >
+                          <T>{row[option.key]}</T>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </FadeIn>
 
-        {/* Bottom note */}
-        <FadeIn delay={0.4}>
-          <p className="text-center text-sm text-text-muted mt-8">
-            <T id="comparison.note">IntuneGet has no surprise bills, no seat limits, and no hidden fees. Your data stays yours - export anytime with no lock-in.</T>
-          </p>
+        <FadeIn delay={0.26}>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 text-center sm:flex-row sm:gap-5">
+            <p className="text-sm text-text-muted">
+              <T>No seat limits, no per-device fees, and no lock-in.</T>
+            </p>
+            <Link
+              href="/apps"
+              className="group inline-flex items-center gap-2 rounded-xl bg-accent-cyan px-4 py-2.5 text-sm font-semibold text-bg-deepest shadow-sm transition-[transform,box-shadow,background-color] hover:-translate-y-0.5 hover:bg-accent-cyan-dim hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
+            >
+              <T>Explore the app catalog</T>
+              <ArrowRight
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
         </FadeIn>
       </div>
     </section>

@@ -18,6 +18,10 @@ import { GridBackground } from '@/components/landing/ui/GridBackground';
 import { FadeIn } from '@/components/landing/animations/FadeIn';
 import { CountUp } from '@/components/landing/animations/CountUp';
 import { springPresets } from '@/lib/animations/variants';
+import {
+  getSafeInternalRedirect,
+  rememberPostAuthRedirect,
+} from '@/lib/auth/post-auth-redirect';
 
 const VerificationScene = dynamic(
   () => import('@/components/auth/verification-scene/VerificationScene').then(m => m.VerificationScene),
@@ -54,7 +58,7 @@ function SignInContent() {
   const [isConsentSectionOpen, setIsConsentSectionOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  const callbackUrl = getSafeInternalRedirect(searchParams.get('callbackUrl'));
   const consentUrl = typeof window !== 'undefined' ? getAdminConsentUrl() : '';
 
   const handleCopyConsentUrl = async () => {
@@ -137,7 +141,8 @@ function SignInContent() {
           router.push(callbackUrl);
         } else if (outcome.kind === 'consent_missing') {
           clearOnboardingCache();
-          router.push('/onboarding');
+          rememberPostAuthRedirect(callbackUrl);
+          router.push(`/onboarding?callbackUrl=${encodeURIComponent(callbackUrl)}`);
         } else {
           // Transient failure: don't wipe the cache and don't strand the user
           // on /onboarding. Send them to the dashboard, where the in-page

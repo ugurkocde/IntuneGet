@@ -18,6 +18,10 @@ interface SearchPackagesResponse {
   count?: number;
 }
 
+interface CatalogPackageResponse {
+  package: NormalizedPackage;
+}
+
 interface ManifestResponse {
   installers: NormalizedInstaller[];
   recommendedInstaller?: NormalizedInstaller;
@@ -135,6 +139,27 @@ export function useSearchPackages(query: string, limit: number = 50, category?: 
       return response.json();
     },
     enabled: query.length >= 2,
+  });
+}
+
+export function useCatalogPackage(packageId: string | null) {
+  return useQuery<CatalogPackageResponse>({
+    queryKey: ['packages', 'catalog-package', packageId],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/winget/catalog-package?id=${encodeURIComponent(packageId!)}`,
+      );
+      if (!response.ok) {
+        throw new Error(
+          response.status === 404
+            ? 'Package not found in the supported catalog'
+            : 'Failed to load catalog package',
+        );
+      }
+      return response.json();
+    },
+    enabled: !!packageId,
+    retry: false,
   });
 }
 

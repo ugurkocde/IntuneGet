@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useInView, useReducedMotion, useSpring, useTransform, motion } from "framer-motion";
+import { useLocale } from "gt-next";
 
 interface CountUpProps {
   end: number;
@@ -25,35 +26,65 @@ export function CountUp({
   const ref = useRef<HTMLSpanElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.5 });
   const shouldReduceMotion = useReducedMotion();
+  // gt-next locale is identical on server and client; the browser's implicit
+  // locale is not, and a bare toLocaleString() breaks hydration for non-en users.
+  // An empty locale string would make toLocaleString throw a RangeError.
+  const localeTag = useLocale() || undefined;
+  // Server HTML and the first client render show the real final value so
+  // crawlers see actual numbers; the animated 0-to-end swap only happens
+  // after mount, which keeps hydration deterministic.
+  const [isMounted, setIsMounted] = useState(false);
   const [hasAnimated, setHasAnimated] = useState(false);
 
+  const formatValue = (value: number) => {
+    if (decimals > 0) {
+      return value.toFixed(decimals);
+    }
+    return Math.round(value).toLocaleString(localeTag);
+  };
+
   const springValue = useSpring(0, {
-    duration: shouldReduceMotion ? 0 : duration * 1000,
+    duration: duration * 1000,
     bounce: 0,
   });
 
-  const displayValue = useTransform(springValue, (latest) => {
-    if (decimals > 0) {
-      return latest.toFixed(decimals);
-    }
-    return Math.round(latest).toLocaleString();
-  });
+  const displayValue = useTransform(springValue, formatValue);
 
   useEffect(() => {
-    if (isInView && !hasAnimated) {
-      const timer = setTimeout(() => {
-        springValue.set(end);
-        setHasAnimated(true);
-      }, delay * 1000);
+    setIsMounted(true);
+  }, []);
 
-      return () => clearTimeout(timer);
+  useEffect(() => {
+    if (!isMounted || !isInView || shouldReduceMotion) {
+      return;
     }
-  }, [isInView, hasAnimated, springValue, end, delay]);
+
+    // After the initial 0-to-end animation, keep tracking `end` so live
+    // counter updates (polling/realtime) stay visible instead of freezing
+    // at the first animated value.
+    if (hasAnimated) {
+      springValue.set(end);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      springValue.set(end);
+      setHasAnimated(true);
+    }, delay * 1000);
+
+    return () => clearTimeout(timer);
+  }, [isMounted, isInView, shouldReduceMotion, hasAnimated, springValue, end, delay]);
+
+  const showAnimatedValue = isMounted && !shouldReduceMotion;
 
   return (
     <span ref={ref} className={className}>
       {prefix}
-      <motion.span>{displayValue}</motion.span>
+      {showAnimatedValue ? (
+        <motion.span className="tabular-nums">{displayValue}</motion.span>
+      ) : (
+        <span className="tabular-nums">{formatValue(end)}</span>
+      )}
       {suffix}
     </span>
   );

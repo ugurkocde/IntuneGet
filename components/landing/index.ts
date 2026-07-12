@@ -6,17 +6,13 @@ export {
   HeroSection,
   FeaturesSection,
   CapabilitiesSection,
-  AdvancedCapabilitiesSection,
   HowItWorksSection,
   FAQSectionAnimated,
   CTASection,
   Footer,
   TrustSection,
-  ProblemOutcomeSection,
   ComparisonSection,
-  MissionSection,
-  QuickFactsSection,
-  SupportedSolutionBanner,
+  MSPSection,
 } from "./sections";
 
 // Animation primitives
@@ -33,7 +29,6 @@ export {
 // UI components
 export {
   Badge,
-  FeatureCard,
   GridBackground,
   GradientOrb,
   CapabilityCard,

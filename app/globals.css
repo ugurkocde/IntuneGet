@@ -15,9 +15,11 @@
 
 /* ===== CSS CUSTOM PROPERTIES ===== */
 :root {
+  color-scheme: light;
+
   /* Light Theme (Evernote-inspired) - RGB channels for Tailwind alpha support */
   --bg-deepest: 248 250 252;
-  --bg-surface: 241 245 249;
+  --bg-surface: 231 238 246;
   --bg-elevated: 255 255 255;
 
   /* Accent colors - Electric Cyan (adjusted for light) */
@@ -54,6 +56,8 @@
 }
 
 .dark {
+  color-scheme: dark;
+
   --bg-deepest: 8 15 29;
   --bg-surface: 15 26 46;
   --bg-elevated: 21 35 58;
