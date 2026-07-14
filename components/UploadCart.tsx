@@ -416,11 +416,11 @@ export function UploadCart() {
                           deployed to the tenant by someone. Deploying again
                           would create a second Intune app unless forced. */}
                       {tenantDeployedBy.has(item.wingetId) && !item.forceCreate && (
-                        <div className="mt-3 flex items-start gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                          <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-500/20 dark:bg-amber-500/10">
+                          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                           <div className="text-xs flex-1">
-                            <p className="text-amber-300 font-medium">Already deployed in this tenant</p>
-                            <p className="text-amber-200/70 mt-0.5">
+                            <p className="font-medium text-amber-900 dark:text-amber-300">Already deployed in this tenant</p>
+                            <p className="mt-0.5 text-amber-800 dark:text-amber-200/80">
                               {tenantDeployedBy.get(item.wingetId)
                                 ? `Deployed by ${tenantDeployedBy.get(item.wingetId)}. Deploying again is skipped unless you deploy as a new app.`
                                 : 'Deploying again is skipped unless you deploy as a new app.'}
@@ -428,7 +428,7 @@ export function UploadCart() {
                             <button
                               onClick={() => updateItem(item.id, { forceCreate: true })}
                               disabled={isDeploying}
-                              className="mt-1.5 text-amber-300 hover:text-amber-200 font-medium underline underline-offset-2"
+                              className="mt-1.5 font-medium text-amber-800 underline underline-offset-2 transition-colors hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:opacity-50 dark:text-amber-300 dark:hover:text-amber-200 dark:focus-visible:ring-amber-400 dark:focus-visible:ring-offset-bg-elevated"
                             >
                               Deploy as new app anyway
                             </button>
