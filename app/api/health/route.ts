@@ -44,7 +44,9 @@ export async function GET() {
 
       if (supabaseUrl && supabaseKey) {
         const supabase = createClient(supabaseUrl, supabaseKey);
-        const { error } = await supabase.from("apps").select("id").limit(1);
+        // Probe a real public catalog table. The legacy "apps" table was
+        // removed, which made healthy hosted deployments report degraded.
+        const { error } = await supabase.from("curated_apps").select("winget_id").limit(1);
         status.services.database = !error;
       }
     }
