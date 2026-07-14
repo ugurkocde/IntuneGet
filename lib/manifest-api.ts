@@ -17,6 +17,16 @@ import { getCatalogSource } from '@/lib/catalog';
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests';
 const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
 
+function githubReadHeaders(accept: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'User-Agent': 'IntuneGet',
+    Accept: accept,
+  };
+  const token = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 // Cache for manifest data
 const manifestCache = new Map<string, { data: WingetManifest; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -77,18 +87,15 @@ export async function fetchAvailableVersions(wingetId: string): Promise<string[]
 
 /**
  * Fetch available versions straight from the winget-pkgs GitHub repo,
- * skipping the Supabase catalog. Used when the catalog itself is suspected
- * stale (e.g. requeueing a job after a HASH_MISMATCH).
+ * skipping the Supabase catalog. Used by dispatch preflight when the catalog
+ * may be stale.
  */
 export async function fetchAvailableVersionsLive(wingetId: string): Promise<string[]> {
   const { basePath } = getManifestPaths(wingetId);
 
   try {
     const response = await fetch(`${GITHUB_API_BASE}/${basePath}`, {
-      headers: {
-        'User-Agent': 'IntuneGet',
-        Accept: 'application/vnd.github.v3+json',
-      },
+      headers: githubReadHeaders('application/vnd.github.v3+json'),
       cache: 'no-store', // Avoid stale cache issues in edge runtime
     });
 
@@ -133,10 +140,7 @@ export async function fetchInstallerManifest(
 
   try {
     const response = await fetch(url, {
-      headers: {
-        Accept: 'text/plain',
-        'User-Agent': 'IntuneGet',
-      },
+      headers: githubReadHeaders('text/plain'),
       cache: 'no-store',
     });
 
@@ -180,10 +184,7 @@ async function fetchLocaleFile(
 
   try {
     const response = await fetch(url, {
-      headers: {
-        Accept: 'text/plain',
-        'User-Agent': 'IntuneGet',
-      },
+      headers: githubReadHeaders('text/plain'),
       cache: 'no-store',
     });
 
@@ -680,8 +681,8 @@ export async function getInstallers(
 
 /**
  * Get installers for a package straight from winget-pkgs, bypassing the
- * Supabase cache and the in-memory manifest cache. Used when cached installer
- * data is known to be stale (e.g. requeueing a job after a HASH_MISMATCH).
+ * Supabase cache and the in-memory manifest cache. Used by dispatch preflight
+ * to validate the exact trusted installer tuple.
  */
 export async function getLiveInstallers(
   wingetId: string,

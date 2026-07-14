@@ -13,8 +13,9 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     concurrency:
-      group: package-${{ github.event.client_payload.job.tenantId }}-${{ github.event.client_payload.app.wingetId }}
+      group: package-${{ github.event.client_payload.job.tenantId }}
       cancel-in-progress: false
+      queue: max
     env:
       # Map client_payload to environment variables for use in steps
       # Payload is grouped into: job, app, installer, config (GitHub limits to 10 top-level properties)
@@ -1531,6 +1532,7 @@ jobs:
             displayName = $env:DISPLAY_NAME
             displayVersion = $env:VERSION
             publisher = $env:PUBLISHER
+            notes = "IntuneGet deployment job: $env:JOB_ID"
             description = $descriptionWithSource
             largeIcon = $largeIcon
             fileName = "$env:PACKAGE_FILENAME"
@@ -1561,9 +1563,43 @@ jobs:
 
           $appBody = $appBodyHash | ConvertTo-Json -Depth 10
 
-          $app = Invoke-GraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps" -Method POST -Body $appBody
+          # Reconcile app creation with a durable job marker. A timed-out POST may
+          # have succeeded in Intune, so retrying it blindly can create duplicates.
+          $jobMarker = "IntuneGet deployment job: $env:JOB_ID"
+          function Find-IntuneAppForJob {
+            try {
+              $escapedDisplayName = $env:DISPLAY_NAME.Replace("'", "''")
+              $filter = [System.Uri]::EscapeDataString("displayName eq '$escapedDisplayName'")
+              $lookupUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?`$filter=$filter&`$select=id,displayName,notes,createdDateTime,committedContentVersion&`$top=100"
+              $lookup = Invoke-GraphRequest -Uri $lookupUri -MaxRetries 3
+              return @($lookup.value) | Where-Object { $_.notes -eq $jobMarker } | Select-Object -First 1
+            } catch {
+              Write-Warning "Could not reconcile app creation for job $env:JOB_ID`: $($_.Exception.Message)"
+              return $null
+            }
+          }
+
+          $app = Find-IntuneAppForJob
+          if ($app) {
+            Write-Host "Reusing Intune app created for this job: $($app.id)"
+          } else {
+            try {
+              $app = Invoke-GraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps" -Method POST -Body $appBody
+            } catch {
+              $createError = $_
+              Write-Warning "App creation returned an uncertain result. Reconciling by job marker before failing."
+              for ($reconcileAttempt = 1; $reconcileAttempt -le 5 -and -not $app; $reconcileAttempt++) {
+                Start-Sleep -Seconds 8
+                $app = Find-IntuneAppForJob
+              }
+              if (-not $app) {
+                throw $createError
+              }
+              Write-Host "Recovered Intune app after an uncertain create response: $($app.id)"
+            }
+          }
           $appId = $app.id
-          Write-Host "Created Intune app: $appId"
+          Write-Host "Using Intune app: $appId"
           echo "INTUNE_APP_ID=$appId" >> $env:GITHUB_ENV
 
           # 2-4. Create content version, file entry, and wait for Azure Storage URI
@@ -1572,6 +1608,15 @@ jobs:
           $encryptedFileSize = [long]$env:ENCRYPTED_FILE_SIZE
           $unencryptedSize = [long]$env:UNENCRYPTED_SIZE
           $encInfo = Get-Content -LiteralPath $env:ENCRYPTION_INFO_PATH -Raw | ConvertFrom-Json
+
+          # A terminal commitFileFailed state cannot be repaired by recommitting
+          # the same file. Retry the complete content flow with fresh objects.
+          $maxContentUploadAttempts = 2
+          $contentUploadAttempt = 0
+          $commitSuccess = $false
+          while (-not $commitSuccess -and $contentUploadAttempt -lt $maxContentUploadAttempts) {
+          $contentUploadAttempt++
+          Write-Host "Content upload attempt $contentUploadAttempt/$maxContentUploadAttempts"
 
           $maxContentRetries = 3
           $contentRetry = 0
@@ -1913,7 +1958,7 @@ jobs:
 
           # 8. Commit file and wait for completion (retry if timed out)
           $maxCommitAttempts = 3
-          $commitSuccess = $false
+          $terminalCommitFailure = $false
           for ($commitAttempt = 1; $commitAttempt -le $maxCommitAttempts; $commitAttempt++) {
             Write-Host "Committing file to Intune (attempt $commitAttempt/$maxCommitAttempts)..."
             Invoke-GraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId/files/$fileId/commit" -Method POST -Body $commitBody -Idempotent
@@ -1957,6 +2002,11 @@ jobs:
 
             $observedCommitState = if ($fileStatus) { $fileStatus.uploadState } else { "temporarily unavailable" }
             Write-Host "Commit attempt $commitAttempt ended with state: $observedCommitState"
+            if ($observedCommitState -eq "commitFileFailed") {
+              $terminalCommitFailure = $true
+              Write-Warning "Intune reported terminal commitFileFailed. The same file will not be recommitted."
+              break
+            }
             if ($commitAttempt -lt $maxCommitAttempts) {
               $backoff = 15 * $commitAttempt
               Write-Host "Retrying commit in ${backoff}s..."
@@ -1965,11 +2015,31 @@ jobs:
           }
 
           if (-not $commitSuccess) {
+            if ($terminalCommitFailure -and $contentUploadAttempt -lt $maxContentUploadAttempts) {
+              Write-Host "Discarding terminal content objects before a fresh upload attempt"
+              try {
+                Invoke-GraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId/files/$fileId" -Method DELETE -MaxRetries 1 | Out-Null
+              } catch {
+                Write-Warning "Could not remove terminal content file ${fileId}: $($_.Exception.Message)"
+              }
+              try {
+                Invoke-GraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/microsoft.graph.win32LobApp/contentVersions/$contentVersionId" -Method DELETE -MaxRetries 1 | Out-Null
+              } catch {
+                Write-Warning "Could not remove terminal content version ${contentVersionId}: $($_.Exception.Message)"
+              }
+              Start-Sleep -Seconds (15 * $contentUploadAttempt)
+              continue
+            }
+            break
+          }
+          }
+
+          if (-not $commitSuccess) {
             $finalCommitState = if ($fileStatus) { $fileStatus.uploadState } else { "unknown" }
             Send-ErrorCallback -Stage 'upload' -Category 'intune_api' -Code 'INTUNE_COMMIT_FAILED' `
               -Message "Failed to commit the uploaded file to Intune" `
-              -Details @{ commitState = $finalCommitState; appId = $appId; attempts = $maxCommitAttempts }
-            throw "File commit failed after $maxCommitAttempts attempts. State: $finalCommitState"
+              -Details @{ commitState = $finalCommitState; appId = $appId; contentUploadAttempts = $contentUploadAttempt; commitAttempts = $maxCommitAttempts }
+            throw "File commit failed after $contentUploadAttempt content upload attempt(s). State: $finalCommitState"
           }
 
           # 9. Update app with committed content version

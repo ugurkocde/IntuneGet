@@ -32,8 +32,12 @@ import {
 import type { PackagingJob } from '@/lib/db/types';
 import type { CartItem, Win32CartItem, StoreCartItem } from '@/types/upload';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
+import {
+  enforceInstallerPreflight,
+  InstallerPreflightError,
+} from '@/lib/installer-preflight';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface PackageRequestBody {
   items: CartItem[];
@@ -197,6 +201,47 @@ export async function POST(request: NextRequest) {
           },
           { status: 400 }
         );
+      }
+    }
+
+    // Enforce installer health before creating job rows. Work in pairs to
+    // bound outbound bandwidth for a ten-app cart while keeping normal
+    // batches responsive.
+    for (let i = 0; i < win32Items.length; i += 2) {
+      const preflightResults = await Promise.allSettled(
+        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight({
+          wingetId: item.wingetId,
+          version: item.version,
+          architecture: item.architecture,
+          installerUrl: item.installerUrl,
+          installerSha256: item.installerSha256,
+          installerType: item.installerType,
+          installScope: item.installScope,
+          sourceType: item.sourceType,
+        })),
+      );
+
+      const failedIndex = preflightResults.findIndex((result) => result.status === 'rejected');
+      if (failedIndex !== -1) {
+        const failed = preflightResults[failedIndex] as PromiseRejectedResult;
+        const failedItem = win32Items[i + failedIndex];
+        const error = failed.reason;
+        if (error instanceof InstallerPreflightError) {
+          return NextResponse.json({
+            error: 'Installer validation blocked this deployment',
+            message: error.message,
+            code: error.code,
+            retryable: error.retryable,
+            package: {
+              wingetId: failedItem.wingetId,
+              displayName: failedItem.displayName || failedItem.wingetId,
+              version: failedItem.version,
+            },
+            expectedSha256: failedItem.installerSha256?.toUpperCase(),
+            actualSha256: error.actualSha256,
+          }, { status: error.retryable ? 503 : 409 });
+        }
+        throw error;
       }
     }
 
@@ -448,6 +493,7 @@ export async function POST(request: NextRequest) {
                 : undefined,
               installScope: item.installScope,
               forceCreate: item.forceCreate || forceCreate,
+              sourceType: item.sourceType,
             };
 
             const triggerResult = await triggerPackagingWorkflow(

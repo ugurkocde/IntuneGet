@@ -505,7 +505,7 @@ jobs:
                     return;
                   }
 
-                  if (!forceRefresh) {
+                  if (!forceRefresh && syncMode !== 'all') {
                     if (existingVersions.has(`${app.winget_id}\u0000${latestVersion}`)) {
                       // Version already synced, but heal a still-missing
                       // description (e.g. the locale fetch failed when this

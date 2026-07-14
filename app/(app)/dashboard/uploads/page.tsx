@@ -325,7 +325,7 @@ export default function UploadsPage() {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
           const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to redeploy');
+          throw new Error(errorData.message || errorData.error || 'Failed to redeploy');
         }
         throw new Error(`Failed to redeploy (${response.status})`);
       }

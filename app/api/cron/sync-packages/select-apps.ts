@@ -1,5 +1,5 @@
 /**
- * Selection logic for the daily package sync cron.
+ * Selection logic for the hourly hot-package sync cron.
  *
  * Postgres sorts NULL popularity_rank values last in ascending order, so a
  * single ranked query with a limit would never reach newly added apps that

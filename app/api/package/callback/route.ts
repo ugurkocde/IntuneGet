@@ -9,7 +9,7 @@ import { getDatabase } from '@/lib/db';
 import { verifyCallbackSignature } from '@/lib/callback-signature';
 import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
-import { tryHashMismatchRequeue } from '@/lib/hash-mismatch-retry';
+import { quarantineInstaller } from '@/lib/installer-preflight';
 import {
   packageCallbackSchema,
   sanitizeErrorDetails,
@@ -131,6 +131,34 @@ export async function POST(request: NextRequest) {
         category: data.errorCategory,
         code: data.errorCode,
       });
+
+      // Persist the quarantine before making the job terminal when the legacy
+      // job contains a complete trusted tuple. Dispatch preflight still fails
+      // closed if shared state is unavailable, so callback bookkeeping must not
+      // be held open by a transient storage problem.
+      if (data.errorCode === 'HASH_MISMATCH') {
+        const packageConfig = currentJob.package_config && typeof currentJob.package_config === 'object'
+          && !Array.isArray(currentJob.package_config)
+          ? currentJob.package_config as Record<string, unknown>
+          : {};
+        const actualHash = data.errorDetails && typeof data.errorDetails.actualHash === 'string'
+          ? data.errorDetails.actualHash
+          : undefined;
+        try {
+          await quarantineInstaller({
+            wingetId: currentJob.winget_id,
+            version: currentJob.version,
+            architecture: currentJob.architecture || 'x64',
+            installerUrl: currentJob.installer_url || '',
+            installerSha256: currentJob.installer_sha256 || '',
+            installerType: currentJob.installer_type || undefined,
+            installScope: currentJob.install_scope === 'user' ? 'user' : 'machine',
+            sourceType: packageConfig.sourceType === 'custom' ? 'custom' : 'winget',
+          }, actualHash, 'HASH_MISMATCH', data.message || 'The installer failed SHA256 verification');
+        } catch (quarantineError) {
+          console.error('Could not persist installer quarantine from callback:', quarantineError);
+        }
+      }
     }
 
     // Optimistic status condition prevents a cancellation or another terminal
@@ -145,15 +173,6 @@ export async function POST(request: NextRequest) {
         reason: 'job_changed_during_callback',
         job: latestJob,
       });
-    }
-
-    // Stale-hash failures usually mean the upstream installer was replaced in
-    // place after the catalog synced. Refresh the manifest live from
-    // winget-pkgs and requeue the job once; when that succeeds the job is
-    // packaging again and the failure side effects below must not run.
-    let requeued = false;
-    if (data.status === 'failed' && data.errorCode === 'HASH_MISMATCH') {
-      requeued = await tryHashMismatchRequeue(db, updatedJob);
     }
 
     // Side effects run only after the state transition succeeds, making callback
@@ -178,9 +197,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if this job belongs to a batch deployment item. A requeued job is
-    // no longer terminal - its retry run reports completion via a later callback.
-    if (!requeued && (data.status === 'deployed' || data.status === 'failed' || data.status === 'duplicate_skipped')) {
+    // Check if this job belongs to a batch deployment item.
+    if (data.status === 'deployed' || data.status === 'failed' || data.status === 'duplicate_skipped') {
       const jobStatus = data.status === 'failed' ? 'failed' : 'completed';
       onJobCompleted(data.jobId, jobStatus, data.message).catch((err) => {
         console.error('[Callback] Batch orchestrator error:', err);
@@ -193,7 +211,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      requeued: requeued || undefined,
       job: updatedJob,
     });
   } catch (error) {

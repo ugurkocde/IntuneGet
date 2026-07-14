@@ -5,6 +5,18 @@ import {
   type WorkflowInputs,
 } from './github-actions';
 
+const { enforceInstallerPreflightMock } = vi.hoisted(() => ({
+  enforceInstallerPreflightMock: vi.fn(),
+}));
+
+vi.mock('./installer-preflight', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./installer-preflight')>();
+  return {
+    ...original,
+    enforceInstallerPreflight: enforceInstallerPreflightMock,
+  };
+});
+
 const config: GitHubActionsConfig = {
   token: 'test-token',
   owner: 'example',
@@ -36,6 +48,7 @@ function workflowInputs(overrides: Partial<WorkflowInputs> = {}): WorkflowInputs
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
@@ -56,6 +69,11 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   });
 
   it('defaults to strict mode when no mode override is supplied', async () => {
+    enforceInstallerPreflightMock.mockResolvedValueOnce({
+      cacheKey: 'healthy-key',
+      status: 'healthy',
+      source: 'cache',
+    });
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -71,5 +89,23 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     const request = fetchMock.mock.calls[0][1] as RequestInit;
     const payload = JSON.parse(String(request.body));
     expect(payload.client_payload.installer.hashValidationMode).toBe('strict');
+  });
+
+  it('does not call GitHub when installer preflight blocks dispatch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    enforceInstallerPreflightMock.mockRejectedValueOnce(new Error('quarantined'));
+
+    await expect(triggerPackagingWorkflow(
+      workflowInputs({
+        wingetId: 'Example.App',
+        installerSha256: 'a'.repeat(64),
+        sourceType: 'winget',
+      }),
+      config,
+      { skipRunCapture: true },
+    )).rejects.toThrow('quarantined');
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

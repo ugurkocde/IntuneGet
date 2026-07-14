@@ -53,6 +53,26 @@ interface PackageApiResponse {
   message?: string;
 }
 
+interface DeploymentError {
+  title: string;
+  message: string;
+  retryable: boolean;
+  blockedBeforeDispatch?: boolean;
+  packageName?: string;
+  packageVersion?: string;
+}
+
+interface PackageApiErrorResponse {
+  error?: string;
+  message?: string;
+  code?: string;
+  retryable?: boolean;
+  package?: {
+    displayName?: string;
+    version?: string;
+  };
+}
+
 export function UploadCart() {
   const router = useRouter();
   const items = useCartStore((state) => state.items);
@@ -64,7 +84,7 @@ export function UploadCart() {
   const clearCart = useCartStore((state) => state.clearCart);
   const [isDeploying, setIsDeploying] = useState(false);
   const [showLargeDeployConfirm, setShowLargeDeployConfirm] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DeploymentError | null>(null);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
   // winget id -> email of whoever already deployed it in this tenant, so we can
   // warn before a teammate's app is deployed a second time.
@@ -149,14 +169,22 @@ export function UploadCart() {
     if (!isAuthenticated) {
       const signedIn = await signIn();
       if (!signedIn) {
-        setError('Please sign in with Microsoft to deploy packages.');
+        setError({
+          title: 'Microsoft sign-in required',
+          message: 'Please sign in with Microsoft to deploy packages.',
+          retryable: true,
+        });
         return;
       }
     }
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      setError('Failed to get access token. Please sign in again.');
+      setError({
+        title: 'Microsoft sign-in expired',
+        message: 'Failed to get an access token. Please sign in again.',
+        retryable: true,
+      });
       return;
     }
 
@@ -176,7 +204,23 @@ export function UploadCart() {
       if (!response.ok) {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
-          const errorData = await response.json();
+          const errorData = await response.json() as PackageApiErrorResponse;
+          if (response.status === 409 || Boolean(errorData.code)) {
+            const packageLabel = errorData.package?.displayName;
+            const versionLabel = errorData.package?.version;
+            const retryable = errorData.retryable === true;
+            setError({
+              title: retryable
+                ? 'Installer verification temporarily unavailable'
+                : 'Deployment blocked before upload',
+              message: errorData.message || errorData.error || 'The installer could not be verified safely.',
+              retryable,
+              blockedBeforeDispatch: true,
+              packageName: packageLabel,
+              packageVersion: versionLabel,
+            });
+            return;
+          }
           throw new Error(errorData.message || errorData.error || 'Failed to queue packaging jobs');
         }
         throw new Error(`Deployment failed (${response.status})`);
@@ -201,7 +245,11 @@ export function UploadCart() {
       router.push(`/dashboard/uploads?jobs=${jobIds}`);
     } catch (err) {
       console.error('Deploy error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to deploy packages');
+      setError({
+        title: 'Deployment could not be started',
+        message: err instanceof Error ? err.message : 'Failed to deploy packages',
+        retryable: true,
+      });
     } finally {
       setIsDeploying(false);
     }
@@ -412,8 +460,25 @@ export function UploadCart() {
                   <div className="flex items-start gap-3 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
                     <AlertCircle className="w-5 h-5 text-status-error flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
-                      <p className="text-status-error font-medium">Deployment failed</p>
-                      <p className="text-status-error/70 mt-1">{error}</p>
+                      <p className="text-status-error font-medium">{error.title}</p>
+                      {(error.packageName || error.packageVersion) && (
+                        <p className="text-text-secondary mt-1">
+                          {[error.packageName, error.packageVersion && `v${error.packageVersion}`]
+                            .filter(Boolean)
+                            .join(' ')}
+                        </p>
+                      )}
+                      <p className="text-status-error/70 mt-1">{error.message}</p>
+                      {error.blockedBeforeDispatch && (
+                        <p className="text-text-muted mt-2">
+                          No GitHub Action was started and no changes were made in Intune.
+                        </p>
+                      )}
+                      {!error.retryable && (
+                        <p className="text-text-muted mt-1">
+                          Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -472,7 +537,7 @@ export function UploadCart() {
                     {isDeploying ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Deploying...
+                        Verifying installers...
                       </>
                     ) : isAuthenticated && permissionStatus === 'checking' ? (
                       <>

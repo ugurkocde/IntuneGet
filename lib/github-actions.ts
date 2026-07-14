@@ -5,6 +5,7 @@
  */
 
 import { applyInstallerUrlOverride } from './installer-url-overrides';
+import { enforceInstallerPreflight } from './installer-preflight';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -38,6 +39,7 @@ export interface WorkflowInputs {
   removeAssignmentsFromPreviousApp?: boolean; // Remove assignments from previous app after carry-over
   autoSupersede?: boolean; // Mark the new app as superseding the previous app
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
+  sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
 }
 
 export interface GitHubActionsConfig {
@@ -110,6 +112,19 @@ export async function triggerPackagingWorkflow(
     inputs.architecture ?? '',
     inputs.installerUrl,
   );
+
+  // This is the final dispatch boundary shared by manual, MSP, update-policy,
+  // and auto-update paths. Never create a packaging run for a known-bad tuple.
+  await enforceInstallerPreflight({
+    wingetId: inputs.wingetId,
+    version: inputs.version,
+    architecture: inputs.architecture,
+    installerUrl: finalInstallerUrl,
+    installerSha256: inputs.installerSha256,
+    installerType: inputs.installerType,
+    installScope: inputs.installScope,
+    sourceType: inputs.sourceType,
+  });
 
   // Record time before triggering to help find the run
   const triggerTime = new Date();

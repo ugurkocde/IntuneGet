@@ -7,6 +7,16 @@ const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs
 const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
 const BATCH_SIZE = 10;
 
+function githubHeaders(accept: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'User-Agent': 'IntuneGet',
+    Accept: accept,
+  };
+  const token = process.env.GITHUB_PAT;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 interface VersionHistoryRecord {
   winget_id: string;
   version: string;
@@ -103,41 +113,8 @@ export async function GET(request: Request) {
 
             const latestVersion = versions[0];
 
-            // Check if we already have this version
-            const { data: existing } = await supabase
-              .from('version_history')
-              .select('version')
-              .eq('winget_id', winget_id)
-              .eq('version', latestVersion)
-              .single();
-
-            if (existing) {
-              // Version already synced, but heal a still-missing description
-              // (e.g. the locale fetch failed when this version was first
-              // synced) instead of waiting for the next version bump. The
-              // DB-side null filter makes the write a no-op when a
-              // description appeared in the meantime.
-              if (!localeText(app.description)) {
-                const healManifest = await fetchLocaleManifest(winget_id, latestVersion);
-                const healDescription =
-                  localeText(healManifest?.ShortDescription) ||
-                  localeText(healManifest?.Description);
-                if (healDescription) {
-                  await supabase
-                    .from('curated_apps')
-                    .update({
-                      description: healDescription,
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq('winget_id', winget_id)
-                    .is('description', null);
-                }
-              }
-              skipped++;
-              return;
-            }
-
-            // Fetch installer manifest
+            // Always refresh the current version. Publishers and winget-pkgs
+            // can correct a URL or SHA256 without changing the version.
             const installerManifest = await fetchInstallerManifest(winget_id, latestVersion);
             if (!installerManifest) {
               failed++;
@@ -302,10 +279,7 @@ async function fetchVersions(wingetId: string): Promise<string[]> {
     const response = await fetch(
       `${GITHUB_API_BASE}/${basePath}`,
       {
-        headers: {
-          'User-Agent': 'IntuneGet',
-          Accept: 'application/vnd.github.v3+json',
-        },
+        headers: githubHeaders('application/vnd.github.v3+json'),
       }
     );
 
@@ -339,10 +313,7 @@ async function fetchInstallerManifest(
 
   try {
     const response = await fetch(url, {
-      headers: {
-        Accept: 'text/plain',
-        'User-Agent': 'IntuneGet',
-      },
+      headers: githubHeaders('text/plain'),
     });
 
     if (!response.ok) return null;
@@ -365,10 +336,7 @@ async function fetchManifestYaml(
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await fetch(url, {
-        headers: {
-          Accept: 'text/plain',
-          'User-Agent': 'IntuneGet',
-        },
+        headers: githubHeaders('text/plain'),
       });
 
       if (response.status === 404) return null;
