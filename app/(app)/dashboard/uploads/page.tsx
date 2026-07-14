@@ -921,17 +921,6 @@ function UploadJobCard({
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
             <span title={job.id} translate="no">Support ID: {job.id.slice(0, 8)}</span>
-            {job.github_run_url && (
-              <a
-                href={job.github_run_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-              >
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                <T>View workflow run</T>
-              </a>
-            )}
           </div>
 
           {/* Error message */}
