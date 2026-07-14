@@ -71,10 +71,10 @@
     "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "^4.1.10",
-    "eslint": "^9.39.4",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
     "husky": "^9.1.7",
-    "postcss": "^8.5.16",
+    "postcss": "^8.5.19",
     "tailwindcss": "^4.3.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
