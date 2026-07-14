@@ -293,7 +293,7 @@ async function performLivePreflight(
     if (!hashesEqual(downloaded.sha256, input.installerSha256)) {
       const error = new InstallerPreflightError(
         'HASH_MISMATCH',
-        `The publisher currently serves different bytes for ${input.wingetId} ${input.version}. The deployment was quarantined before GitHub Actions dispatch.`,
+        `The publisher currently serves different bytes for ${input.wingetId} ${input.version}. The deployment was quarantined before the packaging pipeline started.`,
         false,
         downloaded.sha256,
       );

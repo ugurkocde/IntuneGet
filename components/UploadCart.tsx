@@ -471,7 +471,7 @@ export function UploadCart() {
                       <p className="text-status-error/70 mt-1">{error.message}</p>
                       {error.blockedBeforeDispatch && (
                         <p className="text-text-muted mt-2">
-                          No GitHub Action was started and no changes were made in Intune.
+                          No packaging pipeline was started and no changes were made in Intune.
                         </p>
                       )}
                       {!error.retryable && (
