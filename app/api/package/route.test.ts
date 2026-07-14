@@ -237,7 +237,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       architecture: 'x64',
       installerType: 'exe',
       installerUrl: 'https://example.com/setup.exe',
-      installerSha256: 'abc123',
+      installerSha256: 'a'.repeat(64),
       installCommand: 'setup.exe /S',
       uninstallCommand: 'uninstall.exe /S',
       installScope: 'machine',
@@ -313,5 +313,104 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
     expect(triggerPackagingWorkflowMock.mock.calls[0][0].relationships).toBeUndefined();
+  });
+
+  it('calculates the hash in the workflow for a custom app without a supplied SHA256', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({ sourceType: 'custom', installerSha256: '' })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        installerSha256: '',
+        hashValidationMode: 'calculate',
+      })
+    );
+  });
+
+  it('treats a whitespace-only custom-app SHA256 as missing', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({ sourceType: 'custom', installerSha256: '   ' })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        installerSha256: '',
+        hashValidationMode: 'calculate',
+      })
+    );
+  });
+
+  it('keeps strict hash validation when a trusted SHA256 is supplied', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0].hashValidationMode).toBe('strict');
+  });
+
+  it('rejects a catalog package without its trusted manifest SHA256', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item({ installerSha256: '' })] }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toMatch(/catalog packages require a trusted manifest hash/i);
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid custom-app SHA256 instead of calculating over malformed input', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({ sourceType: 'custom', installerSha256: 'not-a-hash' })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 });

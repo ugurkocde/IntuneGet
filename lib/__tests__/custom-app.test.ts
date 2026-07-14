@@ -162,10 +162,13 @@ describe('buildCustomAppCartItem', () => {
     expect(generated.uninstallCommand).toBe('REGISTRY_UNINSTALL:My App 2');
   });
 
-  it('should pass through a valid sha256 and default to empty string', () => {
+  it('should pass through a valid sha256, trim whitespace, and allow it to be omitted', () => {
     expect(buildCustomAppCartItem(validInput({ sha256: VALID_SHA256 })).installerSha256).toBe(
       VALID_SHA256
     );
+    expect(
+      buildCustomAppCartItem(validInput({ sha256: ` ${VALID_SHA256} ` })).installerSha256
+    ).toBe(VALID_SHA256);
     expect(buildCustomAppCartItem(validInput()).installerSha256).toBe('');
     expect(buildCustomAppCartItem(validInput({ sha256: '   ' })).installerSha256).toBe('');
   });

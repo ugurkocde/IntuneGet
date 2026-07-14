@@ -32,6 +32,7 @@ export const packageCallbackSchema = z.object({
   phase: z.string().trim().min(1).max(64).optional(),
   message: z.string().max(2_000).optional(),
   progress: z.number().min(0).max(100).optional(),
+  installerSha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
   intuneAppId: z.string().trim().min(1).max(128).optional(),
   intuneAppUrl: z.string().url().max(2_048).optional(),
   duplicateInfo: z.object({

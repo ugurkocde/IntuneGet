@@ -15,7 +15,7 @@ import {
 import { getAppConfig } from '@/lib/config';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getFeatureFlags } from '@/lib/features';
-import { isValidInstallerUrl } from '@/lib/custom-app';
+import { isValidInstallerUrl, isValidSha256 } from '@/lib/custom-app';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { checkStoredConsent } from '@/lib/msp/consent-cache';
@@ -179,6 +179,25 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      const installerSha256 = item.installerSha256?.trim() || '';
+      if (installerSha256 && !isValidSha256(installerSha256)) {
+        return NextResponse.json(
+          {
+            error: `Invalid installer SHA256 for "${item.displayName || item.wingetId}": expected a 64-character hexadecimal value`,
+          },
+          { status: 400 }
+        );
+      }
+      // Catalog packages must retain their trusted manifest hash. Custom apps
+      // may omit it and have the packaging runner calculate it after download.
+      if (!installerSha256 && item.sourceType !== 'custom') {
+        return NextResponse.json(
+          {
+            error: `Missing installer SHA256 for "${item.displayName || item.wingetId}": catalog packages require a trusted manifest hash`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const jobs: PackagingJobRecord[] = [];
@@ -331,6 +350,7 @@ export async function POST(request: NextRequest) {
         for (const item of win32Items) {
           try {
             const jobId = crypto.randomUUID();
+            const installerSha256 = item.installerSha256?.trim() || '';
 
             const jobRecord = await db.jobs.create({
               id: jobId,
@@ -344,7 +364,7 @@ export async function POST(request: NextRequest) {
               architecture: item.architecture,
               installer_type: item.installerType,
               installer_url: item.installerUrl,
-              installer_sha256: item.installerSha256,
+              installer_sha256: installerSha256,
               install_command: item.installCommand,
               uninstall_command: item.uninstallCommand,
               install_scope: item.installScope,
@@ -395,6 +415,7 @@ export async function POST(request: NextRequest) {
 
         const dispatchResults = await Promise.allSettled(
           pendingDispatches.map(async ({ item, jobId, createdAt }) => {
+            const installerSha256 = item.installerSha256?.trim() || '';
             const workflowInputs: WorkflowInputs = {
               jobId,
               tenantId,
@@ -408,7 +429,8 @@ export async function POST(request: NextRequest) {
               version: item.version,
               architecture: item.architecture,
               installerUrl: item.installerUrl,
-              installerSha256: item.installerSha256 || '',
+              installerSha256,
+              hashValidationMode: installerSha256 ? 'strict' : 'calculate',
               installerType: item.installerType,
               nestedInstallerType: item.nestedInstallerType,
               nestedInstallerPath: item.nestedInstallerPath,

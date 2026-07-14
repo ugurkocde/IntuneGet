@@ -45,10 +45,10 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
   const [installerType, setInstallerType] = useState<CustomInstallerType>('exe');
   const [architecture, setArchitecture] = useState<WingetArchitecture>('x64');
   const [installScope, setInstallScope] = useState<WingetScope>('machine');
+  const [sha256, setSha256] = useState('');
 
   // Optional fields
   const [silentSwitches, setSilentSwitches] = useState(CUSTOM_SILENT_SWITCH_DEFAULTS.exe);
-  const [sha256, setSha256] = useState('');
   const [uninstallCommand, setUninstallCommand] = useState('');
   const [description, setDescription] = useState('');
   const [iconUrl, setIconUrl] = useState('');
@@ -269,6 +269,29 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
               )}
             </div>
 
+            {/* SHA256 */}
+            <div>
+              <label htmlFor="custom-app-sha256" className="block text-sm font-medium text-text-muted mb-2">SHA256 hash (optional)</label>
+              <Input
+                id="custom-app-sha256"
+                type="text"
+                value={sha256}
+                onChange={(e) => {
+                  setSha256(e.target.value);
+                  clearError('sha256');
+                }}
+                placeholder="Calculated automatically when empty"
+                className={cn(inputClassName, 'font-mono')}
+              />
+              <p className="text-xs text-text-muted mt-1">
+                Provide a trusted hash for strict verification. When empty, the packaging runner
+                calculates SHA256 from the downloaded installer and records it on the job.
+              </p>
+              {errors.sha256 && (
+                <p className="text-xs text-status-error mt-1">{errors.sha256}</p>
+              )}
+            </div>
+
             {/* Installer Type */}
             <div>
               <label htmlFor="custom-app-installer-type" className="block text-sm font-medium text-text-muted mb-2">Installer type</label>
@@ -348,25 +371,6 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
                 <p className="text-xs text-text-muted mt-1">
                   Pre-filled with the default for the selected installer type.
                 </p>
-              </div>
-
-              {/* SHA256 */}
-              <div>
-                <label htmlFor="custom-app-sha256" className="block text-sm font-medium text-text-muted mb-2">SHA256 hash</label>
-                <Input
-                  id="custom-app-sha256"
-                  type="text"
-                  value={sha256}
-                  onChange={(e) => {
-                    setSha256(e.target.value);
-                    clearError('sha256');
-                  }}
-                  placeholder="Leave empty to skip verification"
-                  className={cn(inputClassName, 'font-mono')}
-                />
-                {errors.sha256 && (
-                  <p className="text-xs text-status-error mt-1">{errors.sha256}</p>
-                )}
               </div>
 
               {/* Uninstall Command */}

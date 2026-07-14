@@ -18,14 +18,19 @@ describe('package callback contract', () => {
       jobId,
       status: 'uploading',
       progress: 85,
+      installerSha256: 'a'.repeat(64),
     });
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.installerSha256).toBe('a'.repeat(64));
+    }
   });
 
   it('rejects invalid progress and unknown statuses', () => {
     expect(packageCallbackSchema.safeParse({ jobId, status: 'uploading', progress: 101 }).success).toBe(false);
     expect(packageCallbackSchema.safeParse({ jobId, status: 'cancelled', progress: 0 }).success).toBe(false);
+    expect(packageCallbackSchema.safeParse({ jobId, status: 'packaging', installerSha256: 'bad' }).success).toBe(false);
   });
 
   it('prevents regressions and terminal-state overwrites', () => {

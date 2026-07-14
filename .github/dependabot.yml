@@ -22,12 +22,20 @@ updates:
     groups:
       npm-production:
         dependency-type: production
-        update-types: [major, minor, patch]
+        update-types: [minor, patch]
         patterns: ["*"]
       npm-development:
         dependency-type: development
-        update-types: [major, minor, patch]
+        update-types: [minor, patch]
         patterns: ["*"]
+    ignore:
+      # These major versions currently exceed the compatibility range of the
+      # Next.js ESLint toolchain. Keep receiving security, minor, and patch
+      # updates while major upgrades are evaluated explicitly.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /packager
@@ -39,7 +47,7 @@ updates:
       timezone: Europe/Berlin
     groups:
       packager-dependencies:
-        update-types: [major, minor, patch]
+        update-types: [minor, patch]
         patterns: ["*"]
 
   - package-ecosystem: docker

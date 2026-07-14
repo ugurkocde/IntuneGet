@@ -9,6 +9,7 @@ import { getDatabase } from '@/lib/db';
 import { verifyCallbackSignature } from '@/lib/callback-signature';
 import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
+import { tryHashMismatchRequeue } from '@/lib/hash-mismatch-retry';
 import {
   packageCallbackSchema,
   sanitizeErrorDetails,
@@ -74,6 +75,9 @@ export async function POST(request: NextRequest) {
     }
     if (data.runUrl) {
       updateData.github_run_url = data.runUrl;
+    }
+    if (data.installerSha256) {
+      updateData.installer_sha256 = data.installerSha256.toUpperCase();
     }
 
     // Handle deployed status
@@ -143,6 +147,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Stale-hash failures usually mean the upstream installer was replaced in
+    // place after the catalog synced. Refresh the manifest live from
+    // winget-pkgs and requeue the job once; when that succeeds the job is
+    // packaging again and the failure side effects below must not run.
+    let requeued = false;
+    if (data.status === 'failed' && data.errorCode === 'HASH_MISMATCH') {
+      requeued = await tryHashMismatchRequeue(db, updatedJob);
+    }
+
     // Side effects run only after the state transition succeeds, making callback
     // retries idempotent and preventing duplicate history rows.
     if (data.status === 'deployed' && data.intuneAppId) {
@@ -165,8 +178,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if this job belongs to a batch deployment item
-    if (data.status === 'deployed' || data.status === 'failed' || data.status === 'duplicate_skipped') {
+    // Check if this job belongs to a batch deployment item. A requeued job is
+    // no longer terminal - its retry run reports completion via a later callback.
+    if (!requeued && (data.status === 'deployed' || data.status === 'failed' || data.status === 'duplicate_skipped')) {
       const jobStatus = data.status === 'failed' ? 'failed' : 'completed';
       onJobCompleted(data.jobId, jobStatus, data.message).catch((err) => {
         console.error('[Callback] Batch orchestrator error:', err);
@@ -179,6 +193,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      requeued: requeued || undefined,
       job: updatedJob,
     });
   } catch (error) {

@@ -5,8 +5,9 @@
  *
  * Custom apps reuse the existing win32 packaging pipeline: a synthetic
  * winget-style ID (Custom.<Publisher>.<Name>) drives the registry marker
- * detection rule, and the SHA256 hash is optional (verification is skipped
- * downstream when empty).
+ * detection rule. A supplied SHA256 enables strict verification; when it is
+ * omitted, the packaging workflow calculates the hash from the downloaded
+ * installer and records it on the job.
  */
 
 import {
