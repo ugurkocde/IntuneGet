@@ -72,7 +72,15 @@ export async function fetchAvailableVersions(wingetId: string): Promise<string[]
     console.warn(`Supabase version lookup failed for ${wingetId}:`, error);
   }
 
-  // Fallback to GitHub API
+  return fetchAvailableVersionsLive(wingetId);
+}
+
+/**
+ * Fetch available versions straight from the winget-pkgs GitHub repo,
+ * skipping the Supabase catalog. Used when the catalog itself is suspected
+ * stale (e.g. requeueing a job after a HASH_MISMATCH).
+ */
+export async function fetchAvailableVersionsLive(wingetId: string): Promise<string[]> {
   const { basePath } = getManifestPaths(wingetId);
 
   try {
@@ -668,6 +676,22 @@ export async function getInstallers(
   }
 
   return manifest.Installers.map(normalizeInstaller);
+}
+
+/**
+ * Get installers for a package straight from winget-pkgs, bypassing the
+ * Supabase cache and the in-memory manifest cache. Used when cached installer
+ * data is known to be stale (e.g. requeueing a job after a HASH_MISMATCH).
+ */
+export async function getLiveInstallers(
+  wingetId: string,
+  version: string
+): Promise<NormalizedInstaller[]> {
+  const installerManifest = await fetchInstallerManifest(wingetId, version);
+  if (!installerManifest) {
+    return [];
+  }
+  return normalizeInstallers(installerManifest).map(normalizeInstaller);
 }
 
 /**

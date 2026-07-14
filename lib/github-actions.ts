@@ -17,6 +17,7 @@ export interface WorkflowInputs {
   architecture?: string;
   installerUrl: string;
   installerSha256: string;
+  hashValidationMode?: 'strict' | 'calculate';
   installerType: string;
   nestedInstallerType?: string; // Nested installer type for zip installers
   nestedInstallerPath?: string; // Relative path to the nested installer inside the zip
@@ -145,6 +146,7 @@ export async function triggerPackagingWorkflow(
         installer: {
           url: finalInstallerUrl,
           sha256: inputs.installerSha256,
+          hashValidationMode: inputs.hashValidationMode || 'strict',
           type: inputs.installerType,
           nestedInstallerType: inputs.nestedInstallerType || '',
           nestedInstallerPath: inputs.nestedInstallerPath || '',
