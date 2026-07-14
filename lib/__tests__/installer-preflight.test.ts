@@ -91,6 +91,7 @@ describe('installer dispatch preflight', () => {
       code: 'HASH_MISMATCH',
       retryable: false,
       actualSha256,
+      message: 'The publisher currently serves different bytes for Example.App 1.2.3. The deployment was quarantined before the packaging pipeline started.',
     });
     await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
       code: 'HASH_MISMATCH',
