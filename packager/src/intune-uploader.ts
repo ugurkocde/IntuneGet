@@ -202,7 +202,7 @@ export class IntuneUploader {
 
     // Step 1: Create Win32 LOB App (5%)
     await onProgress?.(5, 'Creating app in Intune...');
-    const app = await this.createWin32App(graphClient, job);
+    const app = await this.createWin32App(graphClient, job, encryptedContentPath);
     this.logger.info('Created Win32 LOB App', { appId: app.id });
 
     // Step 2: Create content version (10%)
@@ -333,7 +333,8 @@ export class IntuneUploader {
    */
   private async createWin32App(
     graphClient: GraphClient,
-    job: PackagingJob
+    job: PackagingJob,
+    encryptedContentPath: string
   ): Promise<{ id: string }> {
     const commands = this.buildCommandLines(job);
     const baseDescription = extractPackageDescription(
@@ -354,10 +355,18 @@ export class IntuneUploader {
       description,
       publisher: job.publisher,
       displayVersion: job.version,
+      // Required by Graph; matches the mobileAppContentFile.name set later in
+      // createContentFile so the app's declared file matches the uploaded one.
+      fileName: path.basename(encryptedContentPath),
       installCommandLine: commands.install,
       uninstallCommandLine: commands.uninstall,
       applicableArchitectures: this.mapArchitecture(job.architecture),
-      minimumSupportedWindowsRelease: 'v10_1903',
+      // Pre-Windows-11 releases (1607 through 21H1) are unambiguous and use the
+      // bare release label; a Windows10_/Windows11_ prefix is only needed from
+      // 21H2 onward, where the label is shared between both OS lines. "v10_1903"
+      // is the deprecated minimumSupportedOperatingSystem flag name and is
+      // rejected ("Unknown MinimumSupportedWindowsRelease") by this property.
+      minimumSupportedWindowsRelease: '1903',
       runAs32Bit: false,
       setupFilePath: 'Invoke-AppDeployToolkit.exe',
       installExperience: {
@@ -371,7 +380,13 @@ export class IntuneUploader {
         { returnCode: 1641, type: 'hardReboot' },
         { returnCode: 1618, type: 'retry' },
       ],
-      rules: [], // Will add detection/requirement rules later
+      // Graph validates at creation time that a Win32LobApp has at least one
+      // detection rule, so it must be included on the initial POST body - a
+      // later PATCH (as addDetectionRules used to do) is too late. Sending
+      // `rules` alongside `detectionRules` - even as an empty array - also
+      // trips a "Conflicting rules... between Rules and DetectionRules" 400,
+      // so `rules` must be omitted here entirely.
+      detectionRules: this.buildDetectionRules(job),
     };
 
     if (largeIcon) {
@@ -672,29 +687,21 @@ export class IntuneUploader {
   }
 
   /**
-   * Add detection rules (and requirement rules if present) to the app
+   * Add requirement rules to the app, if present (detection rules are already
+   * set on the initial create POST in createWin32App - Graph requires them
+   * there, not via a later PATCH).
    */
   private async addDetectionRules(
     graphClient: GraphClient,
     appId: string,
     job: PackagingJob
   ): Promise<void> {
-    const detectionRules = this.buildDetectionRules(job);
     const requirementRules = this.extractRequirementRules(job);
 
-    // Set detection rules using the detectionRules property (old format,
-    // compatible with the win32LobAppDetection type names used by buildDetectionRules)
-    if (detectionRules.length > 0) {
-      await graphClient.patch(`/deviceAppManagement/mobileApps/${appId}`, {
-        '@odata.type': '#microsoft.graph.win32LobApp',
-        detectionRules: detectionRules,
-      });
-    }
-
     // If requirement rules exist (for "Update Only" mode), read the current
-    // unified rules array (which now includes the detection rules set above,
-    // converted to win32LobAppRule format by Graph internally), append the
-    // requirement rules, and PATCH back the complete set.
+    // unified rules array (which already includes the detection rules set at
+    // creation, converted to win32LobAppRule format by Graph internally),
+    // append the requirement rules, and PATCH back the complete set.
     if (requirementRules.length > 0) {
       const app = await graphClient.get<{ rules?: unknown[] }>(
         `/deviceAppManagement/mobileApps/${appId}`
@@ -1222,7 +1229,7 @@ export class IntuneUploader {
 
         if (ruleObj.type === 'file') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppFileSystemDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppFileSystemDetection',
             path: ruleObj.path,
             fileOrFolderName: ruleObj.fileOrFolderName,
             check32BitOn64System: ruleObj.check32BitOn64System || false,
@@ -1232,7 +1239,7 @@ export class IntuneUploader {
           });
         } else if (ruleObj.type === 'registry') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppRegistryDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppRegistryDetection',
             keyPath: ruleObj.keyPath,
             valueName: ruleObj.valueName,
             check32BitOn64System: ruleObj.check32BitOn64System || false,
@@ -1242,14 +1249,14 @@ export class IntuneUploader {
           });
         } else if (ruleObj.type === 'msi') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppProductCodeDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppProductCodeDetection',
             productCode: ruleObj.productCode,
             productVersionOperator: ruleObj.productVersionOperator || 'notConfigured',
             productVersion: ruleObj.productVersion,
           });
         } else if (ruleObj.type === 'script') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppPowerShellScriptDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppPowerShellScriptDetection',
             scriptContent: Buffer.from(ruleObj.scriptContent as string).toString('base64'),
             enforceSignatureCheck: ruleObj.enforceSignatureCheck || false,
             runAs32Bit: ruleObj.runAs32Bit || false,
@@ -1261,7 +1268,7 @@ export class IntuneUploader {
     // Add default detection rule if none specified
     if (rules.length === 0) {
       rules.push({
-        '@odata.type': '#microsoft.graph.win32LobAppFileSystemDetectionRule',
+        '@odata.type': '#microsoft.graph.win32LobAppFileSystemDetection',
         path: '%ProgramFiles%',
         fileOrFolderName: job.display_name.replace(/[^a-zA-Z0-9]/g, ''),
         check32BitOn64System: false,
