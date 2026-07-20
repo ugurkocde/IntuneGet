@@ -74,8 +74,8 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
     "husky": "^9.1.7",
-    "postcss": "^8.5.19",
-    "tailwindcss": "^4.3.2",
+    "postcss": "^8.5.20",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
