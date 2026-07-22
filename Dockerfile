@@ -30,6 +30,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# The production container runs the standalone server directly and does not
+# need npm. Remove the package manager and its bundled dependencies from the
+# runtime image to reduce attack surface and avoid shipping vulnerable tools.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
