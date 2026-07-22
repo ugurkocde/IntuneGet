@@ -227,6 +227,7 @@ jobs:
                 winget_last_update: pkg.LastUpdate || null,
                 is_verified: true, // Source is authoritative (winget-pkgs)
                 is_winget_verified: true,
+                app_source: 'win32',
                 parent_winget_id: isVariant ? localeInfo.parentId : null,
                 locale_code: isVariant ? localeInfo.locale : null,
                 is_locale_variant: isVariant,

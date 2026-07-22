@@ -37,7 +37,6 @@ concurrency:
 
 env:
   NODE_VERSION: "26.5.0"
-  GITHUB_RAW_BASE: "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests"
 
 permissions:
   contents: read
@@ -90,7 +89,7 @@ jobs:
               total = requestedIds.length;
             } else {
               // Query count via Supabase REST API (no npm needed)
-              let url = `${SUPABASE_URL}/rest/v1/curated_apps?select=winget_id`;
+              let url = `${SUPABASE_URL}/rest/v1/curated_apps?select=winget_id&app_source=eq.win32&is_winget_verified=eq.true`;
               const res = await fetch(url, {
                 headers: {
                   'apikey': SUPABASE_KEY,
@@ -215,9 +214,9 @@ jobs:
         run: |
           node << 'EOF'
           const fs = require('fs');
-          const https = require('https');
           const { createClient } = require('@supabase/supabase-js');
           const yaml = require('yaml');
+          const resolverModule = import('./lib/winget-sync-resolution.mjs');
 
           const supabaseUrl = process.env.SUPABASE_URL;
           const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
@@ -228,176 +227,15 @@ jobs:
           }
 
           const supabase = createClient(supabaseUrl, supabaseKey);
-          const GITHUB_RAW_BASE = process.env.GITHUB_RAW_BASE;
           const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-          const MAX_MANIFEST_BYTES = 5 * 1024 * 1024;
-
-          function fetchUrl(url, retries = 5) {
-            return new Promise((resolve, reject) => {
-              const attempt = (retriesLeft) => {
-                const headers = { 'User-Agent': 'IntuneGet-Manifest-Sync' };
-                if (GITHUB_TOKEN && url.includes('api.github.com')) {
-                  headers['Authorization'] = `token ${GITHUB_TOKEN}`;
-                }
-                https.get(url, { headers }, (res) => {
-                  if (res.statusCode === 404) {
-                    resolve(null);
-                    return;
-                  }
-                  if (res.statusCode === 403 || res.statusCode === 429) {
-                    // Use Retry-After header, cap at 30s to avoid extremely long waits
-                    const retryAfter = Math.min(parseInt(res.headers['retry-after'] || '3', 10), 30);
-                    if (retriesLeft > 0) {
-                      res.resume();
-                      setTimeout(() => attempt(retriesLeft - 1), retryAfter * 1000);
-                      return;
-                    }
-                    // Drain response body before rejecting
-                    res.resume();
-                    reject(new Error(`HTTP ${res.statusCode} (rate limited, retries exhausted)`));
-                    return;
-                  }
-                  if (res.statusCode !== 200) {
-                    if (retriesLeft > 0 && res.statusCode >= 500) {
-                      res.resume();
-                      setTimeout(() => attempt(retriesLeft - 1), 1000);
-                      return;
-                    }
-                    res.resume();
-                    reject(new Error(`HTTP ${res.statusCode}`));
-                    return;
-                  }
-
-                  let data = '';
-                  let bytes = 0;
-                  res.on('data', chunk => {
-                    bytes += chunk.length;
-                    if (bytes > MAX_MANIFEST_BYTES) {
-                      res.destroy();
-                      reject(new Error(`Response exceeded ${MAX_MANIFEST_BYTES} bytes`));
-                      return;
-                    }
-                    data += chunk;
-                  });
-                  res.on('end', () => resolve(data));
-                }).on('error', (err) => {
-                  if (retriesLeft > 0) {
-                    setTimeout(() => attempt(retriesLeft - 1), 1000);
-                  } else {
-                    reject(err);
-                  }
-                });
-              };
-              attempt(retries);
-            });
-          }
-
-          function buildManifestUrl(wingetId, version, type = 'installer') {
-            const parts = wingetId.split('.');
-            if (parts.length < 2) return null;
-            const publisher = parts[0];
-            const namePath = parts.slice(1).join('/');
-            const firstLetter = publisher.charAt(0).toLowerCase();
-            return `${GITHUB_RAW_BASE}/${firstLetter}/${publisher}/${namePath}/${version}/${wingetId}.${type}.yaml`;
-          }
-
-          function buildVersionListUrl(wingetId) {
-            const parts = wingetId.split('.');
-            if (parts.length < 2) return null;
-            const publisher = parts[0];
-            const namePath = parts.slice(1).map(p => encodeURIComponent(p)).join('/');
-            const firstLetter = publisher.charAt(0).toLowerCase();
-            return `https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/${firstLetter}/${encodeURIComponent(publisher)}/${namePath}`;
-          }
-
-          let versionFetchErrors = 0;
-          async function fetchVersions(wingetId) {
-            const url = buildVersionListUrl(wingetId);
-            if (!url) return [];
-            try {
-              const response = await fetchUrl(url);
-              if (!response) return [];
-              const dirs = JSON.parse(response);
-              return dirs
-                .filter(d => d.type === 'dir')
-                .map(d => d.name)
-                .filter(name => /^\d/.test(name))
-                .filter(name => /^\d+[\d._-]*\d*$/.test(name) || name.includes('.'))
-                .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-            } catch (e) {
-              versionFetchErrors++;
-              // Log first few errors to help diagnose rate limiting
-              if (versionFetchErrors <= 5) {
-                console.error(`  [DEBUG] fetchVersions failed for ${wingetId}: ${e.message}`);
-              }
-              return [];
-            }
-          }
-
-          async function fetchInstallerManifest(wingetId, version) {
-            const url = buildManifestUrl(wingetId, version, 'installer');
-            if (!url) return null;
-            try {
-              const content = await fetchUrl(url);
-              if (!content) return null;
-              return yaml.parse(content);
-            } catch (e) {
-              return null;
-            }
-          }
-
-          function buildVersionManifestUrl(wingetId, version) {
-            const parts = wingetId.split('.');
-            if (parts.length < 2) return null;
-            const publisher = parts[0];
-            const namePath = parts.slice(1).join('/');
-            const firstLetter = publisher.charAt(0).toLowerCase();
-            return `${GITHUB_RAW_BASE}/${firstLetter}/${publisher}/${namePath}/${version}/${wingetId}.yaml`;
-          }
 
           function localeText(value) {
             return typeof value === 'string' ? value.trim() : '';
           }
 
-          function hasLocaleDescription(manifest) {
-            return Boolean(manifest && (localeText(manifest.ShortDescription) || localeText(manifest.Description)));
-          }
-
-          async function fetchYamlManifest(url) {
-            if (!url) return null;
-            try {
-              const content = await fetchUrl(url);
-              if (content) return yaml.parse(content);
-            } catch (e) {
-              // Treat as missing; fetchUrl already retried transient failures
-            }
-            return null;
-          }
-
-          // en-US is preferred, but when it is absent or carries no
-          // description the DefaultLocale declared in <id>.yaml is fetched
-          // instead (e.g. zh-CN-only packages). Singleton manifests carry
-          // the locale fields directly in <id>.yaml and are handled by the
-          // same lookup.
-          async function fetchLocaleManifest(wingetId, version) {
-            const enUS = await fetchYamlManifest(buildManifestUrl(wingetId, version, 'locale.en-US'));
-            if (hasLocaleDescription(enUS)) return enUS;
-
-            const versionManifest = await fetchYamlManifest(buildVersionManifestUrl(wingetId, version));
-            if (hasLocaleDescription(versionManifest)) return versionManifest;
-
-            const defaultLocale = localeText(versionManifest?.DefaultLocale);
-            if (defaultLocale && defaultLocale.toLowerCase() !== 'en-us') {
-              const defaultManifest = await fetchYamlManifest(buildManifestUrl(wingetId, version, `locale.${defaultLocale}`));
-              if (hasLocaleDescription(defaultManifest) || (defaultManifest && !enUS)) {
-                return defaultManifest;
-              }
-            }
-
-            return enUS;
-          }
-
           async function syncManifests() {
+            const { createWingetManifestClient, resolveWingetManifest } = await resolverModule;
+            const manifestClient = createWingetManifestClient({ token: GITHUB_TOKEN });
             const appIds = process.env.APP_IDS;
             const appOffset = parseInt(process.env.APP_OFFSET || '0', 10);
             const chunkSize = parseInt(process.env.APP_LIMIT || '2000', 10);
@@ -412,7 +250,8 @@ jobs:
               if (chunkSize === 0) {
                 console.log('No apps to sync in this shard.');
                 fs.writeFileSync('./sync-results.json', JSON.stringify({
-                  synced: 0, failed: 0, skipped: 0, newVersions: []
+                  synced: 0, failed: 0, skipped: 0, skippedExisting: 0,
+                  unavailable: 0, unavailableItems: [], failedItems: [], newVersions: []
                 }));
                 return;
               }
@@ -421,6 +260,8 @@ jobs:
               let query = supabase
                 .from('curated_apps')
                 .select('winget_id, latest_version, description')
+                .eq('app_source', 'win32')
+                .eq('is_winget_verified', true)
                 .order('popularity_rank', { ascending: true, nullsFirst: false })
                 .range(appOffset, appOffset + chunkSize - 1);
 
@@ -432,13 +273,15 @@ jobs:
               const { data, error } = await supabase
                 .from('curated_apps')
                 .select('winget_id, latest_version, description')
-                .in('winget_id', targetIds);
+                .in('winget_id', targetIds)
+                .eq('app_source', 'win32')
+                .eq('is_winget_verified', true);
               if (error) throw error;
               apps = data || [];
             }
 
-            // Versions come from the trusted package index stored in curated_apps,
-            // so GitHub API enumeration is only a fallback for legacy null rows.
+            // Try the stored catalog version first. GitHub API enumeration is
+            // reserved for missing or pruned versions and legacy null rows.
             const batchSize = 10;
             const batchDelay = 750;
             const delay = ms => new Promise(r => setTimeout(r, ms));
@@ -478,12 +321,11 @@ jobs:
 
             let synced = 0;
             let failed = 0;
-            let skipped = 0;
             let healed = 0;
             let failedApps = [];
-            let skippedNoVersions = 0;
+            let unavailable = 0;
+            let unavailableApps = [];
             let skippedExisting = 0;
-            let skippedNoManifest = 0;
             let newVersions = [];
             const startTime = Date.now();
 
@@ -492,18 +334,27 @@ jobs:
 
               await Promise.all(batch.map(async (app) => {
                 try {
-                  let latestVersion = app.latest_version;
-                  if (!latestVersion) {
-                    const versions = await fetchVersions(app.winget_id);
-                    latestVersion = versions[0];
-                  }
-                  if (!latestVersion) throw new Error('No latest version available from index or upstream');
-
                   if (syncMode === 'new_only' && previousVersionByApp.has(app.winget_id)) {
-                    skipped++;
                     skippedExisting++;
                     return;
                   }
+
+                  const resolution = await resolveWingetManifest({
+                    client: manifestClient,
+                    wingetId: app.winget_id,
+                    storedVersion: app.latest_version,
+                  });
+                  if (resolution.status === 'unavailable') {
+                    unavailable++;
+                    unavailableApps.push({
+                      id: app.winget_id,
+                      reason: resolution.reason || 'upstream_unavailable'
+                    });
+                    return;
+                  }
+
+                  const latestVersion = resolution.version;
+                  const installerManifest = resolution.manifest;
 
                   if (!forceRefresh && syncMode !== 'all') {
                     if (existingVersions.has(`${app.winget_id}\u0000${latestVersion}`)) {
@@ -513,7 +364,7 @@ jobs:
                       // next version bump. The DB-side null filter makes the
                       // write a no-op when a description appeared meanwhile.
                       if (!localeText(app.description)) {
-                        const healManifest = await fetchLocaleManifest(app.winget_id, latestVersion);
+                        const healManifest = await manifestClient.fetchLocaleManifest(app.winget_id, latestVersion);
                         const healDescription = localeText(healManifest?.ShortDescription) ||
                                                 localeText(healManifest?.Description);
                         if (healDescription) {
@@ -525,22 +376,12 @@ jobs:
                           if (!healError) healed++;
                         }
                       }
-                      skipped++;
                       skippedExisting++;
                       return;
                     }
                   }
 
-                  const installerManifest = await fetchInstallerManifest(app.winget_id, latestVersion);
-
-                  if (!installerManifest) {
-                    failed++;
-                    skippedNoManifest++;
-                    failedApps.push({ id: app.winget_id, reason: 'no installer manifest' });
-                    return;
-                  }
-
-                  const localeManifest = await fetchLocaleManifest(app.winget_id, latestVersion);
+                  const localeManifest = await manifestClient.fetchLocaleManifest(app.winget_id, latestVersion);
 
                   const rawInstallers = installerManifest.Installers || [];
                   const defaultInstaller = rawInstallers[0] || {};
@@ -641,7 +482,7 @@ jobs:
               if ((i / batchSize) % 5 === 0 || processed >= apps.length) {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const rate = (processed / (Date.now() - startTime) * 1000).toFixed(1);
-                console.log(`  [${elapsed}s] ${processed}/${apps.length} | synced: ${synced} | failed: ${failed} | skipped: ${skipped} (no-versions: ${skippedNoVersions}, existing: ${skippedExisting}, no-manifest: ${skippedNoManifest}) | ${rate} apps/s`);
+                console.log(`  [${elapsed}s] ${processed}/${apps.length} | synced: ${synced} | unavailable: ${unavailable} | failed: ${failed} | existing: ${skippedExisting} | ${rate} apps/s`);
               }
             }
 
@@ -653,12 +494,20 @@ jobs:
             console.log(`  Duration:    ${totalTime}s`);
             console.log(`  Synced:      ${synced}`);
             console.log(`  Failed:      ${failed}`);
-            console.log(`  Skipped:     ${skipped}`);
+            console.log(`  Unavailable: ${unavailable}`);
+            console.log(`  Existing:    ${skippedExisting}`);
             console.log(`  Healed descriptions: ${healed}`);
-            console.log(`    - No versions found: ${skippedNoVersions}`);
-            console.log(`    - Already up to date: ${skippedExisting}`);
-            console.log(`    - No manifest found:  ${skippedNoManifest}`);
             console.log(`========================================`);
+
+            if (unavailableApps.length > 0) {
+              console.log(`\nUnavailable upstream packages (showing first 30):`);
+              for (const item of unavailableApps.slice(0, 30)) {
+                console.log(`  - ${item.id}: ${item.reason}`);
+              }
+              if (unavailableApps.length > 30) {
+                console.log(`  ... and ${unavailableApps.length - 30} more`);
+              }
+            }
 
             if (failedApps.length > 0) {
               console.log(`\nFailed apps (showing first 30):`);
@@ -681,7 +530,15 @@ jobs:
             }
 
             fs.writeFileSync('./sync-results.json', JSON.stringify({
-              synced, failed, skipped, healed, newVersions
+              synced,
+              failed,
+              skipped: skippedExisting,
+              skippedExisting,
+              unavailable,
+              unavailableItems: unavailableApps,
+              failedItems: failedApps,
+              healed,
+              newVersions
             }));
           }
 
@@ -693,7 +550,10 @@ jobs:
             const fs = require('fs');
             if (!require('fs').existsSync('./sync-results.json')) {
               fs.writeFileSync('./sync-results.json', JSON.stringify({
-                synced: 0, failed: 1, skipped: 0, newVersions: []
+                synced: 0, failed: 1, skipped: 0, skippedExisting: 0,
+                unavailable: 0, unavailableItems: [],
+                failedItems: [{ id: 'shard', reason: err.message || String(err) }],
+                newVersions: []
               }));
             }
             process.exit(1);
@@ -749,58 +609,79 @@ jobs:
           const fs = require('fs');
           const path = require('path');
 
-          const resultsDir = './results';
-          const expectedShards = Number.parseInt(process.env.EXPECTED_SHARDS || '0', 10);
-          let totalSynced = 0, totalFailed = 0, totalSkipped = 0, totalHealed = 0;
-          let allNewVersions = [];
-          let shardsFound = 0;
+          async function main() {
+            const { classifyWingetSyncRun } = await import('./lib/winget-sync-resolution.mjs');
+            const resultsDir = './results';
+            const expectedShards = Number.parseInt(process.env.EXPECTED_SHARDS || '0', 10);
+            let totalSynced = 0, totalFailed = 0, totalSkippedExisting = 0;
+            let totalUnavailable = 0, totalHealed = 0, shardsFound = 0;
+            let allNewVersions = [], unavailableItems = [], failedItems = [];
 
-          if (fs.existsSync(resultsDir)) {
-            const dirs = fs.readdirSync(resultsDir);
-            for (const dir of dirs) {
-              const filePath = path.join(resultsDir, dir, 'sync-results.json');
-              if (fs.existsSync(filePath)) {
-                const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                totalSynced += data.synced || 0;
-                totalFailed += data.failed || 0;
-                totalSkipped += data.skipped || 0;
-                totalHealed += data.healed || 0;
-                allNewVersions = allNewVersions.concat(data.newVersions || []);
-                shardsFound++;
+            if (fs.existsSync(resultsDir)) {
+              const dirs = fs.readdirSync(resultsDir);
+              for (const dir of dirs) {
+                const filePath = path.join(resultsDir, dir, 'sync-results.json');
+                if (fs.existsSync(filePath)) {
+                  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                  totalSynced += data.synced || 0;
+                  totalFailed += data.failed || 0;
+                  totalSkippedExisting += data.skippedExisting ?? data.skipped ?? 0;
+                  totalUnavailable += data.unavailable || 0;
+                  totalHealed += data.healed || 0;
+                  allNewVersions = allNewVersions.concat(data.newVersions || []);
+                  unavailableItems = unavailableItems.concat(data.unavailableItems || []);
+                  failedItems = failedItems.concat(data.failedItems || []);
+                  shardsFound++;
+                }
               }
             }
-          }
 
-          console.log(`\n========================================`);
-          console.log(`  Sync Complete (${shardsFound} shards)`);
-          console.log(`========================================`);
-          console.log(`  Synced:      ${totalSynced}`);
-          console.log(`  Failed:      ${totalFailed}`);
-          console.log(`  Skipped:     ${totalSkipped}`);
-          console.log(`  Healed descriptions: ${totalHealed}`);
-          console.log(`  New versions: ${allNewVersions.length}`);
-          console.log(`========================================`);
+            const complete = expectedShards > 0 && shardsFound === expectedShards;
+            if (!complete) {
+              totalFailed += Math.max(1, expectedShards - shardsFound);
+              failedItems.push({ id: 'shards', reason: `Expected ${expectedShards}, found ${shardsFound}` });
+              console.error(`Incomplete sync: expected ${expectedShards} shard artifacts, found ${shardsFound}`);
+            }
+            const classification = classifyWingetSyncRun({
+              complete,
+              failed: totalFailed,
+              unavailable: totalUnavailable,
+            });
 
-          fs.writeFileSync('./aggregate-results.json', JSON.stringify({
-            synced: totalSynced,
-            failed: totalFailed,
-            skipped: totalSkipped,
-            healed: totalHealed,
-            newVersions: allNewVersions
-          }));
+            console.log(`\n========================================`);
+            console.log(`  Sync Complete (${shardsFound} shards)`);
+            console.log(`========================================`);
+            console.log(`  Synced:      ${totalSynced}`);
+            console.log(`  Failed:      ${totalFailed}`);
+            console.log(`  Unavailable: ${totalUnavailable}`);
+            console.log(`  Existing:    ${totalSkippedExisting}`);
+            console.log(`  Healed descriptions: ${totalHealed}`);
+            console.log(`  New versions: ${allNewVersions.length}`);
+            console.log(`  Status:      ${classification.status}`);
+            console.log(`========================================`);
 
-          const complete = expectedShards > 0 && shardsFound === expectedShards;
-          if (!complete) {
-            totalFailed += Math.max(1, expectedShards - shardsFound);
-            console.error(`Incomplete sync: expected ${expectedShards} shard artifacts, found ${shardsFound}`);
-          }
+            fs.writeFileSync('./aggregate-results.json', JSON.stringify({
+              synced: totalSynced,
+              failed: totalFailed,
+              skipped: totalSkippedExisting,
+              skippedExisting: totalSkippedExisting,
+              unavailable: totalUnavailable,
+              unavailableItems,
+              failedItems,
+              healed: totalHealed,
+              newVersions: allNewVersions,
+              complete,
+              status: classification.status,
+            }));
 
-          // Update sync status in Supabase
-          const SUPABASE_URL = process.env.SUPABASE_URL;
-          const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-          const syncMode = process.env.SYNC_MODE || 'all';
-
-          async function updateStatus() {
+            const SUPABASE_URL = process.env.SUPABASE_URL;
+            const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+            const syncMode = process.env.SYNC_MODE || 'all';
+            const errorMessage = totalFailed > 0
+              ? `${totalFailed} operational sync failures`
+              : totalUnavailable > 0
+                ? `${totalUnavailable} upstream packages unavailable`
+                : null;
             const response = await fetch(`${SUPABASE_URL}/rest/v1/curated_sync_status`, {
               method: 'POST',
               headers: {
@@ -812,14 +693,16 @@ jobs:
               body: JSON.stringify({
                 id: 'sync-manifests',
                 last_run_completed_at: new Date().toISOString(),
-                last_run_status: complete && totalFailed === 0 ? 'success' : (totalSynced > 0 ? 'partial' : 'failed'),
+                last_run_status: classification.status,
                 items_processed: totalSynced,
-                error_message: totalFailed > 0 ? `${totalFailed} apps failed to sync` : null,
+                error_message: errorMessage,
                 metadata: {
                   mode: syncMode,
                   synced: totalSynced,
                   failed: totalFailed,
-                  skipped: totalSkipped,
+                  unavailable: totalUnavailable,
+                  unavailable_samples: unavailableItems.slice(0, 20),
+                  skipped_existing: totalSkippedExisting,
                   shards: shardsFound,
                   expected_shards: expectedShards,
                   new_versions: allNewVersions.length
@@ -830,33 +713,49 @@ jobs:
             if (!response.ok) {
               throw new Error(`Sync status update failed: ${response.status} ${await response.text()}`);
             }
+            if (classification.shouldFail) process.exit(1);
           }
 
-          updateStatus()
-            .then(() => {
-              if (!complete || totalFailed > 0) process.exit(1);
-            })
-            .catch(err => {
-              console.error('Failed to update sync status:', err);
-              process.exit(1);
-            });
+          main().catch(err => {
+            console.error('Failed to aggregate sync results:', err);
+            process.exit(1);
+          });
           SUMMARYEOF
 
       - name: Create summary
+        if: always()
         run: |
           if [ -f aggregate-results.json ]; then
             SYNCED=$(jq -r '.synced' aggregate-results.json)
             FAILED=$(jq -r '.failed' aggregate-results.json)
-            SKIPPED=$(jq -r '.skipped' aggregate-results.json)
+            UNAVAILABLE=$(jq -r '.unavailable' aggregate-results.json)
+            SKIPPED=$(jq -r '.skippedExisting' aggregate-results.json)
+            STATUS=$(jq -r '.status' aggregate-results.json)
             NEW_VERSIONS=$(jq -r '.newVersions | length' aggregate-results.json)
 
             echo "## Manifest Sync Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "- **Mode:** ${{ github.event.inputs.mode || 'all' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** $STATUS" >> $GITHUB_STEP_SUMMARY
             echo "- **Synced:** $SYNCED" >> $GITHUB_STEP_SUMMARY
             echo "- **Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "- **Skipped:** $SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Unavailable upstream:** $UNAVAILABLE" >> $GITHUB_STEP_SUMMARY
+            echo "- **Already up to date:** $SKIPPED" >> $GITHUB_STEP_SUMMARY
             echo "- **New versions detected:** $NEW_VERSIONS" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$UNAVAILABLE" -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Unavailable Upstream (first 20)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              jq -r '.unavailableItems[:20][] | "- **\(.id):** \(.reason)"' aggregate-results.json >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "$FAILED" -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Operational Failures (first 20)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              jq -r '.failedItems[:20][] | "- **\(.id):** \(.reason)"' aggregate-results.json >> $GITHUB_STEP_SUMMARY
+            fi
 
             if [ "$NEW_VERSIONS" -gt 0 ]; then
               echo "" >> $GITHUB_STEP_SUMMARY
