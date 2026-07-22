@@ -1,21 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import YAML from 'yaml';
+import {
+  classifyWingetSyncRun,
+  createWingetManifestClient,
+  resolveWingetManifest,
+} from '@/lib/winget-sync-resolution.mjs';
 import { selectAppsToSync } from './select-apps';
 
-const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests';
-const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
 const BATCH_SIZE = 10;
-
-function githubHeaders(accept: string): Record<string, string> {
-  const headers: Record<string, string> = {
-    'User-Agent': 'IntuneGet',
-    Accept: accept,
-  };
-  const token = process.env.GITHUB_PAT;
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
+const SYNC_STATUS_ID = 'sync-manifests-hot';
 
 interface VersionHistoryRecord {
   winget_id: string;
@@ -56,16 +49,21 @@ export async function GET(request: Request) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const manifestClient = createWingetManifestClient({
+    token: process.env.GITHUB_PAT,
+    maxRetries: 2,
+  });
 
   try {
     // Mark sync as started
-    await supabase.from('curated_sync_status').upsert({
-      id: 'sync-manifests',
+    const { error: startStatusError } = await supabase.from('curated_sync_status').upsert({
+      id: SYNC_STATUS_ID,
       last_run_started_at: new Date().toISOString(),
       last_run_status: 'running',
       error_message: null,
       updated_at: new Date().toISOString(),
     });
+    if (startStatusError) throw startStatusError;
 
     // Get curated apps that need syncing (top ranked apps plus apps that
     // have never been synced, which NULL popularity_rank would push past
@@ -74,18 +72,24 @@ export async function GET(request: Request) {
 
     if (curatedApps.length === 0) {
       // No curated apps yet, update sync status
-      await supabase.from('curated_sync_status').upsert({
-        id: 'sync-manifests',
+      const { error: emptyStatusError } = await supabase.from('curated_sync_status').upsert({
+        id: SYNC_STATUS_ID,
         last_run_completed_at: new Date().toISOString(),
         last_run_status: 'success',
         items_processed: 0,
         error_message: 'No curated apps to sync',
         updated_at: new Date().toISOString(),
       });
+      if (emptyStatusError) throw emptyStatusError;
 
       return NextResponse.json({
         success: true,
         count: 0,
+        synced: 0,
+        failed: 0,
+        skipped: 0,
+        unavailable: 0,
+        newVersions: 0,
         message: 'No curated apps to sync. Run build-app-list workflow first.',
       });
     }
@@ -93,6 +97,9 @@ export async function GET(request: Request) {
     let synced = 0;
     let failed = 0;
     let skipped = 0;
+    let unavailable = 0;
+    const unavailableItems: Array<{ id: string; reason: string }> = [];
+    const failedItems: Array<{ id: string; reason: string }> = [];
     const newVersions: { wingetId: string; oldVersion: string; newVersion: string }[] = [];
 
     // Process apps in batches
@@ -104,25 +111,26 @@ export async function GET(request: Request) {
           try {
             const { winget_id, latest_version } = app;
 
-            // Fetch available versions from GitHub
-            const versions = await fetchVersions(winget_id);
-            if (versions.length === 0) {
-              skipped++;
+            const resolution = await resolveWingetManifest({
+              client: manifestClient,
+              wingetId: winget_id,
+              storedVersion: latest_version,
+              preferLive: true,
+            });
+            if (resolution.status === 'unavailable') {
+              unavailable++;
+              unavailableItems.push({
+                id: winget_id,
+                reason: resolution.reason || 'upstream_unavailable',
+              });
               return;
             }
 
-            const latestVersion = versions[0];
-
-            // Always refresh the current version. Publishers and winget-pkgs
-            // can correct a URL or SHA256 without changing the version.
-            const installerManifest = await fetchInstallerManifest(winget_id, latestVersion);
-            if (!installerManifest) {
-              failed++;
-              return;
-            }
+            const latestVersion = resolution.version;
+            const installerManifest = resolution.manifest;
 
             // Fetch locale manifest for metadata
-            const localeManifest = await fetchLocaleManifest(winget_id, latestVersion);
+            const localeManifest = await manifestClient.fetchLocaleManifest(winget_id, latestVersion);
 
             // Extract installer data
             const installers = (installerManifest.Installers as Array<Record<string, unknown>>) || [];
@@ -153,8 +161,7 @@ export async function GET(request: Request) {
               .upsert(versionRecord, { onConflict: 'winget_id,version' });
 
             if (vhError) {
-              failed++;
-              return;
+              throw new Error(`version_history upsert failed: ${vhError.message}`);
             }
 
             // Update curated_apps with latest version and metadata.
@@ -180,10 +187,13 @@ export async function GET(request: Request) {
             const license = localeText(localeManifest?.License);
             if (license) appUpdate.license = license;
 
-            await supabase
+            const { error: appUpdateError } = await supabase
               .from('curated_apps')
               .update(appUpdate)
               .eq('winget_id', winget_id);
+            if (appUpdateError) {
+              throw new Error(`curated_apps update failed: ${appUpdateError.message}`);
+            }
 
             // Track new versions
             if (latest_version && latest_version !== latestVersion) {
@@ -195,8 +205,12 @@ export async function GET(request: Request) {
             }
 
             synced++;
-          } catch {
+          } catch (error) {
             failed++;
+            failedItems.push({
+              id: app.winget_id,
+              reason: error instanceof Error ? error.message : String(error),
+            });
           }
         })
       );
@@ -207,36 +221,47 @@ export async function GET(request: Request) {
       }
     }
 
-    // Update sync status
-    await supabase.from('curated_sync_status').upsert({
-      id: 'sync-manifests',
+    const classification = classifyWingetSyncRun({ complete: true, failed, unavailable });
+    const errorMessage = failed > 0
+      ? `${failed} operational sync failures`
+      : unavailable > 0
+        ? `${unavailable} upstream packages unavailable`
+        : null;
+
+    const { error: completionStatusError } = await supabase.from('curated_sync_status').upsert({
+      id: SYNC_STATUS_ID,
       last_run_completed_at: new Date().toISOString(),
-      last_run_status: failed > 0 && synced === 0 ? 'failed' : 'success',
+      last_run_status: classification.status,
       items_processed: synced,
-      error_message: failed > 0 ? `${failed} apps failed to sync` : null,
+      error_message: errorMessage,
       metadata: {
         synced,
         failed,
         skipped,
+        unavailable,
+        unavailable_samples: unavailableItems.slice(0, 20),
+        failed_samples: failedItems.slice(0, 20),
         new_versions: newVersions.length,
       },
       updated_at: new Date().toISOString(),
     });
+    if (completionStatusError) throw completionStatusError;
 
     return NextResponse.json({
-      success: true,
+      success: !classification.shouldFail,
       synced,
       failed,
       skipped,
+      unavailable,
       newVersions: newVersions.length,
-      message: `Synced ${synced} apps, ${failed} failed, ${skipped} skipped`,
-    });
+      message: `Synced ${synced} apps, ${unavailable} unavailable, ${failed} failed, ${skipped} skipped`,
+    }, { status: classification.shouldFail ? 500 : 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Update sync status to failed
     await supabase.from('curated_sync_status').upsert({
-      id: 'sync-manifests',
+      id: SYNC_STATUS_ID,
       last_run_status: 'failed',
       error_message: errorMessage,
       updated_at: new Date().toISOString(),
@@ -246,154 +271,8 @@ export async function GET(request: Request) {
   }
 }
 
-// Helper functions
-
-/**
- * Build the manifest directory path for a winget ID. Every dot-separated
- * segment of the ID is a directory in winget-pkgs (e.g. MongoDB.Compass.Full
- * -> m/MongoDB/Compass/Full), so multi-part IDs must not keep their dots.
- */
-function manifestBasePath(wingetId: string): string | null {
-  const parts = wingetId.split('.');
-  if (parts.length < 2) return null;
-  const firstLetter = parts[0].charAt(0).toLowerCase();
-  return `${firstLetter}/${parts.join('/')}`;
-}
-
 function localeText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function hasLocaleDescription(manifest: Record<string, unknown> | null): boolean {
-  return Boolean(
-    manifest &&
-      (localeText(manifest.ShortDescription) || localeText(manifest.Description))
-  );
-}
-
-async function fetchVersions(wingetId: string): Promise<string[]> {
-  const basePath = manifestBasePath(wingetId);
-  if (!basePath) return [];
-
-  try {
-    const response = await fetch(
-      `${GITHUB_API_BASE}/${basePath}`,
-      {
-        headers: githubHeaders('application/vnd.github.v3+json'),
-      }
-    );
-
-    if (!response.ok) return [];
-
-    const dirs = await response.json();
-    // Keep only version-like directory names (same filter as the
-    // sync-manifests GitHub Actions workflow) so non-version directories
-    // such as ".validation" or named subfolders are never picked as latest
-    return dirs
-      .filter((d: { type: string }) => d.type === 'dir')
-      .map((d: { name: string }) => d.name)
-      .filter((name: string) => /^\d/.test(name))
-      .filter((name: string) => /^\d+[\d._-]*\d*$/.test(name) || name.includes('.'))
-      .sort((a: string, b: string) =>
-        b.localeCompare(a, undefined, { numeric: true })
-      );
-  } catch {
-    return [];
-  }
-}
-
-async function fetchInstallerManifest(
-  wingetId: string,
-  version: string
-): Promise<Record<string, unknown> | null> {
-  const basePath = manifestBasePath(wingetId);
-  if (!basePath) return null;
-
-  const url = `${GITHUB_RAW_BASE}/${basePath}/${version}/${wingetId}.installer.yaml`;
-
-  try {
-    const response = await fetch(url, {
-      headers: githubHeaders('text/plain'),
-    });
-
-    if (!response.ok) return null;
-
-    const yamlContent = await response.text();
-    return YAML.parse(yamlContent);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fetch and parse a manifest YAML with one retry on transient failures
- * (network errors, 429/5xx). 404 means the file does not exist and is
- * not retried.
- */
-async function fetchManifestYaml(
-  url: string
-): Promise<Record<string, unknown> | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await fetch(url, {
-        headers: githubHeaders('text/plain'),
-      });
-
-      if (response.status === 404) return null;
-
-      if (response.ok) {
-        return YAML.parse(await response.text());
-      }
-    } catch {
-      // Network or parse error: fall through to the retry
-    }
-
-    if (attempt === 0) {
-      // Short backoff: this route runs many fetches inside Vercel's
-      // maxDuration budget, so retries must stay cheap.
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-
-  return null;
-}
-
-/**
- * Resolve the locale manifest for a package version. en-US is preferred,
- * but when it is absent or carries no description (packages whose
- * DefaultLocale is not en-US name their locale file accordingly, e.g.
- * <id>.locale.zh-CN.yaml), the DefaultLocale declared in <id>.yaml is
- * fetched instead. Singleton manifests carry the locale fields directly
- * in <id>.yaml and are handled by the same lookup.
- */
-async function fetchLocaleManifest(
-  wingetId: string,
-  version: string
-): Promise<Record<string, unknown> | null> {
-  const basePath = manifestBasePath(wingetId);
-  if (!basePath) return null;
-
-  const versionDir = `${GITHUB_RAW_BASE}/${basePath}/${version}`;
-
-  const enUS = await fetchManifestYaml(
-    `${versionDir}/${wingetId}.locale.en-US.yaml`
-  );
-  if (hasLocaleDescription(enUS)) return enUS;
-
-  const versionManifest = await fetchManifestYaml(`${versionDir}/${wingetId}.yaml`);
-  if (hasLocaleDescription(versionManifest)) return versionManifest;
-
-  const defaultLocale = localeText(versionManifest?.DefaultLocale);
-  if (defaultLocale && defaultLocale.toLowerCase() !== 'en-us') {
-    const defaultManifest = await fetchManifestYaml(
-      `${versionDir}/${wingetId}.locale.${defaultLocale}.yaml`
-    );
-    if (hasLocaleDescription(defaultManifest) || (defaultManifest && !enUS)) {
-      return defaultManifest;
-    }
-  }
-
-  return enUS;
 }
 
 // Allow up to 5 minutes for the sync to complete

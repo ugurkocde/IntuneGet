@@ -26,6 +26,8 @@ export async function selectAppsToSync(
     .from('curated_apps')
     .select('winget_id, latest_version, description')
     .eq('is_verified', true)
+    .eq('is_winget_verified', true)
+    .eq('app_source', 'win32')
     .order('popularity_rank', { ascending: true })
     .limit(RANKED_SYNC_LIMIT);
 
@@ -38,6 +40,8 @@ export async function selectAppsToSync(
     .from('curated_apps')
     .select('winget_id, latest_version, description')
     .eq('is_verified', true)
+    .eq('is_winget_verified', true)
+    .eq('app_source', 'win32')
     .is('latest_version', null)
     .order('created_at', { ascending: false })
     .limit(UNSYNCED_SYNC_LIMIT);
