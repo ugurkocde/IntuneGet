@@ -8,6 +8,7 @@ import { PackagerConfig } from './config.js';
 import { PackagingJob } from './job-poller.js';
 import { GraphClient } from './graph-client.js';
 import { createLogger, Logger } from './logger.js';
+import { fetchWithProxy } from './fetch-with-proxy.js';
 import {
   findDuplicateIntuneApp,
   INTUNE_APP_SOURCE_MARKER,
@@ -400,8 +401,7 @@ export class IntuneUploader {
     }
 
     try {
-      const fetch = (await import('node-fetch')).default;
-      const response = await fetch(iconUrl);
+      const response = await fetchWithProxy(iconUrl);
 
       if (!response.ok) {
         this.logger.warn('Failed to download app icon, creating app without icon', {
@@ -529,7 +529,6 @@ export class IntuneUploader {
     azureStorageUri: string,
     onProgress?: (percent: number) => Promise<void>
   ): Promise<void> {
-    const fetch = (await import('node-fetch')).default;
     const fileHandle = await fs.promises.open(filePath, 'r');
     const stats = await fileHandle.stat();
     const fileSize = stats.size;
@@ -552,7 +551,7 @@ export class IntuneUploader {
 
         // Upload block
         const blockUrl = `${azureStorageUri}&comp=block&blockid=${encodeURIComponent(blockId)}`;
-        const response = await fetch(blockUrl, {
+        const response = await fetchWithProxy(blockUrl, {
           method: 'PUT',
           headers: {
             'Content-Length': chunk.length.toString(),
@@ -572,7 +571,7 @@ export class IntuneUploader {
       // Commit blocks
       const blockListXml = this.createBlockListXml(blockIds);
       const commitUrl = `${azureStorageUri}&comp=blocklist`;
-      const commitResponse = await fetch(commitUrl, {
+      const commitResponse = await fetchWithProxy(commitUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/xml',

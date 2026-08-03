@@ -7,6 +7,7 @@ import { ConfidentialClientApplication } from '@azure/msal-node';
 import { ManagedIdentityCredential, type TokenCredential } from '@azure/identity';
 import { PackagerConfig } from './config.js';
 import { createLogger, Logger } from './logger.js';
+import { fetchWithProxy } from './fetch-with-proxy.js';
 
 const GRAPH_ENDPOINT = 'https://graph.microsoft.com/beta';
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
@@ -97,8 +98,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch(url, {
+    const response = await fetchWithProxy(url, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -126,8 +126,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch(url, {
+    const response = await fetchWithProxy(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -162,8 +161,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch(url, {
+    const response = await fetchWithProxy(url, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -198,8 +196,7 @@ export class GraphClient {
     const token = await this.getAccessToken();
     const url = `${GRAPH_ENDPOINT}${path}`;
 
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch(url, {
+    const response = await fetchWithProxy(url, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`,
