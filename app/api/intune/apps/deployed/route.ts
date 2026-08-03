@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
-
-interface UploadHistoryRow {
-  winget_id: string;
-}
-
-interface TenantJobRow {
-  winget_id: string;
-  user_email: string | null;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,42 +14,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
-    const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+    // MSP tenant resolution requires Supabase; fall back to the token's own
+    // tenant in Supabase-less SQLite installs (matches the pattern in
+    // unmanaged-apps/route.ts). The deployment lookups below go through the
+    // db abstraction, which already supports both SQLite and Supabase.
+    let tenantId = user.tenantId;
+    if (isSupabaseConfigured()) {
+      const supabase = createServerClient();
+      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
-      supabase,
-      userId: user.userId,
-      tokenTenantId: user.tenantId,
-      requestedTenantId: mspTenantId,
-    });
+      const tenantResolution = await resolveTargetTenantId({
+        supabase,
+        userId: user.userId,
+        tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
 
-    if (tenantResolution.errorResponse) {
-      return tenantResolution.errorResponse;
+      if (tenantResolution.errorResponse) {
+        return tenantResolution.errorResponse;
+      }
+
+      tenantId = tenantResolution.tenantId;
     }
+
+    const db = getDatabase();
 
     // scope=tenant returns every user's IntuneGet deployments in the tenant
     // (with attribution) so the cart can warn about apps a teammate already
     // deployed. packaging_jobs carries user_email; upload_history does not.
     const scope = new URL(request.url).searchParams.get('scope');
     if (scope === 'tenant') {
-      const { data, error } = await supabase
-        .from('packaging_jobs')
-        .select('winget_id, user_email')
-        .eq('tenant_id', tenantResolution.tenantId)
-        .eq('status', 'deployed');
-
-      if (error) {
-        return NextResponse.json(
-          { error: 'Failed to fetch tenant deployed packages' },
-          { status: 500 }
-        );
-      }
+      const tenantJobs = await db.jobs.getByTenantId(tenantId, 500);
 
       const byWingetId = new Map<string, string | null>();
-      for (const row of (data || []) as TenantJobRow[]) {
-        if (row.winget_id && !byWingetId.has(row.winget_id)) {
-          byWingetId.set(row.winget_id, row.user_email);
+      for (const job of tenantJobs) {
+        if (job.status === 'deployed' && job.winget_id && !byWingetId.has(job.winget_id)) {
+          byWingetId.set(job.winget_id, job.user_email);
         }
       }
 
@@ -74,22 +66,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const { data, error } = await supabase
-      .from('upload_history')
-      .select('winget_id')
-      .eq('user_id', user.userId)
-      .eq('intune_tenant_id', tenantResolution.tenantId);
-
-    if (error) {
-      return NextResponse.json(
-        { error: 'Failed to fetch deployed packages' },
-        { status: 500 }
-      );
-    }
-
+    const history = await db.uploadHistory.getByUserId(user.userId, 500);
     const deployedWingetIds = Array.from(
       new Set(
-        ((data || []) as UploadHistoryRow[])
+        history
+          .filter((row) => row.intune_tenant_id === tenantId)
           .map((row) => row.winget_id)
           .filter(Boolean)
       )

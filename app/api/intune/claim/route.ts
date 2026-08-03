@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { ClaimAppRequest, ClaimedApp } from '@/types/unmanaged';
@@ -71,6 +71,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    // Claim tracking (claimed_apps/user_profiles) has no SQLite equivalent -
+    // it's a Supabase-only feature, unlike the discovered-apps scan itself
+    // (unmanaged-apps/route.ts), which runs live and cache-less without
+    // Supabase. Report unavailable rather than crash; the caller (POST
+    // handler in use-unmanaged-apps.ts) already treats a >=500 response here
+    // as non-fatal and still adds the app to the cart.
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { error: 'Claim tracking is not available without Supabase configured.' },
+        { status: 503 }
       );
     }
 
@@ -183,6 +196,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Claim tracking has no SQLite equivalent (Supabase-only feature).
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ claims: [] });
+    }
+
     const supabase = createServerClient();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
@@ -254,6 +272,14 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing claim ID' },
         { status: 400 }
+      );
+    }
+
+    // Claim tracking has no SQLite equivalent (Supabase-only feature).
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { error: 'Claim tracking is not available without Supabase configured.' },
+        { status: 503 }
       );
     }
 
