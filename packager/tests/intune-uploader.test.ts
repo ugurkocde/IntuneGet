@@ -66,13 +66,18 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
       fetchLargeIcon: (job: PackagingJob) => Promise<unknown>;
       createWin32App: (
         graphClient: typeof graphClientStub,
-        job: PackagingJob
+        job: PackagingJob,
+        packageFileName: string
       ) => Promise<{ id: string }>;
     };
     vi.spyOn(uploaderInternal, 'fetchLargeIcon').mockResolvedValue(null);
 
     const job = makeJob();
-    const result = await uploaderInternal.createWin32App(graphClientStub, job);
+    const result = await uploaderInternal.createWin32App(
+      graphClientStub,
+      job,
+      'Invoke-AppDeployToolkit.intunewin'
+    );
 
     expect(result.id).toBe('app-1');
     expect(postMock).toHaveBeenCalledTimes(1);
@@ -98,6 +103,38 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
     });
   });
 
+  it('sends the package file name as fileName, separate from setupFilePath', async () => {
+    // Regression: Graph rejects the create call with "FileName for Win32 LOB
+    // app cannot be empty" when the body carries setupFilePath but no
+    // fileName. The two are different fields - fileName names the uploaded
+    // .intunewin, setupFilePath the entry point inside it.
+    const postMock = vi.fn().mockResolvedValue({ id: 'app-5' });
+    const graphClientStub = { post: postMock };
+
+    const uploader = new IntuneUploader(makeConfig());
+    const uploaderInternal = uploader as unknown as {
+      fetchLargeIcon: (job: PackagingJob) => Promise<unknown>;
+      createWin32App: (
+        graphClient: typeof graphClientStub,
+        job: PackagingJob,
+        packageFileName: string
+      ) => Promise<{ id: string }>;
+    };
+    vi.spyOn(uploaderInternal, 'fetchLargeIcon').mockResolvedValue(null);
+
+    await uploaderInternal.createWin32App(
+      graphClientStub,
+      makeJob(),
+      'Invoke-AppDeployToolkit.intunewin'
+    );
+
+    const [, body] = postMock.mock.calls[0];
+    expect(body).toMatchObject({
+      fileName: 'Invoke-AppDeployToolkit.intunewin',
+      setupFilePath: 'Invoke-AppDeployToolkit.exe',
+    });
+  });
+
   it('maps notExists to the doesNotExist operation type Graph expects', async () => {
     const postMock = vi.fn().mockResolvedValue({ id: 'app-3' });
     const graphClientStub = { post: postMock };
@@ -107,7 +144,8 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
       fetchLargeIcon: (job: PackagingJob) => Promise<unknown>;
       createWin32App: (
         graphClient: typeof graphClientStub,
-        job: PackagingJob
+        job: PackagingJob,
+        packageFileName: string
       ) => Promise<{ id: string }>;
     };
     vi.spyOn(uploaderInternal, 'fetchLargeIcon').mockResolvedValue(null);
@@ -122,7 +160,11 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
         },
       ],
     });
-    await uploaderInternal.createWin32App(graphClientStub, job);
+    await uploaderInternal.createWin32App(
+      graphClientStub,
+      job,
+      'Invoke-AppDeployToolkit.intunewin'
+    );
 
     const [, body] = postMock.mock.calls[0];
     expect((body as { rules: unknown[] }).rules[0]).toMatchObject({
@@ -142,7 +184,8 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
       fetchLargeIcon: (job: PackagingJob) => Promise<unknown>;
       createWin32App: (
         graphClient: typeof graphClientStub,
-        job: PackagingJob
+        job: PackagingJob,
+        packageFileName: string
       ) => Promise<{ id: string }>;
     };
     vi.spyOn(uploaderInternal, 'fetchLargeIcon').mockResolvedValue(null);
@@ -150,7 +193,11 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
     const job = makeJob({
       detection_rules: [{ type: 'script', scriptContent: 'Write-Output "ok"' }],
     });
-    await uploaderInternal.createWin32App(graphClientStub, job);
+    await uploaderInternal.createWin32App(
+      graphClientStub,
+      job,
+      'Invoke-AppDeployToolkit.intunewin'
+    );
 
     const [, body] = postMock.mock.calls[0];
     expect((body as { rules: unknown[] }).rules[0]).toEqual({
@@ -172,13 +219,18 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
       fetchLargeIcon: (job: PackagingJob) => Promise<unknown>;
       createWin32App: (
         graphClient: typeof graphClientStub,
-        job: PackagingJob
+        job: PackagingJob,
+        packageFileName: string
       ) => Promise<{ id: string }>;
     };
     vi.spyOn(uploaderInternal, 'fetchLargeIcon').mockResolvedValue(null);
 
     const job = makeJob({ detection_rules: [] });
-    await uploaderInternal.createWin32App(graphClientStub, job);
+    await uploaderInternal.createWin32App(
+      graphClientStub,
+      job,
+      'Invoke-AppDeployToolkit.intunewin'
+    );
 
     const [, body] = postMock.mock.calls[0];
     const rules = (body as { rules: unknown[] }).rules;
