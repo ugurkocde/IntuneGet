@@ -8,6 +8,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { getCatalogSource } from '@/lib/catalog';
 import {
   generateDetectionRules,
@@ -261,7 +262,7 @@ export function parsePsadtConfig(packageConfig: unknown): DeploymentConfig['psad
  */
 export async function buildDefaultDeploymentConfig(
   // Kept for call-site compatibility; the catalog source owns client creation.
-  _supabase: ReturnType<typeof createServerClient>,
+  _supabase: ReturnType<typeof createServerClient> | null | undefined,
   wingetId: string,
   latestVersion: string
 ): Promise<DeploymentConfig | null> {
@@ -358,7 +359,11 @@ export type BuildDeploymentConfigResult =
  * trigger route's "no policy yet" branch.
  */
 export async function buildDeploymentConfigForApp(
-  supabase: ReturnType<typeof createServerClient>,
+  // Vestigial: the two tables read below (upload_history, packaging_jobs)
+  // exist in both backends and are reached through the db abstraction, and
+  // the catalog fallback resolves its own store. Kept optional so
+  // Supabase-less callers can omit it.
+  _supabase: ReturnType<typeof createServerClient> | null | undefined,
   args: {
     userId: string;
     tenantId: string;
@@ -369,24 +374,16 @@ export async function buildDeploymentConfigForApp(
 ): Promise<BuildDeploymentConfigResult> {
   const { userId, tenantId, wingetId, latestVersion, globalCarryOver } = args;
 
-  // Get the original deployment config from upload_history
-  const { data: uploadHistory } = await supabase
-    .from('upload_history')
-    .select('id, packaging_job_id')
-    .eq('user_id', userId)
-    .eq('intune_tenant_id', tenantId)
-    .eq('winget_id', wingetId)
-    .order('deployed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Get the original deployment config from upload_history. Both reads go
+  // through the db abstraction: the rows live in SQLite as well as Supabase,
+  // and the adapter already returns them newest-first.
+  const db = getDatabase();
+  const tenantHistory = await db.uploadHistory.getByUserIdAndTenantId(userId, tenantId);
+  const uploadHistory = tenantHistory.find((row) => row.winget_id === wingetId) || null;
 
   if (uploadHistory?.packaging_job_id) {
     // Has prior deployment: extract config from packaging job
-    const { data: packagingJob } = await supabase
-      .from('packaging_jobs')
-      .select('*')
-      .eq('id', uploadHistory.packaging_job_id)
-      .maybeSingle();
+    const packagingJob = await db.jobs.getById(uploadHistory.packaging_job_id);
 
     if (!packagingJob) {
       // Prior deployment exists but its packaging job is gone.
@@ -432,7 +429,7 @@ export async function buildDeploymentConfigForApp(
 
   // No prior deployment: build config from curated catalog data
   const defaultConfig = await buildDefaultDeploymentConfig(
-    supabase,
+    null,
     wingetId,
     latestVersion
   );

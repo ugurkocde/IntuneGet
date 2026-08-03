@@ -10,6 +10,13 @@ const {
   triggerPackagingWorkflowMock,
   getAppConfigMock,
   getFeatureFlagsMock,
+  isSupabaseConfiguredMock,
+  getDatabaseMock,
+  getDetectedUpdatesMock,
+  getHistoryMock,
+  createJobMock,
+  buildDeploymentConfigForAppMock,
+  appExistsMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
   createServerClientMock: vi.fn(),
@@ -19,6 +26,13 @@ const {
   triggerPackagingWorkflowMock: vi.fn(),
   getAppConfigMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
+  isSupabaseConfiguredMock: vi.fn(),
+  getDatabaseMock: vi.fn(),
+  getDetectedUpdatesMock: vi.fn(),
+  getHistoryMock: vi.fn(),
+  createJobMock: vi.fn(),
+  buildDeploymentConfigForAppMock: vi.fn(),
+  appExistsMock: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -27,7 +41,19 @@ vi.mock('@/lib/auth-utils', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
-  isSupabaseConfigured: () => true,
+  isSupabaseConfigured: isSupabaseConfiguredMock,
+}));
+
+vi.mock('@/lib/db', () => ({
+  getDatabase: getDatabaseMock,
+}));
+
+vi.mock('@/lib/update-policies/build-deployment-config', () => ({
+  buildDeploymentConfigForApp: buildDeploymentConfigForAppMock,
+}));
+
+vi.mock('@/lib/catalog', () => ({
+  getCatalogSource: () => ({ appExists: appExistsMock }),
 }));
 
 vi.mock('@/lib/auto-update/trigger', () => ({
@@ -35,6 +61,10 @@ vi.mock('@/lib/auto-update/trigger', () => ({
     triggerAutoUpdate = triggerAutoUpdateMock;
   },
   getLatestInstallerInfo: getLatestInstallerInfoMock,
+  // The Supabase-less path reuses these so both paths write the same
+  // package_config shape.
+  normalizeAssignments: (config: DeploymentConfig) => config.assignments ?? [],
+  normalizeCategories: (config: DeploymentConfig) => config.categories ?? [],
 }));
 
 vi.mock('@/lib/github-actions', () => ({
@@ -166,6 +196,15 @@ describe('POST /api/updates/trigger', () => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+    isSupabaseConfiguredMock.mockReturnValue(true);
+    getDatabaseMock.mockReturnValue({
+      updateCheckResults: { getByUserId: getDetectedUpdatesMock },
+      uploadHistory: { getByUserIdAndTenantId: getHistoryMock },
+      jobs: { create: createJobMock },
+    });
+    getDetectedUpdatesMock.mockResolvedValue([]);
+    getHistoryMock.mockResolvedValue([]);
+    createJobMock.mockResolvedValue({ id: 'job-new' });
 
     parseAccessTokenMock.mockResolvedValue({
       userId: 'user-1',
@@ -436,5 +475,140 @@ describe('POST /api/updates/trigger', () => {
     expect(workflowInputs.autoSupersede).toBe(false);
     expect(workflowInputs.supersedenceType).toBeUndefined();
     expect(workflowInputs.relationships).toBeUndefined();
+  });
+  describe('without Supabase (DATABASE_MODE=sqlite self-hosting)', () => {
+    const detectedUpdate = {
+      id: 'upd-1',
+      user_id: 'user-1',
+      tenant_id: 'tenant-1',
+      winget_id: 'Mozilla.Firefox',
+      intune_app_id: 'stale-app-id',
+      display_name: 'Mozilla Firefox',
+      current_version: '152.0.1',
+      latest_version: '152.0.5',
+      is_critical: false,
+      is_managed: false,
+      large_icon_type: null,
+      large_icon_value: null,
+      notified_at: null,
+      dismissed_at: null,
+      detected_at: '2026-08-03T10:00:00Z',
+      updated_at: '2026-08-03T10:00:00Z',
+    };
+
+    const deploymentConfig = {
+      displayName: 'Mozilla Firefox',
+      publisher: 'Mozilla',
+      architecture: 'x64',
+      installerType: 'exe',
+      installCommand: 'setup.exe /S',
+      uninstallCommand: 'helper.exe /S',
+      installScope: 'system',
+      detectionRules: [{ type: 'registry' }],
+      assignments: [{ type: 'group', groupId: 'g-1' }],
+      categories: [],
+      forceCreateNewApp: true,
+    } as unknown as DeploymentConfig;
+
+    beforeEach(() => {
+      isSupabaseConfiguredMock.mockReturnValue(false);
+      getFeatureFlagsMock.mockReturnValue({ localPackager: true });
+      getDetectedUpdatesMock.mockResolvedValue([detectedUpdate]);
+      buildDeploymentConfigForAppMock.mockResolvedValue({
+        status: 'ok',
+        deploymentConfig,
+        originalUploadHistoryId: 'upload-1',
+      });
+      getLatestInstallerInfoMock.mockResolvedValue({
+        wingetId: 'Mozilla.Firefox',
+        currentVersion: '152.0.1',
+        latestVersion: '152.0.5',
+        displayName: 'Mozilla Firefox',
+        installerUrl: 'https://example.com/firefox.exe',
+        installerSha256: 'a'.repeat(64),
+        installerType: 'exe',
+      });
+    });
+
+    function triggerRequest() {
+      const request = new NextRequest('http://localhost:3000/api/updates/trigger', {
+        method: 'POST',
+        body: JSON.stringify({ winget_id: 'Mozilla.Firefox', tenant_id: 'tenant-1' }),
+      });
+      request.headers.set('Authorization', 'Bearer test-token');
+      return request;
+    }
+
+    it('queues a packaging job instead of refusing with a 503', async () => {
+      // Regression: this route answered 503 "Update deployment requires
+      // Supabase" for every request, so the Update button in a self-hosted
+      // install could never do anything. A manual trigger needs no policy and
+      // no auto-update bookkeeping - only a queued job for the local packager.
+      const response = await POST(triggerRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.triggered).toBe(1);
+      expect(body.results[0].packaging_job_id).toBe('job-new');
+      expect(createServerClientMock).not.toHaveBeenCalled();
+
+      const job = createJobMock.mock.calls[0][0];
+      expect(job).toMatchObject({
+        user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        winget_id: 'Mozilla.Firefox',
+        version: '152.0.5',
+        installer_url: 'https://example.com/firefox.exe',
+        status: 'queued',
+      });
+      expect(job.package_config.assignments).toEqual([
+        { type: 'group', groupId: 'g-1' },
+      ]);
+    });
+
+    it('prefers the newest deployment over a stale detected app id', async () => {
+      getHistoryMock.mockResolvedValue([
+        { winget_id: 'Mozilla.Firefox', intune_app_id: 'current-app-id' },
+        { winget_id: 'Mozilla.Firefox', intune_app_id: 'older-app-id' },
+      ]);
+
+      await POST(triggerRequest());
+
+      const job = createJobMock.mock.calls[0][0];
+      expect(job.package_config.sourceIntuneAppId).toBe('current-app-id');
+    });
+
+    it('falls back to the detected app id when there is no deployment history', async () => {
+      getHistoryMock.mockResolvedValue([]);
+
+      await POST(triggerRequest());
+
+      const job = createJobMock.mock.calls[0][0];
+      expect(job.package_config.sourceIntuneAppId).toBe('stale-app-id');
+    });
+
+    it('reports an unknown app instead of queueing a job for it', async () => {
+      getDetectedUpdatesMock.mockResolvedValue([]);
+
+      const body = await (await POST(triggerRequest())).json();
+
+      expect(body.success).toBe(false);
+      expect(body.failed).toBe(1);
+      expect(body.results[0].error).toBe('Update not found');
+      expect(createJobMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses when no local packager would pick the job up', async () => {
+      // Queueing here would leave the job sitting in 'queued' forever with no
+      // indication to the user that nothing is going to run it.
+      getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+
+      const body = await (await POST(triggerRequest())).json();
+
+      expect(body.failed).toBe(1);
+      expect(body.results[0].error).toMatch(/local packager/);
+      expect(createJobMock).not.toHaveBeenCalled();
+    });
   });
 });
