@@ -112,6 +112,14 @@ export interface DatabaseAdapter {
     getByUserId(userId: string, limit?: number): Promise<PackagingJob[]>;
 
     /**
+     * Every job belonging to a user, newest first and uncapped.
+     *
+     * For aggregate statistics, where a page would silently undercount rather
+     * than merely shorten the answer. Use getByUserId() for list views.
+     */
+    getAllByUserId(userId: string): Promise<PackagingJob[]>;
+
+    /**
      * Get jobs for every user in a tenant (tenant-wide deployments view)
      */
     getByTenantId(tenantId: string, limit?: number): Promise<PackagingJob[]>;

@@ -176,6 +176,25 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getAllByUserId(userId: string): Promise<PackagingJob[]> {
+      const supabase = createServerClient();
+
+      // No .limit(): callers aggregate over the full set, where a page would
+      // undercount rather than just shorten the answer.
+      const { data, error } = await supabase
+        .from('packaging_jobs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (isError(error)) {
+        console.error('Error fetching all jobs by user ID:', error);
+        throw error;
+      }
+
+      return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const supabase = createServerClient();
 

@@ -209,6 +209,19 @@ export const sqliteDb: DatabaseAdapter = {
       return rows.map(parseJobRow);
     },
 
+    async getAllByUserId(userId: string): Promise<PackagingJob[]> {
+      const database = getDb();
+      // No LIMIT: callers aggregate over the full set, where a page would
+      // undercount rather than just shorten the answer.
+      const stmt = database.prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE user_id = ? AND archived_at IS NULL
+        ORDER BY created_at DESC
+      `);
+      const rows = stmt.all(userId) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const database = getDb();
       // Every user's jobs in this tenant, most recent first, no age cutoff.
