@@ -117,6 +117,15 @@ export interface DatabaseAdapter {
     getByTenantId(tenantId: string, limit?: number): Promise<PackagingJob[]>;
 
     /**
+     * Get every job in a tenant that reached a given status. Filters on the
+     * status in the query rather than in the caller, so a tenant with more
+     * jobs than any page size still yields a complete set - callers use this
+     * to decide whether an app is already deployed, where a missing row reads
+     * as "not deployed" rather than as a truncated list.
+     */
+    getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]>;
+
+    /**
      * Create a new job
      */
     create(job: Partial<PackagingJob>): Promise<PackagingJob>;
@@ -176,5 +185,12 @@ export interface DatabaseAdapter {
      * Get upload history by user ID
      */
     getByUserId(userId: string, limit?: number): Promise<UploadHistoryRecord[]>;
+
+    /**
+     * Get a user's upload history within one tenant. Filters on the tenant in
+     * the query rather than in the caller, so a user active in several
+     * tenants cannot have this tenant's rows pushed out by another tenant's.
+     */
+    getByUserIdAndTenantId(userId: string, tenantId: string): Promise<UploadHistoryRecord[]>;
   };
 }

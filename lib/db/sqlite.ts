@@ -222,6 +222,19 @@ export const sqliteDb: DatabaseAdapter = {
       return rows.map(parseJobRow);
     },
 
+    async getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]> {
+      const database = getDb();
+      // No LIMIT: the caller needs the complete set to answer "is this app
+      // already deployed in the tenant", where a missing row is meaningful.
+      const stmt = database.prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE tenant_id = ? AND status = ? AND archived_at IS NULL
+        ORDER BY created_at DESC
+      `);
+      const rows = stmt.all(tenantId, status) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
     /**
      * Create a new job
      */
@@ -506,6 +519,24 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       return stmt.all(userId, limit) as UploadHistoryRecord[];
+    },
+
+    /**
+     * Get a user's upload history within one tenant
+     */
+    async getByUserIdAndTenantId(
+      userId: string,
+      tenantId: string
+    ): Promise<UploadHistoryRecord[]> {
+      const database = getDb();
+      // No LIMIT: the caller needs the complete set to answer "did this user
+      // already deploy this app", where a missing row is meaningful.
+      const stmt = database.prepare(`
+        SELECT * FROM upload_history
+        WHERE user_id = ? AND intune_tenant_id = ?
+        ORDER BY deployed_at DESC
+      `);
+      return stmt.all(userId, tenantId) as UploadHistoryRecord[];
     },
   },
 };

@@ -195,6 +195,26 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]> {
+      const supabase = createServerClient();
+
+      // No .limit(): the caller needs the complete set to answer "is this app
+      // already deployed in the tenant", where a missing row is meaningful.
+      const { data, error } = await supabase
+        .from('packaging_jobs')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('status', status)
+        .order('created_at', { ascending: false });
+
+      if (isError(error)) {
+        console.error('Error fetching jobs by tenant ID and status:', error);
+        throw error;
+      }
+
+      return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
     /**
      * Create a new job
      */
@@ -501,6 +521,32 @@ export const supabaseDb: DatabaseAdapter = {
 
       if (isError(error)) {
         console.error('Error fetching upload history:', error);
+        throw error;
+      }
+
+      return data || [];
+    },
+
+    /**
+     * Get a user's upload history within one tenant
+     */
+    async getByUserIdAndTenantId(
+      userId: string,
+      tenantId: string
+    ): Promise<UploadHistoryRecord[]> {
+      const supabase = createServerClient();
+      const query = getUploadHistoryQuery(supabase);
+
+      // No .limit(): the caller needs the complete set to answer "did this
+      // user already deploy this app", where a missing row is meaningful.
+      const { data, error } = await query
+        .select('*')
+        .eq('user_id', userId)
+        .eq('intune_tenant_id', tenantId)
+        .order('deployed_at', { ascending: false });
+
+      if (isError(error)) {
+        console.error('Error fetching upload history by tenant:', error);
         throw error;
       }
 

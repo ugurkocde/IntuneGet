@@ -52,6 +52,9 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
       completed_at TEXT,
       cancelled_at TEXT,
       cancelled_by TEXT,
+      -- Mirrors the real schema in lib/db/sqlite.ts; the tenant-scoped
+      -- queries exclude archived jobs.
+      archived_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
@@ -124,6 +127,27 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
           LIMIT ?
         `);
         const rows = stmt.all(userId, limit) as Record<string, unknown>[];
+        return rows.map(parseJobRow);
+      },
+
+      async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM packaging_jobs
+          WHERE tenant_id = ? AND archived_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT ?
+        `);
+        const rows = stmt.all(tenantId, limit) as Record<string, unknown>[];
+        return rows.map(parseJobRow);
+      },
+
+      async getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM packaging_jobs
+          WHERE tenant_id = ? AND status = ? AND archived_at IS NULL
+          ORDER BY created_at DESC
+        `);
+        const rows = stmt.all(tenantId, status) as Record<string, unknown>[];
         return rows.map(parseJobRow);
       },
 
@@ -366,6 +390,18 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
         `);
         return stmt.all(userId, limit) as UploadHistoryRecord[];
       },
+
+      async getByUserIdAndTenantId(
+        userId: string,
+        tenantId: string
+      ): Promise<UploadHistoryRecord[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM upload_history
+          WHERE user_id = ? AND intune_tenant_id = ?
+          ORDER BY deployed_at DESC
+        `);
+        return stmt.all(userId, tenantId) as UploadHistoryRecord[];
+      },
     },
   };
 
@@ -496,6 +532,39 @@ describe('SQLite Database Adapter', () => {
       expect(jobs.map(j => j.id)).toContain(job1.id);
       expect(jobs.map(j => j.id)).toContain(job2.id);
       expect(jobs.map(j => j.id)).toContain(job3.id);
+    });
+  });
+
+  describe('jobs.getByTenantIdAndStatus', () => {
+    it('should return only the requested status within the tenant', async () => {
+      await adapter.jobs.create(
+        createTestJob({ tenant_id: 'tenant-1', status: 'deployed', winget_id: 'A.App' })
+      );
+      await adapter.jobs.create(
+        createTestJob({ tenant_id: 'tenant-1', status: 'failed', winget_id: 'B.App' })
+      );
+      await adapter.jobs.create(
+        createTestJob({ tenant_id: 'tenant-2', status: 'deployed', winget_id: 'C.App' })
+      );
+
+      const jobs = await adapter.jobs.getByTenantIdAndStatus('tenant-1', 'deployed');
+
+      expect(jobs.map((j) => j.winget_id)).toEqual(['A.App']);
+    });
+
+    it('should not truncate the result set', async () => {
+      // The route behind this ("is this app already deployed in the tenant?")
+      // reads a missing row as "not deployed", so a capped page would report
+      // older deployments as undeployed.
+      for (let i = 0; i < 120; i++) {
+        await adapter.jobs.create(
+          createTestJob({ tenant_id: 'tenant-1', status: 'deployed', winget_id: `App.${i}` })
+        );
+      }
+
+      const jobs = await adapter.jobs.getByTenantIdAndStatus('tenant-1', 'deployed');
+
+      expect(jobs).toHaveLength(120);
     });
   });
 
@@ -817,6 +886,67 @@ describe('SQLite Database Adapter', () => {
       const history = await adapter.uploadHistory.getByUserId('non-existent-user');
 
       expect(history).toEqual([]);
+    });
+  });
+
+  describe('uploadHistory.getByUserIdAndTenantId', () => {
+    it('should return only the given tenant rows for that user', async () => {
+      await adapter.uploadHistory.create({
+        user_id: 'user-1',
+        winget_id: 'Microsoft.VSCode',
+        version: '1.85.0',
+        display_name: 'VS Code',
+        intune_app_id: 'app-1',
+        intune_tenant_id: 'tenant-1',
+      });
+      await adapter.uploadHistory.create({
+        user_id: 'user-1',
+        winget_id: 'Git.Git',
+        version: '2.43.0',
+        display_name: 'Git',
+        intune_app_id: 'app-2',
+        intune_tenant_id: 'tenant-2',
+      });
+      await adapter.uploadHistory.create({
+        user_id: 'user-2',
+        winget_id: 'Mozilla.Firefox',
+        version: '121.0',
+        display_name: 'Firefox',
+        intune_app_id: 'app-3',
+        intune_tenant_id: 'tenant-1',
+      });
+
+      const history = await adapter.uploadHistory.getByUserIdAndTenantId('user-1', 'tenant-1');
+
+      expect(history.map((h) => h.winget_id)).toEqual(['Microsoft.VSCode']);
+    });
+
+    it('should filter the tenant in the query rather than after the fact', async () => {
+      // The regression this guards against: fetching a capped page by user and
+      // filtering the tenant in the caller, which drops this tenant's older
+      // deployments once a busier tenant fills the page.
+      for (let i = 0; i < 120; i++) {
+        await adapter.uploadHistory.create({
+          user_id: 'user-1',
+          winget_id: `Noise.${i}`,
+          version: '1.0',
+          display_name: `Noise ${i}`,
+          intune_app_id: `noise-${i}`,
+          intune_tenant_id: 'tenant-loud',
+        });
+      }
+      await adapter.uploadHistory.create({
+        user_id: 'user-1',
+        winget_id: 'Quiet.App',
+        version: '1.0',
+        display_name: 'Quiet App',
+        intune_app_id: 'quiet-1',
+        intune_tenant_id: 'tenant-quiet',
+      });
+
+      const history = await adapter.uploadHistory.getByUserIdAndTenantId('user-1', 'tenant-quiet');
+
+      expect(history.map((h) => h.winget_id)).toEqual(['Quiet.App']);
     });
   });
 });

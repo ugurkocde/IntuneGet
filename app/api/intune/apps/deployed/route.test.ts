@@ -6,16 +6,16 @@ const {
   isSupabaseConfiguredMock,
   resolveTargetTenantIdMock,
   getDatabaseMock,
-  getByUserIdMock,
-  getByTenantIdMock,
+  getByUserIdAndTenantIdMock,
+  getByTenantIdAndStatusMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
   createServerClientMock: vi.fn(),
   isSupabaseConfiguredMock: vi.fn(),
   resolveTargetTenantIdMock: vi.fn(),
   getDatabaseMock: vi.fn(),
-  getByUserIdMock: vi.fn(),
-  getByTenantIdMock: vi.fn(),
+  getByUserIdAndTenantIdMock: vi.fn(),
+  getByTenantIdAndStatusMock: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -42,11 +42,11 @@ describe('GET /api/intune/apps/deployed', () => {
     vi.clearAllMocks();
     isSupabaseConfiguredMock.mockReturnValue(true);
     getDatabaseMock.mockReturnValue({
-      uploadHistory: { getByUserId: getByUserIdMock },
-      jobs: { getByTenantId: getByTenantIdMock },
+      uploadHistory: { getByUserIdAndTenantId: getByUserIdAndTenantIdMock },
+      jobs: { getByTenantIdAndStatus: getByTenantIdAndStatusMock },
     });
-    getByUserIdMock.mockResolvedValue([]);
-    getByTenantIdMock.mockResolvedValue([]);
+    getByUserIdAndTenantIdMock.mockResolvedValue([]);
+    getByTenantIdAndStatusMock.mockResolvedValue([]);
   });
 
   it('returns unique deployed winget IDs for authenticated user and tenant', async () => {
@@ -60,11 +60,10 @@ describe('GET /api/intune/apps/deployed', () => {
       tenantId: 'tenant-home',
       errorResponse: null,
     });
-    getByUserIdMock.mockResolvedValue([
+    getByUserIdAndTenantIdMock.mockResolvedValue([
       { winget_id: 'Microsoft.Edge', intune_tenant_id: 'tenant-home' },
       { winget_id: 'Microsoft.Edge', intune_tenant_id: 'tenant-home' },
       { winget_id: 'Git.Git', intune_tenant_id: 'tenant-home' },
-      { winget_id: 'Other.App', intune_tenant_id: 'tenant-other' },
     ]);
 
     const request = new NextRequest('http://localhost:3000/api/intune/apps/deployed');
@@ -76,7 +75,11 @@ describe('GET /api/intune/apps/deployed', () => {
     expect(response.status).toBe(200);
     expect(body.deployedWingetIds).toEqual(['Microsoft.Edge', 'Git.Git']);
     expect(body.count).toBe(2);
-    expect(getByUserIdMock).toHaveBeenCalledWith('user-1', 500);
+    // The tenant filter belongs in the query, not in this route: filtering a
+    // capped page of rows here would let a user active in several tenants
+    // lose this tenant's deployments to another tenant's, and a missing row
+    // reads as "not deployed".
+    expect(getByUserIdAndTenantIdMock).toHaveBeenCalledWith('user-1', 'tenant-home');
   });
 
   it('applies tenant override via X-MSP-Tenant-Id', async () => {
@@ -179,9 +182,9 @@ describe('GET /api/intune/apps/deployed', () => {
       tenantId: 'tenant-home',
       errorResponse: null,
     });
-    getByTenantIdMock.mockResolvedValue([
+    getByTenantIdAndStatusMock.mockResolvedValue([
       { winget_id: 'Microsoft.Edge', user_email: 'a@example.com', status: 'deployed' },
-      { winget_id: 'Git.Git', user_email: 'b@example.com', status: 'failed' },
+      { winget_id: 'Microsoft.Edge', user_email: 'c@example.com', status: 'deployed' },
     ]);
 
     const request = new NextRequest('http://localhost:3000/api/intune/apps/deployed?scope=tenant');
@@ -192,9 +195,13 @@ describe('GET /api/intune/apps/deployed', () => {
 
     expect(response.status).toBe(200);
     expect(body.scope).toBe('tenant');
+    // First deployer wins the attribution when several people deployed it.
     expect(body.tenantDeployments).toEqual([
       { wingetId: 'Microsoft.Edge', deployedBy: 'a@example.com' },
     ]);
+    // Same reasoning as the per-user query: the status filter runs in the
+    // query so a busy tenant cannot push older deployed jobs off the page.
+    expect(getByTenantIdAndStatusMock).toHaveBeenCalledWith('tenant-home', 'deployed');
   });
 
   it('resolves deployments without touching Supabase when running Supabase-less (DATABASE_MODE=sqlite, no MSP config)', async () => {
@@ -205,7 +212,7 @@ describe('GET /api/intune/apps/deployed', () => {
       tenantId: 'tenant-home',
       userName: 'User',
     });
-    getByUserIdMock.mockResolvedValue([
+    getByUserIdAndTenantIdMock.mockResolvedValue([
       { winget_id: 'Microsoft.Edge', intune_tenant_id: 'tenant-home' },
     ]);
 

@@ -44,11 +44,11 @@ export async function GET(request: NextRequest) {
     // deployed. packaging_jobs carries user_email; upload_history does not.
     const scope = new URL(request.url).searchParams.get('scope');
     if (scope === 'tenant') {
-      const tenantJobs = await db.jobs.getByTenantId(tenantId, 500);
+      const tenantJobs = await db.jobs.getByTenantIdAndStatus(tenantId, 'deployed');
 
       const byWingetId = new Map<string, string | null>();
       for (const job of tenantJobs) {
-        if (job.status === 'deployed' && job.winget_id && !byWingetId.has(job.winget_id)) {
+        if (job.winget_id && !byWingetId.has(job.winget_id)) {
           byWingetId.set(job.winget_id, job.user_email);
         }
       }
@@ -66,14 +66,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const history = await db.uploadHistory.getByUserId(user.userId, 500);
+    const history = await db.uploadHistory.getByUserIdAndTenantId(user.userId, tenantId);
     const deployedWingetIds = Array.from(
-      new Set(
-        history
-          .filter((row) => row.intune_tenant_id === tenantId)
-          .map((row) => row.winget_id)
-          .filter(Boolean)
-      )
+      new Set(history.map((row) => row.winget_id).filter(Boolean))
     );
 
     return NextResponse.json({
