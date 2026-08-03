@@ -16,7 +16,7 @@ const agentPromises: { http: Promise<unknown> | null; https: Promise<unknown> | 
   https: null,
 };
 
-async function resolveProxyAgent(targetUrl: string): Promise<unknown> {
+export async function resolveProxyAgent(targetUrl: string): Promise<unknown> {
   const isHttps = targetUrl.startsWith('https:');
   const proxyUrl = isHttps
     ? process.env.HTTPS_PROXY || process.env.https_proxy

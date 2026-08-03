@@ -8,6 +8,7 @@ import { ManagedIdentityCredential, type TokenCredential } from '@azure/identity
 import { PackagerConfig } from './config.js';
 import { createLogger, Logger } from './logger.js';
 import { fetchWithProxy } from './fetch-with-proxy.js';
+import { ProxyHttpClient } from './msal-proxy-http-client.js';
 
 const GRAPH_ENDPOINT = 'https://graph.microsoft.com/beta';
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
@@ -43,6 +44,9 @@ export class GraphClient {
           clientId: config.azure.clientId,
           clientSecret: config.azure.clientSecret,
           authority: `https://login.microsoftonline.com/${tenantId}`,
+        },
+        system: {
+          networkClient: new ProxyHttpClient(),
         },
       });
     }
