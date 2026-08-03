@@ -4,7 +4,13 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import type {
+  DatabaseAdapter,
+  PackagingJob,
+  UpdateCheckResult,
+  UploadHistoryRecord,
+  JobStats,
+} from './types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -570,6 +576,108 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return data || [];
+    },
+  },
+
+  updateCheckResults: {
+    async getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]> {
+      const supabase = createServerClient();
+
+      let query = supabase
+        .from('update_check_results')
+        .select('*')
+        .eq('user_id', userId)
+        .order('detected_at', { ascending: false });
+
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query;
+
+      if (isError(error)) {
+        console.error('Error fetching update check results:', error);
+        throw error;
+      }
+
+      return (data as unknown as UpdateCheckResult[]) || [];
+    },
+
+    async replaceForUserAndTenant(
+      userId: string,
+      tenantId: string,
+      rows: Array<Partial<UpdateCheckResult>>
+    ): Promise<UpdateCheckResult[]> {
+      const supabase = createServerClient();
+      const now = new Date().toISOString();
+
+      const { error: deleteError } = await supabase
+        .from('update_check_results')
+        .delete()
+        .eq('user_id', userId)
+        .eq('tenant_id', tenantId);
+
+      if (isError(deleteError)) {
+        console.error('Error clearing update check results:', deleteError);
+        throw deleteError;
+      }
+
+      if (rows.length === 0) {
+        return [];
+      }
+
+      const payload = rows.map((row) => ({
+        user_id: userId,
+        tenant_id: tenantId,
+        winget_id: row.winget_id,
+        intune_app_id: row.intune_app_id,
+        display_name: row.display_name,
+        current_version: row.current_version,
+        latest_version: row.latest_version,
+        is_critical: Boolean(row.is_critical),
+        is_managed: row.is_managed !== false,
+        large_icon_type: row.large_icon_type ?? null,
+        large_icon_value: row.large_icon_value ?? null,
+        notified_at: row.notified_at ?? null,
+        dismissed_at: row.dismissed_at ?? null,
+        detected_at: row.detected_at || now,
+        updated_at: now,
+      }));
+
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .insert(payload as never)
+        .select();
+
+      if (isError(error)) {
+        console.error('Error writing update check results:', error);
+        throw error;
+      }
+
+      return (data as unknown as UpdateCheckResult[]) || [];
+    },
+
+    async setDismissedAt(
+      id: string,
+      userId: string,
+      dismissedAt: string | null
+    ): Promise<UpdateCheckResult | null> {
+      const supabase = createServerClient();
+
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .update({ dismissed_at: dismissedAt, updated_at: new Date().toISOString() } as never)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .maybeSingle();
+
+      if (isError(error)) {
+        console.error('Error updating update check result:', error);
+        throw error;
+      }
+
+      return (data as unknown as UpdateCheckResult) || null;
     },
   },
 };

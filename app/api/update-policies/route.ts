@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
@@ -28,6 +28,20 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const tenantId = searchParams.get('tenant_id');
+
+    // Auto-update policies are a Supabase-only feature: app_update_policies has
+    // no SQLite equivalent, and the schedulers that would act on a policy
+    // (vercel.json crons) do not exist in a self-hosted container. Report that
+    // plainly instead of crashing on createServerClient().
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            'Auto-update policies require Supabase and are not available on this self-hosted deployment',
+        },
+        { status: 503 }
+      );
+    }
 
     const supabase = createServerClient();
 
@@ -94,6 +108,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Invalid policy_type. Must be one of: ${validPolicyTypes.join(', ')}` },
         { status: 400 }
+      );
+    }
+
+    // Auto-update policies are a Supabase-only feature: app_update_policies has
+    // no SQLite equivalent, and the schedulers that would act on a policy
+    // (vercel.json crons) do not exist in a self-hosted container. Report that
+    // plainly instead of crashing on createServerClient().
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            'Auto-update policies require Supabase and are not available on this self-hosted deployment',
+        },
+        { status: 503 }
       );
     }
 

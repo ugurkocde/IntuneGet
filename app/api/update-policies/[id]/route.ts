@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { AppUpdatePolicy, UpdatePolicyType } from '@/types/update-policies';
 import type { Database } from '@/types/database';
@@ -32,6 +32,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+    // Auto-update policies are a Supabase-only feature: app_update_policies has
+    // no SQLite equivalent, and the schedulers that would act on a policy
+    // (vercel.json crons) do not exist in a self-hosted container. Report that
+    // plainly instead of crashing on createServerClient().
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            'Auto-update policies require Supabase and are not available on this self-hosted deployment',
+        },
+        { status: 503 }
+      );
+    }
+
     const supabase = createServerClient();
 
     // Get policy by ID, ensuring it belongs to the user
@@ -83,6 +97,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
     const body = await request.json();
+
+    // Auto-update policies are a Supabase-only feature: app_update_policies has
+    // no SQLite equivalent, and the schedulers that would act on a policy
+    // (vercel.json crons) do not exist in a self-hosted container. Report that
+    // plainly instead of crashing on createServerClient().
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            'Auto-update policies require Supabase and are not available on this self-hosted deployment',
+        },
+        { status: 503 }
+      );
+    }
 
     const supabase = createServerClient();
 
@@ -192,6 +220,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+    // Auto-update policies are a Supabase-only feature: app_update_policies has
+    // no SQLite equivalent, and the schedulers that would act on a policy
+    // (vercel.json crons) do not exist in a self-hosted container. Report that
+    // plainly instead of crashing on createServerClient().
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            'Auto-update policies require Supabase and are not available on this self-hosted deployment',
+        },
+        { status: 503 }
+      );
+    }
+
     const supabase = createServerClient();
 
     // Delete the policy (only if it belongs to the user)

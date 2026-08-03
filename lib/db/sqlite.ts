@@ -6,7 +6,12 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord } from './types';
+import type {
+  DatabaseAdapter,
+  PackagingJob,
+  UpdateCheckResult,
+  UploadHistoryRecord,
+} from './types';
 
 // Singleton database instance
 let db: Database.Database | null = null;
@@ -144,6 +149,49 @@ function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_upload_history_user_id ON upload_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_upload_history_deployed_at ON upload_history(deployed_at);
   `);
+
+  // Cache of detected app updates. Mirrors the update_check_results table in
+  // supabase/migrations (011, 018, 031), including its uniqueness rule: one
+  // row per user, tenant, package and Intune app object.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS update_check_results (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      winget_id TEXT NOT NULL,
+      intune_app_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      current_version TEXT NOT NULL,
+      latest_version TEXT NOT NULL,
+      is_critical INTEGER NOT NULL DEFAULT 0,
+      is_managed INTEGER NOT NULL DEFAULT 1,
+      large_icon_type TEXT,
+      large_icon_value TEXT,
+      notified_at TEXT,
+      dismissed_at TEXT,
+      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, tenant_id, winget_id, intune_app_id)
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_update_check_results_user ON update_check_results(user_id);
+    CREATE INDEX IF NOT EXISTS idx_update_check_results_tenant ON update_check_results(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_update_check_results_detected ON update_check_results(detected_at DESC);
+  `);
+}
+
+/**
+ * SQLite has no boolean type and stores these as 0/1; the adapter contract
+ * hands callers real booleans.
+ */
+function parseUpdateCheckRow(row: Record<string, unknown>): UpdateCheckResult {
+  return {
+    ...row,
+    is_critical: Boolean(row.is_critical),
+    is_managed: Boolean(row.is_managed),
+  } as UpdateCheckResult;
 }
 
 /**
@@ -550,6 +598,105 @@ export const sqliteDb: DatabaseAdapter = {
         ORDER BY deployed_at DESC
       `);
       return stmt.all(userId, tenantId) as UploadHistoryRecord[];
+    },
+  },
+
+  updateCheckResults: {
+    async getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]> {
+      const database = getDb();
+      const stmt = tenantId
+        ? database.prepare(`
+            SELECT * FROM update_check_results
+            WHERE user_id = ? AND tenant_id = ?
+            ORDER BY detected_at DESC
+          `)
+        : database.prepare(`
+            SELECT * FROM update_check_results
+            WHERE user_id = ?
+            ORDER BY detected_at DESC
+          `);
+      const rows = (
+        tenantId ? stmt.all(userId, tenantId) : stmt.all(userId)
+      ) as Record<string, unknown>[];
+      return rows.map(parseUpdateCheckRow);
+    },
+
+    async replaceForUserAndTenant(
+      userId: string,
+      tenantId: string,
+      rows: Array<Partial<UpdateCheckResult>>
+    ): Promise<UpdateCheckResult[]> {
+      const database = getDb();
+      const now = new Date().toISOString();
+
+      const deleteStmt = database.prepare(
+        'DELETE FROM update_check_results WHERE user_id = ? AND tenant_id = ?'
+      );
+      const insertStmt = database.prepare(`
+        INSERT INTO update_check_results (
+          id, user_id, tenant_id, winget_id, intune_app_id, display_name,
+          current_version, latest_version, is_critical, is_managed,
+          large_icon_type, large_icon_value, notified_at, dismissed_at,
+          detected_at, updated_at
+        ) VALUES (
+          @id, @user_id, @tenant_id, @winget_id, @intune_app_id, @display_name,
+          @current_version, @latest_version, @is_critical, @is_managed,
+          @large_icon_type, @large_icon_value, @notified_at, @dismissed_at,
+          @detected_at, @updated_at
+        )
+      `);
+
+      // Delete and insert must not be observable apart: a reader between them
+      // would see the tenant as having no updates at all.
+      const replaceAll = database.transaction((incoming: Array<Partial<UpdateCheckResult>>) => {
+        deleteStmt.run(userId, tenantId);
+        for (const row of incoming) {
+          insertStmt.run({
+            id: row.id || crypto.randomUUID(),
+            user_id: userId,
+            tenant_id: tenantId,
+            winget_id: row.winget_id,
+            intune_app_id: row.intune_app_id,
+            display_name: row.display_name,
+            current_version: row.current_version,
+            latest_version: row.latest_version,
+            is_critical: row.is_critical ? 1 : 0,
+            is_managed: row.is_managed === false ? 0 : 1,
+            large_icon_type: row.large_icon_type ?? null,
+            large_icon_value: row.large_icon_value ?? null,
+            notified_at: row.notified_at ?? null,
+            dismissed_at: row.dismissed_at ?? null,
+            detected_at: row.detected_at || now,
+            updated_at: now,
+          });
+        }
+      });
+
+      replaceAll(rows);
+      return this.getByUserId(userId, tenantId);
+    },
+
+    async setDismissedAt(
+      id: string,
+      userId: string,
+      dismissedAt: string | null
+    ): Promise<UpdateCheckResult | null> {
+      const database = getDb();
+      const stmt = database.prepare(`
+        UPDATE update_check_results
+        SET dismissed_at = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `);
+      const result = stmt.run(dismissedAt, new Date().toISOString(), id, userId);
+
+      if (result.changes === 0) {
+        return null;
+      }
+
+      const row = database
+        .prepare('SELECT * FROM update_check_results WHERE id = ?')
+        .get(id) as Record<string, unknown> | undefined;
+      return row ? parseUpdateCheckRow(row) : null;
     },
   },
 };

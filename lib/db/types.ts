@@ -79,6 +79,33 @@ export interface UploadHistoryRecord {
 }
 
 /**
+ * A detected available update for one deployed app.
+ *
+ * Mirrors the update_check_results table (supabase/migrations 011, 018, 031).
+ * The row is a cache: the comparison itself runs live against Intune and the
+ * app catalog, and a refresh replaces a tenant's rows wholesale. What only
+ * lives here is per-user state - dismissed_at and notified_at.
+ */
+export interface UpdateCheckResult {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  winget_id: string;
+  intune_app_id: string;
+  display_name: string;
+  current_version: string;
+  latest_version: string;
+  is_critical: boolean;
+  is_managed: boolean;
+  large_icon_type: string | null;
+  large_icon_value: string | null;
+  notified_at: string | null;
+  dismissed_at: string | null;
+  detected_at: string;
+  updated_at: string;
+}
+
+/**
  * Job statistics
  */
 export interface JobStats {
@@ -200,5 +227,37 @@ export interface DatabaseAdapter {
      * tenants cannot have this tenant's rows pushed out by another tenant's.
      */
     getByUserIdAndTenantId(userId: string, tenantId: string): Promise<UploadHistoryRecord[]>;
+  };
+
+  updateCheckResults: {
+    /**
+     * Every detected update for a user, newest first. tenantId narrows to one
+     * tenant; omit it for all tenants the user has results in.
+     */
+    getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]>;
+
+    /**
+     * Replace a tenant's results for this user with a freshly detected set.
+     *
+     * A refresh re-derives every row from a live scan, so rows that are gone
+     * from the scan must disappear rather than linger as phantom updates -
+     * hence replace rather than merge. Callers carry notified_at forward
+     * themselves, since only they know whether the version changed.
+     */
+    replaceForUserAndTenant(
+      userId: string,
+      tenantId: string,
+      rows: Array<Partial<UpdateCheckResult>>
+    ): Promise<UpdateCheckResult[]>;
+
+    /**
+     * Mark one detected update dismissed (or un-dismissed with null), scoped
+     * to the owning user so one user cannot dismiss another's row.
+     */
+    setDismissedAt(
+      id: string,
+      userId: string,
+      dismissedAt: string | null
+    ): Promise<UpdateCheckResult | null>;
   };
 }

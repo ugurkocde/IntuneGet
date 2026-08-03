@@ -3,11 +3,13 @@ import { NextRequest } from 'next/server';
 const {
   parseAccessTokenMock,
   createServerClientMock,
+  isSupabaseConfiguredMock,
   getCatalogSourceMock,
   getAppForInstallerMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
   createServerClientMock: vi.fn(),
+  isSupabaseConfiguredMock: vi.fn(),
   getCatalogSourceMock: vi.fn(),
   getAppForInstallerMock: vi.fn(),
 }));
@@ -18,6 +20,7 @@ vi.mock('@/lib/auth-utils', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
+  isSupabaseConfigured: isSupabaseConfiguredMock,
 }));
 
 vi.mock('@/lib/catalog', () => ({
@@ -140,6 +143,7 @@ function makeRequest(body: Record<string, unknown>) {
 describe('POST /api/update-policies', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isSupabaseConfiguredMock.mockReturnValue(true);
     parseAccessTokenMock.mockResolvedValue({
       userId: 'user-1',
       userEmail: 'user@example.com',
@@ -306,5 +310,25 @@ describe('POST /api/update-policies', () => {
     expect(response.status).toBe(200);
     expect(insertPayloads[0].policy_type).toBe('notify');
     expect(body.created).toBe(true);
+  });
+
+  it('reports policies unavailable instead of crashing when Supabase is absent', async () => {
+    // Regression: the route called createServerClient() unconditionally, which
+    // throws without Supabase config, so a self-hosted SQLite install got a
+    // 500 here. Policies genuinely need Supabase - say so with a 503.
+    isSupabaseConfiguredMock.mockReturnValue(false);
+
+    const response = await POST(
+      makeRequest({
+        winget_id: 'Microsoft.Edge',
+        tenant_id: 'tenant-1',
+        policy_type: 'notify',
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toMatch(/not available on this self-hosted deployment/);
+    expect(createServerClientMock).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { compareVersions } from '@/lib/version-compare';
 import type { AvailableUpdate } from '@/types/update-policies';
@@ -31,48 +32,29 @@ export async function GET(request: NextRequest) {
     // apps are opt-in to avoid accidentally updating mismatched/customized apps.
     const includeUnmanaged = searchParams.get('include_unmanaged') === 'true';
 
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json({
-        updates: [],
-        count: 0,
-        criticalCount: 0,
-      });
-    }
+    // Detected updates live in the db abstraction, so this works in both
+    // backends. Auto-update policies below are Supabase-only.
+    const supabase = isSupabaseConfigured() ? createServerClient() : null;
 
-    const supabase = createServerClient();
-
-    // Build query for update check results
-    let query = supabase
-      .from('update_check_results')
-      .select('*')
-      .eq('user_id', user.userId)
-      .order('detected_at', { ascending: false });
-
-    // Filter by tenant if specified
-    if (tenantId) {
-      query = query.eq('tenant_id', tenantId);
-    }
-
-    // Exclude dismissed unless requested
-    if (!includeDismissed) {
-      query = query.is('dismissed_at', null);
-    }
-
-    // Filter critical only
-    if (criticalOnly) {
-      query = query.eq('is_critical', true);
-    }
-
-    const { data: updates, error: updatesError } = await query;
-
-    if (updatesError) {
+    let updates;
+    try {
+      updates = await getDatabase().updateCheckResults.getByUserId(user.userId, tenantId);
+    } catch {
       return NextResponse.json(
         { error: 'Failed to fetch updates' },
         { status: 500 }
       );
     }
 
-    if (!updates || updates.length === 0) {
+    if (!includeDismissed) {
+      updates = updates.filter((update) => update.dismissed_at === null);
+    }
+
+    if (criticalOnly) {
+      updates = updates.filter((update) => update.is_critical);
+    }
+
+    if (updates.length === 0) {
       return NextResponse.json({
         updates: [],
         count: 0,
@@ -80,37 +62,44 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get policies for these updates
+    // Get policies for these updates. Auto-update policies are a Supabase-only
+    // feature (app_update_policies has no SQLite equivalent, and there is no
+    // scheduler to act on them in a self-hosted container), so without
+    // Supabase every update simply reports no policy.
     const wingetIds = [...new Set(updates.map((u) => u.winget_id))];
-    let policiesQuery = supabase
-      .from('app_update_policies')
-      .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, last_auto_update_version, consecutive_failures')
-      .eq('user_id', user.userId)
-      .in('winget_id', wingetIds);
+    const { data: policies } = supabase
+      ? await (() => {
+          let policiesQuery = supabase
+            .from('app_update_policies')
+            .select('id, winget_id, tenant_id, policy_type, is_enabled, pinned_version, last_auto_update_at, last_auto_update_version, consecutive_failures')
+            .eq('user_id', user.userId)
+            .in('winget_id', wingetIds);
 
-    if (tenantId) {
-      policiesQuery = policiesQuery.eq('tenant_id', tenantId);
-    }
+          if (tenantId) {
+            policiesQuery = policiesQuery.eq('tenant_id', tenantId);
+          }
 
-    const { data: policies } = await policiesQuery;
+          return policiesQuery;
+        })()
+      : { data: null };
 
-    // Query upload_history to determine which apps were deployed through IntuneGet
-    let deployedQuery = supabase
-      .from('upload_history')
-      .select('winget_id, intune_tenant_id')
-      .eq('user_id', user.userId)
-      .in('winget_id', wingetIds);
-
-    if (tenantId) {
-      deployedQuery = deployedQuery.eq('intune_tenant_id', tenantId);
-    }
-
-    const { data: deployedApps } = await deployedQuery;
-
+    // Deployment history tells us which apps went out through IntuneGet; it
+    // exists in both backends. Query per tenant rather than fetching a capped
+    // page of the user's whole history and filtering here - has_prior_deployment
+    // reads a missing row as "never deployed", so a truncated page would be a
+    // wrong answer rather than a shorter one. The tenants involved are bounded
+    // by the updates themselves (one, outside MSP setups).
+    const tenantsInPlay = [...new Set(updates.map((u) => u.tenant_id))];
     const deployedSet = new Set<string>();
-    if (deployedApps) {
-      for (const d of deployedApps) {
-        deployedSet.add(`${d.winget_id}:${d.intune_tenant_id}`);
+    for (const tenant of tenantsInPlay) {
+      const history = await getDatabase().uploadHistory.getByUserIdAndTenantId(
+        user.userId,
+        tenant
+      );
+      for (const row of history) {
+        if (wingetIds.includes(row.winget_id)) {
+          deployedSet.add(`${row.winget_id}:${tenant}`);
+        }
       }
     }
 
@@ -194,30 +183,21 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json(
-        {
-          error:
-            'Update dismissal requires Supabase and is not available on this self-hosted deployment',
-        },
-        { status: 503 }
-      );
-    }
+    // Dismissal is per-user state on a row the db abstraction owns, so it
+    // works in both backends. The user id is part of every write, so one user
+    // cannot dismiss another's row.
+    const dismissedAt = action === 'dismiss' ? new Date().toISOString() : null;
+    const db = getDatabase();
 
-    const supabase = createServerClient();
-
-    const updateData = {
-      dismissed_at: action === 'dismiss' ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase
-      .from('update_check_results')
-      .update(updateData)
-      .in('id', update_ids)
-      .eq('user_id', user.userId);
-
-    if (error) {
+    let updated = 0;
+    try {
+      for (const id of update_ids as string[]) {
+        const row = await db.updateCheckResults.setDismissedAt(id, user.userId, dismissedAt);
+        if (row) {
+          updated += 1;
+        }
+      }
+    } catch {
       return NextResponse.json(
         { error: 'Failed to update updates' },
         { status: 500 }
@@ -226,7 +206,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      updated: update_ids.length,
+      updated,
       action,
     });
   } catch {

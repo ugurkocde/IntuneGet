@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -87,42 +88,45 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json(
-        { error: 'Update checking requires Supabase and is not available on this self-hosted deployment' },
-        { status: 503 }
-      );
-    }
+    // The comparison itself needs no Supabase: deployed apps come from Graph,
+    // latest versions from getCatalogSource() (which serves a local snapshot
+    // catalog when Supabase is absent), and the matching heuristics are pure.
+    // Supabase only adds MSP tenant resolution, the consent record, and the
+    // two explicit-mapping sources below - so run without it rather than
+    // refusing the whole check (same shape as unmanaged-apps/route.ts).
+    const supabase = isSupabaseConfigured() ? createServerClient() : null;
+    let tenantId = user.tenantId;
 
-    // Verify admin consent
-    const supabase = createServerClient();
-    const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+    if (supabase) {
+      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
-      supabase,
-      userId: user.userId,
-      tokenTenantId: user.tenantId,
-      requestedTenantId: mspTenantId,
-    });
+      const tenantResolution = await resolveTargetTenantId({
+        supabase,
+        userId: user.userId,
+        tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
 
-    if (tenantResolution.errorResponse) {
-      return tenantResolution.errorResponse;
-    }
+      if (tenantResolution.errorResponse) {
+        return tenantResolution.errorResponse;
+      }
 
-    const tenantId = tenantResolution.tenantId;
+      tenantId = tenantResolution.tenantId;
 
-    const { data: consentData, error: consentError } = await supabase
-      .from('tenant_consent')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .single();
+      // Verify admin consent
+      const { data: consentData, error: consentError } = await supabase
+        .from('tenant_consent')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .single();
 
-    if (consentError || !consentData) {
-      return NextResponse.json(
-        { error: 'Admin consent not found' },
-        { status: 403 }
-      );
+      if (consentError || !consentData) {
+        return NextResponse.json(
+          { error: 'Admin consent not found' },
+          { status: 403 }
+        );
+      }
     }
 
     // Get service principal token
@@ -166,34 +170,39 @@ export async function GET(request: NextRequest) {
     const liveIntuneAppIds = new Set(apps.map((a) => a.id));
 
     // Build explicit app-id to winget-id mappings from deployment history.
+    // Deployment history is the strongest signal for "this app is ours", and
+    // it exists in both backends, so it goes through the db abstraction rather
+    // than a direct Supabase query.
     const uploadHistoryWingetMap = new Map<string, string>();
     const uploadHistoryVersionMap = new Map<string, string>();
-    const { data: tenantHistoryRows } = await supabase
-      .from('upload_history')
-      .select('intune_app_id, winget_id, version')
-      .eq('user_id', user.userId)
-      .eq('intune_tenant_id', tenantId);
+    const tenantHistoryRows = await getDatabase().uploadHistory.getByUserIdAndTenantId(
+      user.userId,
+      tenantId
+    );
 
-    if (tenantHistoryRows) {
-      for (const row of tenantHistoryRows as UploadHistoryMappingRow[]) {
-        if (row.intune_app_id && row.winget_id) {
-          uploadHistoryWingetMap.set(row.intune_app_id, row.winget_id);
-        }
-        if (row.intune_app_id && row.version && liveIntuneAppIds.has(row.intune_app_id)) {
-          uploadHistoryVersionMap.set(row.intune_app_id, row.version);
-        }
+    for (const row of tenantHistoryRows as UploadHistoryMappingRow[]) {
+      if (row.intune_app_id && row.winget_id) {
+        uploadHistoryWingetMap.set(row.intune_app_id, row.winget_id);
+      }
+      if (row.intune_app_id && row.version && liveIntuneAppIds.has(row.intune_app_id)) {
+        uploadHistoryVersionMap.set(row.intune_app_id, row.version);
       }
     }
 
     // Build explicit user-link mappings from the Discovered Apps feature.
     // These take precedence over fuzzy matching: if a user explicitly linked
     // an app to a Winget package, use that link with high confidence.
+    // Claimed apps and manual mappings are Supabase-only features (see the
+    // claim and mappings routes); without them the matcher simply falls back
+    // to deployment history, the description marker and the heuristics.
     const claimedWingetByIntuneAppId = new Map<string, string>();
     const claimedWingetByName = new Map<string, string>();
-    const { data: claimedRows } = await supabase
-      .from('claimed_apps')
-      .select('intune_app_id, discovered_app_name, winget_package_id')
-      .eq('tenant_id', tenantId);
+    const { data: claimedRows } = supabase
+      ? await supabase
+          .from('claimed_apps')
+          .select('intune_app_id, discovered_app_name, winget_package_id')
+          .eq('tenant_id', tenantId)
+      : { data: null };
 
     if (claimedRows) {
       for (const row of claimedRows as ClaimedAppMappingRow[]) {
@@ -215,10 +224,12 @@ export async function GET(request: NextRequest) {
     // Manual mappings are keyed by lowercased display name; include tenant
     // mappings and global (tenant_id is null) mappings.
     const manualWingetByName = new Map<string, string>();
-    const { data: manualMappingRows } = await supabase
-      .from('manual_app_mappings')
-      .select('discovered_app_name, winget_package_id')
-      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+    const { data: manualMappingRows } = supabase
+      ? await supabase
+          .from('manual_app_mappings')
+          .select('discovered_app_name, winget_package_id')
+          .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+      : { data: null };
 
     if (manualMappingRows) {
       for (const row of manualMappingRows as ManualAppMappingRow[]) {

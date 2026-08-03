@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord } from '../types';
+import type {
+  DatabaseAdapter,
+  PackagingJob,
+  UpdateCheckResult,
+  UploadHistoryRecord,
+} from '../types';
 
 // Create an in-memory SQLite adapter for testing
 function createTestAdapter(): DatabaseAdapter & { close: () => void } {
@@ -88,6 +93,36 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
     CREATE INDEX IF NOT EXISTS idx_upload_history_user_id ON upload_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_upload_history_deployed_at ON upload_history(deployed_at);
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS update_check_results (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      winget_id TEXT NOT NULL,
+      intune_app_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      current_version TEXT NOT NULL,
+      latest_version TEXT NOT NULL,
+      is_critical INTEGER NOT NULL DEFAULT 0,
+      is_managed INTEGER NOT NULL DEFAULT 1,
+      large_icon_type TEXT,
+      large_icon_value TEXT,
+      notified_at TEXT,
+      dismissed_at TEXT,
+      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, tenant_id, winget_id, intune_app_id)
+    )
+  `);
+
+  function parseUpdateCheckRow(row: Record<string, unknown>): UpdateCheckResult {
+    return {
+      ...row,
+      is_critical: Boolean(row.is_critical),
+      is_managed: Boolean(row.is_managed),
+    } as UpdateCheckResult;
+  }
 
   function parseJobRow(row: Record<string, unknown>): PackagingJob {
     return {
@@ -411,6 +446,91 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
           ORDER BY deployed_at DESC
         `);
         return stmt.all(userId, tenantId) as UploadHistoryRecord[];
+      },
+    },
+
+    updateCheckResults: {
+      async getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]> {
+        const stmt = tenantId
+          ? db.prepare(`
+              SELECT * FROM update_check_results
+              WHERE user_id = ? AND tenant_id = ?
+              ORDER BY detected_at DESC
+            `)
+          : db.prepare(`
+              SELECT * FROM update_check_results
+              WHERE user_id = ?
+              ORDER BY detected_at DESC
+            `);
+        const rows = (
+          tenantId ? stmt.all(userId, tenantId) : stmt.all(userId)
+        ) as Record<string, unknown>[];
+        return rows.map(parseUpdateCheckRow);
+      },
+
+      async replaceForUserAndTenant(
+        userId: string,
+        tenantId: string,
+        rows: Array<Partial<UpdateCheckResult>>
+      ): Promise<UpdateCheckResult[]> {
+        const now = new Date().toISOString();
+        db.prepare('DELETE FROM update_check_results WHERE user_id = ? AND tenant_id = ?').run(
+          userId,
+          tenantId
+        );
+        const insert = db.prepare(`
+          INSERT INTO update_check_results (
+            id, user_id, tenant_id, winget_id, intune_app_id, display_name,
+            current_version, latest_version, is_critical, is_managed,
+            large_icon_type, large_icon_value, notified_at, dismissed_at,
+            detected_at, updated_at
+          ) VALUES (
+            @id, @user_id, @tenant_id, @winget_id, @intune_app_id, @display_name,
+            @current_version, @latest_version, @is_critical, @is_managed,
+            @large_icon_type, @large_icon_value, @notified_at, @dismissed_at,
+            @detected_at, @updated_at
+          )
+        `);
+        for (const row of rows) {
+          insert.run({
+            id: row.id || crypto.randomUUID(),
+            user_id: userId,
+            tenant_id: tenantId,
+            winget_id: row.winget_id,
+            intune_app_id: row.intune_app_id,
+            display_name: row.display_name,
+            current_version: row.current_version,
+            latest_version: row.latest_version,
+            is_critical: row.is_critical ? 1 : 0,
+            is_managed: row.is_managed === false ? 0 : 1,
+            large_icon_type: row.large_icon_type ?? null,
+            large_icon_value: row.large_icon_value ?? null,
+            notified_at: row.notified_at ?? null,
+            dismissed_at: row.dismissed_at ?? null,
+            detected_at: row.detected_at || now,
+            updated_at: now,
+          });
+        }
+        return this.getByUserId(userId, tenantId);
+      },
+
+      async setDismissedAt(
+        id: string,
+        userId: string,
+        dismissedAt: string | null
+      ): Promise<UpdateCheckResult | null> {
+        const result = db
+          .prepare(
+            'UPDATE update_check_results SET dismissed_at = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+          )
+          .run(dismissedAt, new Date().toISOString(), id, userId);
+        if (result.changes === 0) {
+          return null;
+        }
+        const row = db
+          .prepare('SELECT * FROM update_check_results WHERE id = ?')
+          .get(id) as Record<string, unknown> | undefined;
+        return row ? parseUpdateCheckRow(row) : null;
       },
     },
   };
@@ -957,6 +1077,113 @@ describe('SQLite Database Adapter', () => {
       const history = await adapter.uploadHistory.getByUserIdAndTenantId('user-1', 'tenant-quiet');
 
       expect(history.map((h) => h.winget_id)).toEqual(['Quiet.App']);
+    });
+  });
+  describe('updateCheckResults', () => {
+    function makeUpdate(overrides: Partial<UpdateCheckResult> = {}): Partial<UpdateCheckResult> {
+      return {
+        winget_id: 'Microsoft.Edge',
+        intune_app_id: 'app-1',
+        display_name: 'Edge',
+        current_version: '1.0.0',
+        latest_version: '1.1.0',
+        is_critical: false,
+        is_managed: true,
+        ...overrides,
+      };
+    }
+
+    it('round-trips booleans rather than leaking SQLite 0/1', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ is_critical: true, is_managed: false }),
+      ]);
+
+      const [row] = await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1');
+
+      expect(row.is_critical).toBe(true);
+      expect(row.is_managed).toBe(false);
+    });
+
+    it('replaces a tenant set instead of merging into it', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge', intune_app_id: 'app-1' }),
+        makeUpdate({ winget_id: 'Git.Git', intune_app_id: 'app-2' }),
+      ]);
+
+      // Git.Git is no longer detected: it must disappear rather than linger as
+      // a phantom update the user can never clear.
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge', intune_app_id: 'app-1' }),
+      ]);
+
+      const rows = await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1');
+      expect(rows.map((r) => r.winget_id)).toEqual(['Microsoft.Edge']);
+    });
+
+    it('leaves other tenants alone when replacing one', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge' }),
+      ]);
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-2', [
+        makeUpdate({ winget_id: 'Git.Git' }),
+      ]);
+
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', []);
+
+      expect(await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1')).toEqual([]);
+      expect(
+        (await adapter.updateCheckResults.getByUserId('user-1', 'tenant-2')).map((r) => r.winget_id)
+      ).toEqual(['Git.Git']);
+    });
+
+    it('returns every tenant when no tenant is given', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge' }),
+      ]);
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-2', [
+        makeUpdate({ winget_id: 'Git.Git' }),
+      ]);
+
+      const rows = await adapter.updateCheckResults.getByUserId('user-1');
+
+      expect(rows.map((r) => r.winget_id).sort()).toEqual(['Git.Git', 'Microsoft.Edge']);
+    });
+
+    it('persists dismissed_at handed back through a replace', async () => {
+      // The refresh route re-derives rows from a live scan and passes the prior
+      // dismissed_at back for unchanged versions, so dismissing an update
+      // survives a refresh. The store must keep what it is given.
+      const dismissedAt = '2026-02-01T10:00:00.000Z';
+
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ dismissed_at: dismissedAt }),
+      ]);
+
+      const [row] = await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1');
+      expect(row.dismissed_at).toBe(dismissedAt);
+    });
+
+    it('dismisses only the owning user rows', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ id: 'upd-1' }),
+      ]);
+
+      const foreign = await adapter.updateCheckResults.setDismissedAt(
+        'upd-1',
+        'someone-else',
+        '2026-02-01T10:00:00.000Z'
+      );
+      expect(foreign).toBeNull();
+
+      const own = await adapter.updateCheckResults.setDismissedAt(
+        'upd-1',
+        'user-1',
+        '2026-02-01T10:00:00.000Z'
+      );
+      expect(own?.dismissed_at).toBe('2026-02-01T10:00:00.000Z');
+
+      const restored = await adapter.updateCheckResults.setDismissedAt('upd-1', 'user-1', null);
+      expect(restored?.dismissed_at).toBeNull();
     });
   });
 });
