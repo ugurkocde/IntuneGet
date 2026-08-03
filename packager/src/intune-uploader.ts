@@ -364,7 +364,13 @@ export class IntuneUploader {
       installCommandLine: commands.install,
       uninstallCommandLine: commands.uninstall,
       applicableArchitectures: this.mapArchitecture(job.architecture),
-      minimumSupportedWindowsRelease: 'v10_1903',
+      // Graph has two ways to express this and they take different values:
+      // minimumSupportedOperatingSystem is an object of v10_* booleans (what
+      // lib/intune-api.ts uses), minimumSupportedWindowsRelease is a bare
+      // release string. Passing the object form's 'v10_1903' to the string
+      // property is rejected with "Unknown MinimumSupportedWindowsRelease".
+      // Matches package-intunewin.yml, which creates the app the same way.
+      minimumSupportedWindowsRelease: '1903',
       runAs32Bit: false,
       // Graph rejects the create call with "FileName for Win32 LOB app cannot
       // be empty" when this is missing. It is the name of the uploaded package

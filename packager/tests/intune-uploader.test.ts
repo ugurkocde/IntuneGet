@@ -135,6 +135,37 @@ describe('IntuneUploader.createWin32App (accessed via private-method cast)', () 
     });
   });
 
+  it('sends minimumSupportedWindowsRelease as a bare release string', async () => {
+    // Regression: 'v10_1903' belongs to the minimumSupportedOperatingSystem
+    // object form; the minimumSupportedWindowsRelease string property takes
+    // '1903' and rejects the prefixed value with "Unknown
+    // MinimumSupportedWindowsRelease: v10_1903". package-intunewin.yml sends
+    // the bare string.
+    const postMock = vi.fn().mockResolvedValue({ id: 'app-6' });
+    const graphClientStub = { post: postMock };
+
+    const uploader = new IntuneUploader(makeConfig());
+    const uploaderInternal = uploader as unknown as {
+      fetchLargeIcon: (job: PackagingJob) => Promise<unknown>;
+      createWin32App: (
+        graphClient: typeof graphClientStub,
+        job: PackagingJob,
+        packageFileName: string
+      ) => Promise<{ id: string }>;
+    };
+    vi.spyOn(uploaderInternal, 'fetchLargeIcon').mockResolvedValue(null);
+
+    await uploaderInternal.createWin32App(
+      graphClientStub,
+      makeJob(),
+      'Invoke-AppDeployToolkit.intunewin'
+    );
+
+    const [, body] = postMock.mock.calls[0];
+    expect(body).toMatchObject({ minimumSupportedWindowsRelease: '1903' });
+    expect(body).not.toHaveProperty('minimumSupportedOperatingSystem');
+  });
+
   it('maps notExists to the doesNotExist operation type Graph expects', async () => {
     const postMock = vi.fn().mockResolvedValue({ id: 'app-3' });
     const graphClientStub = { post: postMock };
