@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 
 interface DailyDeployment {
@@ -52,36 +52,17 @@ export async function GET(request: NextRequest) {
       now.getUTCDate() - days
     ));
 
-    const supabase = createServerClient();
-
-    // Define the shape of jobs returned from the query
-    interface PackagingJobAnalytics {
-      id: string;
-      winget_id: string;
-      display_name: string;
-      publisher: string | null;
-      status: string;
-      error_message: string | null;
-      created_at: string;
-      completed_at: string | null;
-    }
-
-    // Get all jobs in date range
-    const { data: jobs, error: jobsError } = await supabase
-      .from('packaging_jobs')
-      .select('id, winget_id, display_name, publisher, status, error_message, created_at, completed_at')
-      .eq('user_id', user.userId)
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: false });
-
-    if (jobsError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch analytics data' },
-        { status: 500 }
-      );
-    }
-
-    const allJobs = (jobs || []) as PackagingJobAnalytics[];
+    // Reports are derived entirely from packaging_jobs, which exists in both
+    // backends, so this works in Supabase-less SQLite installs too. It
+    // previously called createServerClient() unconditionally, which throws
+    // without Supabase config and made the whole Reports page answer 500.
+    // The date window is applied here rather than in the query: the adapter
+    // returns a user's jobs newest-first and uncapped, so narrowing in memory
+    // cannot drop rows the report should have counted.
+    const startIso = startDate.toISOString();
+    const allJobs = (await getDatabase().jobs.getAllByUserId(user.userId)).filter(
+      (job) => job.created_at >= startIso
+    );
 
     // Calculate success rate
     const completedJobs = allJobs.filter((j) => j.status === 'completed').length;
