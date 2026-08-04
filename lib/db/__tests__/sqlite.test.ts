@@ -95,6 +95,15 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT PRIMARY KEY,
+      settings TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS update_check_results (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -446,6 +455,45 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
           ORDER BY deployed_at DESC
         `);
         return stmt.all(userId, tenantId) as UploadHistoryRecord[];
+      },
+    },
+
+    userSettings: {
+      async get(userId: string): Promise<Record<string, unknown> | null> {
+        const row = db
+          .prepare('SELECT settings FROM user_settings WHERE user_id = ?')
+          .get(userId) as { settings: string } | undefined;
+        if (!row) return null;
+        try {
+          return JSON.parse(row.settings) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      },
+
+      async merge(
+        userId: string,
+        partial: Record<string, unknown>
+      ): Promise<Record<string, unknown>> {
+        const now = new Date().toISOString();
+        const row = db
+          .prepare('SELECT settings FROM user_settings WHERE user_id = ?')
+          .get(userId) as { settings: string } | undefined;
+        let current: Record<string, unknown> = {};
+        if (row) {
+          try {
+            current = JSON.parse(row.settings) as Record<string, unknown>;
+          } catch {
+            current = {};
+          }
+        }
+        const merged = { ...current, ...partial };
+        db.prepare(
+          `INSERT INTO user_settings (user_id, settings, created_at, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`
+        ).run(userId, JSON.stringify(merged), now, now);
+        return merged;
       },
     },
 
@@ -1184,6 +1232,42 @@ describe('SQLite Database Adapter', () => {
 
       const restored = await adapter.updateCheckResults.setDismissedAt('upd-1', 'user-1', null);
       expect(restored?.dismissed_at).toBeNull();
+    });
+  });
+
+  describe('userSettings', () => {
+    it('returns null for a user who never saved settings', async () => {
+      expect(await adapter.userSettings.get('nobody')).toBeNull();
+    });
+
+    it('merges into stored settings rather than replacing them', async () => {
+      await adapter.userSettings.merge('user-1', {
+        carryOverAssignments: true,
+        supersedePreviousApp: true,
+      });
+
+      // Saving one toggle must not clear the other - the settings page sends
+      // only the key that changed.
+      const merged = await adapter.userSettings.merge('user-1', {
+        carryOverAssignments: false,
+      });
+
+      expect(merged).toEqual({
+        carryOverAssignments: false,
+        supersedePreviousApp: true,
+      });
+      expect(await adapter.userSettings.get('user-1')).toEqual({
+        carryOverAssignments: false,
+        supersedePreviousApp: true,
+      });
+    });
+
+    it('keeps users apart', async () => {
+      await adapter.userSettings.merge('user-1', { carryOverAssignments: true });
+      await adapter.userSettings.merge('user-2', { carryOverAssignments: false });
+
+      expect(await adapter.userSettings.get('user-1')).toEqual({ carryOverAssignments: true });
+      expect(await adapter.userSettings.get('user-2')).toEqual({ carryOverAssignments: false });
     });
   });
 });

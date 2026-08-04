@@ -17,6 +17,7 @@ const {
   createJobMock,
   buildDeploymentConfigForAppMock,
   appExistsMock,
+  getUserSettingsMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
   createServerClientMock: vi.fn(),
@@ -33,6 +34,7 @@ const {
   createJobMock: vi.fn(),
   buildDeploymentConfigForAppMock: vi.fn(),
   appExistsMock: vi.fn(),
+  getUserSettingsMock: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -201,7 +203,9 @@ describe('POST /api/updates/trigger', () => {
       updateCheckResults: { getByUserId: getDetectedUpdatesMock },
       uploadHistory: { getByUserIdAndTenantId: getHistoryMock },
       jobs: { create: createJobMock },
+      userSettings: { get: getUserSettingsMock },
     });
+    getUserSettingsMock.mockResolvedValue(null);
     getDetectedUpdatesMock.mockResolvedValue([]);
     getHistoryMock.mockResolvedValue([]);
     createJobMock.mockResolvedValue({ id: 'job-new' });
@@ -609,6 +613,76 @@ describe('POST /api/updates/trigger', () => {
       expect(body.failed).toBe(1);
       expect(body.results[0].error).toMatch(/local packager/);
       expect(createJobMock).not.toHaveBeenCalled();
+    });
+    it('carries assignments over and supersedes when the user enabled both', async () => {
+      // Regression: these two settings live in user_settings, which the
+      // Supabase-less path did not read - it hardcoded carry-over to false and
+      // omitted autoSupersede entirely. The result in Intune was both versions
+      // assigned and the old app not marked as superseded, which is exactly
+      // what the toggles are there to prevent.
+      getUserSettingsMock.mockResolvedValue({
+        carryOverAssignments: true,
+        supersedePreviousApp: true,
+      });
+      getHistoryMock.mockResolvedValue([
+        { winget_id: 'Mozilla.Firefox', intune_app_id: 'current-app-id' },
+      ]);
+
+      await POST(triggerRequest());
+
+      const job = createJobMock.mock.calls[0][0];
+      expect(job.package_config).toMatchObject({
+        autoSupersede: true,
+        supersedenceType: 'update',
+        sourceIntuneAppId: 'current-app-id',
+        assignmentMigration: {
+          carryOverAssignments: true,
+          removeAssignmentsFromPreviousApp: true,
+        },
+      });
+    });
+
+    it('leaves the previous app alone when the user disabled both', async () => {
+      getUserSettingsMock.mockResolvedValue({
+        carryOverAssignments: false,
+        supersedePreviousApp: false,
+      });
+
+      await POST(triggerRequest());
+
+      const job = createJobMock.mock.calls[0][0];
+      expect(job.package_config.autoSupersede).toBe(false);
+      expect(job.package_config.supersedenceType).toBeUndefined();
+      expect(job.package_config.assignmentMigration).toEqual({
+        carryOverAssignments: false,
+        removeAssignmentsFromPreviousApp: false,
+      });
+    });
+
+    it('does not claim supersedence when there is no app to supersede', async () => {
+      // Nothing to point at: the detected result has no app id either.
+      getUserSettingsMock.mockResolvedValue({ supersedePreviousApp: true });
+      getHistoryMock.mockResolvedValue([]);
+      getDetectedUpdatesMock.mockResolvedValue([
+        { ...detectedUpdate, intune_app_id: '' },
+      ]);
+
+      await POST(triggerRequest());
+
+      const job = createJobMock.mock.calls[0][0];
+      expect(job.package_config.autoSupersede).toBe(false);
+      expect(job.package_config.supersedenceType).toBeUndefined();
+    });
+
+    it('passes the carry-over setting into the deployment config builder', async () => {
+      getUserSettingsMock.mockResolvedValue({ carryOverAssignments: true });
+
+      await POST(triggerRequest());
+
+      expect(buildDeploymentConfigForAppMock).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ globalCarryOver: true })
+      );
     });
   });
 });

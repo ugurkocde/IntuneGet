@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { DEFAULT_USER_SETTINGS } from '@/types/user-settings';
 import type { UserSettings, UserSettingsUpdate } from '@/types/user-settings';
@@ -76,33 +76,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient() as ReturnType<typeof createServerClient> & {
-      from: (relation: string, ...args: unknown[]) => any;
-    };
+    // user_settings is a plain per-user JSON blob and exists in both backends,
+    // so this goes through the db abstraction. It previously called
+    // createServerClient() unconditionally, which throws without Supabase - so
+    // in a self-hosted install these settings could never be read or saved,
+    // and the update path silently fell back to "carry over off, no
+    // supersedence" no matter what the toggles showed.
+    const stored = await getDatabase().userSettings.get(user.userId);
 
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('settings')
-      .eq('user_id', user.userId)
-      .maybeSingle();
-
-    if (error) {
-      return NextResponse.json(
-        { error: 'Failed to fetch user settings' },
-        { status: 500 }
-      );
-    }
-
-    const storedSettings = isStoredSettings(data?.settings)
-      ? (data?.settings as Record<string, unknown>)
-      : undefined;
-    const sanitizedStoredSettings = storedSettings
-      ? sanitizeSettings(storedSettings)
+    const sanitizedStoredSettings = isStoredSettings(stored)
+      ? sanitizeSettings(stored as Record<string, unknown>)
       : {};
-    const hasStoredSettings =
-      data !== null &&
-      data !== undefined &&
-      Object.keys(sanitizedStoredSettings).length > 0;
+    const hasStoredSettings = Object.keys(sanitizedStoredSettings).length > 0;
 
     const merged = {
       ...DEFAULT_USER_SETTINGS,
@@ -141,65 +126,24 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient() as ReturnType<typeof createServerClient> & {
-      from: (relation: string, ...args: unknown[]) => any;
-    };
-
-    const { data: existingRow, error: fetchError } = await supabase
-      .from('user_settings')
-      .select('settings')
-      .eq('user_id', user.userId)
-      .maybeSingle();
-
-    if (fetchError) {
+    // The adapter merges read-and-write in one step, so a concurrent save
+    // cannot merge onto a stale base and drop the other one's keys.
+    let mergedRow: Record<string, unknown>;
+    try {
+      mergedRow = await getDatabase().userSettings.merge(
+        user.userId,
+        settingsUpdate as Record<string, unknown>
+      );
+    } catch {
       return NextResponse.json(
         { error: 'Failed to update user settings' },
         { status: 500 }
       );
     }
 
-    const existingSettings = sanitizeSettings(
-      isStoredSettings(existingRow?.settings)
-        ? (existingRow?.settings as Record<string, unknown>)
-        : {}
+    const updatedSettings = sanitizeSettings(
+      isStoredSettings(mergedRow) ? mergedRow : (settingsUpdate as Record<string, unknown>)
     );
-
-    const mergedSettings: UserSettingsUpdate = {
-      ...existingSettings,
-      ...settingsUpdate,
-    };
-
-    const { data: updatedRow, error: upsertError } = await supabase
-      .from('user_settings')
-      .upsert(
-        {
-          user_id: user.userId,
-          settings: mergedSettings,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      )
-      .select('settings')
-      .single();
-
-    if (upsertError) {
-      return NextResponse.json(
-        { error: 'Failed to update user settings' },
-        { status: 500 }
-      );
-    }
-
-    if (!updatedRow) {
-      return NextResponse.json(
-        { error: 'Failed to read updated user settings' },
-        { status: 500 }
-      );
-    }
-
-    const updatedStoredSettings = isStoredSettings(updatedRow.settings)
-      ? (updatedRow.settings as Record<string, unknown>)
-      : mergedSettings;
-    const updatedSettings = sanitizeSettings(updatedStoredSettings);
 
     return NextResponse.json({
       settings: {

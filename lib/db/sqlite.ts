@@ -175,6 +175,16 @@ function initializeSchema(db: Database.Database): void {
     )
   `);
 
+  // Per-user settings blob. Mirrors user_settings in supabase/migrations/020.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT PRIMARY KEY,
+      settings TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_update_check_results_user ON update_check_results(user_id);
     CREATE INDEX IF NOT EXISTS idx_update_check_results_tenant ON update_check_results(tenant_id);
@@ -598,6 +608,62 @@ export const sqliteDb: DatabaseAdapter = {
         ORDER BY deployed_at DESC
       `);
       return stmt.all(userId, tenantId) as UploadHistoryRecord[];
+    },
+  },
+
+  userSettings: {
+    async get(userId: string): Promise<Record<string, unknown> | null> {
+      const database = getDb();
+      const row = database
+        .prepare('SELECT settings FROM user_settings WHERE user_id = ?')
+        .get(userId) as { settings: string } | undefined;
+
+      if (!row) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(row.settings) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    },
+
+    async merge(
+      userId: string,
+      partial: Record<string, unknown>
+    ): Promise<Record<string, unknown>> {
+      const database = getDb();
+      const now = new Date().toISOString();
+
+      // Read and write in one transaction so two concurrent saves cannot each
+      // merge onto the same stale base and lose one another's keys.
+      const mergeSettings = database.transaction(() => {
+        const row = database
+          .prepare('SELECT settings FROM user_settings WHERE user_id = ?')
+          .get(userId) as { settings: string } | undefined;
+
+        let current: Record<string, unknown> = {};
+        if (row) {
+          try {
+            current = JSON.parse(row.settings) as Record<string, unknown>;
+          } catch {
+            current = {};
+          }
+        }
+
+        const merged = { ...current, ...partial };
+        database
+          .prepare(
+            `INSERT INTO user_settings (user_id, settings, created_at, updated_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`
+          )
+          .run(userId, JSON.stringify(merged), now, now);
+        return merged;
+      });
+
+      return mergeSettings();
     },
   },
 

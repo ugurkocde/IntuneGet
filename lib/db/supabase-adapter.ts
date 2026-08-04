@@ -100,6 +100,37 @@ function getPackagingJobsQuery(supabase: ReturnType<typeof createServerClient>):
   return supabase.from('packaging_jobs') as unknown as PackagingJobsQueryBuilder;
 }
 
+interface UserSettingsRow {
+  settings: Record<string, unknown>;
+}
+
+interface UserSettingsQueryBuilder {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      maybeSingle(): Promise<QueryResult<UserSettingsRow>>;
+    };
+  };
+  upsert(
+    data: Record<string, unknown>,
+    options: { onConflict: string }
+  ): Promise<{ error: PostgrestError | null }>;
+}
+
+/**
+ * Get a query builder for user_settings. The generated Database type does not
+ * cover this table, so the client is cast the same way the settings route
+ * already does it.
+ */
+function getUserSettingsQuery(
+  supabase: ReturnType<typeof createServerClient>
+): UserSettingsQueryBuilder {
+  // The table name itself is unknown to the generated type, so the client is
+  // widened before the call rather than the result after it.
+  return (supabase as unknown as { from: (table: string) => unknown }).from(
+    'user_settings'
+  ) as UserSettingsQueryBuilder;
+}
+
 /**
  * Get a typed query builder for upload_history table
  */
@@ -576,6 +607,60 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return data || [];
+    },
+  },
+
+  userSettings: {
+    async get(userId: string): Promise<Record<string, unknown> | null> {
+      const supabase = createServerClient();
+
+      const { data, error } = await getUserSettingsQuery(supabase)
+        .select('settings')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (isError(error)) {
+        console.error('Error fetching user settings:', error);
+        throw error;
+      }
+
+      return data?.settings ?? null;
+    },
+
+    async merge(
+      userId: string,
+      partial: Record<string, unknown>
+    ): Promise<Record<string, unknown>> {
+      const supabase = createServerClient();
+
+      const { data: existing, error: readError } = await getUserSettingsQuery(supabase)
+        .select('settings')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (isError(readError)) {
+        console.error('Error reading user settings before merge:', readError);
+        throw readError;
+      }
+
+      const current = existing?.settings ?? {};
+      const merged = { ...current, ...partial };
+
+      const { error: writeError } = await getUserSettingsQuery(supabase).upsert(
+        {
+          user_id: userId,
+          settings: merged,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+
+      if (isError(writeError)) {
+        console.error('Error writing user settings:', writeError);
+        throw writeError;
+      }
+
+      return merged;
     },
   },
 

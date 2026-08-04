@@ -106,6 +106,20 @@ export interface UpdateCheckResult {
 }
 
 /**
+ * Per-user settings blob.
+ *
+ * Mirrors the user_settings table (supabase/migrations/020). A single JSON
+ * object per user; the app treats unknown keys as pass-through, so the shape
+ * is deliberately open.
+ */
+export interface UserSettingsRecord {
+  user_id: string;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Job statistics
  */
 export interface JobStats {
@@ -227,6 +241,23 @@ export interface DatabaseAdapter {
      * tenants cannot have this tenant's rows pushed out by another tenant's.
      */
     getByUserIdAndTenantId(userId: string, tenantId: string): Promise<UploadHistoryRecord[]>;
+  };
+
+  userSettings: {
+    /**
+     * A user's settings object, or null if they never saved any.
+     */
+    get(userId: string): Promise<Record<string, unknown> | null>;
+
+    /**
+     * Merge a partial settings object into the stored one and return the
+     * result. Callers send only the keys they are changing, so this must
+     * merge rather than replace.
+     */
+    merge(
+      userId: string,
+      partial: Record<string, unknown>
+    ): Promise<Record<string, unknown>>;
   };
 
   updateCheckResults: {

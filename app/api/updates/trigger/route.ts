@@ -449,6 +449,16 @@ async function triggerWithoutSupabase(
   updateRequests: { winget_id: string; tenant_id: string }[]
 ): Promise<NextResponse> {
   const db = getDatabase();
+
+  // carryOverAssignments and supersedePreviousApp are user settings, and they
+  // decide what happens to the app being replaced: whether its assignments
+  // move to the new version and whether Intune records the new app as
+  // superseding it. Reading them is not optional - defaulting to false leaves
+  // both versions assigned and nothing superseded.
+  const storedSettings = (await db.userSettings.get(user.userId)) ?? {};
+  const globalCarryOver = Boolean(storedSettings.carryOverAssignments);
+  const supersedePrevious = Boolean(storedSettings.supersedePreviousApp);
+
   const response: TriggerUpdateResponse = {
     success: true,
     triggered: 0,
@@ -500,9 +510,7 @@ async function triggerWithoutSupabase(
         tenantId: req.tenant_id,
         wingetId: req.winget_id,
         latestVersion: updateResult.latest_version,
-        // carryOverAssignments lives in user_settings, which is Supabase-only;
-        // fall back to the config stored on the original packaging job.
-        globalCarryOver: false,
+        globalCarryOver,
       });
 
       if (built.status === 'orphaned_job') {
@@ -538,6 +546,10 @@ async function triggerWithoutSupabase(
       const sourceIntuneAppId =
         latestUpload?.intune_app_id || updateResult.intune_app_id || null;
 
+      // Supersedence needs something to supersede; without a source app id
+      // Intune has no previous version to point at.
+      const autoSupersede = supersedePrevious && Boolean(sourceIntuneAppId);
+
       const job = await db.jobs.create({
         user_id: user.userId,
         user_email: user.userEmail || null,
@@ -565,7 +577,14 @@ async function triggerWithoutSupabase(
           nestedInstallerPath: installerInfo.nestedInstallerPath,
           forceCreate: config.forceCreateNewApp !== false,
           sourceIntuneAppId,
-          assignmentMigration: config.assignmentMigration,
+          autoSupersede,
+          supersedenceType: autoSupersede ? 'update' : undefined,
+          // The current setting wins over whatever the original deployment
+          // stored, matching how the Supabase path re-reads it per run.
+          assignmentMigration: {
+            carryOverAssignments: globalCarryOver,
+            removeAssignmentsFromPreviousApp: globalCarryOver,
+          },
           description: config.description,
           notes: config.notes,
         } as unknown as Json,
