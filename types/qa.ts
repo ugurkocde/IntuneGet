@@ -59,10 +59,21 @@ export interface QaStatusRow {
   tested_at_utc: string;
 }
 
+export interface QaCandidateStatusRow {
+  winget_id: string;
+  version: string;
+  architecture: QaArchitecture;
+  installer_sha256: string;
+  status: 'queued' | 'dispatched' | 'running';
+  enqueued_at: string;
+  started_at: string | null;
+}
+
 /** Full compact database row used only when details or the gate are requested. */
 export interface QaResultRow extends QaStatusRow {
   display_name: string;
   publisher: string;
+  installer_sha256: string | null;
   overall_duration_seconds: number | null;
   installer_type: string | null;
   install_command: string;
@@ -77,10 +88,11 @@ export interface QaResultRow extends QaStatusRow {
 }
 
 export interface QaStatus {
-  outcome: QaOutcome;
+  outcome: QaOutcome | 'Queued' | 'Running';
   testedVersion: string;
   architecture: QaArchitecture;
   testedAtUtc: string;
+  installerSha256?: string;
 }
 
 export type QaBadgeState =
@@ -88,6 +100,8 @@ export type QaBadgeState =
   | 'failed'
   | 'stale_passed'
   | 'stale_failed'
+  | 'queued'
+  | 'running'
   | 'untested';
 
 export type QaFailureBucket =

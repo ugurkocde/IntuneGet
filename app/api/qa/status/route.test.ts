@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { getQaStatusesMock, applyRateLimitMock } = vi.hoisted(() => ({
+const { getQaStatusesMock, getQaCandidateStatusesMock, applyRateLimitMock } = vi.hoisted(() => ({
   getQaStatusesMock: vi.fn(),
+  getQaCandidateStatusesMock: vi.fn(),
   applyRateLimitMock: vi.fn(),
 }));
 vi.mock('@/lib/catalog', () => ({
-  getCatalogSource: () => ({ getQaStatuses: getQaStatusesMock }),
+  getCatalogSource: () => ({
+    getQaStatuses: getQaStatusesMock,
+    getQaCandidateStatuses: getQaCandidateStatusesMock,
+  }),
 }));
 vi.mock('@/lib/rate-limit', () => ({
   applyRateLimit: applyRateLimitMock,
@@ -19,6 +23,7 @@ import { GET } from './route';
 describe('GET /api/qa/status', () => {
   beforeEach(() => {
     getQaStatusesMock.mockReset();
+    getQaCandidateStatusesMock.mockReset().mockResolvedValue([]);
     applyRateLimitMock.mockReset().mockResolvedValue(null);
   });
 
@@ -38,7 +43,7 @@ describe('GET /api/qa/status', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toContain('s-maxage=300');
+    expect(response.headers.get('cache-control')).toContain('s-maxage=60');
     expect(body.statuses['OpenJS.NodeJS']).toMatchObject({ outcome: 'Passed', testedVersion: '26.7.0' });
     expect(body.statuses['Mozilla.Firefox']).toBeNull();
   });
@@ -54,6 +59,28 @@ describe('GET /api/qa/status', () => {
     expect(mixed.status).toBe(200);
     expect((await mixed.json()).statuses['9NBLGGH4NNS1']).toBeNull();
     expect(getQaStatusesMock).toHaveBeenCalledWith(['OpenJS.NodeJS']);
+  });
+
+  it('overlays an active candidate on the last completed result', async () => {
+    getQaStatusesMock.mockResolvedValue([]);
+    getQaCandidateStatusesMock.mockResolvedValue([
+      {
+        winget_id: 'OpenJS.NodeJS',
+        version: '27.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        status: 'running',
+        enqueued_at: '2026-08-07T12:00:00Z',
+        started_at: '2026-08-07T12:01:00Z',
+      },
+    ]);
+    const response = await GET(
+      new NextRequest('http://localhost/api/qa/status?ids=OpenJS.NodeJS')
+    );
+    expect((await response.json()).statuses['OpenJS.NodeJS']).toMatchObject({
+      outcome: 'Running',
+      testedVersion: '27.0.0',
+    });
   });
 
   it('rejects oversized ID sets before querying the catalog', async () => {

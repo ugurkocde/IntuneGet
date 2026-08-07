@@ -23,4 +23,11 @@ describe('deriveQaBadgeState', () => {
     expect(deriveQaBadgeState(passed, '8.9.70')).toBe('stale_passed');
     expect(deriveQaBadgeState({ ...passed, outcome: 'Failed' }, '8.9.8')).toBe('stale_failed');
   });
+
+  it('shows active candidate states even while the catalog version catches up', () => {
+    const running: QaStatus = { ...passed, outcome: 'Running', testedVersion: '9.0.0' };
+    expect(deriveQaBadgeState(running, '9.0.0')).toBe('running');
+    expect(deriveQaBadgeState({ ...running, outcome: 'Queued' }, '9.0.0')).toBe('queued');
+    expect(deriveQaBadgeState(running, '8.9.7')).toBe('running');
+  });
 });

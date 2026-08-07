@@ -30,6 +30,7 @@ export interface Database {
           publisher: string;
           tested_version: string;
           architecture: string;
+          installer_sha256: string | null;
           outcome: string;
           tested_at_utc: string;
           overall_duration_seconds: number | null;
@@ -53,6 +54,7 @@ export interface Database {
           publisher: string;
           tested_version: string;
           architecture: string;
+          installer_sha256?: string | null;
           outcome: string;
           tested_at_utc: string;
           overall_duration_seconds?: number | null;
@@ -76,6 +78,7 @@ export interface Database {
           publisher?: string;
           tested_version?: string;
           architecture?: string;
+          installer_sha256?: string | null;
           outcome?: string;
           tested_at_utc?: string;
           overall_duration_seconds?: number | null;
@@ -93,6 +96,81 @@ export interface Database {
           qa_schema_version?: number;
           synced_at?: string;
         };
+        Relationships: GenericRelationship[];
+      };
+      qa_recipes: {
+        Row: {
+          winget_id: string;
+          definition_path: string;
+          architecture: string;
+          installer_type: string;
+          active: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          winget_id: string;
+          definition_path: string;
+          architecture: string;
+          installer_type: string;
+          active?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          winget_id?: string;
+          definition_path?: string;
+          architecture?: string;
+          installer_type?: string;
+          active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
+      qa_candidates: {
+        Row: {
+          id: string;
+          winget_id: string;
+          definition_path: string;
+          version: string;
+          architecture: string;
+          installer_url: string;
+          installer_sha256: string;
+          installer_type: string;
+          installer_file_name: string;
+          status: string;
+          priority: number;
+          attempts: number;
+          enqueued_at: string;
+          dispatched_at: string | null;
+          started_at: string | null;
+          finished_at: string | null;
+          github_run_id: string | null;
+          github_run_url: string | null;
+          failure_summary: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          winget_id: string;
+          definition_path: string;
+          version: string;
+          architecture: string;
+          installer_url: string;
+          installer_sha256: string;
+          installer_type: string;
+          installer_file_name: string;
+          status?: string;
+          priority?: number;
+          attempts?: number;
+          enqueued_at?: string;
+          dispatched_at?: string | null;
+          started_at?: string | null;
+          finished_at?: string | null;
+          github_run_id?: string | null;
+          github_run_url?: string | null;
+          failure_summary?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;
         Relationships: GenericRelationship[];
       };
       user_profiles: {

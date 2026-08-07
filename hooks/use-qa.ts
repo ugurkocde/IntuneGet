@@ -27,7 +27,8 @@ export function useQaStatuses(ids: string[]) {
       };
     },
     enabled: stableIds.length > 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
   });
 }
 

@@ -15,7 +15,8 @@ import {
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
-import { describeQaGateError, enforceQaGate, QaGateError } from '@/lib/qa/gate';
+import { describeQaGateError, enforceQaGate, isQaGateError } from '@/lib/qa/gate';
+import { normalizeInstallerSha256, selectWingetInstaller } from '@/lib/qa/candidate';
 
 interface TriggerResult {
   success: boolean;
@@ -24,7 +25,7 @@ interface TriggerResult {
   error?: string;
   skipped?: boolean;
   skipReason?: string;
-  code?: 'QA_FAILED_CURRENT_VERSION';
+  code?: 'QA_FAILED_CURRENT_VERSION' | 'QA_NOT_PASSED_CURRENT_VERSION';
 }
 
 interface UpdateInfo {
@@ -180,9 +181,11 @@ export class AutoUpdateTrigger {
           wingetId: updateInfo.wingetId,
           version: updateInfo.latestVersion,
           architecture: deploymentConfig.architecture,
+          installerSha256: updateInfo.installerSha256,
+          requirePassed: true,
         });
       } catch (error) {
-        if (error instanceof QaGateError) {
+        if (isQaGateError(error)) {
           return {
             success: false,
             skipped: true,
@@ -703,7 +706,8 @@ export function createAutoUpdateTrigger(): AutoUpdateTrigger | null {
 export async function getLatestInstallerInfo(
   // Kept for call-site compatibility; the catalog source owns client creation.
   _supabase: SupabaseClient,
-  wingetId: string
+  wingetId: string,
+  architecture?: string
 ): Promise<UpdateInfo | null> {
   const catalog = getCatalogSource();
 
@@ -724,31 +728,30 @@ export async function getLatestInstallerInfo(
     return null;
   }
 
-  // Extract installer details (prefer x64 architecture)
+  // Bind the selected installer to the deployment's requested architecture.
   let installerUrl = versionInfo.installer_url;
   let installerSha256 = versionInfo.installer_sha256;
   let installerType = versionInfo.installer_type;
   let nestedInstallerType: string | undefined;
   let nestedInstallerPath: string | undefined;
 
-  // If there are architecture-specific installers, prefer x64
-  // Note: The installers JSONB uses PascalCase from winget manifests
+  // The installers JSONB uses PascalCase from WinGet manifests.
   if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    const x64Installer = versionInfo.installers.find(
-      (i: { Architecture?: string }) => i.Architecture === 'x64'
-    );
-    if (x64Installer) {
-      installerUrl = x64Installer.InstallerUrl || installerUrl;
-      installerSha256 = x64Installer.InstallerSha256 || installerSha256;
-      installerType = x64Installer.InstallerType || installerType;
-      nestedInstallerType = x64Installer.NestedInstallerType || undefined;
-      nestedInstallerPath = Array.isArray(x64Installer.NestedInstallerFiles)
-        ? x64Installer.NestedInstallerFiles[0]?.RelativeFilePath
-        : undefined;
-    }
+    const selectedInstaller = selectWingetInstaller(versionInfo.installers, architecture);
+    if (!selectedInstaller) return null;
+    installerUrl = selectedInstaller.InstallerUrl || installerUrl;
+    installerSha256 = selectedInstaller.InstallerSha256 || installerSha256;
+    installerType = selectedInstaller.InstallerType || installerType;
+    nestedInstallerType = selectedInstaller.NestedInstallerType || undefined;
+    nestedInstallerPath = Array.isArray(selectedInstaller.NestedInstallerFiles)
+      ? selectedInstaller.NestedInstallerFiles[0]?.RelativeFilePath
+      : undefined;
+  } else if (architecture) {
+    return null;
   }
 
-  if (!installerUrl) {
+  const normalizedSha256 = normalizeInstallerSha256(installerSha256);
+  if (!installerUrl || !normalizedSha256) {
     return null;
   }
 
@@ -758,7 +761,7 @@ export async function getLatestInstallerInfo(
     latestVersion: curatedApp.latest_version,
     displayName: curatedApp.name,
     installerUrl,
-    installerSha256: installerSha256 || '',
+    installerSha256: normalizedSha256,
     installerType: installerType || 'exe',
     nestedInstallerType,
     nestedInstallerPath,

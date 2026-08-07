@@ -11,6 +11,10 @@ export function deriveQaBadgeState(
 ): QaBadgeState {
   if (!qa) return 'untested';
 
+  if (qa.outcome === 'Queued' || qa.outcome === 'Running') {
+    return qa.outcome.toLowerCase() as 'queued' | 'running';
+  }
+
   const stale = !catalogVersion || qa.testedVersion !== catalogVersion;
   if (stale) {
     return qa.outcome === 'Passed' ? 'stale_passed' : 'stale_failed';
@@ -19,7 +23,7 @@ export function deriveQaBadgeState(
 }
 
 export function toQaStatus(row: {
-  outcome: QaStatus['outcome'];
+  outcome: 'Passed' | 'Failed';
   tested_version: string;
   architecture: QaStatus['architecture'];
   tested_at_utc: string;
@@ -29,5 +33,22 @@ export function toQaStatus(row: {
     testedVersion: row.tested_version,
     architecture: row.architecture,
     testedAtUtc: row.tested_at_utc,
+  };
+}
+
+export function toQaCandidateStatus(row: {
+  status: 'queued' | 'dispatched' | 'running';
+  version: string;
+  architecture: QaStatus['architecture'];
+  installer_sha256: string;
+  enqueued_at: string;
+  started_at: string | null;
+}): QaStatus {
+  return {
+    outcome: row.status === 'running' ? 'Running' : 'Queued',
+    testedVersion: row.version,
+    architecture: row.architecture,
+    testedAtUtc: row.started_at || row.enqueued_at,
+    installerSha256: row.installer_sha256,
   };
 }

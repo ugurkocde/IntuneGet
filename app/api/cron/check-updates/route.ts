@@ -122,7 +122,11 @@ async function processAutoUpdates(
 
     try {
       // Get installer info for the new version
-      const installerInfo = await getLatestInstallerInfo(supabase, update.winget_id);
+      const installerInfo = await getLatestInstallerInfo(
+        supabase,
+        update.winget_id,
+        policy.deployment_config?.architecture
+      );
 
       if (!installerInfo) {
         result.errors.push(

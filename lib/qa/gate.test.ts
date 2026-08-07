@@ -6,7 +6,9 @@ vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({ getQaResult: getQaResultMock }),
 }));
 
-import { enforceQaGate, QaGateError } from './gate';
+import { enforceQaGate, QaGateError, QaGateNotPassedError } from './gate';
+
+const installerSha256 = 'A'.repeat(64);
 
 const failedRow = {
   winget_id: 'OpenJS.NodeJS',
@@ -15,6 +17,7 @@ const failedRow = {
   tested_version: '26.7.0',
   architecture: 'x64',
   outcome: 'Failed',
+  installer_sha256: installerSha256,
   tested_at_utc: '2026-08-07T12:00:00Z',
   overall_duration_seconds: 30,
   installer_type: 'msi',
@@ -59,5 +62,51 @@ describe('enforceQaGate', () => {
     ).resolves.toBeUndefined();
     getQaResultMock.mockResolvedValue(null);
     await expect(enforceQaGate({ wingetId: 'Unknown.App', version: '1.0' })).resolves.toBeUndefined();
+  });
+
+  it('allows only an exact passed candidate when requirePassed is enabled', async () => {
+    getQaResultMock.mockResolvedValue({ ...failedRow, outcome: 'Passed' });
+    await expect(
+      enforceQaGate({
+        wingetId: 'OpenJS.NodeJS',
+        version: '26.7.0',
+        architecture: 'x64',
+        installerSha256: installerSha256.toLowerCase(),
+        requirePassed: true,
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it.each([
+    ['missing', null, '26.7.0', 'x64', installerSha256],
+    ['failed', failedRow, '26.7.0', 'x64', installerSha256],
+    ['stale version', { ...failedRow, outcome: 'Passed' }, '26.8.0', 'x64', installerSha256],
+    ['wrong architecture', { ...failedRow, outcome: 'Passed' }, '26.7.0', 'arm64', installerSha256],
+    ['wrong SHA', { ...failedRow, outcome: 'Passed' }, '26.7.0', 'x64', 'B'.repeat(64)],
+  ])('blocks a %s candidate in strict mode', async (_label, row, version, architecture, sha) => {
+    getQaResultMock.mockResolvedValue(row);
+    await expect(
+      enforceQaGate({
+        wingetId: 'OpenJS.NodeJS',
+        version: String(version),
+        architecture: String(architecture),
+        installerSha256: String(sha),
+        requirePassed: true,
+      })
+    ).rejects.toBeInstanceOf(QaGateNotPassedError);
+  });
+
+  it('does not allow a manual override to bypass strict automatic QA', async () => {
+    getQaResultMock.mockResolvedValue(null);
+    await expect(
+      enforceQaGate({
+        wingetId: 'OpenJS.NodeJS',
+        version: '26.7.0',
+        architecture: 'x64',
+        installerSha256,
+        requirePassed: true,
+        qaOverride: true,
+      })
+    ).rejects.toBeInstanceOf(QaGateNotPassedError);
   });
 });

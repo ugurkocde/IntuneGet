@@ -104,7 +104,7 @@ export interface TriggerResult {
 export async function triggerPackagingWorkflow(
   inputs: WorkflowInputs,
   config?: GitHubActionsConfig,
-  options?: { skipRunCapture?: boolean }
+  options?: { skipRunCapture?: boolean; requireQaPass?: boolean }
 ): Promise<TriggerResult> {
   const cfg = config || getGitHubActionsConfig();
 
@@ -131,6 +131,8 @@ export async function triggerPackagingWorkflow(
     wingetId: inputs.wingetId,
     version: inputs.version,
     architecture: inputs.architecture,
+    installerSha256: inputs.installerSha256,
+    requirePassed: options?.requireQaPass,
     qaOverride: inputs.qaOverride,
     sourceType: inputs.sourceType,
   });

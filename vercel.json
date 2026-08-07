@@ -9,6 +9,14 @@
       "schedule": "30 3 * * *"
     },
     {
+      "path": "/api/cron/qa-enqueue",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/qa-dispatch",
+      "schedule": "5-59/10 * * * *"
+    },
+    {
       "path": "/api/cron/send-notifications",
       "schedule": "0 4 * * *"
     },

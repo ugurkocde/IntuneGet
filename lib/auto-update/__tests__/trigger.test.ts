@@ -99,6 +99,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       tested_version: '2.0.0',
       architecture: 'x64',
       outcome: 'Failed',
+      installer_sha256: 'A'.repeat(64),
       tested_at_utc: '2026-08-07T12:00:00Z',
       overall_duration_seconds: 30,
       installer_type: 'zip',
@@ -135,9 +136,9 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     expect(result).toMatchObject({
       success: false,
       skipped: true,
-      code: 'QA_FAILED_CURRENT_VERSION',
+      code: 'QA_NOT_PASSED_CURRENT_VERSION',
     });
-    expect(result.skipReason).toContain('uninstall command');
+    expect(result.skipReason).toContain('exact QA pass');
     expect(createHistorySpy).not.toHaveBeenCalled();
   });
 

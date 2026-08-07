@@ -18,7 +18,7 @@ import { getLocaleDisplay } from '@/lib/locale-utils';
 import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
-import type { QaResultRow, QaStatusRow } from '@/types/qa';
+import type { QaCandidateStatusRow, QaResultRow, QaStatusRow } from '@/types/qa';
 import type {
   CatalogSource,
   CategoryCount,
@@ -382,7 +382,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     const { data, error } = await supabase
       .from('qa_results')
       .select(
-        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, qa_schema_version, synced_at'
+        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, installer_sha256, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, qa_schema_version, synced_at'
       )
       .eq('winget_id', wingetId)
       .maybeSingle();
@@ -393,6 +393,29 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
 
     return (data as QaResultRow | null) || null;
+  }
+
+  async getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]> {
+    if (ids.length === 0) return [];
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('qa_candidates')
+      .select('winget_id, version, architecture, installer_sha256, status, enqueued_at, started_at')
+      .in('winget_id', ids)
+      .in('status', ['queued', 'dispatched', 'running'])
+      .order('enqueued_at', { ascending: false });
+    if (error) {
+      console.error('Failed to read QA candidate statuses:', error.message);
+      return [];
+    }
+
+    const latest = new Map<string, QaCandidateStatusRow>();
+    for (const row of (data || []) as QaCandidateStatusRow[]) {
+      if (!latest.has(row.winget_id)) latest.set(row.winget_id, row);
+    }
+    return [...latest.values()];
   }
 
   // ---------------------------------------------------------------------------

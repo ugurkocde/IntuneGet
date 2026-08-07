@@ -51,7 +51,7 @@ const SCCM_COLUMNS = [
 ];
 const QA_COLUMNS = [
   'winget_id', 'display_name', 'publisher', 'tested_version', 'architecture',
-  'outcome', 'tested_at_utc', 'overall_duration_seconds', 'installer_type',
+  'outcome', 'installer_sha256', 'tested_at_utc', 'overall_duration_seconds', 'installer_type',
   'install_command', 'uninstall_command', 'detection', 'phase_results', 'changes',
   'relevant_event_count', 'environment', 'qa_schema_version', 'synced_at',
 ];
@@ -117,6 +117,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       CREATE TABLE qa_results (
         winget_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, publisher TEXT NOT NULL,
         tested_version TEXT NOT NULL, architecture TEXT NOT NULL, outcome TEXT NOT NULL,
+        installer_sha256 TEXT,
         tested_at_utc TEXT NOT NULL, overall_duration_seconds REAL, installer_type TEXT,
         install_command TEXT NOT NULL, uninstall_command TEXT NOT NULL,
         detection TEXT NOT NULL, phase_results TEXT NOT NULL, changes TEXT,
@@ -146,11 +147,11 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
        VALUES (@id,@sccm_display_name_normalized,@sccm_ci_id,@sccm_product_code,@winget_package_id,
        @winget_package_name,@confidence,@is_verified)`);
     const insQa = db.prepare(`INSERT OR REPLACE INTO qa_results
-      (winget_id, display_name, publisher, tested_version, architecture, outcome,
+      (winget_id, display_name, publisher, tested_version, architecture, outcome, installer_sha256,
        tested_at_utc, overall_duration_seconds, installer_type, install_command,
        uninstall_command, detection, phase_results, changes, relevant_event_count,
        environment, qa_schema_version, synced_at)
-      VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,
+      VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,@installer_sha256,
        @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
        @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
        @environment,@qa_schema_version,@synced_at)`);
@@ -198,6 +199,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           tested_version: q.tested_version,
           architecture: q.architecture,
           outcome: q.outcome,
+          installer_sha256: q.installer_sha256 ?? null,
           tested_at_utc: q.tested_at_utc,
           overall_duration_seconds: q.overall_duration_seconds ?? null,
           installer_type: q.installer_type ?? null,

@@ -20,6 +20,7 @@ import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
 import type {
+  QaCandidateStatusRow,
   QaChanges,
   QaDetectionRule,
   QaEnvironment,
@@ -583,6 +584,11 @@ export class SnapshotCatalogSource implements CatalogSource {
       },
       () => null
     );
+  }
+
+  async getQaCandidateStatuses(_ids: string[]): Promise<QaCandidateStatusRow[]> {
+    // Candidate state is operational and intentionally absent from snapshots.
+    return [];
   }
 
   // ---------------------------------------------------------------------------

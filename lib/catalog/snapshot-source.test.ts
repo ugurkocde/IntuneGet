@@ -118,6 +118,7 @@ const qaResults = [
     tested_version: '120.0',
     architecture: 'x64',
     outcome: 'Passed',
+    installer_sha256: 'A'.repeat(64),
     tested_at_utc: '2026-01-03T00:00:00Z',
     overall_duration_seconds: 12.5,
     installer_type: 'msi',

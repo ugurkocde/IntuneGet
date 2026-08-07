@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
+import { Clock3, LoaderCircle, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import { getStatusToneClasses } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { deriveQaBadgeState } from '@/lib/qa/status';
@@ -18,6 +18,23 @@ export function QaBadge({ wingetId, catalogVersion, status }: QaBadgeProps) {
   const [open, setOpen] = useState(false);
   const state = deriveQaBadgeState(status, catalogVersion);
   if (!status || state === 'untested') return null;
+
+  if (state === 'queued' || state === 'running') {
+    const running = state === 'running';
+    const Icon = running ? LoaderCircle : Clock3;
+    return (
+      <span
+        aria-label={`QA ${state} for version ${status.testedVersion}.`}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
+          getStatusToneClasses(running ? 'info' : 'neutral')
+        )}
+      >
+        <Icon className={cn('h-3 w-3', running && 'animate-spin')} aria-hidden="true" />
+        QA {running ? 'Running' : 'Queued'} v{status.testedVersion}
+      </span>
+    );
+  }
 
   const stale = state === 'stale_passed' || state === 'stale_failed';
   const failed = state === 'failed' || state === 'stale_failed';

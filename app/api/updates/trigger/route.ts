@@ -29,7 +29,7 @@ import type {
 } from '@/types/update-policies';
 import type { Json } from '@/types/database';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
-import { describeQaGateError, QaGateError } from '@/lib/qa/gate';
+import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 
 // Batches of up to 10 apps run sequentially (DB lookups, job creation, and a
 // workflow dispatch each); the platform default duration times out mid-batch
@@ -272,7 +272,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Get installer info
-        const installerInfo = await getLatestInstallerInfo(supabase, req.winget_id);
+        const installerInfo = await getLatestInstallerInfo(
+          supabase,
+          req.winget_id,
+          (policy.deployment_config as unknown as DeploymentConfig | null)?.architecture
+        );
 
         if (!installerInfo) {
           response.failed++;
@@ -384,9 +388,10 @@ export async function POST(request: NextRequest) {
             try {
               await triggerPackagingWorkflow(workflowInputs, undefined, {
                 skipRunCapture: isBatch,
+                requireQaPass: true,
               });
             } catch (error) {
-              if (!(error instanceof QaGateError)) throw error;
+              if (!isQaGateError(error)) throw error;
 
               // The status can change between the pre-job auto-update gate and
               // the final dispatch gate. Make that race an explicit safety
@@ -397,7 +402,7 @@ export async function POST(request: NextRequest) {
                 .from('packaging_jobs')
                 .update({
                   status: 'cancelled',
-                  status_message: 'Skipped because current QA failed',
+                  status_message: 'Skipped while awaiting exact QA pass',
                   error_message: message,
                   cancelled_at: completedAt,
                   completed_at: completedAt,

@@ -16,7 +16,7 @@ import type { LocaleVariant } from '@/types/winget';
 import type { SccmMatchResult } from '@/lib/matching/sccm-matcher';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
-import type { QaResultRow, QaStatusRow } from '@/types/qa';
+import type { QaCandidateStatusRow, QaResultRow, QaStatusRow } from '@/types/qa';
 
 /**
  * Raw row returned by the search_curated_apps / get_popular_curated_apps RPCs.
@@ -213,6 +213,9 @@ export interface CatalogSource {
 
   /** Compact QA badge rows for a visible set of catalog apps. */
   getQaStatuses(ids: string[]): Promise<QaStatusRow[]>;
+
+  /** Latest active queued/running candidate for each requested app. */
+  getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]>;
 
   /** Latest compact QA result for one catalog app. */
   getQaResult(wingetId: string): Promise<QaResultRow | null>;

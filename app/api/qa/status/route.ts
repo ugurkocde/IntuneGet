@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCatalogSource } from '@/lib/catalog';
-import { toQaStatus } from '@/lib/qa/status';
+import { toQaCandidateStatus, toQaStatus } from '@/lib/qa/status';
 import { applyRateLimit, getIpKey, PUBLIC_RATE_LIMIT } from '@/lib/rate-limit';
 import type { QaStatus } from '@/types/qa';
 
 const APP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*\.[A-Za-z0-9][A-Za-z0-9._+-]*$/;
-const CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=600';
+const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=120';
 
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await applyRateLimit(getIpKey(request), PUBLIC_RATE_LIMIT);
@@ -25,13 +25,20 @@ export async function GET(request: NextRequest) {
     // Store product IDs share the catalog but are not WinGet IDs. Treat any
     // unsupported identifier as untested instead of failing the entire batch.
     const validIds = ids.filter((id) => APP_ID_PATTERN.test(id));
-    const rows = validIds.length > 0
-      ? await getCatalogSource().getQaStatuses(validIds)
-      : [];
+    const catalog = getCatalogSource();
+    const [rows, candidates] = validIds.length > 0
+      ? await Promise.all([
+          catalog.getQaStatuses(validIds),
+          catalog.getQaCandidateStatuses(validIds),
+        ])
+      : [[], []];
     const statuses: Record<string, QaStatus | null> = Object.fromEntries(
       ids.map((id) => [id, null])
     );
     for (const row of rows) statuses[row.winget_id] = toQaStatus(row);
+    for (const candidate of candidates) {
+      statuses[candidate.winget_id] = toQaCandidateStatus(candidate);
+    }
 
     return NextResponse.json({ statuses }, { headers: { 'Cache-Control': CACHE_CONTROL } });
   } catch (error) {

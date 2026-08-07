@@ -129,6 +129,20 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('binds a required QA pass to the dispatched installer SHA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const sha = 'A'.repeat(64);
+    await triggerPackagingWorkflow(
+      workflowInputs({ wingetId: 'Example.App', installerSha256: sha, sourceType: 'winget' }),
+      config,
+      { skipRunCapture: true, requireQaPass: true }
+    );
+    expect(enforceQaGateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ installerSha256: sha, requirePassed: true })
+    );
+  });
+
   it('uses qaOverride only at the server gate and does not forward it to GitHub', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
