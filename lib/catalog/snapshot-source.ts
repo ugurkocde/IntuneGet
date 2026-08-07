@@ -20,6 +20,14 @@ import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
 import type {
+  QaChanges,
+  QaDetectionRule,
+  QaEnvironment,
+  QaPhaseResults,
+  QaResultRow,
+  QaStatusRow,
+} from '@/types/qa';
+import type {
   CatalogSource,
   CategoryCount,
   CuratedAppRpcRow,
@@ -35,6 +43,29 @@ import type {
 } from './types';
 
 type DB = BetterSqlite3.Database;
+
+const qaTableAvailability = new WeakMap<object, boolean>();
+
+function hasQaResultsTable(db: DB): boolean {
+  const cached = qaTableAvailability.get(db);
+  if (cached !== undefined) return cached;
+
+  const row = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='qa_results'")
+    .get();
+  const available = Boolean(row);
+  qaTableAvailability.set(db, available);
+  return available;
+}
+
+function parseJson<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Run a snapshot query, degrading gracefully when the snapshot is unavailable.
@@ -504,6 +535,54 @@ export class SnapshotCatalogSource implements CatalogSource {
     // installation_snapshots is operational data, not catalog data, so it is
     // not shipped in the snapshot. There is nothing to return in sqlite mode.
     return null;
+  }
+
+  async getQaStatuses(ids: string[]): Promise<QaStatusRow[]> {
+    return withDb(
+      (db) => {
+        if (ids.length === 0 || !hasQaResultsTable(db)) return [];
+        const placeholders = ids.map(() => '?').join(', ');
+        return db
+          .prepare(
+            `SELECT winget_id, outcome, tested_version, architecture, tested_at_utc
+             FROM qa_results WHERE winget_id IN (${placeholders})`
+          )
+          .all(...ids) as QaStatusRow[];
+      },
+      () => []
+    );
+  }
+
+  async getQaResult(wingetId: string): Promise<QaResultRow | null> {
+    return withDb(
+      (db) => {
+        if (!hasQaResultsTable(db)) return null;
+        const row = db
+          .prepare('SELECT * FROM qa_results WHERE winget_id = ? LIMIT 1')
+          .get(wingetId) as
+          | (Omit<QaResultRow, 'detection' | 'phase_results' | 'changes' | 'environment'> & {
+              detection: string;
+              phase_results: string;
+              changes: string | null;
+              environment: string | null;
+            })
+          | undefined;
+
+        if (!row) return null;
+        const detection = parseJson<QaDetectionRule>(row.detection);
+        const phaseResults = parseJson<QaPhaseResults>(row.phase_results);
+        if (!detection || !phaseResults) return null;
+
+        return {
+          ...row,
+          detection,
+          phase_results: phaseResults,
+          changes: parseJson<QaChanges>(row.changes),
+          environment: parseJson<QaEnvironment>(row.environment),
+        };
+      },
+      () => null
+    );
   }
 
   // ---------------------------------------------------------------------------

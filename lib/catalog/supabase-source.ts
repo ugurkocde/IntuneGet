@@ -18,6 +18,7 @@ import { getLocaleDisplay } from '@/lib/locale-utils';
 import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
+import type { QaResultRow, QaStatusRow } from '@/types/qa';
 import type {
   CatalogSource,
   CategoryCount,
@@ -353,6 +354,43 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
 
     return data[0] as InstallationSnapshot;
+  }
+
+  async getQaStatuses(ids: string[]): Promise<QaStatusRow[]> {
+    if (ids.length === 0) return [];
+
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('qa_results')
+      .select('winget_id, outcome, tested_version, architecture, tested_at_utc')
+      .in('winget_id', ids);
+
+    if (error) {
+      console.error('Failed to read QA statuses:', error.message);
+      return [];
+    }
+
+    return (data || []) as QaStatusRow[];
+  }
+
+  async getQaResult(wingetId: string): Promise<QaResultRow | null> {
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+      .from('qa_results')
+      .select('*')
+      .eq('winget_id', wingetId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to read QA result:', error.message);
+      return null;
+    }
+
+    return (data as QaResultRow | null) || null;
   }
 
   // ---------------------------------------------------------------------------

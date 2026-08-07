@@ -23,6 +23,78 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      qa_results: {
+        Row: {
+          winget_id: string;
+          display_name: string;
+          publisher: string;
+          tested_version: string;
+          architecture: string;
+          outcome: string;
+          tested_at_utc: string;
+          overall_duration_seconds: number | null;
+          installer_type: string | null;
+          install_command: string;
+          uninstall_command: string;
+          detection: Json;
+          phase_results: Json;
+          changes: Json | null;
+          relevant_event_count: number | null;
+          environment: Json | null;
+          test_id: string | null;
+          github_run_id: string | null;
+          github_run_attempt: number | null;
+          qa_schema_version: number;
+          synced_at: string;
+        };
+        Insert: {
+          winget_id: string;
+          display_name: string;
+          publisher: string;
+          tested_version: string;
+          architecture: string;
+          outcome: string;
+          tested_at_utc: string;
+          overall_duration_seconds?: number | null;
+          installer_type?: string | null;
+          install_command: string;
+          uninstall_command: string;
+          detection: Json;
+          phase_results: Json;
+          changes?: Json | null;
+          relevant_event_count?: number | null;
+          environment?: Json | null;
+          test_id?: string | null;
+          github_run_id?: string | null;
+          github_run_attempt?: number | null;
+          qa_schema_version?: number;
+          synced_at?: string;
+        };
+        Update: {
+          winget_id?: string;
+          display_name?: string;
+          publisher?: string;
+          tested_version?: string;
+          architecture?: string;
+          outcome?: string;
+          tested_at_utc?: string;
+          overall_duration_seconds?: number | null;
+          installer_type?: string | null;
+          install_command?: string;
+          uninstall_command?: string;
+          detection?: Json;
+          phase_results?: Json;
+          changes?: Json | null;
+          relevant_event_count?: number | null;
+          environment?: Json | null;
+          test_id?: string | null;
+          github_run_id?: string | null;
+          github_run_attempt?: number | null;
+          qa_schema_version?: number;
+          synced_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
       user_profiles: {
         Row: {
           id: string;

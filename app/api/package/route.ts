@@ -36,6 +36,7 @@ import {
   enforceInstallerPreflight,
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
+import { enforceQaGate, QaGateError } from '@/lib/qa/gate';
 
 export const maxDuration = 300;
 
@@ -240,6 +241,45 @@ export async function POST(request: NextRequest) {
             expectedSha256: failedItem.installerSha256?.toUpperCase(),
             actualSha256: error.actualSha256,
           }, { status: error.retryable ? 503 : 409 });
+        }
+        throw error;
+      }
+    }
+
+    // Block only a known failed result for the exact version/architecture.
+    // Missing or stale QA data is intentionally non-blocking.
+    for (const item of win32Items) {
+      try {
+        await enforceQaGate({
+          wingetId: item.wingetId,
+          version: item.version,
+          architecture: item.architecture,
+          qaOverride: item.qaOverride,
+          sourceType: item.sourceType,
+        });
+      } catch (error) {
+        if (error instanceof QaGateError) {
+          return NextResponse.json(
+            {
+              error: 'QA testing blocked this deployment',
+              message: error.message,
+              code: error.code,
+              retryable: false,
+              package: {
+                wingetId: item.wingetId,
+                displayName: item.displayName || item.wingetId,
+                version: item.version,
+              },
+              qa: {
+                testedVersion: error.details.testedVersion,
+                testedAtUtc: error.details.testedAtUtc,
+                architecture: error.details.architecture,
+                classificationBucket: error.details.classification.bucket,
+                remediation: error.details.classification.remediation,
+              },
+            },
+            { status: 409 }
+          );
         }
         throw error;
       }
@@ -493,6 +533,7 @@ export async function POST(request: NextRequest) {
                 : undefined,
               installScope: item.installScope,
               forceCreate: item.forceCreate || forceCreate,
+              qaOverride: item.qaOverride,
               sourceType: item.sourceType,
             };
 

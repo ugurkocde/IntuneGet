@@ -9,6 +9,8 @@ import type { NormalizedPackage } from '@/types/winget';
 import { cleanPackageName } from '@/lib/locale-utils';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { QaBadge } from '@/components/qa/QaBadge';
+import type { QaStatus } from '@/types/qa';
 
 const installerTypeStyles: Record<string, string> = {
   msi: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
@@ -42,9 +44,10 @@ interface AppListItemProps {
   isBulkSelectMode?: boolean;
   isBulkSelected?: boolean;
   onBulkToggle?: (pkg: NormalizedPackage) => void;
+  qaStatus?: QaStatus | null;
 }
 
-function AppListItemComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle }: AppListItemProps) {
+function AppListItemComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus }: AppListItemProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -147,6 +150,12 @@ function AppListItemComponent({ package: pkg, onSelect, isDeployed = false, isBu
             </span>
           ) : null}
 
+          {pkg.appSource !== 'store' && (
+            <div className="flex-shrink-0">
+              <QaBadge wingetId={pkg.id} catalogVersion={pkg.version} status={qaStatus} />
+            </div>
+          )}
+
           {pkg.category && (
             <div className="hidden xl:block flex-shrink-0">
               <CategoryBadge category={pkg.category} />
@@ -196,5 +205,9 @@ export const AppListItem = memo(AppListItemComponent, (prevProps, nextProps) => 
          prevProps.package.version === nextProps.package.version &&
          prevProps.isDeployed === nextProps.isDeployed &&
          prevProps.isBulkSelectMode === nextProps.isBulkSelectMode &&
-         prevProps.isBulkSelected === nextProps.isBulkSelected;
+         prevProps.isBulkSelected === nextProps.isBulkSelected &&
+         prevProps.qaStatus?.outcome === nextProps.qaStatus?.outcome &&
+         prevProps.qaStatus?.testedVersion === nextProps.qaStatus?.testedVersion &&
+         prevProps.qaStatus?.architecture === nextProps.qaStatus?.architecture &&
+         prevProps.qaStatus?.testedAtUtc === nextProps.qaStatus?.testedAtUtc;
 });

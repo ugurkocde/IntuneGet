@@ -15,6 +15,7 @@ import {
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
+import { describeQaGateError, enforceQaGate, QaGateError } from '@/lib/qa/gate';
 
 interface TriggerResult {
   success: boolean;
@@ -23,6 +24,7 @@ interface TriggerResult {
   error?: string;
   skipped?: boolean;
   skipReason?: string;
+  code?: 'QA_FAILED_CURRENT_VERSION';
 }
 
 interface UpdateInfo {
@@ -168,6 +170,28 @@ export class AutoUpdateTrigger {
       // Backfill PSADT settings from the original deployment for policies
       // created before psadtConfig was stored on deployment_config
       await this.ensurePsadtConfig(policy);
+
+      // A current, exact QA failure is an intentional safety skip, not a
+      // packaging failure. Keep it ahead of history/job creation so scheduled
+      // auto-updates do not leave misleading failed or queued jobs behind.
+      const deploymentConfig = policy.deployment_config as DeploymentConfig;
+      try {
+        await enforceQaGate({
+          wingetId: updateInfo.wingetId,
+          version: updateInfo.latestVersion,
+          architecture: deploymentConfig.architecture,
+        });
+      } catch (error) {
+        if (error instanceof QaGateError) {
+          return {
+            success: false,
+            skipped: true,
+            skipReason: describeQaGateError(error),
+            code: error.code,
+          };
+        }
+        throw error;
+      }
 
       // Determine update type
       const updateType = classifyUpdateType(updateInfo.currentVersion, updateInfo.latestVersion);

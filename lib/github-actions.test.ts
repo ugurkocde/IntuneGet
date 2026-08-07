@@ -5,8 +5,9 @@ import {
   type WorkflowInputs,
 } from './github-actions';
 
-const { enforceInstallerPreflightMock } = vi.hoisted(() => ({
+const { enforceInstallerPreflightMock, enforceQaGateMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
+  enforceQaGateMock: vi.fn(),
 }));
 
 vi.mock('./installer-preflight', async (importOriginal) => {
@@ -15,6 +16,11 @@ vi.mock('./installer-preflight', async (importOriginal) => {
     ...original,
     enforceInstallerPreflight: enforceInstallerPreflightMock,
   };
+});
+
+vi.mock('./qa/gate', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./qa/gate')>();
+  return { ...original, enforceQaGate: enforceQaGateMock };
 });
 
 const config: GitHubActionsConfig = {
@@ -107,5 +113,30 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     )).rejects.toThrow('quarantined');
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not call GitHub when the final QA gate blocks dispatch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    enforceQaGateMock.mockRejectedValueOnce(new Error('known failed QA result'));
+
+    await expect(triggerPackagingWorkflow(
+      workflowInputs({ wingetId: 'Example.App', sourceType: 'winget' }),
+      config,
+      { skipRunCapture: true },
+    )).rejects.toThrow('known failed QA result');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses qaOverride only at the server gate and does not forward it to GitHub', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({ qaOverride: true }), config, { skipRunCapture: true });
+
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }));
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.stringify(payload)).not.toContain('qaOverride');
   });
 });

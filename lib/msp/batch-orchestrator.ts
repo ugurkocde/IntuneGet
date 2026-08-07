@@ -18,6 +18,7 @@ import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { queueWebhookDelivery } from '@/lib/msp/webhook-service';
 import { createAuditLog } from '@/lib/audit-logger';
+import { describeQaGateError, enforceQaGate, QaGateError } from '@/lib/qa/gate';
 
 // Stale timeout: items in_progress longer than this are marked failed
 const STALE_TIMEOUT_MINUTES = 45;
@@ -263,7 +264,23 @@ async function startBatchItems(batchId: string): Promise<number> {
   const db = getDatabase();
   let started = 0;
 
+  // Evaluate the package tuple once before processing tenants. This avoids
+  // creating one misleading job per tenant for a known current QA failure.
+  let qaGateError: QaGateError | null = null;
+  if (installerDetails) {
+    try {
+      await enforceQaGate({
+        wingetId: batch.winget_id,
+        version: batch.version,
+      });
+    } catch (error) {
+      if (error instanceof QaGateError) qaGateError = error;
+      else throw error;
+    }
+  }
+
   for (const item of pendingItems) {
+    let jobId: string | null = null;
     try {
       // If no installer details, fail the item
       if (!installerDetails) {
@@ -272,6 +289,18 @@ async function startBatchItems(batchId: string): Promise<number> {
           .update({
             status: 'failed',
             error_message: 'Package version not found in catalog',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+        continue;
+      }
+
+      if (qaGateError) {
+        await supabase
+          .from('msp_batch_deployment_items')
+          .update({
+            status: 'skipped',
+            error_message: describeQaGateError(qaGateError),
             completed_at: new Date().toISOString(),
           })
           .eq('id', item.id);
@@ -293,7 +322,7 @@ async function startBatchItems(batchId: string): Promise<number> {
       }
 
       // Create packaging job
-      const jobId = crypto.randomUUID();
+      jobId = crypto.randomUUID();
       const jobRecord = await db.jobs.create({
         id: jobId,
         user_id: batch.created_by_user_id,
@@ -369,11 +398,23 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       started++;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to trigger packaging workflow';
+      const isQaSkip = err instanceof QaGateError;
+      const msg = isQaSkip
+        ? describeQaGateError(err)
+        : err instanceof Error ? err.message : 'Failed to trigger packaging workflow';
+      if (isQaSkip && jobId) {
+        await db.jobs.update(jobId, {
+          status: 'cancelled',
+          status_message: 'Skipped because current QA failed',
+          error_message: msg,
+          cancelled_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        });
+      }
       await supabase
         .from('msp_batch_deployment_items')
         .update({
-          status: 'failed',
+          status: isQaSkip ? 'skipped' : 'failed',
           error_message: msg,
           completed_at: new Date().toISOString(),
         })
@@ -454,7 +495,7 @@ async function advanceBatch(batchId: string): Promise<boolean> {
     .from('msp_batch_deployments')
     .update({
       completed_tenants: completed,
-      failed_tenants: failed,
+      failed_tenants: failed + skipped,
     })
     .eq('id', batchId);
 
@@ -497,7 +538,7 @@ async function advanceBatch(batchId: string): Promise<boolean> {
         status: finalStatus,
         total_tenants: items.length,
         completed_tenants: completed,
-        failed_tenants: failed,
+        failed_tenants: failed + skipped,
         skipped_tenants: skipped,
       });
     } catch (err) {
@@ -523,7 +564,8 @@ async function advanceBatch(batchId: string): Promise<boolean> {
           status: finalStatus,
           total_tenants: items.length,
           completed_tenants: completed,
-          failed_tenants: failed,
+          failed_tenants: failed + skipped,
+          skipped_tenants: skipped,
         },
       });
     } catch (err) {

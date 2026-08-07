@@ -158,6 +158,9 @@ interface CartItemBase {
   // Redeploy flag - skip duplicate detection during deployment
   forceCreate?: boolean;
 
+  // Explicit acknowledgement of a failed QA result for this exact version.
+  qaOverride?: boolean;
+
   // Cart metadata
   addedAt: string;
 }

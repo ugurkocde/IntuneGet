@@ -1,0 +1,42 @@
+name: Sync QA Results
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-qa-results
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Reconcile compact QA results
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository without credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.5.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Reconcile canonical QA JSON into Supabase
+        env:
+          QA_REPO_READ_PAT: ${{ secrets.QA_REPO_READ_PAT }}
+          QA_REPOSITORY: ${{ vars.QA_REPOSITORY || 'ugurkocde/IntuneGet-Workflows' }}
+          QA_REPOSITORY_REF: main
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sync-qa-results.mjs

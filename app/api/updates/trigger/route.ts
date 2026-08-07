@@ -29,6 +29,7 @@ import type {
 } from '@/types/update-policies';
 import type { Json } from '@/types/database';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
+import { describeQaGateError, QaGateError } from '@/lib/qa/gate';
 
 // Batches of up to 10 apps run sequentially (DB lookups, job creation, and a
 // workflow dispatch each); the platform default duration times out mid-batch
@@ -380,9 +381,50 @@ export async function POST(request: NextRequest) {
             };
 
             const isBatch = updateRequests.length > 1;
-            await triggerPackagingWorkflow(workflowInputs, undefined, {
-              skipRunCapture: isBatch,
-            });
+            try {
+              await triggerPackagingWorkflow(workflowInputs, undefined, {
+                skipRunCapture: isBatch,
+              });
+            } catch (error) {
+              if (!(error instanceof QaGateError)) throw error;
+
+              // The status can change between the pre-job auto-update gate and
+              // the final dispatch gate. Make that race an explicit safety
+              // cancellation rather than leaving a queued/failed mystery job.
+              const message = describeQaGateError(error);
+              const completedAt = new Date().toISOString();
+              await supabase
+                .from('packaging_jobs')
+                .update({
+                  status: 'cancelled',
+                  status_message: 'Skipped because current QA failed',
+                  error_message: message,
+                  cancelled_at: completedAt,
+                  completed_at: completedAt,
+                })
+                .eq('id', triggerResult.packagingJobId);
+              if (triggerResult.historyId) {
+                await supabase
+                  .from('auto_update_history')
+                  .update({
+                    status: 'cancelled',
+                    error_message: message,
+                    completed_at: completedAt,
+                  })
+                  .eq('id', triggerResult.historyId);
+              }
+
+              response.failed++;
+              response.results.push({
+                winget_id: req.winget_id,
+                tenant_id: req.tenant_id,
+                success: false,
+                skipped: true,
+                code: error.code,
+                error: message,
+              });
+              continue;
+            }
           }
           // If local packager mode, the job stays in 'queued'/'packaging' for local pickup
 
@@ -399,6 +441,8 @@ export async function POST(request: NextRequest) {
             winget_id: req.winget_id,
             tenant_id: req.tenant_id,
             success: false,
+            skipped: triggerResult.skipped || undefined,
+            code: triggerResult.code,
             error: triggerResult.error || triggerResult.skipReason || 'Unknown error',
           });
         }

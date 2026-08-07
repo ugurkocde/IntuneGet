@@ -16,6 +16,7 @@ const {
   getAppConfigMock,
   getFeatureFlagsMock,
   enforceInstallerPreflightMock,
+  enforceQaGateMock,
 } = vi.hoisted(() => ({
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
@@ -30,6 +31,7 @@ const {
   getAppConfigMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
   enforceInstallerPreflightMock: vi.fn(),
+  enforceQaGateMock: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -69,6 +71,14 @@ vi.mock('@/lib/installer-preflight', async (importOriginal) => {
   };
 });
 
+vi.mock('@/lib/qa/gate', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/qa/gate')>();
+  return {
+    ...original,
+    enforceQaGate: enforceQaGateMock,
+  };
+});
+
 vi.mock('@/lib/supabase', () => ({
   createServerClient: vi.fn(),
 }));
@@ -90,6 +100,7 @@ vi.mock('@/lib/store-app-deploy', () => ({
 
 import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { QaGateError } from '@/lib/qa/gate';
 
 function makeJob(overrides: Partial<PackagingJob>): PackagingJob {
   const now = new Date().toISOString();
@@ -286,6 +297,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       status: 'healthy',
       source: 'cache',
     });
+    enforceQaGateMock.mockResolvedValue(undefined);
   });
 
   it('forwards item relationships into the workflow inputs', async () => {
@@ -462,6 +474,45 @@ describe('POST /api/package (workflow dispatch)', () => {
       expectedSha256: 'A'.repeat(64),
       actualSha256: 'b'.repeat(64),
     }));
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a rich 409 before creating a job for a failed exact-version QA result', async () => {
+    enforceQaGateMock.mockRejectedValueOnce(new QaGateError({
+      wingetId: 'Test.App',
+      testedVersion: '1.0.0',
+      testedAtUtc: '2026-08-07T12:00:00Z',
+      architecture: 'x64',
+      classification: {
+        signal: 'uninstall_unknown_product',
+        bucket: 'package_definition',
+        confidence: 'high',
+        evidence: 'MSI exit code 1605',
+        remediation: 'Correct the uninstall command.',
+        source: 'heuristic',
+      },
+    }));
+
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body).toMatchObject({
+      code: 'QA_FAILED_CURRENT_VERSION',
+      retryable: false,
+      package: { wingetId: 'Test.App', displayName: 'Test App', version: '1.0.0' },
+      qa: { testedVersion: '1.0.0', architecture: 'x64', classificationBucket: 'package_definition' },
+    });
     expect(createMock).not.toHaveBeenCalled();
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });

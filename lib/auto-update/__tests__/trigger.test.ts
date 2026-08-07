@@ -5,6 +5,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutoUpdateTrigger } from '../trigger';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
+import type { QaResultRow } from '@/types/qa';
+
+const { getQaResultMock } = vi.hoisted(() => ({ getQaResultMock: vi.fn() }));
+vi.mock('@/lib/catalog', () => ({
+  getCatalogSource: () => ({ getQaResult: getQaResultMock }),
+}));
 
 interface TableHandlers {
   maybeSingleResult?: { data: unknown; error: unknown };
@@ -82,6 +88,60 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 describe('AutoUpdateTrigger psadtConfig handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getQaResultMock.mockResolvedValue(null);
+  });
+
+  it('records a current QA failure as a safety skip before creating history or a job', async () => {
+    getQaResultMock.mockResolvedValue({
+      winget_id: 'Test.App',
+      display_name: 'Test App',
+      publisher: 'Test',
+      tested_version: '2.0.0',
+      architecture: 'x64',
+      outcome: 'Failed',
+      tested_at_utc: '2026-08-07T12:00:00Z',
+      overall_duration_seconds: 30,
+      installer_type: 'zip',
+      install_command: 'setup.exe /S',
+      uninstall_command: 'setup.exe /uninstall',
+      detection: { type: 'fileVersion', path: 'C:\\Test\\app.exe', minimumVersion: '2.0.0' },
+      phase_results: {
+        install: { exitCode: 0, durationSeconds: 1, timedOut: false },
+        detectionAfterInstall: { exitCode: 0, durationSeconds: 1, timedOut: false },
+        uninstall: { exitCode: 1605, durationSeconds: 1, timedOut: false },
+        detectionAfterUninstall: null,
+      },
+      changes: null,
+      relevant_event_count: 0,
+      environment: null,
+      test_id: 'qa-1',
+      github_run_id: '1',
+      github_run_attempt: 1,
+      qa_schema_version: 1,
+      synced_at: '2026-08-07T12:01:00Z',
+    } satisfies QaResultRow);
+
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const policy = makePolicy({
+      displayName: 'Test App',
+      architecture: 'x64',
+    });
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    const createHistorySpy = vi.spyOn(trigger as never, 'createHistoryRecord' as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
+
+    expect(result).toMatchObject({
+      success: false,
+      skipped: true,
+      code: 'QA_FAILED_CURRENT_VERSION',
+    });
+    expect(result.skipReason).toContain('uninstall command');
+    expect(createHistorySpy).not.toHaveBeenCalled();
   });
 
   describe('ensurePsadtConfig', () => {

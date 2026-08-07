@@ -53,6 +53,17 @@ This document consolidates environment variables across web app and packager mod
 | `RESEND_API_KEY` | Optional | Email sending |
 | `RESEND_FROM_EMAIL` | Optional | Email sender address |
 
+### Maintainer Workflow Secrets (not web app variables)
+
+| Secret or variable | Location | Notes |
+|---|---|---|
+| `QA_REPO_READ_PAT` | IntuneGet repository Actions secret | Fine-grained PAT with Contents: read on only the private IntuneGet-Workflows repository. Used by `sync-qa-results.yml`; never exposed to the app or browser. |
+| `QA_REPOSITORY` | IntuneGet repository Actions variable (optional) | Canonical QA repository in `owner/name` form. Defaults to `ugurkocde/IntuneGet-Workflows`. |
+
+The QA synchronization workflow also uses the existing
+`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` repository secrets to
+write the compact mirror. These values remain server-side in GitHub Actions.
+
 ### Runtime/Platform
 
 | Variable | Source |
@@ -142,3 +153,5 @@ What this means for operators:
 5. In Docker deployments, if MSAL authentication URLs are missing the `client_id`
    parameter, verify that `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` is set in the
    container environment (not only in a `.env` file on the host).
+6. Do not add `QA_REPO_READ_PAT` to `.env.local`; it belongs only in the source
+   repository's GitHub Actions secrets.

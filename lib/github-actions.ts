@@ -6,6 +6,7 @@
 
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { enforceInstallerPreflight } from './installer-preflight';
+import { enforceQaGate } from './qa/gate';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -34,6 +35,7 @@ export interface WorkflowInputs {
   relationships?: string; // JSON-serialized AppRelationship[]
   installScope?: 'machine' | 'user'; // Install scope for per-user vs per-machine
   forceCreate?: boolean; // Skip duplicate check and force create new app
+  qaOverride?: boolean; // Server-side QA acknowledgement; never forwarded to GitHub
   sourceIntuneAppId?: string; // Previous app ID for assignment carry-over
   carryOverAssignments?: boolean; // Copy assignments from previous app
   removeAssignmentsFromPreviousApp?: boolean; // Remove assignments from previous app after carry-over
@@ -123,6 +125,13 @@ export async function triggerPackagingWorkflow(
     installerSha256: inputs.installerSha256,
     installerType: inputs.installerType,
     installScope: inputs.installScope,
+    sourceType: inputs.sourceType,
+  });
+  await enforceQaGate({
+    wingetId: inputs.wingetId,
+    version: inputs.version,
+    architecture: inputs.architecture,
+    qaOverride: inputs.qaOverride,
     sourceType: inputs.sourceType,
   });
 

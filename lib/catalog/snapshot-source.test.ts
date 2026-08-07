@@ -110,10 +110,41 @@ const sccmMappings = [
   },
 ];
 
+const qaResults = [
+  {
+    winget_id: 'Google.Chrome',
+    display_name: 'Google Chrome',
+    publisher: 'Google LLC',
+    tested_version: '120.0',
+    architecture: 'x64',
+    outcome: 'Passed',
+    tested_at_utc: '2026-01-03T00:00:00Z',
+    overall_duration_seconds: 12.5,
+    installer_type: 'msi',
+    install_command: 'msiexec /i chrome.msi /qn',
+    uninstall_command: 'msiexec /x {PRODUCT} /qn',
+    detection: { type: 'fileVersion', path: 'C:\\Program Files\\Chrome\\chrome.exe', minimumVersion: '120.0' },
+    phase_results: {
+      install: { exitCode: 0, durationSeconds: 3, timedOut: false },
+      detectionAfterInstall: { exitCode: 0, durationSeconds: 1, timedOut: false },
+      uninstall: { exitCode: 0, durationSeconds: 2, timedOut: false },
+      detectionAfterUninstall: { exitCode: 1, durationSeconds: 1, timedOut: false },
+    },
+    changes: null,
+    relevant_event_count: 0,
+    environment: { computerName: 'INTUNE-QA', executedAs: 'SYSTEM' },
+    test_id: 'snapshot-test',
+    github_run_id: '1',
+    github_run_attempt: 1,
+    qa_schema_version: 1,
+    synced_at: '2026-01-03T00:01:00Z',
+  },
+];
+
 beforeAll(() => {
   tmpDir = mkdtempSync(path.join(tmpdir(), 'snapshot-source-test-'));
   dbPath = path.join(tmpDir, 'catalog.sqlite');
-  buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings });
+  buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings, qaResults });
   process.env.CATALOG_SNAPSHOT_FILE = dbPath;
   _resetSnapshotStoreForTest();
 });
@@ -202,6 +233,22 @@ describe('SnapshotCatalogSource', () => {
 
   it('getInstallationChangelog returns null (not shipped in snapshot)', async () => {
     expect(await source.getInstallationChangelog('Google.Chrome')).toBeNull();
+  });
+
+  it('returns compact QA statuses and lazy full details from the snapshot', async () => {
+    const statuses = await source.getQaStatuses(['Google.Chrome', 'Mozilla.Firefox']);
+    expect(statuses).toEqual([
+      expect.objectContaining({
+        winget_id: 'Google.Chrome',
+        outcome: 'Passed',
+        tested_version: '120.0',
+      }),
+    ]);
+
+    const result = await source.getQaResult('Google.Chrome');
+    expect(result?.detection.minimumVersion).toBe('120.0');
+    expect(result?.phase_results.detectionAfterUninstall?.exitCode).toBe(1);
+    expect(await source.getQaResult('Mozilla.Firefox')).toBeNull();
   });
 
   it('getAllLatestVersions returns rows with non-null latest_version', async () => {

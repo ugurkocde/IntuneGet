@@ -212,6 +212,8 @@ export interface TriggerUpdateResponse {
     winget_id: string;
     tenant_id: string;
     success: boolean;
+    skipped?: boolean;
+    code?: 'QA_FAILED_CURRENT_VERSION';
     packaging_job_id?: string;
     error?: string;
   }[];
