@@ -58,7 +58,8 @@ This document consolidates environment variables across web app and packager mod
 | Secret or variable | Location | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | IntuneGet-Workflows repository Actions secret | Supabase project URL used by the canonical QA synchronization job. |
-| `SUPABASE_SERVICE_ROLE_KEY` | IntuneGet-Workflows repository Actions secret | Server-side key used only by the GitHub-hosted synchronization job. Never exposed to the self-hosted QA runner, test VM, app, or browser. |
+| `SUPABASE_PUBLISHABLE_KEY` | IntuneGet-Workflows repository Actions secret | Public API key used to call the narrowly scoped QA synchronization RPC. |
+| `QA_SYNC_SECRET` | IntuneGet-Workflows repository Actions secret | Dedicated random credential accepted only by the QA synchronization RPC. Never exposed to the self-hosted QA runner, test VM, app, or browser. |
 
 The QA synchronization workflow runs in the canonical `IntuneGet-Workflows`
 repository, so it reads its own compact JSON without a cross-repository token.
@@ -152,5 +153,5 @@ What this means for operators:
 5. In Docker deployments, if MSAL authentication URLs are missing the `client_id`
    parameter, verify that `NEXT_PUBLIC_AZURE_AD_CLIENT_ID` is set in the
    container environment (not only in a `.env` file on the host).
-6. Keep the QA synchronization service-role key only in the canonical workflow
-   repository's GitHub Actions secrets, never in `.env.local` or the test VM.
+6. Keep the scoped `QA_SYNC_SECRET` only in the canonical workflow repository's
+   GitHub Actions secrets, never in `.env.local` or the test VM.
