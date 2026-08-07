@@ -37,9 +37,7 @@ const row = {
   },
   changes: null,
   relevant_event_count: 0,
-  environment: { computerName: 'INTUNE-QA', executedAs: 'SYSTEM' },
-  github_run_id: '123',
-  github_run_attempt: 1,
+  environment: { executionContext: 'LocalSystem' },
 };
 
 describe('GET /api/apps/[id]/qa', () => {
@@ -48,7 +46,7 @@ describe('GET /api/apps/[id]/qa', () => {
     applyRateLimitMock.mockReset().mockResolvedValue(null);
   });
 
-  it('returns commands and compact evidence without a private run URL', async () => {
+  it('returns commands and compact evidence without private run provenance', async () => {
     getQaResultMock.mockResolvedValue(row);
     const response = await GET(new NextRequest('http://localhost/api/apps/OpenJS.NodeJS/qa'), {
       params: Promise.resolve({ id: 'OpenJS.NodeJS' }),
@@ -57,8 +55,8 @@ describe('GET /api/apps/[id]/qa', () => {
 
     expect(response.status).toBe(200);
     expect(body.commands.install).toContain('/qn');
-    expect(body.testRun).toEqual({ runId: '123', runAttempt: 1 });
-    expect(JSON.stringify(body)).not.toContain('runUrl');
+    expect(body.environment).toEqual({ executionContext: 'LocalSystem' });
+    expect(JSON.stringify(body)).not.toMatch(/runUrl|runId|runAttempt|testId|computerName|executedAs/);
     expect(body.classification).toBeNull();
   });
 

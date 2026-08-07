@@ -30,9 +30,6 @@ const failedRow = {
   changes: null,
   relevant_event_count: 0,
   environment: null,
-  test_id: 'historical-failure',
-  github_run_id: '1',
-  github_run_attempt: 1,
   qa_schema_version: 1,
   synced_at: '2026-08-07T12:01:00Z',
 } satisfies QaResultRow;

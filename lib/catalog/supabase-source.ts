@@ -381,7 +381,9 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const { data, error } = await supabase
       .from('qa_results')
-      .select('*')
+      .select(
+        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, qa_schema_version, synced_at'
+      )
       .eq('winget_id', wingetId)
       .maybeSingle();
 

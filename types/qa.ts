@@ -47,8 +47,7 @@ export interface QaDetectionRule {
 }
 
 export interface QaEnvironment {
-  computerName: string;
-  executedAs: string;
+  executionContext: 'LocalSystem';
 }
 
 /** Minimal database row used for card/list status badges. */
@@ -73,9 +72,6 @@ export interface QaResultRow extends QaStatusRow {
   changes: QaChanges | null;
   relevant_event_count: number | null;
   environment: QaEnvironment | null;
-  test_id: string | null;
-  github_run_id: string | null;
-  github_run_attempt: number | null;
   qa_schema_version: number;
   synced_at: string;
 }
@@ -130,9 +126,5 @@ export interface QaDetailsResponse {
   changes: QaChanges | null;
   relevantEventCount: number | null;
   environment: QaEnvironment | null;
-  testRun: {
-    runId: string | null;
-    runAttempt: number | null;
-  };
   classification: QaClassification | null;
 }

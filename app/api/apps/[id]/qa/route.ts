@@ -47,7 +47,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       changes: row.changes,
       relevantEventCount: row.relevant_event_count,
       environment: row.environment,
-      testRun: { runId: row.github_run_id, runAttempt: row.github_run_attempt },
       classification:
         row.outcome === 'Failed' ? classifyQaFailure(row.phase_results, row.changes) : null,
     };

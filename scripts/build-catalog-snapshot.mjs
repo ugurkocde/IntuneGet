@@ -53,8 +53,7 @@ const QA_COLUMNS = [
   'winget_id', 'display_name', 'publisher', 'tested_version', 'architecture',
   'outcome', 'tested_at_utc', 'overall_duration_seconds', 'installer_type',
   'install_command', 'uninstall_command', 'detection', 'phase_results', 'changes',
-  'relevant_event_count', 'environment', 'test_id', 'github_run_id',
-  'github_run_attempt', 'qa_schema_version', 'synced_at',
+  'relevant_event_count', 'environment', 'qa_schema_version', 'synced_at',
 ];
 
 /** Fetch every row of a table in pages (Supabase caps a single request at 1000). */
@@ -121,8 +120,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
         tested_at_utc TEXT NOT NULL, overall_duration_seconds REAL, installer_type TEXT,
         install_command TEXT NOT NULL, uninstall_command TEXT NOT NULL,
         detection TEXT NOT NULL, phase_results TEXT NOT NULL, changes TEXT,
-        relevant_event_count INTEGER, environment TEXT, test_id TEXT,
-        github_run_id TEXT, github_run_attempt INTEGER, qa_schema_version INTEGER NOT NULL,
+        relevant_event_count INTEGER, environment TEXT, qa_schema_version INTEGER NOT NULL,
         synced_at TEXT NOT NULL
       );
     `);
@@ -151,11 +149,11 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       (winget_id, display_name, publisher, tested_version, architecture, outcome,
        tested_at_utc, overall_duration_seconds, installer_type, install_command,
        uninstall_command, detection, phase_results, changes, relevant_event_count,
-       environment, test_id, github_run_id, github_run_attempt, qa_schema_version, synced_at)
+       environment, qa_schema_version, synced_at)
       VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,
        @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
        @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
-       @environment,@test_id,@github_run_id,@github_run_attempt,@qa_schema_version,@synced_at)`);
+       @environment,@qa_schema_version,@synced_at)`);
 
     const tx = db.transaction(() => {
       for (const a of curatedApps) {
@@ -210,9 +208,6 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           changes: jsonOrNull(q.changes),
           relevant_event_count: q.relevant_event_count ?? null,
           environment: jsonOrNull(q.environment),
-          test_id: q.test_id ?? null,
-          github_run_id: q.github_run_id ?? null,
-          github_run_attempt: q.github_run_attempt ?? null,
           qa_schema_version: q.qa_schema_version ?? 1,
           synced_at: q.synced_at ?? new Date().toISOString(),
         });
@@ -328,8 +323,7 @@ async function selfTest() {
         detectionAfterUninstall: { exitCode: 1, durationSeconds: 1, timedOut: false },
       },
       changes: null, relevant_event_count: 0,
-      environment: { computerName: 'INTUNE-QA', executedAs: 'SYSTEM' },
-      test_id: 'self-test', github_run_id: '1', github_run_attempt: 1,
+      environment: { executionContext: 'LocalSystem' },
       qa_schema_version: 1, synced_at: '2026-01-03T00:01:00Z',
     },
   ];

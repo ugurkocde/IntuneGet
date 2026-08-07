@@ -43,7 +43,7 @@ function phaseStatus(
   if (!result) return { label: 'Not run', passed: null };
   if (result.timedOut) return { label: 'Timed out', passed: false };
   if (name === 'Detection after uninstall') {
-    return result.exitCode === 1
+    return result.exitCode !== 0
       ? { label: 'Not detected (expected)', passed: true }
       : { label: 'Still detected', passed: false };
   }
@@ -199,9 +199,8 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
               ) : null}
 
               <section className="grid gap-3 rounded-xl border border-overlay/10 bg-bg-elevated/50 p-4 text-xs text-text-secondary sm:grid-cols-2">
-                <div><span className="block text-text-muted">Environment</span>{data.environment?.computerName || 'Unknown'} · <code>{data.environment?.executedAs || 'Unknown account'}</code></div>
+                <div><span className="block text-text-muted">Execution context</span><code>{data.environment?.executionContext || 'Not recorded'}</code></div>
                 <div><span className="block text-text-muted">Relevant Windows events</span>{data.relevantEventCount ?? 'Not recorded'}</div>
-                <div className="sm:col-span-2"><span className="block text-text-muted">Test run</span>{data.testRun.runId ? `GitHub Actions run ${data.testRun.runId} (attempt ${data.testRun.runAttempt ?? 1}). Run logs are in a private QA repository.` : 'Run provenance unavailable.'}</div>
               </section>
             </>
           )}
