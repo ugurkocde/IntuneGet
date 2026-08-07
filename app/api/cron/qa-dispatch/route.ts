@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
+import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -26,19 +27,10 @@ export async function GET(request: Request) {
     const timeout = candidate.status === 'running' ? RUN_TIMEOUT_MS : DISPATCH_TIMEOUT_MS;
     if (timestamp && now.getTime() - new Date(timestamp).getTime() <= timeout) continue;
 
-    const exhausted = candidate.attempts >= MAX_ATTEMPTS;
+    const recovery = qaTimeoutRecoveryUpdate(candidate, now.toISOString(), MAX_ATTEMPTS);
     const { error } = await supabase
       .from('qa_candidates')
-      .update({
-        status: exhausted ? 'error' : 'queued',
-        dispatched_at: null,
-        started_at: null,
-        github_run_id: null,
-        github_run_url: null,
-        finished_at: exhausted ? now.toISOString() : null,
-        failure_summary: exhausted ? 'QA workflow did not report completion before the safety timeout.' : null,
-        updated_at: now.toISOString(),
-      })
+      .update(recovery)
       .eq('id', candidate.id)
       .eq('status', candidate.status);
     if (error) throw error;

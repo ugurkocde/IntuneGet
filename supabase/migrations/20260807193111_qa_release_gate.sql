@@ -202,10 +202,10 @@ begin
         when normalized_outcome = 'retry' then 'error'
         else normalized_outcome
       end,
-      dispatched_at = case when normalized_outcome = 'retry' then null else dispatched_at end,
-      started_at = case when normalized_outcome = 'retry' then null else started_at end,
-      github_run_id = case when normalized_outcome = 'retry' then null else github_run_id end,
-      github_run_url = case when normalized_outcome = 'retry' then null else github_run_url end,
+      dispatched_at = case when normalized_outcome = 'retry' and attempts < 2 then null else dispatched_at end,
+      started_at = case when normalized_outcome = 'retry' and attempts < 2 then null else started_at end,
+      github_run_id = case when normalized_outcome = 'retry' and attempts < 2 then null else github_run_id end,
+      github_run_url = case when normalized_outcome = 'retry' and attempts < 2 then null else github_run_url end,
       finished_at = case when normalized_outcome = 'retry' and attempts < 2 then null else now() end,
       failure_summary = case when normalized_outcome = 'passed' then null else left(p_summary, 1000) end,
       updated_at = now()
