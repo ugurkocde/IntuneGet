@@ -107,7 +107,7 @@ begin
     raise exception 'At least one canonical QA recipe is required';
   end if;
 
-  update public.qa_recipes set active = false, updated_at = now();
+  update public.qa_recipes set active = false, updated_at = now() where active = true;
 
   insert into public.qa_recipes (
     winget_id,
