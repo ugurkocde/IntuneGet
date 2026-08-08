@@ -41,9 +41,10 @@ export interface QaChanges {
 }
 
 export interface QaDetectionRule {
-  type: 'fileVersion';
-  path: string;
-  minimumVersion: string;
+  type: 'fileVersion' | 'installationEvidence';
+  path?: string;
+  minimumVersion?: string;
+  description?: string;
 }
 
 export interface QaEnvironment {

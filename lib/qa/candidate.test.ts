@@ -3,6 +3,7 @@ import {
   normalizeInstallerSha256,
   normalizeQaArchitecture,
   normalizeQaInstallerType,
+  selectQaVmInstaller,
   selectWingetInstaller,
 } from './candidate';
 
@@ -20,6 +21,12 @@ describe('QA candidate normalization', () => {
   it('does not silently substitute a different architecture', () => {
     expect(selectWingetInstaller(installers, 'arm64')).toBeNull();
     expect(normalizeQaArchitecture(undefined)).toBe('x64');
+  });
+
+  it('uses x86 only as an explicit fallback supported by the x64 QA VM', () => {
+    expect(selectQaVmInstaller(installers)).toMatchObject({ architecture: 'x64' });
+    expect(selectQaVmInstaller([installers[0]])).toMatchObject({ architecture: 'x86' });
+    expect(selectQaVmInstaller([{ Architecture: 'arm64' }])).toBeNull();
   });
 
   it('accepts and uppercases only complete SHA-256 values', () => {

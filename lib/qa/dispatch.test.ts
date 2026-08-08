@@ -18,12 +18,15 @@ describe('dispatchQaCandidate', () => {
     vi.stubGlobal('fetch', fetchMock);
     await dispatchQaCandidate({
       id: '11111111-1111-4111-8111-111111111111',
+      winget_id: 'Example.App',
       definition_path: 'qa/apps/example.app.json',
       version: '2.0.0',
+      architecture: 'x64',
       installer_url: 'https://example.test/setup.exe',
       installer_sha256: 'A'.repeat(64),
       installer_file_name: 'setup.exe',
       installer_type: 'exe',
+      test_config: { mode: 'catalog' },
     });
 
     const [url, request] = fetchMock.mock.calls[0];
@@ -34,6 +37,8 @@ describe('dispatchQaCandidate', () => {
     });
     expect(JSON.parse(body.inputs.candidate_payload)).toMatchObject({
       version: '2.0.0',
+      wingetId: 'Example.App',
+      architecture: 'x64',
       installerSha256: 'A'.repeat(64),
     });
     expect(JSON.stringify(body)).not.toContain('secret-token');
@@ -44,12 +49,15 @@ describe('dispatchQaCandidate', () => {
     await expect(
       dispatchQaCandidate({
         id: '11111111-1111-4111-8111-111111111111',
+        winget_id: 'Example.App',
         definition_path: 'qa/apps/example.app.json',
         version: '2.0.0',
+        architecture: 'x64',
         installer_url: 'https://example.test/setup.exe',
         installer_sha256: 'A'.repeat(64),
         installer_file_name: 'setup.exe',
         installer_type: 'exe',
+        test_config: { mode: 'catalog' },
       })
     ).rejects.toThrow('403');
   });

@@ -129,13 +129,14 @@ export interface Database {
         Row: {
           id: string;
           winget_id: string;
-          definition_path: string;
+          definition_path: string | null;
           version: string;
           architecture: string;
           installer_url: string;
           installer_sha256: string;
           installer_type: string;
           installer_file_name: string;
+          test_config: Json;
           status: string;
           priority: number;
           attempts: number;
@@ -151,13 +152,14 @@ export interface Database {
         Insert: {
           id?: string;
           winget_id: string;
-          definition_path: string;
+          definition_path?: string | null;
           version: string;
           architecture: string;
           installer_url: string;
           installer_sha256: string;
           installer_type: string;
           installer_file_name: string;
+          test_config?: Json;
           status?: string;
           priority?: number;
           attempts?: number;
@@ -171,6 +173,70 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_poll_runs: {
+        Row: {
+          id: string;
+          request_id: string | null;
+          status: 'running' | 'succeeded' | 'partial' | 'failed';
+          started_at: string;
+          finished_at: string | null;
+          duration_ms: number | null;
+          recipe_count: number;
+          checked_count: number;
+          updates_found_count: number;
+          queued_count: number;
+          already_known_count: number;
+          unavailable_count: number;
+          error_count: number;
+          errors: Json;
+          alert_delivery: Json | null;
+          base_sha: string | null;
+          head_sha: string | null;
+          changed_package_count: number;
+          supported_changed_count: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id?: string | null;
+          status?: 'running' | 'succeeded' | 'partial' | 'failed';
+          started_at?: string;
+          finished_at?: string | null;
+          duration_ms?: number | null;
+          recipe_count?: number;
+          checked_count?: number;
+          updates_found_count?: number;
+          queued_count?: number;
+          already_known_count?: number;
+          unavailable_count?: number;
+          error_count?: number;
+          errors?: Json;
+          alert_delivery?: Json | null;
+          base_sha?: string | null;
+          head_sha?: string | null;
+          changed_package_count?: number;
+          supported_changed_count?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_poll_runs']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_winget_poll_state: {
+        Row: {
+          id: string;
+          head_sha: string | null;
+          last_checked_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          head_sha?: string | null;
+          last_checked_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_winget_poll_state']['Insert']>;
         Relationships: GenericRelationship[];
       };
       user_profiles: {
@@ -1265,6 +1331,9 @@ export interface Database {
           curation_notes: string | null;
           manually_mapped: boolean;
           is_verified: boolean;
+          is_winget_verified: boolean | null;
+          is_locale_variant: boolean | null;
+          app_source: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1288,6 +1357,9 @@ export interface Database {
           curation_notes?: string | null;
           manually_mapped?: boolean;
           is_verified?: boolean;
+          is_winget_verified?: boolean | null;
+          is_locale_variant?: boolean | null;
+          app_source?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1311,6 +1383,9 @@ export interface Database {
           curation_notes?: string | null;
           manually_mapped?: boolean;
           is_verified?: boolean;
+          is_winget_verified?: boolean | null;
+          is_locale_variant?: boolean | null;
+          app_source?: string | null;
           created_at?: string;
           updated_at?: string;
         };

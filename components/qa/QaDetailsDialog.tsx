@@ -147,7 +147,11 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
                   <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-overlay/10 bg-bg-base p-3 text-xs text-text-secondary">{data.commands.uninstall}</pre>
                 </div>
                 <p className="text-xs text-text-secondary">
-                  Detection: file version at <code className="rounded bg-bg-base px-1 py-0.5">{data.detection.path}</code> must be at least {data.detection.minimumVersion}.
+                  {data.detection.type === 'fileVersion' ? (
+                    <>Detection: file version at <code className="rounded bg-bg-base px-1 py-0.5">{data.detection.path}</code> must be at least {data.detection.minimumVersion}.</>
+                  ) : (
+                    <>Detection: {data.detection.description}.</>
+                  )}
                 </p>
               </section>
 

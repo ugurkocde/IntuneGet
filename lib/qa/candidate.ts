@@ -7,6 +7,11 @@ export interface WingetInstallerCandidate {
   NestedInstallerFiles?: Array<{ RelativeFilePath?: string }>;
 }
 
+export interface QaInstallerSelection {
+  installer: WingetInstallerCandidate;
+  architecture: 'x64' | 'x86';
+}
+
 const SUPPORTED_ARCHITECTURES = new Set(['x64', 'x86', 'arm64']);
 
 export function normalizeQaArchitecture(value?: string | null): 'x64' | 'x86' | 'arm64' {
@@ -28,6 +33,21 @@ export function selectWingetInstaller(
     installers.find((installer) => installer.Architecture?.toLowerCase() === 'neutral') ||
     null
   );
+}
+
+/** Select an installer executable by the x64 QA VM (x64/neutral first, then x86). */
+export function selectQaVmInstaller(
+  installers: WingetInstallerCandidate[] | null | undefined
+): QaInstallerSelection | null {
+  if (!installers?.length) return null;
+  const x64 = installers.find((installer) => installer.Architecture?.toLowerCase() === 'x64');
+  if (x64) return { installer: x64, architecture: 'x64' };
+  const neutral = installers.find(
+    (installer) => installer.Architecture?.toLowerCase() === 'neutral'
+  );
+  if (neutral) return { installer: neutral, architecture: 'x64' };
+  const x86 = installers.find((installer) => installer.Architecture?.toLowerCase() === 'x86');
+  return x86 ? { installer: x86, architecture: 'x86' } : null;
 }
 
 export function normalizeInstallerSha256(value?: string | null): string {

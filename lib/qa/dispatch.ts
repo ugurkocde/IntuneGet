@@ -1,13 +1,17 @@
 import { getGitHubActionsConfig } from '@/lib/github-actions';
+import type { Json } from '@/types/database';
 
 export interface QaDispatchCandidate {
   id: string;
-  definition_path: string;
+  winget_id: string;
+  definition_path: string | null;
   version: string;
+  architecture: string;
   installer_url: string;
   installer_sha256: string;
   installer_file_name: string;
   installer_type: string;
+  test_config: Json;
 }
 
 export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promise<void> {
@@ -25,14 +29,17 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
       ref: config.ref,
       inputs: {
         smoke_test: 'false',
-        app_definition: candidate.definition_path,
+        app_definition: candidate.definition_path || '',
         candidate_payload: JSON.stringify({
           id: candidate.id,
+          wingetId: candidate.winget_id,
           version: candidate.version,
+          architecture: candidate.architecture,
           installerUrl: candidate.installer_url,
           installerSha256: candidate.installer_sha256,
           installerFileName: candidate.installer_file_name,
           installerType: candidate.installer_type,
+          testConfig: candidate.test_config,
         }),
         timeout_minutes: '60',
       },
