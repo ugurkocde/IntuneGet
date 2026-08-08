@@ -34,6 +34,14 @@ function healthTone(state: string): StatusTone {
   return 'neutral';
 }
 
+function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): string | null {
+  if (issue === 'github_rate_limit') return 'GitHub API rate limit';
+  if (issue === 'partial_failure') return 'Some package checks failed';
+  if (issue === 'stalled') return 'Poll did not finish';
+  if (issue === 'upstream_error') return 'Upstream polling error';
+  return null;
+}
+
 function CurrentTest({ data }: { data: QaLiveResponse }) {
   const correctedStart = useMemo(
     () => data.current
@@ -129,6 +137,14 @@ function DashboardContent() {
           <div className="mb-3 flex items-center justify-between"><span className="text-sm text-text-muted">WinGet polling</span><Clock3 className="h-4 w-4 text-text-muted" aria-hidden="true" /></div>
           <StatusBadge tone={healthTone(data.scheduler.state)}>{data.scheduler.state.charAt(0).toUpperCase() + data.scheduler.state.slice(1)}</StatusBadge>
           <p className="mt-2 text-xs text-text-muted">Last scan {relativeTime(data.scheduler.lastPollAt)}</p>
+          {data.scheduler.issue && (
+            <p className="mt-1 text-xs text-status-error">
+              {schedulerIssueLabel(data.scheduler.issue)}
+              {data.scheduler.consecutiveFailures > 1
+                ? ` · ${data.scheduler.consecutiveFailures} consecutive failures`
+                : ''}
+            </p>
+          )}
         </div>
         <div className="rounded-2xl border border-overlay/10 bg-bg-elevated p-5">
           <div className="mb-3 flex items-center justify-between"><span className="text-sm text-text-muted">Queue</span><Loader2 className="h-4 w-4 text-text-muted" aria-hidden="true" /></div>

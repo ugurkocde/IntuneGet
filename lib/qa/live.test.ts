@@ -33,7 +33,9 @@ describe('buildQaLiveResponse', () => {
         status: 'succeeded',
         started_at: '2026-08-08T16:50:00.000Z',
         finished_at: '2026-08-08T16:50:10.000Z',
+        errors: [],
       },
+      consecutivePollFailures: 0,
       recent: [],
       apps: [{
         winget_id: 'Example.App',
@@ -45,6 +47,7 @@ describe('buildQaLiveResponse', () => {
 
     expect(response.runner.state).toBe('testing');
     expect(response.scheduler.state).toBe('healthy');
+    expect(response.scheduler).toMatchObject({ lastOutcome: 'succeeded', issue: null, consecutiveFailures: 0 });
     expect(response.current).toMatchObject({
       displayName: 'Example',
       phase: 'installing',
@@ -68,12 +71,14 @@ describe('buildQaLiveResponse', () => {
       },
       queuedCount: 0,
       queued: [],
-      poll: { status: 'running', started_at: '2026-08-08T16:00:00.000Z', finished_at: null },
+      poll: { status: 'running', started_at: '2026-08-08T16:00:00.000Z', finished_at: null, errors: [] },
+      consecutivePollFailures: 2,
       recent: [],
       apps: [],
     });
     expect(response.runner.state).toBe('stalled');
     expect(response.scheduler.state).toBe('degraded');
+    expect(response.scheduler.issue).toBe('stalled');
   });
 
   it('ignores phase evidence left behind by an earlier retry attempt', () => {
@@ -89,6 +94,7 @@ describe('buildQaLiveResponse', () => {
       queuedCount: 1,
       queued: [],
       poll: null,
+      consecutivePollFailures: 0,
       recent: [],
       apps: [],
     });
@@ -98,5 +104,31 @@ describe('buildQaLiveResponse', () => {
     });
     expect(response.current?.phase).toBe('preparing_package');
     expect(response.current?.phaseStartedAt).toBeNull();
+  });
+
+  it('publishes only a sanitized GitHub rate-limit cause', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-08T19:11:00.000Z'),
+      current: null,
+      queuedCount: 0,
+      queued: [],
+      poll: {
+        status: 'failed',
+        started_at: '2026-08-08T19:10:00.000Z',
+        finished_at: '2026-08-08T19:10:01.000Z',
+        errors: ['system: WinGet change feed failed (403): API rate limit exceeded secret-detail'],
+      },
+      consecutivePollFailures: 2,
+      recent: [],
+      apps: [],
+    });
+
+    expect(response.scheduler).toMatchObject({
+      state: 'degraded',
+      lastOutcome: 'failed',
+      issue: 'github_rate_limit',
+      consecutiveFailures: 2,
+    });
+    expect(JSON.stringify(response)).not.toContain('secret-detail');
   });
 });

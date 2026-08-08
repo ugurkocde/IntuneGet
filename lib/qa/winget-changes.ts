@@ -47,13 +47,44 @@ async function githubJson<T>(
   path: string,
   token?: string
 ): Promise<T> {
-  const response = await fetchImpl(`${GITHUB_API_BASE}${path}`, {
-    headers: githubHeaders(token),
-    cache: 'no-store',
-  });
+  const request = (requestToken?: string) =>
+    fetchImpl(`${GITHUB_API_BASE}${path}`, {
+      headers: githubHeaders(requestToken),
+      cache: 'no-store',
+    });
+  let response = await request(token);
   if (!response.ok) {
-    const detail = (await response.text()).slice(0, 500);
-    throw new Error(`WinGet change feed failed (${response.status}): ${detail || path}`);
+    let detail = (await response.text()).slice(0, 500);
+    const rateLimited =
+      response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.get('x-ratelimit-remaining') === '0' ||
+          /rate limit exceeded/i.test(detail)));
+
+    if (token && rateLimited) {
+      const resetEpoch = Number(response.headers.get('x-ratelimit-reset'));
+      console.warn(
+        JSON.stringify({
+          level: 'warning',
+          message: 'qa_winget_github_authenticated_rate_limit',
+          route: '/api/cron/qa-enqueue',
+          resetAt:
+            Number.isFinite(resetEpoch) && resetEpoch > 0
+              ? new Date(resetEpoch * 1000).toISOString()
+              : null,
+        })
+      );
+      response = await request(undefined);
+      if (response.ok) return (await response.json()) as T;
+      detail = (await response.text()).slice(0, 500);
+    }
+
+    const resetEpoch = Number(response.headers.get('x-ratelimit-reset'));
+    const reset =
+      Number.isFinite(resetEpoch) && resetEpoch > 0
+        ? `; resets ${new Date(resetEpoch * 1000).toISOString()}`
+        : '';
+    throw new Error(`WinGet change feed failed (${response.status}${reset}): ${detail || path}`);
   }
   return (await response.json()) as T;
 }

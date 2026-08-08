@@ -71,6 +71,9 @@ export interface QaLiveResponse {
   scheduler: {
     state: 'healthy' | 'degraded' | 'unknown';
     lastPollAt: string | null;
+    lastOutcome: 'running' | 'succeeded' | 'partial' | 'failed' | null;
+    issue: 'github_rate_limit' | 'upstream_error' | 'partial_failure' | 'stalled' | null;
+    consecutiveFailures: number;
   };
   current: {
     wingetId: string;

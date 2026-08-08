@@ -26,6 +26,7 @@ interface PollRow {
   status: 'running' | 'succeeded' | 'partial' | 'failed';
   started_at: string;
   finished_at: string | null;
+  errors: Json;
 }
 
 interface ResultRow {
@@ -51,6 +52,7 @@ export interface QaLiveSnapshotInput {
   queuedCount: number;
   queued: CandidateRow[];
   poll: PollRow | null;
+  consecutivePollFailures: number;
   recent: ResultRow[];
   apps: AppRow[];
 }
@@ -94,6 +96,21 @@ function elapsedSeconds(start: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
 }
 
+function schedulerIssue(
+  poll: PollRow | null,
+  staleRunning: boolean
+): QaLiveResponse['scheduler']['issue'] {
+  if (!poll || poll.status === 'succeeded') return null;
+  if (staleRunning) return 'stalled';
+  const errors = Array.isArray(poll.errors) ? poll.errors : [];
+  const combined = errors.filter((error): error is string => typeof error === 'string').join(' ');
+  if (/github|winget change feed/i.test(combined) && /rate limit/i.test(combined)) {
+    return 'github_rate_limit';
+  }
+  if (poll.status === 'partial') return 'partial_failure';
+  return 'upstream_error';
+}
+
 export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse {
   const appById = new Map(input.apps.map((app) => [app.winget_id, app]));
   const currentStartedAt = input.current
@@ -112,14 +129,15 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
   );
 
   let schedulerState: QaLiveResponse['scheduler']['state'] = 'unknown';
+  let stalePoll = false;
   if (input.poll) {
-    const staleRunning =
+    stalePoll =
       input.poll.status === 'running' &&
       input.now.getTime() - new Date(input.poll.started_at).getTime() > POLL_STALE_MS;
     schedulerState =
       input.poll.status === 'succeeded'
         ? 'healthy'
-        : input.poll.status === 'running' && !staleRunning
+        : input.poll.status === 'running' && !stalePoll
           ? 'healthy'
           : 'degraded';
   }
@@ -136,6 +154,9 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     scheduler: {
       state: schedulerState,
       lastPollAt: input.poll?.finished_at || input.poll?.started_at || null,
+      lastOutcome: input.poll?.status || null,
+      issue: schedulerIssue(input.poll, stalePoll),
+      consecutiveFailures: input.consecutivePollFailures,
     },
     current: input.current && currentStartedAt
       ? {
@@ -205,10 +226,9 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .eq('status', 'queued'),
     supabase
       .from('qa_poll_runs')
-      .select('status, started_at, finished_at')
+      .select('status, started_at, finished_at, errors')
       .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(10),
     supabase
       .from('qa_results')
       .select(
@@ -226,6 +246,12 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const current = (activeResult.data as CandidateRow | null) || null;
   const queued = (queueResult.data || []) as CandidateRow[];
   const recent = (recentResult.data || []) as ResultRow[];
+  const polls = (pollResult.data || []) as PollRow[];
+  let consecutivePollFailures = 0;
+  for (const poll of polls) {
+    if (poll.status !== 'failed' && poll.status !== 'partial') break;
+    consecutivePollFailures += 1;
+  }
   const ids = [
     ...(current ? [current.winget_id] : []),
     ...queued.map((row) => row.winget_id),
@@ -247,7 +273,8 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     current,
     queuedCount: countResult.count || 0,
     queued,
-    poll: (pollResult.data as PollRow | null) || null,
+    poll: polls[0] || null,
+    consecutivePollFailures,
     recent,
     apps,
   });

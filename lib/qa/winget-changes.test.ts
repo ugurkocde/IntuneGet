@@ -92,4 +92,42 @@ describe('detectWingetChanges', () => {
       'compare limits'
     );
   });
+
+  it('falls back to the public feed when an authenticated request is rate limited', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
+          status: 403,
+          headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1786220000' },
+        })
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ sha: BASE }]), { status: 200 }));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(
+      detectWingetChanges({ token: 'configured-token', baseSha: BASE, fetchImpl })
+    ).resolves.toMatchObject({ headSha: BASE, changedPackageIds: [] });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get('Authorization')).toBe(
+      'Bearer configured-token'
+    );
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).has('Authorization')).toBe(false);
+  });
+
+  it('reports the reset time when both authenticated and public feeds are rate limited', async () => {
+    const limited = () =>
+      new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
+        status: 403,
+        headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1786220000' },
+      });
+    const fetchImpl = vi.fn().mockImplementation(limited);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(
+      detectWingetChanges({ token: 'configured-token', baseSha: BASE, fetchImpl })
+    ).rejects.toThrow(/resets 2026-/);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
 });
