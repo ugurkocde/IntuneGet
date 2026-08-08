@@ -427,6 +427,35 @@ if ($extensionTypeMap.ContainsKey($fileExtension)) {
     }
 }
 
+$isNestedPortable = $installerTypeLower -eq 'zip' -and
+    -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
+    $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable'
+
+if ($installerTypeLower -eq 'zip' -and -not [string]::IsNullOrWhiteSpace($NestedInstallerPath)) {
+    $NestedInstallerPath = $NestedInstallerPath.Trim() -replace '/', '\'
+    $nestedPathSegments = @($NestedInstallerPath -split '\\')
+    $nestedPathIsUnsafe = [System.IO.Path]::IsPathRooted($NestedInstallerPath) -or
+        $NestedInstallerPath.StartsWith('\\') -or
+        $nestedPathSegments -contains '..' -or
+        $NestedInstallerPath.Contains(':') -or
+        $NestedInstallerPath -match '[\x00-\x1f]'
+    if ($nestedPathIsUnsafe) {
+        throw "Unsafe nested installer path: $NestedInstallerPath"
+    }
+}
+
+$portableFolderName = ($DisplayName -replace '[<>:"/\\|?*\x00-\x1f]', '_').Trim().TrimEnd('.')
+if ([string]::IsNullOrWhiteSpace($portableFolderName) -or
+    $portableFolderName -match '^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$') {
+    $portableFolderName = $sanitizedWingetId
+}
+$portableFolderNameSingleQuoteEscaped = $portableFolderName -replace "'", "''"
+$portableInstallPathLine = if ($IsUserScope) {
+    "    `$installPath = Join-Path `$env:LOCALAPPDATA 'Programs\$portableFolderNameSingleQuoteEscaped'"
+} else {
+    "    `$installPath = Join-Path `$env:ProgramFiles '$portableFolderNameSingleQuoteEscaped'"
+}
+
 # Check if uninstall command uses special handling
 $useRegistryUninstall = $false
 $useMsixUninstall = $false
@@ -434,7 +463,10 @@ $usePortableUninstall = $false
 $registryUninstallDisplayName = ''
 $msixPackageName = ''
 
-if ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
+if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
+    $usePortableUninstall = $true
+    Write-Host "Using portable uninstall (folder removal)"
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
 
@@ -459,7 +491,7 @@ if ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
     $useMsixUninstall = $true
     $msixPackageName = $Matches[1]
     Write-Host "Using MSIX uninstall for package: $msixPackageName"
-} elseif ($installerTypeLower -in 'zip', 'portable') {
+} elseif ($installerTypeLower -eq 'zip') {
     $usePortableUninstall = $true
     Write-Host "Using portable uninstall (folder removal)"
 }
@@ -926,68 +958,128 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                 $nestedInstallerTypeLower = if ($NestedInstallerType) { $NestedInstallerType.ToLower() } else { '' }
                 Write-Host "Zip installer with nested installer: type='$nestedInstallerTypeLower' path='$NestedInstallerPath'"
 
-                # Build the execution line for the nested installer (dispatch on nested type)
-                switch ($nestedInstallerTypeLower) {
-                    { $_ -in 'msi', 'wix' } {
-                        $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
-                        if ($msiProperties) {
-                            $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath -AdditionalArgumentList '$msiProperties'"
-                        } else {
-                            $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath"
-                        }
-                    }
-                    'portable' {
-                        $nestedExecuteLine = '        throw "Portable nested installers are not supported yet"'
-                    }
-                    default {
-                        if ($IsUserScope) {
-                            $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
-                        } else {
-                            $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
-                        }
-                    }
-                }
-
-                $lines += @(
-                    ''
-                    '    # Extract the zip archive to a unique temp directory and run the nested installer'
-                    '    $zipExtractDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_Zip_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
-                    '    $null = New-Item -Path $zipExtractDir -ItemType Directory -Force'
-                    '    try {'
-                    '        Write-ADTLogEntry -Message "Extracting zip archive to: $zipExtractDir" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-                )
-                if ($IsUserScope) {
-                    # Per-user installs: copy the zip to user temp first (consistent with the
-                    # exe branch - some installers fail when run from the IMECache directory)
+                if ($isNestedPortable) {
                     $lines += @(
-                        "        Copy-Item -LiteralPath `"`$(`$adtSession.DirFiles)\$installerFileName`" -Destination `$zipExtractDir -Force"
-                        "        Expand-Archive -Path (Join-Path `$zipExtractDir '$installerFileNameSingleQuoteEscaped') -DestinationPath `$zipExtractDir -Force"
+                        ''
+                        '    # Safely stage every portable archive entry before replacing the installed app'
+                        $portableInstallPathLine
+                        '    $portableStageDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_Portable_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
+                        '    $replacementStarted = $false'
+                        '    try {'
+                        '        $null = New-Item -Path $portableStageDir -ItemType Directory -Force'
+                        '        Add-Type -AssemblyName System.IO.Compression.FileSystem'
+                        '        $stageRoot = [System.IO.Path]::GetFullPath($portableStageDir)'
+                        '        $stageRootPrefix = $stageRoot.TrimEnd([char[]]@(''\'', ''/'')) + [System.IO.Path]::DirectorySeparatorChar'
+                        '        $archive = [System.IO.Compression.ZipFile]::OpenRead($installerPath)'
+                        '        try {'
+                        '            foreach ($entry in $archive.Entries) {'
+                        '                $entryRelativePath = $entry.FullName.Replace(''/'', [System.IO.Path]::DirectorySeparatorChar)'
+                        '                if ([string]::IsNullOrWhiteSpace($entryRelativePath)) { continue }'
+                        '                if ($entryRelativePath.Contains('':'')) { throw "Archive entry contains an unsupported path: $($entry.FullName)" }'
+                        '                $targetPath = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($stageRoot, $entryRelativePath))'
+                        '                if ($targetPath -ne $stageRoot -and -not $targetPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {'
+                        '                    throw "Archive entry escapes the portable staging directory: $($entry.FullName)"'
+                        '                }'
+                        '                if ([string]::IsNullOrEmpty($entry.Name)) {'
+                        '                    $null = New-Item -Path $targetPath -ItemType Directory -Force'
+                        '                    continue'
+                        '                }'
+                        '                $targetDirectory = [System.IO.Path]::GetDirectoryName($targetPath)'
+                        '                if ($targetDirectory) { $null = New-Item -Path $targetDirectory -ItemType Directory -Force }'
+                        '                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)'
+                        '            }'
+                        '        }'
+                        '        finally {'
+                        '            if ($archive) { $archive.Dispose() }'
+                        '        }'
+                        "        `$declaredNestedPath = [System.IO.Path]::GetFullPath((Join-Path `$stageRoot '$nestedInstallerPathEscaped'))"
+                        '        if (-not $declaredNestedPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {'
+                        '            throw "Nested installer path escapes the portable staging directory"'
+                        '        }'
+                        '        if (-not (Test-Path -LiteralPath $declaredNestedPath -PathType Leaf)) {'
+                        "            throw `"Nested installer not found in archive: $nestedInstallerPathEscaped`""
+                        '        }'
+                        '        $installParent = [System.IO.Path]::GetDirectoryName($installPath)'
+                        '        if ($installParent) { $null = New-Item -Path $installParent -ItemType Directory -Force }'
+                        '        $replacementStarted = $true'
+                        '        if (Test-Path -LiteralPath $installPath) { Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction Stop }'
+                        '        Move-Item -LiteralPath $portableStageDir -Destination $installPath -Force'
+                        '        Write-ADTLogEntry -Message "Portable archive installed to: $installPath" -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                        '    }'
+                        '    catch {'
+                        '        if ($replacementStarted -and (Test-Path -LiteralPath $installPath)) {'
+                        '            Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction SilentlyContinue'
+                        '        }'
+                        '        Write-ADTLogEntry -Message "Failed to install portable archive: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
+                        '        throw'
+                        '    }'
+                        '    finally {'
+                        '        if (Test-Path -LiteralPath $portableStageDir) {'
+                        '            Remove-Item -LiteralPath $portableStageDir -Recurse -Force -ErrorAction SilentlyContinue'
+                        '        }'
+                        '    }'
                     )
                 } else {
+                    # Build the execution line for a non-portable nested installer.
+                    switch ($nestedInstallerTypeLower) {
+                        { $_ -in 'msi', 'wix' } {
+                            $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
+                            if ($msiProperties) {
+                                $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath -AdditionalArgumentList '$msiProperties'"
+                            } else {
+                                $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath"
+                            }
+                        }
+                        default {
+                            if ($IsUserScope) {
+                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                            } else {
+                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                            }
+                        }
+                    }
+
                     $lines += @(
-                        "        Expand-Archive -Path `"`$(`$adtSession.DirFiles)\$installerFileName`" -DestinationPath `$zipExtractDir -Force"
+                        ''
+                        '    # Extract the zip archive to a unique temp directory and run the nested installer'
+                        '    $zipExtractDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_Zip_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
+                        '    $null = New-Item -Path $zipExtractDir -ItemType Directory -Force'
+                        '    try {'
+                        '        Write-ADTLogEntry -Message "Extracting zip archive to: $zipExtractDir" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                    )
+                    if ($IsUserScope) {
+                        # Per-user installs: copy the zip to user temp first (consistent with the
+                        # exe branch - some installers fail when run from the IMECache directory)
+                        $lines += @(
+                            "        Copy-Item -LiteralPath `"`$(`$adtSession.DirFiles)\$installerFileName`" -Destination `$zipExtractDir -Force"
+                            "        Expand-Archive -Path (Join-Path `$zipExtractDir '$installerFileNameSingleQuoteEscaped') -DestinationPath `$zipExtractDir -Force"
+                        )
+                    } else {
+                        $lines += @(
+                            "        Expand-Archive -Path `"`$(`$adtSession.DirFiles)\$installerFileName`" -DestinationPath `$zipExtractDir -Force"
+                        )
+                    }
+                    $lines += @(
+                        "        `$nestedInstallerPath = Join-Path `$zipExtractDir '$nestedInstallerPathEscaped'"
+                        '        if (-not (Test-Path -LiteralPath $nestedInstallerPath)) {'
+                        "            throw `"Nested installer not found in archive: $nestedInstallerPathEscaped`""
+                        '        }'
+                        '        Write-ADTLogEntry -Message "Running nested installer: $nestedInstallerPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                        $nestedExecuteLine
+                        '    }'
+                        '    finally {'
+                        '        if (Test-Path -LiteralPath $zipExtractDir) {'
+                        '            Remove-Item -Path $zipExtractDir -Recurse -Force -ErrorAction SilentlyContinue'
+                        '        }'
+                        '    }'
                     )
                 }
-                $lines += @(
-                    "        `$nestedInstallerPath = Join-Path `$zipExtractDir '$nestedInstallerPathEscaped'"
-                    '        if (-not (Test-Path -LiteralPath $nestedInstallerPath)) {'
-                    "            throw `"Nested installer not found in archive: $nestedInstallerPathEscaped`""
-                    '        }'
-                    '        Write-ADTLogEntry -Message "Running nested installer: $nestedInstallerPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-                    $nestedExecuteLine
-                    '    }'
-                    '    finally {'
-                    '        if (Test-Path -LiteralPath $zipExtractDir) {'
-                    '            Remove-Item -Path $zipExtractDir -Recurse -Force -ErrorAction SilentlyContinue'
-                    '        }'
-                    '    }'
-                )
             }
         }
         'portable' {
             $lines += @(
                 "    `$sourcePath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
-                "    `$installPath = `"`$env:ProgramFiles\$displayNameEscaped`""
+                $portableInstallPathLine
                 '    Write-ADTLogEntry -Message "Installing portable app to: $installPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                 '    try {'
                 '        if (-not (Test-Path $installPath)) {'
@@ -1229,7 +1321,7 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
     $lines += @(
         ''
         '    # Remove portable app folder'
-        "    `$installPath = `"`$env:ProgramFiles\$displayNameEscaped`""
+        $portableInstallPathLine
         '    Write-ADTLogEntry -Message "Removing portable app folder: $installPath" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
         '    try {'
         '        if (Test-Path $installPath) {'

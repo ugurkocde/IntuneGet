@@ -584,6 +584,48 @@ catch
     };
   }
 
+  private isPortableInstaller(job: PackagingJob): boolean {
+    if (job.installer_type.toLowerCase() === 'portable') {
+      return true;
+    }
+    const nested = this.getNestedInstaller(job);
+    return job.installer_type.toLowerCase() === 'zip' && nested.type?.toLowerCase() === 'portable';
+  }
+
+  private normalizeNestedInstallerPath(nestedPath: string): string {
+    const normalized = nestedPath.trim().replace(/\//g, '\\');
+    const segments = normalized.split('\\');
+    if (
+      !normalized ||
+      /[\x00-\x1f]/.test(normalized) ||
+      normalized.includes(':') ||
+      path.win32.isAbsolute(normalized) ||
+      normalized.startsWith('\\') ||
+      segments.includes('..')
+    ) {
+      throw new Error(`Unsafe nested installer path: ${nestedPath}`);
+    }
+    return normalized;
+  }
+
+  private getPortableFolderName(job: PackagingJob): string {
+    const sanitized = job.display_name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim().replace(/\.+$/, '');
+    if (
+      !sanitized ||
+      /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i.test(sanitized)
+    ) {
+      return this.sanitizeWingetId(job.winget_id);
+    }
+    return sanitized;
+  }
+
+  private getPortableInstallPathLine(job: PackagingJob): string {
+    const folderName = this.getPortableFolderName(job).replace(/'/g, "''");
+    return job.install_scope === 'user'
+      ? `$installPath = Join-Path $env:LOCALAPPDATA 'Programs\\${folderName}'`
+      : `$installPath = Join-Path $env:ProgramFiles '${folderName}'`;
+  }
+
   /**
    * Get custom install/uninstall command override from package_config.psadtConfig
    * Returns null when the override is absent, not a string, or empty/whitespace
@@ -714,6 +756,16 @@ ${steps}
       return `Start-ADTMsiProcess -Action 'Install' -FilePath '${fileName}'`;
     }
 
+    if (installerType === 'portable') {
+      const fileNameEscaped = fileName.replace(/'/g, "''");
+      return `${this.getPortableInstallPathLine(job)}
+    $sourcePath = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
+    $null = New-Item -Path $installPath -ItemType Directory -Force
+    $targetPath = Join-Path $installPath '${fileNameEscaped}'
+    Copy-Item -LiteralPath $sourcePath -Destination $targetPath -Force
+    Write-ADTLogEntry -Message "Portable app installed to: $installPath" -Severity 'Success' -Source 'Install-ADTDeployment'`;
+    }
+
     return `Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\${fileName}" -ArgumentList '${silentSwitches}' -WindowStyle Hidden -WaitForMsiExec`;
   }
 
@@ -741,8 +793,13 @@ ${steps}
       return 'throw "Zip package does not declare a nested installer; cannot install"';
     }
 
-    const nestedPathEscaped = nested.path.replace(/'/g, "''");
+    const normalizedNestedPath = this.normalizeNestedInstallerPath(nested.path);
+    const nestedPathEscaped = normalizedNestedPath.replace(/'/g, "''");
     const nestedType = (nested.type ?? '').toLowerCase();
+
+    if (nestedType === 'portable') {
+      return this.getPortableZipInstallCommand(job, fileName, nestedPathEscaped);
+    }
 
     let executeLine: string;
     if (nestedType === 'msi' || nestedType === 'wix') {
@@ -750,8 +807,6 @@ ${steps}
       executeLine = msiProperties
         ? `Start-ADTMsiProcess -Action 'Install' -FilePath $nestedInstallerPath -AdditionalArgumentList '${msiProperties}'`
         : `Start-ADTMsiProcess -Action 'Install' -FilePath $nestedInstallerPath`;
-    } else if (nestedType === 'portable') {
-      executeLine = 'throw "Portable nested installers are not supported yet"';
     } else {
       executeLine = `Start-ADTProcess -FilePath $nestedInstallerPath -ArgumentList '${silentSwitches}' -WindowStyle Hidden -WaitForMsiExec`;
     }
@@ -774,6 +829,71 @@ ${steps}
     }`;
   }
 
+  private getPortableZipInstallCommand(
+    job: PackagingJob,
+    fileName: string,
+    nestedPathEscaped: string
+  ): string {
+    const fileNameEscaped = fileName.replace(/'/g, "''");
+    return `${this.getPortableInstallPathLine(job)}
+    $portableStageDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_Portable_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))
+    $replacementStarted = $false
+    try {
+        $null = New-Item -Path $portableStageDir -ItemType Directory -Force
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $stageRoot = [System.IO.Path]::GetFullPath($portableStageDir)
+        $stageRootPrefix = $stageRoot.TrimEnd([char[]]@('\\', '/')) + [System.IO.Path]::DirectorySeparatorChar
+        $archivePath = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
+        try {
+            foreach ($entry in $archive.Entries) {
+                $entryRelativePath = $entry.FullName.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+                if ([string]::IsNullOrWhiteSpace($entryRelativePath)) { continue }
+                if ($entryRelativePath.Contains(':')) { throw "Archive entry contains an unsupported path: $($entry.FullName)" }
+                $targetPath = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($stageRoot, $entryRelativePath))
+                if ($targetPath -ne $stageRoot -and -not $targetPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Archive entry escapes the portable staging directory: $($entry.FullName)"
+                }
+                if ([string]::IsNullOrEmpty($entry.Name)) {
+                    $null = New-Item -Path $targetPath -ItemType Directory -Force
+                    continue
+                }
+                $targetDirectory = [System.IO.Path]::GetDirectoryName($targetPath)
+                if ($targetDirectory) { $null = New-Item -Path $targetDirectory -ItemType Directory -Force }
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
+            }
+        }
+        finally {
+            if ($archive) { $archive.Dispose() }
+        }
+        $declaredNestedPath = [System.IO.Path]::GetFullPath((Join-Path $stageRoot '${nestedPathEscaped}'))
+        if (-not $declaredNestedPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Nested installer path escapes the portable staging directory"
+        }
+        if (-not (Test-Path -LiteralPath $declaredNestedPath -PathType Leaf)) {
+            throw "Nested installer not found in archive: ${nestedPathEscaped}"
+        }
+        $installParent = [System.IO.Path]::GetDirectoryName($installPath)
+        if ($installParent) { $null = New-Item -Path $installParent -ItemType Directory -Force }
+        $replacementStarted = $true
+        if (Test-Path -LiteralPath $installPath) { Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction Stop }
+        Move-Item -LiteralPath $portableStageDir -Destination $installPath -Force
+        Write-ADTLogEntry -Message "Portable archive installed to: $installPath" -Severity 'Success' -Source 'Install-ADTDeployment'
+    }
+    catch {
+        if ($replacementStarted -and (Test-Path -LiteralPath $installPath)) {
+            Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Write-ADTLogEntry -Message "Failed to install portable archive: $_" -Severity 'Error' -Source 'Install-ADTDeployment'
+        throw
+    }
+    finally {
+        if (Test-Path -LiteralPath $portableStageDir) {
+            Remove-Item -LiteralPath $portableStageDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }`;
+  }
+
   /**
    * Get uninstall command (PSADT v4 cmdlets)
    * A custom uninstall command override from psadtConfig takes precedence
@@ -783,6 +903,14 @@ ${steps}
     if (uninstallOverride) {
       const overrideEscaped = uninstallOverride.replace(/'/g, "''");
       return `Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\cmd.exe" -ArgumentList '/c ${overrideEscaped}' -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden`;
+    }
+
+    if (this.isPortableInstaller(job)) {
+      return `${this.getPortableInstallPathLine(job)}
+    Write-ADTLogEntry -Message "Removing portable app folder: $installPath" -Severity 'Info' -Source 'Uninstall-ADTDeployment'
+    if (Test-Path -LiteralPath $installPath) {
+        Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction Stop
+    }`;
     }
 
     if (!job.uninstall_command) {
