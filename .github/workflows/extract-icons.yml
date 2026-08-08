@@ -90,7 +90,11 @@ jobs:
             echo "::error::The PAT secret is not set -- icon PRs cannot be published."
             exit 1
           fi
-          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push' 2>/dev/null)" != "true" ]; then
+          # A dry-run push replicates the exact operation that breaks when the
+          # PAT expires or loses 'Contents: write'. No refs are created. The
+          # /repos permissions field is NOT a reliable substitute -- it reports
+          # push=false for fine-grained PATs that can in fact push.
+          if ! git push --dry-run "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/preflight-check-${GITHUB_RUN_ID}"; then
             echo "::error::The PAT cannot push to $GITHUB_REPOSITORY -- it has likely expired or lost 'Contents: write'. Rotate the PAT secret before re-running."
             exit 1
           fi
@@ -283,7 +287,11 @@ jobs:
             echo "::error::The PAT secret is not set -- icon PRs cannot be published."
             exit 1
           fi
-          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push' 2>/dev/null)" != "true" ]; then
+          # A dry-run push replicates the exact operation that breaks when the
+          # PAT expires or loses 'Contents: write'. No refs are created. The
+          # /repos permissions field is NOT a reliable substitute -- it reports
+          # push=false for fine-grained PATs that can in fact push.
+          if ! git push --dry-run "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/preflight-check-${GITHUB_RUN_ID}"; then
             echo "::error::The PAT cannot push to $GITHUB_REPOSITORY -- it has likely expired or lost 'Contents: write'. Rotate the PAT secret before re-running."
             exit 1
           fi
