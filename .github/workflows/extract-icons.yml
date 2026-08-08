@@ -81,6 +81,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify push token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The PAT secret is not set -- icon PRs cannot be published."
+            exit 1
+          fi
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push' 2>/dev/null)" != "true" ]; then
+            echo "::error::The PAT cannot push to $GITHUB_REPOSITORY -- it has likely expired or lost 'Contents: write'. Rotate the PAT secret before re-running."
+            exit 1
+          fi
+          echo "PAT verified: push access to $GITHUB_REPOSITORY confirmed"
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -103,7 +118,7 @@ jobs:
 
       - name: Commit web icons
         id: commit-web-icons
-        if: steps.fetch-web-icons.outputs.total_hits != '0'
+        if: steps.fetch-web-icons.outputs.total_hits != '' && steps.fetch-web-icons.outputs.total_hits != '0'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.PAT }}
@@ -181,6 +196,38 @@ jobs:
           });
           EOF
 
+      # Advance the pagination cursor only after the fetched icons were
+      # committed (or there was nothing to commit). Default step semantics do
+      # the gating: a failed commit/database step aborts the job before this
+      # step, so the next run retries the same batch instead of skipping it.
+      - name: Persist web icon cursor
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          if (!fs.existsSync('web-icon-cursor.json')) {
+            console.log('No cursor file (top-up/gap-fill mode) -- nothing to persist');
+            process.exit(0);
+          }
+          const { createClient } = require('@supabase/supabase-js');
+          const cursor = JSON.parse(fs.readFileSync('web-icon-cursor.json', 'utf8'));
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+          supabase.from('curated_sync_status').upsert({
+            id: 'extract-icons-web-cursor',
+            metadata: { last_winget_id: cursor.last_winget_id },
+            updated_at: new Date().toISOString(),
+          }).then(({ error }) => {
+            if (error) {
+              console.error('Failed to persist web icon cursor:', error.message);
+              process.exit(1);
+            }
+            console.log('Web icon cursor advanced to:', cursor.last_winget_id);
+          });
+          EOF
+
       - name: Web icons summary
         if: always()
         run: |
@@ -226,6 +273,21 @@ jobs:
       - name: Pull latest (includes web icons)
         run: git pull origin main
         shell: bash
+
+      - name: Verify push token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The PAT secret is not set -- icon PRs cannot be published."
+            exit 1
+          fi
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push' 2>/dev/null)" != "true" ]; then
+            echo "::error::The PAT cannot push to $GITHUB_REPOSITORY -- it has likely expired or lost 'Contents: write'. Rotate the PAT secret before re-running."
+            exit 1
+          fi
+          echo "PAT verified: push access to $GITHUB_REPOSITORY confirmed"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -803,3 +865,32 @@ jobs:
             }
           }
         shell: pwsh
+
+  # ============================================================
+  # Alert: keep a visible issue open while the pipeline is failing.
+  # Scheduled-run failure emails are easy to miss -- this workflow
+  # once failed for four weeks straight before anyone noticed.
+  # ============================================================
+  alert-on-failure:
+    runs-on: ubuntu-24.04
+    needs: [extract-web-icons, extract-binary-icons]
+    if: always() && contains(needs.*.result, 'failure')
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Extract App Icons workflow is failing"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Run failed again: $run_url"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The Extract App Icons workflow failed: $run_url
+
+          The most common cause is the \`PAT\` secret expiring or losing write access -- check the 'Verify push token' step of the failed run, and rotate the secret if it flagged the token.
+
+          A comment is added here on every subsequent failed run. Close this issue once the workflow is green again."
+          fi
