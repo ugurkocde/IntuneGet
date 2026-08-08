@@ -83,11 +83,21 @@ export interface QaLiveResponse {
     catalogVersion: string;
     architecture: QaArchitecture;
     executionContext: 'LocalSystem' | 'User';
+    deployMode: 'Auto' | 'Silent' | 'NonInteractive';
+    dialogExpected: boolean;
     phase: QaLivePhase;
     phaseStartedAt: string | null;
     startedAt: string;
     elapsedSeconds: number;
   } | null;
+  viewer: {
+    candidateId: string | null;
+    available: boolean;
+    capturedAt: string | null;
+    sequence: number | null;
+    width: number | null;
+    height: number | null;
+  };
   queue: {
     count: number;
     next: Array<{

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createServerClient } from '@/lib/supabase';
+import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
 import type { Json } from '@/types/database';
 import type { QaArchitecture, QaLivePhase, QaLiveResponse, QaOutcome } from '@/types/qa';
 
@@ -8,6 +9,7 @@ const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
 
 interface CandidateRow {
+  id: string;
   winget_id: string;
   version: string;
   architecture: string;
@@ -20,6 +22,15 @@ interface CandidateRow {
   phase_started_at: string | null;
   phase_updated_at: string | null;
   test_config: Json;
+}
+
+interface FrameRow {
+  candidate_id: string;
+  sequence: number;
+  captured_at: string;
+  updated_at: string;
+  width: number;
+  height: number;
 }
 
 interface PollRow {
@@ -55,6 +66,7 @@ export interface QaLiveSnapshotInput {
   consecutivePollFailures: number;
   recent: ResultRow[];
   apps: AppRow[];
+  frame: FrameRow | null;
 }
 
 const VALID_PHASES = new Set<QaLivePhase>([
@@ -89,6 +101,19 @@ function executionContext(config: Json): 'LocalSystem' | 'User' {
       : 'LocalSystem';
   } catch {
     return 'LocalSystem';
+  }
+}
+
+function deployMode(config: Json): 'Auto' | 'Silent' | 'NonInteractive' {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return 'Silent';
+  const canonical = config.packageProfileCanonicalJson;
+  if (typeof canonical !== 'string') return 'Silent';
+  try {
+    const parsed = JSON.parse(canonical) as { psadtConfig?: { deployMode?: unknown } };
+    const value = parsed.psadtConfig?.deployMode;
+    return value === 'Auto' || value === 'NonInteractive' ? value : 'Silent';
+  } catch {
+    return 'Silent';
   }
 }
 
@@ -143,6 +168,11 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
   }
 
   const currentApp = input.current ? appById.get(input.current.winget_id) : null;
+  const frameIsCurrent = Boolean(
+    input.current &&
+    input.frame?.candidate_id === input.current.id &&
+    input.now.getTime() - new Date(input.frame.updated_at).getTime() <= QA_LIVE_FRAME_MAX_AGE_MS
+  );
 
   return {
     serverTime: input.now.toISOString(),
@@ -167,12 +197,22 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
           catalogVersion: currentApp?.latest_version || input.current.version,
           architecture: architecture(input.current.architecture),
           executionContext: executionContext(input.current.test_config),
+          deployMode: deployMode(input.current.test_config),
+          dialogExpected: deployMode(input.current.test_config) === 'Auto',
           phase: phase(phaseIsCurrentAttempt ? input.current.phase : null),
           phaseStartedAt: phaseIsCurrentAttempt ? input.current.phase_started_at : null,
           startedAt: currentStartedAt,
           elapsedSeconds: elapsedSeconds(currentStartedAt, input.now),
         }
       : null,
+    viewer: {
+      candidateId: frameIsCurrent ? input.current?.id || null : null,
+      available: frameIsCurrent,
+      capturedAt: frameIsCurrent ? input.frame?.updated_at || null : null,
+      sequence: frameIsCurrent ? input.frame?.sequence ?? null : null,
+      width: frameIsCurrent ? input.frame?.width ?? null : null,
+      height: frameIsCurrent ? input.frame?.height ?? null : null,
+    },
     queue: {
       count: input.queuedCount,
       next: input.queued.map((candidate) => ({
@@ -199,7 +239,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
 export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const supabase = createServerClient();
   const candidateColumns =
-    'winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, test_config';
+    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, test_config';
 
   const [activeResult, queueResult, countResult, pollResult, recentResult] = await Promise.all([
     supabase
@@ -259,6 +299,16 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   ];
   const uniqueIds = [...new Set(ids)];
   let apps: AppRow[] = [];
+  let frame: FrameRow | null = null;
+  if (current) {
+    const frameResult = await supabase
+      .from('qa_live_frames')
+      .select('candidate_id, sequence, captured_at, updated_at, width, height')
+      .eq('candidate_id', current.id)
+      .maybeSingle();
+    if (frameResult.error) throw new Error(`Could not load QA live frame metadata: ${frameResult.error.message}`);
+    frame = (frameResult.data as FrameRow | null) || null;
+  }
   if (uniqueIds.length) {
     const appResult = await supabase
       .from('curated_apps')
@@ -277,5 +327,6 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     consecutivePollFailures,
     recent,
     apps,
+    frame,
   });
 }

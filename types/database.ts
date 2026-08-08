@@ -284,6 +284,30 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['qa_poll_runs']['Insert']>;
         Relationships: GenericRelationship[];
       };
+      qa_live_frames: {
+        Row: {
+          candidate_id: string;
+          object_path: string;
+          sequence: number;
+          captured_at: string;
+          width: number;
+          height: number;
+          byte_size: number;
+          updated_at: string;
+        };
+        Insert: {
+          candidate_id: string;
+          object_path: string;
+          sequence: number;
+          captured_at: string;
+          width: number;
+          height: number;
+          byte_size: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_live_frames']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_winget_poll_state: {
         Row: {
           id: string;
@@ -2159,6 +2183,34 @@ export interface Database {
       };
     };
     Functions: {
+      authorize_qa_live_frame_ingest: {
+        Args: {
+          p_secret: string;
+          p_candidate_id: string;
+          p_captured_at: string;
+        };
+        Returns: boolean;
+      };
+      authorize_qa_live_frame_cleanup: {
+        Args: {
+          p_secret: string;
+          p_candidate_id: string;
+        };
+        Returns: boolean;
+      };
+      publish_qa_live_frame_metadata: {
+        Args: {
+          p_secret: string;
+          p_candidate_id: string;
+          p_object_path: string;
+          p_sequence: number;
+          p_captured_at: string;
+          p_width: number;
+          p_height: number;
+          p_byte_size: number;
+        };
+        Returns: boolean;
+      };
       increment_usage: {
         Args: {
           p_org_id: string;

@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, Loader2, Server, ShieldCheck, XCircle } from 'lucide-react';
+import Image from 'next/image';
+import { AlertTriangle, CheckCircle2, Clock3, Eye, Loader2, Monitor, Server, ShieldCheck, XCircle } from 'lucide-react';
 import { AppIcon } from '@/components/AppIcon';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
@@ -40,6 +41,39 @@ function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): strin
   if (issue === 'stalled') return 'Poll did not finish';
   if (issue === 'upstream_error') return 'Upstream polling error';
   return null;
+}
+
+function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
+  const [visibleSrc, setVisibleSrc] = useState<string | null>(null);
+
+  return (
+    <>
+      {visibleSrc ? (
+        <Image
+          src={visibleSrc}
+          alt={alt}
+          fill
+          unoptimized
+          loading="eager"
+          sizes="(min-width: 1024px) 960px, 100vw"
+          className="object-contain"
+        />
+      ) : null}
+      {src !== visibleSrc ? (
+        <Image
+          src={src}
+          alt=""
+          aria-hidden="true"
+          fill
+          unoptimized
+          loading="eager"
+          sizes="(min-width: 1024px) 960px, 100vw"
+          className="object-contain opacity-0"
+          onLoad={() => setVisibleSrc(src)}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function CurrentTest({ data }: { data: QaLiveResponse }) {
@@ -97,6 +131,40 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
         </div>
       </div>
       <QaPhaseTimeline currentPhase={data.current.phase} />
+      <div className="overflow-hidden rounded-xl border border-overlay/10 bg-black" aria-labelledby="live-console-heading">
+        <div className="flex items-center justify-between border-b border-white/10 bg-bg-primary/80 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Monitor className="h-4 w-4 text-accent-cyan" aria-hidden="true" />
+            <h3 id="live-console-heading" className="text-sm font-medium text-text-primary">Live test VM</h3>
+            <span className="hidden text-xs text-text-muted md:inline">
+              {data.current.dialogExpected ? 'PSADT UI may appear' : `${data.current.deployMode} install · no dialog expected`}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-text-muted">
+            <span className="hidden items-center gap-1.5 sm:flex"><Eye className="h-3.5 w-3.5" aria-hidden="true" />Read-only</span>
+            {data.viewer.available ? (
+              <span className="flex items-center gap-1.5 text-status-success">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-success" aria-hidden="true" />
+                Live · {relativeTime(data.viewer.capturedAt)}
+              </span>
+            ) : <span>Waiting for a console frame</span>}
+          </div>
+        </div>
+        <div className="relative aspect-video w-full bg-black">
+          {data.viewer.available && data.viewer.sequence != null && data.viewer.candidateId ? (
+            <LiveFrameImage
+              key={data.viewer.candidateId}
+              src={`/api/qa/live/frame?candidate=${encodeURIComponent(data.viewer.candidateId)}&sequence=${data.viewer.sequence}`}
+              alt={`Read-only live view of the isolated QA VM while testing ${data.current.displayName}`}
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <Monitor className="h-8 w-8 text-white/25" aria-hidden="true" />
+              <p className="max-w-md text-sm text-white/50">The private host is preparing a safe, read-only VM console view. No keyboard, mouse, clipboard, or audio channel is exposed.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

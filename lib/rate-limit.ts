@@ -54,8 +54,13 @@ export function getUserKey(userId: string): string {
 }
 
 export function getIpKey(request: Request): string {
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return `ip:${realIp}`;
   const forwarded = request.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
+  const hops = forwarded
+    ? forwarded.split(',').map((hop) => hop.trim()).filter(Boolean)
+    : [];
+  const ip = hops.at(-1) || 'unknown';
   return `ip:${ip}`;
 }
 
@@ -85,9 +90,21 @@ export const PUBLIC_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60 * 1000,
 };
 
-/** Live QA dashboard: five-second polling with room for multiple tabs. */
+/** Live QA status: two-second foreground polling with room for shared egress. */
 export const QA_LIVE_RATE_LIMIT: RateLimitConfig = {
-  limit: 90,
+  limit: 180,
+  windowMs: 60 * 1000,
+};
+
+/** Cacheable live-frame reads can be shared by several viewers behind one IP. */
+export const QA_LIVE_FRAME_RATE_LIMIT: RateLimitConfig = {
+  limit: 240,
+  windowMs: 60 * 1000,
+};
+
+/** A single trusted host publishes roughly 30 frames per minute. */
+export const QA_LIVE_INGEST_RATE_LIMIT: RateLimitConfig = {
+  limit: 60,
   windowMs: 60 * 1000,
 };
 
@@ -213,6 +230,33 @@ export async function applyRateLimit(
   }
 
   return null;
+}
+
+/**
+ * Apply the distributed limiter without the per-instance memory fallback.
+ * Sensitive machine-to-machine endpoints fail closed if the DB limiter is
+ * unavailable instead of multiplying their allowance across Vercel instances.
+ */
+export async function applyStrictRateLimit(
+  key: string,
+  config: RateLimitConfig
+): Promise<NextResponse | null> {
+  const result = await checkRateLimitDB(key, config);
+  if (!result.limited) return null;
+
+  const retryAfter = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000));
+  return NextResponse.json(
+    { error: 'Too many requests', retryAfter },
+    {
+      status: 429,
+      headers: {
+        'X-RateLimit-Limit': result.limit.toString(),
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': Math.ceil(result.resetAt / 1000).toString(),
+        'Retry-After': retryAfter.toString(),
+      },
+    }
+  );
 }
 
 /**

@@ -9,6 +9,7 @@ describe('buildQaLiveResponse', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-08T17:00:00.000Z'),
       current: {
+        id: '11111111-1111-1111-1111-111111111111',
         winget_id: 'Example.App',
         version: '2.0.0',
         architecture: 'x64',
@@ -43,6 +44,14 @@ describe('buildQaLiveResponse', () => {
         publisher: 'Example Corp',
         latest_version: '2.0.0',
       }],
+      frame: {
+        candidate_id: '11111111-1111-1111-1111-111111111111',
+        sequence: 42,
+        captured_at: '2026-08-08T16:59:58.000Z',
+        updated_at: '2026-08-08T16:59:59.000Z',
+        width: 1280,
+        height: 720,
+      },
     });
 
     expect(response.runner.state).toBe('testing');
@@ -52,7 +61,17 @@ describe('buildQaLiveResponse', () => {
       displayName: 'Example',
       phase: 'installing',
       executionContext: 'User',
+      deployMode: 'Silent',
+      dialogExpected: false,
       elapsedSeconds: 1200,
+    });
+    expect(response.viewer).toEqual({
+      candidateId: '11111111-1111-1111-1111-111111111111',
+      available: true,
+      capturedAt: '2026-08-08T16:59:59.000Z',
+      sequence: 42,
+      width: 1280,
+      height: 720,
     });
     const serialized = JSON.stringify(response);
     for (const forbidden of ['installer_url', 'failure_summary', 'github_run_url', 'private']) {
@@ -64,6 +83,7 @@ describe('buildQaLiveResponse', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-08T17:00:00.000Z'),
       current: {
+        id: '22222222-2222-2222-2222-222222222222',
         winget_id: 'Example.App', version: '2', architecture: 'x64', status: 'running',
         priority: 0, enqueued_at: '2026-08-08T15:00:00.000Z', dispatched_at: null,
         started_at: '2026-08-08T15:30:00.000Z', phase: null, phase_started_at: null,
@@ -75,6 +95,7 @@ describe('buildQaLiveResponse', () => {
       consecutivePollFailures: 2,
       recent: [],
       apps: [],
+      frame: null,
     });
     expect(response.runner.state).toBe('stalled');
     expect(response.scheduler.state).toBe('degraded');
@@ -85,6 +106,7 @@ describe('buildQaLiveResponse', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-08T18:26:00.000Z'),
       current: {
+        id: '33333333-3333-3333-3333-333333333333',
         winget_id: 'Example.App', version: '2', architecture: 'x64', status: 'dispatched',
         priority: 0, enqueued_at: '2026-08-08T15:00:00.000Z',
         dispatched_at: '2026-08-08T18:25:40.000Z', started_at: null,
@@ -97,6 +119,7 @@ describe('buildQaLiveResponse', () => {
       consecutivePollFailures: 0,
       recent: [],
       apps: [],
+      frame: null,
     });
     expect(response.runner).toEqual({
       state: 'testing',
@@ -121,6 +144,7 @@ describe('buildQaLiveResponse', () => {
       consecutivePollFailures: 2,
       recent: [],
       apps: [],
+      frame: null,
     });
 
     expect(response.scheduler).toMatchObject({

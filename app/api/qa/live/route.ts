@@ -5,7 +5,7 @@ import { applyRateLimit, getIpKey, QA_LIVE_RATE_LIMIT } from '@/lib/rate-limit';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const rateLimitResponse = await applyRateLimit(getIpKey(request), QA_LIVE_RATE_LIMIT);
+  const rateLimitResponse = await applyRateLimit(`qa-live:${getIpKey(request)}`, QA_LIVE_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
