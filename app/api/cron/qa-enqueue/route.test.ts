@@ -29,7 +29,17 @@ type QueryResult = {
 
 function query(result: QueryResult) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'neq', 'in', 'order', 'limit']) {
+  for (const method of [
+    'select',
+    'eq',
+    'neq',
+    'not',
+    'in',
+    'order',
+    'limit',
+    'or',
+    'contains',
+  ]) {
     builder[method] = vi.fn(() => builder);
   }
   builder.single = vi.fn(async () => result);
@@ -46,10 +56,14 @@ function createSupabaseStub(options: {
   coverageError?: string;
   supportedApps?: Array<Record<string, unknown>>;
   recipes?: Array<Record<string, unknown>>;
+  candidates?: Array<Record<string, unknown>>;
+  candidatePages?: Array<Array<Record<string, unknown>>>;
 }) {
   const pollRunInserts: Array<Record<string, unknown>> = [];
   const pollRunUpdates: Array<Record<string, unknown>> = [];
   const cursorUpdates: Array<Record<string, unknown>> = [];
+  const candidateInserts: Array<Record<string, unknown>> = [];
+  let candidatePageIndex = 0;
 
   const client = {
     from: vi.fn((table: string) => {
@@ -97,15 +111,65 @@ function createSupabaseStub(options: {
       }
       if (table === 'qa_candidates') {
         return {
-          insert: vi.fn(() => query({ data: { id: 'candidate-1' }, error: null })),
+          insert: vi.fn((row: Record<string, unknown>) => {
+            candidateInserts.push(row);
+            return query({ data: { id: `candidate-${candidateInserts.length}` }, error: null });
+          }),
           update: vi.fn(() => query({ data: null, error: null })),
-          select: vi.fn(() => query({ data: null, error: null })),
+          select: vi.fn(() =>
+            query({
+              data: options.candidatePages
+                ? options.candidatePages[candidatePageIndex++] || []
+                : options.candidates || [],
+              error: null,
+            })
+          ),
         };
       }
       throw new Error(`Unexpected table: ${table}`);
     }),
   };
-  return { client, pollRunInserts, pollRunUpdates, cursorUpdates };
+  return { client, pollRunInserts, pollRunUpdates, cursorUpdates, candidateInserts };
+}
+
+const CURRENT_PACKAGER_COMMIT = 'de6ff2636a446ff69a222811d4057dd92b452a71';
+
+function profileCandidate(options: {
+  id: string;
+  wingetId: string;
+  packagerCommit: string;
+  enqueuedAt?: string;
+  profileKind?: string;
+}): Record<string, unknown> {
+  return {
+    id: options.id,
+    winget_id: options.wingetId,
+    enqueued_at: options.enqueuedAt || '2026-08-08T10:00:00.000Z',
+    test_config: {
+      profileKind: options.profileKind || 'catalog-default',
+      packageProfileCanonicalJson: JSON.stringify({
+        toolchain: { packagerCommit: options.packagerCommit },
+      }),
+    },
+  };
+}
+
+function resolvedManifest() {
+  return {
+    status: 'resolved',
+    version: '1.0.0',
+    manifest: {
+      InstallerType: 'nullsoft',
+      Installers: [
+        {
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/setup.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'nullsoft',
+        },
+      ],
+    },
+  };
 }
 
 function cronRequest(): Request {
@@ -205,5 +269,184 @@ describe('GET /api/cron/qa-enqueue', () => {
       'system: Could not count the supported QA catalog: database unavailable',
     ]);
     expect(pollRunUpdates[0]).toMatchObject({ status: 'failed', error_count: 1 });
+  });
+
+  it('queues a catalog app when its most recent QA profile used an older packager', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'old-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: '1'.repeat(40),
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 1,
+      toolchainBackfillCount: 1,
+      toolchainBackfillPagesScanned: 1,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Example.App',
+      status: 'queued',
+      test_level: 'psadt-package',
+      test_config: {
+        profileKind: 'catalog-default',
+        silentArgs: '/S',
+      },
+    });
+    const canonical = JSON.parse(
+      String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
+    );
+    expect(canonical.toolchain.packagerCommit).toBe(CURRENT_PACKAGER_COMMIT);
+  });
+
+  it('does not backfill an app that already has a current catalog profile', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'current-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+          enqueuedAt: '2026-08-08T10:01:00.000Z',
+        }),
+        profileCandidate({
+          id: 'old-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: '1'.repeat(40),
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('uses only the newest catalog profile when deciding whether an app is stale', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'newest-stale-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: '1'.repeat(40),
+          enqueuedAt: '2026-08-08T10:01:00.000Z',
+        }),
+        profileCandidate({
+          id: 'older-current-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Example.App' });
+  });
+
+  it('continues keyset pagination until it finds a stale catalog profile', async () => {
+    const firstPage = Array.from({ length: 1_000 }, (_, index) =>
+      profileCandidate({
+        id: `irrelevant-${String(1_000 - index).padStart(4, '0')}`,
+        wingetId: `Irrelevant.App.${index}`,
+        packagerCommit: '1'.repeat(40),
+        enqueuedAt: '2026-08-08T10:00:00.000Z',
+        profileKind: 'deployment-config',
+      })
+    );
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Paged.App', name: 'Paged', publisher: 'Contoso' }],
+      candidatePages: [
+        firstPage,
+        [
+          profileCandidate({
+            id: 'paged-old-candidate',
+            wingetId: 'Paged.App',
+            packagerCommit: '1'.repeat(40),
+            enqueuedAt: '2026-08-08T09:59:59.000Z',
+          }),
+        ],
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      toolchainBackfillCount: 1,
+      toolchainBackfillPagesScanned: 2,
+    });
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Paged.App' });
+  });
+
+  it('does not let unsupported stale apps consume the backfill batch', async () => {
+    const unsupportedPage = Array.from({ length: 1_000 }, (_, index) =>
+      profileCandidate({
+        id: `unsupported-${String(1_000 - index).padStart(4, '0')}`,
+        wingetId: `Unsupported.App.${index}`,
+        packagerCommit: '1'.repeat(40),
+        enqueuedAt: '2026-08-08T10:00:00.000Z',
+      })
+    );
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        { winget_id: 'Supported.App', name: 'Supported', publisher: 'Contoso' },
+      ],
+      candidatePages: [
+        unsupportedPage,
+        [
+          profileCandidate({
+            id: 'supported-old-candidate',
+            wingetId: 'Supported.App',
+            packagerCommit: '1'.repeat(40),
+            enqueuedAt: '2026-08-08T09:59:59.000Z',
+          }),
+        ],
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      toolchainBackfillCount: 1,
+      toolchainBackfillPagesScanned: 2,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Supported.App' });
   });
 });

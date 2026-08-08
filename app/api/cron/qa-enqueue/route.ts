@@ -15,7 +15,7 @@ import {
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
-import { buildQaPackageIdentity } from '@/lib/qa/package-profile';
+import { buildQaPackageIdentity, QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
 import {
   createWingetManifestClient,
@@ -27,6 +27,108 @@ const POLL_STATE_ID = 'microsoft/winget-pkgs';
 const INITIAL_LOOKBACK_MINUTES = 30;
 const MAX_RECORDED_ERRORS = 100;
 const MAX_ERROR_LENGTH = 1_000;
+const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
+const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
+
+interface QaCandidateProfileRow {
+  id: string;
+  winget_id: string;
+  enqueued_at: string;
+  test_config: unknown;
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function catalogProfilePackagerCommit(testConfig: unknown): string {
+  const config = object(testConfig);
+  if (config.profileKind !== 'catalog-default') return '';
+  if (typeof config.packageProfileCanonicalJson !== 'string') return '';
+
+  try {
+    const profile = object(JSON.parse(config.packageProfileCanonicalJson));
+    const toolchain = object(profile.toolchain);
+    return typeof toolchain.packagerCommit === 'string' ? toolchain.packagerCommit : '';
+  } catch {
+    return '';
+  }
+}
+
+async function findToolchainBackfillIds(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<{ ids: string[]; pagesScanned: number }> {
+  const decidedIds = new Set<string>();
+  const supportedStaleIds: string[] = [];
+  let cursor: { enqueuedAt: string; id: string } | null = null;
+  let pagesScanned = 0;
+
+  while (true) {
+    let candidateQuery = supabase
+      .from('qa_candidates')
+      .select('id, winget_id, enqueued_at, test_config')
+      .eq('test_level', 'psadt-package')
+      .not('package_profile_sha256', 'is', null)
+      .order('enqueued_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(TOOLCHAIN_BACKFILL_PAGE_SIZE);
+    if (cursor) {
+      candidateQuery = candidateQuery.or(
+        `enqueued_at.lt.${cursor.enqueuedAt},and(enqueued_at.eq.${cursor.enqueuedAt},id.lt.${cursor.id})`
+      );
+    }
+
+    const { data, error } = await candidateQuery;
+    if (error) throw new Error(`Could not scan prior QA toolchains: ${error.message}`);
+    const rows = (data || []) as QaCandidateProfileRow[];
+    pagesScanned++;
+
+    const pageStaleIds: string[] = [];
+    for (const row of rows) {
+      const commit = catalogProfilePackagerCommit(row.test_config);
+      if (!commit || decidedIds.has(row.winget_id)) continue;
+      decidedIds.add(row.winget_id);
+      if (commit !== QA_PSADT_TOOLCHAIN.packagerCommit) pageStaleIds.push(row.winget_id);
+    }
+
+    if (pageStaleIds.length > 0) {
+      const { data: supported, error: supportedError } = await supabase
+        .from('curated_apps')
+        .select('winget_id')
+        .in('winget_id', pageStaleIds)
+        .eq('is_verified', true)
+        .eq('is_winget_verified', true)
+        .eq('app_source', 'win32')
+        .eq('is_locale_variant', false)
+        .eq('psadt_supported', true);
+      if (supportedError) {
+        throw new Error(`Could not filter QA toolchain backfill apps: ${supportedError.message}`);
+      }
+      const supportedIds = new Set((supported || []).map((app) => app.winget_id));
+      for (const wingetId of pageStaleIds) {
+        if (supportedIds.has(wingetId)) supportedStaleIds.push(wingetId);
+      }
+    }
+
+    if (supportedStaleIds.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE) {
+      return {
+        ids: supportedStaleIds.slice(0, TOOLCHAIN_BACKFILL_BATCH_SIZE),
+        pagesScanned,
+      };
+    }
+    if (rows.length < TOOLCHAIN_BACKFILL_PAGE_SIZE) {
+      return { ids: supportedStaleIds, pagesScanned };
+    }
+
+    const last = rows.at(-1);
+    if (!last?.enqueued_at || !last.id) {
+      throw new Error('Could not advance the QA toolchain backfill cursor.');
+    }
+    cursor = { enqueuedAt: last.enqueued_at, id: last.id };
+  }
+}
 
 function installerFileName(installerUrl: string, installerType: string): string {
   try {
@@ -70,6 +172,8 @@ export async function GET(request: Request) {
   let recipeCount = 0;
   let changedPackageCount = 0;
   let supportedChangedCount = 0;
+  let toolchainBackfillCount = 0;
+  let toolchainBackfillPagesScanned = 0;
   let baseSha: string | null = null;
   let headSha: string | null = null;
   let runId: string | null = null;
@@ -149,6 +253,11 @@ export async function GET(request: Request) {
     baseSha = changes.baseSha;
     headSha = changes.headSha;
     changedPackageCount = changes.changedPackageIds.length;
+    const backfill = await findToolchainBackfillIds(supabase);
+    toolchainBackfillPagesScanned = backfill.pagesScanned;
+    const changedIds = new Set(changes.changedPackageIds);
+    const backfillIds = new Set(backfill.ids);
+    const targetPackageIds = Array.from(new Set([...changedIds, ...backfillIds]));
 
     structuredQaPollLog('info', 'qa_poll_started', {
       runId,
@@ -158,6 +267,8 @@ export async function GET(request: Request) {
       baseSha,
       headSha,
       changedPackageCount,
+      toolchainBackfillRequestedCount: backfill.ids.length,
+      toolchainBackfillPagesScanned,
     });
 
     let supportedApps: Array<{
@@ -165,11 +276,11 @@ export async function GET(request: Request) {
       name: string;
       publisher: string;
     }> = [];
-    if (changes.changedPackageIds.length > 0) {
+    if (targetPackageIds.length > 0) {
       const { data, error } = await supabase
         .from('curated_apps')
         .select('winget_id, name, publisher')
-        .in('winget_id', changes.changedPackageIds)
+        .in('winget_id', targetPackageIds)
         .eq('is_verified', true)
         .eq('is_winget_verified', true)
         .eq('app_source', 'win32')
@@ -177,7 +288,8 @@ export async function GET(request: Request) {
       if (error) throw new Error(`Could not filter changed WinGet packages: ${error.message}`);
       supportedApps = data || [];
     }
-    supportedChangedCount = supportedApps.length;
+    supportedChangedCount = supportedApps.filter((app) => changedIds.has(app.winget_id)).length;
+    toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
 
     const supportedIds = supportedApps.map((app) => app.winget_id);
     let recipes: Array<{
@@ -472,6 +584,8 @@ export async function GET(request: Request) {
       headSha,
       changedPackageCount,
       supportedChangedCount,
+      toolchainBackfillCount,
+      toolchainBackfillPagesScanned,
       ...summary,
     });
 
@@ -486,6 +600,8 @@ export async function GET(request: Request) {
         headSha,
         changedPackageCount,
         supportedChangedCount,
+        toolchainBackfillCount,
+        toolchainBackfillPagesScanned,
         ...summary,
       },
       { status: status === 'succeeded' ? 200 : 207 }
@@ -522,6 +638,8 @@ export async function GET(request: Request) {
         headSha,
         changedPackageCount,
         supportedChangedCount,
+        toolchainBackfillCount,
+        toolchainBackfillPagesScanned,
         ...summary,
       },
       { status: 500 }
