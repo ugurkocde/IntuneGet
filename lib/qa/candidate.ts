@@ -5,6 +5,11 @@ export interface WingetInstallerCandidate {
   InstallerType?: string;
   NestedInstallerType?: string;
   NestedInstallerFiles?: Array<{ RelativeFilePath?: string }>;
+  Scope?: string;
+  ProductCode?: string;
+  PackageFamilyName?: string;
+  InstallerSwitches?: Record<string, unknown>;
+  AppsAndFeaturesEntries?: Array<{ ProductCode?: string }>;
 }
 
 export interface QaInstallerSelection {
@@ -69,4 +74,14 @@ export function normalizeQaInstallerType(
   return ['exe', 'msi', 'msix', 'appx', 'zip'].includes(fallback)
     ? (fallback as 'exe' | 'msi' | 'msix' | 'appx' | 'zip')
     : 'exe';
+}
+
+export function qaInstallerFileName(installerUrl: string, installerType: string): string {
+  try {
+    const decoded = decodeURIComponent(new URL(installerUrl).pathname.split('/').pop() || '');
+    if (decoded && !/[\\/:*?"<>|]/.test(decoded)) return decoded;
+  } catch {
+    // Use a deterministic safe fallback below.
+  }
+  return `installer.${normalizeQaInstallerType(installerType)}`;
 }

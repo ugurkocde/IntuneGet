@@ -7,9 +7,21 @@ import { AutoUpdateTrigger } from '../trigger';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
 
-const { getQaResultMock } = vi.hoisted(() => ({ getQaResultMock: vi.fn() }));
+const { getQaResultMock, getPackageResultMock } = vi.hoisted(() => ({
+  getQaResultMock: vi.fn(),
+  getPackageResultMock: vi.fn(),
+}));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({ getQaResult: getQaResultMock }),
+}));
+vi.mock('@/lib/supabase', () => ({
+  createServerClient: () => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: getPackageResultMock }),
+      }),
+    }),
+  }),
 }));
 
 interface TableHandlers {
@@ -89,10 +101,11 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getQaResultMock.mockResolvedValue(null);
+    getPackageResultMock.mockResolvedValue({ data: null, error: null });
   });
 
   it('records a current QA failure as a safety skip before creating history or a job', async () => {
-    getQaResultMock.mockResolvedValue({
+    const failedPackageResult = {
       winget_id: 'Test.App',
       display_name: 'Test App',
       publisher: 'Test',
@@ -117,7 +130,17 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       environment: null,
       qa_schema_version: 1,
       synced_at: '2026-08-07T12:01:00Z',
-    } satisfies QaResultRow);
+      test_level: 'psadt-package',
+      package_profile_sha256: 'B'.repeat(64),
+      psadt_version: '4.1.8',
+      psadt_template_sha256: 'C'.repeat(64),
+      psadt_config_sha256: 'D'.repeat(64),
+      detection_rules_sha256: 'E'.repeat(64),
+      packager_commit: 'f'.repeat(40),
+      package_content_sha256: 'F'.repeat(64),
+    } satisfies QaResultRow;
+    getQaResultMock.mockResolvedValue(failedPackageResult);
+    getPackageResultMock.mockResolvedValue({ data: failedPackageResult, error: null });
 
     const supabase = createSupabaseMock({});
     const trigger = makeTrigger(supabase);
@@ -138,7 +161,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       skipped: true,
       code: 'QA_NOT_PASSED_CURRENT_VERSION',
     });
-    expect(result.skipReason).toContain('exact QA pass');
+    expect(result.skipReason).toContain('exact PSADT package QA pass');
     expect(createHistorySpy).not.toHaveBeenCalled();
   });
 

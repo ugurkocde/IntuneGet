@@ -1,8 +1,12 @@
+import { generateDetectionRules, generateUninstallCommand } from '@/lib/detection-rules';
+import type { DetectionRule } from '@/types/intune';
+import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
+import { normalizeQaPsadtConfig } from './package-profile';
+import type { NormalizedInstaller, WingetInstallerType, WingetScope } from '@/types/winget';
 import type { WingetInstallerCandidate } from './candidate';
 
 export interface QaCatalogTestConfig {
-  [key: string]: string | string[];
-  mode: 'catalog';
+  mode: 'psadt-package';
   displayName: string;
   publisher: string;
   sourceInstallerType: string;
@@ -11,6 +15,14 @@ export interface QaCatalogTestConfig {
   scope: string;
   nestedInstallerType: string;
   nestedInstallerFiles: string[];
+  uninstallCommand: string;
+  psadtConfig: PSADTConfig;
+  detectionRules: DetectionRule[];
+  profileKind: 'catalog-default';
+  packageProfileCanonicalJson?: string;
+  packageProfileSha256?: string;
+  psadtConfigSha256?: string;
+  detectionRulesSha256?: string;
 }
 
 type ManifestRecord = Record<string, unknown>;
@@ -50,7 +62,7 @@ export function buildQaCatalogTestConfig({
   manifest,
   installer,
 }: {
-  app: { name: string; publisher: string };
+  app: { wingetId: string; name: string; publisher: string; version: string };
   manifest: ManifestRecord;
   installer: WingetInstallerCandidate & ManifestRecord;
 }): QaCatalogTestConfig {
@@ -67,20 +79,64 @@ export function buildQaCatalogTestConfig({
         .filter(Boolean)
         .slice(0, 20)
     : [];
+  const rawSourceType =
+    text(installer.InstallerType) || text(manifest.InstallerType) || 'exe';
+  const supportedTypes = new Set<WingetInstallerType>([
+    'msix',
+    'msi',
+    'appx',
+    'exe',
+    'zip',
+    'inno',
+    'nullsoft',
+    'wix',
+    'burn',
+    'pwa',
+    'portable',
+  ]);
+  const sourceInstallerType = supportedTypes.has(rawSourceType.toLowerCase() as WingetInstallerType)
+    ? (rawSourceType.toLowerCase() as WingetInstallerType)
+    : 'exe';
+  const rawScope = text(installer.Scope) || text(manifest.Scope);
+  const scope: WingetScope = rawScope.toLowerCase() === 'user' ? 'user' : 'machine';
+  const productCode =
+    msiProductCode(installer.ProductCode) ||
+    msiProductCode(appsAndFeaturesProductCode(installer));
+  const normalizedInstaller: NormalizedInstaller = {
+    architecture: (text(installer.Architecture).toLowerCase() || 'x64') as NormalizedInstaller['architecture'],
+    url: text(installer.InstallerUrl),
+    sha256: text(installer.InstallerSha256),
+    type: sourceInstallerType,
+    nestedInstallerType: text(installer.NestedInstallerType).toLowerCase() as WingetInstallerType,
+    nestedInstallerPath: nestedFiles[0],
+    scope,
+    silentArgs,
+    productCode: productCode || undefined,
+    packageFamilyName: text(installer.PackageFamilyName) || undefined,
+  };
+  const detectionRules = generateDetectionRules(
+    normalizedInstaller,
+    app.name,
+    app.wingetId,
+    app.version,
+    DEFAULT_PSADT_CONFIG.registryMarkerPath
+  );
+  const psadtConfig: PSADTConfig = normalizeQaPsadtConfig(DEFAULT_PSADT_CONFIG, detectionRules);
 
   return {
-    mode: 'catalog',
+    mode: 'psadt-package',
     displayName: app.name,
     publisher: app.publisher,
-    sourceInstallerType:
-      text(installer.InstallerType) || text(manifest.InstallerType) || 'exe',
+    sourceInstallerType,
     silentArgs,
-    productCode:
-      msiProductCode(installer.ProductCode) ||
-      msiProductCode(appsAndFeaturesProductCode(installer)),
-    scope: text(installer.Scope) || text(manifest.Scope),
+    productCode,
+    scope,
     nestedInstallerType:
       text(installer.NestedInstallerType) || text(manifest.NestedInstallerType),
     nestedInstallerFiles: nestedFiles,
+    uninstallCommand: generateUninstallCommand(normalizedInstaller, app.name),
+    psadtConfig,
+    detectionRules,
+    profileKind: 'catalog-default',
   };
 }

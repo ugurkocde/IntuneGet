@@ -382,6 +382,7 @@ export async function POST(request: NextRequest) {
               removeAssignmentsFromPreviousApp: currentCarryOver,
               autoSupersede: supersedePrevious,
               supersedenceType: supersedePrevious ? 'update' : undefined,
+              packageProfileSha256: triggerResult.packageProfileSha256,
             };
 
             const isBatch = updateRequests.length > 1;

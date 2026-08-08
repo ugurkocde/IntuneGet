@@ -47,6 +47,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       changes: row.changes,
       relevantEventCount: row.relevant_event_count,
       environment: row.environment,
+      package: {
+        testLevel: row.test_level,
+        profileSha256: row.package_profile_sha256,
+        psadtVersion: row.psadt_version,
+        psadtTemplateSha256: row.psadt_template_sha256,
+        psadtConfigSha256: row.psadt_config_sha256,
+        detectionRulesSha256: row.detection_rules_sha256,
+        packagerCommit: row.packager_commit,
+        contentSha256: row.package_content_sha256,
+      },
       classification:
         row.outcome === 'Failed' ? classifyQaFailure(row.phase_results, row.changes) : null,
     };

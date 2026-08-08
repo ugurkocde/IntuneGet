@@ -15,6 +15,7 @@ import {
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
+import { buildQaPackageIdentity } from '@/lib/qa/package-profile';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
 import {
   createWingetManifestClient,
@@ -193,6 +194,8 @@ export async function GET(request: Request) {
       installer_sha256: string | null;
       outcome: string;
       tested_at_utc: string;
+      test_level: string;
+      package_profile_sha256: string | null;
     }> = [];
     if (supportedIds.length > 0) {
       const [recipeResult, policyResult, resultResult] = await Promise.all([
@@ -210,7 +213,7 @@ export async function GET(request: Request) {
         supabase
           .from('qa_results')
           .select(
-            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc'
+            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, test_level, package_profile_sha256'
           )
           .in('winget_id', supportedIds),
       ]);
@@ -284,13 +287,42 @@ export async function GET(request: Request) {
               throw new Error('resolved installer is missing a valid HTTPS URL or SHA-256');
             }
 
-            const previous = resultById.get(app.winget_id);
             const architecture = selectedForVm.architecture;
+            const testConfig = buildQaCatalogTestConfig({
+              app: { ...app, wingetId: app.winget_id, version: resolution.version },
+              manifest,
+              installer: selectedForVm.installer as never,
+            });
+            const packageIdentity = buildQaPackageIdentity({
+              profileKind: testConfig.profileKind,
+              wingetId: app.winget_id,
+              displayName: testConfig.displayName,
+              publisher: testConfig.publisher,
+              version: resolution.version,
+              architecture,
+              installerSha256,
+              sourceInstallerType: testConfig.sourceInstallerType,
+              silentArgs: testConfig.silentArgs,
+              uninstallCommand: testConfig.uninstallCommand,
+              installScope: testConfig.scope,
+              nestedInstallerType: testConfig.nestedInstallerType,
+              nestedInstallerFiles: testConfig.nestedInstallerFiles,
+              psadtConfig: testConfig.psadtConfig,
+              detectionRules: testConfig.detectionRules,
+            });
+            testConfig.packageProfileCanonicalJson = packageIdentity.canonicalJson;
+            testConfig.packageProfileSha256 = packageIdentity.packageProfileSha256;
+            testConfig.psadtConfigSha256 = packageIdentity.psadtConfigSha256;
+            testConfig.detectionRulesSha256 = packageIdentity.detectionRulesSha256;
+            const previous = resultById.get(app.winget_id);
             const previousMatches = Boolean(
               previous &&
+                previous.test_level === 'psadt-package' &&
                 previous.tested_version === resolution.version &&
                 previous.architecture.toLowerCase() === architecture.toLowerCase() &&
-                previous.installer_sha256?.toUpperCase() === installerSha256
+                previous.installer_sha256?.toUpperCase() === installerSha256 &&
+                previous.package_profile_sha256?.toUpperCase() ===
+                  packageIdentity.packageProfileSha256
             );
             const now = new Date().toISOString();
             const initialStatus = previousMatches
@@ -298,11 +330,6 @@ export async function GET(request: Request) {
                 ? 'passed'
                 : 'failed'
               : 'queued';
-            const testConfig = buildQaCatalogTestConfig({
-              app,
-              manifest,
-              installer: selectedForVm.installer as never,
-            });
             const { data: inserted, error: insertError } = await supabase!
               .from('qa_candidates')
               .insert({
@@ -314,7 +341,9 @@ export async function GET(request: Request) {
                 installer_sha256: installerSha256,
                 installer_type: installerType,
                 installer_file_name: installerFileName(installerUrl, installerType),
-                test_config: testConfig,
+                test_level: 'psadt-package',
+                package_profile_sha256: packageIdentity.packageProfileSha256,
+                test_config: testConfig as never,
                 status: initialStatus,
                 priority: priorities.get(app.winget_id) || 0,
                 finished_at: initialStatus === 'queued' ? null : previous?.tested_at_utc || now,
@@ -332,6 +361,7 @@ export async function GET(request: Request) {
                 .eq('version', resolution.version)
                 .eq('architecture', architecture)
                 .eq('installer_sha256', installerSha256)
+                .eq('package_profile_sha256', packageIdentity.packageProfileSha256)
                 .maybeSingle();
               if (existingError) {
                 throw new Error(`Could not read the existing QA candidate: ${existingError.message}`);
@@ -345,7 +375,7 @@ export async function GET(request: Request) {
                     attempts: 0,
                     finished_at: null,
                     failure_summary: null,
-                    test_config: testConfig,
+                    test_config: testConfig as never,
                     updated_at: now,
                   })
                   .eq('id', existing.id)
@@ -356,7 +386,10 @@ export async function GET(request: Request) {
                   .update({ status: 'superseded', finished_at: now, updated_at: now })
                   .eq('winget_id', app.winget_id)
                   .eq('architecture', architecture)
+                  .eq('test_level', 'psadt-package')
+                  .contains('test_config', { profileKind: 'catalog-default' })
                   .eq('status', 'queued')
+                  .neq('version', resolution.version)
                   .neq('id', existing.id);
                 if (supersedeError) throw supersedeError;
                 summary.queued++;
@@ -365,7 +398,7 @@ export async function GET(request: Request) {
                   .from('qa_candidates')
                   .update({
                     priority: priorities.get(app.winget_id) || 0,
-                    test_config: testConfig,
+                    test_config: testConfig as never,
                     updated_at: now,
                   })
                   .eq('id', existing.id)
@@ -388,7 +421,10 @@ export async function GET(request: Request) {
               .update({ status: 'superseded', finished_at: now, updated_at: now })
               .eq('winget_id', app.winget_id)
               .eq('architecture', architecture)
+              .eq('test_level', 'psadt-package')
+              .contains('test_config', { profileKind: 'catalog-default' })
               .eq('status', 'queued')
+              .neq('version', resolution.version)
               .neq('id', inserted.id);
             if (supersedeError) throw supersedeError;
           } catch (error) {

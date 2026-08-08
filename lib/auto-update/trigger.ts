@@ -16,12 +16,23 @@ import {
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
 import { describeQaGateError, enforceQaGate, isQaGateError } from '@/lib/qa/gate';
-import { normalizeInstallerSha256, selectWingetInstaller } from '@/lib/qa/candidate';
+import {
+  normalizeInstallerSha256,
+  normalizeQaInstallerType,
+  qaInstallerFileName,
+  selectWingetInstaller,
+} from '@/lib/qa/candidate';
+import {
+  buildQaPackageIdentityFromWorkflowInput,
+  normalizeQaPsadtConfig,
+} from '@/lib/qa/package-profile';
+import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 
 interface TriggerResult {
   success: boolean;
   packagingJobId?: string;
   historyId?: string;
+  packageProfileSha256?: string;
   error?: string;
   skipped?: boolean;
   skipReason?: string;
@@ -176,12 +187,118 @@ export class AutoUpdateTrigger {
       // packaging failure. Keep it ahead of history/job creation so scheduled
       // auto-updates do not leave misleading failed or queued jobs behind.
       const deploymentConfig = policy.deployment_config as DeploymentConfig;
+      const packageIdentity = buildQaPackageIdentityFromWorkflowInput({
+        wingetId: updateInfo.wingetId,
+        displayName: deploymentConfig.displayName || updateInfo.displayName,
+        publisher: deploymentConfig.publisher || 'Unknown Publisher',
+        version: updateInfo.latestVersion,
+        architecture: deploymentConfig.architecture || 'x64',
+        installerSha256: updateInfo.installerSha256,
+        installerType: updateInfo.installerType || deploymentConfig.installerType || 'exe',
+        nestedInstallerType: updateInfo.nestedInstallerType,
+        nestedInstallerPath: updateInfo.nestedInstallerPath,
+        silentSwitches: extractSilentSwitches(
+          deploymentConfig.installCommand || '',
+          updateInfo.installerType || deploymentConfig.installerType || 'exe'
+        ),
+        uninstallCommand: deploymentConfig.uninstallCommand || '',
+        installScope: deploymentConfig.installScope === 'user' ? 'user' : 'machine',
+        psadtConfig: deploymentConfig.psadtConfig
+          ? JSON.stringify(deploymentConfig.psadtConfig)
+          : undefined,
+        detectionRules: JSON.stringify(deploymentConfig.detectionRules || []),
+      });
+      const normalizedPsadtConfig = normalizeQaPsadtConfig(
+        deploymentConfig.psadtConfig,
+        deploymentConfig.detectionRules || []
+      );
+      const sourceInstallerType =
+        updateInfo.installerType || deploymentConfig.installerType || 'exe';
+      const architecture = (deploymentConfig.architecture || 'x64').toLowerCase();
+      const now = new Date().toISOString();
+      const { error: candidateError } = await this.supabase.from('qa_candidates').insert({
+        winget_id: updateInfo.wingetId,
+        definition_path: null,
+        version: updateInfo.latestVersion,
+        architecture,
+        installer_url: updateInfo.installerUrl,
+        installer_sha256: updateInfo.installerSha256.toUpperCase(),
+        installer_type: normalizeQaInstallerType(sourceInstallerType),
+        installer_file_name: qaInstallerFileName(updateInfo.installerUrl, sourceInstallerType),
+        test_level: 'psadt-package',
+        package_profile_sha256: packageIdentity.packageProfileSha256,
+        test_config: {
+          mode: 'psadt-package',
+          displayName: deploymentConfig.displayName || updateInfo.displayName,
+          publisher: deploymentConfig.publisher || 'Unknown Publisher',
+          sourceInstallerType,
+          silentArgs: extractSilentSwitches(
+            deploymentConfig.installCommand || '',
+            sourceInstallerType
+          ),
+          productCode: '',
+          scope: deploymentConfig.installScope === 'user' ? 'user' : 'machine',
+          nestedInstallerType: updateInfo.nestedInstallerType || '',
+          nestedInstallerFiles: updateInfo.nestedInstallerPath
+            ? [updateInfo.nestedInstallerPath]
+            : [],
+          uninstallCommand: deploymentConfig.uninstallCommand || '',
+          psadtConfig: normalizedPsadtConfig,
+          detectionRules: deploymentConfig.detectionRules || [],
+          profileKind: 'deployment-config',
+          packageProfileCanonicalJson: packageIdentity.canonicalJson,
+          packageProfileSha256: packageIdentity.packageProfileSha256,
+          psadtConfigSha256: packageIdentity.psadtConfigSha256,
+          detectionRulesSha256: packageIdentity.detectionRulesSha256,
+        },
+        status: 'queued',
+        priority: 1000,
+        updated_at: now,
+      });
+      if (candidateError?.code === '23505') {
+        const { data: existingCandidate, error: existingCandidateError } = await this.supabase
+          .from('qa_candidates')
+          .select('id, status')
+          .eq('winget_id', updateInfo.wingetId)
+          .eq('version', updateInfo.latestVersion)
+          .eq('architecture', architecture)
+          .eq('installer_sha256', updateInfo.installerSha256.toUpperCase())
+          .eq('package_profile_sha256', packageIdentity.packageProfileSha256)
+          .maybeSingle();
+        if (existingCandidateError) {
+          throw new Error(`Could not read exact PSADT QA candidate: ${existingCandidateError.message}`);
+        }
+        if (existingCandidate && ['error', 'superseded'].includes(existingCandidate.status)) {
+          const { error: reactivateError } = await this.supabase
+            .from('qa_candidates')
+            .update({
+              status: 'queued',
+              priority: 1000,
+              attempts: 0,
+              dispatched_at: null,
+              started_at: null,
+              finished_at: null,
+              github_run_id: null,
+              github_run_url: null,
+              failure_summary: null,
+              updated_at: now,
+            })
+            .eq('id', existingCandidate.id)
+            .in('status', ['error', 'superseded']);
+          if (reactivateError) {
+            throw new Error(`Could not requeue exact PSADT package QA: ${reactivateError.message}`);
+          }
+        }
+      } else if (candidateError) {
+        throw new Error(`Could not queue exact PSADT package QA: ${candidateError.message}`);
+      }
       try {
         await enforceQaGate({
           wingetId: updateInfo.wingetId,
           version: updateInfo.latestVersion,
           architecture: deploymentConfig.architecture,
           installerSha256: updateInfo.installerSha256,
+          packageProfileSha256: packageIdentity.packageProfileSha256,
           requirePassed: true,
         });
       } catch (error) {
@@ -222,6 +339,7 @@ export class AutoUpdateTrigger {
         success: true,
         packagingJobId: packagingJob.id,
         historyId: historyRecord.id,
+        packageProfileSha256: packageIdentity.packageProfileSha256,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -11,8 +11,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { buildSqlite } from '../../scripts/build-catalog-snapshot.mjs';
-import { SnapshotCatalogSource } from './snapshot-source';
+import { hasCompatibleQaResultsTable, SnapshotCatalogSource } from './snapshot-source';
 import { _resetSnapshotStoreForTest } from './snapshot-store';
 
 let tmpDir: string;
@@ -136,6 +137,14 @@ const qaResults = [
     environment: { executionContext: 'LocalSystem' },
     qa_schema_version: 1,
     synced_at: '2026-01-03T00:01:00Z',
+    test_level: 'psadt-package',
+    package_profile_sha256: 'B'.repeat(64),
+    psadt_version: '4.1.8',
+    psadt_template_sha256: 'C'.repeat(64),
+    psadt_config_sha256: 'D'.repeat(64),
+    detection_rules_sha256: 'E'.repeat(64),
+    packager_commit: 'f'.repeat(40),
+    package_content_sha256: 'F'.repeat(64),
   },
 ];
 
@@ -304,5 +313,25 @@ describe('SnapshotCatalogSource', () => {
   it('getCategoryCount respects verifiedOnly', async () => {
     expect(await source.getCategoryCount({ verifiedOnly: true })).toBe(4);
     expect(await source.getCategoryCount({ verifiedOnly: false })).toBe(4);
+  });
+});
+
+describe('snapshot QA schema compatibility', () => {
+  it('does not query PSADT fields from a legacy QA table', () => {
+    const legacy = new Database(':memory:');
+    legacy.exec('CREATE TABLE qa_results (winget_id TEXT PRIMARY KEY)');
+    expect(hasCompatibleQaResultsTable(legacy)).toBe(false);
+    legacy.close();
+
+    const current = new Database(':memory:');
+    current.exec(`CREATE TABLE qa_results (
+      winget_id TEXT PRIMARY KEY,
+      test_level TEXT,
+      package_profile_sha256 TEXT,
+      psadt_version TEXT,
+      package_content_sha256 TEXT
+    )`);
+    expect(hasCompatibleQaResultsTable(current)).toBe(true);
+    current.close();
   });
 });

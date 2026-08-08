@@ -7,11 +7,16 @@ const passed: QaStatus = {
   testedVersion: '8.9.7',
   architecture: 'x64',
   testedAtUtc: '2026-08-07T12:48:35Z',
+  testLevel: 'psadt-package',
+  packageProfileSha256: 'B'.repeat(64),
 };
+
+const installerOnly: QaStatus = { ...passed, testLevel: 'installer-preflight' };
 
 describe('deriveQaBadgeState', () => {
   it('models missing results as untested', () => {
     expect(deriveQaBadgeState(null, '8.9.7')).toBe('untested');
+    expect(deriveQaBadgeState(installerOnly, '8.9.7')).toBe('untested');
   });
 
   it('returns passed and failed for an exact version', () => {

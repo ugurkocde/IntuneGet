@@ -7,6 +7,7 @@
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { enforceInstallerPreflight } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
+import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -42,6 +43,7 @@ export interface WorkflowInputs {
   autoSupersede?: boolean; // Mark the new app as superseding the previous app
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
   sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
+  packageProfileSha256?: string; // Exact generated PSADT package identity; computed server-side when absent
 }
 
 export interface GitHubActionsConfig {
@@ -127,11 +129,17 @@ export async function triggerPackagingWorkflow(
     installScope: inputs.installScope,
     sourceType: inputs.sourceType,
   });
+  const packageProfileSha256 =
+    inputs.sourceType === 'custom'
+      ? undefined
+      : inputs.packageProfileSha256 ||
+        buildQaPackageIdentityFromWorkflowInput(inputs).packageProfileSha256;
   await enforceQaGate({
     wingetId: inputs.wingetId,
     version: inputs.version,
     architecture: inputs.architecture,
     installerSha256: inputs.installerSha256,
+    packageProfileSha256,
     requirePassed: options?.requireQaPass,
     qaOverride: inputs.qaOverride,
     sourceType: inputs.sourceType,

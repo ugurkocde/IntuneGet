@@ -46,15 +46,20 @@ import type {
 type DB = BetterSqlite3.Database;
 
 const qaTableAvailability = new WeakMap<object, boolean>();
+const REQUIRED_QA_COLUMNS = [
+  'test_level',
+  'package_profile_sha256',
+  'psadt_version',
+  'package_content_sha256',
+] as const;
 
-function hasQaResultsTable(db: DB): boolean {
+export function hasCompatibleQaResultsTable(db: DB): boolean {
   const cached = qaTableAvailability.get(db);
   if (cached !== undefined) return cached;
 
-  const row = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='qa_results'")
-    .get();
-  const available = Boolean(row);
+  const columns = db.prepare('PRAGMA table_info(qa_results)').all() as Array<{ name: string }>;
+  const names = new Set(columns.map((column) => column.name));
+  const available = REQUIRED_QA_COLUMNS.every((column) => names.has(column));
   qaTableAvailability.set(db, available);
   return available;
 }
@@ -541,12 +546,14 @@ export class SnapshotCatalogSource implements CatalogSource {
   async getQaStatuses(ids: string[]): Promise<QaStatusRow[]> {
     return withDb(
       (db) => {
-        if (ids.length === 0 || !hasQaResultsTable(db)) return [];
+        if (ids.length === 0 || !hasCompatibleQaResultsTable(db)) return [];
         const placeholders = ids.map(() => '?').join(', ');
         return db
           .prepare(
-            `SELECT winget_id, outcome, tested_version, architecture, tested_at_utc
-             FROM qa_results WHERE winget_id IN (${placeholders})`
+            `SELECT winget_id, outcome, tested_version, architecture, tested_at_utc,
+                    test_level, package_profile_sha256
+             FROM qa_results
+             WHERE test_level = 'psadt-package' AND winget_id IN (${placeholders})`
           )
           .all(...ids) as QaStatusRow[];
       },
@@ -557,9 +564,11 @@ export class SnapshotCatalogSource implements CatalogSource {
   async getQaResult(wingetId: string): Promise<QaResultRow | null> {
     return withDb(
       (db) => {
-        if (!hasQaResultsTable(db)) return null;
+        if (!hasCompatibleQaResultsTable(db)) return null;
         const row = db
-          .prepare('SELECT * FROM qa_results WHERE winget_id = ? LIMIT 1')
+          .prepare(
+            "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' LIMIT 1"
+          )
           .get(wingetId) as
           | (Omit<QaResultRow, 'detection' | 'phase_results' | 'changes' | 'environment'> & {
               detection: string;

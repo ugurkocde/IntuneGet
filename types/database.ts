@@ -31,6 +31,14 @@ export interface Database {
           tested_version: string;
           architecture: string;
           installer_sha256: string | null;
+          test_level: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256: string | null;
+          psadt_version: string | null;
+          psadt_template_sha256: string | null;
+          psadt_config_sha256: string | null;
+          detection_rules_sha256: string | null;
+          packager_commit: string | null;
+          package_content_sha256: string | null;
           outcome: string;
           tested_at_utc: string;
           overall_duration_seconds: number | null;
@@ -55,6 +63,14 @@ export interface Database {
           tested_version: string;
           architecture: string;
           installer_sha256?: string | null;
+          test_level?: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256?: string | null;
+          psadt_version?: string | null;
+          psadt_template_sha256?: string | null;
+          psadt_config_sha256?: string | null;
+          detection_rules_sha256?: string | null;
+          packager_commit?: string | null;
+          package_content_sha256?: string | null;
           outcome: string;
           tested_at_utc: string;
           overall_duration_seconds?: number | null;
@@ -79,6 +95,14 @@ export interface Database {
           tested_version?: string;
           architecture?: string;
           installer_sha256?: string | null;
+          test_level?: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256?: string | null;
+          psadt_version?: string | null;
+          psadt_template_sha256?: string | null;
+          psadt_config_sha256?: string | null;
+          detection_rules_sha256?: string | null;
+          packager_commit?: string | null;
+          package_content_sha256?: string | null;
           outcome?: string;
           tested_at_utc?: string;
           overall_duration_seconds?: number | null;
@@ -137,6 +161,8 @@ export interface Database {
           installer_type: string;
           installer_file_name: string;
           test_config: Json;
+          test_level: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256: string | null;
           status: string;
           priority: number;
           attempts: number;
@@ -160,6 +186,8 @@ export interface Database {
           installer_type: string;
           installer_file_name: string;
           test_config?: Json;
+          test_level?: 'installer-preflight' | 'psadt-package';
+          package_profile_sha256?: string | null;
           status?: string;
           priority?: number;
           attempts?: number;
@@ -173,6 +201,31 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_package_results: {
+        Row: {
+          package_profile_sha256: string;
+          winget_id: string;
+          tested_version: string;
+          architecture: string;
+          installer_sha256: string;
+          outcome: 'Passed' | 'Failed';
+          tested_at_utc: string;
+          psadt_version: string;
+          psadt_template_sha256: string;
+          psadt_config_sha256: string;
+          detection_rules_sha256: string;
+          packager_commit: string;
+          package_content_sha256: string;
+          github_run_id: string | null;
+          github_run_url: string | null;
+          synced_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['qa_package_results']['Row'], 'synced_at'> & {
+          synced_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_package_results']['Insert']>;
         Relationships: GenericRelationship[];
       };
       qa_poll_runs: {

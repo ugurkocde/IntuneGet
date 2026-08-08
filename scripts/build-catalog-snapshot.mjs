@@ -54,6 +54,8 @@ const QA_COLUMNS = [
   'outcome', 'installer_sha256', 'tested_at_utc', 'overall_duration_seconds', 'installer_type',
   'install_command', 'uninstall_command', 'detection', 'phase_results', 'changes',
   'relevant_event_count', 'environment', 'qa_schema_version', 'synced_at',
+  'test_level', 'package_profile_sha256', 'psadt_version', 'psadt_template_sha256',
+  'psadt_config_sha256', 'detection_rules_sha256', 'packager_commit', 'package_content_sha256',
 ];
 
 /** Fetch every row of a table in pages (Supabase caps a single request at 1000). */
@@ -122,7 +124,9 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
         install_command TEXT NOT NULL, uninstall_command TEXT NOT NULL,
         detection TEXT NOT NULL, phase_results TEXT NOT NULL, changes TEXT,
         relevant_event_count INTEGER, environment TEXT, qa_schema_version INTEGER NOT NULL,
-        synced_at TEXT NOT NULL
+        synced_at TEXT NOT NULL, test_level TEXT NOT NULL, package_profile_sha256 TEXT,
+        psadt_version TEXT, psadt_template_sha256 TEXT, psadt_config_sha256 TEXT,
+        detection_rules_sha256 TEXT, packager_commit TEXT, package_content_sha256 TEXT
       );
     `);
 
@@ -150,11 +154,15 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       (winget_id, display_name, publisher, tested_version, architecture, outcome, installer_sha256,
        tested_at_utc, overall_duration_seconds, installer_type, install_command,
        uninstall_command, detection, phase_results, changes, relevant_event_count,
-       environment, qa_schema_version, synced_at)
+       environment, qa_schema_version, synced_at, test_level, package_profile_sha256,
+       psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256,
+       packager_commit, package_content_sha256)
       VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,@installer_sha256,
        @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
        @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
-       @environment,@qa_schema_version,@synced_at)`);
+       @environment,@qa_schema_version,@synced_at,@test_level,@package_profile_sha256,
+       @psadt_version,@psadt_template_sha256,@psadt_config_sha256,@detection_rules_sha256,
+       @packager_commit,@package_content_sha256)`);
 
     const tx = db.transaction(() => {
       for (const a of curatedApps) {
@@ -212,6 +220,14 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           environment: jsonOrNull(q.environment),
           qa_schema_version: q.qa_schema_version ?? 1,
           synced_at: q.synced_at ?? new Date().toISOString(),
+          test_level: q.test_level ?? 'installer-preflight',
+          package_profile_sha256: q.package_profile_sha256 ?? null,
+          psadt_version: q.psadt_version ?? null,
+          psadt_template_sha256: q.psadt_template_sha256 ?? null,
+          psadt_config_sha256: q.psadt_config_sha256 ?? null,
+          detection_rules_sha256: q.detection_rules_sha256 ?? null,
+          packager_commit: q.packager_commit ?? null,
+          package_content_sha256: q.package_content_sha256 ?? null,
         });
       }
     });
@@ -252,7 +268,9 @@ async function exportFromSupabase(outDir) {
     fetchAll(supabase, 'version_history', VERSION_COLUMNS),
     // Only GLOBAL mappings (no tenant data) reach a public snapshot.
     fetchAll(supabase, 'sccm_winget_mappings', SCCM_COLUMNS, (q) => q.is('tenant_id', null)),
-    fetchAll(supabase, 'qa_results', QA_COLUMNS).catch((error) => {
+    fetchAll(supabase, 'qa_results', QA_COLUMNS, (query) =>
+      query.eq('test_level', 'psadt-package')
+    ).catch((error) => {
       // qa_results is deliberately optional during rollout and in older
       // deployments. Never take the core catalog snapshot dark because the
       // compact QA mirror is not available yet.

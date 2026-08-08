@@ -11,6 +11,8 @@ export interface QaDispatchCandidate {
   installer_sha256: string;
   installer_file_name: string;
   installer_type: string;
+  test_level: 'installer-preflight' | 'psadt-package';
+  package_profile_sha256: string | null;
   test_config: Json;
 }
 
@@ -39,6 +41,8 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
           installerSha256: candidate.installer_sha256,
           installerFileName: candidate.installer_file_name,
           installerType: candidate.installer_type,
+          testLevel: candidate.test_level,
+          packageProfileSha256: candidate.package_profile_sha256,
           testConfig: candidate.test_config,
         }),
         timeout_minutes: '60',

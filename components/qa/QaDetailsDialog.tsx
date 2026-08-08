@@ -92,8 +92,8 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Application QA details</DialogTitle>
-          <DialogDescription>Latest isolated Windows installation and uninstall test.</DialogDescription>
+          <DialogTitle>PSADT package QA details</DialogTitle>
+          <DialogDescription>Latest isolated test of the package IntuneGet deploys through Intune.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 p-6">
@@ -126,6 +126,7 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
                   <span>{new Date(data.testedAtUtc).toLocaleString()}</span>
                   <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {formatDuration(data.overallDurationSeconds)}</span>
                   <span>{data.installerType?.toUpperCase() || 'Installer type unknown'}</span>
+                  <span>PSADT {data.package?.psadtVersion || 'version unknown'}</span>
                 </div>
               </section>
 
@@ -205,6 +206,8 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
               <section className="grid gap-3 rounded-xl border border-overlay/10 bg-bg-elevated/50 p-4 text-xs text-text-secondary sm:grid-cols-2">
                 <div><span className="block text-text-muted">Execution context</span><code>{data.environment?.executionContext || 'Not recorded'}</code></div>
                 <div><span className="block text-text-muted">Relevant Windows events</span>{data.relevantEventCount ?? 'Not recorded'}</div>
+                <div><span className="block text-text-muted">PSADT package profile</span><code>{data.package?.profileSha256?.slice(0, 12) || 'Not recorded'}</code></div>
+                <div><span className="block text-text-muted">Packager commit</span><code>{data.package?.packagerCommit?.slice(0, 12) || 'Not recorded'}</code></div>
               </section>
             </>
           )}

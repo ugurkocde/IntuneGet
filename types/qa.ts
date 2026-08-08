@@ -41,7 +41,7 @@ export interface QaChanges {
 }
 
 export interface QaDetectionRule {
-  type: 'fileVersion' | 'installationEvidence';
+  type: 'fileVersion' | 'installationEvidence' | 'intuneRules';
   path?: string;
   minimumVersion?: string;
   description?: string;
@@ -51,6 +51,8 @@ export interface QaEnvironment {
   executionContext: 'LocalSystem';
 }
 
+export type QaTestLevel = 'installer-preflight' | 'psadt-package';
+
 /** Minimal database row used for card/list status badges. */
 export interface QaStatusRow {
   winget_id: string;
@@ -58,6 +60,8 @@ export interface QaStatusRow {
   tested_version: string;
   architecture: QaArchitecture;
   tested_at_utc: string;
+  test_level: QaTestLevel;
+  package_profile_sha256: string | null;
 }
 
 export interface QaCandidateStatusRow {
@@ -68,6 +72,8 @@ export interface QaCandidateStatusRow {
   status: 'queued' | 'dispatched' | 'running';
   enqueued_at: string;
   started_at: string | null;
+  test_level: QaTestLevel;
+  package_profile_sha256: string | null;
 }
 
 /** Full compact database row used only when details or the gate are requested. */
@@ -86,6 +92,12 @@ export interface QaResultRow extends QaStatusRow {
   environment: QaEnvironment | null;
   qa_schema_version: number;
   synced_at: string;
+  psadt_version: string | null;
+  psadt_template_sha256: string | null;
+  psadt_config_sha256: string | null;
+  detection_rules_sha256: string | null;
+  packager_commit: string | null;
+  package_content_sha256: string | null;
 }
 
 export interface QaStatus {
@@ -94,6 +106,8 @@ export interface QaStatus {
   architecture: QaArchitecture;
   testedAtUtc: string;
   installerSha256?: string;
+  testLevel: QaTestLevel;
+  packageProfileSha256?: string;
 }
 
 export type QaBadgeState =
@@ -142,4 +156,14 @@ export interface QaDetailsResponse {
   relevantEventCount: number | null;
   environment: QaEnvironment | null;
   classification: QaClassification | null;
+  package?: {
+    testLevel: QaTestLevel;
+    profileSha256: string | null;
+    psadtVersion: string | null;
+    psadtTemplateSha256: string | null;
+    psadtConfigSha256: string | null;
+    detectionRulesSha256: string | null;
+    packagerCommit: string | null;
+    contentSha256: string | null;
+  };
 }

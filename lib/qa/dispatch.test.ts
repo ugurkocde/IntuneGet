@@ -26,7 +26,9 @@ describe('dispatchQaCandidate', () => {
       installer_sha256: 'A'.repeat(64),
       installer_file_name: 'setup.exe',
       installer_type: 'exe',
-      test_config: { mode: 'catalog' },
+      test_level: 'psadt-package',
+      package_profile_sha256: 'B'.repeat(64),
+      test_config: { mode: 'psadt-package' },
     });
 
     const [url, request] = fetchMock.mock.calls[0];
@@ -40,6 +42,8 @@ describe('dispatchQaCandidate', () => {
       wingetId: 'Example.App',
       architecture: 'x64',
       installerSha256: 'A'.repeat(64),
+      testLevel: 'psadt-package',
+      packageProfileSha256: 'B'.repeat(64),
     });
     expect(JSON.stringify(body)).not.toContain('secret-token');
   });
@@ -57,7 +61,9 @@ describe('dispatchQaCandidate', () => {
         installer_sha256: 'A'.repeat(64),
         installer_file_name: 'setup.exe',
         installer_type: 'exe',
-        test_config: { mode: 'catalog' },
+        test_level: 'psadt-package',
+        package_profile_sha256: 'B'.repeat(64),
+        test_config: { mode: 'psadt-package' },
       })
     ).rejects.toThrow('403');
   });

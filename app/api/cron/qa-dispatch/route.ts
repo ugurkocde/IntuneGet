@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const { data: active, error: activeError } = await supabase
     .from('qa_candidates')
     .select('*')
+    .eq('test_level', 'psadt-package')
     .in('status', ['dispatched', 'running']);
   if (activeError) throw new Error(`Could not reconcile QA candidates: ${activeError.message}`);
 
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
   const { data: stillActive, error: stillActiveError } = await supabase
     .from('qa_candidates')
     .select('id')
+    .eq('test_level', 'psadt-package')
     .in('status', ['dispatched', 'running'])
     .limit(1);
   if (stillActiveError) throw stillActiveError;
@@ -50,6 +52,7 @@ export async function GET(request: Request) {
   const { data: next, error: queueError } = await supabase
     .from('qa_candidates')
     .select('*')
+    .eq('test_level', 'psadt-package')
     .eq('status', 'queued')
     .order('priority', { ascending: false })
     .order('enqueued_at', { ascending: true })
@@ -129,6 +132,7 @@ export async function POST(request: Request) {
       updated_at: now,
     })
     .eq('id', body.candidateId)
+    .eq('test_level', 'psadt-package')
     .in('status', ['error', 'superseded'])
     .select('id')
     .maybeSingle();

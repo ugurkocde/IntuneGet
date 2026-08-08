@@ -51,6 +51,8 @@ function serviceOrAnonClient() {
   return createClient(url, key);
 }
 
+let warnedMissingQaServiceRole = false;
+
 export class SupabaseCatalogSource implements CatalogSource {
   // ---------------------------------------------------------------------------
   // search / discovery
@@ -364,8 +366,11 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const { data, error } = await supabase
       .from('qa_results')
-      .select('winget_id, outcome, tested_version, architecture, tested_at_utc')
-      .in('winget_id', ids);
+      .select(
+        'winget_id, outcome, tested_version, architecture, tested_at_utc, test_level, package_profile_sha256'
+      )
+      .in('winget_id', ids)
+      .eq('test_level', 'psadt-package');
 
     if (error) {
       console.error('Failed to read QA statuses:', error.message);
@@ -382,9 +387,10 @@ export class SupabaseCatalogSource implements CatalogSource {
     const { data, error } = await supabase
       .from('qa_results')
       .select(
-        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, installer_sha256, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, qa_schema_version, synced_at'
+        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, installer_sha256, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, qa_schema_version, synced_at, test_level, package_profile_sha256, psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256, packager_commit, package_content_sha256'
       )
       .eq('winget_id', wingetId)
+      .eq('test_level', 'psadt-package')
       .maybeSingle();
 
     if (error) {
@@ -397,13 +403,25 @@ export class SupabaseCatalogSource implements CatalogSource {
 
   async getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]> {
     if (ids.length === 0) return [];
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      if (!warnedMissingQaServiceRole) {
+        console.warn(
+          'QA queued/running statuses are unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured.'
+        );
+        warnedMissingQaServiceRole = true;
+      }
+      return [];
+    }
     const supabase = serviceOrAnonClient();
     if (!supabase) return [];
 
     const { data, error } = await supabase
       .from('qa_candidates')
-      .select('winget_id, version, architecture, installer_sha256, status, enqueued_at, started_at')
+      .select(
+        'winget_id, version, architecture, installer_sha256, status, enqueued_at, started_at, test_level, package_profile_sha256'
+      )
       .in('winget_id', ids)
+      .eq('test_level', 'psadt-package')
       .in('status', ['queued', 'dispatched', 'running'])
       .order('enqueued_at', { ascending: false });
     if (error) {
