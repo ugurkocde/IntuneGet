@@ -114,6 +114,11 @@ export async function GET(request: Request) {
     }
 
     const { data: image, error: downloadError } = await supabase.storage.from(BUCKET).download(frame.object_path);
+    if (downloadError?.message === 'Object not found' || (!downloadError && !image)) {
+      // Cleanup and ring-slot replacement can win the race after metadata was
+      // read. This is an expected stale-frame miss, not a platform failure.
+      return new NextResponse(null, { status: 404, headers: noStoreHeaders() });
+    }
     if (downloadError || !image) throw new Error(`Could not download QA live frame: ${downloadError?.message || 'missing object'}`);
 
     return new NextResponse(await image.arrayBuffer(), {

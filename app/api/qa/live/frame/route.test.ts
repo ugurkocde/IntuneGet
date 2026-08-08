@@ -75,6 +75,53 @@ describe('/api/qa/live/frame ingest boundary', () => {
     expect(createServerClientMock).not.toHaveBeenCalled();
   });
 
+  it('returns a quiet 404 when cleanup removes the object after metadata is read', async () => {
+    const chain = (result: unknown) => {
+      const query = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        in: vi.fn(),
+        order: vi.fn(),
+        limit: vi.fn(),
+        maybeSingle: vi.fn().mockResolvedValue(result),
+      };
+      query.select.mockReturnValue(query);
+      query.eq.mockReturnValue(query);
+      query.in.mockReturnValue(query);
+      query.order.mockReturnValue(query);
+      query.limit.mockReturnValue(query);
+      return query;
+    };
+    const activeQuery = chain({ data: { id: candidateId }, error: null });
+    const frameQuery = chain({
+      data: {
+        object_path: `${candidateId}/slot-1.jpg`,
+        captured_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sequence: 42,
+      },
+      error: null,
+    });
+    const from = vi.fn()
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(frameQuery);
+    const download = vi.fn().mockResolvedValue({ data: null, error: { message: 'Object not found' } });
+    createServerClientMock.mockReturnValueOnce({
+      rpc: rpcMock,
+      from,
+      storage: { from: vi.fn(() => ({ download })) },
+    } as never);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await GET(new Request(
+      `https://www.intuneget.com/api/qa/live/frame?candidate=${candidateId}&sequence=42`
+    ));
+
+    expect(response.status).toBe(404);
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it('requires the QA-only secret and an active exact-package candidate', async () => {
     rpcMock.mockResolvedValueOnce({ data: false, error: null });
     const response = await POST(new Request('https://intuneget.com/api/qa/live/frame', {
