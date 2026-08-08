@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const migrationPaths = [
   'supabase/migrations/20260807193111_qa_release_gate.sql',
   'supabase/migrations/20260807205000_qa_candidate_terminal_evidence.sql',
+  'supabase/migrations/20260808193500_qa_candidate_catalog_promotion.sql',
+  'supabase/migrations/20260808194800_harden_qa_catalog_promotion_order.sql',
 ];
 
 describe.each(migrationPaths)('QA candidate migration contract: %s', (migrationPath) => {
@@ -21,6 +23,33 @@ describe.each(migrationPaths)('QA candidate migration contract: %s', (migrationP
   it('keeps terminal retry exhaustion distinct from a re-queued retry', () => {
     expect(sql).toContain("when normalized_outcome = 'retry' and attempts < 2 then 'queued'");
     expect(sql).toContain("when normalized_outcome = 'retry' then 'error'");
+  });
+});
+
+describe('QA candidate catalog promotion migration contract', () => {
+  const sql = readFileSync(
+    resolve(process.cwd(), 'supabase/migrations/20260808194800_harden_qa_catalog_promotion_order.sql'),
+    'utf8'
+  );
+
+  it('requires exact passed package evidence before promotion', () => {
+    expect(sql).toContain("result.outcome = 'Passed'");
+    expect(sql).toContain('result.tested_version = candidate.version');
+    expect(sql).toContain('result.installer_sha256 = candidate.installer_sha256');
+    expect(sql).toContain('result.package_profile_sha256 = candidate.package_profile_sha256');
+  });
+
+  it('uses an optimistic catalog-version guard to prevent rollback', () => {
+    expect(sql).toContain('app.latest_version is not distinct from candidate.catalog_version_at_enqueue');
+    expect(sql).toContain('later.enqueued_at > candidate.enqueued_at');
+    expect(sql).not.toContain('catalog_version_at_enqueue = candidate.version');
+  });
+
+  it('supersedes stale retries and records skipped promotions', () => {
+    expect(sql).toContain("set status = 'superseded'");
+    expect(sql).toContain('Retry superseded because the catalog version changed after enqueue.');
+    expect(sql).toContain('Catalog promotion skipped because a newer release candidate exists.');
+    expect(sql).toContain('Catalog promotion skipped because the catalog version changed after enqueue.');
   });
 });
 

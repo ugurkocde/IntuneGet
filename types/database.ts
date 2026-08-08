@@ -163,6 +163,7 @@ export interface Database {
           test_config: Json;
           test_level: 'installer-preflight' | 'psadt-package';
           package_profile_sha256: string | null;
+          catalog_version_at_enqueue: string | null;
           status: string;
           priority: number;
           attempts: number;
@@ -191,6 +192,7 @@ export interface Database {
           test_config?: Json;
           test_level?: 'installer-preflight' | 'psadt-package';
           package_profile_sha256?: string | null;
+          catalog_version_at_enqueue?: string | null;
           status?: string;
           priority?: number;
           attempts?: number;

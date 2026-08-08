@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useQaDetails } from '@/hooks/use-qa';
+import { qaVersionMismatchMessage } from '@/lib/qa/version-mismatch';
 import { QA_CHANGE_CATEGORIES, type QaChangeSet, type QaPhaseResult } from '@/types/qa';
 
 interface QaDetailsDialogProps {
@@ -133,7 +134,7 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
               {data.testedVersion !== catalogVersion ? (
                 <div className="flex gap-2 rounded-xl border border-status-warning/20 bg-status-warning/10 p-3 text-sm text-status-warning">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p>This result is for version {data.testedVersion}; the catalog now offers {catalogVersion}. The outcome may not apply to the newer version.</p>
+                  <p>{qaVersionMismatchMessage(data.testedVersion, catalogVersion)}</p>
                 </div>
               ) : null}
 

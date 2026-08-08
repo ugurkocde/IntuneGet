@@ -277,11 +277,12 @@ export async function GET(request: Request) {
       winget_id: string;
       name: string;
       publisher: string;
+      latest_version: string | null;
     }> = [];
     if (targetPackageIds.length > 0) {
       const { data, error } = await supabase
         .from('curated_apps')
-        .select('winget_id, name, publisher')
+        .select('winget_id, name, publisher, latest_version')
         .in('winget_id', targetPackageIds)
         .eq('is_verified', true)
         .eq('is_winget_verified', true)
@@ -458,6 +459,7 @@ export async function GET(request: Request) {
                 test_level: 'psadt-package',
                 package_profile_sha256: packageIdentity.packageProfileSha256,
                 test_config: testConfig as never,
+                catalog_version_at_enqueue: app.latest_version,
                 status: initialStatus,
                 priority: priorities.get(app.winget_id) || 0,
                 finished_at: initialStatus === 'queued' ? null : previous?.tested_at_utc || now,
@@ -490,6 +492,7 @@ export async function GET(request: Request) {
                     finished_at: null,
                     failure_summary: null,
                     test_config: testConfig as never,
+                    catalog_version_at_enqueue: app.latest_version,
                     updated_at: now,
                   })
                   .eq('id', existing.id)
