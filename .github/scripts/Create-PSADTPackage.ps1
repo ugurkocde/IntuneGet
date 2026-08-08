@@ -390,7 +390,7 @@ if ($extensionTypeMap.ContainsKey($fileExtension)) {
 
     switch ($fileExtension) {
         '.exe' {
-            if ($installerTypeLower -in 'portable', 'zip') {
+            if ($installerTypeLower -eq 'zip') {
                 $shouldOverride = $true
             }
         }
@@ -986,17 +986,26 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
         }
         'portable' {
             $lines += @(
-                "    `$zipPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
-                "    `$extractPath = `"`$env:ProgramFiles\$displayNameEscaped`""
-                '    Write-ADTLogEntry -Message "Extracting portable app to: $extractPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                "    `$sourcePath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
+                "    `$installPath = `"`$env:ProgramFiles\$displayNameEscaped`""
+                '    Write-ADTLogEntry -Message "Installing portable app to: $installPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                 '    try {'
-                '        if (-not (Test-Path $extractPath)) {'
-                '            New-Item -Path $extractPath -ItemType Directory -Force | Out-Null'
+                '        if (-not (Test-Path $installPath)) {'
+                '            New-Item -Path $installPath -ItemType Directory -Force | Out-Null'
                 '        }'
-                '        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force'
-                '        Write-ADTLogEntry -Message "Portable app extracted successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
+            )
+            if ($fileExtension -eq '.zip') {
+                $lines += '        Expand-Archive -LiteralPath $sourcePath -DestinationPath $installPath -Force'
+            } else {
+                $lines += @(
+                    "        `$targetPath = Join-Path `$installPath '$installerFileNameSingleQuoteEscaped'"
+                    '        Copy-Item -LiteralPath $sourcePath -Destination $targetPath -Force'
+                )
+            }
+            $lines += @(
+                '        Write-ADTLogEntry -Message "Portable app installed successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
                 '    } catch {'
-                '        Write-ADTLogEntry -Message "Failed to extract portable app: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
+                '        Write-ADTLogEntry -Message "Failed to install portable app: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
                 '        throw'
                 '    }'
             )

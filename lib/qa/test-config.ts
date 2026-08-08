@@ -1,8 +1,14 @@
 import { generateDetectionRules, generateUninstallCommand } from '@/lib/detection-rules';
+import { normalizeInstaller } from '@/lib/manifest-api';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import { normalizeQaPsadtConfig } from './package-profile';
-import type { NormalizedInstaller, WingetInstallerType, WingetScope } from '@/types/winget';
+import type {
+  WingetInstaller,
+  WingetInstallerSwitches,
+  WingetInstallerType,
+  WingetScope,
+} from '@/types/winget';
 import type { WingetInstallerCandidate } from './candidate';
 
 export interface QaCatalogTestConfig {
@@ -66,19 +72,18 @@ export function buildQaCatalogTestConfig({
   manifest: ManifestRecord;
   installer: WingetInstallerCandidate & ManifestRecord;
 }): QaCatalogTestConfig {
-  const rootSwitches = record(manifest.InstallerSwitches);
-  const installerSwitches = record(installer.InstallerSwitches);
-  const silentArgs =
-    text(installerSwitches.Silent) ||
-    text(installerSwitches.SilentWithProgress) ||
-    text(rootSwitches.Silent) ||
-    text(rootSwitches.SilentWithProgress);
-  const nestedFiles = Array.isArray(installer.NestedInstallerFiles)
+  const effectiveSwitches = isRecord(installer.InstallerSwitches)
+    ? installer.InstallerSwitches
+    : manifest.InstallerSwitches;
+  const effectiveNestedFiles = Array.isArray(installer.NestedInstallerFiles)
     ? installer.NestedInstallerFiles
-        .map((entry) => text(record(entry).RelativeFilePath))
-        .filter(Boolean)
-        .slice(0, 20)
-    : [];
+    : Array.isArray(manifest.NestedInstallerFiles)
+      ? manifest.NestedInstallerFiles
+      : [];
+  const nestedFiles = effectiveNestedFiles
+    .map((entry) => text(record(entry).RelativeFilePath))
+    .filter(Boolean)
+    .slice(0, 20);
   const rawSourceType =
     text(installer.InstallerType) || text(manifest.InstallerType) || 'exe';
   const supportedTypes = new Set<WingetInstallerType>([
@@ -97,23 +102,34 @@ export function buildQaCatalogTestConfig({
   const sourceInstallerType = supportedTypes.has(rawSourceType.toLowerCase() as WingetInstallerType)
     ? (rawSourceType.toLowerCase() as WingetInstallerType)
     : 'exe';
+  const rawNestedInstallerType =
+    text(installer.NestedInstallerType) || text(manifest.NestedInstallerType);
+  const nestedInstallerType = supportedTypes.has(
+    rawNestedInstallerType.toLowerCase() as WingetInstallerType
+  )
+    ? (rawNestedInstallerType.toLowerCase() as WingetInstallerType)
+    : undefined;
   const rawScope = text(installer.Scope) || text(manifest.Scope);
   const scope: WingetScope = rawScope.toLowerCase() === 'user' ? 'user' : 'machine';
   const productCode =
     msiProductCode(installer.ProductCode) ||
     msiProductCode(appsAndFeaturesProductCode(installer));
-  const normalizedInstaller: NormalizedInstaller = {
-    architecture: (text(installer.Architecture).toLowerCase() || 'x64') as NormalizedInstaller['architecture'],
-    url: text(installer.InstallerUrl),
-    sha256: text(installer.InstallerSha256),
-    type: sourceInstallerType,
-    nestedInstallerType: text(installer.NestedInstallerType).toLowerCase() as WingetInstallerType,
-    nestedInstallerPath: nestedFiles[0],
-    scope,
-    silentArgs,
-    productCode: productCode || undefined,
-    packageFamilyName: text(installer.PackageFamilyName) || undefined,
+  const inheritedInstaller: WingetInstaller = {
+    Architecture: (text(installer.Architecture).toLowerCase() ||
+      'x64') as WingetInstaller['Architecture'],
+    InstallerUrl: text(installer.InstallerUrl),
+    InstallerSha256: text(installer.InstallerSha256),
+    InstallerType: sourceInstallerType,
+    NestedInstallerType: nestedInstallerType,
+    NestedInstallerFiles: nestedFiles.map((relativeFilePath) => ({
+      RelativeFilePath: relativeFilePath,
+    })),
+    Scope: scope,
+    InstallerSwitches: normalizeInstallerSwitches(effectiveSwitches),
+    ProductCode: productCode || undefined,
+    PackageFamilyName: text(installer.PackageFamilyName) || undefined,
   };
+  const normalizedInstaller = normalizeInstaller(inheritedInstaller);
   const detectionRules = generateDetectionRules(
     normalizedInstaller,
     app.name,
@@ -128,15 +144,38 @@ export function buildQaCatalogTestConfig({
     displayName: app.name,
     publisher: app.publisher,
     sourceInstallerType,
-    silentArgs,
+    silentArgs: normalizedInstaller.silentArgs || '',
     productCode,
     scope,
-    nestedInstallerType:
-      text(installer.NestedInstallerType) || text(manifest.NestedInstallerType),
+    nestedInstallerType: nestedInstallerType || '',
     nestedInstallerFiles: nestedFiles,
     uninstallCommand: generateUninstallCommand(normalizedInstaller, app.name),
     psadtConfig,
     detectionRules,
     profileKind: 'catalog-default',
   };
+}
+
+function isRecord(value: unknown): value is ManifestRecord {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function normalizeInstallerSwitches(value: unknown): WingetInstallerSwitches | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const switches: WingetInstallerSwitches = {};
+  const keys: Array<keyof WingetInstallerSwitches> = [
+    'Silent',
+    'SilentWithProgress',
+    'Interactive',
+    'InstallLocation',
+    'Log',
+    'Upgrade',
+    'Custom',
+  ];
+  for (const key of keys) {
+    const normalized = text(value[key]);
+    if (normalized) switches[key] = normalized;
+  }
+  return switches;
 }

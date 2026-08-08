@@ -37,4 +37,97 @@ describe('buildQaCatalogTestConfig', () => {
       detectionValue: '2.0.0',
     });
   });
+
+  it.each([
+    ['inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'],
+    ['nullsoft', '/S'],
+  ])('applies the WinGet default silent switches for %s installers', (installerType, expected) => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.Example',
+        name: 'Example',
+        publisher: 'Contoso',
+        version: '2.0.0',
+      },
+      manifest: { InstallerType: installerType },
+      installer: { Architecture: 'x64', InstallerType: installerType },
+    });
+
+    expect(config.silentArgs).toBe(expected);
+  });
+
+  it('inherits root nested installer metadata for zip packages', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.Archive',
+        name: 'Archive',
+        publisher: 'Contoso',
+        version: '1.0.0',
+      },
+      manifest: {
+        InstallerType: 'zip',
+        NestedInstallerType: 'inno',
+        NestedInstallerFiles: [{ RelativeFilePath: 'setup\\install.exe' }],
+      },
+      installer: { Architecture: 'x64', InstallerType: 'zip' },
+    });
+
+    expect(config).toMatchObject({
+      sourceInstallerType: 'zip',
+      nestedInstallerType: 'inno',
+      nestedInstallerFiles: ['setup\\install.exe'],
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+    });
+  });
+
+  it('appends inherited custom switches to the derived silent default', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.Example',
+        name: 'Example',
+        publisher: 'Contoso',
+        version: '2.0.0',
+      },
+      manifest: { InstallerType: 'inno', InstallerSwitches: { Custom: '/ALLUSERS' } },
+      installer: { Architecture: 'x64', InstallerType: 'inno' },
+    });
+
+    expect(config.silentArgs).toBe(
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS'
+    );
+  });
+
+  it('uses installer switch objects without merging root switch keys', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.Example',
+        name: 'Example',
+        publisher: 'Contoso',
+        version: '2.0.0',
+      },
+      manifest: { InstallerType: 'nullsoft', InstallerSwitches: { Silent: '/ROOT' } },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Custom: '/CURRENTUSER' },
+      },
+    });
+
+    expect(config.silentArgs).toBe('/S /CURRENTUSER');
+  });
+
+  it('keeps portable packages argument-free', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.Portable',
+        name: 'Portable',
+        publisher: 'Contoso',
+        version: '1.0.0',
+      },
+      manifest: { InstallerType: 'portable' },
+      installer: { Architecture: 'x64', InstallerType: 'portable' },
+    });
+
+    expect(config.silentArgs).toBe('');
+  });
 });
