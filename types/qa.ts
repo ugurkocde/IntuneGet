@@ -48,7 +48,63 @@ export interface QaDetectionRule {
 }
 
 export interface QaEnvironment {
-  executionContext: 'LocalSystem';
+  executionContext: 'LocalSystem' | 'User';
+}
+
+export type QaLivePhase =
+  | 'queued'
+  | 'preparing_package'
+  | 'restoring_vm'
+  | 'installing'
+  | 'detecting_install'
+  | 'uninstalling'
+  | 'verifying_removal'
+  | 'publishing';
+
+export interface QaLiveResponse {
+  serverTime: string;
+  active: boolean;
+  runner: {
+    state: 'idle' | 'testing' | 'stalled';
+    heartbeatAt: string | null;
+  };
+  scheduler: {
+    state: 'healthy' | 'degraded' | 'unknown';
+    lastPollAt: string | null;
+  };
+  current: {
+    wingetId: string;
+    displayName: string;
+    publisher: string | null;
+    version: string;
+    catalogVersion: string;
+    architecture: QaArchitecture;
+    executionContext: 'LocalSystem' | 'User';
+    phase: QaLivePhase;
+    phaseStartedAt: string | null;
+    startedAt: string;
+    elapsedSeconds: number;
+  } | null;
+  queue: {
+    count: number;
+    next: Array<{
+      wingetId: string;
+      displayName: string;
+      version: string;
+      architecture: QaArchitecture;
+      enqueuedAt: string;
+    }>;
+  };
+  recent: Array<{
+    wingetId: string;
+    displayName: string;
+    testedVersion: string;
+    catalogVersion: string;
+    architecture: QaArchitecture;
+    outcome: QaOutcome;
+    testedAtUtc: string;
+    durationSeconds: number | null;
+  }>;
 }
 
 export type QaTestLevel = 'installer-preflight' | 'psadt-package';

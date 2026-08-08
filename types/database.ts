@@ -173,6 +173,9 @@ export interface Database {
           github_run_id: string | null;
           github_run_url: string | null;
           failure_summary: string | null;
+          phase: string | null;
+          phase_started_at: string | null;
+          phase_updated_at: string | null;
           updated_at: string;
         };
         Insert: {
@@ -198,6 +201,9 @@ export interface Database {
           github_run_id?: string | null;
           github_run_url?: string | null;
           failure_summary?: string | null;
+          phase?: string | null;
+          phase_started_at?: string | null;
+          phase_updated_at?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;

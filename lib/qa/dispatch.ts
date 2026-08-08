@@ -31,6 +31,7 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
       ref: config.ref,
       inputs: {
         smoke_test: 'false',
+        candidate_label: `${candidate.winget_id} ${candidate.version} ${candidate.architecture}`,
         app_definition: candidate.definition_path || '',
         candidate_payload: JSON.stringify({
           id: candidate.id,

@@ -1,0 +1,249 @@
+import 'server-only';
+
+import { createServerClient } from '@/lib/supabase';
+import type { Json } from '@/types/database';
+import type { QaArchitecture, QaLivePhase, QaLiveResponse, QaOutcome } from '@/types/qa';
+
+const RUNNER_STALE_MS = 10 * 60 * 1000;
+const POLL_STALE_MS = 5 * 60 * 1000;
+
+interface CandidateRow {
+  winget_id: string;
+  version: string;
+  architecture: string;
+  status: string;
+  priority: number;
+  enqueued_at: string;
+  dispatched_at: string | null;
+  started_at: string | null;
+  phase: string | null;
+  phase_started_at: string | null;
+  phase_updated_at: string | null;
+  test_config: Json;
+}
+
+interface PollRow {
+  status: 'running' | 'succeeded' | 'partial' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+}
+
+interface ResultRow {
+  winget_id: string;
+  display_name: string;
+  tested_version: string;
+  architecture: string;
+  outcome: string;
+  tested_at_utc: string;
+  overall_duration_seconds: number | null;
+}
+
+interface AppRow {
+  winget_id: string;
+  name: string;
+  publisher: string | null;
+  latest_version: string | null;
+}
+
+export interface QaLiveSnapshotInput {
+  now: Date;
+  current: CandidateRow | null;
+  queuedCount: number;
+  queued: CandidateRow[];
+  poll: PollRow | null;
+  recent: ResultRow[];
+  apps: AppRow[];
+}
+
+const VALID_PHASES = new Set<QaLivePhase>([
+  'queued',
+  'preparing_package',
+  'restoring_vm',
+  'installing',
+  'detecting_install',
+  'uninstalling',
+  'verifying_removal',
+  'publishing',
+]);
+
+function architecture(value: string): QaArchitecture {
+  return value === 'x86' || value === 'arm64' ? value : 'x64';
+}
+
+function phase(value: string | null): QaLivePhase {
+  return value && VALID_PHASES.has(value as QaLivePhase)
+    ? (value as QaLivePhase)
+    : 'preparing_package';
+}
+
+function executionContext(config: Json): 'LocalSystem' | 'User' {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return 'LocalSystem';
+  const canonical = config.packageProfileCanonicalJson;
+  if (typeof canonical !== 'string') return 'LocalSystem';
+  try {
+    const parsed = JSON.parse(canonical) as { installer?: { installScope?: unknown } };
+    return String(parsed.installer?.installScope || '').toLowerCase() === 'user'
+      ? 'User'
+      : 'LocalSystem';
+  } catch {
+    return 'LocalSystem';
+  }
+}
+
+function elapsedSeconds(start: string, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
+}
+
+export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse {
+  const appById = new Map(input.apps.map((app) => [app.winget_id, app]));
+  const currentStartedAt = input.current
+    ? input.current.started_at || input.current.dispatched_at || input.current.enqueued_at
+    : null;
+  const heartbeatAt = input.current
+    ? input.current.phase_updated_at || currentStartedAt
+    : null;
+  const runnerStalled = Boolean(
+    heartbeatAt && input.now.getTime() - new Date(heartbeatAt).getTime() > RUNNER_STALE_MS
+  );
+
+  let schedulerState: QaLiveResponse['scheduler']['state'] = 'unknown';
+  if (input.poll) {
+    const staleRunning =
+      input.poll.status === 'running' &&
+      input.now.getTime() - new Date(input.poll.started_at).getTime() > POLL_STALE_MS;
+    schedulerState =
+      input.poll.status === 'succeeded'
+        ? 'healthy'
+        : input.poll.status === 'running' && !staleRunning
+          ? 'healthy'
+          : 'degraded';
+  }
+
+  const currentApp = input.current ? appById.get(input.current.winget_id) : null;
+
+  return {
+    serverTime: input.now.toISOString(),
+    active: Boolean(input.current),
+    runner: {
+      state: input.current ? (runnerStalled ? 'stalled' : 'testing') : 'idle',
+      heartbeatAt,
+    },
+    scheduler: {
+      state: schedulerState,
+      lastPollAt: input.poll?.finished_at || input.poll?.started_at || null,
+    },
+    current: input.current && currentStartedAt
+      ? {
+          wingetId: input.current.winget_id,
+          displayName: currentApp?.name || input.current.winget_id,
+          publisher: currentApp?.publisher || null,
+          version: input.current.version,
+          catalogVersion: currentApp?.latest_version || input.current.version,
+          architecture: architecture(input.current.architecture),
+          executionContext: executionContext(input.current.test_config),
+          phase: phase(input.current.phase),
+          phaseStartedAt: input.current.phase_started_at,
+          startedAt: currentStartedAt,
+          elapsedSeconds: elapsedSeconds(currentStartedAt, input.now),
+        }
+      : null,
+    queue: {
+      count: input.queuedCount,
+      next: input.queued.map((candidate) => ({
+        wingetId: candidate.winget_id,
+        displayName: appById.get(candidate.winget_id)?.name || candidate.winget_id,
+        version: candidate.version,
+        architecture: architecture(candidate.architecture),
+        enqueuedAt: candidate.enqueued_at,
+      })),
+    },
+    recent: input.recent.map((result) => ({
+      wingetId: result.winget_id,
+      displayName: result.display_name || appById.get(result.winget_id)?.name || result.winget_id,
+      testedVersion: result.tested_version,
+      catalogVersion: appById.get(result.winget_id)?.latest_version || result.tested_version,
+      architecture: architecture(result.architecture),
+      outcome: result.outcome === 'Passed' ? 'Passed' : ('Failed' as QaOutcome),
+      testedAtUtc: result.tested_at_utc,
+      durationSeconds: result.overall_duration_seconds,
+    })),
+  };
+}
+
+export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
+  const supabase = createServerClient();
+  const candidateColumns =
+    'winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, test_config';
+
+  const [activeResult, queueResult, countResult, pollResult, recentResult] = await Promise.all([
+    supabase
+      .from('qa_candidates')
+      .select(candidateColumns)
+      .eq('test_level', 'psadt-package')
+      .in('status', ['dispatched', 'running'])
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('qa_candidates')
+      .select(candidateColumns)
+      .eq('test_level', 'psadt-package')
+      .eq('status', 'queued')
+      .order('priority', { ascending: false })
+      .order('enqueued_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(10),
+    supabase
+      .from('qa_candidates')
+      .select('id', { count: 'exact', head: true })
+      .eq('test_level', 'psadt-package')
+      .eq('status', 'queued'),
+    supabase
+      .from('qa_poll_runs')
+      .select('status, started_at, finished_at')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('qa_results')
+      .select(
+        'winget_id, display_name, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds'
+      )
+      .eq('test_level', 'psadt-package')
+      .order('tested_at_utc', { ascending: false })
+      .limit(10),
+  ]);
+
+  for (const result of [activeResult, queueResult, countResult, pollResult, recentResult]) {
+    if (result.error) throw new Error(`Could not load live QA data: ${result.error.message}`);
+  }
+
+  const current = (activeResult.data as CandidateRow | null) || null;
+  const queued = (queueResult.data || []) as CandidateRow[];
+  const recent = (recentResult.data || []) as ResultRow[];
+  const ids = [
+    ...(current ? [current.winget_id] : []),
+    ...queued.map((row) => row.winget_id),
+    ...recent.map((row) => row.winget_id),
+  ];
+  const uniqueIds = [...new Set(ids)];
+  let apps: AppRow[] = [];
+  if (uniqueIds.length) {
+    const appResult = await supabase
+      .from('curated_apps')
+      .select('winget_id, name, publisher, latest_version')
+      .in('winget_id', uniqueIds);
+    if (appResult.error) throw new Error(`Could not load QA app metadata: ${appResult.error.message}`);
+    apps = (appResult.data || []) as AppRow[];
+  }
+
+  return buildQaLiveResponse({
+    now: new Date(),
+    current,
+    queuedCount: countResult.count || 0,
+    queued,
+    poll: (pollResult.data as PollRow | null) || null,
+    recent,
+    apps,
+  });
+}

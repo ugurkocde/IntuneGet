@@ -36,6 +36,7 @@ describe('dispatchQaCandidate', () => {
     const body = JSON.parse(String((request as RequestInit).body));
     expect(body.inputs).toMatchObject({
       app_definition: 'qa/apps/example.app.json',
+      candidate_label: 'Example.App 2.0.0 x64',
     });
     expect(JSON.parse(body.inputs.candidate_payload)).toMatchObject({
       version: '2.0.0',

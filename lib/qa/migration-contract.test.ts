@@ -41,3 +41,22 @@ describe('QA dispatcher schema contract', () => {
     expect(sql).toContain("where status in ('dispatched', 'running')");
   });
 });
+
+describe('QA live dashboard migration contract', () => {
+  const sql = readFileSync(
+    resolve(process.cwd(), 'supabase/migrations/20260808165628_qa_live_dashboard.sql'),
+    'utf8'
+  );
+
+  it('keeps phase writes monotonic and limited to active candidates', () => {
+    expect(sql).toContain("status in ('dispatched', 'running')");
+    expect(sql).toContain('p_observed_at > phase_updated_at');
+    expect(sql).toContain('returns boolean');
+  });
+
+  it('preserves User context while stripping public execution provenance', () => {
+    expect(sql).toContain("row_data.environment->>'executionContext' = 'User'");
+    expect(sql).toContain('test_id = null');
+    expect(sql).toContain('github_run_id = null');
+  });
+});

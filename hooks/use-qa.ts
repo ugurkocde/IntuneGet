@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { QaDetailsResponse, QaStatus } from '@/types/qa';
+import type { QaDetailsResponse, QaLiveResponse, QaStatus } from '@/types/qa';
 
 interface QaStatusesResponse {
   statuses: Record<string, QaStatus | null>;
@@ -42,5 +42,18 @@ export function useQaDetails(wingetId: string, enabled: boolean) {
     },
     enabled: Boolean(wingetId) && enabled,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useQaLive() {
+  return useQuery<QaLiveResponse>({
+    queryKey: ['qa', 'live'],
+    queryFn: async () => {
+      const response = await fetch('/api/qa/live', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to load live QA status');
+      return response.json();
+    },
+    staleTime: 4_000,
+    refetchInterval: (query) => (query.state.data?.active ? 5_000 : 30_000),
   });
 }

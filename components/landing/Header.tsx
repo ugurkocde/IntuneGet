@@ -32,6 +32,7 @@ const AuthedAvatar = dynamic(
 
 const primaryNavLinks = [
   { href: "/apps", label: "Apps" },
+  { href: "/qa", label: "QA" },
   { href: "/#how-it-works", label: "How It Works" },
   { href: "/security", label: "Security" },
 ];

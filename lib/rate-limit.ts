@@ -85,6 +85,12 @@ export const PUBLIC_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60 * 1000,
 };
 
+/** Live QA dashboard: five-second polling with room for multiple tabs. */
+export const QA_LIVE_RATE_LIMIT: RateLimitConfig = {
+  limit: 90,
+  windowMs: 60 * 1000,
+};
+
 /** Strict limit for sensitive operations: 5 requests/minute */
 export const STRICT_RATE_LIMIT: RateLimitConfig = {
   limit: 5,
