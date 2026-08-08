@@ -142,7 +142,10 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     getQaResultMock.mockResolvedValue(failedPackageResult);
     getPackageResultMock.mockResolvedValue({ data: failedPackageResult, error: null });
 
-    const supabase = createSupabaseMock({});
+    const candidateInsertSpy = vi.fn();
+    const supabase = createSupabaseMock({
+      qa_candidates: { insertSpy: candidateInsertSpy },
+    });
     const trigger = makeTrigger(supabase);
     const policy = makePolicy({
       displayName: 'Test App',
@@ -163,6 +166,16 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     });
     expect(result.skipReason).toContain('exact PSADT package QA pass');
     expect(createHistorySpy).not.toHaveBeenCalled();
+    expect(candidateInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        winget_id: UPDATE_INFO.wingetId,
+        status: 'queued',
+        test_config: expect.objectContaining({ profileKind: 'deployment-config' }),
+      })
+    );
+    expect(candidateInsertSpy.mock.calls[0][0].package_profile_sha256).not.toBe(
+      failedPackageResult.package_profile_sha256
+    );
   });
 
   describe('ensurePsadtConfig', () => {

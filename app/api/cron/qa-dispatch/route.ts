@@ -1,11 +1,40 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
+import { validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 2;
+const QUEUE_SCAN_PAGE_SIZE = 100;
+const MAX_QUEUE_SCAN_PAGES = 10;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function queueCursor(candidate: {
+  id: unknown;
+  priority: unknown;
+  enqueued_at: unknown;
+}): { priority: number; enqueuedAt: string; id: string } | null {
+  if (!Number.isInteger(candidate.priority)) return null;
+  if (typeof candidate.id !== 'string' || !UUID_PATTERN.test(candidate.id)) return null;
+  if (
+    typeof candidate.enqueued_at !== 'string' ||
+    !candidate.enqueued_at ||
+    Number.isNaN(Date.parse(candidate.enqueued_at))
+  ) {
+    return null;
+  }
+  return {
+    priority: candidate.priority as number,
+    enqueuedAt: candidate.enqueued_at,
+    id: candidate.id,
+  };
+}
+
+function postgrestQuoted(value: string): string {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -49,60 +78,173 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, dispatched: false, reason: 'qa_active', reconciled });
   }
 
-  const { data: next, error: queueError } = await supabase
-    .from('qa_candidates')
-    .select('*')
-    .eq('test_level', 'psadt-package')
-    .eq('status', 'queued')
-    .order('priority', { ascending: false })
-    .order('enqueued_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (queueError) throw queueError;
-  if (!next) {
-    return NextResponse.json({ success: true, dispatched: false, reason: 'queue_empty', reconciled });
-  }
+  let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+  let scanned = 0;
+  let superseded = 0;
+  const supersededAt = new Date().toISOString();
 
-  const dispatchedAt = new Date().toISOString();
-  const { data: claimed, error: claimError } = await supabase
-    .from('qa_candidates')
-    .update({
-      status: 'dispatched',
-      attempts: next.attempts + 1,
-      dispatched_at: dispatchedAt,
-      failure_summary: null,
-      updated_at: dispatchedAt,
-    })
-    .eq('id', next.id)
-    .eq('status', 'queued')
-    .select('*')
-    .maybeSingle();
-  if (claimError?.code === '23505') {
-    return NextResponse.json({ success: true, dispatched: false, reason: 'claim_lost', reconciled });
-  }
-  if (claimError) throw claimError;
-  if (!claimed) {
-    return NextResponse.json({ success: true, dispatched: false, reason: 'claim_lost', reconciled });
-  }
-
-  try {
-    await dispatchQaCandidate(claimed);
-    return NextResponse.json({ success: true, dispatched: true, candidateId: claimed.id, reconciled });
-  } catch (error) {
-    console.error(`QA dispatch failed for candidate ${claimed.id}:`, error);
-    await supabase
+  for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
+    let queueQuery = supabase
       .from('qa_candidates')
-      .update({
-        status: 'queued',
-        attempts: next.attempts,
-        dispatched_at: null,
-        failure_summary: 'QA workflow dispatch failed; retry scheduled.',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', claimed.id)
-      .eq('status', 'dispatched');
-    throw error;
+      .select(
+        'id, winget_id, version, architecture, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts'
+      )
+      .eq('test_level', 'psadt-package')
+      .eq('status', 'queued')
+      .order('priority', { ascending: false })
+      .order('enqueued_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(QUEUE_SCAN_PAGE_SIZE);
+    if (cursor) {
+      const enqueuedAt = postgrestQuoted(cursor.enqueuedAt);
+      const id = postgrestQuoted(cursor.id);
+      queueQuery = queueQuery.or(
+        `priority.lt.${cursor.priority},and(priority.eq.${cursor.priority},enqueued_at.gt.${enqueuedAt}),and(priority.eq.${cursor.priority},enqueued_at.eq.${enqueuedAt},id.gt.${id})`
+      );
+    }
+
+    const { data: page, error: queueError } = await queueQuery;
+    if (queueError) throw queueError;
+    if (!page?.length) break;
+    scanned += page.length;
+
+    const eligible = [];
+    const invalidByReason = new Map<string, string[]>();
+    const addInvalid = (reason: string, id: string) => {
+      const ids = invalidByReason.get(reason) || [];
+      ids.push(id);
+      invalidByReason.set(reason, ids);
+    };
+    for (const candidate of page) {
+      if (!queueCursor(candidate)) {
+        addInvalid('queue-metadata-invalid', candidate.id);
+        continue;
+      }
+      const validation = validateCurrentQaPackageProfile({
+        testConfig: candidate.test_config,
+        candidatePackageProfileSha256: candidate.package_profile_sha256,
+        candidateWingetId: candidate.winget_id,
+        candidateVersion: candidate.version,
+        candidateArchitecture: candidate.architecture,
+        candidateInstallerSha256: candidate.installer_sha256,
+      });
+      if (validation.valid) {
+        eligible.push(candidate);
+        continue;
+      }
+      addInvalid(validation.reason, candidate.id);
+    }
+
+    for (const [reason, ids] of invalidByReason) {
+      const { data: updated, error: supersedeError } = await supabase
+        .from('qa_candidates')
+        .update({
+          status: 'superseded',
+          finished_at: supersededAt,
+          failure_summary: `Superseded before dispatch: ${reason}.`,
+          updated_at: supersededAt,
+        })
+        .in('id', ids)
+        .eq('status', 'queued')
+        .select('id');
+      if (supersedeError) throw supersedeError;
+      superseded += updated?.length || 0;
+    }
+
+    let nextCursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+    for (let index = page.length - 1; index >= 0; index--) {
+      nextCursor = queueCursor(page[index]);
+      if (nextCursor) break;
+    }
+    if (!nextCursor) {
+      return NextResponse.json({
+        success: true,
+        dispatched: false,
+        reason: 'queue_metadata_invalid',
+        reconciled,
+        scanned,
+        superseded,
+      });
+    }
+    cursor = nextCursor;
+
+    for (const candidate of eligible) {
+      const dispatchedAt = new Date().toISOString();
+      const { data: claimed, error: claimError } = await supabase
+        .from('qa_candidates')
+        .update({
+          status: 'dispatched',
+          attempts: candidate.attempts + 1,
+          dispatched_at: dispatchedAt,
+          failure_summary: null,
+          updated_at: dispatchedAt,
+        })
+        .eq('id', candidate.id)
+        .eq('status', 'queued')
+        .select('*')
+        .maybeSingle();
+      if (claimError?.code === '23505') {
+        return NextResponse.json({
+          success: true,
+          dispatched: false,
+          reason: 'claim_lost',
+          reconciled,
+          scanned,
+          superseded,
+        });
+      }
+      if (claimError) throw claimError;
+      // A lost compare-and-set means another dispatcher is already making
+      // progress. Do not move on to a second row and violate single-flight QA.
+      if (!claimed) {
+        return NextResponse.json({
+          success: true,
+          dispatched: false,
+          reason: 'claim_lost',
+          reconciled,
+          scanned,
+          superseded,
+        });
+      }
+
+      try {
+        await dispatchQaCandidate(claimed);
+        return NextResponse.json({
+          success: true,
+          dispatched: true,
+          candidateId: claimed.id,
+          reconciled,
+          scanned,
+          superseded,
+        });
+      } catch (error) {
+        console.error(`QA dispatch failed for candidate ${claimed.id}:`, error);
+        await supabase
+          .from('qa_candidates')
+          .update({
+            status: 'queued',
+            attempts: candidate.attempts,
+            dispatched_at: null,
+            failure_summary: 'QA workflow dispatch failed; retry scheduled.',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', claimed.id)
+          .eq('status', 'dispatched');
+        throw error;
+      }
+    }
+
+    if (page.length < QUEUE_SCAN_PAGE_SIZE) break;
   }
+
+  return NextResponse.json({
+    success: true,
+    dispatched: false,
+    reason: scanned >= QUEUE_SCAN_PAGE_SIZE * MAX_QUEUE_SCAN_PAGES ? 'scan_limit' : 'queue_empty',
+    reconciled,
+    scanned,
+    superseded,
+  });
 }
 
 /** Operator recovery for a terminal infrastructure error; protected by CRON_SECRET. */

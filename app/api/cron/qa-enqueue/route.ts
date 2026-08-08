@@ -15,7 +15,10 @@ import {
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
-import { buildQaPackageIdentity, QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
+import {
+  buildQaPackageIdentity,
+  validateCurrentQaPackageProfile,
+} from '@/lib/qa/package-profile';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
 import {
   createWingetManifestClient,
@@ -33,7 +36,11 @@ const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
 interface QaCandidateProfileRow {
   id: string;
   winget_id: string;
+  version: string;
+  architecture: string;
+  installer_sha256: string;
   enqueued_at: string;
+  package_profile_sha256: string | null;
   test_config: unknown;
 }
 
@@ -41,20 +48,6 @@ function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function catalogProfilePackagerCommit(testConfig: unknown): string {
-  const config = object(testConfig);
-  if (config.profileKind !== 'catalog-default') return '';
-  if (typeof config.packageProfileCanonicalJson !== 'string') return '';
-
-  try {
-    const profile = object(JSON.parse(config.packageProfileCanonicalJson));
-    const toolchain = object(profile.toolchain);
-    return typeof toolchain.packagerCommit === 'string' ? toolchain.packagerCommit : '';
-  } catch {
-    return '';
-  }
 }
 
 async function findToolchainBackfillIds(
@@ -68,7 +61,9 @@ async function findToolchainBackfillIds(
   while (true) {
     let candidateQuery = supabase
       .from('qa_candidates')
-      .select('id, winget_id, enqueued_at, test_config')
+      .select(
+        'id, winget_id, version, architecture, installer_sha256, enqueued_at, package_profile_sha256, test_config'
+      )
       .eq('test_level', 'psadt-package')
       .not('package_profile_sha256', 'is', null)
       .order('enqueued_at', { ascending: false })
@@ -87,10 +82,18 @@ async function findToolchainBackfillIds(
 
     const pageStaleIds: string[] = [];
     for (const row of rows) {
-      const commit = catalogProfilePackagerCommit(row.test_config);
-      if (!commit || decidedIds.has(row.winget_id)) continue;
+      const config = object(row.test_config);
+      if (config.profileKind !== 'catalog-default' || decidedIds.has(row.winget_id)) continue;
       decidedIds.add(row.winget_id);
-      if (commit !== QA_PSADT_TOOLCHAIN.packagerCommit) pageStaleIds.push(row.winget_id);
+      const validation = validateCurrentQaPackageProfile({
+        testConfig: row.test_config,
+        candidatePackageProfileSha256: row.package_profile_sha256,
+        candidateWingetId: row.winget_id,
+        candidateVersion: row.version,
+        candidateArchitecture: row.architecture,
+        candidateInstallerSha256: row.installer_sha256,
+      });
+      if (!validation.valid) pageStaleIds.push(row.winget_id);
     }
 
     if (pageStaleIds.length > 0) {

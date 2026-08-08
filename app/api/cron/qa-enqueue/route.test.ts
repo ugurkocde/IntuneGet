@@ -20,6 +20,13 @@ vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
 }));
 
 import { GET } from './route';
+import {
+  buildQaPackageIdentity,
+  canonicalQaJson,
+  QA_PSADT_TOOLCHAIN,
+  qaSha256,
+} from '@/lib/qa/package-profile';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 type QueryResult = {
   data: unknown;
@@ -140,16 +147,50 @@ function profileCandidate(options: {
   packagerCommit: string;
   enqueuedAt?: string;
   profileKind?: string;
+  toolchainOverrides?: Record<string, unknown>;
 }): Record<string, unknown> {
+  const profileKind = options.profileKind || 'catalog-default';
+  const version = '1.0.0';
+  const architecture = 'x64';
+  const installerSha256 = 'A'.repeat(64);
+  const identity = buildQaPackageIdentity({
+    profileKind: profileKind as 'catalog-default' | 'deployment-config',
+    wingetId: options.wingetId,
+    displayName: 'Example',
+    publisher: 'Contoso',
+    version,
+    architecture,
+    installerSha256,
+    sourceInstallerType: 'nullsoft',
+    silentArgs: '/S',
+    uninstallCommand: '',
+    installScope: 'machine',
+    nestedInstallerType: '',
+    nestedInstallerFiles: [],
+    psadtConfig: DEFAULT_PSADT_CONFIG,
+    detectionRules: [],
+  });
+  const canonicalJson = canonicalQaJson({
+    ...identity.profile,
+    toolchain: {
+      ...QA_PSADT_TOOLCHAIN,
+      packagerCommit: options.packagerCommit,
+      ...(options.toolchainOverrides || {}),
+    },
+  });
+  const packageProfileSha256 = qaSha256(canonicalJson);
   return {
     id: options.id,
     winget_id: options.wingetId,
+    version,
+    architecture,
+    installer_sha256: installerSha256,
     enqueued_at: options.enqueuedAt || '2026-08-08T10:00:00.000Z',
+    package_profile_sha256: packageProfileSha256,
     test_config: {
-      profileKind: options.profileKind || 'catalog-default',
-      packageProfileCanonicalJson: JSON.stringify({
-        toolchain: { packagerCommit: options.packagerCommit },
-      }),
+      profileKind,
+      packageProfileCanonicalJson: canonicalJson,
+      packageProfileSha256,
     },
   };
 }
@@ -338,6 +379,29 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
     expect(candidateInserts).toHaveLength(0);
     expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('backfills a matching commit when another toolchain pin is stale', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'stale-template-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+          toolchainOverrides: { templateSha256: 'B'.repeat(64) },
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Example.App' });
   });
 
   it('uses only the newest catalog profile when deciding whether an app is stale', async () => {
