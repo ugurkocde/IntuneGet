@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/qa-dispatch",
-      "schedule": "5-59/10 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/send-notifications",

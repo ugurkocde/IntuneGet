@@ -52,7 +52,9 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           </div>
           <div>
             <h2 id="current-test-heading" className="text-lg font-semibold text-text-primary">Runner is ready</h2>
-            <p className="text-sm text-text-secondary">No application is being tested right now.</p>
+            <p className="text-sm text-text-secondary">
+              {data.queue.count > 0 ? 'Waiting for the next dispatch check.' : 'No application is waiting to be tested.'}
+            </p>
           </div>
         </div>
       </section>
@@ -115,7 +117,13 @@ function DashboardContent() {
         <div className="rounded-2xl border border-overlay/10 bg-bg-elevated p-5">
           <div className="mb-3 flex items-center justify-between"><span className="text-sm text-text-muted">QA runner</span><Server className="h-4 w-4 text-text-muted" aria-hidden="true" /></div>
           <StatusBadge tone={healthTone(data.runner.state)}>{data.runner.state === 'testing' ? 'Testing' : data.runner.state === 'stalled' ? 'Stalled' : 'Idle'}</StatusBadge>
-          <p className="mt-2 text-xs text-text-muted">{data.runner.heartbeatAt ? `Heartbeat ${relativeTime(data.runner.heartbeatAt)}` : 'Waiting for a runner heartbeat'}</p>
+          <p className="mt-2 text-xs text-text-muted">
+            {data.runner.heartbeatAt
+              ? `Heartbeat ${relativeTime(data.runner.heartbeatAt)}`
+              : data.queue.count > 0
+                ? 'Next dispatch check within one minute'
+                : 'No active test'}
+          </p>
         </div>
         <div className="rounded-2xl border border-overlay/10 bg-bg-elevated p-5">
           <div className="mb-3 flex items-center justify-between"><span className="text-sm text-text-muted">WinGet polling</span><Clock3 className="h-4 w-4 text-text-muted" aria-hidden="true" /></div>

@@ -54,6 +54,8 @@ export function useQaLive() {
       return response.json();
     },
     staleTime: 4_000,
-    refetchInterval: (query) => (query.state.data?.active ? 5_000 : 30_000),
+    refetchInterval: (query) => (query.state.data?.active ? 5_000 : 10_000),
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
   });
 }
