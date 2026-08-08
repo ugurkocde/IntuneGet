@@ -101,8 +101,7 @@ async function findToolchainBackfillIds(
         .eq('is_verified', true)
         .eq('is_winget_verified', true)
         .eq('app_source', 'win32')
-        .eq('is_locale_variant', false)
-        .eq('psadt_supported', true);
+        .eq('is_locale_variant', false);
       if (supportedError) {
         throw new Error(`Could not filter QA toolchain backfill apps: ${supportedError.message}`);
       }
