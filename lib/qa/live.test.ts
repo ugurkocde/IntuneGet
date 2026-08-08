@@ -75,4 +75,28 @@ describe('buildQaLiveResponse', () => {
     expect(response.runner.state).toBe('stalled');
     expect(response.scheduler.state).toBe('degraded');
   });
+
+  it('ignores phase evidence left behind by an earlier retry attempt', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-08T18:26:00.000Z'),
+      current: {
+        winget_id: 'Example.App', version: '2', architecture: 'x64', status: 'dispatched',
+        priority: 0, enqueued_at: '2026-08-08T15:00:00.000Z',
+        dispatched_at: '2026-08-08T18:25:40.000Z', started_at: null,
+        phase: 'restoring_vm', phase_started_at: '2026-08-08T18:00:00.000Z',
+        phase_updated_at: '2026-08-08T18:00:00.000Z', test_config: {},
+      },
+      queuedCount: 1,
+      queued: [],
+      poll: null,
+      recent: [],
+      apps: [],
+    });
+    expect(response.runner).toEqual({
+      state: 'testing',
+      heartbeatAt: '2026-08-08T18:25:40.000Z',
+    });
+    expect(response.current?.phase).toBe('preparing_package');
+    expect(response.current?.phaseStartedAt).toBeNull();
+  });
 });

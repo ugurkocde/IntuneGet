@@ -99,8 +99,13 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
   const currentStartedAt = input.current
     ? input.current.started_at || input.current.dispatched_at || input.current.enqueued_at
     : null;
+  const phaseIsCurrentAttempt = Boolean(
+    input.current?.phase_updated_at &&
+    currentStartedAt &&
+    new Date(input.current.phase_updated_at).getTime() >= new Date(currentStartedAt).getTime()
+  );
   const heartbeatAt = input.current
-    ? input.current.phase_updated_at || currentStartedAt
+    ? (phaseIsCurrentAttempt ? input.current.phase_updated_at : null) || currentStartedAt
     : null;
   const runnerStalled = Boolean(
     heartbeatAt && input.now.getTime() - new Date(heartbeatAt).getTime() > RUNNER_STALE_MS
@@ -141,8 +146,8 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
           catalogVersion: currentApp?.latest_version || input.current.version,
           architecture: architecture(input.current.architecture),
           executionContext: executionContext(input.current.test_config),
-          phase: phase(input.current.phase),
-          phaseStartedAt: input.current.phase_started_at,
+          phase: phase(phaseIsCurrentAttempt ? input.current.phase : null),
+          phaseStartedAt: phaseIsCurrentAttempt ? input.current.phase_started_at : null,
           startedAt: currentStartedAt,
           elapsedSeconds: elapsedSeconds(currentStartedAt, input.now),
         }

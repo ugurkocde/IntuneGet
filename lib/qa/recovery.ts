@@ -22,6 +22,11 @@ export function qaTimeoutRecoveryUpdate(
     failure_summary: exhausted
       ? 'QA workflow did not report completion before the safety timeout.'
       : null,
+    ...(exhausted ? {} : {
+      phase: null,
+      phase_started_at: null,
+      phase_updated_at: null,
+    }),
     updated_at: now,
   };
 }

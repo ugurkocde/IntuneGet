@@ -60,3 +60,18 @@ describe('QA live dashboard migration contract', () => {
     expect(sql).toContain('github_run_id = null');
   });
 });
+
+describe('QA retry phase reset migration contract', () => {
+  const sql = readFileSync(
+    resolve(process.cwd(), 'supabase/migrations/20260808182702_clear_qa_retry_phase.sql'),
+    'utf8'
+  );
+
+  it('clears previous-attempt phase evidence only when a retry is re-queued', () => {
+    for (const column of ['phase', 'phase_started_at', 'phase_updated_at']) {
+      expect(sql).toContain(
+        `${column} = case when normalized_outcome = 'retry' and attempts < 2 then null else ${column} end`
+      );
+    }
+  });
+});

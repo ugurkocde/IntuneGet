@@ -19,6 +19,9 @@ describe('qaTimeoutRecoveryUpdate', () => {
       github_run_url: null,
       finished_at: null,
       failure_summary: null,
+      phase: null,
+      phase_started_at: null,
+      phase_updated_at: null,
     });
   });
 

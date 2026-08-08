@@ -176,6 +176,9 @@ export async function GET(request: Request) {
           status: 'dispatched',
           attempts: candidate.attempts + 1,
           dispatched_at: dispatchedAt,
+          phase: null,
+          phase_started_at: null,
+          phase_updated_at: null,
           failure_summary: null,
           updated_at: dispatchedAt,
         })
@@ -225,6 +228,9 @@ export async function GET(request: Request) {
             status: 'queued',
             attempts: candidate.attempts,
             dispatched_at: null,
+            phase: null,
+            phase_started_at: null,
+            phase_updated_at: null,
             failure_summary: 'QA workflow dispatch failed; retry scheduled.',
             updated_at: new Date().toISOString(),
           })
@@ -270,6 +276,9 @@ export async function POST(request: Request) {
       finished_at: null,
       github_run_id: null,
       github_run_url: null,
+      phase: null,
+      phase_started_at: null,
+      phase_updated_at: null,
       failure_summary: null,
       updated_at: now,
     })
