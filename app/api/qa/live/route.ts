@@ -3,8 +3,6 @@ import { getQaLiveSnapshot } from '@/lib/qa/live';
 import { applyRateLimit, getIpKey, QA_LIVE_RATE_LIMIT } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
-export const preferredRegion = 'fra1';
-
 export async function GET(request: Request) {
   const rateLimitResponse = await applyRateLimit(`qa-live:${getIpKey(request)}`, QA_LIVE_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;

@@ -1,4 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/qa/live/route.ts": {
+      "regions": ["fra1"]
+    },
+    "app/api/qa/live/frame/route.ts": {
+      "regions": ["fra1"]
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/sync-packages",
