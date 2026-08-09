@@ -139,7 +139,7 @@ function createSupabaseStub(options: {
   return { client, pollRunInserts, pollRunUpdates, cursorUpdates, candidateInserts };
 }
 
-const CURRENT_PACKAGER_COMMIT = '9ebba1be54817ab79e6efe60792d5a738415df0e';
+const CURRENT_PACKAGER_COMMIT = 'ed0f960326c4bc97c9f86dd20e2c34827928f979';
 
 function profileCandidate(options: {
   id: string;
