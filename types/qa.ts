@@ -51,6 +51,25 @@ export interface QaEnvironment {
   executionContext: 'LocalSystem' | 'User';
 }
 
+export interface QaPromptConfiguration {
+  closePrompt: boolean;
+  deferral: boolean;
+  progressDialog: boolean;
+  customPromptCount: number;
+  restartPrompt: boolean;
+  balloonTipCount: number;
+}
+
+export interface QaEffectiveConfiguration {
+  deployMode: 'Auto' | 'Silent' | 'NonInteractive';
+  /** Vendor-provided arguments only; custom deployment arguments are withheld. */
+  vendorSilentArguments: string | null;
+  restartBehavior: 'Suppress' | 'Force' | 'Prompt';
+  promptConfiguration: QaPromptConfiguration;
+  processCloseCount: number;
+  uiEvidenceExpected: boolean;
+}
+
 export type QaLivePhase =
   | 'queued'
   | 'preparing_package'
@@ -159,6 +178,7 @@ export interface QaResultRow extends QaStatusRow {
   changes: QaChanges | null;
   relevant_event_count: number | null;
   environment: QaEnvironment | null;
+  effective_configuration: QaEffectiveConfiguration | null;
   qa_schema_version: number;
   synced_at: string;
   psadt_version: string | null;
@@ -224,6 +244,7 @@ export interface QaDetailsResponse {
   changes: QaChanges | null;
   relevantEventCount: number | null;
   environment: QaEnvironment | null;
+  effectiveConfiguration: QaEffectiveConfiguration | null;
   classification: QaClassification | null;
   package?: {
     testLevel: QaTestLevel;

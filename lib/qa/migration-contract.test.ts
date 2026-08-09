@@ -104,3 +104,30 @@ describe('QA retry phase reset migration contract', () => {
     }
   });
 });
+
+describe('QA effective configuration migration contract', () => {
+  const sql = readFileSync(
+    resolve(process.cwd(), 'supabase/migrations/20260809060000_add_qa_effective_configuration.sql'),
+    'utf8'
+  );
+
+  it('allows only the compact public configuration shape', () => {
+    for (const field of [
+      'deployMode',
+      'vendorSilentArguments',
+      'restartBehavior',
+      'promptConfiguration',
+      'processCloseCount',
+      'uiEvidenceExpected',
+    ]) {
+      expect(sql).toContain(`'${field}'`);
+    }
+    expect(sql).toContain("effective_configuration - array[");
+    expect(sql).not.toMatch(/promptMessage|processName|brandingPath|registryPath|fileSystemPath/);
+  });
+
+  it('keeps the legacy helper private while syncing the new column', () => {
+    expect(sql).toContain('effective_configuration = excluded.effective_configuration');
+    expect(sql).toContain('from public, anon, authenticated, service_role');
+  });
+});

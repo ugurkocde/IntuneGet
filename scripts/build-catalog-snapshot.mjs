@@ -53,7 +53,7 @@ const QA_COLUMNS = [
   'winget_id', 'display_name', 'publisher', 'tested_version', 'architecture',
   'outcome', 'installer_sha256', 'tested_at_utc', 'overall_duration_seconds', 'installer_type',
   'install_command', 'uninstall_command', 'detection', 'phase_results', 'changes',
-  'relevant_event_count', 'environment', 'qa_schema_version', 'synced_at',
+  'relevant_event_count', 'environment', 'effective_configuration', 'qa_schema_version', 'synced_at',
   'test_level', 'package_profile_sha256', 'psadt_version', 'psadt_template_sha256',
   'psadt_config_sha256', 'detection_rules_sha256', 'packager_commit', 'package_content_sha256',
 ];
@@ -123,7 +123,8 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
         tested_at_utc TEXT NOT NULL, overall_duration_seconds REAL, installer_type TEXT,
         install_command TEXT NOT NULL, uninstall_command TEXT NOT NULL,
         detection TEXT NOT NULL, phase_results TEXT NOT NULL, changes TEXT,
-        relevant_event_count INTEGER, environment TEXT, qa_schema_version INTEGER NOT NULL,
+        relevant_event_count INTEGER, environment TEXT, effective_configuration TEXT,
+        qa_schema_version INTEGER NOT NULL,
         synced_at TEXT NOT NULL, test_level TEXT NOT NULL, package_profile_sha256 TEXT,
         psadt_version TEXT, psadt_template_sha256 TEXT, psadt_config_sha256 TEXT,
         detection_rules_sha256 TEXT, packager_commit TEXT, package_content_sha256 TEXT
@@ -154,13 +155,13 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       (winget_id, display_name, publisher, tested_version, architecture, outcome, installer_sha256,
        tested_at_utc, overall_duration_seconds, installer_type, install_command,
        uninstall_command, detection, phase_results, changes, relevant_event_count,
-       environment, qa_schema_version, synced_at, test_level, package_profile_sha256,
+       environment, effective_configuration, qa_schema_version, synced_at, test_level, package_profile_sha256,
        psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256,
        packager_commit, package_content_sha256)
       VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,@installer_sha256,
        @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
        @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
-       @environment,@qa_schema_version,@synced_at,@test_level,@package_profile_sha256,
+       @environment,@effective_configuration,@qa_schema_version,@synced_at,@test_level,@package_profile_sha256,
        @psadt_version,@psadt_template_sha256,@psadt_config_sha256,@detection_rules_sha256,
        @packager_commit,@package_content_sha256)`);
 
@@ -218,6 +219,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           changes: jsonOrNull(q.changes),
           relevant_event_count: q.relevant_event_count ?? null,
           environment: jsonOrNull(q.environment),
+          effective_configuration: jsonOrNull(q.effective_configuration),
           qa_schema_version: q.qa_schema_version ?? 1,
           synced_at: q.synced_at ?? new Date().toISOString(),
           test_level: q.test_level ?? 'installer-preflight',
@@ -344,6 +346,17 @@ async function selfTest() {
       },
       changes: null, relevant_event_count: 0,
       environment: { executionContext: 'LocalSystem' },
+      effective_configuration: {
+        deployMode: 'Silent',
+        vendorSilentArguments: '/qn',
+        restartBehavior: 'Suppress',
+        promptConfiguration: {
+          closePrompt: false, deferral: false, progressDialog: false,
+          customPromptCount: 0, restartPrompt: false, balloonTipCount: 0,
+        },
+        processCloseCount: 0,
+        uiEvidenceExpected: false,
+      },
       qa_schema_version: 1, synced_at: '2026-01-03T00:01:00Z',
     },
   ];
@@ -374,9 +387,10 @@ async function selfTest() {
   assert(vh.installer_url === 'https://x/chrome.msi', 'installer_url present');
   assert(JSON.parse(vh.installers)[0].Architecture === 'x64', 'installers JSON round-trip');
 
-  const qa = db.prepare(`SELECT outcome, detection FROM qa_results WHERE winget_id=?`).get('Google.Chrome');
+  const qa = db.prepare(`SELECT outcome, detection, effective_configuration FROM qa_results WHERE winget_id=?`).get('Google.Chrome');
   assert(qa.outcome === 'Passed', 'QA result present');
   assert(JSON.parse(qa.detection).minimumVersion === '120.0', 'QA detection JSON round-trip');
+  assert(JSON.parse(qa.effective_configuration).deployMode === 'Silent', 'QA effective configuration round-trip');
 
   // sccm mapping snake_case columns present
   const sccm = db.prepare(`SELECT winget_package_id FROM sccm_winget_mappings WHERE sccm_display_name_normalized=?`).get('google chrome');

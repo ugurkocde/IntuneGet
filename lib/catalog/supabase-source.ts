@@ -387,7 +387,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     const { data, error } = await supabase
       .from('qa_results')
       .select(
-        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, installer_sha256, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, qa_schema_version, synced_at, test_level, package_profile_sha256, psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256, packager_commit, package_content_sha256'
+        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, installer_sha256, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, effective_configuration, qa_schema_version, synced_at, test_level, package_profile_sha256, psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256, packager_commit, package_content_sha256'
       )
       .eq('winget_id', wingetId)
       .eq('test_level', 'psadt-package')

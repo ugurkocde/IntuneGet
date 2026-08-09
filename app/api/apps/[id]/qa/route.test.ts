@@ -38,6 +38,21 @@ const row = {
   changes: null,
   relevant_event_count: 0,
   environment: { executionContext: 'LocalSystem' },
+  effective_configuration: {
+    deployMode: 'Silent',
+    vendorSilentArguments: '/qn /norestart',
+    restartBehavior: 'Suppress',
+    promptConfiguration: {
+      closePrompt: false,
+      deferral: false,
+      progressDialog: false,
+      customPromptCount: 0,
+      restartPrompt: false,
+      balloonTipCount: 0,
+    },
+    processCloseCount: 0,
+    uiEvidenceExpected: false,
+  },
 };
 
 describe('GET /api/apps/[id]/qa', () => {
@@ -56,7 +71,9 @@ describe('GET /api/apps/[id]/qa', () => {
     expect(response.status).toBe(200);
     expect(body.commands.install).toContain('/qn');
     expect(body.environment).toEqual({ executionContext: 'LocalSystem' });
+    expect(body.effectiveConfiguration).toEqual(row.effective_configuration);
     expect(JSON.stringify(body)).not.toMatch(/runUrl|runId|runAttempt|testId|computerName|executedAs/);
+    expect(JSON.stringify(body)).not.toMatch(/processName|promptMessage|brandingPath/);
     expect(body.classification).toBeNull();
   });
 

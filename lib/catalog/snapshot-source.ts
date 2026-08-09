@@ -23,6 +23,7 @@ import type {
   QaCandidateStatusRow,
   QaChanges,
   QaDetectionRule,
+  QaEffectiveConfiguration,
   QaEnvironment,
   QaPhaseResults,
   QaResultRow,
@@ -570,11 +571,12 @@ export class SnapshotCatalogSource implements CatalogSource {
             "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' LIMIT 1"
           )
           .get(wingetId) as
-          | (Omit<QaResultRow, 'detection' | 'phase_results' | 'changes' | 'environment'> & {
+          | (Omit<QaResultRow, 'detection' | 'phase_results' | 'changes' | 'environment' | 'effective_configuration'> & {
               detection: string;
               phase_results: string;
               changes: string | null;
               environment: string | null;
+              effective_configuration: string | null;
             })
           | undefined;
 
@@ -589,6 +591,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           phase_results: phaseResults,
           changes: parseJson<QaChanges>(row.changes),
           environment: parseJson<QaEnvironment>(row.environment),
+          effective_configuration: parseJson<QaEffectiveConfiguration>(row.effective_configuration),
         };
       },
       () => null

@@ -46,6 +46,7 @@ const failedRow = {
   changes: null,
   relevant_event_count: 0,
   environment: null,
+  effective_configuration: null,
   qa_schema_version: 1,
   synced_at: '2026-08-07T12:01:00Z',
   test_level: 'psadt-package',

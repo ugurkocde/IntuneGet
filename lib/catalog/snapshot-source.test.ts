@@ -135,6 +135,21 @@ const qaResults = [
     changes: null,
     relevant_event_count: 0,
     environment: { executionContext: 'LocalSystem' },
+    effective_configuration: {
+      deployMode: 'Silent',
+      vendorSilentArguments: '/qn',
+      restartBehavior: 'Suppress',
+      promptConfiguration: {
+        closePrompt: false,
+        deferral: false,
+        progressDialog: false,
+        customPromptCount: 0,
+        restartPrompt: false,
+        balloonTipCount: 0,
+      },
+      processCloseCount: 0,
+      uiEvidenceExpected: false,
+    },
     qa_schema_version: 1,
     synced_at: '2026-01-03T00:01:00Z',
     test_level: 'psadt-package',
@@ -255,6 +270,7 @@ describe('SnapshotCatalogSource', () => {
     const result = await source.getQaResult('Google.Chrome');
     expect(result?.detection.minimumVersion).toBe('120.0');
     expect(result?.phase_results.detectionAfterUninstall?.exitCode).toBe(1);
+    expect(result?.effective_configuration?.deployMode).toBe('Silent');
     expect(await source.getQaResult('Mozilla.Firefox')).toBeNull();
   });
 

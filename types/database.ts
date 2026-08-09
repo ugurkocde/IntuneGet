@@ -50,6 +50,7 @@ export interface Database {
           changes: Json | null;
           relevant_event_count: number | null;
           environment: Json | null;
+          effective_configuration: Json | null;
           test_id: string | null;
           github_run_id: string | null;
           github_run_attempt: number | null;
@@ -82,6 +83,7 @@ export interface Database {
           changes?: Json | null;
           relevant_event_count?: number | null;
           environment?: Json | null;
+          effective_configuration?: Json | null;
           test_id?: string | null;
           github_run_id?: string | null;
           github_run_attempt?: number | null;
@@ -114,6 +116,7 @@ export interface Database {
           changes?: Json | null;
           relevant_event_count?: number | null;
           environment?: Json | null;
+          effective_configuration?: Json | null;
           test_id?: string | null;
           github_run_id?: string | null;
           github_run_attempt?: number | null;

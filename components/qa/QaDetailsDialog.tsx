@@ -11,7 +11,12 @@ import {
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useQaDetails } from '@/hooks/use-qa';
 import { qaVersionMismatchMessage } from '@/lib/qa/version-mismatch';
-import { QA_CHANGE_CATEGORIES, type QaChangeSet, type QaPhaseResult } from '@/types/qa';
+import {
+  QA_CHANGE_CATEGORIES,
+  type QaChangeSet,
+  type QaPhaseResult,
+  type QaPromptConfiguration,
+} from '@/types/qa';
 
 interface QaDetailsDialogProps {
   wingetId: string;
@@ -52,6 +57,21 @@ function phaseStatus(
     ? result.exitCode === 0
     : [0, 3010, 1641].includes(result.exitCode);
   return { label: passed ? 'Passed' : 'Failed', passed };
+}
+
+function promptConfigurationSummary(configuration: QaPromptConfiguration): string {
+  const enabled: string[] = [];
+  if (configuration.closePrompt) enabled.push('Close prompt');
+  if (configuration.deferral) enabled.push('Deferral');
+  if (configuration.progressDialog) enabled.push('Progress dialog');
+  if (configuration.customPromptCount > 0) {
+    enabled.push(`${configuration.customPromptCount} custom prompt${configuration.customPromptCount === 1 ? '' : 's'}`);
+  }
+  if (configuration.restartPrompt) enabled.push('Restart prompt');
+  if (configuration.balloonTipCount > 0) {
+    enabled.push(`${configuration.balloonTipCount} balloon tip${configuration.balloonTipCount === 1 ? '' : 's'}`);
+  }
+  return enabled.length > 0 ? enabled.join(' · ') : 'No prompts configured';
 }
 
 function ChangeTable({ title, changes }: { title: string; changes: QaChangeSet }) {
@@ -136,6 +156,33 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>{qaVersionMismatchMessage(data.testedVersion, catalogVersion)}</p>
                 </div>
+              ) : null}
+
+              {data.effectiveConfiguration ? (
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-text-primary">Effective PSADT configuration</h4>
+                    <p className="mt-1 text-xs text-text-muted">Safe, compact settings from the exact package profile used for this test.</p>
+                  </div>
+                  <div className="grid gap-3 rounded-xl border border-overlay/10 bg-bg-elevated/50 p-4 text-xs text-text-secondary sm:grid-cols-2 lg:grid-cols-4">
+                    <div><span className="block text-text-muted">Deploy mode</span><code>{data.effectiveConfiguration.deployMode}</code></div>
+                    <div><span className="block text-text-muted">Restart behavior</span><code>{data.effectiveConfiguration.restartBehavior}</code></div>
+                    <div><span className="block text-text-muted">Processes to close</span>{data.effectiveConfiguration.processCloseCount}</div>
+                    <div><span className="block text-text-muted">UI evidence expected</span>{data.effectiveConfiguration.uiEvidenceExpected ? 'Yes' : 'No'}</div>
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <span className="block text-text-muted">Prompt configuration</span>
+                      {promptConfigurationSummary(data.effectiveConfiguration.promptConfiguration)}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs text-text-muted">Vendor silent arguments</p>
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-overlay/10 bg-bg-base p-3 text-xs text-text-secondary">
+                      {data.effectiveConfiguration.vendorSilentArguments === null
+                        ? 'Custom deployment arguments withheld'
+                        : data.effectiveConfiguration.vendorSilentArguments || 'No arguments required'}
+                    </pre>
+                  </div>
+                </section>
               ) : null}
 
               <section className="space-y-3">

@@ -47,6 +47,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       changes: row.changes,
       relevantEventCount: row.relevant_event_count,
       environment: row.environment,
+      effectiveConfiguration: row.effective_configuration,
       package: {
         testLevel: row.test_level,
         profileSha256: row.package_profile_sha256,
