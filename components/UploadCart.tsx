@@ -431,7 +431,7 @@ export function UploadCart() {
                         {item.qaOverride && (
                           <span className="inline-flex items-center gap-1 rounded border border-status-warning/20 bg-status-warning/10 px-2 py-1 text-xs font-medium text-status-warning">
                             <ShieldAlert className="h-3 w-3" />
-                            QA override
+                            Test override
                           </span>
                         )}
                       </div>
@@ -440,9 +440,9 @@ export function UploadCart() {
                         <div className="mt-3 flex items-start gap-2 rounded-lg border border-status-error/20 bg-status-error/10 p-2.5">
                           <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-error" />
                           <div className="flex-1 text-xs">
-                            <p className="font-medium text-status-error">QA failed for this exact version</p>
+                            <p className="font-medium text-status-error">Installation test failed for this version</p>
                             <p className="mt-0.5 text-text-secondary">
-                              Version {item.version} failed isolated install, detection, or uninstall testing. Review the result before deploying.
+                              Version {item.version} did not complete the install, detection, or uninstall checks. Review the result before deploying.
                             </p>
                             <div className="mt-2 flex flex-wrap gap-3">
                               <button
@@ -450,7 +450,7 @@ export function UploadCart() {
                                 onClick={() => setQaDetailsTarget({ wingetId: item.wingetId, version: item.version })}
                                 className="font-medium text-status-error underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-error"
                               >
-                                View QA details
+                                View test details
                               </button>
                               <button
                                 type="button"

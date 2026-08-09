@@ -44,7 +44,7 @@ export async function ensureQaDemand(
       identity,
       candidateId: null,
       state: 'failed',
-      failureSummary: 'The exact PSADT execution profile failed isolated QA.',
+      failureSummary: 'This app did not pass the isolated installation test.',
     };
   }
 
@@ -116,7 +116,7 @@ export async function ensureQaDemand(
       identity,
       candidateId: existing.id,
       state: 'failed',
-      failureSummary: existing.failure_summary || 'The exact execution profile failed QA.',
+      failureSummary: existing.failure_summary || 'This app did not pass the isolated installation test.',
     };
   }
 

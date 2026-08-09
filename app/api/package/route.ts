@@ -445,7 +445,7 @@ export async function POST(request: NextRequest) {
               package_config: item as unknown as import('@/types/database').Json,
               status: initialStatus,
               status_message: qaDemand?.state === 'waiting'
-                ? 'Waiting for isolated QA of this PSADT execution profile'
+                ? 'Running an isolated installation test to make sure this app works before deployment'
                 : qaDemand?.state === 'failed'
                   ? qaDemand.failureSummary
                   : null,

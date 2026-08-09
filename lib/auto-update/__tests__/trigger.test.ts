@@ -168,7 +168,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       skipped: true,
       code: 'QA_FAILED_CURRENT_VERSION',
     });
-    expect(result.skipReason).toContain('failed isolated QA');
+    expect(result.skipReason).toBe('This app did not pass the isolated installation test.');
     expect(createHistorySpy).not.toHaveBeenCalled();
     expect(candidateInsertSpy).not.toHaveBeenCalled();
   });

@@ -93,9 +93,9 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       case 'failed':
         return 'Failed';
       case 'qa_failed':
-        return 'QA failed';
+        return 'Installation test failed';
       case 'awaiting_qa':
-        return 'Awaiting QA';
+        return 'Testing app';
       case 'packaging':
         return 'Packaging';
       case 'uploading':

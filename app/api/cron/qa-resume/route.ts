@@ -48,7 +48,7 @@ export async function GET(request: Request) {
         .from('packaging_jobs')
         .update({
           status: 'qa_failed',
-          status_message: candidate?.failure_summary || 'The required QA run could not complete.',
+          status_message: candidate?.failure_summary || 'The required installation test could not complete.',
           error_code: 'QA_FAILED_EXECUTION_PROFILE',
           error_stage: 'validation',
           error_category: 'installer',
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
       .from('packaging_jobs')
       .update({
         status: nextStatus,
-        status_message: 'QA passed; packaging resumed automatically',
+        status_message: 'Installation test passed; packaging started automatically',
         qa_completed_at: now,
         packaging_started_at: features.localPackager ? null : now,
       })
@@ -153,7 +153,7 @@ export async function GET(request: Request) {
         .from('packaging_jobs')
         .update({
           status: 'failed',
-          status_message: 'QA passed, but automatic packaging resume failed',
+          status_message: 'Installation test passed, but packaging could not start automatically',
           error_code: 'QA_RESUME_DISPATCH_FAILED',
           error_stage: 'authenticate',
           error_category: 'network',

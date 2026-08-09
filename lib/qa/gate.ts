@@ -16,7 +16,7 @@ export class QaGateError extends Error {
     }
   ) {
     super(
-      `QA testing failed for ${details.wingetId} ${details.testedVersion} (${details.architecture})`
+      `Installation testing failed for ${details.wingetId} ${details.testedVersion} (${details.architecture})`
     );
     this.name = 'QaGateError';
   }
@@ -42,7 +42,7 @@ export class QaGateNotPassedError extends Error {
     }
   ) {
     super(
-      `Awaiting an exact PSADT package QA pass for ${details.wingetId} ${details.version} (${details.architecture}, ${details.installerSha256.slice(0, 8) || 'no hash'})`
+      `Installation testing has not passed yet for ${details.wingetId} ${details.version} (${details.architecture})`
     );
     this.name = 'QaGateNotPassedError';
   }
@@ -56,7 +56,7 @@ export function isQaGateError(error: unknown): error is AnyQaGateError {
 
 export function describeQaGateError(error: AnyQaGateError): string {
   if (error instanceof QaGateNotPassedError) {
-    return `${error.message}. Automatic deployment will resume after that exact PSADT package profile has passed isolated QA.`;
+    return `${error.message}. Automatic deployment will resume after the installation test passes.`;
   }
   const { classification, testedAtUtc } = error.details;
   return [

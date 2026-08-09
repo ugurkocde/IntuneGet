@@ -140,7 +140,7 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col">
         <DialogHeader className="shrink-0">
-          <DialogTitle><T>PSADT package QA details</T></DialogTitle>
+          <DialogTitle><T>Installation test details</T></DialogTitle>
           <DialogDescription><T>Latest isolated test of the package IntuneGet deploys through Intune.</T></DialogDescription>
         </DialogHeader>
 
@@ -281,7 +281,7 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
               <section className="grid gap-3 rounded-xl border border-overlay/10 bg-bg-elevated/50 p-4 text-xs text-text-secondary sm:grid-cols-2">
                 <div><span className="block text-text-muted"><T>Execution context</T></span><code>{data.environment?.executionContext || <T>Not recorded</T>}</code></div>
                 <div><span className="block text-text-muted"><T>Relevant Windows events</T></span>{data.relevantEventCount ?? <T>Not recorded</T>}</div>
-                <div><span className="block text-text-muted"><T>PSADT package profile</T></span><code>{data.package?.profileSha256?.slice(0, 12) || <T>Not recorded</T>}</code></div>
+                <div><span className="block text-text-muted"><T>Tested configuration</T></span><code>{data.package?.profileSha256?.slice(0, 12) || <T>Not recorded</T>}</code></div>
                 <div><span className="block text-text-muted"><T>Packager commit</T></span><code>{data.package?.packagerCommit?.slice(0, 12) || <T>Not recorded</T>}</code></div>
               </section>
             </>

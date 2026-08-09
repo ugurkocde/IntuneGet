@@ -668,14 +668,14 @@ function UploadJobCard({
   const statusConfig = {
     awaiting_qa: {
       icon: ShieldCheck,
-      label: 'Awaiting QA',
+      label: 'Testing app',
       color: 'text-accent-violet',
       bg: 'bg-accent-violet/10',
       border: 'border-l-accent-violet',
     },
     qa_failed: {
       icon: XCircle,
-      label: 'QA failed',
+      label: 'Installation test failed',
       color: 'text-status-error',
       bg: 'bg-status-error/10',
       border: 'border-l-status-error',
@@ -930,7 +930,9 @@ function UploadJobCard({
             <ProgressStepper
               progress={job.progress_percent}
               status={job.status}
-              statusMessage={job.status_message}
+              statusMessage={job.status === 'awaiting_qa'
+                ? 'Running an isolated installation test to make sure this app works before deployment'
+                : job.status_message}
               startTime={job.status === 'awaiting_qa'
                 ? job.qa_requested_at || job.created_at
                 : job.packaging_started_at || job.qa_requested_at || job.created_at}

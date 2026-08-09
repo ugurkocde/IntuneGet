@@ -371,6 +371,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(body.jobs[0]).toMatchObject({ status: 'awaiting_qa' });
     expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
       status: 'awaiting_qa',
+      status_message: 'Running an isolated installation test to make sure this app works before deployment',
       qa_candidate_id: 'candidate-1',
       execution_profile_sha256: 'A'.repeat(64),
       presentation_profile_sha256: 'B'.repeat(64),

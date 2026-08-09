@@ -20,7 +20,7 @@ export function qaTimeoutRecoveryUpdate(
     github_run_url: exhausted ? candidate.github_run_url : null,
     finished_at: exhausted ? now : null,
     failure_summary: exhausted
-      ? 'QA workflow did not report completion before the safety timeout.'
+      ? 'The installation test did not finish before the safety timeout.'
       : null,
     ...(exhausted ? {} : {
       phase: null,

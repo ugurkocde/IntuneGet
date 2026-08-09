@@ -231,7 +231,7 @@ export async function GET(request: Request) {
             phase: null,
             phase_started_at: null,
             phase_updated_at: null,
-            failure_summary: 'QA workflow dispatch failed; retry scheduled.',
+            failure_summary: 'The installation test could not start; retry scheduled.',
             updated_at: new Date().toISOString(),
           })
           .eq('id', claimed.id)

@@ -11,11 +11,11 @@ const ENVIRONMENT_INSTALL_CODES = new Set([1601, 1618, 1622]);
 
 const REMEDIATION: Record<QaFailureBucket, string> = {
   package_definition:
-    "Review and correct the app's QA definition: silent switches, detection rule, or uninstall command.",
+    "Review the app's silent install arguments, detection rule, and uninstall command.",
   vendor_installer:
     'The vendor installer appears to fail even when driven correctly. Test a newer vendor release before deployment.',
   environment:
-    'The result may be specific to the QA machine. Re-run the test before changing the package definition.',
+    'The result may be specific to the test environment. Re-run the test before changing the package definition.',
   unknown:
     'The available aggregate evidence is inconclusive. Review the failing phase and its exit code.',
 };
@@ -138,7 +138,7 @@ export function classifyQaFailure(
       'phase_not_run',
       'environment',
       'low',
-      'A later QA phase did not run after an earlier phase completed.'
+      'A later test step did not run after an earlier step completed.'
     );
   }
 

@@ -403,7 +403,7 @@ export async function POST(request: NextRequest) {
                 .from('packaging_jobs')
                 .update({
                   status: 'cancelled',
-                  status_message: 'Skipped while awaiting exact QA pass',
+                  status_message: 'Waiting for the installation test to finish',
                   error_message: message,
                   cancelled_at: completedAt,
                   completed_at: completedAt,

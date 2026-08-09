@@ -39,7 +39,7 @@ describe('qaTimeoutRecoveryUpdate', () => {
       github_run_id: execution.github_run_id,
       github_run_url: execution.github_run_url,
       finished_at: '2026-08-07T20:50:00.000Z',
-      failure_summary: 'QA workflow did not report completion before the safety timeout.',
+      failure_summary: 'The installation test did not finish before the safety timeout.',
       updated_at: '2026-08-07T20:50:00.000Z',
     });
   });

@@ -25,8 +25,8 @@ interface ProgressStepperProps {
 
 const QA_STAGE: ProgressStage = {
   id: 'qa',
-  label: 'QA',
-  description: 'Verifying the PSADT package in an isolated VM',
+  label: 'Test',
+  description: 'Running an isolated installation test before deployment',
   minProgress: 0,
   maxProgress: 0,
 };
@@ -102,7 +102,7 @@ export function ProgressStepper({
                     <Check className="w-[18px] h-[18px] text-status-success" />
                   ) : isCurrent ? (
                     isQaStage ? (
-                      <ShieldCheck className="w-[18px] h-[18px] text-accent-violet animate-pulse" aria-label="QA verification in progress" />
+                      <ShieldCheck className="w-[18px] h-[18px] text-accent-violet animate-pulse" aria-label="Installation test in progress" />
                     ) : (
                       <Loader2 className="w-[18px] h-[18px] text-accent-cyan animate-spin" aria-label="Processing" />
                     )
@@ -196,7 +196,7 @@ export function ProgressStepper({
               href={qaHref}
               className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-medium text-accent-violet hover:underline"
             >
-              View QA activity
+              View installation test
               <ExternalLink className="h-3 w-3" aria-hidden="true" />
             </Link>
           )}

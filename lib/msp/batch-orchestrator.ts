@@ -405,7 +405,7 @@ async function startBatchItems(batchId: string): Promise<number> {
       if (isQaSkip && jobId) {
         await db.jobs.update(jobId, {
           status: 'cancelled',
-          status_message: 'Skipped because current QA failed',
+          status_message: 'Skipped because the installation test failed',
           error_message: msg,
           cancelled_at: new Date().toISOString(),
           completed_at: new Date().toISOString(),
