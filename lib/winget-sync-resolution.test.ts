@@ -85,6 +85,29 @@ describe('resolveWingetManifest', () => {
       .resolves.toMatchObject({ status: 'resolved', version: '1.0.0' });
   });
 
+  it('uses the authenticated Contents API before the anonymous raw endpoint', async () => {
+    const yaml = [
+      'PackageIdentifier: Example.App',
+      'PackageVersion: 1.0.0',
+      'ManifestType: installer',
+      'Installers:',
+      '- Architecture: x64',
+      '  InstallerUrl: https://example.test/app.exe',
+    ].join('\n');
+    const apiPayload = JSON.stringify({
+      encoding: 'base64',
+      content: Buffer.from(yaml).toString('base64'),
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(apiPayload, { status: 200 }));
+    const client = createWingetManifestClient({ token: 'secret-token', fetchImpl, maxRetries: 0 });
+
+    await expect(resolveWingetManifest({ client, wingetId: 'Example.App', storedVersion: '1.0.0' }))
+      .resolves.toMatchObject({ status: 'resolved', version: '1.0.0' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toContain('https://api.github.com/');
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer secret-token');
+  });
+
   it('treats exhausted rate limits as operational errors', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('', { status: 429 }));
     const client = createWingetManifestClient({ fetchImpl, maxRetries: 0 });
@@ -107,7 +130,6 @@ describe('resolveWingetManifest', () => {
       content: Buffer.from(yaml).toString('base64'),
     });
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response('', { status: 404 }))
       .mockResolvedValueOnce(new Response('', {
         status: 403,
         headers: { 'x-ratelimit-remaining': '0' },
@@ -117,8 +139,8 @@ describe('resolveWingetManifest', () => {
 
     await expect(resolveWingetManifest({ client, wingetId: 'Example.App', storedVersion: '1.0.0' }))
       .resolves.toMatchObject({ status: 'resolved', version: '1.0.0' });
-    expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe('Bearer secret-token');
-    expect(fetchImpl.mock.calls[2][1].headers.Authorization).toBeUndefined();
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer secret-token');
+    expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBeUndefined();
   });
 
   it('treats invalid YAML as an operational error', async () => {
