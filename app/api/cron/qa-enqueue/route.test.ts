@@ -164,7 +164,7 @@ function createSupabaseStub(options: {
   };
 }
 
-const CURRENT_PACKAGER_COMMIT = '3fc86a5a4224986dcd34c4270f0a4d5c919651a2';
+const CURRENT_PACKAGER_COMMIT = QA_PSADT_TOOLCHAIN.packagerCommit;
 
 function profileCandidate(options: {
   id: string;
