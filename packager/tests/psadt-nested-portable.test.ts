@@ -137,4 +137,15 @@ describe('hosted PSADT portable generator', () => {
     expect(script).toContain('Archive entry escapes the portable staging directory');
     expect(script).not.toContain('Portable nested installers are not supported yet');
   });
+
+  it('uses the non-admin PSADT log setting for user-scope packages', () => {
+    const scriptPath = fileURLToPath(
+      new URL('../../.github/scripts/Create-PSADTPackage.ps1', import.meta.url),
+    );
+    const script = readFileSync(scriptPath, 'utf8');
+
+    expect(script).toContain("-Setting 'LogPathNoAdminRights'");
+    expect(script).toContain("`$envLocalAppData\\IntuneGet\\Logs");
+    expect(script).not.toContain("-Setting 'LogPath' -ValueLiteral \"'C:\\ProgramData\\IntuneGet\\Logs'\"");
+  });
 });

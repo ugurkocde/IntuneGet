@@ -359,13 +359,15 @@ if (Use-PSADTBrandAsset -Source $brandingBannerPath -TargetName $bannerTarget -P
     Update-PowerShellDataSetting -Path $configPath -Section 'Assets' -Setting 'Banner' -ValueLiteral (ConvertTo-PSADTConfigValue $bannerTarget)
 }
 
-# User-scope apps run as the logged-in user who cannot write to C:\Windows\Logs\Software
-# Override the PSADT log directory to ProgramData which is writable by all authenticated users
+# PSADT 4.1 selects LogPathNoAdminRights when RequireAdmin is false. Its default
+# ProgramData location is not writable by a standard user when the parent folder
+# does not already exist, so session initialization can fail with exit code 60008.
 if ($IsUserScope) {
-    # Use literal path since .psd1 files load in restricted language mode
-    # where PSADT runtime variables like $envProgramData are not available
-    Update-PowerShellDataSetting -Path $configPath -Section 'Toolkit' -Setting 'LogPath' -ValueLiteral "'C:\ProgramData\IntuneGet\Logs'"
-    Write-Host "User-scope: Log directory overridden to C:\ProgramData\IntuneGet\Logs"
+    # Keep the PSADT variable as a literal for expansion when the toolkit opens
+    # the user session; the resulting path is owned and writable by that user.
+    $userLogPathLiteral = "'`$envLocalAppData\IntuneGet\Logs'"
+    Update-PowerShellDataSetting -Path $configPath -Section 'Toolkit' -Setting 'LogPathNoAdminRights' -ValueLiteral $userLogPathLiteral
+    Write-Host 'User-scope: non-admin log directory set below the current user LocalAppData path'
 }
 
 # Auto-detect installer type from file extension (override incorrect manifest data)
