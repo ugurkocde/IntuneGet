@@ -6,7 +6,6 @@ import { AlertTriangle, CheckCircle2, Clock3, Eye, Loader2, Monitor, Server, Shi
 import { AppIcon } from '@/components/AppIcon';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
-import { QaPhaseTimeline } from '@/components/qa/QaPhaseTimeline';
 import { QaLiveActivityPanel } from '@/components/qa/QaLiveActivityPanel';
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge';
 import { useElapsedTime } from '@/hooks/use-elapsed-time';
@@ -139,7 +138,6 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           </div>
         </div>
       </div>
-      <QaPhaseTimeline currentPhase={data.current.phase} />
       <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(340px,2fr)]">
       <div className="overflow-hidden rounded-xl border border-overlay/10 bg-black" aria-labelledby="live-console-heading">
         <div className="flex items-center justify-between border-b border-white/10 bg-bg-primary/80 px-4 py-3">
@@ -155,7 +153,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             {data.viewer.available ? (
               <span className="flex items-center gap-1.5 text-status-success">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-success" aria-hidden="true" />
-                Live · {relativeTime(data.viewer.capturedAt)}
+                Live
               </span>
             ) : <span>Waiting for a console frame</span>}
           </div>
