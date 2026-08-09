@@ -1,11 +1,13 @@
 'use client';
 
 import { memo, useMemo, useState, type KeyboardEvent } from 'react';
-import { FileCode2, ListTree, Minus, Pencil, Plus, ScrollText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileCode2, ListTree, Minus, Pencil, Plus, ScrollText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QaLiveActivity, QaLiveActivityChange, QaLiveActivityKind, QaLiveLog, QaLivePhase } from '@/types/qa';
 
 type Filter = 'all' | QaLiveActivityKind;
+
+const ITEMS_PER_PAGE = 6;
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -77,6 +79,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
   serverTime: string;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [page, setPage] = useState(1);
   const fileCount = activity
     ? activity.counts.filesAdded + activity.counts.filesChanged + activity.counts.filesRemoved
     : 0;
@@ -89,6 +92,10 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
     ) ?? [],
     [activity, filter]
   );
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedItems = filteredItems.slice(pageStart, pageStart + ITEMS_PER_PAGE);
   const filterCounts: Record<Filter, number> = {
     all: fileCount + registryCount,
     file: fileCount,
@@ -107,7 +114,13 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
     const offset = event.key === 'ArrowRight' ? 1 : -1;
     const nextIndex = (index + offset + FILTERS.length) % FILTERS.length;
     setFilter(FILTERS[nextIndex].id);
+    setPage(1);
     document.getElementById(`qa-activity-tab-${FILTERS[nextIndex].id}`)?.focus();
+  }
+
+  function selectFilter(nextFilter: Filter) {
+    setFilter(nextFilter);
+    setPage(1);
   }
 
   return (
@@ -173,7 +186,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
               aria-selected={filter === item.id}
               aria-controls="qa-activity-panel"
               tabIndex={filter === item.id ? 0 : -1}
-              onClick={() => setFilter(item.id)}
+              onClick={() => selectFilter(item.id)}
               onKeyDown={(event) => moveFilter(event, index)}
               className={cn(
                 'rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan',
@@ -187,7 +200,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
       </div>
 
       <div id="qa-activity-panel" role="tabpanel" aria-labelledby={`qa-activity-tab-${filter}`} className="min-h-0 flex-1 overflow-y-auto">
-        {filteredItems.length ? (
+        {paginatedItems.length ? (
           <>
             <div className="hidden sm:block">
               <table className="w-full table-fixed text-left">
@@ -200,7 +213,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-overlay/10">
-                  {filteredItems.map((item) => (
+                  {paginatedItems.map((item) => (
                     <tr key={`${item.kind}|${item.change}|${item.target}`}>
                       <td className="px-4 py-2.5"><KindLabel kind={item.kind} /></td>
                       <td className="px-2 py-2.5"><ChangeBadge change={item.change} /></td>
@@ -211,7 +224,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
               </table>
             </div>
             <ul className="divide-y divide-overlay/10 sm:hidden" aria-label="Detected system changes">
-              {filteredItems.map((item) => (
+              {paginatedItems.map((item) => (
                 <li key={`${item.kind}|${item.change}|${item.target}`} className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between gap-3"><KindLabel kind={item.kind} /><ChangeBadge change={item.change} /></div>
                   <code className="block break-all text-[11px] leading-relaxed text-text-secondary">{item.target}</code>
@@ -228,6 +241,33 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
           </div>
         )}
       </div>
+
+      {filteredItems.length > ITEMS_PER_PAGE ? (
+        <nav className="flex items-center justify-between gap-3 border-t border-overlay/10 px-3 py-2.5" aria-label="System changes pagination">
+          <button
+            type="button"
+            onClick={() => setPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="inline-flex min-h-9 items-center gap-1 rounded-md border border-overlay/10 px-2.5 text-xs text-text-secondary transition-colors hover:bg-overlay/5 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Previous
+          </button>
+          <span className="text-center text-[11px] text-text-muted" aria-live="polite">
+            Page {currentPage} of {pageCount}
+            <span className="hidden sm:inline"> · {pageStart + 1}–{Math.min(pageStart + ITEMS_PER_PAGE, filteredItems.length)} of {filteredItems.length}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+            disabled={currentPage === pageCount}
+            className="inline-flex min-h-9 items-center gap-1 rounded-md border border-overlay/10 px-2.5 text-xs text-text-secondary transition-colors hover:bg-overlay/5 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </nav>
+      ) : null}
 
       <p className="border-t border-overlay/10 px-4 py-2.5 text-[11px] leading-relaxed text-text-muted">
         {activity ? `Compared at ${new Date(activity.observedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. ` : ''}
