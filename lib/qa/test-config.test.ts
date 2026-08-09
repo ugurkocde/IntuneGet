@@ -29,7 +29,14 @@ describe('buildQaCatalogTestConfig', () => {
       uninstallCommand: 'REGISTRY_UNINSTALL:Example',
       profileKind: 'catalog-default',
     });
-    expect(config.psadtConfig.deployMode).toBe('Silent');
+    expect(config.psadtConfig).toMatchObject({
+      deployMode: 'Auto',
+      progressDialog: {
+        enabled: true,
+        statusMessage: 'IntuneGet is validating this application package.',
+        windowLocation: 'BottomRight',
+      },
+    });
     expect(config.detectionRules[0]).toMatchObject({
       type: 'registry',
       keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Contoso_Example',

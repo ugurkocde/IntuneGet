@@ -50,6 +50,19 @@ function object(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function hasInteractiveCatalogQaProfile(testConfig: unknown): boolean {
+  const canonicalJson = object(testConfig).packageProfileCanonicalJson;
+  if (typeof canonicalJson !== 'string') return false;
+  try {
+    const canonical = object(JSON.parse(canonicalJson));
+    const psadtConfig = object(canonical.psadtConfig);
+    const progressDialog = object(psadtConfig.progressDialog);
+    return psadtConfig.deployMode === 'Auto' && progressDialog.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
 async function findToolchainBackfillIds(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<{ ids: string[]; pagesScanned: number }> {
@@ -93,7 +106,9 @@ async function findToolchainBackfillIds(
         candidateArchitecture: row.architecture,
         candidateInstallerSha256: row.installer_sha256,
       });
-      if (!validation.valid) pageStaleIds.push(row.winget_id);
+      if (!validation.valid || !hasInteractiveCatalogQaProfile(row.test_config)) {
+        pageStaleIds.push(row.winget_id);
+      }
     }
 
     if (pageStaleIds.length > 0) {
@@ -506,7 +521,6 @@ export async function GET(request: Request) {
                   .eq('test_level', 'psadt-package')
                   .contains('test_config', { profileKind: 'catalog-default' })
                   .eq('status', 'queued')
-                  .neq('version', resolution.version)
                   .neq('id', existing.id);
                 if (supersedeError) throw supersedeError;
                 summary.queued++;
@@ -541,7 +555,6 @@ export async function GET(request: Request) {
               .eq('test_level', 'psadt-package')
               .contains('test_config', { profileKind: 'catalog-default' })
               .eq('status', 'queued')
-              .neq('version', resolution.version)
               .neq('id', inserted.id);
             if (supersedeError) throw supersedeError;
           } catch (error) {

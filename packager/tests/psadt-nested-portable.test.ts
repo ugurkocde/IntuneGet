@@ -152,6 +152,17 @@ describe('hosted PSADT portable generator', () => {
     expect(script).not.toContain("-Setting 'LogPath' -ValueLiteral \"'C:\\ProgramData\\IntuneGet\\Logs'\"");
   });
 
+  it('emits the PSADT progress dialog only when the package configuration enables it', () => {
+    const scriptPath = fileURLToPath(
+      new URL('../../.github/scripts/Create-PSADTPackage.ps1', import.meta.url),
+    );
+    const script = readFileSync(scriptPath, 'utf8');
+
+    expect(script).toContain('if ($progressConfig -and $progressConfig.enabled)');
+    expect(script).toContain('"    Show-ADTInstallationProgress$progressParamsStr"');
+    expect(script.match(/Show-ADTInstallationProgress/g)).toHaveLength(1);
+  });
+
   it('captures the vendor registry entry instead of invoking Winget as SYSTEM for uninstall', () => {
     const scriptPath = fileURLToPath(
       new URL('../../.github/scripts/Create-PSADTPackage.ps1', import.meta.url),

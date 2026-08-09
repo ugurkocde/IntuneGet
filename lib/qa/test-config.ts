@@ -137,7 +137,19 @@ export function buildQaCatalogTestConfig({
     app.version,
     DEFAULT_PSADT_CONFIG.registryMarkerPath
   );
-  const psadtConfig: PSADTConfig = normalizeQaPsadtConfig(DEFAULT_PSADT_CONFIG, detectionRules);
+  const psadtConfig: PSADTConfig = normalizeQaPsadtConfig(
+    {
+      ...DEFAULT_PSADT_CONFIG,
+      deployMode: 'Auto',
+      progressDialog: {
+        ...DEFAULT_PSADT_CONFIG.progressDialog,
+        enabled: true,
+        statusMessage: 'IntuneGet is validating this application package.',
+        windowLocation: 'BottomRight',
+      },
+    },
+    detectionRules
+  );
 
   return {
     mode: 'psadt-package',

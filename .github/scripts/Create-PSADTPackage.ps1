@@ -877,7 +877,9 @@ $lines = @(
     $progressCall
 )
 
-# Add installer file existence check and progress display before install commands
+# Add installer file existence check before install commands. The progress dialog
+# is emitted above only when progressDialog.enabled is true so package behavior
+# continues to match the effective PSADT configuration.
 $lines += @(
     ''
     '    # Verify installer file exists before proceeding'
@@ -886,9 +888,6 @@ $lines += @(
     '        Write-ADTLogEntry -Message "Installer file not found: $installerPath" -Severity ''Error'' -Source ''Install-ADTDeployment'''
     '        throw "Installer file not found: $installerPath"'
     '    }'
-    ''
-    '    # Show installation progress'
-    "    Show-ADTInstallationProgress -StatusMessage `"Installing `$(`$adtSession.AppName)...`""
     ''
 )
 

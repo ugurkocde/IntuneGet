@@ -148,11 +148,23 @@ function profileCandidate(options: {
   enqueuedAt?: string;
   profileKind?: string;
   toolchainOverrides?: Record<string, unknown>;
+  interactive?: boolean;
 }): Record<string, unknown> {
   const profileKind = options.profileKind || 'catalog-default';
   const version = '1.0.0';
   const architecture = 'x64';
   const installerSha256 = 'A'.repeat(64);
+  const psadtConfig = options.interactive === false
+    ? DEFAULT_PSADT_CONFIG
+    : {
+        ...DEFAULT_PSADT_CONFIG,
+        deployMode: 'Auto' as const,
+        progressDialog: {
+          ...DEFAULT_PSADT_CONFIG.progressDialog,
+          enabled: true,
+          windowLocation: 'BottomRight' as const,
+        },
+      };
   const identity = buildQaPackageIdentity({
     profileKind: profileKind as 'catalog-default' | 'deployment-config',
     wingetId: options.wingetId,
@@ -167,7 +179,7 @@ function profileCandidate(options: {
     installScope: 'machine',
     nestedInstallerType: '',
     nestedInstallerFiles: [],
-    psadtConfig: DEFAULT_PSADT_CONFIG,
+    psadtConfig,
     detectionRules: [],
   });
   const canonicalJson = canonicalQaJson({
@@ -379,6 +391,35 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
     expect(candidateInserts).toHaveLength(0);
     expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('backfills a self-consistent Silent profile so every catalog QA run is interactive', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'silent-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: CURRENT_PACKAGER_COMMIT,
+          interactive: false,
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    const canonical = JSON.parse(
+      String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
+    );
+    expect(canonical.psadtConfig).toMatchObject({
+      deployMode: 'Auto',
+      progressDialog: { enabled: true, windowLocation: 'BottomRight' },
+    });
   });
 
   it('backfills a matching commit when another toolchain pin is stale', async () => {
