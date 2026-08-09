@@ -19,6 +19,17 @@ const CHANGE_PRESENTATION: Record<QaLiveActivityChange, { label: string; classNa
   removed: { label: 'Removed', className: 'bg-status-error/10 text-status-error', Icon: Minus },
 };
 
+const KNOWN_OS_NOISE_TARGET_PREFIXES = [
+  '%programdata%\\microsoft\\diagnosis\\aggregatorstorage',
+];
+
+function isKnownOsNoiseTarget(target: string): boolean {
+  const normalizedTarget = target.trim().toLowerCase();
+  return KNOWN_OS_NOISE_TARGET_PREFIXES.some(
+    (prefix) => normalizedTarget === prefix || normalizedTarget.startsWith(`${prefix}\\`)
+  );
+}
+
 function compactTarget(target: string): string {
   if (target.length <= 56) return target;
   const separator = target.lastIndexOf('\\');
@@ -73,7 +84,9 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
     ? activity.counts.registryAdded + activity.counts.registryChanged + activity.counts.registryRemoved
     : 0;
   const filteredItems = useMemo(
-    () => activity?.items.filter((item) => filter === 'all' || item.kind === filter) ?? [],
+    () => activity?.items.filter(
+      (item) => !isKnownOsNoiseTarget(item.target) && (filter === 'all' || item.kind === filter)
+    ) ?? [],
     [activity, filter]
   );
   const filterCounts: Record<Filter, number> = {
