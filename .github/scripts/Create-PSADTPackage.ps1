@@ -268,8 +268,10 @@ function Get-PSADTAssetFileName {
 }
 
 # Extract config values with defaults
-# Escape special PowerShell characters for embedding in generated script
-$silentSwitchesEscaped = $SilentSwitches -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+# This value is embedded in a single-quoted string in the generated script.
+# Only a single quote needs escaping; changing backticks or dollar signs would
+# silently change valid vendor arguments.
+$silentSwitchesEscaped = $SilentSwitches -replace "'", "''"
 $uninstallCmd = $UninstallCommand -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
@@ -933,17 +935,13 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
     if ($installerTypeLower -eq 'inno') {
         $innoSwitches = $SilentSwitches.Trim()
         if ($innoSwitches -notmatch '(?i)(^|\s)/SP-(\s|$)') { $innoSwitches = "$innoSwitches /SP-".Trim() }
-        $innoSwitchesEscaped = $innoSwitches -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
-        $innoLogPathExpression = if ($IsUserScope) {
-            "(Join-Path `$env:LOCALAPPDATA 'IntuneGet\Logs\IntuneGet-Inno-Install.log')"
-        } else {
-            "(Join-Path `$env:WINDIR 'Logs\Software\IntuneGet-Inno-Install.log')"
-        }
-        $lines += @(
-            "    `$installerArguments = '$innoSwitchesEscaped /LOG=`"{0}`"' -f $innoLogPathExpression"
-            '    Write-ADTLogEntry -Message "Inno Setup verbose logging enabled" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-        )
-        $installerArgumentList = '$installerArguments'
+        # Keep automatic observability out of the vendor command line. Some Inno
+        # packages fail during initialization when an injected /LOG target cannot
+        # be created or when vendor code rejects an otherwise valid extra switch.
+        # User-provided switches remain byte-for-byte authoritative apart from the
+        # idempotent /SP- safety switch and PowerShell single-quote encoding.
+        $innoSwitchesEscaped = $innoSwitches -replace "'", "''"
+        $installerArgumentList = "'$innoSwitchesEscaped'"
     }
     switch ($installerTypeLower) {
         { $_ -in 'msi', 'wix' } {

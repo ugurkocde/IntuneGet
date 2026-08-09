@@ -8,6 +8,7 @@ import {
   QA_LIVE_INGEST_RATE_LIMIT,
 } from '@/lib/rate-limit';
 import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
+import { isQaLivePublicEnabled } from '@/lib/qa/public-access';
 
 export const dynamic = 'force-dynamic';
 const BUCKET = 'qa-live-frames';
@@ -24,7 +25,7 @@ function noStoreHeaders(extra: Record<string, string> = {}): Record<string, stri
 
 function frameHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return {
-    'Cache-Control': 'public, max-age=0, s-maxage=2, stale-while-revalidate=5',
+    'Cache-Control': 'private, no-store, max-age=0',
     'X-Content-Type-Options': 'nosniff',
     ...extra,
   };
@@ -72,6 +73,9 @@ async function authorizeCleanup(request: Request) {
 }
 
 export async function GET(request: Request) {
+  if (!isQaLivePublicEnabled(new URL(request.url).hostname)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404, headers: noStoreHeaders() });
+  }
   const rateLimitResponse = await applyRateLimit(`qa-frame:${getIpKey(request)}`, QA_LIVE_FRAME_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -137,6 +141,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isQaLivePublicEnabled(new URL(request.url).hostname)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404, headers: noStoreHeaders() });
+  }
   const rateLimitResponse = await applyStrictRateLimit(`qa-frame-ingest:${getIpKey(request)}`, QA_LIVE_INGEST_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -222,6 +229,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!isQaLivePublicEnabled(new URL(request.url).hostname)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404, headers: noStoreHeaders() });
+  }
   const rateLimitResponse = await applyStrictRateLimit(`qa-frame-cleanup:${getIpKey(request)}`, QA_LIVE_INGEST_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 

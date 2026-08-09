@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const { getQaLiveSnapshotMock, applyRateLimitMock } = vi.hoisted(() => ({
@@ -17,8 +17,19 @@ import { GET } from './route';
 
 describe('GET /api/qa/live', () => {
   beforeEach(() => {
+    vi.stubEnv('QA_LIVE_PUBLIC_ENABLED', 'true');
     applyRateLimitMock.mockReset().mockResolvedValue(null);
     getQaLiveSnapshotMock.mockReset().mockResolvedValue({ active: false, current: null });
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('is unavailable unless the operator explicitly enables public QA', async () => {
+    vi.stubEnv('QA_LIVE_PUBLIC_ENABLED', 'false');
+    const response = await GET(new NextRequest('http://localhost/api/qa/live'));
+    expect(response.status).toBe(404);
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(getQaLiveSnapshotMock).not.toHaveBeenCalled();
   });
 
   it('is never cached', async () => {

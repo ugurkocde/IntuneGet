@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { rpcMock, createServerClientMock, applyRateLimitMock, applyStrictRateLimitMock } = vi.hoisted(() => {
   const rpc = vi.fn();
@@ -25,7 +25,33 @@ const candidateId = '11111111-1111-4111-8111-111111111111';
 
 describe('/api/qa/live/frame ingest boundary', () => {
   beforeEach(() => {
+    vi.stubEnv('QA_LIVE_PUBLIC_ENABLED', 'true');
     vi.clearAllMocks();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('is unavailable unless the operator explicitly enables public QA', async () => {
+    vi.stubEnv('QA_LIVE_PUBLIC_ENABLED', 'false');
+    const response = await GET(new Request(
+      `https://www.intuneget.com/api/qa/live/frame?candidate=${candidateId}&sequence=1`
+    ));
+    expect(response.status).toBe(404);
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(createServerClientMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects ingest and cleanup while public QA is disabled', async () => {
+    vi.stubEnv('QA_LIVE_PUBLIC_ENABLED', 'false');
+    const [postResponse, deleteResponse] = await Promise.all([
+      POST(new Request('https://www.intuneget.com/api/qa/live/frame', { method: 'POST' })),
+      DELETE(new Request('https://www.intuneget.com/api/qa/live/frame', { method: 'DELETE' })),
+    ]);
+    expect(postResponse.status).toBe(404);
+    expect(deleteResponse.status).toBe(404);
+    expect(postResponse.headers.get('cache-control')).toContain('no-store');
+    expect(deleteResponse.headers.get('cache-control')).toContain('no-store');
+    expect(createServerClientMock).not.toHaveBeenCalled();
   });
 
   it('rejects malformed frame metadata before reading or storing the body', async () => {
@@ -121,6 +147,7 @@ describe('/api/qa/live/frame ingest boundary', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('x-qa-frame-sequence')).toBe('42');
+    expect(response.headers.get('cache-control')).toBe('private, no-store, max-age=0');
   });
 
   it('returns a quiet 404 when cleanup removes the object after metadata is read', async () => {

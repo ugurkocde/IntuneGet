@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
 import { T } from 'gt-next';
 import { Header } from '@/components/landing/Header';
 import { Footer } from '@/components/landing/sections/Footer';
 import { QaLiveClient } from './QaLiveClient';
+import { isQaLivePublicEnabled } from '@/lib/qa/public-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +24,10 @@ const breadcrumbJsonLd = {
   ],
 };
 
-export default function QaPage() {
+export default async function QaPage() {
+  const host = (await headers()).get('host');
+  if (!isQaLivePublicEnabled(host)) notFound();
+
   return (
     <div className="flex min-h-screen flex-col bg-bg-deepest">
       <Header />
