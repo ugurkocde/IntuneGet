@@ -68,11 +68,59 @@ describe('/api/qa/live/frame ingest boundary', () => {
     expect(createServerClientMock).not.toHaveBeenCalled();
   });
 
-  it('requires the immutable frame sequence in the public URL', async () => {
+  it('requires a frame sequence cache-buster in the public URL', async () => {
     const response = await GET(new Request(`https://www.intuneget.com/api/qa/live/frame?candidate=${candidateId}`));
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Invalid sequence' });
     expect(createServerClientMock).not.toHaveBeenCalled();
+  });
+
+  it('serves the newest frame when capture advances after the status request', async () => {
+    const chain = (result: unknown) => {
+      const query = {
+        select: vi.fn(),
+        eq: vi.fn(),
+        in: vi.fn(),
+        order: vi.fn(),
+        limit: vi.fn(),
+        maybeSingle: vi.fn().mockResolvedValue(result),
+      };
+      query.select.mockReturnValue(query);
+      query.eq.mockReturnValue(query);
+      query.in.mockReturnValue(query);
+      query.order.mockReturnValue(query);
+      query.limit.mockReturnValue(query);
+      return query;
+    };
+    const activeQuery = chain({ data: { id: candidateId }, error: null });
+    const frameQuery = chain({
+      data: {
+        object_path: `${candidateId}/slot-0.jpg`,
+        captured_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        sequence: 42,
+      },
+      error: null,
+    });
+    const from = vi.fn()
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(frameQuery);
+    const download = vi.fn().mockResolvedValue({
+      data: new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }),
+      error: null,
+    });
+    createServerClientMock.mockReturnValueOnce({
+      rpc: rpcMock,
+      from,
+      storage: { from: vi.fn(() => ({ download })) },
+    } as never);
+
+    const response = await GET(new Request(
+      `https://www.intuneget.com/api/qa/live/frame?candidate=${candidateId}&sequence=41`
+    ));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-qa-frame-sequence')).toBe('42');
   });
 
   it('returns a quiet 404 when cleanup removes the object after metadata is read', async () => {

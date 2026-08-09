@@ -104,11 +104,11 @@ export async function GET(request: Request) {
       .eq('candidate_id', active.id)
       .maybeSingle();
     if (frameError) throw new Error(`Could not load QA frame metadata: ${frameError.message}`);
-    if (
-      !frame ||
-      frame.sequence !== requestedSequence ||
-      Date.now() - new Date(frame.updated_at).getTime() > QA_LIVE_FRAME_MAX_AGE_MS
-    ) {
+    // The requested sequence is a cache-buster, not a lock. At a two-second
+    // capture cadence the producer can publish the next frame between the
+    // live-status request and this image request. Serve that newer frame for
+    // the same active candidate instead of flashing an avoidable 404.
+    if (!frame || Date.now() - new Date(frame.updated_at).getTime() > QA_LIVE_FRAME_MAX_AGE_MS) {
       return new NextResponse(null, { status: 404, headers: noStoreHeaders() });
     }
 
