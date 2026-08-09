@@ -65,14 +65,26 @@ function createSupabaseStub(options: {
   recipes?: Array<Record<string, unknown>>;
   candidates?: Array<Record<string, unknown>>;
   candidatePages?: Array<Array<Record<string, unknown>>>;
+  demandBackfillApps?: string[];
 }) {
   const pollRunInserts: Array<Record<string, unknown>> = [];
   const pollRunUpdates: Array<Record<string, unknown>> = [];
   const cursorUpdates: Array<Record<string, unknown>> = [];
   const candidateInserts: Array<Record<string, unknown>> = [];
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   let candidatePageIndex = 0;
 
   const client = {
+    rpc: vi.fn((name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      if (name !== 'qa_missing_demand_backfill_ids') {
+        throw new Error(`Unexpected RPC: ${name}`);
+      }
+      return Promise.resolve({
+        data: (options.demandBackfillApps || []).map((winget_id) => ({ winget_id })),
+        error: null,
+      });
+    }),
     from: vi.fn((table: string) => {
       if (table === 'qa_poll_runs') {
         return {
@@ -142,7 +154,14 @@ function createSupabaseStub(options: {
       throw new Error(`Unexpected table: ${table}`);
     }),
   };
-  return { client, pollRunInserts, pollRunUpdates, cursorUpdates, candidateInserts };
+  return {
+    client,
+    pollRunInserts,
+    pollRunUpdates,
+    cursorUpdates,
+    candidateInserts,
+    rpcCalls,
+  };
 }
 
 const CURRENT_PACKAGER_COMMIT = '3fc86a5a4224986dcd34c4270f0a4d5c919651a2';
@@ -261,7 +280,8 @@ afterEach(() => {
 
 describe('GET /api/cron/qa-enqueue', () => {
   it('persists a successful full-catalog poll and advances its cursor', async () => {
-    const { client, pollRunInserts, pollRunUpdates, cursorUpdates } = createSupabaseStub({});
+    const { client, pollRunInserts, pollRunUpdates, cursorUpdates, rpcCalls } =
+      createSupabaseStub({});
     createServerClientMock.mockReturnValue(client);
 
     const response = await GET(cronRequest());
@@ -277,14 +297,61 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(pollRunInserts).toEqual([expect.objectContaining({ request_id: 'fra1::request-1' })]);
     expect(cursorUpdates).toEqual([expect.objectContaining({ head_sha: 'b'.repeat(40) })]);
+    expect(rpcCalls).toEqual([
+      { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 3 } },
+    ]);
     expect(pollRunUpdates).toEqual([
       expect.objectContaining({
         status: 'succeeded',
         recipe_count: 14_062,
         changed_package_count: 0,
         supported_changed_count: 0,
+        demand_backfill_requested_count: 0,
+        demand_backfill_count: 0,
       }),
     ]);
+  });
+
+  it('queues a demanded app missing latest-version catalog QA without a WinGet change', async () => {
+    const { client, candidateInserts, pollRunUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Missing.App'],
+      supportedApps: [
+        {
+          winget_id: 'Missing.App',
+          name: 'Missing',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      changedPackageCount: 0,
+      demandBackfillRequestedCount: 1,
+      demandBackfillCount: 1,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Missing.App',
+      version: '1.0.0',
+      status: 'queued',
+      priority: 1,
+      demand_source: 'managed',
+      catalog_version_at_enqueue: '1.0.0',
+      test_config: { profileKind: 'catalog-default' },
+    });
+    expect(pollRunUpdates[0]).toMatchObject({
+      demand_backfill_requested_count: 1,
+      demand_backfill_count: 1,
+    });
   });
 
   it('records a changed supported app failure without advancing the cursor', async () => {

@@ -270,6 +270,8 @@ export interface Database {
           head_sha: string | null;
           changed_package_count: number;
           supported_changed_count: number;
+          demand_backfill_requested_count: number;
+          demand_backfill_count: number;
           created_at: string;
         };
         Insert: {
@@ -292,6 +294,8 @@ export interface Database {
           head_sha?: string | null;
           changed_package_count?: number;
           supported_changed_count?: number;
+          demand_backfill_requested_count?: number;
+          demand_backfill_count?: number;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_poll_runs']['Insert']>;
@@ -2247,6 +2251,14 @@ export interface Database {
           p_byte_size: number;
         };
         Returns: boolean;
+      };
+      qa_missing_demand_backfill_ids: {
+        Args: {
+          p_limit?: number;
+        };
+        Returns: Array<{
+          winget_id: string;
+        }>;
       };
       increment_usage: {
         Args: {

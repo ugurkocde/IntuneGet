@@ -32,6 +32,7 @@ const MAX_RECORDED_ERRORS = 100;
 const MAX_ERROR_LENGTH = 1_000;
 const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
 const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
+const DEMAND_BACKFILL_BATCH_SIZE = 3;
 
 interface QaCandidateProfileRow {
   id: string;
@@ -192,6 +193,22 @@ function recordPollError(summary: QaPollSummary, scope: string, error: unknown):
   }
 }
 
+async function findDemandBackfillIds(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc('qa_missing_demand_backfill_ids', {
+    p_limit: DEMAND_BACKFILL_BATCH_SIZE,
+  });
+  if (error) throw new Error(`Could not select demanded-app QA backfill: ${error.message}`);
+  return Array.from(
+    new Set(
+      ((data || []) as Array<{ winget_id?: unknown }>)
+        .map((row) => (typeof row.winget_id === 'string' ? row.winget_id.trim() : ''))
+        .filter(Boolean)
+    )
+  );
+}
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
@@ -215,6 +232,8 @@ export async function GET(request: Request) {
   let supportedChangedCount = 0;
   let toolchainBackfillCount = 0;
   let toolchainBackfillPagesScanned = 0;
+  let demandBackfillRequestedCount = 0;
+  let demandBackfillCount = 0;
   let baseSha: string | null = null;
   let headSha: string | null = null;
   let runId: string | null = null;
@@ -245,6 +264,8 @@ export async function GET(request: Request) {
         head_sha: headSha,
         changed_package_count: changedPackageCount,
         supported_changed_count: supportedChangedCount,
+        demand_backfill_requested_count: demandBackfillRequestedCount,
+        demand_backfill_count: demandBackfillCount,
       })
       .eq('id', runId);
     if (error) throw new Error(`Could not finalize QA poll run ${runId}: ${error.message}`);
@@ -294,11 +315,18 @@ export async function GET(request: Request) {
     baseSha = changes.baseSha;
     headSha = changes.headSha;
     changedPackageCount = changes.changedPackageIds.length;
-    const backfill = await findToolchainBackfillIds(supabase);
+    const [backfill, demandBackfillIds] = await Promise.all([
+      findToolchainBackfillIds(supabase),
+      findDemandBackfillIds(supabase),
+    ]);
     toolchainBackfillPagesScanned = backfill.pagesScanned;
+    demandBackfillRequestedCount = demandBackfillIds.length;
     const changedIds = new Set(changes.changedPackageIds);
     const backfillIds = new Set(backfill.ids);
-    const targetPackageIds = Array.from(new Set([...changedIds, ...backfillIds]));
+    const demandBackfillIdSet = new Set(demandBackfillIds);
+    const targetPackageIds = Array.from(
+      new Set([...changedIds, ...backfillIds, ...demandBackfillIdSet])
+    );
 
     structuredQaPollLog('info', 'qa_poll_started', {
       runId,
@@ -310,6 +338,7 @@ export async function GET(request: Request) {
       changedPackageCount,
       toolchainBackfillRequestedCount: backfill.ids.length,
       toolchainBackfillPagesScanned,
+      demandBackfillRequestedCount,
     });
 
     let supportedApps: Array<{
@@ -403,6 +432,9 @@ export async function GET(request: Request) {
     supportedApps = supportedApps.filter((app) => demandedIds.has(app.winget_id));
     supportedChangedCount = supportedApps.filter((app) => changedIds.has(app.winget_id)).length;
     toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
+    demandBackfillCount = supportedApps.filter((app) =>
+      demandBackfillIdSet.has(app.winget_id)
+    ).length;
     const recipeById = new Map(recipes.map((row) => [row.winget_id, row]));
     const resultById = new Map(results.map((row) => [row.winget_id, row]));
     const client = createWingetManifestClient({ token: process.env.GITHUB_PAT, maxRetries: 2 });
@@ -645,6 +677,8 @@ export async function GET(request: Request) {
       supportedChangedCount,
       toolchainBackfillCount,
       toolchainBackfillPagesScanned,
+      demandBackfillRequestedCount,
+      demandBackfillCount,
       ...summary,
     });
 
@@ -661,6 +695,8 @@ export async function GET(request: Request) {
         supportedChangedCount,
         toolchainBackfillCount,
         toolchainBackfillPagesScanned,
+        demandBackfillRequestedCount,
+        demandBackfillCount,
         ...summary,
       },
       { status: status === 'succeeded' ? 200 : 207 }
@@ -699,6 +735,8 @@ export async function GET(request: Request) {
         supportedChangedCount,
         toolchainBackfillCount,
         toolchainBackfillPagesScanned,
+        demandBackfillRequestedCount,
+        demandBackfillCount,
         ...summary,
       },
       { status: 500 }

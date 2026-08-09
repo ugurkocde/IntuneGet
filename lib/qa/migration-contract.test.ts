@@ -131,3 +131,34 @@ describe('QA effective configuration migration contract', () => {
     expect(sql).toContain('from public, anon, authenticated, service_role');
   });
 });
+
+describe('demanded-app QA backfill migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260809204500_demanded_app_qa_backfill.sql'
+    ),
+    'utf8'
+  );
+
+  it('selects only supported, demanded apps missing current catalog QA', () => {
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain("policy.policy_type = 'auto_update'");
+    expect(sql).toContain('policy.is_enabled is true');
+    expect(sql).toContain('app.is_verified is true');
+    expect(sql).toContain('app.is_winget_verified is true');
+    expect(sql).toContain("app.app_source = 'win32'");
+    expect(sql).toContain('app.is_locale_variant is false');
+    expect(sql).toContain('candidate.version = app.latest_version');
+    expect(sql).toContain("candidate.status <> 'superseded'");
+    expect(sql).toContain("candidate.test_config @> '{\"profileKind\":\"catalog-default\"}'::jsonb");
+  });
+
+  it('keeps selection bounded, indexed, and service-only', () => {
+    expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 100))');
+    expect(sql).toContain('qa_candidates_current_catalog_profile_idx');
+    expect(sql).toContain("set search_path = ''");
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+  });
+});
