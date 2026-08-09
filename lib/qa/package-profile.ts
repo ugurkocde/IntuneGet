@@ -4,7 +4,7 @@ import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c533063a250c2c3f92adae9a55b4ddbc50d81a0c',
+  packagerCommit: '0a6128c63baece425dee66acc643196bbcecf343',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
