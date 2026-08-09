@@ -64,4 +64,17 @@ describe('PSADT registry uninstall identity contract', () => {
       'Uninstall-ADTApplication -InstalledApplication $installedApp -SuccessExitCodes'
     );
   });
+
+  it('uses the packaged Burn bundle when the registered vendor cache is disposable', () => {
+    expect(packager).toContain("if ($originalInstallerType -eq 'burn')");
+    expect(packager).toContain(
+      '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")'
+    );
+    expect(packager).toContain(
+      "`$bundledUninstaller = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
+    );
+    expect(packager).toContain(
+      'Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles'
+    );
+  });
 });

@@ -1386,8 +1386,35 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         '        throw "Could not find one unambiguous vendor uninstall registry entry for [$appName]. Found $($installedApps.Count); refusing broad removal."'
         '    }'
         '    Write-ADTLogEntry -Message "Found exact vendor registry entry [$($installedApps[0].DisplayName)], uninstalling..." -Source ''Uninstall-ADTDeployment'''
-        '    Uninstall-ADTApplication -InstalledApplication $installedApps[0] -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
     )
+    if ($originalInstallerType -eq 'burn') {
+        $lines += @(
+            '    # Burn bundles can register an uninstall executable in a disposable per-account package cache.'
+            '    # Reuse the hash-verified bundle shipped in this PSADT package while preserving the vendor''s registered quiet arguments.'
+            '    $registeredApplication = $installedApps[0]'
+            '    $registeredUninstallProperty = if (-not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)) {'
+            '        ''QuietUninstallString'''
+            '    } elseif (-not [string]::IsNullOrWhiteSpace($registeredApplication.UninstallStringFilePath)) {'
+            '        ''UninstallString'''
+            '    } else {'
+            '        throw "The captured Burn bundle does not provide an uninstall command."'
+            '    }'
+            '    [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")'
+            '    if ($registeredUninstallArguments.Count -eq 0) {'
+            '        $registeredUninstallArguments = @(''/uninstall'', ''/quiet'', ''/norestart'')'
+            '    }'
+            "    `$bundledUninstaller = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
+            '    if (-not (Test-Path -LiteralPath $bundledUninstaller -PathType Leaf)) {'
+            '        throw "The packaged Burn uninstaller was not found: $bundledUninstaller"'
+            '    }'
+            '    Write-ADTLogEntry -Message "Using packaged Burn bundle because the registered vendor cache may be disposable." -Source ''Uninstall-ADTDeployment'''
+            '    Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -CreateNoWindow -WaitForMsiExec -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+        )
+    } else {
+        $lines += @(
+            '    Uninstall-ADTApplication -InstalledApplication $installedApps[0] -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+        )
+    }
 } elseif ($useMsixUninstall) {
     $lines += @(
         ''

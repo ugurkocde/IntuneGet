@@ -488,7 +488,7 @@ function Uninstall-ADTDeployment
     param ()
 
     ## Uninstall the application
-    ${this.getUninstallCommand(job)}
+    ${this.getUninstallCommand(job, installerFileName)}
 ${this.getPostCommandsBlock(job, 'postUninstallCommands', 'Uninstall-ADTDeployment')}
     ## Remove IntuneGet detection marker
     ${this.getRegistryMarkerRemoval(job)}
@@ -909,7 +909,7 @@ ${steps}
    * Get uninstall command (PSADT v4 cmdlets)
    * A custom uninstall command override from psadtConfig takes precedence
    */
-  private getUninstallCommand(job: PackagingJob): string {
+  private getUninstallCommand(job: PackagingJob, installerFileName: string): string {
     const uninstallOverride = this.getCommandOverride(job, 'uninstallCommand');
     if (uninstallOverride) {
       const overrideEscaped = uninstallOverride.replace(/'/g, "''");
@@ -926,6 +926,36 @@ ${steps}
 
     if (!job.uninstall_command) {
       return "Write-ADTLogEntry -Message 'No uninstall command specified' -Severity 'Warning' -Source 'Uninstall-ADTDeployment'";
+    }
+
+    const registryProductMatch = job.uninstall_command.match(
+      /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9-]{36}\}):(.+)$/
+    );
+    if (registryProductMatch && job.installer_type.toLowerCase() === 'burn') {
+      const productCode = registryProductMatch[1];
+      const fileNameEscaped = installerFileName.replace(/'/g, "''");
+      return `$installedApps = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${productCode}' })
+    if ($installedApps.Count -ne 1) {
+        throw "Could not find one unambiguous Burn bundle uninstall entry. Found $($installedApps.Count); refusing broad removal."
+    }
+    $registeredApplication = $installedApps[0]
+    $registeredUninstallProperty = if (-not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)) {
+        'QuietUninstallString'
+    } elseif (-not [string]::IsNullOrWhiteSpace($registeredApplication.UninstallStringFilePath)) {
+        'UninstallString'
+    } else {
+        throw "The captured Burn bundle does not provide an uninstall command."
+    }
+    [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")
+    if ($registeredUninstallArguments.Count -eq 0) {
+        $registeredUninstallArguments = @('/uninstall', '/quiet', '/norestart')
+    }
+    $bundledUninstaller = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
+    if (-not (Test-Path -LiteralPath $bundledUninstaller -PathType Leaf)) {
+        throw "The packaged Burn uninstaller was not found: $bundledUninstaller"
+    }
+    Write-ADTLogEntry -Message "Using packaged Burn bundle because the registered vendor cache may be disposable." -Source 'Uninstall-ADTDeployment'
+    Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -CreateNoWindow -WaitForMsiExec -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)`;
     }
 
     // MSI uninstall: use the product code with Start-ADTMsiProcess

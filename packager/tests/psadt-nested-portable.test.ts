@@ -6,7 +6,7 @@ import type { PackagingJob } from '../src/job-poller';
 
 type ScriptGenerator = {
   getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string;
-  getUninstallCommand(job: PackagingJob): string;
+  getUninstallCommand(job: PackagingJob, fileName: string): string;
 };
 
 const generator = JobProcessor.prototype as unknown as ScriptGenerator;
@@ -46,7 +46,7 @@ function installScript(job: PackagingJob): string {
 }
 
 function uninstallScript(job: PackagingJob): string {
-  return generator.getUninstallCommand.call(generator, job);
+  return generator.getUninstallCommand.call(generator, job, 'piicrawler.zip');
 }
 
 describe('nested portable PSADT generation', () => {
@@ -175,5 +175,32 @@ describe('hosted PSADT portable generator', () => {
     expect(script).toContain('Uninstall-ADTApplication -InstalledApplication $installedApp');
     expect(script).not.toContain('Start-ADTProcess -FilePath $wingetExe');
     expect(script).not.toContain('uninstall --id $wingetId');
+  });
+});
+
+describe('Burn bundle PSADT generation', () => {
+  it('reuses the packaged bundle with the registered quiet uninstall arguments', () => {
+    const job = packagingJob({
+      winget_id: 'Python.Python.3.14',
+      display_name: 'Python 3.14',
+      installer_type: 'burn',
+      installer_url: 'https://www.python.org/ftp/python/3.14.7/python-3.14.7-amd64.exe',
+      uninstall_command:
+        'REGISTRY_UNINSTALL_PRODUCT:{97b6de30-6082-48d1-9bb4-9f43296531a4}:Python 3.14',
+    });
+
+    const script = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'python-3.14.7-amd64.exe'
+    );
+
+    expect(script).toContain("$_.PSChildName -eq '{97b6de30-6082-48d1-9bb4-9f43296531a4}'");
+    expect(script).toContain(
+      '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")'
+    );
+    expect(script).toContain("Join-Path $adtSession.DirFiles 'python-3.14.7-amd64.exe'");
+    expect(script).toContain('-WorkingDirectory $adtSession.DirFiles -CreateNoWindow');
+    expect(script).not.toContain("Start-ADTMsiProcess -Action 'Uninstall'");
   });
 });
