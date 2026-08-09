@@ -686,6 +686,22 @@ describe('generateUninstallCommand', () => {
     expect(command).toContain('Test Application');
   });
 
+  it('should preserve a Burn bundle product code in the registry uninstall marker', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/python.exe',
+      sha256: 'abc123',
+      type: 'burn',
+      productCode: '{97b6de30-6082-48d1-9bb4-9f43296531a4}',
+    };
+
+    const command = generateUninstallCommand(installer, 'Python 3.14');
+
+    expect(command).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{97b6de30-6082-48d1-9bb4-9f43296531a4}:Python 3.14'
+    );
+  });
+
   it('should delegate Inno uninstall to registry lookup when display name is provided', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',

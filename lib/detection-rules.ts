@@ -359,7 +359,11 @@ export function generateUninstallCommand(
       // Use registry-based uninstall lookup for EXE installers
       // This finds the actual UninstallString from the registry and executes it
       if (displayName) {
-        return generateRegistryUninstallCommand(displayName, installer.type);
+        return generateRegistryUninstallCommand(
+          displayName,
+          installer.type,
+          installer.productCode
+        );
       }
       // Fallback to generic commands (less reliable)
       if (installer.type === 'inno') {
@@ -385,8 +389,18 @@ export function generateUninstallCommand(
  */
 function generateRegistryUninstallCommand(
   displayName: string,
-  _installerType: string
+  installerType: string,
+  productCode?: string
 ): string {
+  // Burn bundles commonly register one bundle plus several child MSI entries.
+  // Preserve the manifest product code so the packager can select the bundle's
+  // exact uninstall registry key instead of matching every similarly named item.
+  if (
+    installerType === 'burn' &&
+    /^\{[0-9A-Fa-f-]{36}\}$/.test(productCode || '')
+  ) {
+    return `REGISTRY_UNINSTALL_PRODUCT:${productCode}:${displayName}`;
+  }
   return `REGISTRY_UNINSTALL:${displayName}`;
 }
 

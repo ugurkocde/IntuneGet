@@ -40,3 +40,28 @@ describe('PSADT vendor argument contract', () => {
     expect(assignment).not.toContain("-replace '\\$'");
   });
 });
+
+describe('PSADT registry uninstall identity contract', () => {
+  it('parses and persists a manifest product code for multi-entry installers', () => {
+    expect(packager).toContain(
+      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9-]{36}\\}):(.+)$"
+    );
+    expect(packager).toContain(
+      "[string]$_.PSChildName -eq $configuredUninstallProductCode"
+    );
+    expect(packager).toContain(
+      "Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallRegistryKey''"
+    );
+  });
+
+  it('never sends an ambiguous display-name result set to PSADT uninstall', () => {
+    expect(packager).toContain("Get-ADTApplication -Name $appName -NameMatch ''Exact''");
+    expect(packager).toContain('if ($installedApps.Count -ne 1)');
+    expect(packager).toContain(
+      'Uninstall-ADTApplication -InstalledApplication $installedApps[0]'
+    );
+    expect(packager).not.toContain(
+      'Uninstall-ADTApplication -InstalledApplication $installedApp -SuccessExitCodes'
+    );
+  });
+});

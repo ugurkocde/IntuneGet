@@ -465,14 +465,22 @@ $useRegistryUninstall = $false
 $useMsixUninstall = $false
 $usePortableUninstall = $false
 $registryUninstallDisplayName = ''
+$registryUninstallProductCode = ''
 $msixPackageName = ''
 
 if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
     $usePortableUninstall = $true
     Write-Host "Using portable uninstall (folder removal)"
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9-]{36}\}):(.+)$') {
+    $useRegistryUninstall = $true
+    $registryUninstallProductCode = $Matches[1]
+    $registryUninstallDisplayName = $Matches[2]
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
+}
+
+if ($useRegistryUninstall) {
 
     # Strip common winget package suffixes that don't appear in registry
     $suffixesToRemove = @(
@@ -490,8 +498,9 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
     }
     $registryUninstallDisplayName = $registryUninstallDisplayName.Trim()
 
-    Write-Host "Using registry-based uninstall for: $registryUninstallDisplayName"
-} elseif ($uninstallCmd -match '^MSIX_UNINSTALL:(.+)$') {
+    $registryIdentity = if ($registryUninstallProductCode) { "product $registryUninstallProductCode" } else { 'display name fallback' }
+    Write-Host "Using registry-based uninstall for: $registryUninstallDisplayName ($registryIdentity)"
+} elseif (-not $usePortableUninstall -and $uninstallCmd -match '^MSIX_UNINSTALL:(.+)$') {
     $useMsixUninstall = $true
     $msixPackageName = $Matches[1]
     Write-Host "Using MSIX uninstall for package: $msixPackageName"
@@ -897,6 +906,8 @@ if ($useRegistryUninstall) {
     $lines += @(
         '    # Snapshot uninstall entries so the exact vendor entry created or updated by this installer can be reused later.'
         '    $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
+        "    `$configuredUninstallProductCode = '$registryUninstallProductCode'"
+        "    `$configuredUninstallDisplayName = '$registryUninstallDisplayName'"
         '    $capturedUninstallKey = $null'
         '    $capturedUninstallName = $null'
         ''
@@ -1187,14 +1198,29 @@ if ($useRegistryUninstall) {
         '        $previousApplication = $preInstallApplications | Where-Object { $_.PSPath -eq $candidateApplication.PSPath } | Select-Object -First 1'
         '        (-not $previousApplication) -or ($previousApplication.DisplayVersion -ne $candidateApplication.DisplayVersion)'
         '    })'
-        '    if ($changedApplications.Count -eq 1) {'
-        '        $capturedUninstallKey = [string]$changedApplications[0].PSChildName'
-        '        $capturedUninstallName = [string]$changedApplications[0].DisplayName'
+        '    $selectedApplications = @()'
+        '    if ($configuredUninstallProductCode) {'
+        '        $selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
+        '        Write-ADTLogEntry -Message "Manifest product code matched $($selectedApplications.Count) changed uninstall entry/entries." -Source ''Install-ADTDeployment'''
+        '    }'
+        '    if ($selectedApplications.Count -eq 0) {'
+        '        $selectedApplications = @($changedApplications | Where-Object { [string]$_.DisplayName -eq $configuredUninstallDisplayName })'
+        '    }'
+        '    if ($selectedApplications.Count -eq 0) {'
+        '        $bundleCandidates = @($changedApplications | Where-Object {'
+        '            -not $_.WindowsInstaller -and [string]$_.DisplayName -like "$configuredUninstallDisplayName*"'
+        '        })'
+        '        if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
+        '    }'
+        '    if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1) {'
+        '        $selectedApplications = @($changedApplications[0])'
+        '    }'
+        '    if ($selectedApplications.Count -eq 1) {'
+        '        $capturedUninstallKey = [string]$selectedApplications[0].PSChildName'
+        '        $capturedUninstallName = [string]$selectedApplications[0].DisplayName'
         '        Write-ADTLogEntry -Message "Captured vendor uninstall entry [$capturedUninstallName] ($capturedUninstallKey)." -Source ''Install-ADTDeployment'''
-        '    } elseif ($changedApplications.Count -gt 1) {'
-        '        Write-ADTLogEntry -Message "Installer changed multiple uninstall entries; no ambiguous entry will be persisted." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
         '    } else {'
-        '        Write-ADTLogEntry -Message "Installer did not create or version-update an uninstall entry." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+        '        throw "Could not select one vendor uninstall entry. The installer changed $($changedApplications.Count) entries and $($selectedApplications.Count) matched the configured identity."'
         '    }'
         ''
     )
@@ -1332,23 +1358,35 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         '    # This handles the registry lookup, MSI vs EXE detection, and silent'
         '    # switches automatically using the app''s registered QuietUninstallString'
         "    `$appName = '$registryUninstallDisplayName'"
+        "    `$configuredProductCode = '$registryUninstallProductCode'"
         "    `$markerProviderPath = '$markerProviderPath'"
         ''
         '    $capturedUninstallKey = (Get-ItemProperty -LiteralPath $markerProviderPath -ErrorAction SilentlyContinue).UninstallRegistryKey'
-        '    $installedApp = if ($capturedUninstallKey) {'
+        '    $installedApps = if ($capturedUninstallKey) {'
         '        Write-ADTLogEntry -Message "Searching for captured vendor uninstall entry: $capturedUninstallKey" -Source ''Uninstall-ADTDeployment'''
         '        @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $capturedUninstallKey })'
+        '    } elseif ($configuredProductCode) {'
+        '        Write-ADTLogEntry -Message "No captured entry; searching for manifest registry key: $configuredProductCode" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+        '        @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $configuredProductCode })'
         '    } else {'
-        '        Write-ADTLogEntry -Message "No captured uninstall entry; searching by configured application name: $appName" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
-        '        @(Get-ADTApplication -Name $appName)'
+        '        Write-ADTLogEntry -Message "No captured uninstall entry; searching by exact configured application name: $appName" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+        '        @(Get-ADTApplication -Name $appName -NameMatch ''Exact'')'
         '    }'
         ''
-        '    if ($installedApp) {'
-        '        Write-ADTLogEntry -Message "Found vendor registry entry, uninstalling..." -Source ''Uninstall-ADTDeployment'''
-        '        Uninstall-ADTApplication -InstalledApplication $installedApp -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
-        '    } else {'
-        '        throw "Could not find an unambiguous vendor uninstall registry entry for: $appName. Refusing to invoke Winget from the SYSTEM context."'
+        '    if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey -and -not $configuredProductCode) {'
+        '        $containsMatches = @(Get-ADTApplication -Name $appName -NameMatch ''Contains'')'
+        '        $bundleMatches = @($containsMatches | Where-Object { -not $_.WindowsInstaller })'
+        '        if ($bundleMatches.Count -eq 1) {'
+        '            $installedApps = $bundleMatches'
+        '        } elseif ($containsMatches.Count -eq 1) {'
+        '            $installedApps = $containsMatches'
+        '        }'
         '    }'
+        '    if ($installedApps.Count -ne 1) {'
+        '        throw "Could not find one unambiguous vendor uninstall registry entry for [$appName]. Found $($installedApps.Count); refusing broad removal."'
+        '    }'
+        '    Write-ADTLogEntry -Message "Found exact vendor registry entry [$($installedApps[0].DisplayName)], uninstalling..." -Source ''Uninstall-ADTDeployment'''
+        '    Uninstall-ADTApplication -InstalledApplication $installedApps[0] -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
     )
 } elseif ($useMsixUninstall) {
     $lines += @(
