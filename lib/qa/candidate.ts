@@ -19,6 +19,18 @@ export interface QaInstallerSelection {
 
 const SUPPORTED_ARCHITECTURES = new Set(['x64', 'x86', 'arm64']);
 
+function preferredScopeInstaller(
+  installers: WingetInstallerCandidate[]
+): WingetInstallerCandidate | null {
+  return (
+    installers.find((installer) => installer.Scope?.trim().toLowerCase() === 'machine') ||
+    installers.find((installer) => !installer.Scope?.trim()) ||
+    installers.find((installer) => installer.Scope?.trim().toLowerCase() === 'user') ||
+    installers[0] ||
+    null
+  );
+}
+
 export function normalizeQaArchitecture(value?: string | null): 'x64' | 'x86' | 'arm64' {
   const normalized = value?.trim().toLowerCase();
   return SUPPORTED_ARCHITECTURES.has(normalized || '')
@@ -33,25 +45,35 @@ export function selectWingetInstaller(
 ): WingetInstallerCandidate | null {
   if (!installers?.length) return null;
   const target = normalizeQaArchitecture(architecture);
-  return (
-    installers.find((installer) => installer.Architecture?.toLowerCase() === target) ||
-    installers.find((installer) => installer.Architecture?.toLowerCase() === 'neutral') ||
-    null
+  const exactArchitecture = installers.filter(
+    (installer) => installer.Architecture?.toLowerCase() === target
   );
+  if (exactArchitecture.length) return preferredScopeInstaller(exactArchitecture);
+  const neutral = installers.filter(
+    (installer) => installer.Architecture?.toLowerCase() === 'neutral'
+  );
+  return preferredScopeInstaller(neutral);
 }
 
-/** Select an installer executable by the x64 QA VM (x64/neutral first, then x86). */
+/**
+ * Select an installer for the x64 QA VM. Within each architecture, prefer
+ * machine scope so elevated PSADT execution does not launch a per-user setup.
+ */
 export function selectQaVmInstaller(
   installers: WingetInstallerCandidate[] | null | undefined
 ): QaInstallerSelection | null {
   if (!installers?.length) return null;
-  const x64 = installers.find((installer) => installer.Architecture?.toLowerCase() === 'x64');
+  const x64 = preferredScopeInstaller(
+    installers.filter((installer) => installer.Architecture?.toLowerCase() === 'x64')
+  );
   if (x64) return { installer: x64, architecture: 'x64' };
-  const neutral = installers.find(
-    (installer) => installer.Architecture?.toLowerCase() === 'neutral'
+  const neutral = preferredScopeInstaller(
+    installers.filter((installer) => installer.Architecture?.toLowerCase() === 'neutral')
   );
   if (neutral) return { installer: neutral, architecture: 'x64' };
-  const x86 = installers.find((installer) => installer.Architecture?.toLowerCase() === 'x86');
+  const x86 = preferredScopeInstaller(
+    installers.filter((installer) => installer.Architecture?.toLowerCase() === 'x86')
+  );
   return x86 ? { installer: x86, architecture: 'x86' } : null;
 }
 

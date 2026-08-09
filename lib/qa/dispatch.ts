@@ -46,7 +46,7 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
           packageProfileSha256: candidate.package_profile_sha256,
           testConfig: candidate.test_config,
         }),
-        timeout_minutes: '60',
+        timeout_minutes: '20',
       },
     }),
   });

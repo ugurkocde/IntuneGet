@@ -934,8 +934,13 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
         $innoSwitches = $SilentSwitches.Trim()
         if ($innoSwitches -notmatch '(?i)(^|\s)/SP-(\s|$)') { $innoSwitches = "$innoSwitches /SP-".Trim() }
         $innoSwitchesEscaped = $innoSwitches -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+        $innoLogPathExpression = if ($IsUserScope) {
+            "(Join-Path `$env:LOCALAPPDATA 'IntuneGet\Logs\IntuneGet-Inno-Install.log')"
+        } else {
+            "(Join-Path `$env:WINDIR 'Logs\Software\IntuneGet-Inno-Install.log')"
+        }
         $lines += @(
-            "    `$installerArguments = '$innoSwitchesEscaped /LOG=`"{0}`"' -f (Join-Path `$env:TEMP 'IntuneGet-Inno-Install.log')"
+            "    `$installerArguments = '$innoSwitchesEscaped /LOG=`"{0}`"' -f $innoLogPathExpression"
             '    Write-ADTLogEntry -Message "Inno Setup verbose logging enabled" -Severity ''Info'' -Source ''Install-ADTDeployment'''
         )
         $installerArgumentList = '$installerArguments'
@@ -1054,9 +1059,9 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                         }
                         default {
                             if ($IsUserScope) {
-                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                             } else {
-                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                             }
                         }
                     }
@@ -1147,7 +1152,7 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                     '    try {'
                     '        Write-ADTLogEntry -Message "Running per-user installer from user temp directory" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                     '        # Use -UseShellExecute for shell context which inherits environment variables'
-                    "        Start-ADTProcess -FilePath `$installerDest -ArgumentList $installerArgumentList -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                    "        Start-ADTProcess -FilePath `$installerDest -ArgumentList $installerArgumentList -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                     '    }'
                     '    finally {'
                     '        # Cleanup temp directory'
@@ -1158,7 +1163,7 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                 )
             } else {
                 $lines += @(
-                    "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                    "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                 )
             }
         }
