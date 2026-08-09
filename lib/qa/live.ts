@@ -3,7 +3,7 @@ import 'server-only';
 import { createServerClient } from '@/lib/supabase';
 import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
 import type { Json } from '@/types/database';
-import type { QaArchitecture, QaLivePhase, QaLiveResponse, QaOutcome } from '@/types/qa';
+import type { QaArchitecture, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome } from '@/types/qa';
 
 const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
@@ -117,6 +117,53 @@ function deployMode(config: Json): 'Auto' | 'Silent' | 'NonInteractive' {
   }
 }
 
+function expectedUiConfiguration(config: Json): QaLiveUiConfiguration | null {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+  const canonical = config.packageProfileCanonicalJson;
+  if (typeof canonical !== 'string') return null;
+  try {
+    const parsed = JSON.parse(canonical) as { psadtConfig?: Record<string, unknown> };
+    const psadt = parsed.psadtConfig;
+    if (!psadt || typeof psadt !== 'object' || Array.isArray(psadt)) return null;
+    const mode = psadt.deployMode === 'Auto' || psadt.deployMode === 'NonInteractive'
+      ? psadt.deployMode
+      : 'Silent';
+    const restartBehavior = psadt.restartBehavior === 'Force' || psadt.restartBehavior === 'Prompt'
+      ? psadt.restartBehavior
+      : 'Suppress';
+    const enabledCount = (value: unknown) => Array.isArray(value)
+      ? Math.min(100, value.filter((item) => item && typeof item === 'object' && !Array.isArray(item) && (item as Record<string, unknown>).enabled === true).length)
+      : 0;
+    const processCloseCount = Math.min(100, Array.isArray(psadt.processesToClose) ? psadt.processesToClose.length : 0);
+    const progressDialog = Boolean(
+      psadt.progressDialog && typeof psadt.progressDialog === 'object' && !Array.isArray(psadt.progressDialog) &&
+      (psadt.progressDialog as Record<string, unknown>).enabled === true
+    );
+    const restartPrompt = Boolean(
+      psadt.restartPrompt && typeof psadt.restartPrompt === 'object' && !Array.isArray(psadt.restartPrompt) &&
+      (psadt.restartPrompt as Record<string, unknown>).enabled === true
+    );
+    const promptConfiguration = {
+      closePrompt: psadt.showClosePrompt === true,
+      deferral: psadt.allowDefer === true,
+      progressDialog,
+      customPromptCount: enabledCount(psadt.customPrompts),
+      restartPrompt,
+      balloonTipCount: enabledCount(psadt.balloonTips),
+    };
+    const configuredUi = Object.entries(promptConfiguration).some(([, value]) => value === true || (typeof value === 'number' && value > 0));
+    return {
+      deployMode: mode,
+      restartBehavior,
+      promptConfiguration,
+      processCloseCount,
+      uiEvidenceExpected: mode !== 'Silent' && configuredUi,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function elapsedSeconds(start: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
 }
@@ -173,6 +220,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     input.frame?.candidate_id === input.current.id &&
     input.now.getTime() - new Date(input.frame.updated_at).getTime() <= QA_LIVE_FRAME_MAX_AGE_MS
   );
+  const currentExpectedUi = input.current ? expectedUiConfiguration(input.current.test_config) : null;
 
   return {
     serverTime: input.now.toISOString(),
@@ -198,7 +246,8 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
           architecture: architecture(input.current.architecture),
           executionContext: executionContext(input.current.test_config),
           deployMode: deployMode(input.current.test_config),
-          dialogExpected: deployMode(input.current.test_config) === 'Auto',
+          dialogExpected: currentExpectedUi?.uiEvidenceExpected ?? deployMode(input.current.test_config) === 'Auto',
+          expectedUi: currentExpectedUi,
           phase: phase(phaseIsCurrentAttempt ? input.current.phase : null),
           phaseStartedAt: phaseIsCurrentAttempt ? input.current.phase_started_at : null,
           startedAt: currentStartedAt,

@@ -22,7 +22,15 @@ describe('buildQaLiveResponse', () => {
         phase_started_at: '2026-08-08T16:45:00.000Z',
         phase_updated_at: '2026-08-08T16:59:00.000Z',
         test_config: {
-          packageProfileCanonicalJson: JSON.stringify({ installer: { installScope: 'user' } }),
+          packageProfileCanonicalJson: JSON.stringify({
+            installer: { installScope: 'user' },
+            psadtConfig: {
+              deployMode: 'NonInteractive', restartBehavior: 'Prompt', processesToClose: [{ name: 'private-process' }],
+              showClosePrompt: true, allowDefer: true, progressDialog: { enabled: true },
+              customPrompts: [{ enabled: true, message: 'private-message' }], restartPrompt: { enabled: false },
+              balloonTips: [{ enabled: true, text: 'private-notification' }],
+            },
+          }),
         },
         installer_url: 'https://secret.example/setup.exe',
         failure_summary: 'C:\\Users\\private',
@@ -61,8 +69,22 @@ describe('buildQaLiveResponse', () => {
       displayName: 'Example',
       phase: 'installing',
       executionContext: 'User',
-      deployMode: 'Silent',
-      dialogExpected: false,
+      deployMode: 'NonInteractive',
+      dialogExpected: true,
+      expectedUi: {
+        deployMode: 'NonInteractive',
+        restartBehavior: 'Prompt',
+        promptConfiguration: {
+          closePrompt: true,
+          deferral: true,
+          progressDialog: true,
+          customPromptCount: 1,
+          restartPrompt: false,
+          balloonTipCount: 1,
+        },
+        processCloseCount: 1,
+        uiEvidenceExpected: true,
+      },
       elapsedSeconds: 1200,
     });
     expect(response.viewer).toEqual({
@@ -74,7 +96,7 @@ describe('buildQaLiveResponse', () => {
       height: 720,
     });
     const serialized = JSON.stringify(response);
-    for (const forbidden of ['installer_url', 'failure_summary', 'github_run_url', 'private']) {
+    for (const forbidden of ['installer_url', 'failure_summary', 'github_run_url', 'private', 'vendorSilentArguments']) {
       expect(serialized).not.toContain(forbidden);
     }
   });
@@ -127,6 +149,7 @@ describe('buildQaLiveResponse', () => {
     });
     expect(response.current?.phase).toBe('preparing_package');
     expect(response.current?.phaseStartedAt).toBeNull();
+    expect(response.current?.expectedUi).toBeNull();
   });
 
   it('publishes only a sanitized GitHub rate-limit cause', () => {

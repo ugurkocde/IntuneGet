@@ -84,6 +84,14 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
     [data.current]
   );
   const elapsed = useElapsedTime({ startTime: correctedStart });
+  const visualizationCaption = data.current?.expectedUi && data.current.deployMode !== 'Auto'
+    ? 'The VM image is genuine. Any panel labeled “configuration preview” is host-rendered from sanitized PSADT settings—not captured PSADT UI.'
+    : 'The VM image is genuine. Any PSADT dialog visible in the frame comes from the isolated test VM.';
+  const viewerModeLabel = data.current?.dialogExpected
+    ? 'Genuine PSADT UI may appear'
+    : data.current?.expectedUi && data.current.deployMode !== 'Auto'
+      ? `${data.current.deployMode} · configuration preview only`
+      : `${data.current?.deployMode || 'PSADT'} install`;
 
   if (!data.current) {
     return (
@@ -137,7 +145,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             <Monitor className="h-4 w-4 text-accent-cyan" aria-hidden="true" />
             <h3 id="live-console-heading" className="text-sm font-medium text-text-primary">Live test VM</h3>
             <span className="hidden text-xs text-text-muted md:inline">
-              {data.current.dialogExpected ? 'PSADT UI may appear' : `${data.current.deployMode} install · no dialog expected`}
+              {viewerModeLabel}
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-text-muted">
@@ -164,6 +172,9 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             </div>
           )}
         </div>
+        <p className="border-t border-white/10 bg-bg-primary/80 px-4 py-2 text-xs leading-relaxed text-text-muted">
+          {visualizationCaption}
+        </p>
       </div>
     </section>
   );

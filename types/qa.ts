@@ -70,6 +70,9 @@ export interface QaEffectiveConfiguration {
   uiEvidenceExpected: boolean;
 }
 
+/** Count/flag-only PSADT configuration safe for the public live QA view. */
+export type QaLiveUiConfiguration = Omit<QaEffectiveConfiguration, 'vendorSilentArguments'>;
+
 export type QaLivePhase =
   | 'queued'
   | 'preparing_package'
@@ -104,6 +107,7 @@ export interface QaLiveResponse {
     executionContext: 'LocalSystem' | 'User';
     deployMode: 'Auto' | 'Silent' | 'NonInteractive';
     dialogExpected: boolean;
+    expectedUi: QaLiveUiConfiguration | null;
     phase: QaLivePhase;
     phaseStartedAt: string | null;
     startedAt: string;
