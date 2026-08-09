@@ -75,6 +75,9 @@ interface PackagingJob {
   updated_at: string;
   packaging_started_at?: string;
   packaging_completed_at?: string;
+  qa_candidate_id?: string | null;
+  qa_requested_at?: string | null;
+  qa_completed_at?: string | null;
   completed_at?: string;
   cancelled_at?: string;
   cancelled_by?: string;
@@ -923,21 +926,24 @@ function UploadJobCard({
           </div>
 
           {/* Progress Stepper for active and failed jobs */}
-          {((isActive && job.status !== 'awaiting_qa') || job.status === 'failed' || job.status === 'qa_failed') && (
+          {(isActive || job.status === 'failed' || job.status === 'qa_failed') && (
             <ProgressStepper
               progress={job.progress_percent}
               status={job.status}
               statusMessage={job.status_message}
-              startTime={job.packaging_started_at || job.created_at}
+              startTime={job.status === 'awaiting_qa'
+                ? job.qa_requested_at || job.created_at
+                : job.packaging_started_at || job.qa_requested_at || job.created_at}
               endTime={['failed', 'qa_failed'].includes(job.status) ? job.completed_at : null}
               errorStage={job.error_stage}
+              qaRequired={Boolean(
+                job.qa_requested_at ||
+                job.qa_completed_at ||
+                job.qa_candidate_id ||
+                ['awaiting_qa', 'qa_failed'].includes(job.status)
+              )}
+              qaHref={job.qa_candidate_id ? '/qa' : undefined}
             />
-          )}
-
-          {job.status === 'awaiting_qa' && (
-            <div className="mt-4 rounded-lg border border-accent-violet/20 bg-accent-violet/5 p-3 text-sm text-text-secondary">
-              {job.status_message || 'This exact PSADT execution profile is queued for isolated QA. Packaging resumes automatically after it passes.'}
-            </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
