@@ -892,6 +892,16 @@ $lines += @(
     ''
 )
 
+if ($useRegistryUninstall) {
+    $lines += @(
+        '    # Snapshot uninstall entries so the exact vendor entry created or updated by this installer can be reused later.'
+        '    $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
+        '    $capturedUninstallKey = $null'
+        '    $capturedUninstallName = $null'
+        ''
+    )
+}
+
 # Optional pre-install removal of existing installations (opt-in via PSADT config)
 if ($removeExistingInstall) {
     Write-Host "Pre-install removal of existing installations enabled"
@@ -1155,6 +1165,28 @@ $lines += @(
 # Optional post-install verification (opt-in via PSADT config)
 # Throwing here routes through the standard catch -> Close-ADTSession error exit,
 # and the detection marker write below is skipped because it never runs
+if ($useRegistryUninstall) {
+    $lines += @(
+        '    # Capture the registry uninstall entry created or version-updated by this installer.'
+        '    $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
+        '    $changedApplications = @($postInstallApplications | Where-Object {'
+        '        $candidateApplication = $_'
+        '        $previousApplication = $preInstallApplications | Where-Object { $_.PSPath -eq $candidateApplication.PSPath } | Select-Object -First 1'
+        '        (-not $previousApplication) -or ($previousApplication.DisplayVersion -ne $candidateApplication.DisplayVersion)'
+        '    })'
+        '    if ($changedApplications.Count -eq 1) {'
+        '        $capturedUninstallKey = [string]$changedApplications[0].PSChildName'
+        '        $capturedUninstallName = [string]$changedApplications[0].DisplayName'
+        '        Write-ADTLogEntry -Message "Captured vendor uninstall entry [$capturedUninstallName] ($capturedUninstallKey)." -Source ''Install-ADTDeployment'''
+        '    } elseif ($changedApplications.Count -gt 1) {'
+        '        Write-ADTLogEntry -Message "Installer changed multiple uninstall entries; no ambiguous entry will be persisted." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+        '    } else {'
+        '        Write-ADTLogEntry -Message "Installer did not create or version-update an uninstall entry." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+        '    }'
+        ''
+    )
+}
+
 if ($verifyInstall) {
     Write-Host "Post-install verification enabled"
     $lines += @(
@@ -1187,6 +1219,18 @@ if ($postInstallCommands.Count -gt 0) {
 }
 
 # Write registry marker - scope-aware
+$userUninstallMarkerLines = @()
+$machineUninstallMarkerLines = @()
+if ($useRegistryUninstall) {
+    $userUninstallMarkerLines = @(
+        '            if ($capturedUninstallKey) { Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''UninstallRegistryKey'' -Value $capturedUninstallKey -Type String -SID $_.SID }',
+        '            if ($capturedUninstallName) { Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''UninstallDisplayName'' -Value $capturedUninstallName -Type String -SID $_.SID }'
+    )
+    $machineUninstallMarkerLines = @(
+        '        if ($capturedUninstallKey) { Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallRegistryKey'' -Value $capturedUninstallKey -Type String }',
+        '        if ($capturedUninstallName) { Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallDisplayName'' -Value $capturedUninstallName -Type String }'
+    )
+}
 if ($IsUserScope) {
     # User-scope: Write to all user hives via Invoke-ADTAllUsersRegistryAction (handles SYSTEM context)
     $lines += @(
@@ -1198,6 +1242,7 @@ if ($IsUserScope) {
         "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'Version' -Value '$Version' -Type String -SID `$_.SID"
         "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'Publisher' -Value '$publisherEscaped' -Type String -SID `$_.SID"
         "            Set-ADTRegistryKey -LiteralPath 'HKCU\$registryMarkerPathEscaped\$sanitizedWingetId' -Name 'WingetId' -Value '$WingetId' -Type String -SID `$_.SID"
+        $userUninstallMarkerLines
         '            Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''InstalledDate'' -Value (Get-Date -Format ''o'') -Type String -SID $_.SID'
         '        }'
         '        Write-ADTLogEntry -Message "IntuneGet detection marker written to all user hives" -Severity ''Success'' -Source ''Install-ADTDeployment'''
@@ -1216,6 +1261,7 @@ if ($IsUserScope) {
         "        Set-ADTRegistryKey -LiteralPath `$regPath -Name 'Version' -Value '$Version' -Type String"
         "        Set-ADTRegistryKey -LiteralPath `$regPath -Name 'Publisher' -Value '$publisherEscaped' -Type String"
         "        Set-ADTRegistryKey -LiteralPath `$regPath -Name 'WingetId' -Value '$WingetId' -Type String"
+        $machineUninstallMarkerLines
         '        Set-ADTRegistryKey -LiteralPath $regPath -Name ''InstalledDate'' -Value (Get-Date -Format ''o'') -Type String'
         '        Write-ADTLogEntry -Message "IntuneGet detection marker written to HKLM registry" -Severity ''Success'' -Source ''Install-ADTDeployment'''
         '    } catch {'
@@ -1262,36 +1308,33 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $customUninstallCommandEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
     )
 } elseif ($useRegistryUninstall) {
-    $wingetIdEscaped = $WingetId -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+    $markerProviderPath = if ($IsUserScope) {
+        "Registry::HKEY_CURRENT_USER\$registryMarkerPathEscaped\$sanitizedWingetId"
+    } else {
+        "Registry::HKEY_LOCAL_MACHINE\$registryMarkerPathEscaped\$sanitizedWingetId"
+    }
     $lines += @(
         ''
         '    # Use PSADT v4 Uninstall-ADTApplication to find and uninstall'
         '    # This handles the registry lookup, MSI vs EXE detection, and silent'
         '    # switches automatically using the app''s registered QuietUninstallString'
         "    `$appName = '$registryUninstallDisplayName'"
-        "    `$wingetId = '$wingetIdEscaped'"
+        "    `$markerProviderPath = '$markerProviderPath'"
         ''
-        '    Write-ADTLogEntry -Message "Searching for installed application: $appName" -Source ''Uninstall-ADTDeployment'''
-        '    $installedApp = Get-ADTApplication -Name $appName'
+        '    $capturedUninstallKey = (Get-ItemProperty -LiteralPath $markerProviderPath -ErrorAction SilentlyContinue).UninstallRegistryKey'
+        '    $installedApp = if ($capturedUninstallKey) {'
+        '        Write-ADTLogEntry -Message "Searching for captured vendor uninstall entry: $capturedUninstallKey" -Source ''Uninstall-ADTDeployment'''
+        '        @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $capturedUninstallKey })'
+        '    } else {'
+        '        Write-ADTLogEntry -Message "No captured uninstall entry; searching by configured application name: $appName" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+        '        @(Get-ADTApplication -Name $appName)'
+        '    }'
         ''
         '    if ($installedApp) {'
-        '        Write-ADTLogEntry -Message "Found via registry name, uninstalling..." -Source ''Uninstall-ADTDeployment'''
-        '        Uninstall-ADTApplication -Name $appName -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+        '        Write-ADTLogEntry -Message "Found vendor registry entry, uninstalling..." -Source ''Uninstall-ADTDeployment'''
+        '        Uninstall-ADTApplication -InstalledApplication $installedApp -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
         '    } else {'
-        '        Write-ADTLogEntry -Message "Not found by name ''$appName'', falling back to winget uninstall --id $wingetId" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
-        ''
-        '        # Find winget.exe (may not be in PATH when running as SYSTEM)'
-        '        $wingetExe = Get-Command winget.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source'
-        '        if (-not $wingetExe) {'
-        '            $wingetExe = Get-ChildItem "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_*__8wekyb3d8bbwe\winget.exe" -ErrorAction SilentlyContinue |'
-        '                Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName'
-        '        }'
-        ''
-        '        if ($wingetExe) {'
-        '            Start-ADTProcess -FilePath $wingetExe -ArgumentList "uninstall --id $wingetId --silent --accept-source-agreements --disable-interactivity" -WindowStyle Hidden -SuccessExitCodes @(0)'
-        '        } else {'
-        '            throw "Could not find installed application: $appName (winget not available for fallback)"'
-        '        }'
+        '        throw "Could not find an unambiguous vendor uninstall registry entry for: $appName. Refusing to invoke Winget from the SYSTEM context."'
         '    }'
     )
 } elseif ($useMsixUninstall) {

@@ -151,4 +151,18 @@ describe('hosted PSADT portable generator', () => {
     expect(script).toContain("`$envLocalAppData\\IntuneGet\\Logs");
     expect(script).not.toContain("-Setting 'LogPath' -ValueLiteral \"'C:\\ProgramData\\IntuneGet\\Logs'\"");
   });
+
+  it('captures the vendor registry entry instead of invoking Winget as SYSTEM for uninstall', () => {
+    const scriptPath = fileURLToPath(
+      new URL('../../.github/scripts/Create-PSADTPackage.ps1', import.meta.url),
+    );
+    const script = readFileSync(scriptPath, 'utf8');
+
+    expect(script).toContain('$preInstallApplications = @(Get-ADTApplication');
+    expect(script).toContain("-Name ''UninstallRegistryKey''");
+    expect(script).toContain('Get-ADTApplication -FilterScript { $_.PSChildName -eq $capturedUninstallKey }');
+    expect(script).toContain('Uninstall-ADTApplication -InstalledApplication $installedApp');
+    expect(script).not.toContain('Start-ADTProcess -FilePath $wingetExe');
+    expect(script).not.toContain('uninstall --id $wingetId');
+  });
 });
