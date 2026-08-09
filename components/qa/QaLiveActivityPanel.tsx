@@ -129,7 +129,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
   }
 
   return (
-    <section className="flex min-h-[22rem] flex-col overflow-hidden rounded-xl border border-overlay/10 bg-bg-surface/45 lg:max-h-[32rem]" aria-labelledby="system-changes-heading">
+    <section className="flex min-h-[22rem] flex-col overflow-hidden rounded-xl border border-overlay/10 bg-bg-surface/45" aria-labelledby="system-changes-heading">
       <div className="border-b border-overlay/10 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -235,7 +235,16 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
         </div>
       </div>
 
-      <div id="qa-activity-panel" role="tabpanel" aria-labelledby={`qa-activity-tab-${filter}`} className={cn('min-h-0 flex-1 overflow-y-auto', mobileView !== 'changes' && 'hidden sm:block')}>
+      <div
+        id="qa-activity-panel"
+        role="tabpanel"
+        aria-labelledby={`qa-activity-tab-${filter}`}
+        className={cn(
+          'min-h-0 flex-1 overflow-y-auto',
+          paginatedItems.length > 0 && 'min-h-72 sm:min-h-88',
+          mobileView !== 'changes' && 'hidden sm:block'
+        )}
+      >
         {paginatedItems.length ? (
           <>
             <div className="hidden sm:block">

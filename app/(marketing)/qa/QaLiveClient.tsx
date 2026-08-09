@@ -267,7 +267,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           <div className="h-full rounded-full bg-accent-cyan transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${phase.progressPercent}%` }} />
         </div>
 
-        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(320px,2fr)] xl:grid-cols-[minmax(0,7fr)_minmax(360px,3fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(320px,2fr)] xl:grid-cols-[minmax(0,7fr)_minmax(360px,3fr)]">
           <div className="-mx-5 w-[calc(100%+2.5rem)] overflow-hidden border-y border-overlay/10 bg-black sm:mx-0 sm:w-auto sm:rounded-xl sm:border" aria-labelledby="live-console-heading">
             <div className="flex items-center justify-between border-b border-white/10 bg-bg-surface/80 px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
