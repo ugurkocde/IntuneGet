@@ -145,6 +145,9 @@ describe('hosted PSADT portable generator', () => {
     const script = readFileSync(scriptPath, 'utf8');
 
     expect(script).toContain("-Setting 'LogPathNoAdminRights'");
+    expect(script).toContain('IntuneGet-PSADT-Bootstrap.log');
+    expect(script).toContain('$env:LOCALAPPDATA\\IntuneGet\\Logs');
+    expect(script).toContain('$env:WINDIR\\Logs\\Software');
     expect(script).toContain("`$envLocalAppData\\IntuneGet\\Logs");
     expect(script).not.toContain("-Setting 'LogPath' -ValueLiteral \"'C:\\ProgramData\\IntuneGet\\Logs'\"");
   });
