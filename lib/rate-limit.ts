@@ -102,9 +102,9 @@ export const QA_LIVE_FRAME_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60 * 1000,
 };
 
-/** A single trusted host publishes roughly 30 frames per minute. */
+/** A trusted host can publish up to 60 frames/minute during interactive phases. */
 export const QA_LIVE_INGEST_RATE_LIMIT: RateLimitConfig = {
-  limit: 60,
+  limit: 90,
   windowMs: 60 * 1000,
 };
 

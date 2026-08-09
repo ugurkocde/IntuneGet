@@ -53,8 +53,12 @@ export function useQaLive() {
       if (!response.ok) throw new Error('Failed to load live QA status');
       return response.json();
     },
-    staleTime: 1_000,
-    refetchInterval: (query) => (query.state.data?.active ? 2_000 : 10_000),
+    staleTime: 500,
+    refetchInterval: (query) => {
+      const phase = query.state.data?.current?.phase;
+      if (phase === 'installing' || phase === 'uninstalling') return 1_000;
+      return query.state.data?.active ? 2_000 : 10_000;
+    },
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: 'always',
   });

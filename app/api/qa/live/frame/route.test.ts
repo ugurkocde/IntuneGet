@@ -16,7 +16,7 @@ vi.mock('@/lib/rate-limit', () => ({
   applyStrictRateLimit: applyStrictRateLimitMock,
   getIpKey: () => 'ip:test',
   QA_LIVE_FRAME_RATE_LIMIT: { limit: 240, windowMs: 60_000 },
-  QA_LIVE_INGEST_RATE_LIMIT: { limit: 60, windowMs: 60_000 },
+  QA_LIVE_INGEST_RATE_LIMIT: { limit: 90, windowMs: 60_000 },
 }));
 
 import { DELETE, GET, POST } from './route';
