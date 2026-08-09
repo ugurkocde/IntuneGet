@@ -87,7 +87,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
   const elapsed = useElapsedTime({ startTime: correctedStart });
   const visualizationCaption = data.current?.expectedUi && data.current.deployMode !== 'Auto'
     ? 'The VM image is genuine. Any panel labeled “configuration preview” is host-rendered from sanitized PSADT settings—not captured PSADT UI.'
-    : 'The VM image is genuine. Any PSADT dialog visible in the frame comes from the isolated test VM.';
+    : null;
   const viewerModeLabel = data.current?.dialogExpected
     ? 'Genuine PSADT UI may appear'
     : data.current?.expectedUi && data.current.deployMode !== 'Auto'
@@ -174,9 +174,11 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             </div>
           )}
         </div>
-        <p className="border-t border-white/10 bg-bg-primary/80 px-4 py-2 text-xs leading-relaxed text-text-muted">
-          {visualizationCaption}
-        </p>
+        {visualizationCaption ? (
+          <p className="border-t border-white/10 bg-bg-primary/80 px-4 py-2 text-xs leading-relaxed text-text-muted">
+            {visualizationCaption}
+          </p>
+        ) : null}
       </div>
       <QaLiveActivityPanel activity={data.activity} log={data.log} phase={data.current.phase} serverTime={data.serverTime} />
       </div>
