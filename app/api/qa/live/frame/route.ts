@@ -10,6 +10,7 @@ import {
 import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
 
 export const dynamic = 'force-dynamic';
+export const preferredRegion = 'fra1';
 
 const BUCKET = 'qa-live-frames';
 const MAX_FRAME_BYTES = 204_800;
