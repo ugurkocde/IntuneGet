@@ -180,6 +180,10 @@ export interface Database {
           phase: string | null;
           phase_started_at: string | null;
           phase_updated_at: string | null;
+          live_activity: Json | null;
+          activity_updated_at: string | null;
+          live_log: Json | null;
+          log_updated_at: string | null;
           updated_at: string;
         };
         Insert: {
@@ -209,6 +213,10 @@ export interface Database {
           phase?: string | null;
           phase_started_at?: string | null;
           phase_updated_at?: string | null;
+          live_activity?: Json | null;
+          activity_updated_at?: string | null;
+          live_log?: Json | null;
+          log_updated_at?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;

@@ -766,6 +766,17 @@ ${steps}
     Write-ADTLogEntry -Message "Portable app installed to: $installPath" -Severity 'Success' -Source 'Install-ADTDeployment'`;
     }
 
+    if (installerType === 'inno') {
+      const innoSwitches = /(^|\s)\/SP-(\s|$)/i.test(silentSwitches)
+        ? silentSwitches
+        : `${silentSwitches} /SP-`.trim();
+      const escapedSwitches = innoSwitches.replace(/'/g, "''");
+      return `$innoLogPath = Join-Path $env:TEMP 'IntuneGet-Inno-Install.log'
+    $innoArguments = '${escapedSwitches} /LOG="{0}"' -f $innoLogPath
+    Write-ADTLogEntry -Message "Inno Setup verbose logging enabled" -Severity 'Info' -Source 'Install-ADTDeployment'
+    Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\${fileName}" -ArgumentList $innoArguments -WindowStyle Hidden -WaitForMsiExec`;
+    }
+
     return `Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\${fileName}" -ArgumentList '${silentSwitches}' -WindowStyle Hidden -WaitForMsiExec`;
   }
 
@@ -1028,7 +1039,7 @@ ${steps}
     const defaultSwitches: Record<string, string> = {
       msi: '/qn /norestart',
       exe: '/S',
-      inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+      inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
       nullsoft: '/S',
       wix: '/qn /norestart',
       burn: '/q /norestart',

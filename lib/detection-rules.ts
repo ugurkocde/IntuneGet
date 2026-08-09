@@ -399,7 +399,7 @@ function getDefaultSilentArgs(type: WingetInstallerType): string {
     msix: '',
     appx: '',
     exe: '/S',
-    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     nullsoft: '/S',
     wix: '/qn /norestart',
     burn: '/quiet /norestart',

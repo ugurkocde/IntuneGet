@@ -46,7 +46,7 @@ describe('buildQaCatalogTestConfig', () => {
   });
 
   it.each([
-    ['inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'],
+    ['inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
     ['nullsoft', '/S'],
   ])('applies the WinGet default silent switches for %s installers', (installerType, expected) => {
     const config = buildQaCatalogTestConfig({
@@ -83,7 +83,7 @@ describe('buildQaCatalogTestConfig', () => {
       sourceInstallerType: 'zip',
       nestedInstallerType: 'inno',
       nestedInstallerFiles: ['setup\\install.exe'],
-      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     });
   });
 
@@ -100,7 +100,7 @@ describe('buildQaCatalogTestConfig', () => {
     });
 
     expect(config.silentArgs).toBe(
-      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS'
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS'
     );
   });
 

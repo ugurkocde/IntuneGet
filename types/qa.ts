@@ -73,6 +73,39 @@ export interface QaEffectiveConfiguration {
 /** Count/flag-only PSADT configuration safe for the public live QA view. */
 export type QaLiveUiConfiguration = Omit<QaEffectiveConfiguration, 'vendorSilentArguments'>;
 
+export type QaLiveActivityKind = 'file' | 'registry';
+export type QaLiveActivityChange = 'added' | 'changed' | 'removed';
+
+export interface QaLiveActivityItem {
+  kind: QaLiveActivityKind;
+  change: QaLiveActivityChange;
+  target: string;
+}
+
+export interface QaLiveActivityCounts {
+  registryAdded: number;
+  registryChanged: number;
+  registryRemoved: number;
+  filesAdded: number;
+  filesChanged: number;
+  filesRemoved: number;
+}
+
+export interface QaLiveActivity {
+  stage: 'after_install' | 'after_uninstall';
+  observedAt: string;
+  counts: QaLiveActivityCounts;
+  items: QaLiveActivityItem[];
+  truncated: boolean;
+}
+
+export interface QaLiveLog {
+  source: 'PSADT';
+  observedAt: string;
+  lastWriteAt: string;
+  lines: string[];
+}
+
 export type QaLivePhase =
   | 'queued'
   | 'preparing_package'
@@ -121,6 +154,8 @@ export interface QaLiveResponse {
     width: number | null;
     height: number | null;
   };
+  activity: QaLiveActivity | null;
+  log: QaLiveLog | null;
   queue: {
     count: number;
     next: Array<{

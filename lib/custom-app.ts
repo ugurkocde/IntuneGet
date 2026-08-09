@@ -35,7 +35,7 @@ export type CustomInstallerType = Extract<
 export const CUSTOM_SILENT_SWITCH_DEFAULTS: Record<CustomInstallerType, string> = {
   exe: '/S',
   msi: '/qn /norestart',
-  inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+  inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
   nullsoft: '/S',
   burn: '/quiet /norestart',
 };

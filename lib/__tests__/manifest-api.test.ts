@@ -123,7 +123,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS');
     });
 
     it('should append Custom after Silent when both are provided', () => {
@@ -236,7 +236,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
     });
 
     it('should use default args for Nullsoft (NSIS)', () => {
@@ -340,7 +340,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
     });
 
     it('should prefer declared Silent switches over nested-type defaults', () => {

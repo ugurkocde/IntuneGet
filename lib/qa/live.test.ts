@@ -21,6 +21,25 @@ describe('buildQaLiveResponse', () => {
         phase: 'installing',
         phase_started_at: '2026-08-08T16:45:00.000Z',
         phase_updated_at: '2026-08-08T16:59:00.000Z',
+        activity_updated_at: '2026-08-08T16:58:30.000Z',
+        log_updated_at: '2026-08-08T16:59:30.000Z',
+        live_activity: {
+          stage: 'after_install',
+          counts: {
+            registryAdded: 2, registryChanged: 1, registryRemoved: 0,
+            filesAdded: 12, filesChanged: 3, filesRemoved: 0,
+          },
+          items: [
+            { kind: 'file', change: 'added', target: '%PROGRAMFILES%\\Example\\Example.exe' },
+            { kind: 'registry', change: 'changed', target: 'HKLM\\SOFTWARE\\Example\\Version' },
+          ],
+          truncated: false,
+        },
+        live_log: {
+          source: 'PSADT',
+          lastWriteAt: '2026-08-08T16:59:28.000Z',
+          lines: ['Installing Example…', 'Vendor installer is running.'],
+        },
         test_config: {
           packageProfileCanonicalJson: JSON.stringify({
             installer: { installScope: 'user' },
@@ -95,6 +114,25 @@ describe('buildQaLiveResponse', () => {
       width: 1280,
       height: 720,
     });
+    expect(response.activity).toEqual({
+      stage: 'after_install',
+      observedAt: '2026-08-08T16:58:30.000Z',
+      counts: {
+        registryAdded: 2, registryChanged: 1, registryRemoved: 0,
+        filesAdded: 12, filesChanged: 3, filesRemoved: 0,
+      },
+      items: [
+        { kind: 'file', change: 'added', target: '%PROGRAMFILES%\\Example\\Example.exe' },
+        { kind: 'registry', change: 'changed', target: 'HKLM\\SOFTWARE\\Example\\Version' },
+      ],
+      truncated: false,
+    });
+    expect(response.log).toEqual({
+      source: 'PSADT',
+      observedAt: '2026-08-08T16:59:30.000Z',
+      lastWriteAt: '2026-08-08T16:59:28.000Z',
+      lines: ['Installing Example…', 'Vendor installer is running.'],
+    });
     const serialized = JSON.stringify(response);
     for (const forbidden of ['installer_url', 'failure_summary', 'github_run_url', 'private', 'vendorSilentArguments']) {
       expect(serialized).not.toContain(forbidden);
@@ -134,6 +172,15 @@ describe('buildQaLiveResponse', () => {
         dispatched_at: '2026-08-08T18:25:40.000Z', started_at: null,
         phase: 'restoring_vm', phase_started_at: '2026-08-08T18:00:00.000Z',
         phase_updated_at: '2026-08-08T18:00:00.000Z', test_config: {},
+        activity_updated_at: '2026-08-08T18:00:00.000Z',
+        log_updated_at: '2026-08-08T18:00:00.000Z',
+        live_activity: {
+          stage: 'after_install',
+          counts: { registryAdded: 1, registryChanged: 0, registryRemoved: 0, filesAdded: 1, filesChanged: 0, filesRemoved: 0 },
+          items: [{ kind: 'file', change: 'added', target: '%PROGRAMFILES%\\Old\\old.exe' }],
+          truncated: false,
+        },
+        live_log: { source: 'PSADT', lastWriteAt: '2026-08-08T18:00:00.000Z', lines: ['old'] },
       },
       queuedCount: 1,
       queued: [],
@@ -150,6 +197,8 @@ describe('buildQaLiveResponse', () => {
     expect(response.current?.phase).toBe('preparing_package');
     expect(response.current?.phaseStartedAt).toBeNull();
     expect(response.current?.expectedUi).toBeNull();
+    expect(response.activity).toBeNull();
+    expect(response.log).toBeNull();
   });
 
   it('publishes only a sanitized GitHub rate-limit cause', () => {

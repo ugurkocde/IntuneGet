@@ -7,6 +7,7 @@ import { AppIcon } from '@/components/AppIcon';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
 import { QaPhaseTimeline } from '@/components/qa/QaPhaseTimeline';
+import { QaLiveActivityPanel } from '@/components/qa/QaLiveActivityPanel';
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge';
 import { useElapsedTime } from '@/hooks/use-elapsed-time';
 import { useQaLive } from '@/hooks/use-qa';
@@ -139,6 +140,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
         </div>
       </div>
       <QaPhaseTimeline currentPhase={data.current.phase} />
+      <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(340px,2fr)]">
       <div className="overflow-hidden rounded-xl border border-overlay/10 bg-black" aria-labelledby="live-console-heading">
         <div className="flex items-center justify-between border-b border-white/10 bg-bg-primary/80 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -175,6 +177,8 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
         <p className="border-t border-white/10 bg-bg-primary/80 px-4 py-2 text-xs leading-relaxed text-text-muted">
           {visualizationCaption}
         </p>
+      </div>
+      <QaLiveActivityPanel activity={data.activity} log={data.log} phase={data.current.phase} serverTime={data.serverTime} />
       </div>
     </section>
   );

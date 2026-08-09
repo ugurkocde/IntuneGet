@@ -3,7 +3,7 @@ import 'server-only';
 import { createServerClient } from '@/lib/supabase';
 import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
 import type { Json } from '@/types/database';
-import type { QaArchitecture, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome } from '@/types/qa';
+import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome } from '@/types/qa';
 
 const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
@@ -21,6 +21,10 @@ interface CandidateRow {
   phase: string | null;
   phase_started_at: string | null;
   phase_updated_at: string | null;
+  live_activity?: Json | null;
+  activity_updated_at?: string | null;
+  live_log?: Json | null;
+  log_updated_at?: string | null;
   test_config: Json;
 }
 
@@ -79,6 +83,7 @@ const VALID_PHASES = new Set<QaLivePhase>([
   'verifying_removal',
   'publishing',
 ]);
+const LIVE_ACTIVITY_TARGET = /^(?:%(?:PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMDATA|WINDIR|PUBLIC|USERPROFILE|LOCALAPPDATA|APPDATA)%\\|HK(?:LM|CU)\\)/i;
 
 function architecture(value: string): QaArchitecture {
   return value === 'x86' || value === 'arm64' ? value : 'x64';
@@ -88,6 +93,54 @@ function phase(value: string | null): QaLivePhase {
   return value && VALID_PHASES.has(value as QaLivePhase)
     ? (value as QaLivePhase)
     : 'preparing_package';
+}
+
+function liveActivity(value: Json | undefined, observedAt: string | null | undefined, attemptStartedAt: string | null): QaLiveActivity | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !observedAt || !attemptStartedAt) return null;
+  if (new Date(observedAt).getTime() < new Date(attemptStartedAt).getTime()) return null;
+  const stage = value.stage;
+  if (stage !== 'after_install' && stage !== 'after_uninstall') return null;
+  const rawCounts = value.counts;
+  if (!rawCounts || typeof rawCounts !== 'object' || Array.isArray(rawCounts)) return null;
+  const countNames = [
+    'registryAdded', 'registryChanged', 'registryRemoved',
+    'filesAdded', 'filesChanged', 'filesRemoved',
+  ] as const;
+  const counts = {} as QaLiveActivity['counts'];
+  for (const name of countNames) {
+    const candidate = rawCounts[name];
+    if (!Number.isInteger(candidate) || Number(candidate) < 0 || Number(candidate) > 50_000_000) return null;
+    counts[name] = Number(candidate);
+  }
+  if (!Array.isArray(value.items) || value.items.length > 40 || typeof value.truncated !== 'boolean') return null;
+  const items: QaLiveActivity['items'] = [];
+  for (const item of value.items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const kind = item.kind;
+    const change = item.change;
+    const target = item.target;
+    if (
+      (kind !== 'file' && kind !== 'registry') ||
+      (change !== 'added' && change !== 'changed' && change !== 'removed') ||
+      typeof target !== 'string' || target.length < 1 || target.length > 240 ||
+      /[\u0000-\u001f\u007f]/.test(target) || !LIVE_ACTIVITY_TARGET.test(target)
+    ) return null;
+    items.push({ kind, change, target });
+  }
+  return { stage, observedAt, counts, items, truncated: value.truncated };
+}
+
+function liveLog(value: Json | undefined, observedAt: string | null | undefined, attemptStartedAt: string | null): QaLiveLog | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !observedAt || !attemptStartedAt) return null;
+  if (new Date(observedAt).getTime() < new Date(attemptStartedAt).getTime()) return null;
+  if (value.source !== 'PSADT' || typeof value.lastWriteAt !== 'string' || !Array.isArray(value.lines) || value.lines.length > 8) return null;
+  if (!Number.isFinite(new Date(value.lastWriteAt).getTime())) return null;
+  const lines: string[] = [];
+  for (const line of value.lines) {
+    if (typeof line !== 'string' || line.length < 1 || line.length > 180 || /[\u0000-\u001f\u007f]/.test(line) || /[A-Z]:\\|INTUNE-QA\\/i.test(line)) return null;
+    lines.push(line);
+  }
+  return { source: 'PSADT', observedAt, lastWriteAt: value.lastWriteAt, lines };
 }
 
 function executionContext(config: Json): 'LocalSystem' | 'User' {
@@ -221,6 +274,12 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     input.now.getTime() - new Date(input.frame.updated_at).getTime() <= QA_LIVE_FRAME_MAX_AGE_MS
   );
   const currentExpectedUi = input.current ? expectedUiConfiguration(input.current.test_config) : null;
+  const currentActivity = input.current
+    ? liveActivity(input.current.live_activity, input.current.activity_updated_at, currentStartedAt)
+    : null;
+  const currentLog = input.current
+    ? liveLog(input.current.live_log, input.current.log_updated_at, currentStartedAt)
+    : null;
 
   return {
     serverTime: input.now.toISOString(),
@@ -262,6 +321,8 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       width: frameIsCurrent ? input.frame?.width ?? null : null,
       height: frameIsCurrent ? input.frame?.height ?? null : null,
     },
+    activity: currentActivity,
+    log: currentLog,
     queue: {
       count: input.queuedCount,
       next: input.queued.map((candidate) => ({
@@ -288,7 +349,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
 export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const supabase = createServerClient();
   const candidateColumns =
-    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, test_config';
+    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config';
 
   const [activeResult, queueResult, countResult, pollResult, recentResult] = await Promise.all([
     supabase

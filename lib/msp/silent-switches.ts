@@ -11,7 +11,7 @@ export function extractSilentSwitches(installCommand: string, installerType: str
   const defaultSwitches: Record<string, string> = {
     msi: '/qn /norestart',
     exe: '/S',
-    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     nullsoft: '/S',
     wix: '/qn /norestart',
     burn: '/q /norestart',

@@ -929,6 +929,17 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
         "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $customInstallCommandEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
     )
 } else {
+    $installerArgumentList = "'$silentSwitchesEscaped'"
+    if ($installerTypeLower -eq 'inno') {
+        $innoSwitches = $SilentSwitches.Trim()
+        if ($innoSwitches -notmatch '(?i)(^|\s)/SP-(\s|$)') { $innoSwitches = "$innoSwitches /SP-".Trim() }
+        $innoSwitchesEscaped = $innoSwitches -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+        $lines += @(
+            "    `$installerArguments = '$innoSwitchesEscaped /LOG=`"{0}`"' -f (Join-Path `$env:TEMP 'IntuneGet-Inno-Install.log')"
+            '    Write-ADTLogEntry -Message "Inno Setup verbose logging enabled" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+        )
+        $installerArgumentList = '$installerArguments'
+    }
     switch ($installerTypeLower) {
         { $_ -in 'msi', 'wix' } {
             $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
@@ -1136,7 +1147,7 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                     '    try {'
                     '        Write-ADTLogEntry -Message "Running per-user installer from user temp directory" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                     '        # Use -UseShellExecute for shell context which inherits environment variables'
-                    "        Start-ADTProcess -FilePath `$installerDest -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                    "        Start-ADTProcess -FilePath `$installerDest -ArgumentList $installerArgumentList -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
                     '    }'
                     '    finally {'
                     '        # Cleanup temp directory'
@@ -1147,7 +1158,7 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                 )
             } else {
                 $lines += @(
-                    "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
+                    "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 30) -TimeoutAction Stop"
                 )
             }
         }
