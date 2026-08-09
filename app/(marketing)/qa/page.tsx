@@ -27,7 +27,7 @@ export default function QaPage() {
       <Header />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <main id="main-content" className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16 pt-24 lg:px-8 lg:pt-28">
-        <div className="mb-10 max-w-3xl space-y-3">
+        <div className="mb-8 max-w-3xl space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent-cyan"><T>Application quality assurance</T></p>
           <h1 className="text-3xl font-bold text-text-primary sm:text-4xl"><T>See package QA as it happens</T></h1>
           <p className="text-lg text-text-secondary"><T>Every update is installed, detected, uninstalled, and verified inside a clean Windows VM before it can be released through IntuneGet.</T></p>

@@ -37,11 +37,12 @@ export function getStatusToneClasses(tone: StatusTone): string {
 interface StatusBadgeProps {
   tone?: StatusTone;
   icon?: LucideIcon;
+  iconClassName?: string;
   children: ReactNode;
   className?: string;
 }
 
-export function StatusBadge({ tone = 'neutral', icon: Icon, children, className }: StatusBadgeProps) {
+export function StatusBadge({ tone = 'neutral', icon: Icon, iconClassName, children, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
@@ -50,7 +51,7 @@ export function StatusBadge({ tone = 'neutral', icon: Icon, children, className 
         className
       )}
     >
-      {Icon && <Icon className="w-3.5 h-3.5" />}
+      {Icon ? <Icon className={cn('h-3.5 w-3.5', iconClassName)} aria-hidden="true" /> : null}
       {children}
     </span>
   );
