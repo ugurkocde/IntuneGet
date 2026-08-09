@@ -115,14 +115,25 @@ function generateRegistryMarkerDetectionRules(
   // Use HKCU for user scope, HKLM for machine scope (default)
   const hive = scope === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE';
 
+  // Intune's strict registry `version` operation is only appropriate for
+  // System.Version-compatible values. WinGet also permits opaque versions
+  // such as `0.0.1786233956-g40887a`; treating those as versions makes an
+  // otherwise correctly installed marker fail detection. Use exact string
+  // comparison for opaque values because the marker is generated per release.
+  const versionParts = /^\d+(?:\.\d+){1,3}$/.test(version) ? version.split('.') : [];
+  const useVersionComparison =
+    versionParts.length >= 2 &&
+    versionParts.length <= 4 &&
+    versionParts.every((part) => Number(part) <= 2_147_483_647);
+
   return [
     {
       type: 'registry',
       keyPath: `${hive}\\${normalizeMarkerPath(markerPath)}\\${sanitizedId}`,
       valueName: 'Version',
       check32BitOn64System: false,
-      detectionType: 'version',
-      operator: 'greaterThanOrEqual',
+      detectionType: useVersionComparison ? 'version' : 'string',
+      operator: useVersionComparison ? 'greaterThanOrEqual' : 'equal',
       detectionValue: version,
     } as RegistryDetectionRule,
   ];

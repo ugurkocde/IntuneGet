@@ -142,6 +142,47 @@ describe('generateDetectionRules', () => {
       expect(regRule.detectionValue).toBe('1.0.0');
     });
 
+    it('should use exact string detection for opaque WinGet versions', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/amp.exe',
+        sha256: 'abc123',
+        type: 'portable',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Amp CLI',
+        'Sourcegraph.Amp',
+        '0.0.1786233956-g40887a'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.detectionType).toBe('string');
+      expect(regRule.operator).toBe('equal');
+      expect(regRule.detectionValue).toBe('0.0.1786233956-g40887a');
+    });
+
+    it('should use exact string detection outside the four-part Windows version range', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.exe',
+        sha256: 'abc123',
+        type: 'exe',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Test App',
+        'Publisher.TestApp',
+        '1.2.3.4.5'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.detectionType).toBe('string');
+      expect(regRule.operator).toBe('equal');
+    });
+
     it('should use HKCU for user-scoped installs', () => {
       const installer: NormalizedInstaller = {
         architecture: 'x64',
