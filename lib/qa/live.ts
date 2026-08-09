@@ -99,7 +99,7 @@ function liveActivity(value: Json | undefined, observedAt: string | null | undef
   if (!value || typeof value !== 'object' || Array.isArray(value) || !observedAt || !attemptStartedAt) return null;
   if (new Date(observedAt).getTime() < new Date(attemptStartedAt).getTime()) return null;
   const stage = value.stage;
-  if (stage !== 'after_install' && stage !== 'after_uninstall') return null;
+  if (stage !== 'during_install' && stage !== 'after_install' && stage !== 'after_uninstall') return null;
   const rawCounts = value.counts;
   if (!rawCounts || typeof rawCounts !== 'object' || Array.isArray(rawCounts)) return null;
   const countNames = [

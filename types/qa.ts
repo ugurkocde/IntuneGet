@@ -92,7 +92,7 @@ export interface QaLiveActivityCounts {
 }
 
 export interface QaLiveActivity {
-  stage: 'after_install' | 'after_uninstall';
+  stage: 'during_install' | 'after_install' | 'after_uninstall';
   observedAt: string;
   counts: QaLiveActivityCounts;
   items: QaLiveActivityItem[];

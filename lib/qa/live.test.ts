@@ -24,7 +24,7 @@ describe('buildQaLiveResponse', () => {
         activity_updated_at: '2026-08-08T16:58:30.000Z',
         log_updated_at: '2026-08-08T16:59:30.000Z',
         live_activity: {
-          stage: 'after_install',
+          stage: 'during_install',
           counts: {
             registryAdded: 2, registryChanged: 1, registryRemoved: 0,
             filesAdded: 12, filesChanged: 3, filesRemoved: 0,
@@ -115,7 +115,7 @@ describe('buildQaLiveResponse', () => {
       height: 720,
     });
     expect(response.activity).toEqual({
-      stage: 'after_install',
+      stage: 'during_install',
       observedAt: '2026-08-08T16:58:30.000Z',
       counts: {
         registryAdded: 2, registryChanged: 1, registryRemoved: 0,

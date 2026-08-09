@@ -104,7 +104,13 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
           <div>
             <h3 id="system-changes-heading" className="text-sm font-medium text-text-primary">Detected system changes</h3>
             <p className="mt-1 text-xs text-text-muted">
-              {activity?.stage === 'after_uninstall' ? 'Removal comparison' : activity ? 'Installation comparison' : 'Awaiting comparison'}
+              {activity?.stage === 'during_install'
+                ? 'Live installation activity'
+                : activity?.stage === 'after_uninstall'
+                  ? 'Removal comparison'
+                  : activity
+                    ? 'Installation comparison'
+                    : 'Awaiting comparison'}
             </p>
           </div>
           <span className="flex items-center gap-1.5 text-xs text-text-muted">
