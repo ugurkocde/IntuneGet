@@ -26,6 +26,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/qa-resume",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/qa-live-cleanup",
       "schedule": "*/15 * * * *"
     },

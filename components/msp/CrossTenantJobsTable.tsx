@@ -74,10 +74,13 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
       case 'completed':
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case 'failed':
+      case 'qa_failed':
         return <XCircle className="w-4 h-4 text-red-500" />;
       case 'packaging':
       case 'uploading':
         return <Loader2 className="w-4 h-4 text-accent-cyan animate-spin" />;
+      case 'awaiting_qa':
+        return <Clock className="w-4 h-4 text-accent-violet" />;
       default:
         return <Clock className="w-4 h-4 text-text-muted" />;
     }
@@ -89,6 +92,10 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
         return 'Completed';
       case 'failed':
         return 'Failed';
+      case 'qa_failed':
+        return 'QA failed';
+      case 'awaiting_qa':
+        return 'Awaiting QA';
       case 'packaging':
         return 'Packaging';
       case 'uploading':
@@ -234,9 +241,10 @@ export function CrossTenantJobsTable({ jobs: initialJobs, isLoading: externalLoa
                       <span className={cn(
                         'text-sm',
                         job.status === 'completed' && 'text-green-500',
-                        job.status === 'failed' && 'text-red-500',
+                        (job.status === 'failed' || job.status === 'qa_failed') && 'text-red-500',
                         (job.status === 'packaging' || job.status === 'uploading') && 'text-accent-cyan',
-                        job.status === 'queued' && 'text-text-muted'
+                        job.status === 'queued' && 'text-text-muted',
+                        job.status === 'awaiting_qa' && 'text-accent-violet'
                       )}>
                         {getStatusText(job.status)}
                       </span>

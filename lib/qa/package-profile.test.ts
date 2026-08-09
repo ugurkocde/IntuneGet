@@ -51,6 +51,50 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('reuses execution QA when only presentation changes', () => {
+    const deploymentInput = { ...input, profileKind: 'deployment-config' as const };
+    const baseline = buildQaPackageIdentity(deploymentInput);
+    const branded = buildQaPackageIdentity({
+      ...deploymentInput,
+      displayName: 'Customer-facing Example',
+      publisher: 'Customer Publisher',
+      psadtConfig: {
+        ...DEFAULT_PSADT_CONFIG,
+        brandingCompanyName: 'Contoso',
+        brandingWelcomeTitle: 'Install Example',
+        brandingAccentColor: '#123456',
+        progressDialog: {
+          ...DEFAULT_PSADT_CONFIG.progressDialog,
+          statusMessage: 'A customer-specific message',
+          windowLocation: 'BottomRight',
+        },
+      },
+    });
+
+    expect(branded.executionProfileSha256).toBe(baseline.executionProfileSha256);
+    expect(branded.packageProfileSha256).toBe(baseline.packageProfileSha256);
+    expect(branded.presentationProfileSha256).not.toBe(
+      baseline.presentationProfileSha256
+    );
+  });
+
+  it('keeps interaction timing and custom command changes in the execution profile', () => {
+    const baseline = buildQaPackageIdentity(input);
+    const interactive = buildQaPackageIdentity({
+      ...input,
+      psadtConfig: {
+        ...DEFAULT_PSADT_CONFIG,
+        allowDefer: true,
+        deferTimes: 5,
+        postInstallCommands: ['echo verified'],
+      },
+    });
+
+    expect(interactive.executionProfileSha256).not.toBe(
+      baseline.executionProfileSha256
+    );
+  });
+
   it('changes when installer switches or detection rules change', () => {
     expect(
       buildQaPackageIdentity({ ...input, silentArgs: '/S' }).packageProfileSha256

@@ -184,6 +184,7 @@ export interface Database {
           activity_updated_at: string | null;
           live_log: Json | null;
           log_updated_at: string | null;
+          demand_source: 'customer' | 'auto_update' | 'managed' | 'operator' | 'catalog';
           updated_at: string;
         };
         Insert: {
@@ -217,6 +218,7 @@ export interface Database {
           activity_updated_at?: string | null;
           live_log?: Json | null;
           log_updated_at?: string | null;
+          demand_source?: 'customer' | 'auto_update' | 'managed' | 'operator' | 'catalog';
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_candidates']['Insert']>;
@@ -580,6 +582,9 @@ export interface Database {
           status: string;
           status_message: string | null;
           progress_percent: number;
+          error_stage: string | null;
+          error_category: string | null;
+          error_code: string | null;
           error_message: string | null;
           created_at: string;
           updated_at: string;
@@ -592,6 +597,11 @@ export interface Database {
           archived_at: string | null;
           is_auto_update: boolean;
           auto_update_policy_id: string | null;
+          execution_profile_sha256: string | null;
+          presentation_profile_sha256: string | null;
+          qa_candidate_id: string | null;
+          qa_requested_at: string | null;
+          qa_completed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -624,6 +634,9 @@ export interface Database {
           status?: string;
           status_message?: string | null;
           progress_percent?: number;
+          error_stage?: string | null;
+          error_category?: string | null;
+          error_code?: string | null;
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -636,6 +649,11 @@ export interface Database {
           archived_at?: string | null;
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
+          execution_profile_sha256?: string | null;
+          presentation_profile_sha256?: string | null;
+          qa_candidate_id?: string | null;
+          qa_requested_at?: string | null;
+          qa_completed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -668,6 +686,9 @@ export interface Database {
           status?: string;
           status_message?: string | null;
           progress_percent?: number;
+          error_stage?: string | null;
+          error_category?: string | null;
+          error_code?: string | null;
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -680,6 +701,11 @@ export interface Database {
           archived_at?: string | null;
           is_auto_update?: boolean;
           auto_update_policy_id?: string | null;
+          execution_profile_sha256?: string | null;
+          presentation_profile_sha256?: string | null;
+          qa_candidate_id?: string | null;
+          qa_requested_at?: string | null;
+          qa_completed_at?: string | null;
         };
         Relationships: GenericRelationship[];
       };

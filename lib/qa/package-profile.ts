@@ -18,7 +18,7 @@ export const QA_PSADT_TOOLCHAIN = {
  * and update the protected workflow verifier in the same rollout. Existing candidates
  * then fail closed and are rebuilt before they can be dispatched.
  */
-export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 1;
+export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 2;
 
 export interface QaPackageProfileInput {
   profileKind: 'catalog-default' | 'deployment-config';
@@ -33,7 +33,7 @@ export interface QaPackageProfileInput {
   uninstallCommand: string;
   installScope: string;
   nestedInstallerType: string;
-  nestedInstallerFiles: string[];
+  nestedInstallerFiles: readonly string[];
   psadtConfig: PSADTConfig;
   detectionRules: DetectionRule[];
 }
@@ -41,9 +41,91 @@ export interface QaPackageProfileInput {
 export interface QaPackageIdentity {
   profile: Record<string, unknown>;
   canonicalJson: string;
+  /** Backwards-compatible name for the behavior-affecting execution profile. */
   packageProfileSha256: string;
+  executionProfileSha256: string;
+  presentationProfileSha256: string;
   psadtConfigSha256: string;
   detectionRulesSha256: string;
+}
+
+const PRESENTATION_PLACEHOLDER = 'IntuneGet QA';
+
+/**
+ * Split PSADT configuration into the fields that can change execution and the
+ * fields that only change what a user sees. QA is deduplicated by execution;
+ * presentation remains auditable on the packaging job without multiplying VM runs.
+ */
+export function splitQaPsadtConfig(config: PSADTConfig): {
+  execution: PSADTConfig;
+  presentation: Record<string, unknown>;
+} {
+  const presentation = {
+    brandingCompanyName: config.brandingCompanyName,
+    brandingWelcomeTitle: config.brandingWelcomeTitle,
+    brandingWelcomeMessage: config.brandingWelcomeMessage,
+    brandingAccentColor: config.brandingAccentColor,
+    brandingLogoPath: config.brandingLogoPath,
+    brandingLogoDarkPath: config.brandingLogoDarkPath,
+    brandingBannerPath: config.brandingBannerPath,
+    windowLocation: config.windowLocation,
+    progressDialog: {
+      statusMessage: config.progressDialog.statusMessage,
+      windowLocation: config.progressDialog.windowLocation,
+    },
+    processesToClose: config.processesToClose.map(({ description }) => ({ description })),
+    customPrompts: config.customPrompts.map((prompt) => ({
+      title: prompt.title,
+      message: prompt.message,
+      icon: prompt.icon,
+      buttonLeftText: prompt.buttonLeftText,
+      buttonMiddleText: prompt.buttonMiddleText,
+      buttonRightText: prompt.buttonRightText,
+    })),
+    balloonTips: config.balloonTips.map((tip) => ({
+      title: tip.title,
+      text: tip.text,
+      icon: tip.icon,
+    })),
+  };
+
+  const execution: PSADTConfig = {
+    ...config,
+    brandingCompanyName: undefined,
+    brandingWelcomeTitle: undefined,
+    brandingWelcomeMessage: undefined,
+    brandingAccentColor: undefined,
+    brandingLogoPath: undefined,
+    brandingLogoDarkPath: undefined,
+    brandingBannerPath: undefined,
+    windowLocation: 'Default',
+    progressDialog: {
+      ...config.progressDialog,
+      statusMessage: config.progressDialog.enabled ? PRESENTATION_PLACEHOLDER : undefined,
+      windowLocation: undefined,
+    },
+    processesToClose: config.processesToClose.map(({ name }) => ({
+      name,
+      description: name,
+    })),
+    customPrompts: config.customPrompts.map((prompt) => ({
+      ...prompt,
+      title: PRESENTATION_PLACEHOLDER,
+      message: PRESENTATION_PLACEHOLDER,
+      icon: 'Information',
+      buttonLeftText: prompt.buttonLeftText ? 'Left' : undefined,
+      buttonMiddleText: prompt.buttonMiddleText ? 'Middle' : undefined,
+      buttonRightText: prompt.buttonRightText ? 'Right' : undefined,
+    })),
+    balloonTips: config.balloonTips.map((tip) => ({
+      ...tip,
+      title: PRESENTATION_PLACEHOLDER,
+      text: PRESENTATION_PLACEHOLDER,
+      icon: 'Info',
+    })),
+  };
+
+  return { execution, presentation };
 }
 
 export interface QaWorkflowPackageInput {
@@ -264,7 +346,14 @@ export function normalizeQaPsadtConfig(
 }
 
 export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageIdentity {
-  const psadtConfigSha256 = qaSha256(canonicalQaJson(input.psadtConfig));
+  const { execution: executionPsadtConfig, presentation } = splitQaPsadtConfig(
+    input.psadtConfig
+  );
+  const psadtConfigSha256 = qaSha256(canonicalQaJson(executionPsadtConfig));
+  const presentationProfileSha256 = qaSha256(canonicalQaJson({
+    app: { displayName: input.displayName, publisher: input.publisher },
+    psadt: presentation,
+  }));
   const detectionRulesSha256 = qaSha256(canonicalQaJson(input.detectionRules));
   const profile = {
     schemaVersion: QA_PACKAGE_PROFILE_SCHEMA_VERSION,
@@ -273,8 +362,8 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
     toolchain: QA_PSADT_TOOLCHAIN,
     app: {
       wingetId: input.wingetId,
-      displayName: input.displayName,
-      publisher: input.publisher,
+      displayName: input.profileKind === 'deployment-config' ? input.wingetId : input.displayName,
+      publisher: input.profileKind === 'deployment-config' ? 'IntuneGet QA' : input.publisher,
       version: input.version,
       architecture: input.architecture.toLowerCase(),
     },
@@ -287,16 +376,19 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
       nestedInstallerType: input.nestedInstallerType.toLowerCase(),
       nestedInstallerFiles: input.nestedInstallerFiles,
     },
-    psadtConfig: input.psadtConfig,
+    psadtConfig: executionPsadtConfig,
     detectionRules: input.detectionRules,
     psadtConfigSha256,
     detectionRulesSha256,
   };
   const canonicalJson = canonicalQaJson(profile);
+  const executionProfileSha256 = qaSha256(canonicalJson);
   return {
     profile,
     canonicalJson,
-    packageProfileSha256: qaSha256(canonicalJson),
+    packageProfileSha256: executionProfileSha256,
+    executionProfileSha256,
+    presentationProfileSha256,
     psadtConfigSha256,
     detectionRulesSha256,
   };

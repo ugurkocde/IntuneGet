@@ -46,6 +46,11 @@ export interface PackagingJob {
   error_code: string | null;
   error_details: Json | null;
   warnings: Json | null;
+  execution_profile_sha256: string | null;
+  presentation_profile_sha256: string | null;
+  qa_candidate_id: string | null;
+  qa_requested_at: string | null;
+  qa_completed_at: string | null;
   packager_id: string | null;
   packager_heartbeat_at: string | null;
   claimed_at: string | null;

@@ -23,6 +23,7 @@ import {
   UserCircle,
   Trash2,
   AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,7 +57,7 @@ interface PackagingJob {
   architecture: string;
   installer_type: string;
   app_source?: 'win32' | 'store';
-  status: 'queued' | 'packaging' | 'completed' | 'failed' | 'uploading' | 'deployed' | 'cancelled' | 'duplicate_skipped';
+  status: 'awaiting_qa' | 'qa_failed' | 'queued' | 'packaging' | 'completed' | 'failed' | 'uploading' | 'deployed' | 'cancelled' | 'duplicate_skipped';
   status_message?: string;
   progress_percent: number;
   error_message?: string;
@@ -190,7 +191,7 @@ export default function UploadsPage() {
   // background poll less often and a manual refresh remains available.
   useEffect(() => {
     const hasActiveJobs = jobs.some((job) =>
-      ['queued', 'packaging', 'uploading'].includes(job.status)
+      ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status)
     );
 
     if (!hasActiveJobs || sessionExpired) return;
@@ -344,7 +345,7 @@ export default function UploadsPage() {
   const filteredJobs = jobs.filter((job) => {
     switch (filter) {
       case 'active':
-        return ['queued', 'packaging', 'uploading'].includes(job.status);
+        return ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
       case 'completed':
         return ['completed', 'deployed', 'duplicate_skipped'].includes(job.status);
       case 'failed':
@@ -357,10 +358,10 @@ export default function UploadsPage() {
   const stats = {
     total: jobs.length,
     active: jobs.filter((j) =>
-      ['queued', 'packaging', 'uploading'].includes(j.status)
+      ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(j.status)
     ).length,
     completed: jobs.filter((j) => ['completed', 'deployed', 'duplicate_skipped'].includes(j.status)).length,
-    failed: jobs.filter((j) => j.status === 'failed').length,
+    failed: jobs.filter((j) => ['qa_failed', 'failed'].includes(j.status)).length,
   };
 
   const filterButtons = ['all', 'active', 'completed', 'failed'] as const;
@@ -662,6 +663,20 @@ function UploadJobCard({
   const prefersReducedMotion = useReducedMotion();
 
   const statusConfig = {
+    awaiting_qa: {
+      icon: ShieldCheck,
+      label: 'Awaiting QA',
+      color: 'text-accent-violet',
+      bg: 'bg-accent-violet/10',
+      border: 'border-l-accent-violet',
+    },
+    qa_failed: {
+      icon: XCircle,
+      label: 'QA failed',
+      color: 'text-status-error',
+      bg: 'bg-status-error/10',
+      border: 'border-l-status-error',
+    },
     queued: {
       icon: Clock,
       label: 'Queued',
@@ -722,11 +737,11 @@ function UploadJobCard({
 
   const config = statusConfig[job.status] || statusConfig.queued;
   const StatusIcon = config.icon;
-  const isActive = ['queued', 'packaging', 'uploading'].includes(job.status);
-  const isStale = isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
+  const isActive = ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isStale = job.status !== 'awaiting_qa' && isActive && (Date.now() - new Date(job.updated_at).getTime()) > 75 * 60 * 1000;
   // Allow cancelling active jobs or dismissing completed/failed jobs
-  const isCancellable = ['queued', 'packaging', 'uploading'].includes(job.status);
-  const isDismissable = ['completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
+  const isCancellable = ['awaiting_qa', 'queued', 'packaging', 'uploading'].includes(job.status);
+  const isDismissable = ['qa_failed', 'completed', 'failed', 'duplicate_skipped', 'deployed'].includes(job.status);
   const canRemove = isCancellable || isDismissable;
 
   const itemVariants = {
@@ -908,15 +923,21 @@ function UploadJobCard({
           </div>
 
           {/* Progress Stepper for active and failed jobs */}
-          {(isActive || job.status === 'failed') && (
+          {((isActive && job.status !== 'awaiting_qa') || job.status === 'failed' || job.status === 'qa_failed') && (
             <ProgressStepper
               progress={job.progress_percent}
               status={job.status}
               statusMessage={job.status_message}
               startTime={job.packaging_started_at || job.created_at}
-              endTime={job.status === 'failed' ? job.completed_at : null}
+              endTime={['failed', 'qa_failed'].includes(job.status) ? job.completed_at : null}
               errorStage={job.error_stage}
             />
+          )}
+
+          {job.status === 'awaiting_qa' && (
+            <div className="mt-4 rounded-lg border border-accent-violet/20 bg-accent-violet/5 p-3 text-sm text-text-secondary">
+              {job.status_message || 'This exact PSADT execution profile is queued for isolated QA. Packaging resumes automatically after it passes.'}
+            </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
@@ -924,9 +945,9 @@ function UploadJobCard({
           </div>
 
           {/* Error message */}
-          {job.status === 'failed' && (job.error_message || job.error_code) && (
+          {['failed', 'qa_failed'].includes(job.status) && (job.error_message || job.error_code || job.status_message) && (
             <ErrorDisplay
-              errorMessage={job.error_message}
+              errorMessage={job.error_message || job.status_message}
               errorStage={job.error_stage}
               errorCategory={job.error_category}
               errorCode={job.error_code}
@@ -935,7 +956,7 @@ function UploadJobCard({
           )}
 
           {/* Retry button for failures */}
-          {job.status === 'failed' && (
+          {['failed', 'qa_failed'].includes(job.status) && (
             <div className="mt-3">
               <Button
                 size="sm"

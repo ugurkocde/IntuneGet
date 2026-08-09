@@ -113,6 +113,12 @@ function createSupabaseStub(options: {
       if (table === 'qa_recipes') {
         return query({ data: options.recipes || [], error: null });
       }
+      if (table === 'upload_history') {
+        return query({
+          data: (options.supportedApps || []).map((app) => ({ winget_id: app.winget_id })),
+          error: null,
+        });
+      }
       if (table === 'app_update_policies' || table === 'qa_results') {
         return query({ data: [], error: null });
       }
@@ -418,7 +424,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     );
     expect(canonical.psadtConfig).toMatchObject({
       deployMode: 'Auto',
-      progressDialog: { enabled: true, windowLocation: 'BottomRight' },
+      progressDialog: { enabled: true },
     });
   });
 

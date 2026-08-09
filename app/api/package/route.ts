@@ -36,7 +36,7 @@ import {
   enforceInstallerPreflight,
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
-import { enforceQaGate, QaGateError } from '@/lib/qa/gate';
+import { ensureQaDemand } from '@/lib/qa/demand';
 
 export const maxDuration = 300;
 
@@ -246,45 +246,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Block only a known failed result for the exact version/architecture.
-    // Missing or stale QA data is intentionally non-blocking.
-    for (const item of win32Items) {
-      try {
-        await enforceQaGate({
-          wingetId: item.wingetId,
-          version: item.version,
-          architecture: item.architecture,
-          qaOverride: item.qaOverride,
-          sourceType: item.sourceType,
-        });
-      } catch (error) {
-        if (error instanceof QaGateError) {
-          return NextResponse.json(
-            {
-              error: 'QA testing blocked this deployment',
-              message: error.message,
-              code: error.code,
-              retryable: false,
-              package: {
-                wingetId: item.wingetId,
-                displayName: item.displayName || item.wingetId,
-                version: item.version,
-              },
-              qa: {
-                testedVersion: error.details.testedVersion,
-                testedAtUtc: error.details.testedAtUtc,
-                architecture: error.details.architecture,
-                classificationBucket: error.details.classification.bucket,
-                remediation: error.details.classification.remediation,
-              },
-            },
-            { status: 409 }
-          );
-        }
-        throw error;
-      }
-    }
-
     const jobs: PackagingJobRecord[] = [];
     const errors: { wingetId: string; error: string }[] = [];
 
@@ -436,6 +397,33 @@ export async function POST(request: NextRequest) {
           try {
             const jobId = crypto.randomUUID();
             const installerSha256 = item.installerSha256?.trim() || '';
+            const qaDemand = item.sourceType === 'custom'
+              ? null
+              : await ensureQaDemand(createServerClient(), {
+                  wingetId: item.wingetId,
+                  displayName: item.displayName,
+                  publisher: item.publisher || 'Unknown Publisher',
+                  version: item.version,
+                  architecture: item.architecture,
+                  installerUrl: item.installerUrl,
+                  installerSha256,
+                  installerType: item.installerType,
+                  nestedInstallerType: item.nestedInstallerType,
+                  nestedInstallerPath: item.nestedInstallerPath,
+                  silentSwitches: extractSilentSwitches(item.installCommand, item.installerType),
+                  uninstallCommand: item.uninstallCommand,
+                  installScope: item.installScope,
+                  psadtConfig: JSON.stringify(item.psadtConfig),
+                  detectionRules: JSON.stringify(item.detectionRules || []),
+                  priority: 2000,
+                  demandSource: 'customer',
+                });
+            const initialStatus = qaDemand?.state === 'waiting'
+              ? 'awaiting_qa'
+              : qaDemand?.state === 'failed'
+                ? 'qa_failed'
+                : 'queued';
+            const now = new Date().toISOString();
 
             const jobRecord = await db.jobs.create({
               id: jobId,
@@ -455,8 +443,21 @@ export async function POST(request: NextRequest) {
               install_scope: item.installScope,
               detection_rules: item.detectionRules as unknown as import('@/types/database').Json,
               package_config: item as unknown as import('@/types/database').Json,
-              status: 'queued',
+              status: initialStatus,
+              status_message: qaDemand?.state === 'waiting'
+                ? 'Waiting for isolated QA of this PSADT execution profile'
+                : qaDemand?.state === 'failed'
+                  ? qaDemand.failureSummary
+                  : null,
               progress_percent: 0,
+              execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
+              presentation_profile_sha256: qaDemand?.identity.presentationProfileSha256 || null,
+              qa_candidate_id: qaDemand?.candidateId || null,
+              qa_requested_at: qaDemand ? now : null,
+              qa_completed_at: qaDemand?.state === 'passed' ? now : null,
+              error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
+              error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
+              error_category: qaDemand?.state === 'failed' ? 'installer' : null,
             });
 
             if (!jobRecord) {
@@ -464,7 +465,23 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            // Local packager mode: leave job in queued state for pickup
+            if (qaDemand?.state === 'waiting' || qaDemand?.state === 'failed') {
+              jobs.push({
+                id: jobId,
+                user_id: userId,
+                tenant_id: tenantId,
+                winget_id: item.wingetId,
+                version: item.version,
+                display_name: item.displayName,
+                publisher: item.publisher,
+                status: initialStatus,
+                package_config: item,
+                created_at: jobRecord?.created_at || now,
+              });
+              continue;
+            }
+
+            // Local packager mode: leave passed/custom jobs queued for pickup.
             if (isLocalPackagerMode) {
               jobs.push({
                 id: jobId,

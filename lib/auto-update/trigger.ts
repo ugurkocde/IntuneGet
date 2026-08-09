@@ -15,17 +15,11 @@ import {
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
-import { describeQaGateError, enforceQaGate, isQaGateError } from '@/lib/qa/gate';
 import {
   normalizeInstallerSha256,
-  normalizeQaInstallerType,
-  qaInstallerFileName,
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
-import {
-  buildQaPackageIdentityFromWorkflowInput,
-  normalizeQaPsadtConfig,
-} from '@/lib/qa/package-profile';
+import { ensureQaDemand, type QaDemandResult } from '@/lib/qa/demand';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 
 interface TriggerResult {
@@ -183,23 +177,23 @@ export class AutoUpdateTrigger {
       // created before psadtConfig was stored on deployment_config
       await this.ensurePsadtConfig(policy);
 
-      // A current, exact QA failure is an intentional safety skip, not a
-      // packaging failure. Keep it ahead of history/job creation so scheduled
-      // auto-updates do not leave misleading failed or queued jobs behind.
       const deploymentConfig = policy.deployment_config as DeploymentConfig;
-      const packageIdentity = buildQaPackageIdentityFromWorkflowInput({
+      const sourceInstallerType =
+        updateInfo.installerType || deploymentConfig.installerType || 'exe';
+      const qaDemand = await ensureQaDemand(this.supabase, {
         wingetId: updateInfo.wingetId,
         displayName: deploymentConfig.displayName || updateInfo.displayName,
         publisher: deploymentConfig.publisher || 'Unknown Publisher',
         version: updateInfo.latestVersion,
         architecture: deploymentConfig.architecture || 'x64',
+        installerUrl: updateInfo.installerUrl,
         installerSha256: updateInfo.installerSha256,
-        installerType: updateInfo.installerType || deploymentConfig.installerType || 'exe',
+        installerType: sourceInstallerType,
         nestedInstallerType: updateInfo.nestedInstallerType,
         nestedInstallerPath: updateInfo.nestedInstallerPath,
         silentSwitches: extractSilentSwitches(
           deploymentConfig.installCommand || '',
-          updateInfo.installerType || deploymentConfig.installerType || 'exe'
+          sourceInstallerType
         ),
         uninstallCommand: deploymentConfig.uninstallCommand || '',
         installScope: deploymentConfig.installScope === 'user' ? 'user' : 'machine',
@@ -207,110 +201,17 @@ export class AutoUpdateTrigger {
           ? JSON.stringify(deploymentConfig.psadtConfig)
           : undefined,
         detectionRules: JSON.stringify(deploymentConfig.detectionRules || []),
+        priority: 1500,
+        demandSource: 'auto_update',
       });
-      const normalizedPsadtConfig = normalizeQaPsadtConfig(
-        deploymentConfig.psadtConfig,
-        deploymentConfig.detectionRules || []
-      );
-      const sourceInstallerType =
-        updateInfo.installerType || deploymentConfig.installerType || 'exe';
-      const architecture = (deploymentConfig.architecture || 'x64').toLowerCase();
-      const now = new Date().toISOString();
-      const { error: candidateError } = await this.supabase.from('qa_candidates').insert({
-        winget_id: updateInfo.wingetId,
-        definition_path: null,
-        version: updateInfo.latestVersion,
-        architecture,
-        installer_url: updateInfo.installerUrl,
-        installer_sha256: updateInfo.installerSha256.toUpperCase(),
-        installer_type: normalizeQaInstallerType(sourceInstallerType),
-        installer_file_name: qaInstallerFileName(updateInfo.installerUrl, sourceInstallerType),
-        test_level: 'psadt-package',
-        package_profile_sha256: packageIdentity.packageProfileSha256,
-        test_config: {
-          mode: 'psadt-package',
-          displayName: deploymentConfig.displayName || updateInfo.displayName,
-          publisher: deploymentConfig.publisher || 'Unknown Publisher',
-          sourceInstallerType,
-          silentArgs: extractSilentSwitches(
-            deploymentConfig.installCommand || '',
-            sourceInstallerType
-          ),
-          productCode: '',
-          scope: deploymentConfig.installScope === 'user' ? 'user' : 'machine',
-          nestedInstallerType: updateInfo.nestedInstallerType || '',
-          nestedInstallerFiles: updateInfo.nestedInstallerPath
-            ? [updateInfo.nestedInstallerPath]
-            : [],
-          uninstallCommand: deploymentConfig.uninstallCommand || '',
-          psadtConfig: normalizedPsadtConfig,
-          detectionRules: deploymentConfig.detectionRules || [],
-          profileKind: 'deployment-config',
-          packageProfileCanonicalJson: packageIdentity.canonicalJson,
-          packageProfileSha256: packageIdentity.packageProfileSha256,
-          psadtConfigSha256: packageIdentity.psadtConfigSha256,
-          detectionRulesSha256: packageIdentity.detectionRulesSha256,
-        },
-        status: 'queued',
-        priority: 1000,
-        updated_at: now,
-      });
-      if (candidateError?.code === '23505') {
-        const { data: existingCandidate, error: existingCandidateError } = await this.supabase
-          .from('qa_candidates')
-          .select('id, status')
-          .eq('winget_id', updateInfo.wingetId)
-          .eq('version', updateInfo.latestVersion)
-          .eq('architecture', architecture)
-          .eq('installer_sha256', updateInfo.installerSha256.toUpperCase())
-          .eq('package_profile_sha256', packageIdentity.packageProfileSha256)
-          .maybeSingle();
-        if (existingCandidateError) {
-          throw new Error(`Could not read exact PSADT QA candidate: ${existingCandidateError.message}`);
-        }
-        if (existingCandidate && ['error', 'superseded'].includes(existingCandidate.status)) {
-          const { error: reactivateError } = await this.supabase
-            .from('qa_candidates')
-            .update({
-              status: 'queued',
-              priority: 1000,
-              attempts: 0,
-              dispatched_at: null,
-              started_at: null,
-              finished_at: null,
-              github_run_id: null,
-              github_run_url: null,
-              failure_summary: null,
-              updated_at: now,
-            })
-            .eq('id', existingCandidate.id)
-            .in('status', ['error', 'superseded']);
-          if (reactivateError) {
-            throw new Error(`Could not requeue exact PSADT package QA: ${reactivateError.message}`);
-          }
-        }
-      } else if (candidateError) {
-        throw new Error(`Could not queue exact PSADT package QA: ${candidateError.message}`);
-      }
-      try {
-        await enforceQaGate({
-          wingetId: updateInfo.wingetId,
-          version: updateInfo.latestVersion,
-          architecture: deploymentConfig.architecture,
-          installerSha256: updateInfo.installerSha256,
-          packageProfileSha256: packageIdentity.packageProfileSha256,
-          requirePassed: true,
-        });
-      } catch (error) {
-        if (isQaGateError(error)) {
-          return {
-            success: false,
-            skipped: true,
-            skipReason: describeQaGateError(error),
-            code: error.code,
-          };
-        }
-        throw error;
+      if (qaDemand.state === 'failed') {
+        return {
+          success: false,
+          skipped: true,
+          skipReason: qaDemand.failureSummary,
+          code: 'QA_FAILED_CURRENT_VERSION',
+          packageProfileSha256: qaDemand.identity.executionProfileSha256,
+        };
       }
 
       // Determine update type
@@ -323,13 +224,18 @@ export class AutoUpdateTrigger {
       const packagingJob = await this.createPackagingJob(
         policy,
         updateInfo,
-        historyRecord.id
+        historyRecord.id,
+        qaDemand
       );
 
       // Update history with job reference
       await this.updateHistoryRecord(historyRecord.id, {
         packaging_job_id: packagingJob.id,
-        status: 'packaging',
+        status: qaDemand.state === 'passed'
+          ? 'packaging'
+          : qaDemand.state === 'waiting'
+            ? 'pending'
+            : 'failed',
       });
 
       // Update policy tracking
@@ -339,7 +245,7 @@ export class AutoUpdateTrigger {
         success: true,
         packagingJobId: packagingJob.id,
         historyId: historyRecord.id,
-        packageProfileSha256: packageIdentity.packageProfileSha256,
+        packageProfileSha256: qaDemand.identity.executionProfileSha256,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -594,7 +500,8 @@ export class AutoUpdateTrigger {
   private async createPackagingJob(
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
-    historyId: string
+    historyId: string,
+    qaDemand?: QaDemandResult
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
     const assignments = normalizeAssignments(config);
@@ -662,8 +569,22 @@ export class AutoUpdateTrigger {
         notes: config.notes,
         autoUpdateHistoryId: historyId,
       },
-      status: 'queued',
+      status: !qaDemand || qaDemand.state === 'passed'
+        ? 'queued'
+        : qaDemand.state === 'waiting'
+          ? 'awaiting_qa'
+          : 'qa_failed',
+      status_message: !qaDemand || qaDemand.state === 'passed'
+        ? 'Exact PSADT execution profile passed QA'
+        : qaDemand.state === 'waiting'
+          ? 'Waiting for isolated QA of this PSADT execution profile'
+          : qaDemand.failureSummary || 'The exact PSADT execution profile failed QA',
       progress_percent: 0,
+      execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
+      presentation_profile_sha256: qaDemand?.identity.presentationProfileSha256 || null,
+      qa_candidate_id: qaDemand?.candidateId || null,
+      qa_requested_at: qaDemand ? new Date().toISOString() : null,
+      qa_completed_at: !qaDemand || qaDemand.state === 'waiting' ? null : new Date().toISOString(),
       is_auto_update: true,
       auto_update_policy_id: policy.id,
     };

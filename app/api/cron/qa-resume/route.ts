@@ -1,0 +1,170 @@
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
+import { getFeatureFlags } from '@/lib/features';
+import { getAppConfig } from '@/lib/config';
+import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { extractSilentSwitches } from '@/lib/msp/silent-switches';
+import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
+import type { Win32CartItem } from '@/types/upload';
+
+const RESUME_BATCH_SIZE = 25;
+
+export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const supabase = createServerClient();
+  const { data: jobs, error: jobsError } = await supabase
+    .from('packaging_jobs')
+    .select('*')
+    .eq('status', 'awaiting_qa')
+    .not('qa_candidate_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(RESUME_BATCH_SIZE);
+  if (jobsError) throw new Error(`Could not read QA-waiting jobs: ${jobsError.message}`);
+
+  const features = getFeatureFlags();
+  const config = getAppConfig();
+  const baseUrl = config.app.url || (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000');
+  const callbackUrl = `${baseUrl}/api/package/callback`;
+  let resumed = 0;
+  let failed = 0;
+  let waiting = 0;
+
+  for (const job of jobs || []) {
+    const { data: candidate, error: candidateError } = await supabase
+      .from('qa_candidates')
+      .select('id, status, failure_summary, package_profile_sha256')
+      .eq('id', job.qa_candidate_id!)
+      .maybeSingle();
+    if (candidateError) throw candidateError;
+    if (!candidate || ['failed', 'error'].includes(candidate.status)) {
+      const now = new Date().toISOString();
+      const { data: updated } = await supabase
+        .from('packaging_jobs')
+        .update({
+          status: 'qa_failed',
+          status_message: candidate?.failure_summary || 'The required QA run could not complete.',
+          error_code: 'QA_FAILED_EXECUTION_PROFILE',
+          error_stage: 'validation',
+          error_category: 'installer',
+          qa_completed_at: now,
+          completed_at: now,
+        })
+        .eq('id', job.id)
+        .eq('status', 'awaiting_qa')
+        .select('id')
+        .maybeSingle();
+      if (updated) failed++;
+      continue;
+    }
+    if (candidate.status !== 'passed') {
+      waiting++;
+      continue;
+    }
+
+    const { data: result, error: resultError } = await supabase
+      .from('qa_package_results')
+      .select('outcome')
+      .eq('package_profile_sha256', job.execution_profile_sha256!)
+      .maybeSingle();
+    if (resultError) throw resultError;
+    if (result?.outcome !== 'Passed') {
+      waiting++;
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus = features.localPackager ? 'queued' : 'packaging';
+    const { data: claimed, error: claimError } = await supabase
+      .from('packaging_jobs')
+      .update({
+        status: nextStatus,
+        status_message: 'QA passed; packaging resumed automatically',
+        qa_completed_at: now,
+        packaging_started_at: features.localPackager ? null : now,
+      })
+      .eq('id', job.id)
+      .eq('status', 'awaiting_qa')
+      .select('id')
+      .maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimed) continue;
+
+    if (features.localPackager) {
+      resumed++;
+      continue;
+    }
+
+    try {
+      const item = job.package_config as unknown as Win32CartItem;
+      const installerSha256 = job.installer_sha256 || '';
+      const workflowInputs: WorkflowInputs = {
+        jobId: job.id,
+        tenantId: job.tenant_id || '',
+        wingetId: job.winget_id,
+        displayName: job.display_name,
+        description: buildIntuneAppDescription({
+          description: item.description,
+          fallback: `Deployed via IntuneGet from Winget: ${job.winget_id}`,
+        }),
+        publisher: job.publisher || item.publisher || 'Unknown Publisher',
+        version: job.version,
+        architecture: job.architecture || item.architecture,
+        installerUrl: job.installer_url || item.installerUrl,
+        installerSha256,
+        hashValidationMode: 'strict',
+        installerType: job.installer_type || item.installerType,
+        nestedInstallerType: item.nestedInstallerType,
+        nestedInstallerPath: item.nestedInstallerPath,
+        silentSwitches: extractSilentSwitches(
+          job.install_command || item.installCommand,
+          job.installer_type || item.installerType
+        ),
+        uninstallCommand: job.uninstall_command || item.uninstallCommand,
+        callbackUrl,
+        psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
+        detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
+        requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
+        assignments: item.assignments ? JSON.stringify(item.assignments) : undefined,
+        categories: item.categories ? JSON.stringify(item.categories) : undefined,
+        espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
+        relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
+        installScope: (job.install_scope || item.installScope) === 'user' ? 'user' : 'machine',
+        forceCreate: item.forceCreate,
+        sourceType: item.sourceType,
+      };
+      const trigger = await triggerPackagingWorkflow(workflowInputs);
+      await supabase
+        .from('packaging_jobs')
+        .update({
+          github_run_id: trigger.runId?.toString() || null,
+          github_run_url: trigger.runUrl || null,
+        })
+        .eq('id', job.id)
+        .eq('status', 'packaging');
+      resumed++;
+    } catch (error) {
+      await supabase
+        .from('packaging_jobs')
+        .update({
+          status: 'failed',
+          status_message: 'QA passed, but automatic packaging resume failed',
+          error_code: 'QA_RESUME_DISPATCH_FAILED',
+          error_stage: 'authenticate',
+          error_category: 'network',
+          error_message: error instanceof Error ? error.message : 'Unknown resume error',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', job.id)
+        .eq('status', 'packaging');
+      failed++;
+    }
+  }
+
+  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting });
+}

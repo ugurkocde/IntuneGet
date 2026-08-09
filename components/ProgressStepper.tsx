@@ -35,7 +35,7 @@ export function ProgressStepper({
     endTime: endTime || null,
   });
 
-  const isJobFailed = status === 'failed';
+  const isJobFailed = status === 'failed' || status === 'qa_failed';
   const isJobCompleted = ['completed', 'deployed'].includes(status);
   const isActive = !isJobFailed && !isJobCompleted;
 

@@ -112,20 +112,44 @@ async function findToolchainBackfillIds(
     }
 
     if (pageStaleIds.length > 0) {
-      const { data: supported, error: supportedError } = await supabase
-        .from('curated_apps')
-        .select('winget_id')
-        .in('winget_id', pageStaleIds)
-        .eq('is_verified', true)
-        .eq('is_winget_verified', true)
-        .eq('app_source', 'win32')
-        .eq('is_locale_variant', false);
+      const [supportedResult, policyResult, deployedResult] = await Promise.all([
+        supabase
+          .from('curated_apps')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds)
+          .eq('is_verified', true)
+          .eq('is_winget_verified', true)
+          .eq('app_source', 'win32')
+          .eq('is_locale_variant', false),
+        supabase
+          .from('app_update_policies')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds)
+          .eq('policy_type', 'auto_update')
+          .eq('is_enabled', true),
+        supabase
+          .from('upload_history')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds),
+      ]);
+      const { data: supported, error: supportedError } = supportedResult;
       if (supportedError) {
         throw new Error(`Could not filter QA toolchain backfill apps: ${supportedError.message}`);
       }
+      if (policyResult.error || deployedResult.error) {
+        throw new Error(
+          `Could not filter QA toolchain backfill demand: ${policyResult.error?.message || deployedResult.error?.message}`
+        );
+      }
       const supportedIds = new Set((supported || []).map((app) => app.winget_id));
+      const demandedIds = new Set([
+        ...(policyResult.data || []).map((row) => row.winget_id),
+        ...(deployedResult.data || []).map((row) => row.winget_id),
+      ]);
       for (const wingetId of pageStaleIds) {
-        if (supportedIds.has(wingetId)) supportedStaleIds.push(wingetId);
+        if (supportedIds.has(wingetId) && demandedIds.has(wingetId)) {
+          supportedStaleIds.push(wingetId);
+        }
       }
     }
 
@@ -306,9 +330,6 @@ export async function GET(request: Request) {
       if (error) throw new Error(`Could not filter changed WinGet packages: ${error.message}`);
       supportedApps = data || [];
     }
-    supportedChangedCount = supportedApps.filter((app) => changedIds.has(app.winget_id)).length;
-    toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
-
     const supportedIds = supportedApps.map((app) => app.winget_id);
     let recipes: Array<{
       winget_id: string;
@@ -317,6 +338,7 @@ export async function GET(request: Request) {
       installer_type: string;
     }> = [];
     let policies: Array<{ winget_id: string }> = [];
+    let deployedApps: Array<{ winget_id: string }> = [];
     let results: Array<{
       winget_id: string;
       tested_version: string;
@@ -328,7 +350,7 @@ export async function GET(request: Request) {
       package_profile_sha256: string | null;
     }> = [];
     if (supportedIds.length > 0) {
-      const [recipeResult, policyResult, resultResult] = await Promise.all([
+      const [recipeResult, policyResult, deployedResult, resultResult] = await Promise.all([
         supabase
           .from('qa_recipes')
           .select('winget_id, definition_path, architecture, installer_type')
@@ -340,6 +362,10 @@ export async function GET(request: Request) {
           .in('winget_id', supportedIds)
           .eq('policy_type', 'auto_update')
           .eq('is_enabled', true),
+        supabase
+          .from('upload_history')
+          .select('winget_id')
+          .in('winget_id', supportedIds),
         supabase
           .from('qa_results')
           .select(
@@ -353,11 +379,15 @@ export async function GET(request: Request) {
       if (policyResult.error) {
         throw new Error(`Could not prioritize QA candidates: ${policyResult.error.message}`);
       }
+      if (deployedResult.error) {
+        throw new Error(`Could not read deployed-app QA demand: ${deployedResult.error.message}`);
+      }
       if (resultResult.error) {
         throw new Error(`Could not read existing QA results: ${resultResult.error.message}`);
       }
       recipes = recipeResult.data || [];
       policies = policyResult.data || [];
+      deployedApps = deployedResult.data || [];
       results = resultResult.data || [];
     }
 
@@ -365,6 +395,14 @@ export async function GET(request: Request) {
     for (const policy of policies) {
       priorities.set(policy.winget_id, (priorities.get(policy.winget_id) || 0) + 1);
     }
+    const demandedIds = new Set<string>(policies.map((policy) => policy.winget_id));
+    for (const deployed of deployedApps) {
+      demandedIds.add(deployed.winget_id);
+      if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
+    }
+    supportedApps = supportedApps.filter((app) => demandedIds.has(app.winget_id));
+    supportedChangedCount = supportedApps.filter((app) => changedIds.has(app.winget_id)).length;
+    toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
     const recipeById = new Map(recipes.map((row) => [row.winget_id, row]));
     const resultById = new Map(results.map((row) => [row.winget_id, row]));
     const client = createWingetManifestClient({ token: process.env.GITHUB_PAT, maxRetries: 2 });
@@ -477,6 +515,9 @@ export async function GET(request: Request) {
                 catalog_version_at_enqueue: app.latest_version,
                 status: initialStatus,
                 priority: priorities.get(app.winget_id) || 0,
+                demand_source: policies.some((policy) => policy.winget_id === app.winget_id)
+                  ? 'auto_update'
+                  : 'managed',
                 finished_at: initialStatus === 'queued' ? null : previous?.tested_at_utc || now,
                 updated_at: now,
               })
