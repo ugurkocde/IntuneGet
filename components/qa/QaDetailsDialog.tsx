@@ -269,15 +269,6 @@ export function QaDetailsDialog({ wingetId, catalogVersion, open, onOpenChange }
                 </section>
               ) : null}
 
-              {data.classification ? (
-                <section className="rounded-xl border border-status-warning/20 bg-status-warning/10 p-4">
-                  <h4 className="text-sm font-semibold text-status-warning"><T>Automated heuristic — not a verified root cause</T></h4>
-                  <p className="mt-2 text-sm text-text-primary">{data.classification.bucket.replace('_', ' ')} · {data.classification.confidence} confidence</p>
-                  <p className="mt-1 text-xs text-text-secondary">{data.classification.evidence}</p>
-                  <p className="mt-2 text-xs text-text-secondary">{data.classification.remediation}</p>
-                </section>
-              ) : null}
-
               <section className="grid gap-3 rounded-xl border border-overlay/10 bg-bg-elevated/50 p-4 text-xs text-text-secondary sm:grid-cols-2">
                 <div><span className="block text-text-muted"><T>Execution context</T></span><code>{data.environment?.executionContext || <T>Not recorded</T>}</code></div>
                 <div><span className="block text-text-muted"><T>Relevant Windows events</T></span>{data.relevantEventCount ?? <T>Not recorded</T>}</div>

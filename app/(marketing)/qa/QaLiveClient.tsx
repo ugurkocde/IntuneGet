@@ -288,7 +288,6 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           </div>
           <QaLiveStepTimeline
             phase={data.current.phase}
-            log={data.log}
             className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
           />
           <div className="lg:col-start-1 lg:row-start-2">

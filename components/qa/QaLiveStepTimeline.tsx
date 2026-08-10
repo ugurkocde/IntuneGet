@@ -15,7 +15,7 @@ import {
 import { T, Var } from 'gt-next';
 import { getQaPhasePresentation } from '@/lib/qa/presentation';
 import { cn } from '@/lib/utils';
-import type { QaLiveLog, QaLivePhase } from '@/types/qa';
+import type { QaLivePhase } from '@/types/qa';
 
 interface TimelineStep {
   phase: Exclude<QaLivePhase, 'queued'>;
@@ -77,27 +77,15 @@ const STEPS: TimelineStep[] = [
   },
 ];
 
-function latestActivity(log: QaLiveLog | null): string | null {
-  const line = log?.lines.at(-1);
-  if (!line) return null;
-  return line
-    .replace(/^\[[^\]]+\]\s*::\s*/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 export function QaLiveStepTimeline({
   phase,
-  log,
   className,
 }: {
   phase: QaLivePhase;
-  log: QaLiveLog | null;
   className?: string;
 }) {
   const phasePresentation = getQaPhasePresentation(phase);
   const activeIndex = STEPS.findIndex((step) => step.phase === phase);
-  const activity = latestActivity(log);
 
   return (
     <section
@@ -199,12 +187,6 @@ export function QaLiveStepTimeline({
                         </li>
                       ))}
                     </ul>
-                    {activity ? (
-                      <div className="rounded-lg border border-overlay/10 bg-black/10 px-2.5 py-2">
-                        <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-text-muted"><T>Latest activity</T></p>
-                        <p className="mt-1 line-clamp-2 font-mono text-[10px] leading-relaxed text-text-secondary">{activity}</p>
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
