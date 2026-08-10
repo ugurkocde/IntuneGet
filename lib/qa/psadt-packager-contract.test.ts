@@ -58,7 +58,10 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain("Get-ADTApplication -Name $appName -NameMatch ''Exact''");
     expect(packager).toContain('if ($installedApps.Count -ne 1)');
     expect(packager).toContain(
-      'Uninstall-ADTApplication -InstalledApplication $installedApps[0]'
+      '$registeredApplication = $installedApps[0]'
+    );
+    expect(packager).toContain(
+      'Uninstall-ADTApplication -InstalledApplication $registeredApplication'
     );
     expect(packager).not.toContain(
       'Uninstall-ADTApplication -InstalledApplication $installedApp -SuccessExitCodes'
@@ -75,6 +78,18 @@ describe('PSADT registry uninstall identity contract', () => {
     );
     expect(packager).toContain(
       'Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles'
+    );
+  });
+
+  it('adds verified silent arguments when a vendor only registers an interactive uninstall', () => {
+    expect(packager).toContain(
+      "$registeredArgumentText -match ''(?i)(^|\\s)--vivaldi(\\s|$)''"
+    );
+    expect(packager).toContain("$additionalUninstallArguments += ''--force-uninstall''");
+    expect(packager).toContain("$registeredInstallerType -eq ''inno''");
+    expect(packager).toContain("$registeredInstallerType -eq ''nullsoft''");
+    expect(packager).toContain(
+      'Uninstall-ADTApplication -InstalledApplication $registeredApplication -AdditionalArgumentList $additionalUninstallArguments'
     );
   });
 });

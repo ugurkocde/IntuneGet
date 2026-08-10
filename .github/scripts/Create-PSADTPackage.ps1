@@ -1412,7 +1412,38 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         )
     } else {
         $lines += @(
-            '    Uninstall-ADTApplication -InstalledApplication $installedApps[0] -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+            '    $registeredApplication = $installedApps[0]'
+            '    [string[]]$additionalUninstallArguments = @()'
+            '    $hasQuietUninstall = -not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)'
+            '    if (-not $hasQuietUninstall) {'
+            '        $registeredUninstallFile = [string]$registeredApplication.UninstallStringFilePath'
+            '        $registeredArgumentText = (@($registeredApplication.UninstallStringArgumentList) -join '' '').Trim()'
+            "        `$registeredInstallerType = '$installerTypeLower'"
+            ''
+            '        # PSADT correctly prefers QuietUninstallString. Some vendors only publish an interactive'
+            '        # UninstallString, so add narrowly verified unattended arguments for known signatures.'
+            '        if ((Split-Path -Leaf $registeredUninstallFile) -ieq ''setup.exe'' -and'
+            '            $registeredArgumentText -match ''(?i)(^|\s)--vivaldi(\s|$)'' -and'
+            '            $registeredArgumentText -notmatch ''(?i)(^|\s)--force-uninstall(\s|$)'') {'
+            '            $additionalUninstallArguments += ''--force-uninstall'''
+            '        } elseif ($registeredInstallerType -eq ''inno'') {'
+            '            foreach ($argument in @(''/VERYSILENT'', ''/SUPPRESSMSGBOXES'', ''/NORESTART'', ''/SP-'')) {'
+            '                if ($registeredArgumentText -notmatch "(?i)(^|\s)$([regex]::Escape($argument))(\s|$)") {'
+            '                    $additionalUninstallArguments += $argument'
+            '                }'
+            '            }'
+            '        } elseif ($registeredInstallerType -eq ''nullsoft'' -and'
+            '                  $registeredArgumentText -notmatch ''(?i)(^|\s)/S(\s|$)'') {'
+            '            $additionalUninstallArguments += ''/S'''
+            '        }'
+            '    }'
+            ''
+            '    if ($additionalUninstallArguments.Count -gt 0) {'
+            '        Write-ADTLogEntry -Message "The vendor registered no quiet uninstall; applying verified unattended arguments [$($additionalUninstallArguments -join '' '')]." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '        Uninstall-ADTApplication -InstalledApplication $registeredApplication -AdditionalArgumentList $additionalUninstallArguments -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+            '    } else {'
+            '        Uninstall-ADTApplication -InstalledApplication $registeredApplication -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+            '    }'
         )
     }
 } elseif ($useMsixUninstall) {
