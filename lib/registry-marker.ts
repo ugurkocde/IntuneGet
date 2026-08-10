@@ -1,3 +1,5 @@
+import type { DetectionRule, RegistryDetectionRule } from '@/types/intune';
+
 /**
  * Registry Marker Path Helpers
  *
@@ -15,6 +17,10 @@
 
 /** Default marker root: subpath under the hive, no hive prefix */
 export const DEFAULT_REGISTRY_MARKER_PATH = 'SOFTWARE\\IntuneGet\\Apps';
+
+export function sanitizeWingetIdForRegistry(wingetId: string): string {
+  return wingetId.replace(/[.\-]/g, '_');
+}
 
 /**
  * Normalize a user-supplied registry marker path into a safe subpath under
@@ -81,4 +87,69 @@ export function rewriteMarkerKeyPath(
   }
 
   return `${hive.toUpperCase()}\\${normalizeMarkerPath(markerPath)}\\${sanitizedWingetId}`;
+}
+
+/**
+ * Reconcile only IntuneGet-owned marker rules with the package that will
+ * actually be generated. Saved deployment profiles can outlive a WinGet
+ * install-scope or version change; without this reconciliation a user-scoped
+ * package writes HKCU while Intune continues looking in HKLM (or vice versa).
+ *
+ * The complete default/current marker path, sanitized WinGet id, and Version
+ * value form the ownership signature. A rule with that exact signature is
+ * internal IntuneGet state and is normalized completely; every other registry
+ * rule is returned by reference and remains byte-for-byte intact.
+ */
+export function reconcileManagedMarkerDetectionRules({
+  detectionRules,
+  wingetId,
+  version,
+  installScope,
+  markerPath,
+}: {
+  detectionRules: DetectionRule[];
+  wingetId: string;
+  version: string;
+  installScope?: string;
+  markerPath?: string | null;
+}): DetectionRule[] {
+  const sanitizedWingetId = sanitizeWingetIdForRegistry(wingetId);
+  const currentMarkerPath = normalizeMarkerPath(markerPath);
+  const managedSubPaths = new Set(
+    [DEFAULT_REGISTRY_MARKER_PATH, currentMarkerPath].map(
+      (path) => `${path}\\${sanitizedWingetId}`.toUpperCase()
+    )
+  );
+  const hive =
+    installScope?.toLowerCase() === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE';
+  const versionParts = /^\d+(?:\.\d+){1,3}$/.test(version) ? version.split('.') : [];
+  const useVersionComparison =
+    versionParts.length >= 2 &&
+    versionParts.length <= 4 &&
+    versionParts.every((part) => Number(part) <= 2_147_483_647);
+
+  return detectionRules.map((rule) => {
+    if (
+      rule.type !== 'registry' ||
+      rule.valueName?.toUpperCase() !== 'VERSION' ||
+      typeof rule.keyPath !== 'string'
+    ) {
+      return rule;
+    }
+
+    const match = /^(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)$/i.exec(rule.keyPath);
+    if (!match || !managedSubPaths.has(match[2].toUpperCase())) {
+      return rule;
+    }
+
+    return {
+      ...rule,
+      keyPath: `${hive}\\${currentMarkerPath}\\${sanitizedWingetId}`,
+      valueName: 'Version',
+      check32BitOn64System: false,
+      detectionType: useVersionComparison ? 'version' : 'string',
+      operator: useVersionComparison ? 'greaterThanOrEqual' : 'equal',
+      detectionValue: version,
+    } satisfies RegistryDetectionRule;
+  });
 }

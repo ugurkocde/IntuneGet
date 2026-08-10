@@ -4,6 +4,7 @@ import {
   type GitHubActionsConfig,
   type WorkflowInputs,
 } from './github-actions';
+import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -95,6 +96,91 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     const request = fetchMock.mock.calls[0][1] as RequestInit;
     const payload = JSON.parse(String(request.body));
     expect(payload.client_payload.installer.hashValidationMode).toBe('strict');
+  });
+
+  it('dispatches the same reconciled marker rules that are used for the QA gate', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const inputs = workflowInputs({
+      wingetId: 'Asana.Asana',
+      version: '2.8.0',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installScope: 'user',
+      detectionRules: JSON.stringify([
+        {
+          type: 'registry',
+          keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+          valueName: 'Version',
+          detectionType: 'version',
+          operator: 'greaterThanOrEqual',
+          detectionValue: '2.7.1',
+        },
+      ]),
+      psadtConfig: JSON.stringify({ brandingCompanyName: 'Contoso' }),
+    });
+
+    await triggerPackagingWorkflow(
+      inputs,
+      config,
+      { skipRunCapture: true }
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    const dispatchedRules = JSON.parse(payload.client_payload.config.detectionRules);
+    const dispatchedConfig = JSON.parse(payload.client_payload.config.psadtConfig);
+
+    expect(dispatchedRules[0]).toMatchObject({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+      detectionValue: '2.8.0',
+    });
+    expect(dispatchedConfig).toMatchObject({
+      brandingCompanyName: 'Contoso',
+      detectionRules: dispatchedRules,
+    });
+    const dispatchedIdentity = buildQaPackageIdentityFromWorkflowInput({
+      ...inputs,
+      psadtConfig: payload.client_payload.config.psadtConfig,
+      detectionRules: payload.client_payload.config.detectionRules,
+    });
+    expect(enforceQaGateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        packageProfileSha256: dispatchedIdentity.packageProfileSha256,
+      })
+    );
+  });
+
+  it('does not reconcile custom-installer detection rules', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const detectionRules = JSON.stringify([
+      {
+        type: 'registry',
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Custom_Example_App',
+        valueName: 'Version',
+        detectionType: 'version',
+        operator: 'equal',
+        detectionValue: '1.0.0',
+      },
+    ]);
+    const psadtConfig = JSON.stringify({ detectionRules, brandingCompanyName: 'Custom' });
+
+    await triggerPackagingWorkflow(
+      workflowInputs({
+        sourceType: 'custom',
+        installScope: 'user',
+        detectionRules,
+        psadtConfig,
+      }),
+      config,
+      { skipRunCapture: true }
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.config.detectionRules).toBe(detectionRules);
+    expect(payload.client_payload.config.psadtConfig).toBe(psadtConfig);
   });
 
   it('does not call GitHub when installer preflight blocks dispatch', async () => {

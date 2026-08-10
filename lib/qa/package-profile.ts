@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 
@@ -18,7 +19,7 @@ export const QA_PSADT_TOOLCHAIN = {
  * and update the protected workflow verifier in the same rollout. Existing candidates
  * then fail closed and are rebuilt before they can be dispatched.
  */
-export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 2;
+export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 3;
 
 export interface QaPackageProfileInput {
   profileKind: 'catalog-default' | 'deployment-config';
@@ -403,13 +404,29 @@ function parseJsonObject<T>(value: string | undefined, fallback: T): T {
   }
 }
 
-export function buildQaPackageIdentityFromWorkflowInput(
-  input: QaWorkflowPackageInput
-): QaPackageIdentity {
-  const detectionRules = parseJsonObject<DetectionRule[]>(input.detectionRules, []);
-  const rawConfig = parseJsonObject<Partial<PSADTConfig>>(input.psadtConfig, {});
+export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): {
+  detectionRules: DetectionRule[];
+  psadtConfig: PSADTConfig;
+  detectionRulesJson: string;
+  psadtConfigJson: string;
+  identity: QaPackageIdentity;
+} {
+  const parsedDetectionRulesValue = parseJsonObject<unknown>(input.detectionRules, []);
+  const parsedDetectionRules = Array.isArray(parsedDetectionRulesValue)
+    ? (parsedDetectionRulesValue as DetectionRule[])
+    : [];
+  const parsedConfig = parseJsonObject<unknown>(input.psadtConfig, {});
+  const rawConfig = (record(parsedConfig) || {}) as Partial<PSADTConfig>;
+  const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, parsedDetectionRules);
+  const detectionRules = reconcileManagedMarkerDetectionRules({
+    detectionRules: parsedDetectionRules,
+    wingetId: input.wingetId,
+    version: input.version,
+    installScope: input.installScope || 'machine',
+    markerPath: preliminaryConfig.registryMarkerPath,
+  });
   const psadtConfig = normalizeQaPsadtConfig(rawConfig, detectionRules);
-  return buildQaPackageIdentity({
+  const identity = buildQaPackageIdentity({
     profileKind: 'deployment-config',
     wingetId: input.wingetId,
     displayName: input.displayName,
@@ -426,4 +443,18 @@ export function buildQaPackageIdentityFromWorkflowInput(
     psadtConfig,
     detectionRules,
   });
+
+  return {
+    detectionRules,
+    psadtConfig,
+    detectionRulesJson: JSON.stringify(detectionRules),
+    psadtConfigJson: JSON.stringify(psadtConfig),
+    identity,
+  };
+}
+
+export function buildQaPackageIdentityFromWorkflowInput(
+  input: QaWorkflowPackageInput
+): QaPackageIdentity {
+  return normalizeQaWorkflowPackageInput(input).identity;
 }

@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import {
   buildQaPackageIdentity,
+  buildQaPackageIdentityFromWorkflowInput,
   canonicalQaJson,
+  normalizeQaWorkflowPackageInput,
   QA_PACKAGE_PROFILE_SCHEMA_VERSION,
   QA_PSADT_TOOLCHAIN,
   qaSha256,
+  splitQaPsadtConfig,
   validateCurrentQaPackageProfile,
 } from './package-profile';
 
@@ -119,6 +122,56 @@ describe('PSADT QA package identity', () => {
       buildQaPackageIdentity({ ...input, profileKind: 'deployment-config' })
         .packageProfileSha256
     ).not.toBe(buildQaPackageIdentity(input).packageProfileSha256);
+  });
+
+  it('reconciles an IntuneGet marker with the current workflow scope and version', () => {
+    const workflowInput = {
+      wingetId: 'Asana.Asana',
+      displayName: 'Asana',
+      publisher: 'Asana',
+      version: '2.8.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Asana',
+      installScope: 'user' as const,
+      detectionRules: JSON.stringify([
+        {
+          type: 'registry',
+          keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+          valueName: 'Version',
+          detectionType: 'version',
+          operator: 'greaterThanOrEqual',
+          detectionValue: '2.7.1',
+        },
+      ]),
+      psadtConfig: JSON.stringify({
+        detectionRules: [],
+        brandingCompanyName: 'Contoso',
+      }),
+    };
+    const normalized = normalizeQaWorkflowPackageInput(workflowInput);
+    const identity = buildQaPackageIdentityFromWorkflowInput(workflowInput);
+    const profile = identity.profile as {
+      schemaVersion: number;
+      detectionRules: Array<Record<string, unknown>>;
+      psadtConfig: { detectionRules: Array<Record<string, unknown>> };
+    };
+
+    expect(profile.schemaVersion).toBe(3);
+    expect(profile.detectionRules[0]).toMatchObject({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+      detectionValue: '2.8.0',
+    });
+    expect(profile.psadtConfig.detectionRules).toEqual(profile.detectionRules);
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      brandingCompanyName: 'Contoso',
+      detectionRules: profile.detectionRules,
+    });
+    expect(
+      splitQaPsadtConfig(JSON.parse(normalized.psadtConfigJson)).execution
+    ).toEqual(profile.psadtConfig);
   });
 });
 

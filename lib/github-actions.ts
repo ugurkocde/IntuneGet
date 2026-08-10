@@ -7,7 +7,9 @@
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { enforceInstallerPreflight } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
-import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
+import {
+  normalizeQaWorkflowPackageInput,
+} from './qa/package-profile';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -43,7 +45,7 @@ export interface WorkflowInputs {
   autoSupersede?: boolean; // Mark the new app as superseding the previous app
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
   sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
-  packageProfileSha256?: string; // Exact generated PSADT package identity; computed server-side when absent
+  packageProfileSha256?: string; // Upstream QA identity; final dispatch recalculates from effective inputs
 }
 
 export interface GitHubActionsConfig {
@@ -116,6 +118,8 @@ export async function triggerPackagingWorkflow(
     inputs.architecture ?? '',
     inputs.installerUrl,
   );
+  const normalizedPackageInput =
+    inputs.sourceType === 'custom' ? null : normalizeQaWorkflowPackageInput(inputs);
 
   // This is the final dispatch boundary shared by manual, MSP, update-policy,
   // and auto-update paths. Never create a packaging run for a known-bad tuple.
@@ -129,11 +133,8 @@ export async function triggerPackagingWorkflow(
     installScope: inputs.installScope,
     sourceType: inputs.sourceType,
   });
-  const packageProfileSha256 =
-    inputs.sourceType === 'custom'
-      ? undefined
-      : inputs.packageProfileSha256 ||
-        buildQaPackageIdentityFromWorkflowInput(inputs).packageProfileSha256;
+  const calculatedPackageProfileSha256 = normalizedPackageInput?.identity.packageProfileSha256;
+  const packageProfileSha256 = calculatedPackageProfileSha256;
   await enforceQaGate({
     wingetId: inputs.wingetId,
     version: inputs.version,
@@ -188,8 +189,9 @@ export async function triggerPackagingWorkflow(
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {
-          psadtConfig: inputs.psadtConfig || '{}',
-          detectionRules: inputs.detectionRules || '[]',
+          psadtConfig: normalizedPackageInput?.psadtConfigJson || inputs.psadtConfig || '{}',
+          detectionRules:
+            normalizedPackageInput?.detectionRulesJson || inputs.detectionRules || '[]',
           requirementRules: inputs.requirementRules || '[]',
           assignments: inputs.assignments || '[]',
           categories: inputs.categories || '[]',
