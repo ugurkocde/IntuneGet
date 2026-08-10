@@ -833,8 +833,13 @@ export async function getLatestInstallerInfo(
     NestedInstallerFiles: selectedManifestInstaller?.NestedInstallerFiles ||
       (nestedInstallerPath ? [{ RelativeFilePath: nestedInstallerPath }] : undefined),
     Scope: selectedManifestInstaller?.Scope || versionInfo.installer_scope || undefined,
-    InstallerSwitches: selectedManifestInstaller?.InstallerSwitches ||
-      (versionInfo.silent_args ? { Silent: versionInfo.silent_args } : undefined),
+    // Current snapshots keep the manifest-level Silent value in silent_args
+    // and installer-level overrides (for example Custom) in each installer.
+    // Merge them per field just like a freshly fetched WinGet manifest.
+    InstallerSwitches: {
+      ...(versionInfo.silent_args ? { Silent: versionInfo.silent_args } : {}),
+      ...(selectedManifestInstaller?.InstallerSwitches || {}),
+    },
   } as WingetInstaller;
   const normalizedInstaller = normalizeInstaller(manifestInstaller);
 
