@@ -303,7 +303,7 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const { data, error } = await supabase
       .from('version_history')
-      .select('installer_url, installer_sha256, installer_type, installer_scope, installers')
+      .select('installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers')
       .eq('winget_id', wingetId)
       .eq('version', version)
       .single();
@@ -323,7 +323,7 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const { data, error } = await supabase
       .from('version_history')
-      .select('installer_url, installer_sha256, installer_type, installer_scope, installers')
+      .select('installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers')
       .eq('winget_id', wingetId)
       .eq('version', version)
       .order('created_at', { ascending: false })
