@@ -147,7 +147,7 @@ export async function GET(request: Request) {
         sourceType: item.sourceType,
       };
       const trigger = await triggerPackagingWorkflow(workflowInputs);
-      const { data: failedJob } = await supabase
+      await supabase
         .from('packaging_jobs')
         .update({
           github_run_id: trigger.runId?.toString() || null,
@@ -157,7 +157,7 @@ export async function GET(request: Request) {
         .eq('status', 'packaging');
       resumed++;
     } catch (error) {
-      await supabase
+      const { data: failedJob } = await supabase
         .from('packaging_jobs')
         .update({
           status: 'failed',
