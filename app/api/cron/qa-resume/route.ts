@@ -6,6 +6,7 @@ import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
+import { ensureQaDemand } from '@/lib/qa/demand';
 import type { Win32CartItem } from '@/types/upload';
 
 const RESUME_BATCH_SIZE = 25;
@@ -43,13 +44,60 @@ export async function GET(request: Request) {
       .eq('id', job.qa_candidate_id!)
       .maybeSingle();
     if (candidateError) throw candidateError;
-    if (!candidate || ['failed', 'error'].includes(candidate.status)) {
+
+    let candidateStatus = candidate?.status;
+    let candidateFailureSummary = candidate?.failure_summary;
+    let executionProfileSha256 = job.execution_profile_sha256;
+
+    if (candidateStatus === 'superseded') {
+      const item = job.package_config as unknown as Win32CartItem;
+      const installerType = job.installer_type || item.installerType;
+      const demand = await ensureQaDemand(supabase, {
+        wingetId: job.winget_id,
+        displayName: job.display_name,
+        publisher: job.publisher || item.publisher || 'Unknown Publisher',
+        version: job.version,
+        architecture: job.architecture || item.architecture,
+        installerUrl: job.installer_url || item.installerUrl,
+        installerSha256: job.installer_sha256 || item.installerSha256 || '',
+        installerType,
+        nestedInstallerType: item.nestedInstallerType,
+        nestedInstallerPath: item.nestedInstallerPath,
+        silentSwitches: extractSilentSwitches(job.install_command || item.installCommand, installerType),
+        uninstallCommand: job.uninstall_command || item.uninstallCommand,
+        installScope: job.install_scope || item.installScope,
+        psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
+        detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
+        priority: 2000,
+        demandSource: job.is_auto_update ? 'auto_update' : 'customer',
+      });
+      executionProfileSha256 = demand.identity.executionProfileSha256;
+      candidateStatus = demand.state === 'waiting' ? 'queued' : demand.state;
+      candidateFailureSummary = demand.failureSummary || null;
+
+      const { error: relinkError } = await supabase
+        .from('packaging_jobs')
+        .update({
+          qa_candidate_id: demand.candidateId || job.qa_candidate_id,
+          execution_profile_sha256: demand.identity.executionProfileSha256,
+          presentation_profile_sha256: demand.identity.presentationProfileSha256,
+          qa_requested_at: new Date().toISOString(),
+          status_message: demand.state === 'waiting'
+            ? 'Running an isolated installation test to make sure this app works before deployment'
+            : job.status_message,
+        })
+        .eq('id', job.id)
+        .eq('status', 'awaiting_qa');
+      if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
+    }
+
+    if (!candidateStatus || ['failed', 'error'].includes(candidateStatus)) {
       const now = new Date().toISOString();
       const { data: updated } = await supabase
         .from('packaging_jobs')
         .update({
           status: 'qa_failed',
-          status_message: candidate?.failure_summary || 'The required installation test could not complete.',
+          status_message: candidateFailureSummary || 'The required installation test could not complete.',
           error_code: 'QA_FAILED_EXECUTION_PROFILE',
           error_stage: 'validation',
           error_category: 'installer',
@@ -65,12 +113,12 @@ export async function GET(request: Request) {
         await handleAutoUpdateJobCompletion(
           job.id,
           'failed',
-          candidate?.failure_summary || 'The required installation test could not complete.'
+          candidateFailureSummary || 'The required installation test could not complete.'
         );
       }
       continue;
     }
-    if (candidate.status !== 'passed') {
+    if (candidateStatus !== 'passed') {
       waiting++;
       continue;
     }
@@ -78,7 +126,7 @@ export async function GET(request: Request) {
     const { data: result, error: resultError } = await supabase
       .from('qa_package_results')
       .select('outcome')
-      .eq('package_profile_sha256', job.execution_profile_sha256!)
+      .eq('package_profile_sha256', executionProfileSha256!)
       .maybeSingle();
     if (resultError) throw resultError;
     if (result?.outcome !== 'Passed') {

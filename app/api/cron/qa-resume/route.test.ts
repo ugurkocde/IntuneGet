@@ -4,11 +4,13 @@ const {
   createServerClientMock,
   getFeatureFlagsMock,
   handleAutoUpdateJobCompletionMock,
+  ensureQaDemandMock,
   triggerPackagingWorkflowMock,
 } = vi.hoisted(() => ({
   createServerClientMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
   handleAutoUpdateJobCompletionMock: vi.fn(),
+  ensureQaDemandMock: vi.fn(),
   triggerPackagingWorkflowMock: vi.fn(),
 }));
 
@@ -19,6 +21,7 @@ vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: triggerPackag
 vi.mock('@/lib/auto-update/cleanup', () => ({
   handleAutoUpdateJobCompletion: handleAutoUpdateJobCompletionMock,
 }));
+vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: ensureQaDemandMock }));
 
 import { GET } from './route';
 
@@ -136,6 +139,79 @@ describe('GET /api/cron/qa-resume', () => {
       'failed',
       'Installer remained interactive.'
     );
+  });
+
+  it('rebuilds and relinks a superseded exact QA profile without failing the upload job', async () => {
+    const job = {
+      id: 'job-superseded',
+      qa_candidate_id: 'candidate-old',
+      execution_profile_sha256: 'A'.repeat(64),
+      status_message: 'Waiting',
+      created_at: '2026-08-09T12:00:00Z',
+      winget_id: 'Example.App',
+      display_name: 'Example App',
+      publisher: 'Example',
+      version: '2.0.0',
+      architecture: 'x64',
+      installer_url: 'https://example.test/installer.msi',
+      installer_sha256: 'C'.repeat(64),
+      installer_type: 'wix',
+      install_command: 'msiexec /i installer.msi /qn',
+      uninstall_command: 'msiexec /x {11111111-1111-1111-1111-111111111111} /qn',
+      install_scope: 'machine',
+      package_config: { psadtConfig: {}, detectionRules: [] },
+      is_auto_update: false,
+    };
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'waiting',
+      candidateId: 'candidate-current',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
+    const relinkUpdate = chain({ data: null, error: null });
+    let packagingCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          packagingCall++;
+          if (packagingCall === 1) return chain({ data: [job], error: null });
+          return relinkUpdate;
+        }
+        if (table === 'qa_candidates') {
+          return chain({
+            data: {
+              id: 'candidate-old',
+              status: 'superseded',
+              failure_summary: null,
+              package_profile_sha256: 'A'.repeat(64),
+            },
+            error: null,
+          });
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    };
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 1 });
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(client, expect.objectContaining({
+      wingetId: 'Example.App',
+      priority: 2000,
+      demandSource: 'customer',
+    }));
+    expect(relinkUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      qa_candidate_id: 'candidate-current',
+      execution_profile_sha256: 'B'.repeat(64),
+      presentation_profile_sha256: 'D'.repeat(64),
+    }));
   });
 
   it('finalizes auto-update tracking when packaging dispatch fails after QA passes', async () => {
