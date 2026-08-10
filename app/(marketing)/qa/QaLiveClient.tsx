@@ -6,12 +6,10 @@ import { T, Var } from 'gt-next';
 import {
   AlertTriangle,
   CheckCircle2,
-  Eye,
   ListOrdered,
   Loader2,
   Monitor,
   Radio,
-  RefreshCw,
   Server,
   ShieldCheck,
   XCircle,
@@ -209,14 +207,6 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
     capturedAt: data.viewer.capturedAt,
     serverTime: data.serverTime,
   });
-  const visualizationCaption = data.current.expectedUi && data.current.deployMode !== 'Auto'
-    ? <T>Any panel labeled “configuration preview” is host-rendered from sanitized PSADT settings—not captured PSADT UI.</T>
-    : null;
-  const viewerModeLabel = data.current.dialogExpected
-    ? <T>Genuine PSADT UI may appear</T>
-    : data.current.expectedUi && data.current.deployMode !== 'Auto'
-      ? <T><Var>{data.current.deployMode}</Var> · configuration preview only</T>
-      : <T><Var>{data.current.deployMode || 'PSADT'}</Var> install</T>;
   const executionContext = data.current.executionContext === 'LocalSystem' ? 'Runs as SYSTEM' : 'Runs as user';
 
   return (
@@ -269,30 +259,18 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           <div className="h-full rounded-full bg-accent-cyan transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${phase.progressPercent}%` }} />
         </div>
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(320px,2fr)] xl:grid-cols-[minmax(0,7fr)_minmax(360px,3fr)]">
-          <div className="-mx-5 w-[calc(100%+2.5rem)] overflow-hidden border-y border-overlay/10 bg-black sm:mx-0 sm:w-auto sm:rounded-xl sm:border" aria-labelledby="live-console-heading">
-            <div className="flex items-center justify-between border-b border-white/10 bg-bg-surface/80 px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <Monitor className="h-4 w-4 shrink-0 text-accent-cyan" aria-hidden="true" />
-                <h3 id="live-console-heading" className="shrink-0 text-sm font-medium text-text-primary"><T>Live test VM</T></h3>
-                <span className="hidden truncate text-xs text-text-muted md:inline">{viewerModeLabel}</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-3 text-xs text-text-muted">
-                <span className="hidden items-center gap-1.5 md:flex"><Eye className="h-3.5 w-3.5" aria-hidden="true" /><T>Read-only</T></span>
-                {frameState === 'live' ? (
-                  <span className="flex items-center gap-1.5 text-status-success">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-success motion-reduce:animate-none" aria-hidden="true" />
-                    <T>Live</T>
-                  </span>
-                ) : frameState === 'paused' ? (
-                  <span className="flex items-center gap-1.5 text-status-warning">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                    <T>Frame paused · retrying</T>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="relative aspect-video w-full bg-black">
+        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div
+            className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl lg:aspect-auto lg:min-h-[36rem]"
+            aria-labelledby="live-console-heading"
+          >
+            <h3 id="live-console-heading" className="sr-only"><T>Live test VM</T></h3>
+            {frameState === 'live' ? (
+              <span className="absolute right-4 top-4 z-10 animate-pulse text-xs font-semibold uppercase tracking-[0.16em] text-status-success drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] motion-reduce:animate-none">
+                <T>Live</T>
+              </span>
+            ) : null}
+            <div className="absolute inset-0">
               {data.viewer.available && data.viewer.sequence != null && data.viewer.candidateId ? (
                 <LiveFrameImage
                   key={data.viewer.candidateId}
@@ -306,15 +284,6 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-bg-surface/80 px-4 py-2 text-[11px] text-text-muted md:hidden">
-              <span className="truncate">{viewerModeLabel}</span>
-              <span className="flex shrink-0 items-center gap-1"><Eye className="h-3 w-3" aria-hidden="true" /><T>Read-only</T></span>
-            </div>
-            {visualizationCaption ? (
-              <p className="border-t border-white/10 bg-bg-surface/80 px-4 py-2 text-xs leading-relaxed text-text-muted">
-                {visualizationCaption}
-              </p>
-            ) : null}
           </div>
           <QaLiveActivityPanel activity={data.activity} log={data.log} phase={data.current.phase} serverTime={data.serverTime} />
         </div>
