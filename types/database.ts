@@ -329,12 +329,16 @@ export interface Database {
         Row: {
           id: string;
           head_sha: string | null;
+          github_etag: string | null;
+          github_rate_limited_until: string | null;
           last_checked_at: string | null;
           updated_at: string;
         };
         Insert: {
           id: string;
           head_sha?: string | null;
+          github_etag?: string | null;
+          github_rate_limited_until?: string | null;
           last_checked_at?: string | null;
           updated_at?: string;
         };

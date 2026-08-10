@@ -66,6 +66,7 @@ function createSupabaseStub(options: {
   candidates?: Array<Record<string, unknown>>;
   candidatePages?: Array<Array<Record<string, unknown>>>;
   demandBackfillApps?: string[];
+  pollState?: Record<string, unknown>;
 }) {
   const pollRunInserts: Array<Record<string, unknown>> = [];
   const pollRunUpdates: Array<Record<string, unknown>> = [];
@@ -115,7 +116,15 @@ function createSupabaseStub(options: {
       }
       if (table === 'qa_winget_poll_state') {
         return {
-          select: vi.fn(() => query({ data: { head_sha: 'a'.repeat(40), last_checked_at: null }, error: null })),
+          select: vi.fn(() => query({
+            data: options.pollState || {
+              head_sha: 'a'.repeat(40),
+              last_checked_at: null,
+              github_etag: null,
+              github_rate_limited_until: null,
+            },
+            error: null,
+          })),
           update: vi.fn((row: Record<string, unknown>) => {
             cursorUpdates.push(row);
             return query({ data: null, error: null });
@@ -270,6 +279,8 @@ beforeEach(() => {
     changedFiles: 0,
     changedPackageIds: [],
     initialized: false,
+    etag: '"next"',
+    rateLimitedUntil: null,
   });
 });
 
@@ -296,7 +307,13 @@ describe('GET /api/cron/qa-enqueue', () => {
       errorCount: 0,
     });
     expect(pollRunInserts).toEqual([expect.objectContaining({ request_id: 'fra1::request-1' })]);
-    expect(cursorUpdates).toEqual([expect.objectContaining({ head_sha: 'b'.repeat(40) })]);
+    expect(cursorUpdates).toEqual([
+      expect.objectContaining({
+        head_sha: 'b'.repeat(40),
+        github_etag: '"next"',
+        github_rate_limited_until: null,
+      }),
+    ]);
     expect(rpcCalls).toEqual([
       { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 3 } },
     ]);
@@ -310,6 +327,43 @@ describe('GET /api/cron/qa-enqueue', () => {
         demand_backfill_count: 0,
       }),
     ]);
+  });
+
+  it('persists GitHub rate-limit deferral and does not advance the change cursor', async () => {
+    const resetAt = '2026-08-10T09:00:00.000Z';
+    detectWingetChangesMock.mockResolvedValue({
+      baseSha: 'a'.repeat(40),
+      headSha: 'a'.repeat(40),
+      changedFiles: 0,
+      changedPackageIds: [],
+      initialized: false,
+      etag: '"current"',
+      rateLimitedUntil: resetAt,
+    });
+    const { client, cursorUpdates, pollRunUpdates } = createSupabaseStub({
+      pollState: {
+        head_sha: 'a'.repeat(40),
+        last_checked_at: null,
+        github_etag: '"current"',
+        github_rate_limited_until: null,
+      },
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(207);
+    expect(body).toMatchObject({
+      success: false,
+      checked: 0,
+      errorCount: 1,
+      errors: [`system: WinGet GitHub change feed paused until ${resetAt}`],
+    });
+    expect(cursorUpdates).toEqual([
+      expect.objectContaining({ github_rate_limited_until: resetAt }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({ status: 'partial', error_count: 1 });
   });
 
   it('queues a demanded app missing latest-version catalog QA without a WinGet change', async () => {

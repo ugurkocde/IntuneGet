@@ -291,7 +291,7 @@ export async function GET(request: Request) {
         .eq('is_locale_variant', false),
       supabase
         .from('qa_winget_poll_state')
-        .select('head_sha, last_checked_at')
+        .select('head_sha, last_checked_at, github_etag, github_rate_limited_until')
         .eq('id', POLL_STATE_ID)
         .maybeSingle(),
     ]);
@@ -311,10 +311,29 @@ export async function GET(request: Request) {
       token: process.env.GITHUB_PAT,
       baseSha,
       since: stateResult.data?.last_checked_at || lookbackStart,
+      etag: stateResult.data?.github_etag || null,
+      rateLimitedUntil: stateResult.data?.github_rate_limited_until || null,
     });
     baseSha = changes.baseSha;
     headSha = changes.headSha;
     changedPackageCount = changes.changedPackageIds.length;
+    if (changes.rateLimitedUntil) {
+      const { error: rateLimitStateError } = await supabase
+        .from('qa_winget_poll_state')
+        .update({
+          github_rate_limited_until: changes.rateLimitedUntil,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', POLL_STATE_ID);
+      if (rateLimitStateError) {
+        throw new Error(`Could not persist the GitHub rate-limit reset: ${rateLimitStateError.message}`);
+      }
+      recordPollError(
+        summary,
+        'system',
+        `WinGet GitHub change feed paused until ${changes.rateLimitedUntil}`
+      );
+    }
     const [backfill, demandBackfillIds] = await Promise.all([
       findToolchainBackfillIds(supabase),
       findDemandBackfillIds(supabase),
@@ -642,6 +661,8 @@ export async function GET(request: Request) {
         .from('qa_winget_poll_state')
         .update({
           head_sha: headSha,
+          github_etag: changes.etag,
+          github_rate_limited_until: null,
           last_checked_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })

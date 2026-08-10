@@ -93,7 +93,7 @@ describe('detectWingetChanges', () => {
     );
   });
 
-  it('falls back to the public feed when an authenticated request is rate limited', async () => {
+  it('persists the authenticated reset time without falling back to a shared public IP quota', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
@@ -101,33 +101,46 @@ describe('detectWingetChanges', () => {
           status: 403,
           headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1786220000' },
         })
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ sha: BASE }]), { status: 200 }));
+      );
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     await expect(
       detectWingetChanges({ token: 'configured-token', baseSha: BASE, fetchImpl })
-    ).resolves.toMatchObject({ headSha: BASE, changedPackageIds: [] });
+    ).resolves.toMatchObject({
+      headSha: BASE,
+      changedPackageIds: [],
+      rateLimitedUntil: new Date(1786220000 * 1000).toISOString(),
+    });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get('Authorization')).toBe(
       'Bearer configured-token'
     );
-    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).has('Authorization')).toBe(false);
   });
 
-  it('reports the reset time when both authenticated and public feeds are rate limited', async () => {
-    const limited = () =>
-      new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
-        status: 403,
-        headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1786220000' },
-      });
-    const fetchImpl = vi.fn().mockImplementation(limited);
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  it('uses a persistent ETag and returns immediately on 304', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(null, { status: 304, headers: { etag: '"current"' } })
+    );
 
     await expect(
-      detectWingetChanges({ token: 'configured-token', baseSha: BASE, fetchImpl })
-    ).rejects.toThrow(/resets 2026-/);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+      detectWingetChanges({ token: 'configured-token', baseSha: BASE, etag: '"current"', fetchImpl })
+    ).resolves.toMatchObject({
+      headSha: BASE,
+      changedPackageIds: [],
+      etag: '"current"',
+      rateLimitedUntil: null,
+    });
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get('If-None-Match')).toBe('"current"');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call GitHub before a stored rate-limit reset', async () => {
+    const fetchImpl = vi.fn();
+    const future = new Date(Date.now() + 60_000).toISOString();
+    await expect(
+      detectWingetChanges({ baseSha: BASE, rateLimitedUntil: future, fetchImpl })
+    ).resolves.toMatchObject({ headSha: BASE, rateLimitedUntil: future });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
