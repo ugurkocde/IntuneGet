@@ -397,7 +397,7 @@ export function generateUninstallCommand(
       // registration after installation instead of emitting a literal GUID
       // placeholder that msiexec will reject with exit code 1619.
       if (displayName) {
-        return generateRegistryUninstallCommand(displayName, installer.type);
+        return generateRegistryUninstallCommand(displayName);
       }
       return 'MSI_UNINSTALL_IDENTITY_REQUIRED';
 
@@ -420,7 +420,6 @@ export function generateUninstallCommand(
       if (displayName) {
         return generateRegistryUninstallCommand(
           displayName,
-          installer.type,
           installer.productCode
         );
       }
@@ -432,7 +431,7 @@ export function generateUninstallCommand(
 
     default:
       if (displayName) {
-        return generateRegistryUninstallCommand(displayName, 'exe');
+        return generateRegistryUninstallCommand(displayName);
       }
       return '# Manual uninstall required';
   }
@@ -448,19 +447,25 @@ export function generateUninstallCommand(
  */
 function generateRegistryUninstallCommand(
   displayName: string,
-  installerType: string,
   productCode?: string
 ): string {
-  // Burn bundles commonly register one bundle plus several child MSI entries.
-  // Preserve the manifest product code so the packager can select the bundle's
-  // exact uninstall registry key instead of matching every similarly named item.
-  if (
-    installerType === 'burn' &&
-    /^\{[0-9A-Fa-f-]{36}\}$/.test(productCode || '')
-  ) {
-    return `REGISTRY_UNINSTALL_PRODUCT:${productCode}:${displayName}`;
+  const normalizedDisplayName = displayName.trim();
+  if (!normalizedDisplayName) {
+    return '# Manual uninstall required';
   }
-  return `REGISTRY_UNINSTALL:${displayName}`;
+  // EXE-family installers can wrap MSI products or register bundles whose ARP
+  // name differs from the catalog display name. A manifest ProductCode or
+  // AppsAndFeatures ProductCode is the authoritative uninstall identity, so
+  // preserve it for every EXE-family installer instead of falling back to a
+  // human-readable name that may be normalized or localized differently.
+  const productCodeMatch = productCode?.trim().match(
+    /^\{?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\}?$/
+  );
+  if (productCodeMatch) {
+    const canonicalProductCode = `{${productCodeMatch[1].toUpperCase()}}`;
+    return `REGISTRY_UNINSTALL_PRODUCT:${canonicalProductCode}:${normalizedDisplayName}`;
+  }
+  return `REGISTRY_UNINSTALL:${normalizedDisplayName}`;
 }
 
 /**

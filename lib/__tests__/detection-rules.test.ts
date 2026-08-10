@@ -847,8 +847,51 @@ describe('generateUninstallCommand', () => {
     const command = generateUninstallCommand(installer, 'Python 3.14');
 
     expect(command).toBe(
-      'REGISTRY_UNINSTALL_PRODUCT:{97b6de30-6082-48d1-9bb4-9f43296531a4}:Python 3.14'
+      'REGISTRY_UNINSTALL_PRODUCT:{97B6DE30-6082-48D1-9BB4-9F43296531A4}:Python 3.14'
     );
+  });
+
+  it('should preserve an EXE wrapper product code in the registry uninstall marker', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/reader.exe',
+      sha256: 'abc123',
+      type: 'exe',
+      productCode: '{AC76BA86-1033-FF00-7760-BC15014EA700}',
+    };
+
+    const command = generateUninstallCommand(
+      installer,
+      'Adobe Acrobat Reader (64-bit)'
+    );
+
+    expect(command).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat Reader (64-bit)'
+    );
+  });
+
+  it('should canonicalize a braceless product code and reject malformed GUID shapes', () => {
+    const base: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.exe',
+      sha256: 'abc123',
+      type: 'exe',
+    };
+
+    expect(
+      generateUninstallCommand(
+        { ...base, productCode: 'ac76ba86-1033-ff00-7760-bc15014ea700' },
+        'Reader'
+      )
+    ).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Reader'
+    );
+    expect(
+      generateUninstallCommand(
+        { ...base, productCode: '{------------------------------------}' },
+        'Reader'
+      )
+    ).toBe('REGISTRY_UNINSTALL:Reader');
   });
 
   it('should delegate Inno uninstall to registry lookup when display name is provided', () => {
@@ -876,6 +919,18 @@ describe('generateUninstallCommand', () => {
     const command = generateUninstallCommand(installer);
 
     expect(command).toBe('uninstall.exe /S');
+  });
+
+  it('should not emit an exact product marker without a usable display name', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.exe',
+      sha256: 'abc123',
+      type: 'exe',
+      productCode: '{AC76BA86-1033-FF00-7760-BC15014EA700}',
+    };
+
+    expect(generateUninstallCommand(installer, '   ')).toBe('# Manual uninstall required');
   });
 });
 

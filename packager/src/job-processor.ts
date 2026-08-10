@@ -707,6 +707,13 @@ ${steps}
 `;
   }
 
+  private getRegistryProductCode(job: PackagingJob): string | null {
+    const match = job.uninstall_command?.match(
+      /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$/
+    );
+    return match?.[1] || null;
+  }
+
   /**
    * Generate PowerShell code to verify the application appears in Add/Remove
    * Programs after install, failing the deployment before the detection
@@ -714,6 +721,22 @@ ${steps}
    * Opt-in via package_config.psadtConfig.verifyInstall; returns '' when disabled
    */
   private getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string): string {
+    const registryProductCode = this.getRegistryProductCode(job);
+    if (registryProductCode) {
+      return `
+    ## Verify the exact manifest/AppsAndFeatures uninstall identity before writing the marker
+    $verifyApps = @()
+    foreach ($verificationAttempt in 1..30) {
+        $verifyApps = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${registryProductCode}' } -ErrorAction SilentlyContinue)
+        if ($verifyApps.Count -eq 1) { break }
+        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }
+    }
+    if ($verifyApps.Count -ne 1) {
+        throw "Post-install verification failed: exact uninstall identity [${registryProductCode}] was found $($verifyApps.Count) time(s)."
+    }
+    Write-ADTLogEntry -Message "Post-install verification passed for exact uninstall identity [${registryProductCode}]" -Source 'Install-ADTDeployment'
+`;
+    }
     const psadtConfig = this.getPsadtConfig(job);
     if (psadtConfig?.verifyInstall !== true) {
       return '';
@@ -1004,7 +1027,7 @@ ${steps}
     }
 
     const registryProductMatch = job.uninstall_command.match(
-      /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9-]{36}\}):(.+)$/
+      /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$/
     );
     if (registryProductMatch && job.installer_type.toLowerCase() === 'burn') {
       const productCode = registryProductMatch[1];
@@ -1021,7 +1044,7 @@ ${steps}
     } else {
         throw "The captured Burn bundle does not provide an uninstall command."
     }
-    [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")
+    [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     if ($registeredUninstallArguments.Count -eq 0) {
         $registeredUninstallArguments = @('/uninstall', '/quiet', '/norestart')
     }
@@ -1030,7 +1053,67 @@ ${steps}
         throw "The packaged Burn uninstaller was not found: $bundledUninstaller"
     }
     Write-ADTLogEntry -Message "Using packaged Burn bundle because the registered vendor cache may be disposable." -Source 'Uninstall-ADTDeployment'
-    Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -CreateNoWindow -WaitForMsiExec -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)`;
+    Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -CreateNoWindow -WaitForMsiExec -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)
+    $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)
+    $nextUninstallProgressLog = [DateTime]::UtcNow
+    do {
+        $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${productCode}' })
+        if ($remainingApplications.Count -eq 0) { break }
+        if ([DateTime]::UtcNow -ge $uninstallDeadline) { break }
+        if ([DateTime]::UtcNow -ge $nextUninstallProgressLog) {
+            Write-ADTLogEntry -Message "Waiting for Burn uninstall registration [${productCode}] to be removed; a child process may still be working." -Source 'Uninstall-ADTDeployment'
+            $nextUninstallProgressLog = [DateTime]::UtcNow.AddSeconds(15)
+        }
+        Start-Sleep -Seconds 5
+    } while ($true)
+    $remainingApplications = @()
+    foreach ($verificationAttempt in 1..5) {
+        $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${productCode}' })
+        if ($remainingApplications.Count -eq 0) { break }
+        if ($verificationAttempt -lt 5) { Start-Sleep -Seconds 2 }
+    }
+    if ($remainingApplications.Count -gt 0) {
+        throw "The exact Burn uninstall registration [${productCode}] still exists after the vendor command completion deadline."
+    }`;
+    }
+
+    if (registryProductMatch) {
+      const productCode = registryProductMatch[1];
+      return `$installedApps = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${productCode}' })
+    if ($installedApps.Count -ne 1) {
+        throw "Could not find one exact vendor uninstall entry [${productCode}]. Found $($installedApps.Count); refusing broad removal."
+    }
+    $registeredApplication = $installedApps[0]
+    if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {
+        Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $registeredApplication.ProductCode -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)
+    } else {
+        Uninstall-ADTApplication -InstalledApplication $registeredApplication -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)
+    }
+    $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)
+    $nextUninstallProgressLog = [DateTime]::UtcNow
+    do {
+        $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${productCode}' })
+        if ($remainingApplications.Count -eq 0) { break }
+        if ([DateTime]::UtcNow -ge $uninstallDeadline) { break }
+        if ([DateTime]::UtcNow -ge $nextUninstallProgressLog) {
+            Write-ADTLogEntry -Message "Waiting for vendor uninstall registration [${productCode}] to be removed; a child process may still be working." -Source 'Uninstall-ADTDeployment'
+            $nextUninstallProgressLog = [DateTime]::UtcNow.AddSeconds(15)
+        }
+        Start-Sleep -Seconds 5
+    } while ($true)
+    $remainingApplications = @()
+    foreach ($verificationAttempt in 1..5) {
+        $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq '${productCode}' })
+        if ($remainingApplications.Count -eq 0) { break }
+        if ($verificationAttempt -lt 5) { Start-Sleep -Seconds 2 }
+    }
+    if ($remainingApplications.Count -gt 0) {
+        throw "The exact vendor uninstall registration [${productCode}] still exists after the vendor command completion deadline."
+    }`;
+    }
+
+    if (/^REGISTRY_UNINSTALL_PRODUCT:/.test(job.uninstall_command)) {
+      return 'throw "The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code."';
     }
 
     // MSI uninstall: use the product code with Start-ADTMsiProcess

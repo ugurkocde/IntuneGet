@@ -7,6 +7,7 @@ import type { PackagingJob } from '../src/job-poller';
 type ScriptGenerator = {
   getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string;
   getUninstallCommand(job: PackagingJob, fileName: string): string;
+  getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string): string;
 };
 
 const generator = JobProcessor.prototype as unknown as ScriptGenerator;
@@ -200,11 +201,86 @@ describe('Burn bundle PSADT generation', () => {
 
     expect(script).toContain("$_.PSChildName -eq '{97b6de30-6082-48d1-9bb4-9f43296531a4}'");
     expect(script).toContain(
-      '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")'
+      '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object'
     );
     expect(script).toContain("Join-Path $adtSession.DirFiles 'python-3.14.7-amd64.exe'");
     expect(script).toContain('-WorkingDirectory $adtSession.DirFiles -CreateNoWindow');
+    expect(script).toContain(
+      "The exact Burn uninstall registration [{97b6de30-6082-48d1-9bb4-9f43296531a4}] still exists"
+    );
+    expect(script).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
+    expect(script).toContain('foreach ($verificationAttempt in 1..5)');
     expect(script).not.toContain("Start-ADTMsiProcess -Action 'Uninstall'");
+  });
+});
+
+describe('EXE product identity PSADT generation', () => {
+  it('verifies and removes only the exact AppsAndFeatures product identity', () => {
+    const job = packagingJob({
+      winget_id: 'Adobe.Acrobat.Reader.64-bit',
+      display_name: 'Adobe Acrobat Reader (64-bit)',
+      installer_type: 'exe',
+      uninstall_command:
+        'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat Reader (64-bit)',
+    });
+
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      job,
+      'Adobe Acrobat Reader (64-bit)'
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'reader.exe'
+    );
+
+    expect(verification).toContain(
+      "$_.PSChildName -eq '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
+    );
+    expect(verification).toContain('foreach ($verificationAttempt in 1..30)');
+    expect(uninstall).toContain(
+      "$_.PSChildName -eq '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
+    );
+    expect(uninstall).toContain('$registeredApplication.WindowsInstaller');
+    expect(uninstall).toContain('Uninstall-ADTApplication -InstalledApplication $registeredApplication');
+    expect(uninstall).toContain(
+      'The exact vendor uninstall registration [{AC76BA86-1033-FF00-7760-BC15014EA700}] still exists'
+    );
+    expect(uninstall).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
+    expect(uninstall).toContain('foreach ($verificationAttempt in 1..5)');
+    expect(uninstall).toContain('refusing broad removal');
+    expect(uninstall).not.toContain(
+      "Start-ADTMsiProcess -Action 'Uninstall' -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
+    );
+  });
+
+  it('always verifies an exact product identity even when generic verification is disabled', () => {
+    const job = packagingJob({
+      installer_type: 'exe',
+      uninstall_command:
+        'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat Reader (64-bit)',
+      package_config: { psadtConfig: { verifyInstall: false } },
+    });
+
+    expect(
+      generator.getPostInstallVerificationBlock.call(generator, job, 'Adobe Acrobat Reader (64-bit)')
+    ).toContain("$_.PSChildName -eq '{AC76BA86-1033-FF00-7760-BC15014EA700}'");
+  });
+
+  it('fails closed when an exact product marker is malformed', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'exe',
+        uninstall_command:
+          'REGISTRY_UNINSTALL_PRODUCT:not-a-guid:Vendor app {AC76BA86-1033-FF00-7760-BC15014EA700}',
+      }),
+      'vendor.exe'
+    );
+
+    expect(uninstall).toContain('exact vendor uninstall identity is malformed');
+    expect(uninstall).not.toContain("Start-ADTMsiProcess -Action 'Uninstall'");
   });
 });
 

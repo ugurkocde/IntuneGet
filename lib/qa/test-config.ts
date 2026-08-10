@@ -48,7 +48,7 @@ function appsAndFeaturesProductCode(installer: ManifestRecord): string {
     ? installer.AppsAndFeaturesEntries
     : [];
   for (const entry of entries) {
-    const productCode = text(record(entry).ProductCode);
+    const productCode = msiProductCode(record(entry).ProductCode);
     if (productCode) return productCode;
   }
   return '';
@@ -56,11 +56,10 @@ function appsAndFeaturesProductCode(installer: ManifestRecord): string {
 
 function msiProductCode(value: unknown): string {
   const candidate = text(value);
-  return /^\{?[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}?$/.test(
-    candidate
-  )
-    ? candidate
-    : '';
+  const match = candidate.match(
+    /^\{?([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})\}?$/
+  );
+  return match ? `{${match[1].toUpperCase()}}` : '';
 }
 
 export function buildQaCatalogTestConfig({
@@ -115,11 +114,12 @@ export function buildQaCatalogTestConfig({
     : undefined;
   const rawScope = text(installer.Scope) || text(manifest.Scope);
   const scope: WingetScope = rawScope.toLowerCase() === 'user' ? 'user' : 'machine';
-  const productCode =
-    msiProductCode(installer.ProductCode) ||
-    msiProductCode(appsAndFeaturesProductCode(installer)) ||
-    msiProductCode(manifest.ProductCode) ||
-    msiProductCode(appsAndFeaturesProductCode(manifest));
+  const explicitInstallerProductCode = text(installer.ProductCode);
+  const productCode = explicitInstallerProductCode
+    ? msiProductCode(explicitInstallerProductCode)
+    : appsAndFeaturesProductCode(installer) ||
+      msiProductCode(manifest.ProductCode) ||
+      appsAndFeaturesProductCode(manifest);
   const packageFamilyName =
     text(installer.PackageFamilyName) || text(manifest.PackageFamilyName);
   const inheritedInstaller: WingetInstaller = {

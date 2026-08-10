@@ -584,6 +584,56 @@ describe('normalizeManifestInstallers', () => {
     );
   });
 
+  it('normalizes installer and root AppsAndFeatures product identities', () => {
+    const installerIdentity = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/reader.exe',
+        InstallerSha256: 'abc123',
+        AppsAndFeaturesEntries: [{
+          ProductCode: 'ac76ba86-1033-ff00-7760-bc15014ea700',
+        }],
+      }],
+    });
+    const inheritedIdentity = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      AppsAndFeaturesEntries: [{
+        ProductCode: '{97b6de30-6082-48d1-9bb4-9f43296531a4}',
+      }],
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/bundle.exe',
+        InstallerSha256: 'def456',
+      }],
+    });
+
+    expect(installerIdentity[0].ProductCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(normalizeInstaller(installerIdentity[0]).productCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(inheritedIdentity[0].ProductCode).toBe(
+      '{97B6DE30-6082-48D1-9BB4-9F43296531A4}'
+    );
+  });
+
+  it('does not replace an explicit non-GUID installer identity with an inherited product code', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'inno',
+      ProductCode: '{11111111-1111-1111-1111-111111111111}',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/setup.exe',
+        InstallerSha256: 'abc123',
+        ProductCode: '{22222222-2222-2222-2222-222222222222}_is1',
+      }],
+    });
+
+    expect(installer.ProductCode).toBeUndefined();
+  });
+
   it('inherits root nested installer semantics before normalization', () => {
     const installers = normalizeManifestInstallers({
       InstallerType: 'zip',

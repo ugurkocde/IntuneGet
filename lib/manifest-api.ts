@@ -18,6 +18,26 @@ import { getCatalogSource } from '@/lib/catalog';
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests';
 const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
 
+function normalizeProductCode(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const match = value.trim().match(
+    /^\{?([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})\}?$/
+  );
+  return match ? `{${match[1].toUpperCase()}}` : undefined;
+}
+
+function appsAndFeaturesProductCode(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const productCode = normalizeProductCode(
+      (entry as Record<string, unknown>).ProductCode
+    );
+    if (productCode) return productCode;
+  }
+  return undefined;
+}
+
 function githubReadHeaders(accept: string): Record<string, string> {
   const headers: Record<string, string> = {
     'User-Agent': 'IntuneGet',
@@ -407,7 +427,12 @@ function coerceInstallersArray(
     return [];
   }
 
-  return installerArray.map((inst) => ({
+  return installerArray.map((inst) => {
+    const explicitProductCode = typeof inst.ProductCode === 'string'
+      ? inst.ProductCode.trim()
+      : '';
+
+    return ({
     Architecture: (inst.Architecture as WingetInstaller['Architecture']) || 'x64',
     InstallerUrl: (inst.InstallerUrl as string) || '',
     InstallerSha256: (inst.InstallerSha256 as string) || '',
@@ -419,11 +444,14 @@ function coerceInstallersArray(
       defaultSilentArgs ? { Silent: defaultSilentArgs } : undefined,
       inst.InstallerSwitches
     ),
-    ProductCode: inst.ProductCode as string,
+    ProductCode: explicitProductCode
+      ? normalizeProductCode(explicitProductCode)
+      : appsAndFeaturesProductCode(inst.AppsAndFeaturesEntries),
     PackageFamilyName: inst.PackageFamilyName as string,
     UpgradeBehavior: inst.UpgradeBehavior as WingetInstaller['UpgradeBehavior'],
     Dependencies: inst.Dependencies as WingetInstaller['Dependencies'],
-  }));
+    });
+  });
 }
 
 function inferArchitectureFromInstallerUrl(installerUrl: string): WingetInstaller['Architecture'] {
@@ -560,10 +588,20 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
   const defaultMinOS = manifest.MinimumOSVersion as string;
   const defaultUpgrade = manifest.UpgradeBehavior as string;
   const defaultDependencies = manifest.Dependencies as WingetInstaller['Dependencies'];
-  const defaultProductCode = manifest.ProductCode as string;
+  const defaultProductCode =
+    normalizeProductCode(manifest.ProductCode) ||
+    appsAndFeaturesProductCode(manifest.AppsAndFeaturesEntries);
   const defaultPackageFamilyName = manifest.PackageFamilyName as string;
 
-  return rawInstallers.map((installer) => ({
+  return rawInstallers.map((installer) => {
+    const explicitInstallerProductCode = typeof installer.ProductCode === 'string'
+      ? installer.ProductCode.trim()
+      : '';
+    const installerProductCode = explicitInstallerProductCode
+      ? normalizeProductCode(explicitInstallerProductCode)
+      : appsAndFeaturesProductCode(installer.AppsAndFeaturesEntries) || defaultProductCode;
+
+    return ({
     Architecture: (installer.Architecture as WingetInstaller['Architecture']) || 'x64',
     InstallerUrl: (installer.InstallerUrl as string) || '',
     InstallerSha256: (installer.InstallerSha256 as string) || '',
@@ -580,7 +618,10 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     // WinGet inherits installer switches per field. An installer-level Custom
     // value must not discard a root-level Silent value (Vivaldi is one example).
     InstallerSwitches: mergeInstallerSwitches(defaultSwitches, installer.InstallerSwitches),
-    ProductCode: (installer.ProductCode as string) || defaultProductCode,
+    // A non-empty installer-level ProductCode is authoritative. If it is an
+    // Inno/EXE registry key rather than a canonical GUID, do not replace it
+    // with an unrelated inherited identity; name-based discovery is safer.
+    ProductCode: installerProductCode,
     PackageFamilyName:
       (installer.PackageFamilyName as string) || defaultPackageFamilyName,
     UpgradeBehavior: (installer.UpgradeBehavior as WingetInstaller['UpgradeBehavior']) ||
@@ -590,7 +631,8 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     MinimumOSVersion: (installer.MinimumOSVersion as string) || defaultMinOS,
     Dependencies: (installer.Dependencies as WingetInstaller['Dependencies']) ||
                   defaultDependencies,
-  }));
+    });
+  });
 }
 
 /**
@@ -705,7 +747,7 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
     nestedInstallerPath: installer.NestedInstallerFiles?.[0]?.RelativeFilePath,
     scope: installer.Scope,
     silentArgs,
-    productCode: installer.ProductCode,
+    productCode: normalizeProductCode(installer.ProductCode),
     packageFamilyName: installer.PackageFamilyName,
     packageDependencies: packageDependencies.length > 0 ? packageDependencies : undefined,
   };

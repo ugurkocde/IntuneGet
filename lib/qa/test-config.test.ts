@@ -26,7 +26,8 @@ describe('buildQaCatalogTestConfig', () => {
       sourceInstallerType: 'inno',
       silentArgs: '/VERYSILENT',
       productCode: '{00000000-0000-0000-0000-000000000001}',
-      uninstallCommand: 'REGISTRY_UNINSTALL:Example',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{00000000-0000-0000-0000-000000000001}:Example',
       profileKind: 'catalog-default',
     });
     expect(config.psadtConfig).toMatchObject({
@@ -186,6 +187,32 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
+  it('uses an EXE AppsAndFeatures product code as the exact uninstall identity', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Adobe.Acrobat.Reader.64-bit',
+        name: 'Adobe Acrobat Reader (64-bit)',
+        publisher: 'Adobe',
+        version: '26.001.21771',
+      },
+      manifest: { InstallerType: 'exe' },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'exe',
+        AppsAndFeaturesEntries: [
+          { ProductCode: '{AC76BA86-1033-FF00-7760-BC15014EA700}' },
+        ],
+      },
+    });
+
+    expect(config.productCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat Reader (64-bit)'
+    );
+  });
+
   it('prefers architecture-specific AppsAndFeatures identity over a root product code', () => {
     const config = buildQaCatalogTestConfig({
       app: {
@@ -208,6 +235,51 @@ describe('buildQaCatalogTestConfig', () => {
     });
 
     expect(config.productCode).toBe('{22222222-2222-2222-2222-222222222222}');
+  });
+
+  it('skips malformed AppsAndFeatures identities and uses the next canonical GUID', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.MultiEntry',
+        name: 'Contoso Multi Entry',
+        publisher: 'Contoso',
+        version: '2.0.0',
+      },
+      manifest: { InstallerType: 'exe' },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'exe',
+        AppsAndFeaturesEntries: [
+          { ProductCode: 'not-a-guid' },
+          { ProductCode: '{33333333-3333-3333-3333-333333333333}' },
+        ],
+      },
+    });
+
+    expect(config.productCode).toBe('{33333333-3333-3333-3333-333333333333}');
+  });
+
+  it('does not replace an explicit Inno registry key with an inherited MSI-style GUID', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.InnoApp',
+        name: 'Contoso Inno App',
+        publisher: 'Contoso',
+        version: '2.0.0',
+      },
+      manifest: {
+        InstallerType: 'inno',
+        ProductCode: '{11111111-1111-1111-1111-111111111111}',
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'inno',
+        ProductCode: '{22222222-2222-2222-2222-222222222222}_is1',
+      },
+    });
+
+    expect(config.productCode).toBe('');
+    expect(config.uninstallCommand).toBe('REGISTRY_UNINSTALL:Contoso Inno App');
   });
 
   it('inherits a root package family name for user-scoped MSIX handling', () => {
