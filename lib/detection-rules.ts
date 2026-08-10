@@ -187,7 +187,10 @@ function generateMsixDetectionRules(
     return [
       {
         type: 'script',
-        scriptContent: generateMsixDetectionScript(installer.packageFamilyName),
+        scriptContent: generateMsixDetectionScript(
+          installer.packageFamilyName,
+          installer.scope
+        ),
         enforceSignatureCheck: false,
         runAs32Bit: false,
       } as ScriptDetectionRule,
@@ -263,16 +266,32 @@ function getBasePath(scope?: WingetScope, architecture?: string): string {
  * Generate MSIX detection script
  * MSIX apps are detected via Get-AppxPackage
  */
-function generateMsixDetectionScript(packageFamilyName: string): string {
+function generateMsixDetectionScript(
+  packageFamilyName: string,
+  scope?: WingetScope
+): string {
   // Extract the package name (before the underscore in family name)
   const packageName = packageFamilyName.split('_')[0];
+  const packageLookup =
+    scope === 'user'
+      ? [
+          `$package = Get-AppxPackage -Name "${packageName}"`,
+          '$runningAsSystem = [Security.Principal.WindowsIdentity]::GetCurrent().IsSystem',
+          `if (-not $package -and $runningAsSystem) { $package = Get-AppxPackage -Name "${packageName}" -AllUsers }`,
+        ].join('\n')
+      : `$package = Get-AppxPackage -Name "${packageName}" -AllUsers`;
 
   const lines = [
     '# MSIX Detection Script',
     `# Package Family Name: ${packageFamilyName}`,
     '',
     '$ErrorActionPreference = "SilentlyContinue"',
-    `$package = Get-AppxPackage -Name "*${packageName}*" -AllUsers`,
+    packageLookup,
+    ...(scope === 'user'
+      ? []
+      : [
+          `if (-not $package) { $package = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq "${packageName}" } }`,
+        ]),
     'if ($package) {',
     '    Write-Output "Installed"',
     '    exit 0',
@@ -338,7 +357,14 @@ export function generateUninstallCommand(
       if (installer.productCode) {
         return `msiexec /x "${installer.productCode}" /qn /norestart`;
       }
-      return 'msiexec /x {PRODUCT_CODE} /qn /norestart';
+      // Some manifests omit ProductCode even though Windows Installer creates
+      // an authoritative uninstall registration at install time. Resolve that
+      // registration after installation instead of emitting a literal GUID
+      // placeholder that msiexec will reject with exit code 1619.
+      if (displayName) {
+        return generateRegistryUninstallCommand(displayName, installer.type);
+      }
+      return 'MSI_UNINSTALL_IDENTITY_REQUIRED';
 
     case 'msix':
     case 'appx':
@@ -346,10 +372,8 @@ export function generateUninstallCommand(
       if (installer.packageFamilyName) {
         return `MSIX_UNINSTALL:${installer.packageFamilyName.split('_')[0]}`;
       }
-      // Fallback using display name
-      if (displayName) {
-        return `MSIX_UNINSTALL:${displayName}`;
-      }
+      // A display name is not an AppX package identity. Keep the marker
+      // intentionally invalid so both packagers reject it before deployment.
       return 'MSIX_UNINSTALL:{PACKAGE_NAME}';
 
     case 'exe':

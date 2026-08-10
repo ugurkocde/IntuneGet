@@ -206,3 +206,67 @@ describe('Burn bundle PSADT generation', () => {
     expect(script).not.toContain("Start-ADTMsiProcess -Action 'Uninstall'");
   });
 });
+
+describe('self-hosted MSIX PSADT generation', () => {
+  const msixJob = (scope: 'user' | 'machine'): PackagingJob => packagingJob({
+    winget_id: 'Microsoft.WindowsTerminal',
+    display_name: 'Windows Terminal',
+    version: '1.24.11911.0',
+    installer_type: 'msix',
+    installer_url: 'https://example.com/terminal.msixbundle',
+    uninstall_command: 'MSIX_UNINSTALL:Microsoft.WindowsTerminal',
+    install_scope: scope,
+  });
+
+  it('uses current-user AppX commands for user-scoped packages', () => {
+    const job = msixJob('user');
+    const install = generator.getInstallCommand.call(
+      generator,
+      job,
+      'terminal.msixbundle',
+      ''
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'terminal.msixbundle'
+    );
+
+    expect(install).toContain('Add-AppxPackage -Path $msixPath');
+    expect(install).not.toContain('Add-AppxProvisionedPackage');
+    expect(uninstall).toContain("Get-AppxPackage -Name 'Microsoft.WindowsTerminal'");
+    expect(uninstall).not.toContain('-AllUsers');
+    expect(uninstall).not.toContain('Get-AppxProvisionedPackage');
+  });
+
+  it('uses online provisioning only for machine-scoped packages', () => {
+    const job = msixJob('machine');
+    const install = generator.getInstallCommand.call(
+      generator,
+      job,
+      'terminal.msixbundle',
+      ''
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'terminal.msixbundle'
+    );
+
+    expect(install).toContain('Add-AppxProvisionedPackage -Online');
+    expect(uninstall).toContain('Get-AppxProvisionedPackage -Online');
+    expect(uninstall).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers');
+  });
+
+  it('refuses a display-name fallback that is not an exact package identity', () => {
+    const job = msixJob('user');
+    job.uninstall_command = 'MSIX_UNINSTALL:Windows Terminal';
+
+    expect(
+      generator.getInstallCommand.call(generator, job, 'terminal.msixbundle', '')
+    ).toContain('identity is missing or unsafe');
+    expect(
+      generator.getUninstallCommand.call(generator, job, 'terminal.msixbundle')
+    ).toContain('refusing an ambiguous removal');
+  });
+});

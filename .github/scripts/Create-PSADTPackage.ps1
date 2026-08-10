@@ -272,6 +272,7 @@ function Get-PSADTAssetFileName {
 # Only a single quote needs escaping; changing backticks or dollar signs would
 # silently change valid vendor arguments.
 $silentSwitchesEscaped = $SilentSwitches -replace "'", "''"
+$versionSingleQuoteEscaped = $Version -replace "'", "''"
 $uninstallCmd = $UninstallCommand -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
@@ -503,10 +504,23 @@ if ($useRegistryUninstall) {
 } elseif (-not $usePortableUninstall -and $uninstallCmd -match '^MSIX_UNINSTALL:(.+)$') {
     $useMsixUninstall = $true
     $msixPackageName = $Matches[1]
+    if ($msixPackageName -notmatch '^[A-Za-z0-9.-]+$') {
+        throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous deployment."
+    }
     Write-Host "Using MSIX uninstall for package: $msixPackageName"
+} elseif (-not $usePortableUninstall -and $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED') {
+    if ([string]::IsNullOrWhiteSpace($customUninstallCommand)) {
+        throw "The MSI/WiX package has neither a product code nor a display name for safe uninstall discovery."
+    }
 } elseif ($installerTypeLower -eq 'zip') {
     $usePortableUninstall = $true
     Write-Host "Using portable uninstall (folder removal)"
+}
+
+if ($installerTypeLower -in @('msix', 'appx') -and
+    [string]::IsNullOrWhiteSpace($msixPackageName) -and
+    ([string]::IsNullOrWhiteSpace($customInstallCommand) -or [string]::IsNullOrWhiteSpace($customUninstallCommand))) {
+    throw "The MSIX/APPX package identity is missing; refusing to generate install or uninstall commands from a display-name guess."
 }
 
 # Extract app close configuration
@@ -861,7 +875,7 @@ $lines = @(
     '$adtSession = @{'
     "    AppVendor = '$publisherEscaped'"
     "    AppName = '$displayNameEscaped'"
-    "    AppVersion = '$Version'"
+    "    AppVersion = '$versionSingleQuoteEscaped'"
     '    AppArch = '''''
     '    AppLang = ''EN'''
     '    AppRevision = ''01'''
@@ -968,17 +982,63 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
             }
         }
         { $_ -in 'msix', 'appx' } {
-            $lines += @(
-                "    `$msixPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
-                '    Write-ADTLogEntry -Message "Provisioning MSIX/APPX package for all users: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-                '    try {'
-                '        Add-AppxProvisionedPackage -Online -PackagePath $msixPath -SkipLicense -ErrorAction Stop'
-                '        Write-ADTLogEntry -Message "MSIX/APPX package provisioned successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
-                '    } catch {'
-                '        Write-ADTLogEntry -Message "Failed to provision MSIX/APPX package: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
-                '        throw'
-                '    }'
-            )
+            if ($IsUserScope) {
+                $lines += @(
+                    "    `$msixPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
+                    "    `$packageName = '$msixPackageName'"
+                    "    `$targetVersion = '$versionSingleQuoteEscaped'"
+                    '    Write-ADTLogEntry -Message "Registering user-scoped MSIX/APPX package: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                    '    try {'
+                    '        $existingPackage = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1'
+                    '        $shouldInstallPackage = $true'
+                    '        if ($existingPackage) {'
+                    '            try {'
+                    '                $shouldInstallPackage = [version]$existingPackage.Version -lt [version]$targetVersion'
+                    '            } catch {'
+                    '                $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion'
+                    '            }'
+                    '            if (-not $shouldInstallPackage) {'
+                    '                Write-ADTLogEntry -Message "MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]; no registration change is required." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                    '            }'
+                    '        }'
+                    '        if ($shouldInstallPackage) {'
+                    '            Add-AppxPackage -Path $msixPath -ForceApplicationShutdown -ErrorAction Stop'
+                    '            Write-ADTLogEntry -Message "User-scoped MSIX/APPX package registered successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                    '        }'
+                    '    } catch {'
+                    '        Write-ADTLogEntry -Message "Failed to register user-scoped MSIX/APPX package: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
+                    '        throw'
+                    '    }'
+                )
+            } else {
+                $lines += @(
+                    "    `$msixPath = `"`$(`$adtSession.DirFiles)\$installerFileName`""
+                    "    `$packageName = '$msixPackageName'"
+                    "    `$targetVersion = '$versionSingleQuoteEscaped'"
+                    '    Write-ADTLogEntry -Message "Provisioning machine-scoped MSIX/APPX package for all users: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                    '    try {'
+                    '        $existingPackage = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $packageName } | Sort-Object Version -Descending | Select-Object -First 1'
+                    '        $shouldInstallPackage = $true'
+                    '        if ($existingPackage) {'
+                    '            try {'
+                    '                $shouldInstallPackage = [version]$existingPackage.Version -lt [version]$targetVersion'
+                    '            } catch {'
+                    '                $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion'
+                    '            }'
+                    '            if (-not $shouldInstallPackage) {'
+                    '                Write-ADTLogEntry -Message "Provisioned MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                    '            }'
+                    '        }'
+                    '        if ($shouldInstallPackage) {'
+                    '            Add-AppxProvisionedPackage -Online -PackagePath $msixPath -SkipLicense -ErrorAction Stop'
+                    '            Write-ADTLogEntry -Message "Machine-scoped MSIX/APPX package provisioned successfully" -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                    '        }'
+                    '    } catch {'
+                    '        Write-ADTLogEntry -Message "Failed to provision machine-scoped MSIX/APPX package: $_" -Severity ''Error'' -Source ''Install-ADTDeployment'''
+                    '        throw'
+                    '    }'
+                )
+            }
         }
         'zip' {
             # Zip archives carry a nested installer (winget nestedInstallerType/nestedInstallerPath)
@@ -1373,7 +1433,8 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         '        @(Get-ADTApplication -Name $appName -NameMatch ''Exact'')'
         '    }'
         ''
-        '    if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey -and -not $configuredProductCode) {'
+        "    `$allowContainsFallback = '$installerTypeLower' -notin @('msi', 'wix')"
+        '    if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey -and -not $configuredProductCode -and $allowContainsFallback) {'
         '        $containsMatches = @(Get-ADTApplication -Name $appName -NameMatch ''Contains'')'
         '        $bundleMatches = @($containsMatches | Where-Object { -not $_.WindowsInstaller })'
         '        if ($bundleMatches.Count -eq 1) {'
@@ -1413,13 +1474,21 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
     } else {
         $lines += @(
             '    $registeredApplication = $installedApps[0]'
+            "    `$registeredInstallerType = '$installerTypeLower'"
+            '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
+            '    $capturedMsiProductCode = if ($registeredInstallerType -in @(''msi'', ''wix'') -and $registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {'
+            '        $registeredApplication.ProductCode'
+            '    } elseif ($registeredInstallerType -in @(''msi'', ''wix'') -and [string]$registeredApplication.PSChildName -match ''^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$'') {'
+            '        [string]$registeredApplication.PSChildName'
+            '    } else {'
+            '        $null'
+            '    }'
             '    [string[]]$additionalUninstallArguments = @()'
             '    $isVivaldiUninstall = $false'
             '    $hasQuietUninstall = -not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)'
             '    if (-not $hasQuietUninstall) {'
             '        $registeredUninstallFile = [string]$registeredApplication.UninstallStringFilePath'
             '        $registeredArgumentText = (@($registeredApplication.UninstallStringArgumentList) -join '' '').Trim()'
-            "        `$registeredInstallerType = '$installerTypeLower'"
             ''
             '        # PSADT correctly prefers QuietUninstallString. Some vendors only publish an interactive'
             '        # UninstallString, so add narrowly verified unattended arguments for known signatures.'
@@ -1438,7 +1507,10 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '        }'
             '    }'
             ''
-            '    if ($isVivaldiUninstall) {'
+            '    if ($capturedMsiProductCode) {'
+            '        Write-ADTLogEntry -Message "Executing MSI uninstall with captured product code [$capturedMsiProductCode]." -Source ''Uninstall-ADTDeployment'''
+            '        Start-ADTMsiProcess -Action ''Uninstall'' -ProductCode $capturedMsiProductCode -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
+            '    } elseif ($isVivaldiUninstall) {'
             '        # Vivaldi documents this exact command for silent removal. Execute it directly instead of'
             '        # appending to the registered command so argument ordering and duplicate switches cannot'
             '        # fall back to the vendor confirmation dialog.'
@@ -1455,33 +1527,60 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '    } else {'
             '        Uninstall-ADTApplication -InstalledApplication $registeredApplication -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)'
             '    }'
+            '    $remainingApplications = @()'
+            '    foreach ($verificationAttempt in 1..5) {'
+            '        $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey })'
+            '        if ($remainingApplications.Count -eq 0) { break }'
+            '        if ($verificationAttempt -lt 5) { Start-Sleep -Seconds 2 }'
+            '    }'
+            '    if ($remainingApplications.Count -gt 0) {'
+            '        throw "The vendor uninstall command returned, but uninstall registration [$registeredUninstallRegistryKey] still exists."'
+            '    }'
         )
     }
 } elseif ($useMsixUninstall) {
-    $lines += @(
-        ''
-        '    # Remove MSIX/APPX provisioned package and installed instances'
-        "    `$packageName = '$msixPackageName'"
-        '    Write-ADTLogEntry -Message "Removing MSIX package: $packageName" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
-        '    try {'
-        '        $provPackage = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "*$packageName*" }'
-        '        if ($provPackage) {'
-        '            Write-ADTLogEntry -Message "Removing provisioned package: $($provPackage.DisplayName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
-        '            $provPackage | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue'
-        '        }'
-        '        $packages = Get-AppxPackage -Name "*$packageName*" -AllUsers -ErrorAction SilentlyContinue'
-        '        if ($packages) {'
-        '            foreach ($pkg in $packages) {'
-        '                Write-ADTLogEntry -Message "Removing installed package: $($pkg.PackageFullName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
-        '                Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue'
-        '            }'
-        '        }'
-        '        Write-ADTLogEntry -Message "MSIX package removal completed" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
-        '    } catch {'
-        '        Write-ADTLogEntry -Message "Failed to remove MSIX package: $_" -Severity ''Error'' -Source ''Uninstall-ADTDeployment'''
-        '        throw'
-        '    }'
-    )
+    if ($IsUserScope) {
+        $lines += @(
+            ''
+            '    # Remove the MSIX/APPX registration for the current user only.'
+            "    `$packageName = '$msixPackageName'"
+            '    Write-ADTLogEntry -Message "Removing user-scoped MSIX package: $packageName" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
+            '    try {'
+            '        $packages = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue'
+            '        foreach ($pkg in @($packages)) {'
+            '            Write-ADTLogEntry -Message "Removing current-user package: $($pkg.PackageFullName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
+            '            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop'
+            '        }'
+            '        Write-ADTLogEntry -Message "User-scoped MSIX package removal completed" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+            '    } catch {'
+            '        Write-ADTLogEntry -Message "Failed to remove user-scoped MSIX package: $_" -Severity ''Error'' -Source ''Uninstall-ADTDeployment'''
+            '        throw'
+            '    }'
+        )
+    } else {
+        $lines += @(
+            ''
+            '    # Remove the machine provision and all registered package instances.'
+            "    `$packageName = '$msixPackageName'"
+            '    Write-ADTLogEntry -Message "Removing machine-scoped MSIX package: $packageName" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
+            '    try {'
+            '        $provPackages = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $packageName }'
+            '        foreach ($provPackage in @($provPackages)) {'
+            '            Write-ADTLogEntry -Message "Removing provisioned package: $($provPackage.DisplayName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
+            '            Remove-AppxProvisionedPackage -Online -PackageName $provPackage.PackageName -ErrorAction Stop | Out-Null'
+            '        }'
+            '        $packages = Get-AppxPackage -Name $packageName -AllUsers -ErrorAction SilentlyContinue'
+            '        foreach ($pkg in @($packages)) {'
+            '            Write-ADTLogEntry -Message "Removing installed package: $($pkg.PackageFullName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
+            '            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop'
+            '        }'
+            '        Write-ADTLogEntry -Message "Machine-scoped MSIX package removal completed" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+            '    } catch {'
+            '        Write-ADTLogEntry -Message "Failed to remove machine-scoped MSIX package: $_" -Severity ''Error'' -Source ''Uninstall-ADTDeployment'''
+            '        throw'
+            '    }'
+        )
+    }
 } elseif ($usePortableUninstall) {
     $lines += @(
         ''

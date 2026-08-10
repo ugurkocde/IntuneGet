@@ -393,7 +393,19 @@ jobs:
                     ...inst,
                     InstallerType: inst.InstallerType || rootType,
                     Scope: inst.Scope || rootScope,
-                    InstallerSwitches: inst.InstallerSwitches || rootSwitches,
+                    InstallerSwitches: (rootSwitches || inst.InstallerSwitches) ? {
+                      ...(rootSwitches || {}),
+                      ...(inst.InstallerSwitches || {}),
+                    } : undefined,
+                    ProductCode: inst.ProductCode || installerManifest.ProductCode,
+                    PackageFamilyName: inst.PackageFamilyName || installerManifest.PackageFamilyName,
+                    AppsAndFeaturesEntries: inst.AppsAndFeaturesEntries || installerManifest.AppsAndFeaturesEntries,
+                    NestedInstallerType: inst.NestedInstallerType || installerManifest.NestedInstallerType,
+                    NestedInstallerFiles: inst.NestedInstallerFiles || installerManifest.NestedInstallerFiles,
+                    UpgradeBehavior: inst.UpgradeBehavior || installerManifest.UpgradeBehavior,
+                    Dependencies: inst.Dependencies || installerManifest.Dependencies,
+                    Platform: inst.Platform || installerManifest.Platform,
+                    MinimumOSVersion: inst.MinimumOSVersion || installerManifest.MinimumOSVersion,
                   }));
 
                   const versionRecord = {

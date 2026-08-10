@@ -160,4 +160,86 @@ describe('buildQaCatalogTestConfig', () => {
 
     expect(config.silentArgs).toBe('');
   });
+
+  it('inherits a root MSI product code for exact silent uninstall', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Exclaimer.CloudSignatureUpdateAgent',
+        name: 'Exclaimer Cloud Signature Update Agent',
+        publisher: 'Exclaimer',
+        version: '1.21.0.0',
+      },
+      manifest: {
+        InstallerType: 'wix',
+        ProductCode: '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}',
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'wix',
+        Scope: 'machine',
+      },
+    });
+
+    expect(config.productCode).toBe('{D1827F05-CDAB-444B-90E3-D52ACB111CBD}');
+    expect(config.uninstallCommand).toBe(
+      'msiexec /x "{D1827F05-CDAB-444B-90E3-D52ACB111CBD}" /qn /norestart'
+    );
+  });
+
+  it('prefers architecture-specific AppsAndFeatures identity over a root product code', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Contoso.MultiArch',
+        name: 'Contoso MultiArch',
+        publisher: 'Contoso',
+        version: '2.0.0',
+      },
+      manifest: {
+        InstallerType: 'wix',
+        ProductCode: '{11111111-1111-1111-1111-111111111111}',
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'wix',
+        AppsAndFeaturesEntries: [
+          { ProductCode: '{22222222-2222-2222-2222-222222222222}' },
+        ],
+      },
+    });
+
+    expect(config.productCode).toBe('{22222222-2222-2222-2222-222222222222}');
+  });
+
+  it('inherits a root package family name for user-scoped MSIX handling', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Microsoft.WindowsTerminal',
+        name: 'Windows Terminal',
+        publisher: 'Microsoft',
+        version: '1.24.11911.0',
+      },
+      manifest: {
+        InstallerType: 'msix',
+        Scope: 'user',
+        PackageFamilyName: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'msix',
+      },
+    });
+
+    expect(config.uninstallCommand).toBe('MSIX_UNINSTALL:Microsoft.WindowsTerminal');
+    expect(config.detectionRules[0]).toMatchObject({ type: 'script' });
+    const script = 'scriptContent' in config.detectionRules[0]
+      ? config.detectionRules[0].scriptContent
+      : '';
+    expect(script).toContain('Get-AppxPackage -Name "Microsoft.WindowsTerminal"');
+    expect(script).toContain(
+      '[Security.Principal.WindowsIdentity]::GetCurrent().IsSystem'
+    );
+    expect(script).toContain(
+      'if (-not $package -and $runningAsSystem) { $package = Get-AppxPackage -Name "Microsoft.WindowsTerminal" -AllUsers }'
+    );
+  });
 });

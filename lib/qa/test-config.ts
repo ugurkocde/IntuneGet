@@ -117,7 +117,11 @@ export function buildQaCatalogTestConfig({
   const scope: WingetScope = rawScope.toLowerCase() === 'user' ? 'user' : 'machine';
   const productCode =
     msiProductCode(installer.ProductCode) ||
-    msiProductCode(appsAndFeaturesProductCode(installer));
+    msiProductCode(appsAndFeaturesProductCode(installer)) ||
+    msiProductCode(manifest.ProductCode) ||
+    msiProductCode(appsAndFeaturesProductCode(manifest));
+  const packageFamilyName =
+    text(installer.PackageFamilyName) || text(manifest.PackageFamilyName);
   const inheritedInstaller: WingetInstaller = {
     Architecture: (text(installer.Architecture).toLowerCase() ||
       'x64') as WingetInstaller['Architecture'],
@@ -131,7 +135,7 @@ export function buildQaCatalogTestConfig({
     Scope: scope,
     InstallerSwitches: normalizeInstallerSwitches(effectiveSwitches),
     ProductCode: productCode || undefined,
-    PackageFamilyName: text(installer.PackageFamilyName) || undefined,
+    PackageFamilyName: packageFamilyName || undefined,
   };
   const normalizedInstaller = normalizeInstaller(inheritedInstaller);
   const detectionRules = generateDetectionRules(

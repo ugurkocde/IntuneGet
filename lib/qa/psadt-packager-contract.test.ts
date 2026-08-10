@@ -101,4 +101,41 @@ describe('PSADT registry uninstall identity contract', () => {
       'Uninstall-ADTApplication -InstalledApplication $registeredApplication -AdditionalArgumentList $additionalUninstallArguments'
     );
   });
+
+  it('uses a captured MSI product code instead of an executable uninstall string', () => {
+    expect(packager).toContain(
+      "$capturedMsiProductCode = if ($registeredInstallerType -in @(''msi'', ''wix'') -and $registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)"
+    );
+    expect(packager).toContain(
+      "Start-ADTMsiProcess -Action ''Uninstall'' -ProductCode $capturedMsiProductCode"
+    );
+    expect(packager).toContain(
+      'foreach ($verificationAttempt in 1..5)'
+    );
+    expect(packager).toContain(
+      'if ($verificationAttempt -lt 5) { Start-Sleep -Seconds 2 }'
+    );
+  });
+
+  it('rejects missing MSI and unsafe MSIX identities during package creation', () => {
+    expect(packager).toContain("$uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED'");
+    expect(packager).toContain("$msixPackageName -notmatch '^[A-Za-z0-9.-]+$'");
+    expect(packager).toContain("$installerTypeLower -in @('msix', 'appx') -and");
+    expect(packager).toContain('[string]::IsNullOrWhiteSpace($msixPackageName) -and');
+    expect(packager).toContain('[string]::IsNullOrWhiteSpace($customUninstallCommand)');
+  });
+});
+
+describe('PSADT MSIX scope contract', () => {
+  it('registers user-scoped packages in the current user context', () => {
+    expect(packager).toContain('Add-AppxPackage -Path $msixPath -ForceApplicationShutdown');
+    expect(packager).toContain('Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue');
+    expect(packager).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop');
+  });
+
+  it('reserves online provisioning and all-user removal for machine scope', () => {
+    expect(packager).toContain('Add-AppxProvisionedPackage -Online -PackagePath $msixPath');
+    expect(packager).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers');
+    expect(packager).toContain('if ($IsUserScope)');
+  });
 });

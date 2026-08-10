@@ -555,6 +555,34 @@ describe('normalizeManifestInstallers', () => {
       '--vivaldi-silent --do-not-launch-chrome'
     );
   });
+
+  it('inherits root MSI and MSIX identity fields', () => {
+    const msiInstallers = normalizeManifestInstallers({
+      InstallerType: 'wix',
+      ProductCode: '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}',
+      Installers: [{
+        Architecture: 'x86',
+        InstallerUrl: 'https://example.com/exclaimer.msi',
+        InstallerSha256: 'abc123',
+      }],
+    });
+    const msixInstallers = normalizeManifestInstallers({
+      InstallerType: 'msix',
+      PackageFamilyName: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/terminal.msixbundle',
+        InstallerSha256: 'def456',
+      }],
+    });
+
+    expect(msiInstallers[0].ProductCode).toBe(
+      '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}'
+    );
+    expect(msixInstallers[0].PackageFamilyName).toBe(
+      'Microsoft.WindowsTerminal_8wekyb3d8bbwe'
+    );
+  });
 });
 
 describe('getManifestPaths logic', () => {

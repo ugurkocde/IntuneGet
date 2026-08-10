@@ -756,6 +756,14 @@ ${steps}
       return `Start-ADTMsiProcess -Action 'Install' -FilePath '${fileName}'`;
     }
 
+    if (
+      ['.msix', '.msixbundle', '.appx', '.appxbundle'].includes(ext) ||
+      installerType === 'msix' ||
+      installerType === 'appx'
+    ) {
+      return this.getMsixInstallCommand(job, fileName);
+    }
+
     if (installerType === 'portable') {
       const fileNameEscaped = fileName.replace(/'/g, "''");
       return `${this.getPortableInstallPathLine(job)}
@@ -790,6 +798,52 @@ ${steps}
       .filter((token) => token && !/^\/(q[nbrfu]?|quiet|norestart|i|x)$/i.test(token))
       .join(' ')
       .trim();
+  }
+
+  private getMsixPackageName(job: PackagingJob): string | null {
+    const match = job.uninstall_command?.match(/^MSIX_UNINSTALL:([A-Za-z0-9.-]+)$/);
+    return match?.[1] || null;
+  }
+
+  private getMsixInstallCommand(job: PackagingJob, fileName: string): string {
+    const packageName = this.getMsixPackageName(job);
+    if (!packageName) {
+      return 'throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous deployment."';
+    }
+
+    const escapedFileName = fileName.replace(/'/g, "''");
+    const escapedVersion = job.version.replace(/'/g, "''");
+    const common = `$msixPath = Join-Path $adtSession.DirFiles '${escapedFileName}'
+    $packageName = '${packageName}'
+    $targetVersion = '${escapedVersion}'`;
+
+    if (job.install_scope === 'user') {
+      return `${common}
+    $existingPackage = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1
+    $shouldInstallPackage = $true
+    if ($existingPackage) {
+        try { $shouldInstallPackage = [version]$existingPackage.Version -lt [version]$targetVersion }
+        catch { $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion }
+    }
+    if ($shouldInstallPackage) {
+        Add-AppxPackage -Path $msixPath -ForceApplicationShutdown -ErrorAction Stop
+    } else {
+        Write-ADTLogEntry -Message "MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]." -Severity 'Success' -Source 'Install-ADTDeployment'
+    }`;
+    }
+
+    return `${common}
+    $existingPackage = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $packageName } | Sort-Object Version -Descending | Select-Object -First 1
+    $shouldInstallPackage = $true
+    if ($existingPackage) {
+        try { $shouldInstallPackage = [version]$existingPackage.Version -lt [version]$targetVersion }
+        catch { $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion }
+    }
+    if ($shouldInstallPackage) {
+        Add-AppxProvisionedPackage -Online -PackagePath $msixPath -SkipLicense -ErrorAction Stop
+    } else {
+        Write-ADTLogEntry -Message "Provisioned MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]." -Severity 'Success' -Source 'Install-ADTDeployment'
+    }`;
   }
 
   /**
@@ -926,6 +980,27 @@ ${steps}
 
     if (!job.uninstall_command) {
       return "Write-ADTLogEntry -Message 'No uninstall command specified' -Severity 'Warning' -Source 'Uninstall-ADTDeployment'";
+    }
+
+    if (/^MSIX_UNINSTALL:/.test(job.uninstall_command)) {
+      const packageName = this.getMsixPackageName(job);
+      if (!packageName) {
+        return 'throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous removal."';
+      }
+      if (job.install_scope === 'user') {
+        return `$packages = Get-AppxPackage -Name '${packageName}' -ErrorAction SilentlyContinue
+    foreach ($pkg in @($packages)) {
+        Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+    }`;
+      }
+      return `$provPackages = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq '${packageName}' }
+    foreach ($provPackage in @($provPackages)) {
+        Remove-AppxProvisionedPackage -Online -PackageName $provPackage.PackageName -ErrorAction Stop | Out-Null
+    }
+    $packages = Get-AppxPackage -Name '${packageName}' -AllUsers -ErrorAction SilentlyContinue
+    foreach ($pkg in @($packages)) {
+        Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop
+    }`;
     }
 
     const registryProductMatch = job.uninstall_command.match(

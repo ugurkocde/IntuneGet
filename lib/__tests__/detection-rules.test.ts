@@ -374,6 +374,46 @@ describe('generateDetectionRules', () => {
       expect(rules).toHaveLength(1);
       expect(rules[0].type).toBe('script');
     });
+
+    it('should query the current user and fall back only when running as SYSTEM', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/terminal.msixbundle',
+        sha256: 'abc123',
+        type: 'msix',
+        scope: 'user',
+        packageFamilyName: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+      };
+
+      const rules = generateDetectionRules(installer, 'Windows Terminal');
+      const script = (rules[0] as ScriptDetectionRule).scriptContent;
+
+      expect(script).toContain('Get-AppxPackage -Name "Microsoft.WindowsTerminal"');
+      expect(script).toContain(
+        '[Security.Principal.WindowsIdentity]::GetCurrent().IsSystem'
+      );
+      expect(script).toContain(
+        'if (-not $package -and $runningAsSystem) { $package = Get-AppxPackage -Name "Microsoft.WindowsTerminal" -AllUsers }'
+      );
+      expect(script).not.toContain('Get-AppxProvisionedPackage');
+    });
+
+    it('should check installed and provisioned identities for a machine-scoped package', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.msix',
+        sha256: 'abc123',
+        type: 'msix',
+        scope: 'machine',
+        packageFamilyName: 'Contoso.App_abc123',
+      };
+
+      const rules = generateDetectionRules(installer, 'Contoso App');
+      const script = (rules[0] as ScriptDetectionRule).scriptContent;
+
+      expect(script).toContain('Get-AppxPackage -Name "Contoso.App" -AllUsers');
+      expect(script).toContain('Get-AppxProvisionedPackage -Online');
+    });
   });
 
   describe('Folder detection rules', () => {
@@ -644,7 +684,7 @@ describe('generateUninstallCommand', () => {
     expect(command).toContain('/norestart');
   });
 
-  it('should generate placeholder MSI uninstall command without product code', () => {
+  it('should resolve MSI uninstall registration without a product code', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',
       url: 'https://example.com/installer.msi',
@@ -652,9 +692,23 @@ describe('generateUninstallCommand', () => {
       type: 'msi',
     };
 
-    const command = generateUninstallCommand(installer);
+    const command = generateUninstallCommand(installer, 'Codeless MSI App');
 
-    expect(command).toContain('{PRODUCT_CODE}');
+    expect(command).toBe('REGISTRY_UNINSTALL:Codeless MSI App');
+    expect(command).not.toContain('{PRODUCT_CODE}');
+  });
+
+  it('should fail safely when MSI uninstall identity cannot be determined', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/installer.msi',
+      sha256: 'abc123',
+      type: 'msi',
+    };
+
+    expect(generateUninstallCommand(installer)).toBe(
+      'MSI_UNINSTALL_IDENTITY_REQUIRED'
+    );
   });
 
   it('should generate MSIX uninstall marker with package family name', () => {
@@ -670,6 +724,19 @@ describe('generateUninstallCommand', () => {
 
     expect(command).toContain('MSIX_UNINSTALL:');
     expect(command).toContain('Microsoft.VSCode');
+  });
+
+  it('should not guess an MSIX package identity from its display name', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/installer.msix',
+      sha256: 'abc123',
+      type: 'msix',
+    };
+
+    expect(generateUninstallCommand(installer, 'Windows Terminal')).toBe(
+      'MSIX_UNINSTALL:{PACKAGE_NAME}'
+    );
   });
 
   it('should generate registry uninstall command for EXE with display name', () => {

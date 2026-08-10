@@ -315,11 +315,28 @@ async function getManifestFromSupabase(
     // Parse installers from JSONB, recover malformed stringified JSON, or fetch fresh installer manifest
     let installers: WingetInstaller[] = [];
 
-    const parsedInstallers = coerceInstallersArray(
-      versionData.installers,
-      versionData.installer_type,
-      versionData.silent_args
-    );
+    let manifestInstallers: WingetInstaller[] = [];
+    if (typeof versionData.manifest_yaml === 'string' && versionData.manifest_yaml.trim()) {
+      try {
+        const storedManifest = YAML.parse(versionData.manifest_yaml);
+        if (storedManifest && typeof storedManifest === 'object') {
+          manifestInstallers = normalizeManifestInstallers(
+            storedManifest as Record<string, unknown>
+          );
+        }
+      } catch {
+        // Fall back to the flattened installer cache below. Older rows can
+        // contain incomplete or malformed manifest_yaml values.
+      }
+    }
+
+    const parsedInstallers = manifestInstallers.length > 0
+      ? manifestInstallers
+      : coerceInstallersArray(
+          versionData.installers,
+          versionData.installer_type,
+          versionData.silent_args
+        );
 
     if (parsedInstallers.length > 0) {
       installers = parsedInstallers;
@@ -543,6 +560,8 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
   const defaultMinOS = manifest.MinimumOSVersion as string;
   const defaultUpgrade = manifest.UpgradeBehavior as string;
   const defaultDependencies = manifest.Dependencies as WingetInstaller['Dependencies'];
+  const defaultProductCode = manifest.ProductCode as string;
+  const defaultPackageFamilyName = manifest.PackageFamilyName as string;
 
   return rawInstallers.map((installer) => ({
     Architecture: (installer.Architecture as WingetInstaller['Architecture']) || 'x64',
@@ -561,8 +580,9 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     // WinGet inherits installer switches per field. An installer-level Custom
     // value must not discard a root-level Silent value (Vivaldi is one example).
     InstallerSwitches: mergeInstallerSwitches(defaultSwitches, installer.InstallerSwitches),
-    ProductCode: installer.ProductCode as string,
-    PackageFamilyName: installer.PackageFamilyName as string,
+    ProductCode: (installer.ProductCode as string) || defaultProductCode,
+    PackageFamilyName:
+      (installer.PackageFamilyName as string) || defaultPackageFamilyName,
     UpgradeBehavior: (installer.UpgradeBehavior as WingetInstaller['UpgradeBehavior']) ||
                      (defaultUpgrade as WingetInstaller['UpgradeBehavior']),
     InstallerLocale: installer.InstallerLocale as string,
