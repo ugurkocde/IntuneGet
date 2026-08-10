@@ -162,3 +162,20 @@ describe('demanded-app QA backfill migration contract', () => {
     expect(sql).toContain('to service_role');
   });
 });
+
+describe('customer-deployed QA campaign migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260810115941_restrict_qa_backfill_to_deployed_apps.sql'
+    ),
+    'utf8'
+  );
+
+  it('requires upload history and uses auto-update only for ordering', () => {
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain("policy.policy_type = 'auto_update'");
+    expect(sql).toContain('from deployed');
+    expect(sql).not.toContain('union all');
+  });
+});

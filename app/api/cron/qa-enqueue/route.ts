@@ -120,7 +120,7 @@ async function findToolchainBackfillIds(
 
     if (pageStaleRows.length > 0) {
       const pageStaleIds = pageStaleRows.map((row) => row.winget_id);
-      const [supportedResult, policyResult, deployedResult] = await Promise.all([
+      const [supportedResult, deployedResult] = await Promise.all([
         supabase
           .from('curated_apps')
           .select('winget_id')
@@ -130,12 +130,6 @@ async function findToolchainBackfillIds(
           .eq('app_source', 'win32')
           .eq('is_locale_variant', false),
         supabase
-          .from('app_update_policies')
-          .select('winget_id')
-          .in('winget_id', pageStaleIds)
-          .eq('policy_type', 'auto_update')
-          .eq('is_enabled', true),
-        supabase
           .from('upload_history')
           .select('winget_id')
           .in('winget_id', pageStaleIds),
@@ -144,16 +138,18 @@ async function findToolchainBackfillIds(
       if (supportedError) {
         throw new Error(`Could not filter QA toolchain backfill apps: ${supportedError.message}`);
       }
-      if (policyResult.error || deployedResult.error) {
+      if (deployedResult.error) {
         throw new Error(
-          `Could not filter QA toolchain backfill demand: ${policyResult.error?.message || deployedResult.error?.message}`
+          `Could not filter QA toolchain backfill demand: ${deployedResult.error.message}`
         );
       }
       const supportedIds = new Set((supported || []).map((app) => app.winget_id));
-      const demandedIds = new Set([
-        ...(policyResult.data || []).map((row) => row.winget_id),
-        ...(deployedResult.data || []).map((row) => row.winget_id),
-      ]);
+      // Toolchain refreshes consume the same single-VM queue as new tests.
+      // An auto-update policy may raise priority, but only a durable tenant
+      // deployment is allowed to put an app into the background campaign.
+      const demandedIds = new Set(
+        (deployedResult.data || []).map((row) => row.winget_id)
+      );
       for (const row of pageStaleRows) {
         if (supportedIds.has(row.winget_id) && demandedIds.has(row.winget_id)) {
           supportedStaleCandidates.push({
