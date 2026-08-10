@@ -275,11 +275,26 @@ describe('PSADT registry uninstall identity contract', () => {
     );
     expect(packager).toContain('-WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru');
     expect(packager).toContain(
-      "$selectedApplications.Count -eq 0 -and $originalInstallerType -eq ''burn''"
-    );
-    expect(packager).toContain(
       '$bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
     );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'does not leak generator-only installer type state into generated scripts',
+    () => {
+      const innoGenerated = generateRegistryUninstallPackage('inno');
+      const burnGenerated = generateRegistryUninstallPackage('burn');
+
+      expect(innoGenerated).not.toContain('$originalInstallerType');
+      expect(burnGenerated).not.toContain('$originalInstallerType');
+      expect(burnGenerated).toContain(
+        '$bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
+      );
+    }
+  );
+
+  it('never emits the generator-only installer type variable as a quoted script line', () => {
+    expect(packager).not.toMatch(/^\s*'.*\$originalInstallerType.*'\s*$/m);
   });
 
   it('verifies registry installers by their captured vendor identity', () => {
@@ -399,6 +414,12 @@ describe('PSADT registry uninstall identity contract', () => {
 
   it('uses a captured MSI product code instead of an executable uninstall string', () => {
     expect(packager).toContain(
+      "Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode'"
+    );
+    expect(packager).toContain(
+      'Using MSI database product code for registry identity'
+    );
+    expect(packager).toContain(
       '$capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)'
     );
     expect(packager).not.toContain("$capturedMsiProductCode = if ($registeredInstallerType -in @(''msi'', ''wix'')");
@@ -413,8 +434,40 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
-  it('rejects missing MSI and unsafe MSIX identities during package creation', () => {
+  it('keeps non-MSI fallback visible, non-WindowsInstaller, and fail-closed', () => {
+    expect(packager).toContain(
+      "$allowContainsFallback = '$installerTypeLower' -notin @('msi', 'wix')"
+    );
+    expect(packager).toContain(
+      "$systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']"
+    );
+    expect(packager).toContain(
+      '$isVisibleApplication -and -not $_.WindowsInstaller'
+    );
+  });
+
+  it('repairs missing MSI identities and rejects unresolved MSI or unsafe MSIX identities', () => {
+    expect(packager).toContain(
+      "$useRegistryUninstall -or $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED'"
+    );
     expect(packager).toContain("$uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED'");
+    expect(packager).toContain(
+      'The MSI database did not expose a valid ProductCode; refusing ambiguous detection or removal.'
+    );
+    const repairIndex = packager.indexOf(
+      "if ($fileExtension -eq '.msi'"
+    );
+    const repairedRegistryBranchIndex = packager.indexOf(
+      'if ($useRegistryUninstall) {',
+      repairIndex
+    );
+    const unresolvedSentinelIndex = packager.indexOf(
+      "elseif (-not $usePortableUninstall -and $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED')",
+      repairedRegistryBranchIndex
+    );
+    expect(repairIndex).toBeGreaterThan(-1);
+    expect(repairedRegistryBranchIndex).toBeGreaterThan(repairIndex);
+    expect(unresolvedSentinelIndex).toBeGreaterThan(repairedRegistryBranchIndex);
     expect(packager).toContain("$msixPackageName -notmatch '^[A-Za-z0-9.-]+$'");
     expect(packager).toContain("$installerTypeLower -in @('msix', 'appx') -and");
     expect(packager).toContain('[string]::IsNullOrWhiteSpace($msixPackageName) -and');

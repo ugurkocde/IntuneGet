@@ -127,6 +127,50 @@ function ConvertTo-PSADTAccentValue {
     return "'" + ($trimmed -replace "'", "''") + "'"
 }
 
+function Get-MsiPropertyValue {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Property
+    )
+
+    $installer = $null
+    $database = $null
+    $view = $null
+    $record = $null
+
+    try {
+        $installer = New-Object -ComObject WindowsInstaller.Installer
+        $database = $installer.GetType().InvokeMember(
+            'OpenDatabase',
+            [System.Reflection.BindingFlags]::InvokeMethod,
+            $null,
+            $installer,
+            @($Path, 0)
+        )
+        $escapedProperty = $Property -replace "'", "''"
+        $view = $database.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = '$escapedProperty'")
+        $view.Execute()
+        $record = $view.Fetch()
+
+        if ($record) {
+            return [string]$record.StringData(1)
+        }
+    } catch {
+        Write-Warning "Could not read MSI property [$Property] from [$Path]: $($_.Exception.Message)"
+    } finally {
+        if ($view) {
+            try { $view.Close() } catch { }
+        }
+        foreach ($comObject in @($record, $view, $database, $installer)) {
+            if ($comObject -and [System.Runtime.InteropServices.Marshal]::IsComObject($comObject)) {
+                [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($comObject)
+            }
+        }
+    }
+
+    return $null
+}
+
 function Update-PowerShellDataSetting {
     param(
         [string]$Path,
@@ -493,6 +537,24 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
     $useRegistryUninstall = $true
     $registryUninstallProductCode = $Matches[1]
     $registryUninstallDisplayName = $DisplayName
+}
+
+# WinGet metadata can omit, decorate, or stale-cache an MSI ProductCode. Read
+# the authoritative identity from the downloaded MSI so the customer package
+# and QA both target the exact Windows Installer product. This also repairs the
+# explicit missing-identity sentinel without guessing from a display name.
+if ($fileExtension -eq '.msi' -and ($useRegistryUninstall -or $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED')) {
+    $msiProductCode = Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode'
+    if ($msiProductCode -match '^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$') {
+        $useRegistryUninstall = $true
+        $registryUninstallProductCode = $msiProductCode.ToUpperInvariant()
+        if (-not $registryUninstallDisplayName) {
+            $registryUninstallDisplayName = $DisplayName
+        }
+        Write-Host "Using MSI database product code for registry identity: $registryUninstallProductCode"
+    } else {
+        throw 'The MSI database did not expose a valid ProductCode; refusing ambiguous detection or removal.'
+    }
 }
 
 if ($useRegistryUninstall) {
@@ -1295,14 +1357,27 @@ if ($useRegistryUninstall) {
         '        }'
         '        if ($selectedApplications.Count -eq 0) {'
         '            $bundleCandidates = @($changedApplications | Where-Object {'
-        '                -not $_.WindowsInstaller -and [string]$_.DisplayName -like "$configuredUninstallDisplayName*"'
+        '                $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
+        '                $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
+        '                $isVisibleApplication -and -not $_.WindowsInstaller -and [string]$_.DisplayName -like "$configuredUninstallDisplayName*"'
         '            })'
         '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
         '        }'
-        '        if ($selectedApplications.Count -eq 0 -and $originalInstallerType -eq ''burn'') {'
-        '            $bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
-        '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
-        '        }'
+    )
+
+    # This is a packager-time decision. Do not emit $originalInstallerType into the
+    # generated deployment script: that variable exists only in this generator and
+    # StrictMode would turn the fallback check into a post-install 60001 failure.
+    if ($originalInstallerType -eq 'burn') {
+        $lines += @(
+            '        if ($selectedApplications.Count -eq 0) {'
+            '            $bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
+            '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
+            '        }'
+        )
+    }
+
+    $lines += @(
         '        if ($selectedApplications.Count -eq 0 -and $configuredUninstallProductCode) {'
         '            $configuredMatches = @($postInstallApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
         '            if ($configuredMatches.Count -eq 1) { $selectedApplications = $configuredMatches }'
@@ -1488,7 +1563,11 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         "    `$allowContainsFallback = '$installerTypeLower' -notin @('msi', 'wix')"
         '    if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey -and -not $configuredProductCode -and $allowContainsFallback) {'
         '        $containsMatches = @(Get-ADTApplication -Name $appName -NameMatch ''Contains'')'
-        '        $bundleMatches = @($containsMatches | Where-Object { -not $_.WindowsInstaller })'
+        '        $bundleMatches = @($containsMatches | Where-Object {'
+        '            $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
+        '            $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
+        '            $isVisibleApplication -and -not $_.WindowsInstaller'
+        '        })'
         '        if ($bundleMatches.Count -eq 1) {'
         '            $installedApps = $bundleMatches'
         '        } elseif ($containsMatches.Count -eq 1) {'
