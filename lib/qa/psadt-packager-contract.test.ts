@@ -87,6 +87,15 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
+  it('verifies registry installers by their captured vendor identity', () => {
+    expect(packager).toContain(
+      '@(Get-ADTApplication -FilterScript { $_.PSChildName -eq $capturedUninstallKey } -ErrorAction SilentlyContinue)'
+    );
+    expect(packager).toContain(
+      'Post-install verification passed for captured vendor identity'
+    );
+  });
+
   it('executes the exact vendor-documented command for Vivaldi silent removal', () => {
     expect(packager).toContain(
       "$registeredArgumentText -match ''(?i)(^|\\s)--vivaldi(\\s|$)''"
