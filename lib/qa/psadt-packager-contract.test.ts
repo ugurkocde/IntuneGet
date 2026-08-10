@@ -1,11 +1,113 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const packager = readFileSync(
   resolve(process.cwd(), '.github/scripts/Create-PSADTPackage.ps1'),
   'utf8'
 );
+
+const packagerPath = resolve(
+  process.cwd(),
+  '.github/scripts/Create-PSADTPackage.ps1'
+);
+
+const canRunWindowsPowerShellPackager =
+  process.platform === 'win32' &&
+  spawnSync('pwsh', [
+    '-NoProfile',
+    '-Command',
+    '$PSVersionTable.PSVersion.ToString()',
+  ]).status === 0;
+
+function generateRegistryUninstallPackage(
+  installerType: 'inno' | 'burn'
+): string {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
+
+  try {
+    for (const directory of [
+      'psadt/PSAppDeployToolkit',
+      'psadt/Config',
+      'psadt/Strings',
+      'psadt/Assets',
+    ]) {
+      mkdirSync(join(fixtureRoot, directory), { recursive: true });
+    }
+
+    const installerPath = join(fixtureRoot, 'setup.exe');
+    writeFileSync(installerPath, 'fixture');
+    writeFileSync(join(fixtureRoot, 'psadt/Invoke-AppDeployToolkit.exe'), 'fixture');
+    writeFileSync(
+      join(fixtureRoot, 'Send-Callback.ps1'),
+      'function Send-Callback { param($Body, $CallbackUrl, $CallbackSecret) return $null }'
+    );
+
+    const result = spawnSync('pwsh', ['-NoProfile', '-File', packagerPath], {
+      cwd: fixtureRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_WORKSPACE: fixtureRoot,
+        INPUT_JOB_ID: 'contract-test',
+        INPUT_CALLBACK_URL: 'https://example.invalid/callback',
+        INPUT_DISPLAY_NAME: 'Contract Test App',
+        INPUT_PUBLISHER: 'IntuneGet',
+        INPUT_VERSION: '1.0.0',
+        INPUT_WINGET_ID: 'IntuneGet.ContractTest',
+        INPUT_INSTALLER_TYPE: installerType,
+        INPUT_INSTALL_SCOPE: 'machine',
+        INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+        INPUT_UNINSTALL_COMMAND: 'REGISTRY_UNINSTALL:Contract Test App',
+        INSTALLER_PATH: installerPath,
+        INSTALLER_FILENAME: 'setup.exe',
+        PSADT_CONFIG: '{}',
+      },
+    });
+
+    if (result.status !== 0) {
+      throw new Error(
+        `Packager fixture failed (${result.status}):\n${result.stdout}\n${result.stderr}`
+      );
+    }
+
+    const generatedPath = join(
+      fixtureRoot,
+      'package',
+      'Invoke-AppDeployToolkit.ps1'
+    );
+    const parseResult = spawnSync(
+      'pwsh',
+      [
+        '-NoProfile',
+        '-Command',
+        '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile($env:TARGET_SCRIPT,[ref]$tokens,[ref]$errors) | Out-Null; if ($errors.Count) { $errors | ForEach-Object { $_.ToString() }; exit 1 }',
+      ],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, TARGET_SCRIPT: generatedPath },
+      }
+    );
+
+    if (parseResult.status !== 0) {
+      throw new Error(
+        `Generated deployment script did not parse:\n${parseResult.stdout}\n${parseResult.stderr}`
+      );
+    }
+
+    return readFileSync(generatedPath, 'utf8');
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+}
 
 describe('PSADT Inno packaging contract', () => {
   it('does not inject diagnostic switches into the vendor command line', () => {
@@ -41,6 +143,31 @@ describe('PSADT vendor argument contract', () => {
   });
 });
 
+describe.skipIf(!canRunWindowsPowerShellPackager)(
+  'PSADT generated deployment contract',
+  () => {
+    it('emits parseable registry-aware scripts for EXE and Burn uninstallers', () => {
+      for (const installerType of ['inno', 'burn'] as const) {
+        const generated = generateRegistryUninstallPackage(installerType);
+
+        expect(generated).toContain(
+          'continuing to wait for exact registration [$registeredUninstallRegistryKey] because a child process may still be working'
+        );
+        expect(generated).toContain('before the completion deadline.');
+        if (installerType === 'inno') {
+          expect(generated).toContain(
+            "$registeredUninstallProperty = if ($hasQuietUninstall) { 'QuietUninstallString' } else { 'UninstallString' }"
+          );
+        } else {
+          expect(generated).toContain(
+            'Start-ADTProcess -FilePath $bundledUninstaller'
+          );
+        }
+      }
+    }, 30_000);
+  }
+);
+
 describe('PSADT registry uninstall identity contract', () => {
   it('parses and persists a manifest product code for multi-entry installers', () => {
     expect(packager).toContain(
@@ -62,14 +189,12 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain('$registryUninstallDisplayName = $DisplayName');
   });
 
-  it('never sends an ambiguous display-name result set to PSADT uninstall', () => {
+  it('never sends an ambiguous display-name result set to a vendor uninstaller', () => {
     expect(packager).toContain("Get-ADTApplication -Name $appName -NameMatch ''Exact''");
     expect(packager).toContain('if ($installedApps.Count -ne 1)');
+    expect(packager).toContain('$registeredApplication = $installedApps[0]');
     expect(packager).toContain(
-      '$registeredApplication = $installedApps[0]'
-    );
-    expect(packager).toContain(
-      'Uninstall-ADTApplication -InstalledApplication $registeredApplication'
+      '$registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
     );
     expect(packager).not.toContain(
       'Uninstall-ADTApplication -InstalledApplication $installedApp -SuccessExitCodes'
@@ -79,7 +204,7 @@ describe('PSADT registry uninstall identity contract', () => {
   it('uses the packaged Burn bundle when the registered vendor cache is disposable', () => {
     expect(packager).toContain("if ($originalInstallerType -eq 'burn')");
     expect(packager).toContain(
-      '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList")'
+      '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })'
     );
     expect(packager).toContain(
       "`$bundledUninstaller = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
@@ -110,10 +235,10 @@ describe('PSADT registry uninstall identity contract', () => {
     );
     expect(packager).toContain('$isVivaldiUninstall = $true');
     expect(packager).toContain(
-      "[string[]]$vivaldiUninstallArguments = @(''--uninstall'', ''--vivaldi'', ''--force-uninstall'')"
+      "$registeredUninstallArguments = @(''--uninstall'', ''--vivaldi'', ''--force-uninstall'')"
     );
     expect(packager).toContain(
-      'Start-ADTProcess -FilePath $vivaldiUninstaller -ArgumentList $vivaldiUninstallArguments -WorkingDirectory (Split-Path -Parent $vivaldiUninstaller)'
+      'Preserve the vendor-documented Vivaldi command while using the same registry-aware'
     );
   });
 
@@ -125,12 +250,38 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
-  it('monitors exact registry removal for EXE apps without a quiet uninstall command', () => {
-    expect(packager).toContain('Start-ADTProcess -FilePath $registeredUninstallFile');
-    expect(packager).toContain('-WindowStyle Hidden -NoWait -PassThru');
+  it('monitors exact registry removal for both quiet and fallback EXE uninstall commands', () => {
+    expect(packager).toContain(
+      "$registeredUninstallProperty = if ($hasQuietUninstall) { ''QuietUninstallString'' } else { ''UninstallString'' }"
+    );
+    expect(packager).toContain(
+      '$uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
+    );
+    expect(packager).toContain(
+      'if ($registeredUninstallArguments.Count -gt 0) {'
+    );
     expect(packager).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
     expect(packager).toContain('Waiting for vendor uninstall registration');
     expect(packager).toContain('$uninstallHandle.Process.HasExited');
+    expect(packager).toContain(
+      'continuing to wait for exact registration [$registeredUninstallRegistryKey] because a child process may still be working'
+    );
+    expect(packager).not.toContain('TotalSeconds -ge 15');
+  });
+
+  it('uses the same registry-aware completion rule for packaged Burn uninstallers', () => {
+    expect(packager).toContain(
+      'Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments'
+    );
+    expect(packager).toContain(
+      'Waiting for Burn uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+    );
+    expect(packager).toContain(
+      'The Burn uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline.'
+    );
+    expect(packager).toContain(
+      'The Burn uninstaller requested a reboot with exit code [$uninstallProcessExitCode].'
+    );
   });
 
   it('reuses only independently safe manifest switches for uninstall', () => {
@@ -140,18 +291,44 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain('/verysilent');
     expect(packager).toContain("-split '\\s+'");
     expect(packager).toContain("(Split-Path -Leaf $registeredUninstallFile) -ine ''msiexec.exe''");
+    expect(packager).not.toContain('|--silent|-s)$');
   });
 
-  it('normalizes misregistered msiexec install actions to quiet removal', () => {
+  it('rebuilds misregistered msiexec commands as exact quiet product-code removal', () => {
     expect(packager).toContain("(Split-Path -Leaf $registeredUninstallFile) -ieq ''msiexec.exe''");
-    expect(packager).toContain("-replace ''(?i)^/i'', ''/x''");
-    expect(packager).toContain("@(''/qn'', ''/norestart'')");
+    expect(packager).toContain('$registeredMsiProductCode');
+    expect(packager).toContain(
+      "$registeredUninstallArguments = @(''/x'', $registeredMsiProductCode, ''/qn'', ''/norestart'')"
+    );
+    expect(packager).toContain(
+      'refusing to reuse install or repair arguments'
+    );
+    expect(packager).toContain(
+      "(?:^|\\s)[/-](?:x|i)\\s*(\\{[A-F0-9]{8}"
+    );
+    const registryIdentityCheck = packager.indexOf(
+      "$registeredUninstallRegistryKey -match ''(?i)^\\{[A-F0-9]"
+    );
+    const actionBoundArgumentCheck = packager.indexOf(
+      "(?:^|\\s)[/-](?:x|i)\\s*(\\{[A-F0-9]"
+    );
+    expect(registryIdentityCheck).toBeGreaterThan(-1);
+    expect(actionBoundArgumentCheck).toBeGreaterThan(registryIdentityCheck);
+  });
+
+  it('preserves reboot requests observed from asynchronous uninstallers', () => {
+    expect(packager).toContain(
+      '$script:UninstallRebootExitCode = 3010'
+    );
+    expect(packager).toContain(
+      'Close-ADTSession -ExitCode $script:UninstallRebootExitCode'
+    );
   });
 
   it('still fails closed when asynchronous registry removal never completes', () => {
     expect(packager).toContain('foreach ($verificationAttempt in 1..5)');
     expect(packager).toContain(
-      'throw "The vendor uninstall command returned, but uninstall registration [$registeredUninstallRegistryKey] still exists."'
+      'throw "The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."'
     );
   });
 

@@ -173,8 +173,9 @@ describe('hosted PSADT portable generator', () => {
     expect(script).toContain("-Name ''UninstallRegistryKey''");
     expect(script).toContain('Get-ADTApplication -FilterScript { $_.PSChildName -eq $capturedUninstallKey }');
     expect(script).toContain(
-      'Uninstall-ADTApplication -InstalledApplication $registeredApplication',
+      '$uninstallHandle = Start-ADTProcess @uninstallProcessParameters',
     );
+    expect(script).toContain('$uninstallHandle.Process.HasExited');
     expect(script).not.toContain('Start-ADTProcess -FilePath $wingetExe');
     expect(script).not.toContain('uninstall --id $wingetId');
   });
