@@ -5,6 +5,7 @@ import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
+import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import type { Win32CartItem } from '@/types/upload';
 
 const RESUME_BATCH_SIZE = 25;
@@ -59,7 +60,14 @@ export async function GET(request: Request) {
         .eq('status', 'awaiting_qa')
         .select('id')
         .maybeSingle();
-      if (updated) failed++;
+      if (updated) {
+        failed++;
+        await handleAutoUpdateJobCompletion(
+          job.id,
+          'failed',
+          candidate?.failure_summary || 'The required installation test could not complete.'
+        );
+      }
       continue;
     }
     if (candidate.status !== 'passed') {
@@ -149,7 +157,7 @@ export async function GET(request: Request) {
         .eq('status', 'packaging');
       resumed++;
     } catch (error) {
-      await supabase
+      const { data: failedJob } = await supabase
         .from('packaging_jobs')
         .update({
           status: 'failed',
@@ -161,7 +169,16 @@ export async function GET(request: Request) {
           completed_at: new Date().toISOString(),
         })
         .eq('id', job.id)
-        .eq('status', 'packaging');
+        .eq('status', 'packaging')
+        .select('id')
+        .maybeSingle();
+      if (failedJob) {
+        await handleAutoUpdateJobCompletion(
+          job.id,
+          'failed',
+          error instanceof Error ? error.message : 'Unknown resume error'
+        );
+      }
       failed++;
     }
   }
