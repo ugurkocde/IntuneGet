@@ -138,7 +138,6 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
         InstallerType: 'exe',
         Scope: 'user',
         InstallerSwitches: {
-          Silent: '--vivaldi-silent',
           Custom: '--do-not-launch-chrome',
         },
       }],
