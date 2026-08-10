@@ -121,7 +121,37 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain("$registeredInstallerType -eq ''inno''");
     expect(packager).toContain("$registeredInstallerType -eq ''nullsoft''");
     expect(packager).toContain(
-      'Uninstall-ADTApplication -InstalledApplication $registeredApplication -AdditionalArgumentList $additionalUninstallArguments'
+      '$registeredUninstallArguments += $additionalUninstallArguments'
+    );
+  });
+
+  it('monitors exact registry removal for EXE apps without a quiet uninstall command', () => {
+    expect(packager).toContain('Start-ADTProcess -FilePath $registeredUninstallFile');
+    expect(packager).toContain('-WindowStyle Hidden -NoWait -PassThru');
+    expect(packager).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
+    expect(packager).toContain('Waiting for vendor uninstall registration');
+    expect(packager).toContain('$uninstallHandle.Process.HasExited');
+  });
+
+  it('reuses only independently safe manifest switches for uninstall', () => {
+    expect(packager).toContain('Never forward install-only values');
+    expect(packager).toContain('--mode=stub');
+    expect(packager).toContain('$safeManifestUninstallArguments');
+    expect(packager).toContain('/verysilent');
+    expect(packager).toContain("-split '\\s+'");
+    expect(packager).toContain("(Split-Path -Leaf $registeredUninstallFile) -ine ''msiexec.exe''");
+  });
+
+  it('normalizes misregistered msiexec install actions to quiet removal', () => {
+    expect(packager).toContain("(Split-Path -Leaf $registeredUninstallFile) -ieq ''msiexec.exe''");
+    expect(packager).toContain("-replace ''(?i)^/i'', ''/x''");
+    expect(packager).toContain("@(''/qn'', ''/norestart'')");
+  });
+
+  it('still fails closed when asynchronous registry removal never completes', () => {
+    expect(packager).toContain('foreach ($verificationAttempt in 1..5)');
+    expect(packager).toContain(
+      'throw "The vendor uninstall command returned, but uninstall registration [$registeredUninstallRegistryKey] still exists."'
     );
   });
 
