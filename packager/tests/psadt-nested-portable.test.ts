@@ -227,6 +227,30 @@ describe('Burn bundle PSADT generation', () => {
 });
 
 describe('EXE product identity PSADT generation', () => {
+  it('uses the same fail-closed architecture-label comparison as hosted packaging', () => {
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      packagingJob({
+        display_name: 'Mozilla Firefox',
+        installer_type: 'nullsoft',
+        uninstall_command: 'REGISTRY_UNINSTALL:Mozilla Firefox (en-US)',
+      }),
+      'Mozilla Firefox'
+    );
+
+    expect(verification).toContain('$configuredUninstallComparableName = ((');
+    expect(verification).toContain('$architectureAgnosticMatches = @($changedApplications');
+    expect(verification).toContain(
+      'if ($architectureAgnosticMatches.Count -eq 1) { $selectedApplications = $architectureAgnosticMatches }'
+    );
+    expect(verification).toContain(
+      '(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)'
+    );
+    expect(verification.indexOf('$architectureAgnosticMatches')).toBeLessThan(
+      verification.indexOf('$bundleCandidates')
+    );
+  });
+
   it('verifies and removes only the exact AppsAndFeatures product identity', () => {
     const job = packagingJob({
       winget_id: 'Adobe.Acrobat.Reader.64-bit',

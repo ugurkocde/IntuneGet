@@ -188,6 +188,51 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).not.toContain('$existingNameMatches');
   });
 
+  it('selects one architecture-decorated ARP entry without accepting an ambiguous set', () => {
+    expect(packager).toContain('$configuredUninstallComparableName = ((');
+    expect(packager).toContain('$architectureAgnosticMatches = @($changedApplications');
+    expect(packager).toContain(
+      'if ($architectureAgnosticMatches.Count -eq 1) { $selectedApplications = $architectureAgnosticMatches }'
+    );
+    expect(packager).toContain(
+      '(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)'
+    );
+    expect(packager.indexOf('$architectureAgnosticMatches')).toBeLessThan(
+      packager.indexOf('$bundleCandidates')
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'normalizes Firefox architecture metadata while leaving helper entries distinct',
+    () => {
+      const result = spawnSync(
+        'pwsh',
+        [
+          '-NoProfile',
+          '-Command',
+          `function ConvertTo-ComparableName([string]$Name) {
+  return (($Name -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\\(\\s*\\)', '' -replace '\\(\\s+', '(' -replace '\\s+\\)', ')' -replace '\\s{2,}', ' ')).Trim()
+}
+[pscustomobject]@{
+  Configured = ConvertTo-ComparableName 'Mozilla Firefox (en-US)'
+  Product = ConvertTo-ComparableName 'Mozilla Firefox (x64 en-US)'
+  Helper = ConvertTo-ComparableName 'Mozilla Maintenance Service'
+} | ConvertTo-Json -Compress`,
+        ],
+        { encoding: 'utf8' }
+      );
+
+      expect(result.status).toBe(0);
+      const names = JSON.parse(result.stdout.trim()) as {
+        Configured: string;
+        Product: string;
+        Helper: string;
+      };
+      expect(names.Product).toBe(names.Configured);
+      expect(names.Helper).not.toBe(names.Configured);
+    }
+  );
+
   it('promotes a concrete MSI/WiX uninstall command to exact registry identity handling', () => {
     expect(packager).toContain(
       "$installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match"

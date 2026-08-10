@@ -772,6 +772,7 @@ ${steps}
     ## Capture and verify the exact uninstall identity observed for this installation.
     $selectedApplications = @()
     $changedApplications = @()
+    $configuredUninstallComparableName = (($configuredUninstallDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
     foreach ($verificationAttempt in 1..30) {
         $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)
         $changedApplications = @($postInstallApplications | Where-Object {
@@ -785,6 +786,14 @@ ${steps}
         }
         if ($selectedApplications.Count -eq 0) {
             $selectedApplications = @($changedApplications | Where-Object { [string]$_.DisplayName -eq $configuredUninstallDisplayName })
+        }
+        if ($selectedApplications.Count -eq 0 -and $configuredUninstallComparableName) {
+            $architectureAgnosticMatches = @($changedApplications | Where-Object {
+                $candidateDisplayName = [string]$_.DisplayName
+                $candidateComparableName = (($candidateDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+                $candidateComparableName -eq $configuredUninstallComparableName
+            })
+            if ($architectureAgnosticMatches.Count -eq 1) { $selectedApplications = $architectureAgnosticMatches }
         }
         if ($selectedApplications.Count -eq 0) {
             $bundleCandidates = @($changedApplications | Where-Object {
