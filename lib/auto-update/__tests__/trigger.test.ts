@@ -3,16 +3,27 @@
  * per-package PSADT settings must survive app updates (issue follow-up to #96).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AutoUpdateTrigger } from '../trigger';
+import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
 
-const { getQaResultMock, getPackageResultMock } = vi.hoisted(() => ({
+const {
+  getQaResultMock,
+  getPackageResultMock,
+  getAppForInstallerMock,
+  getVersionInstallerInfoMock,
+} = vi.hoisted(() => ({
   getQaResultMock: vi.fn(),
   getPackageResultMock: vi.fn(),
+  getAppForInstallerMock: vi.fn(),
+  getVersionInstallerInfoMock: vi.fn(),
 }));
 vi.mock('@/lib/catalog', () => ({
-  getCatalogSource: () => ({ getQaResult: getQaResultMock }),
+  getCatalogSource: () => ({
+    getQaResult: getQaResultMock,
+    getAppForInstaller: getAppForInstallerMock,
+    getVersionInstallerInfo: getVersionInstallerInfoMock,
+  }),
 }));
 vi.mock('@/lib/supabase', () => ({
   createServerClient: () => ({
@@ -87,6 +98,9 @@ const UPDATE_INFO = {
   installerUrl: 'https://example.com/setup-2.0.0.zip',
   installerSha256: 'abc',
   installerType: 'zip',
+  installCommand: '"setup-2.0.0.exe" --current-version-silent',
+  silentSwitches: '--current-version-silent',
+  installScope: 'user' as const,
   nestedInstallerType: 'exe',
   nestedInstallerPath: 'setup-2.0.0.exe',
 };
@@ -102,6 +116,40 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     vi.clearAllMocks();
     getQaResultMock.mockResolvedValue(null);
     getPackageResultMock.mockResolvedValue({ data: null, error: null });
+    getAppForInstallerMock.mockReset();
+    getVersionInstallerInfoMock.mockReset();
+  });
+
+  it('builds the current version command from normalized WinGet switches', async () => {
+    getAppForInstallerMock.mockResolvedValue({
+      latest_version: '8.1.4087.62',
+      name: 'Vivaldi',
+    });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/Vivaldi.8.1.4087.62.x64.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installer_scope: 'user',
+      silent_args: '--vivaldi-silent --do-not-launch-chrome',
+      installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/Vivaldi.8.1.4087.62.x64.exe',
+        InstallerSha256: 'A'.repeat(64),
+        InstallerType: 'exe',
+        Scope: 'user',
+        InstallerSwitches: {
+          Custom: '--do-not-launch-chrome',
+        },
+      }],
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Vivaldi.Vivaldi', 'x64');
+
+    expect(result).toMatchObject({
+      installCommand: '"Vivaldi.8.1.4087.62.x64.exe" --vivaldi-silent --do-not-launch-chrome',
+      silentSwitches: '--vivaldi-silent --do-not-launch-chrome',
+      installScope: 'user',
+    });
   });
 
   it('records a current QA failure as a safety skip before creating history or a job', async () => {
@@ -268,8 +316,12 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       expect(result.id).toBe('job-2');
       expect(insertSpy).toHaveBeenCalledTimes(1);
       const jobData = insertSpy.mock.calls[0][0] as {
+        install_command: string;
+        install_scope: string;
         package_config: Record<string, unknown>;
       };
+      expect(jobData.install_command).toBe('"setup-2.0.0.exe" --current-version-silent');
+      expect(jobData.install_scope).toBe('user');
       expect(jobData.package_config.psadtConfig).toEqual(PSADT_CONFIG);
       expect(jobData.package_config.nestedInstallerType).toBe('exe');
       expect(jobData.package_config.nestedInstallerPath).toBe('setup-2.0.0.exe');

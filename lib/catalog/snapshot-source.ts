@@ -471,7 +471,7 @@ export class SnapshotCatalogSource implements CatalogSource {
       (db) => {
         const row = db
           .prepare(
-            `SELECT installer_url, installer_sha256, installer_type, installer_scope, installers
+            `SELECT installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers
              FROM version_history
              WHERE winget_id = ? AND version = ?`
           )
@@ -481,6 +481,7 @@ export class SnapshotCatalogSource implements CatalogSource {
               installer_sha256: string | null;
               installer_type: string | null;
               installer_scope: string | null;
+              silent_args: string | null;
               installers: string | null;
             }
           | undefined;
@@ -491,6 +492,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           installer_sha256: row.installer_sha256,
           installer_type: row.installer_type,
           installer_scope: row.installer_scope,
+          silent_args: row.silent_args,
           installers: row.installers ? JSON.parse(row.installers) : null,
         };
       },
@@ -506,7 +508,7 @@ export class SnapshotCatalogSource implements CatalogSource {
       (db) => {
         const row = db
           .prepare(
-            `SELECT installer_url, installer_sha256, installer_type, installer_scope, installers
+            `SELECT installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers
              FROM version_history
              WHERE winget_id = ? AND version = ?
              ORDER BY created_at DESC
@@ -518,6 +520,7 @@ export class SnapshotCatalogSource implements CatalogSource {
               installer_sha256: string | null;
               installer_type: string | null;
               installer_scope: string | null;
+              silent_args: string | null;
               installers: string | null;
             }
           | undefined;
@@ -528,6 +531,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           installer_sha256: row.installer_sha256,
           installer_type: row.installer_type,
           installer_scope: row.installer_scope,
+          silent_args: row.silent_args,
           installers: row.installers ? JSON.parse(row.installers) : null,
         };
       },
