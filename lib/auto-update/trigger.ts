@@ -217,7 +217,11 @@ export class AutoUpdateTrigger {
         // generated command saved with the previous deployment.
         silentSwitches: updateInfo.silentSwitches && !customInstallCommand
           ? updateInfo.silentSwitches
-          : extractSilentSwitches(effectiveInstallCommand, sourceInstallerType),
+          : extractSilentSwitches(
+              effectiveInstallCommand,
+              sourceInstallerType,
+              updateInfo.nestedInstallerType
+            ),
         uninstallCommand: deploymentConfig.uninstallCommand || '',
         installScope: updateInfo.installScope ||
           (deploymentConfig.installScope === 'user' ? 'user' : 'machine'),

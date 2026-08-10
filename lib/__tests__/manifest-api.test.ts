@@ -583,6 +583,28 @@ describe('normalizeManifestInstallers', () => {
       'Microsoft.WindowsTerminal_8wekyb3d8bbwe'
     );
   });
+
+  it('inherits root nested installer semantics before normalization', () => {
+    const installers = normalizeManifestInstallers({
+      InstallerType: 'zip',
+      NestedInstallerType: 'inno',
+      Scope: 'machine',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/app.zip',
+        InstallerSha256: 'abc123',
+        NestedInstallerFiles: [{ RelativeFilePath: 'setup.exe' }],
+      }],
+    });
+
+    expect(installers[0].NestedInstallerType).toBe('inno');
+    expect(normalizeInstaller(installers[0])).toMatchObject({
+      type: 'zip',
+      nestedInstallerType: 'inno',
+      nestedInstallerPath: 'setup.exe',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+    });
+  });
 });
 
 describe('getManifestPaths logic', () => {

@@ -410,7 +410,11 @@ export async function POST(request: NextRequest) {
                   installerType: item.installerType,
                   nestedInstallerType: item.nestedInstallerType,
                   nestedInstallerPath: item.nestedInstallerPath,
-                  silentSwitches: extractSilentSwitches(item.installCommand, item.installerType),
+                  silentSwitches: extractSilentSwitches(
+                    item.installCommand,
+                    item.installerType,
+                    item.nestedInstallerType
+                  ),
                   uninstallCommand: item.uninstallCommand,
                   installScope: item.installScope,
                   psadtConfig: JSON.stringify(item.psadtConfig),
@@ -536,7 +540,11 @@ export async function POST(request: NextRequest) {
               installerType: item.installerType,
               nestedInstallerType: item.nestedInstallerType,
               nestedInstallerPath: item.nestedInstallerPath,
-              silentSwitches: extractSilentSwitches(item.installCommand, item.installerType),
+              silentSwitches: extractSilentSwitches(
+                item.installCommand,
+                item.installerType,
+                item.nestedInstallerType
+              ),
               uninstallCommand: item.uninstallCommand,
               callbackUrl,
               psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,

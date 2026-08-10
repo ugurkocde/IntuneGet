@@ -723,7 +723,12 @@ export async function getInstallers(
     return [];
   }
 
-  return manifest.Installers.map(normalizeInstaller);
+  // WinGet allows installer type, nested installer type/files, scope, switches,
+  // and identity fields at the manifest root. Normalize that inheritance before
+  // converting individual installers or archive packages lose their nested
+  // execution semantics.
+  return normalizeManifestInstallers(manifest as unknown as Record<string, unknown>)
+    .map(normalizeInstaller);
 }
 
 /**

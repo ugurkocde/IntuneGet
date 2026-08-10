@@ -6,7 +6,11 @@
 /**
  * Extract silent switches from the install command
  */
-export function extractSilentSwitches(installCommand: string, installerType: string): string {
+export function extractSilentSwitches(
+  installCommand: string,
+  installerType: string,
+  nestedInstallerType?: string
+): string {
   // Common silent switches by installer type
   const defaultSwitches: Record<string, string> = {
     msi: '/qn /norestart',
@@ -17,6 +21,17 @@ export function extractSilentSwitches(installCommand: string, installerType: str
     burn: '/q /norestart',
     msix: '', // MSIX doesn't need switches
   };
+
+  const sourceType = installerType.toLowerCase();
+  const effectiveType = sourceType === 'zip' && nestedInstallerType
+    ? nestedInstallerType.toLowerCase()
+    : sourceType;
+
+  // Archive extraction parameters are not vendor silent switches. Never pass
+  // values such as "-Archive -Path" to a nested executable.
+  if (/\bExpand-Archive\b/i.test(installCommand)) {
+    return defaultSwitches[effectiveType] ?? '';
+  }
 
   // Strip executable path first (handles paths with hyphens like "7z2501-x64.exe")
   // This removes everything up to and including common installer extensions
@@ -38,5 +53,5 @@ export function extractSilentSwitches(installCommand: string, installerType: str
     return switchMatch[0];
   }
 
-  return defaultSwitches[installerType] || '/S';
+  return defaultSwitches[effectiveType] ?? (sourceType === 'zip' ? '' : '/S');
 }

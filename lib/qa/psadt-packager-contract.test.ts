@@ -149,6 +149,14 @@ describe('PSADT registry uninstall identity contract', () => {
   });
 });
 
+describe('PSADT nested archive contract', () => {
+  it('rejects a nested path when its installer type was lost', () => {
+    expect(packager).toContain(
+      'Zip package declares a nested installer path but no nested installer type; refusing unsafe default execution.'
+    );
+  });
+});
+
 describe('PSADT MSIX scope contract', () => {
   it('registers user-scoped packages in the current user context', () => {
     expect(packager).toContain('Add-AppxPackage -Path $msixPath -ForceApplicationShutdown');

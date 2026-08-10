@@ -63,7 +63,11 @@ export async function GET(request: Request) {
         installerType,
         nestedInstallerType: item.nestedInstallerType,
         nestedInstallerPath: item.nestedInstallerPath,
-        silentSwitches: extractSilentSwitches(job.install_command || item.installCommand, installerType),
+        silentSwitches: extractSilentSwitches(
+          job.install_command || item.installCommand,
+          installerType,
+          item.nestedInstallerType
+        ),
         uninstallCommand: job.uninstall_command || item.uninstallCommand,
         installScope: job.install_scope || item.installScope,
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
@@ -179,7 +183,8 @@ export async function GET(request: Request) {
         nestedInstallerPath: item.nestedInstallerPath,
         silentSwitches: extractSilentSwitches(
           job.install_command || item.installCommand,
-          job.installer_type || item.installerType
+          job.installer_type || item.installerType,
+          item.nestedInstallerType
         ),
         uninstallCommand: job.uninstall_command || item.uninstallCommand,
         callbackUrl,

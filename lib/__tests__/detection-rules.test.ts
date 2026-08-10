@@ -664,6 +664,88 @@ describe('generateInstallCommand', () => {
     expect(command).toContain('Expand-Archive');
     expect(command).toContain('-Force');
   });
+
+  it('should generate a nested installer command for non-portable zip packages', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'inno',
+      nestedInstallerPath: 'setup.exe',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+    };
+
+    expect(generateInstallCommand(installer)).toBe(
+      '"setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+    );
+  });
+
+  it('should use msiexec for a nested MSI package', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'msi',
+      nestedInstallerPath: 'payload\\setup.msi',
+      silentArgs: '/qn /norestart',
+    };
+
+    expect(generateInstallCommand(installer)).toBe(
+      'msiexec /i "payload\\setup.msi" /qn /norestart ALLUSERS=1'
+    );
+  });
+
+  it('should not launch a nested portable executable', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'portable',
+      nestedInstallerPath: 'app.exe',
+    };
+
+    expect(generateInstallCommand(installer)).toContain('Expand-Archive');
+  });
+
+  it('should reject a nested path without a nested installer type', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerPath: 'setup.exe',
+    };
+
+    expect(() => generateInstallCommand(installer)).toThrow(/no nested installer type/i);
+  });
+
+  it('should treat a whitespace-only nested path as an archive-only package', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerPath: '   ',
+    };
+
+    expect(generateInstallCommand(installer)).toContain('Expand-Archive');
+  });
+
+  it('should reject an unsafe nested installer path', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: '..\\setup.exe',
+    };
+
+    expect(() => generateInstallCommand(installer)).toThrow(/unsafe nested installer path/i);
+  });
 });
 
 describe('generateUninstallCommand', () => {

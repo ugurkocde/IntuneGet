@@ -351,7 +351,8 @@ export async function POST(request: NextRequest) {
               nestedInstallerPath: installerInfo.nestedInstallerPath,
               silentSwitches: extractSilentSwitches(
                 deploymentConfig.installCommand || '',
-                installerInfo.installerType || deploymentConfig.installerType || 'exe'
+                installerInfo.installerType || deploymentConfig.installerType || 'exe',
+                installerInfo.nestedInstallerType
               ),
               uninstallCommand: deploymentConfig.uninstallCommand || '',
               callbackUrl,

@@ -432,11 +432,10 @@ if ($extensionTypeMap.ContainsKey($fileExtension)) {
     }
 }
 
-$isNestedPortable = $installerTypeLower -eq 'zip' -and
-    -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
-    $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable'
-
 if ($installerTypeLower -eq 'zip' -and -not [string]::IsNullOrWhiteSpace($NestedInstallerPath)) {
+    if ([string]::IsNullOrWhiteSpace($NestedInstallerType)) {
+        throw "Zip package declares a nested installer path but no nested installer type; refusing unsafe default execution."
+    }
     $NestedInstallerPath = $NestedInstallerPath.Trim() -replace '/', '\'
     $nestedPathSegments = @($NestedInstallerPath -split '\\')
     $nestedPathIsUnsafe = [System.IO.Path]::IsPathRooted($NestedInstallerPath) -or
@@ -448,6 +447,10 @@ if ($installerTypeLower -eq 'zip' -and -not [string]::IsNullOrWhiteSpace($Nested
         throw "Unsafe nested installer path: $NestedInstallerPath"
     }
 }
+
+$isNestedPortable = $installerTypeLower -eq 'zip' -and
+    -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
+    $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable'
 
 $portableFolderName = ($DisplayName -replace '[<>:"/\\|?*\x00-\x1f]', '_').Trim().TrimEnd('.')
 if ([string]::IsNullOrWhiteSpace($portableFolderName) -or

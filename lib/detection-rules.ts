@@ -310,7 +310,10 @@ export function generateInstallCommand(
   scope: WingetScope = 'machine'
 ): string {
   const installerName = resolveInstallerFileName(installer.url, installer.type);
-  const silentArgs = installer.silentArgs || getDefaultSilentArgs(installer.type);
+  const effectiveType = installer.type === 'zip' && installer.nestedInstallerType
+    ? installer.nestedInstallerType
+    : installer.type;
+  const silentArgs = installer.silentArgs || getDefaultSilentArgs(effectiveType);
 
   switch (installer.type) {
     case 'msi':
@@ -329,6 +332,38 @@ export function generateInstallCommand(
       return `"${installerName}" ${silentArgs}`.trim();
 
     case 'zip':
+      const declaredNestedPath = installer.nestedInstallerPath?.trim();
+      if (declaredNestedPath) {
+        const nestedPath = declaredNestedPath.replace(/\//g, '\\');
+        if (!installer.nestedInstallerType) {
+          throw new Error('Zip package declares a nested installer path but no nested installer type');
+        }
+        if (
+          /^[\\/]/.test(nestedPath) ||
+          /^[A-Za-z]:/.test(nestedPath) ||
+          nestedPath.split('\\').includes('..') ||
+          /[\x00-\x1f]/.test(nestedPath)
+        ) {
+          throw new Error(`Unsafe nested installer path: ${installer.nestedInstallerPath}`);
+        }
+
+        switch (installer.nestedInstallerType) {
+          case 'msi':
+          case 'wix': {
+            const nestedMsiScope = scope === 'user' ? 'ALLUSERS=""' : 'ALLUSERS=1';
+            return `msiexec /i "${nestedPath}" ${silentArgs} ${nestedMsiScope}`.trim();
+          }
+          case 'msix':
+          case 'appx':
+            return `Add-AppxPackage -Path "${nestedPath}"`;
+          case 'portable':
+            return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
+          default:
+            return `"${nestedPath}" ${silentArgs}`.trim();
+        }
+      }
+      return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
+
     case 'portable':
       return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
 
