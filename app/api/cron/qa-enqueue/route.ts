@@ -19,6 +19,10 @@ import {
   buildQaPackageIdentity,
   validateCurrentQaPackageProfile,
 } from '@/lib/qa/package-profile';
+import {
+  prioritizeToolchainBackfill,
+  type QaToolchainBackfillCandidate,
+} from '@/lib/qa/toolchain-backfill';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
 import {
   createWingetManifestClient,
@@ -43,6 +47,8 @@ interface QaCandidateProfileRow {
   enqueued_at: string;
   package_profile_sha256: string | null;
   test_config: unknown;
+  status: string;
+  priority: number;
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -68,7 +74,7 @@ async function findToolchainBackfillIds(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<{ ids: string[]; pagesScanned: number }> {
   const decidedIds = new Set<string>();
-  const supportedStaleIds: string[] = [];
+  const supportedStaleCandidates: QaToolchainBackfillCandidate[] = [];
   let cursor: { enqueuedAt: string; id: string } | null = null;
   let pagesScanned = 0;
 
@@ -76,7 +82,7 @@ async function findToolchainBackfillIds(
     let candidateQuery = supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_sha256, enqueued_at, package_profile_sha256, test_config'
+        'id, winget_id, version, architecture, installer_sha256, enqueued_at, package_profile_sha256, test_config, status, priority'
       )
       .eq('test_level', 'psadt-package')
       .not('package_profile_sha256', 'is', null)
@@ -94,7 +100,7 @@ async function findToolchainBackfillIds(
     const rows = (data || []) as QaCandidateProfileRow[];
     pagesScanned++;
 
-    const pageStaleIds: string[] = [];
+    const pageStaleRows: QaCandidateProfileRow[] = [];
     for (const row of rows) {
       const config = object(row.test_config);
       if (config.profileKind !== 'catalog-default' || decidedIds.has(row.winget_id)) continue;
@@ -108,11 +114,12 @@ async function findToolchainBackfillIds(
         candidateInstallerSha256: row.installer_sha256,
       });
       if (!validation.valid || !hasInteractiveCatalogQaProfile(row.test_config)) {
-        pageStaleIds.push(row.winget_id);
+        pageStaleRows.push(row);
       }
     }
 
-    if (pageStaleIds.length > 0) {
+    if (pageStaleRows.length > 0) {
+      const pageStaleIds = pageStaleRows.map((row) => row.winget_id);
       const [supportedResult, policyResult, deployedResult] = await Promise.all([
         supabase
           .from('curated_apps')
@@ -147,21 +154,32 @@ async function findToolchainBackfillIds(
         ...(policyResult.data || []).map((row) => row.winget_id),
         ...(deployedResult.data || []).map((row) => row.winget_id),
       ]);
-      for (const wingetId of pageStaleIds) {
-        if (supportedIds.has(wingetId) && demandedIds.has(wingetId)) {
-          supportedStaleIds.push(wingetId);
+      for (const row of pageStaleRows) {
+        if (supportedIds.has(row.winget_id) && demandedIds.has(row.winget_id)) {
+          supportedStaleCandidates.push({
+            wingetId: row.winget_id,
+            status: typeof row.status === 'string' ? row.status : '',
+            priority: Number.isFinite(row.priority) ? row.priority : 0,
+            enqueuedAt: row.enqueued_at,
+          });
         }
       }
     }
 
-    if (supportedStaleIds.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE) {
+    if (supportedStaleCandidates.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE) {
       return {
-        ids: supportedStaleIds.slice(0, TOOLCHAIN_BACKFILL_BATCH_SIZE),
+        ids: prioritizeToolchainBackfill(supportedStaleCandidates).slice(
+          0,
+          TOOLCHAIN_BACKFILL_BATCH_SIZE
+        ),
         pagesScanned,
       };
     }
     if (rows.length < TOOLCHAIN_BACKFILL_PAGE_SIZE) {
-      return { ids: supportedStaleIds, pagesScanned };
+      return {
+        ids: prioritizeToolchainBackfill(supportedStaleCandidates),
+        pagesScanned,
+      };
     }
 
     const last = rows.at(-1);

@@ -46,12 +46,12 @@ interface PollRow {
 
 interface ResultRow {
   winget_id: string;
-  display_name: string;
+  display_name?: string | null;
   tested_version: string;
   architecture: string;
   outcome: string;
   tested_at_utc: string;
-  overall_duration_seconds: number | null;
+  overall_duration_seconds?: number | null;
 }
 
 interface AppRow {
@@ -344,7 +344,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       architecture: architecture(result.architecture),
       outcome: result.outcome === 'Passed' ? 'Passed' : ('Failed' as QaOutcome),
       testedAtUtc: result.tested_at_utc,
-      durationSeconds: result.overall_duration_seconds,
+      durationSeconds: result.overall_duration_seconds ?? null,
     })),
   };
 }
@@ -383,11 +383,10 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .order('started_at', { ascending: false })
       .limit(10),
     supabase
-      .from('qa_results')
+      .from('qa_package_results')
       .select(
-        'winget_id, display_name, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds'
+        'winget_id, tested_version, architecture, outcome, tested_at_utc'
       )
-      .eq('test_level', 'psadt-package')
       .order('tested_at_utc', { ascending: false })
       .limit(10),
   ]);

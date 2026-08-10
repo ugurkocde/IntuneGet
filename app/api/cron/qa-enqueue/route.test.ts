@@ -20,6 +20,7 @@ vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
 }));
 
 import { GET } from './route';
+import { prioritizeToolchainBackfill } from '@/lib/qa/toolchain-backfill';
 import {
   buildQaPackageIdentity,
   canonicalQaJson,
@@ -183,6 +184,8 @@ function profileCandidate(options: {
   profileKind?: string;
   toolchainOverrides?: Record<string, unknown>;
   interactive?: boolean;
+  status?: string;
+  priority?: number;
 }): Record<string, unknown> {
   const profileKind = options.profileKind || 'catalog-default';
   const version = '1.0.0';
@@ -232,6 +235,8 @@ function profileCandidate(options: {
     architecture,
     installer_sha256: installerSha256,
     enqueued_at: options.enqueuedAt || '2026-08-08T10:00:00.000Z',
+    status: options.status || 'superseded',
+    priority: options.priority ?? 1,
     package_profile_sha256: packageProfileSha256,
     test_config: {
       profileKind,
@@ -680,5 +685,39 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({ winget_id: 'Supported.App' });
+  });
+
+  it('prioritizes failed stale profiles before ordinary toolchain backfill', async () => {
+    expect(prioritizeToolchainBackfill([
+      {
+        wingetId: 'Newest.App',
+        status: 'superseded',
+        priority: 1,
+        enqueuedAt: '2026-08-08T10:04:00.000Z',
+      },
+      {
+        wingetId: 'Failed.Low',
+        status: 'failed',
+        priority: 1,
+        enqueuedAt: '2026-08-08T10:01:00.000Z',
+      },
+      {
+        wingetId: 'Failed.High',
+        status: 'failed',
+        priority: 2,
+        enqueuedAt: '2026-08-08T10:00:00.000Z',
+      },
+      {
+        wingetId: 'Error.App',
+        status: 'error',
+        priority: 1,
+        enqueuedAt: '2026-08-08T10:03:00.000Z',
+      },
+    ])).toEqual([
+      'Failed.High',
+      'Failed.Low',
+      'Error.App',
+      'Newest.App',
+    ]);
   });
 });
