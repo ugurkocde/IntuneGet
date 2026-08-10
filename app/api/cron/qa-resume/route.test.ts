@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createServerClientMock, getFeatureFlagsMock } = vi.hoisted(() => ({
+const { createServerClientMock, getFeatureFlagsMock, handleAutoUpdateJobCompletionMock } = vi.hoisted(() => ({
   createServerClientMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
+  handleAutoUpdateJobCompletionMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/features', () => ({ getFeatureFlags: getFeatureFlagsMock }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
 vi.mock('@/lib/github-actions', () => ({ triggerPackagingWorkflow: vi.fn() }));
+vi.mock('@/lib/auto-update/cleanup', () => ({
+  handleAutoUpdateJobCompletion: handleAutoUpdateJobCompletionMock,
+}));
 
 import { GET } from './route';
 
@@ -75,5 +79,56 @@ describe('GET /api/cron/qa-resume', () => {
       status: 'queued',
       qa_completed_at: expect.any(String),
     }));
+    expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('finalizes auto-update tracking when the required QA candidate fails', async () => {
+    const job = {
+      id: 'job-failed-qa',
+      qa_candidate_id: 'candidate-failed',
+      execution_profile_sha256: 'A'.repeat(64),
+      created_at: '2026-08-09T12:00:00Z',
+    };
+    const packagingUpdate = chain({ data: { id: job.id }, error: null });
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          if (client.from.mock.calls.filter(([name]) => name === 'packaging_jobs').length === 1) {
+            return chain({ data: [job], error: null });
+          }
+          return packagingUpdate;
+        }
+        if (table === 'qa_candidates') {
+          return chain({
+            data: {
+              id: 'candidate-failed',
+              status: 'failed',
+              failure_summary: 'Installer remained interactive.',
+              package_profile_sha256: 'A'.repeat(64),
+            },
+            error: null,
+          });
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    };
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ resumed: 0, failed: 1, waiting: 0 });
+    expect(packagingUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'qa_failed',
+      status_message: 'Installer remained interactive.',
+    }));
+    expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(
+      job.id,
+      'failed',
+      'Installer remained interactive.'
+    );
   });
 });
