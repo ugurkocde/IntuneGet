@@ -40,7 +40,7 @@ function healthTone(state: string): StatusTone {
 }
 
 function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): string | null {
-  if (issue === 'github_rate_limit') return 'GitHub API rate limit';
+  if (issue === 'github_rate_limit') return 'GitHub temporarily limited WinGet checks; scanning will retry automatically';
   if (issue === 'partial_failure') return 'Some package checks failed';
   if (issue === 'stalled') return 'Poll did not finish';
   if (issue === 'upstream_error') return 'Upstream polling error';
@@ -169,7 +169,9 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
           <AlertTriangle className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />
           <T>{schedulerIssue}</T>
           {data.scheduler.consecutiveFailures > 1
-            ? <> · <T><Var>{data.scheduler.consecutiveFailures}</Var> consecutive failures</T></>
+            ? data.scheduler.issue === 'github_rate_limit'
+              ? <> · <T><Var>{data.scheduler.consecutiveFailures}</Var> affected scans</T></>
+              : <> · <T><Var>{data.scheduler.consecutiveFailures}</Var> consecutive failures</T></>
             : null}
         </div>
       ) : null}

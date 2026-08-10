@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   normalizeInstaller,
+  normalizeManifestInstallers,
   fetchLocaleManifest,
   getFullManifest,
   clearManifestCache,
@@ -525,6 +526,34 @@ describe('normalizeInstaller', () => {
 
       expect(normalizeInstaller(installer).architecture).toBe('neutral');
     });
+  });
+});
+
+describe('normalizeManifestInstallers', () => {
+  it('merges root and installer-specific switch fields like WinGet', () => {
+    const installers = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallerSwitches: {
+        Silent: '--vivaldi-silent',
+        SilentWithProgress: '--vivaldi-silent',
+      },
+      Installers: [{
+        Architecture: 'x64',
+        Scope: 'user',
+        InstallerUrl: 'https://downloads.vivaldi.com/stable/Vivaldi.exe',
+        InstallerSha256: 'abc123',
+        InstallerSwitches: { Custom: '--do-not-launch-chrome' },
+      }],
+    });
+
+    expect(installers[0].InstallerSwitches).toEqual({
+      Silent: '--vivaldi-silent',
+      SilentWithProgress: '--vivaldi-silent',
+      Custom: '--do-not-launch-chrome',
+    });
+    expect(normalizeInstaller(installers[0]).silentArgs).toBe(
+      '--vivaldi-silent --do-not-launch-chrome'
+    );
   });
 });
 

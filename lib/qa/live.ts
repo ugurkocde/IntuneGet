@@ -229,7 +229,10 @@ function schedulerIssue(
   if (staleRunning) return 'stalled';
   const errors = Array.isArray(poll.errors) ? poll.errors : [];
   const combined = errors.filter((error): error is string => typeof error === 'string').join(' ');
-  if (/github|winget change feed/i.test(combined) && /rate limit/i.test(combined)) {
+  if (
+    /github|winget change feed/i.test(combined) &&
+    /rate limit|paused until/i.test(combined)
+  ) {
     return 'github_rate_limit';
   }
   if (poll.status === 'partial') return 'partial_failure';

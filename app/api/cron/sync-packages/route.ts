@@ -5,6 +5,7 @@ import {
   createWingetManifestClient,
   resolveWingetManifest,
 } from '@/lib/winget-sync-resolution.mjs';
+import { normalizeInstaller, normalizeManifestInstallers } from '@/lib/manifest-api';
 import { selectAppsToSync } from './select-apps';
 
 const BATCH_SIZE = 10;
@@ -133,7 +134,7 @@ export async function GET(request: Request) {
             const localeManifest = await manifestClient.fetchLocaleManifest(winget_id, latestVersion);
 
             // Extract installer data
-            const installers = (installerManifest.Installers as Array<Record<string, unknown>>) || [];
+            const installers = normalizeManifestInstallers(installerManifest);
             const defaultInstaller = installers[0] || {};
 
             // Prepare version history record
@@ -146,10 +147,9 @@ export async function GET(request: Request) {
                 (defaultInstaller.InstallerType as string) ||
                 (installerManifest.InstallerType as string) ||
                 null,
-              silent_args:
-                (defaultInstaller.InstallerSwitches as Record<string, string>)?.Silent ||
-                (installerManifest.InstallerSwitches as Record<string, string>)?.Silent ||
-                null,
+              silent_args: defaultInstaller.Architecture
+                ? normalizeInstaller(defaultInstaller).silentArgs || null
+                : null,
               installers: JSON.stringify(installers),
               manifest_fetched_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),

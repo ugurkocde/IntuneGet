@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import type {
   WingetManifest,
   WingetInstaller,
+  WingetInstallerSwitches,
   NormalizedInstaller,
   WingetInstallerType,
 } from '@/types/winget';
@@ -314,7 +315,11 @@ async function getManifestFromSupabase(
     // Parse installers from JSONB, recover malformed stringified JSON, or fetch fresh installer manifest
     let installers: WingetInstaller[] = [];
 
-    const parsedInstallers = coerceInstallersArray(versionData.installers, versionData.installer_type);
+    const parsedInstallers = coerceInstallersArray(
+      versionData.installers,
+      versionData.installer_type,
+      versionData.silent_args
+    );
 
     if (parsedInstallers.length > 0) {
       installers = parsedInstallers;
@@ -322,7 +327,7 @@ async function getManifestFromSupabase(
       // If DB row is incomplete or legacy, fetch authoritative installer manifest for this version.
       const installerManifest = await fetchInstallerManifest(wingetId, versionData.version);
       if (installerManifest) {
-        installers = normalizeInstallers(installerManifest);
+        installers = normalizeManifestInstallers(installerManifest);
       }
     }
 
@@ -361,7 +366,11 @@ async function getManifestFromSupabase(
   }
 }
 
-function coerceInstallersArray(rawInstallers: unknown, defaultType?: string): WingetInstaller[] {
+function coerceInstallersArray(
+  rawInstallers: unknown,
+  defaultType?: string,
+  defaultSilentArgs?: string
+): WingetInstaller[] {
   let installerArray: Array<Record<string, unknown>> = [];
 
   if (Array.isArray(rawInstallers)) {
@@ -389,7 +398,10 @@ function coerceInstallersArray(rawInstallers: unknown, defaultType?: string): Wi
     NestedInstallerType: inst.NestedInstallerType as WingetInstaller['NestedInstallerType'],
     NestedInstallerFiles: inst.NestedInstallerFiles as WingetInstaller['NestedInstallerFiles'],
     Scope: inst.Scope as WingetInstaller['Scope'],
-    InstallerSwitches: inst.InstallerSwitches as WingetInstaller['InstallerSwitches'],
+    InstallerSwitches: mergeInstallerSwitches(
+      defaultSilentArgs ? { Silent: defaultSilentArgs } : undefined,
+      inst.InstallerSwitches
+    ),
     ProductCode: inst.ProductCode as string,
     PackageFamilyName: inst.PackageFamilyName as string,
     UpgradeBehavior: inst.UpgradeBehavior as WingetInstaller['UpgradeBehavior'],
@@ -465,7 +477,7 @@ export async function getFullManifest(
     );
 
     // Normalize installers
-    const installers = normalizeInstallers(installerManifest);
+    const installers = normalizeManifestInstallers(installerManifest);
 
     // Build combined manifest. Description prefers ShortDescription to match
     // what the catalog syncs store in curated_apps, so the same app gets the
@@ -504,7 +516,21 @@ export async function getFullManifest(
 /**
  * Normalize installers from raw YAML
  */
-function normalizeInstallers(manifest: Record<string, unknown>): WingetInstaller[] {
+function mergeInstallerSwitches(
+  inherited: unknown,
+  installerSpecific: unknown
+): WingetInstallerSwitches | undefined {
+  const inheritedRecord = inherited && typeof inherited === 'object' && !Array.isArray(inherited)
+    ? inherited as Record<string, unknown>
+    : {};
+  const installerRecord = installerSpecific && typeof installerSpecific === 'object' && !Array.isArray(installerSpecific)
+    ? installerSpecific as Record<string, unknown>
+    : {};
+  const merged = { ...inheritedRecord, ...installerRecord } as WingetInstallerSwitches;
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+export function normalizeManifestInstallers(manifest: Record<string, unknown>): WingetInstaller[] {
   const rawInstallers = (manifest.Installers as Array<Record<string, unknown>>) || [];
 
   // Get top-level defaults
@@ -512,7 +538,7 @@ function normalizeInstallers(manifest: Record<string, unknown>): WingetInstaller
   const defaultNestedType = manifest.NestedInstallerType as string;
   const defaultNestedFiles = manifest.NestedInstallerFiles as WingetInstaller['NestedInstallerFiles'];
   const defaultScope = manifest.Scope as string;
-  const defaultSwitches = manifest.InstallerSwitches as Record<string, string>;
+  const defaultSwitches = manifest.InstallerSwitches;
   const defaultPlatform = manifest.Platform as string[];
   const defaultMinOS = manifest.MinimumOSVersion as string;
   const defaultUpgrade = manifest.UpgradeBehavior as string;
@@ -532,8 +558,9 @@ function normalizeInstallers(manifest: Record<string, unknown>): WingetInstaller
                           defaultNestedFiles,
     Scope: (installer.Scope as WingetInstaller['Scope']) ||
            (defaultScope as WingetInstaller['Scope']),
-    InstallerSwitches: (installer.InstallerSwitches as WingetInstaller['InstallerSwitches']) ||
-                       defaultSwitches,
+    // WinGet inherits installer switches per field. An installer-level Custom
+    // value must not discard a root-level Silent value (Vivaldi is one example).
+    InstallerSwitches: mergeInstallerSwitches(defaultSwitches, installer.InstallerSwitches),
     ProductCode: installer.ProductCode as string,
     PackageFamilyName: installer.PackageFamilyName as string,
     UpgradeBehavior: (installer.UpgradeBehavior as WingetInstaller['UpgradeBehavior']) ||
@@ -692,7 +719,7 @@ export async function getLiveInstallers(
   if (!installerManifest) {
     return [];
   }
-  return normalizeInstallers(installerManifest).map(normalizeInstaller);
+  return normalizeManifestInstallers(installerManifest).map(normalizeInstaller);
 }
 
 /**

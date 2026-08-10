@@ -104,7 +104,7 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
-  it('uses installer switch objects without merging root switch keys', () => {
+  it('inherits root switch fields that are not overridden by the installer', () => {
     const config = buildQaCatalogTestConfig({
       app: {
         wingetId: 'Contoso.Example',
@@ -120,7 +120,30 @@ describe('buildQaCatalogTestConfig', () => {
       },
     });
 
-    expect(config.silentArgs).toBe('/S /CURRENTUSER');
+    expect(config.silentArgs).toBe('/ROOT /CURRENTUSER');
+  });
+
+  it('preserves Vivaldi-style root silent and installer custom switches', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Vivaldi.Vivaldi',
+        name: 'Vivaldi',
+        publisher: 'Vivaldi',
+        version: '8.1.4087.62',
+      },
+      manifest: {
+        InstallerType: 'exe',
+        InstallerSwitches: { Silent: '--vivaldi-silent' },
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'exe',
+        Scope: 'user',
+        InstallerSwitches: { Custom: '--do-not-launch-chrome' },
+      },
+    });
+
+    expect(config.silentArgs).toBe('--vivaldi-silent --do-not-launch-chrome');
   });
 
   it('keeps portable packages argument-free', () => {

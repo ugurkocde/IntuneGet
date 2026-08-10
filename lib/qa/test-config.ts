@@ -72,9 +72,13 @@ export function buildQaCatalogTestConfig({
   manifest: ManifestRecord;
   installer: WingetInstallerCandidate & ManifestRecord;
 }): QaCatalogTestConfig {
-  const effectiveSwitches = isRecord(installer.InstallerSwitches)
-    ? installer.InstallerSwitches
-    : manifest.InstallerSwitches;
+  // WinGet installer defaults are inherited per switch field, not as one
+  // replaceable object. Preserve root Silent when a selected installer only
+  // overrides Custom, Log, or another field.
+  const effectiveSwitches = {
+    ...record(manifest.InstallerSwitches),
+    ...record(installer.InstallerSwitches),
+  };
   const effectiveNestedFiles = Array.isArray(installer.NestedInstallerFiles)
     ? installer.NestedInstallerFiles
     : Array.isArray(manifest.NestedInstallerFiles)

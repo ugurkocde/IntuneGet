@@ -227,4 +227,29 @@ describe('buildQaLiveResponse', () => {
     });
     expect(JSON.stringify(response)).not.toContain('secret-detail');
   });
+
+  it('identifies a persisted GitHub cooldown as a rate limit', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-10T07:11:00.000Z'),
+      current: null,
+      queuedCount: 0,
+      queued: [],
+      poll: {
+        status: 'partial',
+        started_at: '2026-08-10T07:10:47.000Z',
+        finished_at: '2026-08-10T07:10:49.000Z',
+        errors: ['system: WinGet GitHub change feed paused until 2026-08-10T07:33:39.000Z'],
+      },
+      consecutivePollFailures: 1,
+      recent: [],
+      apps: [],
+      frame: null,
+    });
+
+    expect(response.scheduler).toMatchObject({
+      state: 'degraded',
+      lastOutcome: 'partial',
+      issue: 'github_rate_limit',
+    });
+  });
 });
