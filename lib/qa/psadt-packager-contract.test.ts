@@ -416,6 +416,11 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain(
       "Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode'"
     );
+    expect(packager).toContain('[void]$view.Execute()');
+    expect(packager).toContain('try { [void]$view.Close() } catch { }');
+    expect(packager).toContain(
+      "$msiProductCode = [string](Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode')"
+    );
     expect(packager).toContain(
       'Using MSI database product code for registry identity'
     );

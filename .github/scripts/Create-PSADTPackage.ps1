@@ -149,17 +149,23 @@ function Get-MsiPropertyValue {
         )
         $escapedProperty = $Property -replace "'", "''"
         $view = $database.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = '$escapedProperty'")
-        $view.Execute()
+        # Windows Installer COM methods can emit incidental pipeline output.
+        # Suppress it so this helper always returns exactly one scalar property
+        # value instead of an Object[] that later breaks string normalization.
+        [void]$view.Execute()
         $record = $view.Fetch()
 
         if ($record) {
-            return [string]$record.StringData(1)
+            $value = [string]$record.StringData(1)
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                return $value
+            }
         }
     } catch {
         Write-Warning "Could not read MSI property [$Property] from [$Path]: $($_.Exception.Message)"
     } finally {
         if ($view) {
-            try { $view.Close() } catch { }
+            try { [void]$view.Close() } catch { }
         }
         foreach ($comObject in @($record, $view, $database, $installer)) {
             if ($comObject -and [System.Runtime.InteropServices.Marshal]::IsComObject($comObject)) {
@@ -544,7 +550,7 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
 # and QA both target the exact Windows Installer product. This also repairs the
 # explicit missing-identity sentinel without guessing from a display name.
 if ($fileExtension -eq '.msi' -and ($useRegistryUninstall -or $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED')) {
-    $msiProductCode = Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode'
+    $msiProductCode = [string](Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode')
     if ($msiProductCode -match '^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$') {
         $useRegistryUninstall = $true
         $registryUninstallProductCode = $msiProductCode.ToUpperInvariant()
