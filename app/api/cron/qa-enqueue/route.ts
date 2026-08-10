@@ -17,6 +17,7 @@ import {
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
 import {
   buildQaPackageIdentity,
+  validateCompatiblePassedCatalogQaProfile,
   validateCurrentQaPackageProfile,
 } from '@/lib/qa/package-profile';
 import {
@@ -113,7 +114,21 @@ async function findToolchainBackfillIds(
         candidateArchitecture: row.architecture,
         candidateInstallerSha256: row.installer_sha256,
       });
-      if (!validation.valid || !hasInteractiveCatalogQaProfile(row.test_config)) {
+      const compatiblePassedValidation = row.status === 'passed'
+        ? validateCompatiblePassedCatalogQaProfile({
+            testConfig: row.test_config,
+            candidatePackageProfileSha256: row.package_profile_sha256,
+            candidateWingetId: row.winget_id,
+            candidateVersion: row.version,
+            candidateArchitecture: row.architecture,
+            candidateInstallerSha256: row.installer_sha256,
+          })
+        : null;
+      const hasCompatiblePassedProfile = compatiblePassedValidation?.valid === true;
+      if (
+        (!validation.valid && !hasCompatiblePassedProfile) ||
+        !hasInteractiveCatalogQaProfile(row.test_config)
+      ) {
         pageStaleRows.push(row);
       }
     }

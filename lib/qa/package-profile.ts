@@ -14,6 +14,20 @@ export const QA_PSADT_TOOLCHAIN = {
 } as const;
 
 /**
+ * Successful catalog runs produced by these packager commits remain valid for
+ * background coverage. Only add a commit when every change after it is limited
+ * to a failure path that a passing package could not have exercised.
+ *
+ * This compatibility is deliberately not used for customer deployment
+ * profiles or queued-candidate dispatch: those continue to require the exact
+ * current package profile.
+ */
+export const QA_COMPATIBLE_PASSED_PACKAGER_COMMITS = [
+  QA_PSADT_TOOLCHAIN.packagerCommit,
+  'de49775e759b693b92db09bc99aa116f197c4850',
+] as const;
+
+/**
  * Increment this whenever profile-building semantics change without a corresponding
  * toolchain-pin change (for example, default PSADT settings or detection derivation),
  * and update the protected workflow verifier in the same rollout. Existing candidates
@@ -202,14 +216,19 @@ export function qaSha256(value: string): string {
  * The hash is calculated over the stored canonical string itself; parsing and re-serializing it
  * would make the result dependent on object key order.
  */
-export function validateCurrentQaPackageProfile(input: {
+type QaPackageProfileValidationInput = {
   testConfig: unknown;
   candidatePackageProfileSha256: unknown;
   candidateWingetId: unknown;
   candidateVersion: unknown;
   candidateArchitecture: unknown;
   candidateInstallerSha256: unknown;
-}): QaPackageProfileValidation {
+};
+
+function validateQaPackageProfile(
+  input: QaPackageProfileValidationInput,
+  acceptedPackagerCommits: readonly string[]
+): QaPackageProfileValidation {
   const config = record(input.testConfig);
   if (!config) return { valid: false, reason: 'test-config-invalid' };
   if (config.profileKind !== 'catalog-default' && config.profileKind !== 'deployment-config') {
@@ -254,6 +273,12 @@ export function validateCurrentQaPackageProfile(input: {
   const toolchain = record(profile.toolchain);
   if (!toolchain) return { valid: false, reason: 'toolchain-missing' };
   for (const [field, expected] of Object.entries(QA_PSADT_TOOLCHAIN)) {
+    if (field === 'packagerCommit') {
+      if (!acceptedPackagerCommits.includes(textValue(toolchain[field]))) {
+        return { valid: false, reason: `toolchain-mismatch:${field}` };
+      }
+      continue;
+    }
     if (toolchain[field] !== expected) {
       return { valid: false, reason: `toolchain-mismatch:${field}` };
     }
@@ -320,6 +345,18 @@ export function validateCurrentQaPackageProfile(input: {
     canonicalJson,
     packageProfileSha256: calculatedSha256,
   };
+}
+
+export function validateCurrentQaPackageProfile(
+  input: QaPackageProfileValidationInput
+): QaPackageProfileValidation {
+  return validateQaPackageProfile(input, [QA_PSADT_TOOLCHAIN.packagerCommit]);
+}
+
+export function validateCompatiblePassedCatalogQaProfile(
+  input: QaPackageProfileValidationInput
+): QaPackageProfileValidation {
+  return validateQaPackageProfile(input, QA_COMPATIBLE_PASSED_PACKAGER_COMMITS);
 }
 
 export function normalizeQaPsadtConfig(

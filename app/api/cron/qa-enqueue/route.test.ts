@@ -463,7 +463,8 @@ describe('GET /api/cron/qa-enqueue', () => {
         profileCandidate({
           id: 'old-candidate',
           wingetId: 'Example.App',
-          packagerCommit: '1'.repeat(40),
+          packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
+          status: 'failed',
         }),
       ],
     });
@@ -495,6 +496,29 @@ describe('GET /api/cron/qa-enqueue', () => {
       String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
     );
     expect(canonical.toolchain.packagerCommit).toBe(CURRENT_PACKAGER_COMMIT);
+  });
+
+  it('preserves a passing catalog result from an explicitly compatible packager', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'compatible-passed-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
+          status: 'passed',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
   });
 
   it('does not backfill an app that already has a current catalog profile', async () => {
@@ -563,6 +587,7 @@ describe('GET /api/cron/qa-enqueue', () => {
           wingetId: 'Example.App',
           packagerCommit: CURRENT_PACKAGER_COMMIT,
           toolchainOverrides: { templateSha256: 'B'.repeat(64) },
+          status: 'passed',
         }),
       ],
     });
