@@ -74,11 +74,13 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
   log,
   phase,
   serverTime,
+  mode = 'panel',
 }: {
   activity: QaLiveActivity | null;
   log: QaLiveLog | null;
   phase: QaLivePhase;
   serverTime: string;
+  mode?: 'panel' | 'dialog';
 }) {
   const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(1);
@@ -132,7 +134,13 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
   }
 
   return (
-    <section className="flex min-h-[22rem] flex-col overflow-hidden rounded-xl border border-overlay/10 bg-bg-surface/45" aria-labelledby="system-changes-heading">
+    <section
+      className={cn(
+        'flex flex-col overflow-hidden rounded-xl border border-overlay/10 bg-bg-surface/45',
+        mode === 'dialog' ? 'min-h-[34rem]' : 'min-h-[22rem]'
+      )}
+      aria-labelledby="system-changes-heading"
+    >
       <div className="border-b border-overlay/10 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -265,7 +273,14 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
                     <tr key={`${item.kind}|${item.change}|${item.target}`}>
                       <td className="px-4 py-2.5"><KindLabel kind={item.kind} /></td>
                       <td className="px-2 py-2.5"><ChangeBadge change={item.change} /></td>
-                      <td className="px-2 py-2.5 pr-4"><code className="block truncate text-[11px] text-text-secondary" title={item.target}>{compactTarget(item.target)}</code></td>
+                      <td className="px-2 py-2.5 pr-4">
+                        <code
+                          className={cn('block text-[11px] text-text-secondary', mode === 'dialog' ? 'break-all' : 'truncate')}
+                          title={item.target}
+                        >
+                          {mode === 'dialog' ? item.target : compactTarget(item.target)}
+                        </code>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

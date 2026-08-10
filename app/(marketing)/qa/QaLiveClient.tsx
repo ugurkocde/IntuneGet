@@ -17,7 +17,8 @@ import {
 import { AppIcon } from '@/components/AppIcon';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
-import { QaLiveActivityPanel } from '@/components/qa/QaLiveActivityPanel';
+import { QaLiveActivityDialog } from '@/components/qa/QaLiveActivityDialog';
+import { QaLiveStepTimeline } from '@/components/qa/QaLiveStepTimeline';
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge';
 import { useElapsedTime } from '@/hooks/use-elapsed-time';
 import { useQaLive } from '@/hooks/use-qa';
@@ -285,7 +286,19 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
               )}
             </div>
           </div>
-          <QaLiveActivityPanel activity={data.activity} log={data.log} phase={data.current.phase} serverTime={data.serverTime} />
+          <QaLiveStepTimeline
+            phase={data.current.phase}
+            log={data.log}
+            className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
+          />
+          <div className="lg:col-start-1 lg:row-start-2">
+            <QaLiveActivityDialog
+              activity={data.activity}
+              log={data.log}
+              phase={data.current.phase}
+              serverTime={data.serverTime}
+            />
+          </div>
         </div>
       </div>
     </section>
