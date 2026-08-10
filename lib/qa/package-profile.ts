@@ -5,7 +5,7 @@ import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c4609782be26123a519858ea39b653e6f00a96a0',
+  packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -19,7 +19,7 @@ export const QA_PSADT_TOOLCHAIN = {
  * and update the protected workflow verifier in the same rollout. Existing candidates
  * then fail closed and are rebuilt before they can be dispatched.
  */
-export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 3;
+export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 4;
 
 export interface QaPackageProfileInput {
   profileKind: 'catalog-default' | 'deployment-config';

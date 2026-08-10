@@ -159,7 +159,7 @@ describe('PSADT QA package identity', () => {
       psadtConfig: { detectionRules: Array<Record<string, unknown>> };
     };
 
-    expect(profile.schemaVersion).toBe(3);
+    expect(profile.schemaVersion).toBe(QA_PACKAGE_PROFILE_SCHEMA_VERSION);
     expect(profile.detectionRules[0]).toMatchObject({
       keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
       detectionValue: '2.8.0',
