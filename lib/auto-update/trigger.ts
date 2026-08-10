@@ -23,6 +23,7 @@ import { ensureQaDemand, type QaDemandResult } from '@/lib/qa/demand';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { generateInstallCommand } from '@/lib/detection-rules';
 import { normalizeInstaller } from '@/lib/manifest-api';
+import { upgradeLegacyPackageDefaults } from '@/lib/update-policies/upgrade-legacy-package-defaults';
 import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
 
 interface TriggerResult {
@@ -194,6 +195,13 @@ export class AutoUpdateTrigger {
       // Backfill PSADT settings from the original deployment for policies
       // created before psadtConfig was stored on deployment_config
       await this.ensurePsadtConfig(policy);
+
+      // Policies created by older IntuneGet releases can contain generated
+      // defaults that were never valid at runtime (for example an MSI
+      // {PRODUCT_CODE} token and a guessed installation folder). Upgrade only
+      // those exact legacy shapes before QA so the same corrected profile is
+      // later used by both GitHub Actions and the self-hosted packager.
+      await this.ensureCurrentPackageDefaults(policy, updateInfo);
 
       const deploymentConfig = policy.deployment_config as DeploymentConfig;
       const sourceInstallerType =
@@ -520,6 +528,38 @@ export class AutoUpdateTrigger {
         }`
       );
     }
+  }
+
+  private async ensureCurrentPackageDefaults(
+    policy: AppUpdatePolicy,
+    updateInfo: UpdateInfo
+  ): Promise<void> {
+    const current = policy.deployment_config as DeploymentConfig | null;
+    if (!current) return;
+
+    const upgraded = upgradeLegacyPackageDefaults(current, {
+      wingetId: updateInfo.wingetId,
+      version: updateInfo.latestVersion,
+      displayName: updateInfo.displayName,
+      installerUrl: updateInfo.installerUrl,
+      installerSha256: updateInfo.installerSha256,
+      installerType: updateInfo.installerType || current.installerType,
+      installScope: updateInfo.installScope ||
+        (current.installScope === 'user' ? 'user' : 'machine'),
+    });
+    if (!upgraded.changed) return;
+
+    const { error } = await this.supabase
+      .from('app_update_policies')
+      .update({
+        deployment_config: upgraded.config,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', policy.id);
+    if (error) {
+      throw new Error(`Could not persist corrected package defaults: ${error.message}`);
+    }
+    policy.deployment_config = upgraded.config;
   }
 
   /**

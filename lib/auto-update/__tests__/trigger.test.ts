@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 const {
   getQaResultMock,
@@ -37,9 +38,11 @@ vi.mock('@/lib/supabase', () => ({
 
 interface TableHandlers {
   maybeSingleResult?: { data: unknown; error: unknown };
+  maybeSingleSpy?: ReturnType<typeof vi.fn>;
   singleResult?: { data: unknown; error: unknown };
   updateSpy?: ReturnType<typeof vi.fn>;
   insertSpy?: ReturnType<typeof vi.fn>;
+  terminalError?: unknown;
 }
 
 function createSupabaseMock(tables: Record<string, TableHandlers>) {
@@ -51,7 +54,10 @@ function createSupabaseMock(tables: Record<string, TableHandlers>) {
       for (const method of ['select', 'eq', 'not', 'order', 'limit']) {
         builder[method] = vi.fn(chain);
       }
-      builder.maybeSingle = vi.fn(async () => handlers.maybeSingleResult || { data: null, error: null });
+      builder.error = handlers.terminalError || null;
+      builder.maybeSingle = vi.fn(async () => handlers.maybeSingleSpy
+        ? handlers.maybeSingleSpy()
+        : handlers.maybeSingleResult || { data: null, error: null });
       builder.single = vi.fn(async () => handlers.singleResult || { data: null, error: null });
       builder.update = vi.fn((payload: unknown) => {
         handlers.updateSpy?.(payload);
@@ -88,6 +94,30 @@ function makePolicy(deploymentConfig: Partial<DeploymentConfig>): AppUpdatePolic
     deployment_config: deploymentConfig as DeploymentConfig,
     is_enabled: true,
   } as unknown as AppUpdatePolicy;
+}
+
+function zoomConfigForTrigger(): DeploymentConfig {
+  const legacyRule = {
+    type: 'file' as const,
+    path: '%ProgramFiles%',
+    fileOrFolderName: 'Zoom VDI Workplace',
+    detectionType: 'exists' as const,
+    check32BitOn64System: false,
+  };
+  return {
+    displayName: 'Zoom VDI Workplace',
+    publisher: 'Zoom',
+    architecture: 'x64',
+    installerType: 'msi',
+    installCommand: 'msiexec /i "ZoomInstallerVDI.msi" /qn',
+    uninstallCommand: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+    installScope: 'machine',
+    detectionRules: [legacyRule],
+    psadtConfig: {
+      ...DEFAULT_PSADT_CONFIG,
+      detectionRules: [legacyRule],
+    },
+  };
 }
 
 const UPDATE_INFO = {
@@ -278,6 +308,158 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
 
       expect((policy.deployment_config as DeploymentConfig).psadtConfig).toBeUndefined();
       expect(updateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ensureCurrentPackageDefaults', () => {
+    it('persists corrected legacy MSI defaults before QA and packaging', async () => {
+      const updateSpy = vi.fn();
+      const supabase = createSupabaseMock({
+        app_update_policies: { updateSpy },
+      });
+      const trigger = makeTrigger(supabase);
+      const legacyRule = {
+        type: 'file' as const,
+        path: '%ProgramFiles%',
+        fileOrFolderName: 'Zoom VDI Workplace',
+        detectionType: 'exists' as const,
+        check32BitOn64System: false,
+      };
+      const policy = makePolicy({
+        displayName: 'Zoom VDI Workplace',
+        publisher: 'Zoom',
+        architecture: 'x64',
+        installerType: 'msi',
+        installCommand: 'msiexec /i "ZoomInstallerVDI.msi" /qn',
+        uninstallCommand: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+        installScope: 'machine',
+        detectionRules: [legacyRule],
+        psadtConfig: {
+          ...DEFAULT_PSADT_CONFIG,
+          deployMode: 'Silent',
+          verifyInstall: true,
+          removeExistingInstall: true,
+          registryMarkerPath: 'SOFTWARE\\Contoso\\Apps',
+          installCommand: 'msiexec /i "setup.msi" /qn',
+          detectionRules: [legacyRule],
+        },
+      });
+
+      await (trigger as unknown as {
+        ensureCurrentPackageDefaults: (
+          p: AppUpdatePolicy,
+          u: Parameters<AutoUpdateTrigger['triggerAutoUpdate']>[1]
+        ) => Promise<void>;
+      }).ensureCurrentPackageDefaults(policy, {
+        ...UPDATE_INFO,
+        wingetId: 'Zoom.Zoom.VDI',
+        latestVersion: '7.0.27050',
+        displayName: 'Zoom VDI Workplace',
+        installerUrl: 'https://zoom.example/ZoomInstallerVDI.msi',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'msi',
+        installScope: 'machine',
+        nestedInstallerType: undefined,
+        nestedInstallerPath: undefined,
+      });
+
+      const config = policy.deployment_config as DeploymentConfig;
+      expect(config.uninstallCommand).toBe('REGISTRY_UNINSTALL:Zoom VDI Workplace');
+      expect(config.detectionRules[0]).toMatchObject({
+        type: 'registry',
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Apps\\Zoom_Zoom_VDI',
+        detectionValue: '7.0.27050',
+      });
+      expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
+        deployment_config: config,
+        updated_at: expect.any(String),
+      }));
+    });
+
+    it('persists the corrected profile before looking up QA demand', async () => {
+      const updateSpy = vi.fn();
+      const qaLookupSpy = vi.fn(async () => ({
+        data: { outcome: 'Failed' },
+        error: null,
+      }));
+      const supabase = createSupabaseMock({
+        app_update_policies: { updateSpy },
+        qa_package_results: { maybeSingleSpy: qaLookupSpy },
+      });
+      const trigger = makeTrigger(supabase);
+      const legacyRule = {
+        type: 'file' as const,
+        path: '%ProgramFiles%',
+        fileOrFolderName: 'Zoom VDI Workplace',
+        detectionType: 'exists' as const,
+        check32BitOn64System: false,
+      };
+      const policy = makePolicy({
+        displayName: 'Zoom VDI Workplace',
+        publisher: 'Zoom',
+        architecture: 'x64',
+        installerType: 'msi',
+        installCommand: 'msiexec /i "ZoomInstallerVDI.msi" /qn',
+        uninstallCommand: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+        installScope: 'machine',
+        detectionRules: [legacyRule],
+        psadtConfig: {
+          ...DEFAULT_PSADT_CONFIG,
+          detectionRules: [legacyRule],
+        },
+      });
+      policy.original_upload_history_id = 'prior-upload';
+      policy.consecutive_failures = 0;
+      vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+      vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+
+      await trigger.triggerAutoUpdate(policy, {
+        ...UPDATE_INFO,
+        wingetId: 'Zoom.Zoom.VDI',
+        latestVersion: '7.0.27050',
+        displayName: 'Zoom VDI Workplace',
+        installerUrl: 'https://zoom.example/ZoomInstallerVDI.msi',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'msi',
+        installScope: 'machine',
+      }, { skipRateLimits: true });
+
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      expect(qaLookupSpy).toHaveBeenCalledTimes(1);
+      expect(updateSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        qaLookupSpy.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('does not mutate the in-memory policy when persistence fails', async () => {
+      const supabase = createSupabaseMock({
+        app_update_policies: {
+          terminalError: { message: 'database unavailable' },
+        },
+      });
+      const trigger = makeTrigger(supabase);
+      const policy = makePolicy({
+        ...zoomConfigForTrigger(),
+      });
+      const originalConfig = policy.deployment_config;
+
+      await expect((trigger as unknown as {
+        ensureCurrentPackageDefaults: (
+          p: AppUpdatePolicy,
+          u: Parameters<AutoUpdateTrigger['triggerAutoUpdate']>[1]
+        ) => Promise<void>;
+      }).ensureCurrentPackageDefaults(policy, {
+        ...UPDATE_INFO,
+        wingetId: 'Zoom.Zoom.VDI',
+        latestVersion: '7.0.27050',
+        displayName: 'Zoom VDI Workplace',
+        installerUrl: 'https://zoom.example/ZoomInstallerVDI.msi',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'msi',
+        installScope: 'machine',
+      })).rejects.toThrow('Could not persist corrected package defaults');
+
+      expect(policy.deployment_config).toBe(originalConfig);
     });
   });
 
