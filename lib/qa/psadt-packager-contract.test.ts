@@ -81,11 +81,20 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
-  it('adds verified silent arguments when a vendor only registers an interactive uninstall', () => {
+  it('executes the exact vendor-documented command for Vivaldi silent removal', () => {
     expect(packager).toContain(
       "$registeredArgumentText -match ''(?i)(^|\\s)--vivaldi(\\s|$)''"
     );
-    expect(packager).toContain("$additionalUninstallArguments += ''--force-uninstall''");
+    expect(packager).toContain('$isVivaldiUninstall = $true');
+    expect(packager).toContain(
+      "[string[]]$vivaldiUninstallArguments = @(''--uninstall'', ''--vivaldi'', ''--force-uninstall'')"
+    );
+    expect(packager).toContain(
+      'Start-ADTProcess -FilePath $vivaldiUninstaller -ArgumentList $vivaldiUninstallArguments -WorkingDirectory (Split-Path -Parent $vivaldiUninstaller)'
+    );
+  });
+
+  it('adds verified silent arguments when other vendors only register an interactive uninstall', () => {
     expect(packager).toContain("$registeredInstallerType -eq ''inno''");
     expect(packager).toContain("$registeredInstallerType -eq ''nullsoft''");
     expect(packager).toContain(
