@@ -479,6 +479,14 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
+} elseif ($installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match '(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\})') {
+    # Deployment profiles commonly carry the concrete msiexec uninstall command
+    # instead of the internal REGISTRY_UNINSTALL_PRODUCT marker. Treat its product
+    # code as the same immutable registry identity so install verification and
+    # removal never fall back to a human/Winget display name.
+    $useRegistryUninstall = $true
+    $registryUninstallProductCode = $Matches[1]
+    $registryUninstallDisplayName = $DisplayName
 }
 
 if ($useRegistryUninstall) {

@@ -54,6 +54,14 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
+  it('promotes a concrete MSI/WiX uninstall command to exact registry identity handling', () => {
+    expect(packager).toContain(
+      "$installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match"
+    );
+    expect(packager).toContain('$registryUninstallProductCode = $Matches[1]');
+    expect(packager).toContain('$registryUninstallDisplayName = $DisplayName');
+  });
+
   it('never sends an ambiguous display-name result set to PSADT uninstall', () => {
     expect(packager).toContain("Get-ADTApplication -Name $appName -NameMatch ''Exact''");
     expect(packager).toContain('if ($installedApps.Count -ne 1)');
