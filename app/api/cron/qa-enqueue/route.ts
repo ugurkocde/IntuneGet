@@ -16,12 +16,14 @@ import {
 } from '@/lib/qa/candidate';
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
 import {
+  QA_PSADT_TOOLCHAIN,
   buildQaPackageIdentity,
   validateCompatiblePassedCatalogQaProfile,
   validateCurrentQaPackageProfile,
 } from '@/lib/qa/package-profile';
 import {
   prioritizeToolchainBackfill,
+  shouldRetryTerminalToolchainCandidate,
   type QaToolchainBackfillCandidate,
 } from '@/lib/qa/toolchain-backfill';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
@@ -125,6 +127,14 @@ async function findToolchainBackfillIds(
           })
         : null;
       const hasCompatiblePassedProfile = compatiblePassedValidation?.valid === true;
+      if (
+        !shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, {
+          wingetId: row.winget_id,
+          status: row.status,
+        })
+      ) {
+        continue;
+      }
       if (
         (!validation.valid && !hasCompatiblePassedProfile) ||
         !hasInteractiveCatalogQaProfile(row.test_config)

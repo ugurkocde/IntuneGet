@@ -5,6 +5,24 @@ export interface QaToolchainBackfillCandidate {
   enqueuedAt: string;
 }
 
+// A packager release should not automatically re-run every known vendor or
+// application failure. Record only the apps whose previously failing path is
+// changed by the current packager release. Successful and never-tested apps
+// continue through the normal compatibility/backfill logic.
+const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '99edd0a9f4b7e10d4cc4272f90d763f3bd681440': ['Figma.Figma'],
+};
+
+export function shouldRetryTerminalToolchainCandidate(
+  packagerCommit: string,
+  candidate: Pick<QaToolchainBackfillCandidate, 'wingetId' | 'status'>
+): boolean {
+  if (!['failed', 'error'].includes(candidate.status)) return true;
+  return (TOOLCHAIN_TERMINAL_RETRY_TARGETS[packagerCommit] || []).includes(
+    candidate.wingetId
+  );
+}
+
 function timestamp(value: string): number {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : 0;

@@ -456,13 +456,13 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(pollRunUpdates[0]).toMatchObject({ status: 'failed', error_count: 1 });
   });
 
-  it('queues a catalog app when its most recent QA profile used an older packager', async () => {
+  it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
-      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      supportedApps: [{ winget_id: 'Figma.Figma', name: 'Figma', publisher: 'Figma' }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'Example.App',
+          wingetId: 'Figma.Figma',
           packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
           status: 'failed',
         }),
@@ -484,7 +484,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Example.App',
+      winget_id: 'Figma.Figma',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {
@@ -496,6 +496,29 @@ describe('GET /api/cron/qa-enqueue', () => {
       String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
     );
     expect(canonical.toolchain.packagerCommit).toBe(CURRENT_PACKAGER_COMMIT);
+  });
+
+  it('preserves an unrelated terminal failure across a packager release', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
+      candidates: [
+        profileCandidate({
+          id: 'unrelated-failed-candidate',
+          wingetId: 'Example.App',
+          packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
+          status: 'failed',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
   });
 
   it('preserves a passing catalog result from an explicitly compatible packager', async () => {
