@@ -21,6 +21,9 @@ import {
 } from '@/lib/qa/candidate';
 import { ensureQaDemand, type QaDemandResult } from '@/lib/qa/demand';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
+import { generateInstallCommand } from '@/lib/detection-rules';
+import { normalizeInstaller } from '@/lib/manifest-api';
+import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
 
 interface TriggerResult {
   success: boolean;
@@ -41,6 +44,9 @@ interface UpdateInfo {
   installerUrl: string;
   installerSha256: string;
   installerType: string;
+  installCommand?: string;
+  silentSwitches?: string;
+  installScope?: WingetScope;
   nestedInstallerType?: string;
   nestedInstallerPath?: string;
   currentIntuneAppId?: string;
@@ -50,6 +56,18 @@ interface RateLimitCheck {
   allowed: boolean;
   reason?: string;
   retryAfterMinutes?: number;
+}
+
+function buildCurrentVersionInstallCommand(installer: NormalizedInstaller): string {
+  // The packager extracts arguments from this command and separately resolves
+  // the nested payload path. Keep a command-shaped value for archive packages
+  // so their nested installer's current silent switches are retained.
+  if (installer.type === 'zip') {
+    const nestedFileName = installer.nestedInstallerPath || 'installer.exe';
+    return `"${nestedFileName}" ${installer.silentArgs || ''}`.trim();
+  }
+
+  return generateInstallCommand(installer, installer.scope || 'machine');
 }
 
 function normalizeAssignments(config: DeploymentConfig): PackageAssignment[] {
@@ -180,6 +198,9 @@ export class AutoUpdateTrigger {
       const deploymentConfig = policy.deployment_config as DeploymentConfig;
       const sourceInstallerType =
         updateInfo.installerType || deploymentConfig.installerType || 'exe';
+      const customInstallCommand = deploymentConfig.psadtConfig?.installCommand?.trim();
+      const effectiveInstallCommand =
+        customInstallCommand || updateInfo.installCommand || deploymentConfig.installCommand || '';
       const qaDemand = await ensureQaDemand(this.supabase, {
         wingetId: updateInfo.wingetId,
         displayName: deploymentConfig.displayName || updateInfo.displayName,
@@ -191,12 +212,15 @@ export class AutoUpdateTrigger {
         installerType: sourceInstallerType,
         nestedInstallerType: updateInfo.nestedInstallerType,
         nestedInstallerPath: updateInfo.nestedInstallerPath,
-        silentSwitches: extractSilentSwitches(
-          deploymentConfig.installCommand || '',
-          sourceInstallerType
-        ),
+        // An explicit PSADT override remains authoritative. Otherwise QA must
+        // exercise the current version's manifest-derived command, not the
+        // generated command saved with the previous deployment.
+        silentSwitches: updateInfo.silentSwitches && !customInstallCommand
+          ? updateInfo.silentSwitches
+          : extractSilentSwitches(effectiveInstallCommand, sourceInstallerType),
         uninstallCommand: deploymentConfig.uninstallCommand || '',
-        installScope: deploymentConfig.installScope === 'user' ? 'user' : 'machine',
+        installScope: updateInfo.installScope ||
+          (deploymentConfig.installScope === 'user' ? 'user' : 'machine'),
         psadtConfig: deploymentConfig.psadtConfig
           ? JSON.stringify(deploymentConfig.psadtConfig)
           : undefined,
@@ -538,9 +562,12 @@ export class AutoUpdateTrigger {
       installer_type: updateInfo.installerType || config.installerType,
       installer_url: updateInfo.installerUrl,
       installer_sha256: updateInfo.installerSha256,
-      install_command: config.installCommand,
+      // Refresh vendor-controlled installer arguments for each version. A
+      // user-supplied psadtConfig.installCommand is kept in package_config and
+      // still takes precedence inside the packager.
+      install_command: updateInfo.installCommand || config.installCommand,
       uninstall_command: config.uninstallCommand,
-      install_scope: config.installScope,
+      install_scope: updateInfo.installScope || config.installScope,
       detection_rules: config.detectionRules,
       package_config: {
         assignments,
@@ -773,6 +800,7 @@ export async function getLatestInstallerInfo(
   let installerType = versionInfo.installer_type;
   let nestedInstallerType: string | undefined;
   let nestedInstallerPath: string | undefined;
+  let selectedManifestInstaller: WingetInstaller | null = null;
 
   // The installers JSONB uses PascalCase from WinGet manifests.
   if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
@@ -785,6 +813,7 @@ export async function getLatestInstallerInfo(
     nestedInstallerPath = Array.isArray(selectedInstaller.NestedInstallerFiles)
       ? selectedInstaller.NestedInstallerFiles[0]?.RelativeFilePath
       : undefined;
+    selectedManifestInstaller = selectedInstaller as WingetInstaller;
   } else if (architecture) {
     return null;
   }
@@ -794,6 +823,21 @@ export async function getLatestInstallerInfo(
     return null;
   }
 
+  const manifestInstaller = {
+    ...(selectedManifestInstaller || {}),
+    Architecture: (selectedManifestInstaller?.Architecture || architecture || 'x64'),
+    InstallerUrl: installerUrl,
+    InstallerSha256: normalizedSha256,
+    InstallerType: (installerType || 'exe'),
+    NestedInstallerType: selectedManifestInstaller?.NestedInstallerType || nestedInstallerType,
+    NestedInstallerFiles: selectedManifestInstaller?.NestedInstallerFiles ||
+      (nestedInstallerPath ? [{ RelativeFilePath: nestedInstallerPath }] : undefined),
+    Scope: selectedManifestInstaller?.Scope || versionInfo.installer_scope || undefined,
+    InstallerSwitches: selectedManifestInstaller?.InstallerSwitches ||
+      (versionInfo.silent_args ? { Silent: versionInfo.silent_args } : undefined),
+  } as WingetInstaller;
+  const normalizedInstaller = normalizeInstaller(manifestInstaller);
+
   return {
     wingetId,
     currentVersion: '', // Will be filled by caller
@@ -802,6 +846,9 @@ export async function getLatestInstallerInfo(
     installerUrl,
     installerSha256: normalizedSha256,
     installerType: installerType || 'exe',
+    installCommand: buildCurrentVersionInstallCommand(normalizedInstaller),
+    silentSwitches: normalizedInstaller.silentArgs,
+    installScope: normalizedInstaller.scope,
     nestedInstallerType,
     nestedInstallerPath,
   };

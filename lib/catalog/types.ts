@@ -114,6 +114,7 @@ export interface VersionInstallerInfo {
   installer_sha256: string | null;
   installer_type: string | null;
   installer_scope?: string | null;
+  silent_args?: string | null;
   installers: unknown;
 }
 
