@@ -104,6 +104,9 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
     file: fileCount,
     registry: registryCount,
   };
+  const detailsMissingFromSample = Boolean(
+    activity && filterCounts[filter] > 0 && filteredItems.length === 0
+  );
   const logAgeSeconds = log ? Math.max(0, Math.floor((new Date(serverTime).getTime() - new Date(log.lastWriteAt).getTime()) / 1000)) : null;
   const logAgeMinutes = logAgeSeconds == null ? null : Math.floor(logAgeSeconds / 60);
   const logLastEntryTime = log
@@ -281,7 +284,13 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
           <div className="flex h-full min-h-44 items-center justify-center px-6 py-8 text-center">
             <div>
               <ListTree className="mx-auto h-6 w-6 text-text-muted" aria-hidden="true" />
-              <p className="mt-3 text-sm text-text-secondary"><T>{activity ? 'No changes in this category were detected.' : emptyMessage(phase)}</T></p>
+              <p className="mt-3 text-sm text-text-secondary">
+                {detailsMissingFromSample ? (
+                  <T><Var>{filterCounts[filter]}</Var> changes were counted, but their detailed paths were not included in this run&apos;s evidence sample.</T>
+                ) : (
+                  <T>{activity ? 'No changes in this category were detected.' : emptyMessage(phase)}</T>
+                )}
+              </p>
             </div>
           </div>
         )}
@@ -317,7 +326,7 @@ export const QaLiveActivityPanel = memo(function QaLiveActivityPanel({
       <p className={cn('border-t border-overlay/10 px-4 py-2.5 text-[11px] leading-relaxed text-text-muted sm:block', mobileView !== 'changes' && 'hidden')}>
         {activity ? <T>Compared at <Var>{new Date(activity.observedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</Var>. </T> : null}
         {activity?.truncated ? (
-          <T>Snapshot comparison, not a complete real-time trace. Paths are sanitized and the first 40 entries are shown.</T>
+          <T>Snapshot comparison, not a complete real-time trace. Paths are sanitized and a 40-entry sample is shown.</T>
         ) : (
           <T>Snapshot comparison, not a complete real-time trace. Paths are sanitized and up to 40 entries are shown.</T>
         )}
