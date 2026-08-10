@@ -29,7 +29,8 @@ const canRunWindowsPowerShellPackager =
   ]).status === 0;
 
 function generateRegistryUninstallPackage(
-  installerType: 'inno' | 'burn'
+  installerType: 'inno' | 'burn',
+  displayName = 'Contract Test App'
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -59,14 +60,14 @@ function generateRegistryUninstallPackage(
         GITHUB_WORKSPACE: fixtureRoot,
         INPUT_JOB_ID: 'contract-test',
         INPUT_CALLBACK_URL: 'https://example.invalid/callback',
-        INPUT_DISPLAY_NAME: 'Contract Test App',
+        INPUT_DISPLAY_NAME: displayName,
         INPUT_PUBLISHER: 'IntuneGet',
         INPUT_VERSION: '1.0.0',
         INPUT_WINGET_ID: 'IntuneGet.ContractTest',
         INPUT_INSTALLER_TYPE: installerType,
         INPUT_INSTALL_SCOPE: 'machine',
         INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
-        INPUT_UNINSTALL_COMMAND: 'REGISTRY_UNINSTALL:Contract Test App',
+        INPUT_UNINSTALL_COMMAND: `REGISTRY_UNINSTALL:${displayName}`,
         INSTALLER_PATH: installerPath,
         INSTALLER_FILENAME: 'setup.exe',
         PSADT_CONFIG: '{}',
@@ -171,7 +172,10 @@ describe.skipIf(!canRunWindowsPowerShellPackager)(
 describe('PSADT registry uninstall identity contract', () => {
   it('parses and persists a manifest product code for multi-entry installers', () => {
     expect(packager).toContain(
-      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9-]{36}\\}):(.+)$"
+      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):(.+)$"
+    );
+    expect(packager).toContain(
+      "throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'"
     );
     expect(packager).toContain(
       "[string]$_.PSChildName -eq $configuredUninstallProductCode"
@@ -179,6 +183,9 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain(
       "Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallRegistryKey''"
     );
+    expect(packager).toContain('foreach ($verificationAttempt in 1..30)');
+    expect(packager).toContain('$configuredMatches = @($postInstallApplications');
+    expect(packager).not.toContain('$existingNameMatches');
   });
 
   it('promotes a concrete MSI/WiX uninstall command to exact registry identity handling', () => {
@@ -187,6 +194,15 @@ describe('PSADT registry uninstall identity contract', () => {
     );
     expect(packager).toContain('$registryUninstallProductCode = $Matches[1]');
     expect(packager).toContain('$registryUninstallDisplayName = $DisplayName');
+    expect(packager).toContain('$registryUninstallDisplayNameEscaped = $registryUninstallDisplayName -replace');
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)('emits apostrophe-safe registry identity strings', () => {
+    const generated = generateRegistryUninstallPackage('inno', "Contoso O'Brien Agent");
+
+    expect(generated).toContain("$configuredUninstallDisplayName = 'Contoso O''Brien Agent'");
+    expect(generated).toContain("$appName = 'Contoso O''Brien Agent'");
+    expect(generated).not.toContain("Contoso O''''Brien Agent");
   });
 
   it('never sends an ambiguous display-name result set to a vendor uninstaller', () => {
@@ -212,6 +228,7 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain(
       'Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles'
     );
+    expect(packager).toContain('-WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru');
     expect(packager).toContain(
       "$selectedApplications.Count -eq 0 -and $originalInstallerType -eq ''burn''"
     );
@@ -262,7 +279,10 @@ describe('PSADT registry uninstall identity contract', () => {
     );
     expect(packager).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
     expect(packager).toContain('Waiting for vendor uninstall registration');
-    expect(packager).toContain('$uninstallHandle.Process.HasExited');
+    expect(packager).toContain('$uninstallHandle.Task.IsCompleted');
+    expect(packager).toContain('$uninstallHandle.Task.GetAwaiter().GetResult().ExitCode');
+    expect(packager).toContain("$isRegisteredMsiExec = $registeredUninstallLeaf -in @(''msiexec'', ''msiexec.exe'')");
+    expect(packager).toContain("$registeredUninstallFile = Join-Path $env:SystemRoot ''System32\\msiexec.exe''");
     expect(packager).toContain(
       'continuing to wait for exact registration [$registeredUninstallRegistryKey] because a child process may still be working'
     );
@@ -295,7 +315,7 @@ describe('PSADT registry uninstall identity contract', () => {
   });
 
   it('rebuilds misregistered msiexec commands as exact quiet product-code removal', () => {
-    expect(packager).toContain("(Split-Path -Leaf $registeredUninstallFile) -ieq ''msiexec.exe''");
+    expect(packager).toContain("$isRegisteredMsiExec = $registeredUninstallLeaf -in @(''msiexec'', ''msiexec.exe'')");
     expect(packager).toContain('$registeredMsiProductCode');
     expect(packager).toContain(
       "$registeredUninstallArguments = @(''/x'', $registeredMsiProductCode, ''/qn'', ''/norestart'')"
@@ -334,8 +354,9 @@ describe('PSADT registry uninstall identity contract', () => {
 
   it('uses a captured MSI product code instead of an executable uninstall string', () => {
     expect(packager).toContain(
-      "$capturedMsiProductCode = if ($registeredInstallerType -in @(''msi'', ''wix'') -and $registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)"
+      '$capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)'
     );
+    expect(packager).not.toContain("$capturedMsiProductCode = if ($registeredInstallerType -in @(''msi'', ''wix'')");
     expect(packager).toContain(
       "Start-ADTMsiProcess -Action ''Uninstall'' -ProductCode $capturedMsiProductCode"
     );

@@ -5,6 +5,7 @@ import { JobProcessor } from '../src/job-processor';
 import type { PackagingJob } from '../src/job-poller';
 
 type ScriptGenerator = {
+  generateDeployScript(job: PackagingJob, fileName: string): string;
   getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string;
   getUninstallCommand(job: PackagingJob, fileName: string): string;
   getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string): string;
@@ -176,7 +177,8 @@ describe('hosted PSADT portable generator', () => {
     expect(script).toContain(
       '$uninstallHandle = Start-ADTProcess @uninstallProcessParameters',
     );
-    expect(script).toContain('$uninstallHandle.Process.HasExited');
+    expect(script).toContain('$uninstallHandle.Task.IsCompleted');
+    expect(script).toContain('$uninstallHandle.Task.GetAwaiter().GetResult().ExitCode');
     expect(script).not.toContain('Start-ADTProcess -FilePath $wingetExe');
     expect(script).not.toContain('uninstall --id $wingetId');
   });
@@ -199,16 +201,26 @@ describe('Burn bundle PSADT generation', () => {
       'python-3.14.7-amd64.exe'
     );
 
-    expect(script).toContain("$_.PSChildName -eq '{97b6de30-6082-48d1-9bb4-9f43296531a4}'");
+    expect(script).toContain(
+      "$configuredProductCode = '{97b6de30-6082-48d1-9bb4-9f43296531a4}'"
+    );
+    expect(script).toContain(
+      '$_.PSChildName -eq $registeredUninstallRegistryKey'
+    );
     expect(script).toContain(
       '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object'
     );
     expect(script).toContain("Join-Path $adtSession.DirFiles 'python-3.14.7-amd64.exe'");
-    expect(script).toContain('-WorkingDirectory $adtSession.DirFiles -CreateNoWindow');
+    expect(script).toContain('WorkingDirectory = $adtSession.DirFiles');
+    expect(script).toContain("WindowStyle = 'Hidden'");
     expect(script).toContain(
-      "The exact Burn uninstall registration [{97b6de30-6082-48d1-9bb4-9f43296531a4}] still exists"
+      'The Burn uninstall command did not remove registration [$registeredUninstallRegistryKey]'
     );
     expect(script).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
+    expect(script).toContain('NoWait = $true');
+    expect(script).toContain('WaitForMsiExec = $true');
+    expect(script).toContain('$uninstallHandle = Start-ADTProcess @uninstallProcessParameters');
+    expect(script).toContain('The Burn uninstall parent process exited with code');
     expect(script).toContain('foreach ($verificationAttempt in 1..5)');
     expect(script).not.toContain("Start-ADTMsiProcess -Action 'Uninstall'");
   });
@@ -229,6 +241,12 @@ describe('EXE product identity PSADT generation', () => {
       job,
       'Adobe Acrobat Reader (64-bit)'
     );
+    const snapshot = generator.getRegistryInstallSnapshotBlock.call(
+      generator,
+      job,
+      'Adobe Acrobat Reader (64-bit)'
+    );
+    const marker = generator.getRegistryMarkerCreation.call(generator, job);
     const uninstall = generator.getUninstallCommand.call(
       generator,
       job,
@@ -236,16 +254,28 @@ describe('EXE product identity PSADT generation', () => {
     );
 
     expect(verification).toContain(
-      "$_.PSChildName -eq '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
+      '$_.PSChildName -eq $configuredUninstallProductCode'
     );
+    expect(verification).toContain('$capturedUninstallKey = [string]$selectedApplications[0].PSChildName');
     expect(verification).toContain('foreach ($verificationAttempt in 1..30)');
+    expect(verification).not.toContain('$existingNameMatches');
+    expect(snapshot).toContain('$preInstallApplications = @(Get-ADTApplication');
+    expect(marker).toContain("-Name 'UninstallRegistryKey' -Value $capturedUninstallKey");
     expect(uninstall).toContain(
-      "$_.PSChildName -eq '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
+      "$configuredProductCode = '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
     );
     expect(uninstall).toContain('$registeredApplication.WindowsInstaller');
-    expect(uninstall).toContain('Uninstall-ADTApplication -InstalledApplication $registeredApplication');
+    expect(uninstall).toContain('$capturedMsiProductCode');
+    expect(uninstall).toContain('[string]$registeredApplication.PSChildName');
+    expect(uninstall).toContain('$uninstallHandle = Start-ADTProcess @uninstallProcessParameters');
+    expect(uninstall).toContain('NoWait = $true');
+    expect(uninstall).toContain("$isRegisteredMsiExec = $registeredUninstallLeaf -in @('msiexec', 'msiexec.exe')");
+    expect(uninstall).toContain("$registeredUninstallFile = Join-Path $env:SystemRoot 'System32\\msiexec.exe'");
+    expect(uninstall.indexOf('if ($isRegisteredMsiExec)')).toBeLessThan(
+      uninstall.indexOf('if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf))')
+    );
     expect(uninstall).toContain(
-      'The exact vendor uninstall registration [{AC76BA86-1033-FF00-7760-BC15014EA700}] still exists'
+      'The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey]'
     );
     expect(uninstall).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
     expect(uninstall).toContain('foreach ($verificationAttempt in 1..5)');
@@ -253,6 +283,22 @@ describe('EXE product identity PSADT generation', () => {
     expect(uninstall).not.toContain(
       "Start-ADTMsiProcess -Action 'Uninstall' -ProductCode '{AC76BA86-1033-FF00-7760-BC15014EA700}'"
     );
+
+    const deployScript = generator.generateDeployScript.call(generator, job, 'reader.exe');
+    expect(deployScript).toContain('$script:UninstallRebootExitCode = $null');
+    expect(deployScript).toContain('Close-ADTSession -ExitCode $script:UninstallRebootExitCode');
+  });
+
+  it('emits apostrophe-safe registry identity strings', () => {
+    const job = packagingJob({
+      display_name: "Contoso O'Brien Agent",
+      installer_type: 'exe',
+      uninstall_command: "REGISTRY_UNINSTALL:Contoso O'Brien Agent",
+    });
+
+    const deployScript = generator.generateDeployScript.call(generator, job, 'setup.exe');
+    expect(deployScript).toContain("$configuredUninstallDisplayName = 'Contoso O''Brien Agent'");
+    expect(deployScript).toContain("$configuredDisplayName = 'Contoso O''Brien Agent'");
   });
 
   it('always verifies an exact product identity even when generic verification is disabled', () => {
@@ -265,7 +311,33 @@ describe('EXE product identity PSADT generation', () => {
 
     expect(
       generator.getPostInstallVerificationBlock.call(generator, job, 'Adobe Acrobat Reader (64-bit)')
-    ).toContain("$_.PSChildName -eq '{AC76BA86-1033-FF00-7760-BC15014EA700}'");
+    ).toContain('$_.PSChildName -eq $configuredUninstallProductCode');
+  });
+
+  it('adds verified unattended switches when an EXE publishes only an interactive uninstall command', () => {
+    const inno = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'inno',
+        install_command: 'vendor.exe /VERYSILENT /NORESTART',
+        uninstall_command:
+          'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Vendor app',
+      }),
+      'vendor.exe'
+    );
+    const nullsoft = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'nullsoft',
+        uninstall_command:
+          'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Vendor app',
+      }),
+      'vendor.exe'
+    );
+
+    expect(inno).toContain("@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-')");
+    expect(nullsoft).toContain("$additionalUninstallArguments += '/S'");
+    expect(inno).toContain("$safeManifestUninstallArguments = @('/VERYSILENT /NORESTART' -split '\\s+'");
   });
 
   it('fails closed when an exact product marker is malformed', () => {

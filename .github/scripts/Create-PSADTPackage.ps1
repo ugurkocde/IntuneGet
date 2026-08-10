@@ -273,7 +273,8 @@ function Get-PSADTAssetFileName {
 # silently change valid vendor arguments.
 $silentSwitchesEscaped = $SilentSwitches -replace "'", "''"
 $versionSingleQuoteEscaped = $Version -replace "'", "''"
-$uninstallCmd = $UninstallCommand -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+$uninstallCmd = [string]$UninstallCommand
+$uninstallCmdSingleQuoteEscaped = $uninstallCmd -replace "'", "''"
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $sanitizedWingetId = $WingetId -replace '[\.\-]', '_'
@@ -475,13 +476,15 @@ $msixPackageName = ''
 if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
     $usePortableUninstall = $true
     Write-Host "Using portable uninstall (folder removal)"
-} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9-]{36}\}):(.+)$') {
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$') {
     $useRegistryUninstall = $true
     $registryUninstallProductCode = $Matches[1]
     $registryUninstallDisplayName = $Matches[2]
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:') {
+    throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'
 } elseif ($installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match '(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\})') {
     # Deployment profiles commonly carry the concrete msiexec uninstall command
     # instead of the internal REGISTRY_UNINSTALL_PRODUCT marker. Treat its product
@@ -509,6 +512,7 @@ if ($useRegistryUninstall) {
         $registryUninstallDisplayName = $registryUninstallDisplayName -replace $suffix, ''
     }
     $registryUninstallDisplayName = $registryUninstallDisplayName.Trim()
+    $registryUninstallDisplayNameEscaped = $registryUninstallDisplayName -replace "'", "''"
 
     $registryIdentity = if ($registryUninstallProductCode) { "product $registryUninstallProductCode" } else { 'display name fallback' }
     Write-Host "Using registry-based uninstall for: $registryUninstallDisplayName ($registryIdentity)"
@@ -932,7 +936,7 @@ if ($useRegistryUninstall) {
         '    # Snapshot uninstall entries so the exact vendor entry created or updated by this installer can be reused later.'
         '    $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
         "    `$configuredUninstallProductCode = '$registryUninstallProductCode'"
-        "    `$configuredUninstallDisplayName = '$registryUninstallDisplayName'"
+        "    `$configuredUninstallDisplayName = '$registryUninstallDisplayNameEscaped'"
         '    $capturedUninstallKey = $null'
         '    $capturedUninstallName = $null'
         ''
@@ -1263,34 +1267,42 @@ $lines += @(
 if ($useRegistryUninstall) {
     $lines += @(
         '    # Capture the registry uninstall entry created or version-updated by this installer.'
-        '    $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
-        '    $changedApplications = @($postInstallApplications | Where-Object {'
-        '        $candidateApplication = $_'
-        '        $previousApplication = $preInstallApplications | Where-Object { $_.PSPath -eq $candidateApplication.PSPath } | Select-Object -First 1'
-        '        (-not $previousApplication) -or ($previousApplication.DisplayVersion -ne $candidateApplication.DisplayVersion)'
-        '    })'
+        '    # Manifest identity is a preference; the observed ARP delta is authoritative when metadata is stale.'
         '    $selectedApplications = @()'
-        '    if ($configuredUninstallProductCode) {'
-        '        $selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
-        '        Write-ADTLogEntry -Message "Manifest product code matched $($selectedApplications.Count) changed uninstall entry/entries." -Source ''Install-ADTDeployment'''
-        '    }'
-        '    if ($selectedApplications.Count -eq 0) {'
-        '        $selectedApplications = @($changedApplications | Where-Object { [string]$_.DisplayName -eq $configuredUninstallDisplayName })'
-        '    }'
-        '    if ($selectedApplications.Count -eq 0) {'
-        '        $bundleCandidates = @($changedApplications | Where-Object {'
-        '            -not $_.WindowsInstaller -and [string]$_.DisplayName -like "$configuredUninstallDisplayName*"'
+        '    $changedApplications = @()'
+        '    foreach ($verificationAttempt in 1..30) {'
+        '        $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
+        '        $changedApplications = @($postInstallApplications | Where-Object {'
+        '            $candidateApplication = $_'
+        '            $previousApplication = $preInstallApplications | Where-Object { $_.PSPath -eq $candidateApplication.PSPath } | Select-Object -First 1'
+        '            (-not $previousApplication) -or ($previousApplication.DisplayVersion -ne $candidateApplication.DisplayVersion)'
         '        })'
-        '        if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
-        '    }'
-        '    if ($selectedApplications.Count -eq 0 -and $originalInstallerType -eq ''burn'') {'
-        '        # A Burn bootstrapper can register a bundle name that differs from the manifest display name.'
-        '        # Select it only when the install produced exactly one non-MSI entry; ambiguity still fails closed.'
-        '        $bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
-        '        if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
-        '    }'
-        '    if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1) {'
-        '        $selectedApplications = @($changedApplications[0])'
+        '        $selectedApplications = @()'
+        '        if ($configuredUninstallProductCode) {'
+        '            $selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0) {'
+        '            $selectedApplications = @($changedApplications | Where-Object { [string]$_.DisplayName -eq $configuredUninstallDisplayName })'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0) {'
+        '            $bundleCandidates = @($changedApplications | Where-Object {'
+        '                -not $_.WindowsInstaller -and [string]$_.DisplayName -like "$configuredUninstallDisplayName*"'
+        '            })'
+        '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0 -and $originalInstallerType -eq ''burn'') {'
+        '            $bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
+        '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0 -and $configuredUninstallProductCode) {'
+        '            $configuredMatches = @($postInstallApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
+        '            if ($configuredMatches.Count -eq 1) { $selectedApplications = $configuredMatches }'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1) {'
+        '            $selectedApplications = @($changedApplications[0])'
+        '        }'
+        '        if ($selectedApplications.Count -eq 1) { break }'
+        '        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }'
         '    }'
         '    if ($selectedApplications.Count -eq 1) {'
         '        $capturedUninstallKey = [string]$selectedApplications[0].PSChildName'
@@ -1448,7 +1460,7 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
         '    # Use PSADT v4 Uninstall-ADTApplication to find and uninstall'
         '    # This handles the registry lookup, MSI vs EXE detection, and silent'
         '    # switches automatically using the app''s registered QuietUninstallString'
-        "    `$appName = '$registryUninstallDisplayName'"
+        "    `$appName = '$registryUninstallDisplayNameEscaped'"
         "    `$configuredProductCode = '$registryUninstallProductCode'"
         "    `$markerProviderPath = '$markerProviderPath'"
         ''
@@ -1501,15 +1513,15 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '    }'
             '    Write-ADTLogEntry -Message "Using packaged Burn bundle because the registered vendor cache may be disposable." -Source ''Uninstall-ADTDeployment'''
             '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
-            '    $uninstallHandle = Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
             '    $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)'
+            '    $uninstallHandle = Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
             '    $uninstallProcessExitLogged = $false'
             '    $nextUninstallProgressLog = [DateTime]::UtcNow'
             '    do {'
             '        $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey })'
             '        if ($remainingApplications.Count -eq 0) { break }'
             '        $uninstallProcessExited = $false'
-            '        try { $uninstallProcessExited = $uninstallHandle.Process.HasExited } catch { }'
+            '        try { $uninstallProcessExited = $uninstallHandle.Task.IsCompleted } catch { }'
             '        if ($uninstallProcessExited -and -not $uninstallProcessExitLogged) {'
             '            $uninstallProcessExitLogged = $true'
             '            Write-ADTLogEntry -Message "The Burn uninstall parent process exited; continuing to wait for exact registration [$registeredUninstallRegistryKey] because a child process may still be working." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
@@ -1522,7 +1534,13 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '        Start-Sleep -Seconds 5'
             '    } while ($true)'
             '    $uninstallProcessExitCode = $null'
-            '    try { if ($uninstallHandle.Process.HasExited) { $uninstallProcessExitCode = $uninstallHandle.Process.ExitCode } } catch { }'
+            '    try {'
+            '        if ($uninstallHandle.Task.IsCompleted) {'
+            '            $uninstallProcessExitCode = $uninstallHandle.Task.GetAwaiter().GetResult().ExitCode'
+            '        }'
+            '    } catch {'
+            '        Write-ADTLogEntry -Message "The Burn uninstall task completed without a readable exit code: $_" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '    }'
             '    if ($uninstallProcessExitCode -in @(1641, 3010)) {'
             '        $script:UninstallRebootExitCode = 3010'
             '        Write-ADTLogEntry -Message "The Burn uninstaller requested a reboot with exit code [$uninstallProcessExitCode]." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
@@ -1544,9 +1562,9 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '    $registeredApplication = $installedApps[0]'
             "    `$registeredInstallerType = '$installerTypeLower'"
             '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
-            '    $capturedMsiProductCode = if ($registeredInstallerType -in @(''msi'', ''wix'') -and $registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {'
+            '    $capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {'
             '        $registeredApplication.ProductCode'
-            '    } elseif ($registeredInstallerType -in @(''msi'', ''wix'') -and [string]$registeredApplication.PSChildName -match ''^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$'') {'
+            '    } elseif ($registeredApplication.WindowsInstaller -and [string]$registeredApplication.PSChildName -match ''^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$'') {'
             '        [string]$registeredApplication.PSChildName'
             '    } else {'
             '        $null'
@@ -1606,10 +1624,9 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '            $registeredUninstallArguments = @(''--uninstall'', ''--vivaldi'', ''--force-uninstall'')'
             '            Write-ADTLogEntry -Message "Executing the vendor-documented Vivaldi silent uninstall command." -Source ''Uninstall-ADTDeployment'''
             '        }'
-            '        if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {'
-            '            throw "The registered vendor uninstaller was not found: $registeredUninstallFile"'
-            '        }'
-            '        if ((Split-Path -Leaf $registeredUninstallFile) -ieq ''msiexec.exe'') {'
+            '        $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile'
+            '        $isRegisteredMsiExec = $registeredUninstallLeaf -in @(''msiexec'', ''msiexec.exe'')'
+            '        if ($isRegisteredMsiExec) {'
             '            $registeredMsiProductCode = if ($registeredUninstallRegistryKey -match ''(?i)^\{[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}\}$'') {'
             '                $registeredUninstallRegistryKey'
             '            } elseif (($registeredUninstallArguments -join '' '') -match ''(?i)(?:^|\s)[/-](?:x|i)\s*(\{[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}\})(?=\s|$)'') {'
@@ -1617,9 +1634,15 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '            } else {'
             '                throw "The registered msiexec uninstall command does not expose an exact product code; refusing to reuse install or repair arguments."'
             '            }'
+            '            $registeredUninstallFile = Join-Path $env:SystemRoot ''System32\msiexec.exe'''
             '            $registeredUninstallArguments = @(''/x'', $registeredMsiProductCode, ''/qn'', ''/norestart'')'
-            '        } elseif (-not $hasQuietUninstall -and -not $isVivaldiUninstall) {'
-            '            $registeredUninstallArguments += $additionalUninstallArguments'
+            '        } else {'
+            '            if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {'
+            '                throw "The registered vendor uninstaller was not found: $registeredUninstallFile"'
+            '            }'
+            '            if (-not $hasQuietUninstall -and -not $isVivaldiUninstall) {'
+            '                $registeredUninstallArguments += $additionalUninstallArguments'
+            '            }'
             '        }'
             '        if (-not $hasQuietUninstall -and -not $isVivaldiUninstall -and $additionalUninstallArguments.Count -gt 0) {'
             '            Write-ADTLogEntry -Message "The vendor registered no quiet uninstall; applying verified unattended arguments [$($additionalUninstallArguments -join '' '')]." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
@@ -1635,15 +1658,15 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '        if ($registeredUninstallArguments.Count -gt 0) {'
             '            $uninstallProcessParameters.ArgumentList = $registeredUninstallArguments'
             '        }'
-            '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
             '        $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)'
+            '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
             '        $uninstallProcessExitLogged = $false'
             '        $nextUninstallProgressLog = [DateTime]::UtcNow'
             '        do {'
             '            $remainingApplications = @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey })'
             '            if ($remainingApplications.Count -eq 0) { break }'
             '            $uninstallProcessExited = $false'
-            '            try { $uninstallProcessExited = $uninstallHandle.Process.HasExited } catch { }'
+            '            try { $uninstallProcessExited = $uninstallHandle.Task.IsCompleted } catch { }'
             '            if ($uninstallProcessExited -and -not $uninstallProcessExitLogged) {'
             '                $uninstallProcessExitLogged = $true'
             '                Write-ADTLogEntry -Message "The vendor uninstall parent process exited; continuing to wait for exact registration [$registeredUninstallRegistryKey] because a child process may still be working." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
@@ -1656,7 +1679,13 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '            Start-Sleep -Seconds 5'
             '        } while ($true)'
             '        $uninstallProcessExitCode = $null'
-            '        try { if ($uninstallHandle.Process.HasExited) { $uninstallProcessExitCode = $uninstallHandle.Process.ExitCode } } catch { }'
+            '        try {'
+            '            if ($uninstallHandle.Task.IsCompleted) {'
+            '                $uninstallProcessExitCode = $uninstallHandle.Task.GetAwaiter().GetResult().ExitCode'
+            '            }'
+            '        } catch {'
+            '            Write-ADTLogEntry -Message "The vendor uninstall task completed without a readable exit code: $_" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '        }'
             '        if ($uninstallProcessExitCode -in @(1641, 3010)) {'
             '            $script:UninstallRebootExitCode = 3010'
             '            Write-ADTLogEntry -Message "The vendor uninstaller requested a reboot with exit code [$uninstallProcessExitCode]." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
@@ -1740,7 +1769,7 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
     $lines += @(
         ''
         '    # Execute uninstall command'
-        "    `$uninstallCmd = '$uninstallCmd'"
+        "    `$uninstallCmd = '$uninstallCmdSingleQuoteEscaped'"
         ''
         '    # Check if this is an MSI uninstall (contains product code GUID)'
         '    if ($uninstallCmd -match ''\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}'') {'
