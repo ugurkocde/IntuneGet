@@ -2,7 +2,30 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { buildQaLiveResponse } from './live';
+import { buildQaLiveResponse, countConsecutiveFailedPolls } from './live';
+
+describe('countConsecutiveFailedPolls', () => {
+  it('does not describe partial package checks as consecutive polling failures', () => {
+    expect(
+      countConsecutiveFailedPolls([
+        { status: 'partial' },
+        { status: 'failed' },
+        { status: 'failed' },
+      ])
+    ).toBe(0);
+  });
+
+  it('counts only the uninterrupted leading failed scan streak', () => {
+    expect(
+      countConsecutiveFailedPolls([
+        { status: 'failed' },
+        { status: 'failed' },
+        { status: 'succeeded' },
+        { status: 'failed' },
+      ])
+    ).toBe(2);
+  });
+});
 
 describe('buildQaLiveResponse', () => {
   it('returns a sanitized live projection and derives health', () => {

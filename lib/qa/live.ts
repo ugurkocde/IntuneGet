@@ -354,6 +354,17 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
   };
 }
 
+export function countConsecutiveFailedPolls(
+  polls: Array<{ status: string }>
+): number {
+  let failures = 0;
+  for (const poll of polls) {
+    if (poll.status !== 'failed') break;
+    failures += 1;
+  }
+  return failures;
+}
+
 export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const supabase = createServerClient();
   const candidateColumns =
@@ -405,11 +416,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const queued = (queueResult.data || []) as CandidateRow[];
   const recent = (recentResult.data || []) as ResultRow[];
   const polls = (pollResult.data || []) as PollRow[];
-  let consecutivePollFailures = 0;
-  for (const poll of polls) {
-    if (poll.status !== 'failed' && poll.status !== 'partial') break;
-    consecutivePollFailures += 1;
-  }
+  const consecutivePollFailures = countConsecutiveFailedPolls(polls);
   const ids = [
     ...(current ? [current.winget_id] : []),
     ...queued.map((row) => row.winget_id),
