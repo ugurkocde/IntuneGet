@@ -22,7 +22,6 @@ export async function GET(request: Request) {
     .from('packaging_jobs')
     .select('*')
     .eq('status', 'awaiting_qa')
-    .not('qa_candidate_id', 'is', null)
     .order('created_at', { ascending: true })
     .limit(RESUME_BATCH_SIZE);
   if (jobsError) throw new Error(`Could not read QA-waiting jobs: ${jobsError.message}`);
@@ -38,18 +37,27 @@ export async function GET(request: Request) {
   let waiting = 0;
 
   for (const job of jobs || []) {
-    const { data: candidate, error: candidateError } = await supabase
-      .from('qa_candidates')
-      .select('id, status, failure_summary, package_profile_sha256')
-      .eq('id', job.qa_candidate_id!)
-      .maybeSingle();
-    if (candidateError) throw candidateError;
+    let candidate: {
+      id: string;
+      status: string;
+      failure_summary: string | null;
+      package_profile_sha256: string | null;
+    } | null = null;
+    if (job.qa_candidate_id) {
+      const { data, error: candidateError } = await supabase
+        .from('qa_candidates')
+        .select('id, status, failure_summary, package_profile_sha256')
+        .eq('id', job.qa_candidate_id)
+        .maybeSingle();
+      if (candidateError) throw candidateError;
+      candidate = data;
+    }
 
     let candidateStatus = candidate?.status;
     let candidateFailureSummary = candidate?.failure_summary;
     let executionProfileSha256 = job.execution_profile_sha256;
 
-    if (candidateStatus === 'superseded') {
+    if (!candidate || candidateStatus === 'superseded') {
       const item = job.package_config as unknown as Win32CartItem;
       const installerType = job.installer_type || item.installerType;
       const demand = await ensureQaDemand(supabase, {

@@ -214,6 +214,67 @@ describe('GET /api/cron/qa-resume', () => {
     }));
   });
 
+  it('rebuilds a legacy waiting job that has no QA candidate link', async () => {
+    const job = {
+      id: 'job-unlinked',
+      qa_candidate_id: null,
+      execution_profile_sha256: 'A'.repeat(64),
+      status_message: 'Testing the app installation before upload',
+      created_at: '2026-08-09T12:00:00Z',
+      winget_id: 'Example.Legacy',
+      display_name: 'Example Legacy',
+      publisher: 'Example',
+      version: '2.0.0',
+      architecture: 'x64',
+      installer_url: 'https://example.test/installer.exe',
+      installer_sha256: 'C'.repeat(64),
+      installer_type: 'exe',
+      install_command: 'installer.exe /silent',
+      uninstall_command: 'installer.exe /uninstall',
+      install_scope: 'machine',
+      package_config: { psadtConfig: {}, detectionRules: [] },
+      is_auto_update: false,
+    };
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'waiting',
+      candidateId: 'candidate-recovered',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
+    const relinkUpdate = chain({ data: null, error: null });
+    let packagingCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table !== 'packaging_jobs') throw new Error(`Unexpected table ${table}`);
+        packagingCall++;
+        if (packagingCall === 1) return chain({ data: [job], error: null });
+        return relinkUpdate;
+      }),
+    };
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 1 });
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(client, expect.objectContaining({
+      wingetId: 'Example.Legacy',
+      priority: 2000,
+      demandSource: 'customer',
+    }));
+    expect(relinkUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      qa_candidate_id: 'candidate-recovered',
+      execution_profile_sha256: 'B'.repeat(64),
+      presentation_profile_sha256: 'D'.repeat(64),
+    }));
+    expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
+  });
+
   it('finalizes auto-update tracking when packaging dispatch fails after QA passes', async () => {
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     triggerPackagingWorkflowMock.mockRejectedValue(new Error('GitHub dispatch unavailable'));
