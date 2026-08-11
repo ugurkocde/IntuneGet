@@ -51,7 +51,7 @@ function createSupabaseMock(tables: Record<string, TableHandlers>) {
       const handlers = tables[table] || {};
       const builder: Record<string, unknown> = {};
       const chain = () => builder;
-      for (const method of ['select', 'eq', 'not', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'not', 'contains', 'order', 'limit']) {
         builder[method] = vi.fn(chain);
       }
       builder.error = handlers.terminalError || null;
