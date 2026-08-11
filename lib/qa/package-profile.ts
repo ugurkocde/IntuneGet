@@ -630,9 +630,14 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     : [];
   const parsedConfig = parseJsonObject<unknown>(input.psadtConfig, {});
   const rawConfig = (record(parsedConfig) || {}) as Partial<PSADTConfig>;
-  const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, parsedDetectionRules);
+  const requestedDetectionRules = parsedDetectionRules.length > 0
+    ? parsedDetectionRules
+    : Array.isArray(rawConfig.detectionRules)
+      ? rawConfig.detectionRules
+      : parsedDetectionRules;
+  const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, requestedDetectionRules);
   const detectionRules = normalizeCatalogDetectionRules({
-    detectionRules: parsedDetectionRules,
+    detectionRules: requestedDetectionRules,
     wingetId: input.wingetId,
     version: input.version,
     installScope: input.installScope || 'machine',

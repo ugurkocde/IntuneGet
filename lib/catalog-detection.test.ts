@@ -51,4 +51,42 @@ describe('catalog detection normalization', () => {
     expect(result).toEqual([customRule]);
     expect(result[0]).toBe(customRule);
   });
+
+  it('drops malformed legacy entries and repairs the resulting empty rule list', () => {
+    const result = normalizeCatalogDetectionRules({
+      detectionRules: [null, {}, { type: 'registry', keyPath: '' }],
+      wingetId: 'Legacy.App',
+      version: '1.0.0',
+      installScope: 'machine',
+    });
+
+    expect(result).toEqual([expect.objectContaining({
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Legacy_App',
+      detectionValue: '1.0.0',
+    })]);
+  });
+
+  it.each([
+    { wingetId: '', version: '1.0.0', message: 'non-empty Winget ID' },
+    { wingetId: 'Example.App', version: '   ', message: 'non-empty version' },
+  ])('fails closed for a missing catalog identity', ({ wingetId, version, message }) => {
+    expect(() => normalizeCatalogDetectionRules({
+      detectionRules: [],
+      wingetId,
+      version,
+    })).toThrow(message);
+  });
+
+  it('matches packager scope semantics for whitespace-padded values', () => {
+    const result = normalizeCatalogDetectionRules({
+      detectionRules: [],
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      installScope: ' user ',
+    });
+
+    expect(result[0]).toMatchObject({
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Example_App',
+    });
+  });
 });

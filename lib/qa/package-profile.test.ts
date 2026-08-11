@@ -212,6 +212,32 @@ describe('PSADT QA package identity', () => {
       normalized.detectionRules
     );
   });
+
+  it('preserves PSADT detection rules when the top-level workflow list is empty', () => {
+    const fileRule = {
+      type: 'file' as const,
+      path: '%ProgramFiles%\\Cursor',
+      fileOrFolderName: 'Cursor.exe',
+      detectionType: 'exists' as const,
+    };
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Anysphere.Cursor',
+      displayName: 'Cursor',
+      publisher: 'Anysphere',
+      version: '3.14.27',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Cursor',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [fileRule] }),
+    });
+
+    expect(normalized.detectionRules).toEqual([fileRule]);
+    expect(JSON.parse(normalized.psadtConfigJson).detectionRules).toEqual([fileRule]);
+  });
 });
 
 describe('current catalog QA package validation', () => {

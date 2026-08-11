@@ -419,6 +419,75 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
+  it('preserves configured PSADT rules when the top-level list is empty', async () => {
+    const fileRule = {
+      type: 'file',
+      path: '%ProgramFiles%\\Cursor',
+      fileOrFolderName: 'Cursor.exe',
+      detectionType: 'exists',
+    };
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          detectionRules: [],
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: [fileRule] },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].detectionRules)).toEqual([fileRule]);
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].detectionRules)).toEqual([
+      fileRule,
+    ]);
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      detectionRules: [fileRule],
+      psadtConfig: { detectionRules: [fileRule] },
+    });
+  });
+
+  it('leaves custom-source detection rules untouched', async () => {
+    const fileRule = {
+      type: 'file',
+      path: '%LocalAppData%\\Custom App',
+      fileOrFolderName: 'Custom.exe',
+      detectionType: 'exists',
+    };
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          sourceType: 'custom',
+          installerSha256: '',
+          detectionRules: [fileRule],
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].detectionRules)).toEqual([
+      fileRule,
+    ]);
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      sourceType: 'custom',
+      detectionRules: [fileRule],
+    });
+  });
+
   it('parks a customer deployment until its exact execution profile passes QA', async () => {
     ensureQaDemandMock.mockResolvedValueOnce({
       state: 'waiting',
