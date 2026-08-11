@@ -3,7 +3,7 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it.each(['OCSInventoryNG.WindowsAgent'])(
+  it.each(['Greenshot.Greenshot'])(
     'retries the terminal %s failure changed by the current toolchain release',
     (wingetId) => {
       expect(shouldRetryTerminalToolchainCandidate(
@@ -12,6 +12,17 @@ describe('QA toolchain targeted retries', () => {
       )).toBe(true);
     }
   );
+
+  it('keeps the OCS retry scoped to its historical toolchain release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'fc18fffd40f6d362be251e05e2bc784373dfc735',
+      { wingetId: 'OCSInventoryNG.WindowsAgent', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'OCSInventoryNG.WindowsAgent', status: 'failed' }
+    )).toBe(false);
+  });
 
   it('does not replay an unrelated terminal failure', () => {
     expect(shouldRetryTerminalToolchainCandidate(

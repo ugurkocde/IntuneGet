@@ -10,6 +10,9 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99': [
+    'Greenshot.Greenshot',
+  ],
   'fc18fffd40f6d362be251e05e2bc784373dfc735': [
     'OCSInventoryNG.WindowsAgent',
   ],
