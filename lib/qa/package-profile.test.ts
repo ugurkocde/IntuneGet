@@ -11,6 +11,7 @@ import {
   qaSha256,
   splitQaPsadtConfig,
   validateCompatiblePassedCatalogQaProfile,
+  validateCompatiblePassedDeploymentQaProfile,
   validateCurrentQaPackageProfile,
 } from './package-profile';
 
@@ -255,10 +256,8 @@ describe('current catalog QA package validation', () => {
     ).toMatchObject({ valid: true });
   });
 
-  it('does not reuse an older pass with configured process lifecycle behavior', () => {
-    const priorCommit = QA_COMPATIBLE_PASSED_PACKAGER_COMMITS.find(
-      (commit) => commit !== QA_PSADT_TOOLCHAIN.packagerCommit
-    )!;
+  it('does not reuse a process lifecycle pass from before the lifecycle release', () => {
+    const priorCommit = 'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028';
     const legacyIdentity = identityWithPackagerCommit(
       buildQaPackageIdentity({
         ...input,
@@ -273,6 +272,102 @@ describe('current catalog QA package validation', () => {
     expect(
       validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
     ).toEqual({ valid: false, reason: 'compatible-process-lifecycle-changed' });
+  });
+
+  it('reuses a process lifecycle pass through later unrelated releases', () => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({
+        ...input,
+        psadtConfig: {
+          ...DEFAULT_PSADT_CONFIG,
+          processesToClose: [{ name: 'Example', description: 'Example' }],
+        },
+      }),
+      '66448ea49841c2c9f3ebf56e455ce8797e2b2abb'
+    );
+
+    expect(
+      validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
+    ).toMatchObject({ valid: true });
+  });
+
+  it('retests only a profile that exercises the zero-day deferral branch', () => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({
+        ...input,
+        psadtConfig: {
+          ...DEFAULT_PSADT_CONFIG,
+          allowDefer: true,
+          deferDays: 0,
+        },
+      }),
+      '430f817da1120f6a14f421b7016b628a06854aba'
+    );
+
+    expect(
+      validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
+    ).toEqual({ valid: false, reason: 'compatible-zero-day-deferral-changed' });
+  });
+
+  it('reuses the same deployment execution profile across an unrelated packager release', () => {
+    const currentIdentity = buildQaPackageIdentity({
+      ...input,
+      profileKind: 'deployment-config',
+      psadtConfig: {
+        ...DEFAULT_PSADT_CONFIG,
+        processesToClose: [{ name: 'Example', description: 'Example' }],
+      },
+    });
+    const priorIdentity = identityWithPackagerCommit(
+      currentIdentity,
+      '66448ea49841c2c9f3ebf56e455ce8797e2b2abb'
+    );
+
+    expect(validateCompatiblePassedDeploymentQaProfile({
+      prior: {
+        testConfig: {
+          profileKind: 'deployment-config',
+          packageProfileCanonicalJson: priorIdentity.canonicalJson,
+          packageProfileSha256: priorIdentity.packageProfileSha256,
+        },
+        candidatePackageProfileSha256: priorIdentity.packageProfileSha256,
+        candidateWingetId: input.wingetId,
+        candidateVersion: input.version,
+        candidateArchitecture: input.architecture,
+        candidateInstallerSha256: input.installerSha256,
+      },
+      currentCanonicalJson: currentIdentity.canonicalJson,
+      currentPackageProfileSha256: currentIdentity.packageProfileSha256,
+    })).toMatchObject({ valid: true });
+  });
+
+  it('does not reuse a different deployment execution profile', () => {
+    const currentIdentity = buildQaPackageIdentity({
+      ...input,
+      profileKind: 'deployment-config',
+      psadtConfig: { ...DEFAULT_PSADT_CONFIG, deployMode: 'Auto' },
+    });
+    const priorIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({ ...input, profileKind: 'deployment-config' }),
+      '66448ea49841c2c9f3ebf56e455ce8797e2b2abb'
+    );
+
+    expect(validateCompatiblePassedDeploymentQaProfile({
+      prior: {
+        testConfig: {
+          profileKind: 'deployment-config',
+          packageProfileCanonicalJson: priorIdentity.canonicalJson,
+          packageProfileSha256: priorIdentity.packageProfileSha256,
+        },
+        candidatePackageProfileSha256: priorIdentity.packageProfileSha256,
+        candidateWingetId: input.wingetId,
+        candidateVersion: input.version,
+        candidateArchitecture: input.architecture,
+        candidateInstallerSha256: input.installerSha256,
+      },
+      currentCanonicalJson: currentIdentity.canonicalJson,
+      currentPackageProfileSha256: currentIdentity.packageProfileSha256,
+    })).toEqual({ valid: false, reason: 'compatible-execution-profile-changed' });
   });
 
   it('does not reuse an older pass when the current app adapter adds behavior', () => {

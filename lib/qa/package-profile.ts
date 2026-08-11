@@ -20,20 +20,25 @@ export const QA_PSADT_TOOLCHAIN = {
  * background coverage. Only add a commit when every change after it is limited
  * to a failure path that a passing package could not have exercised.
  *
- * This compatibility is deliberately not used for customer deployment
- * profiles or queued-candidate dispatch: those continue to require the exact
- * current package profile.
+ * Queued-candidate dispatch still requires the exact current package profile.
+ * Customer demand can reuse an older pass only after its full execution
+ * profile matches with the commit removed and every intervening release is
+ * proven irrelevant to the behavior that profile exercises.
  */
-export const QA_COMPATIBLE_PASSED_PACKAGER_COMMITS = [
-  QA_PSADT_TOOLCHAIN.packagerCommit,
-  '66448ea49841c2c9f3ebf56e455ce8797e2b2abb',
-  '430f817da1120f6a14f421b7016b628a06854aba',
-  '42bf6e2af604a5e6bb44f2feff38e941ab2222c1',
-  'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028',
-  '99edd0a9f4b7e10d4cc4272f90d763f3bd681440',
-  'c603eab9b8de23a6b5eb466f0fd8cdf2bfd04e33',
+export const QA_PACKAGER_RELEASE_HISTORY = [
   'de49775e759b693b92db09bc99aa116f197c4850',
+  'c603eab9b8de23a6b5eb466f0fd8cdf2bfd04e33',
+  '99edd0a9f4b7e10d4cc4272f90d763f3bd681440',
+  'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028',
+  '42bf6e2af604a5e6bb44f2feff38e941ab2222c1',
+  '430f817da1120f6a14f421b7016b628a06854aba',
+  '66448ea49841c2c9f3ebf56e455ce8797e2b2abb',
+  QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
+
+export const QA_COMPATIBLE_PASSED_PACKAGER_COMMITS = [
+  ...QA_PACKAGER_RELEASE_HISTORY,
+].reverse();
 
 /**
  * Increment this whenever profile-building semantics change without a corresponding
@@ -198,6 +203,63 @@ function textValue(value: unknown): string {
 
 function lowerTextValue(value: unknown): string {
   return textValue(value).toLowerCase();
+}
+
+function passingProfileCompatibilityReason(
+  priorPackagerCommit: string,
+  profile: Record<string, unknown>
+): string | null {
+  const priorIndex = QA_PACKAGER_RELEASE_HISTORY.indexOf(
+    priorPackagerCommit as (typeof QA_PACKAGER_RELEASE_HISTORY)[number]
+  );
+  const currentIndex = QA_PACKAGER_RELEASE_HISTORY.indexOf(
+    QA_PSADT_TOOLCHAIN.packagerCommit
+  );
+  if (priorIndex < 0 || currentIndex < 0 || priorIndex > currentIndex) {
+    return 'compatible-packager-history-unknown';
+  }
+
+  const psadtConfig = record(profile.psadtConfig);
+  if (!psadtConfig) return 'compatible-profile-invalid';
+  const configuredProcesses = Array.isArray(psadtConfig.processesToClose)
+    ? psadtConfig.processesToClose
+    : [];
+
+  for (const release of QA_PACKAGER_RELEASE_HISTORY.slice(priorIndex + 1, currentIndex + 1)) {
+    // 42bf6e2 introduced the reviewed process-close lifecycle. A prior pass
+    // with no configured process list remains valid; one that expected this
+    // behavior must be exercised again. Later releases inherit the behavior
+    // and must not repeatedly invalidate the same profile.
+    if (
+      release === '42bf6e2af604a5e6bb44f2feff38e941ab2222c1' &&
+      configuredProcesses.length > 0
+    ) {
+      return 'compatible-process-lifecycle-changed';
+    }
+
+    // 66448ea corrected PSADT's zero-day deferral sentinel. Only profiles
+    // that actually contain that value can exercise the changed branch.
+    if (
+      release === '66448ea49841c2c9f3ebf56e455ce8797e2b2abb' &&
+      psadtConfig.deferDays === 0
+    ) {
+      return 'compatible-zero-day-deferral-changed';
+    }
+  }
+
+  return null;
+}
+
+function profileWithoutPackagerCommit(profile: Record<string, unknown>): Record<string, unknown> {
+  const toolchain = record(profile.toolchain);
+  return {
+    ...profile,
+    toolchain: toolchain
+      ? Object.fromEntries(
+          Object.entries(toolchain).filter(([field]) => field !== 'packagerCommit')
+        )
+      : toolchain,
+  };
 }
 
 function normalizeForJson(value: unknown): unknown {
@@ -372,23 +434,23 @@ export function validateCompatiblePassedCatalogQaProfile(
   );
   if (!validation.valid || !validation.canonicalJson) return validation;
 
-  // Older successful catalog profiles remain reusable only when this
-  // lifecycle change cannot affect their generated script. Customer and
-  // queued deployment profiles always require the exact current commit.
+  // A passed result remains reusable through a later release only when none
+  // of the intervening changes can alter the behavior that profile exercises.
+  // This is release-aware: a process-close profile tested after the lifecycle
+  // release is not invalidated again by every later unrelated packager fix.
   const profile = record(JSON.parse(validation.canonicalJson));
   const toolchain = record(profile?.toolchain);
-  if (textValue(toolchain?.packagerCommit) === QA_PSADT_TOOLCHAIN.packagerCommit) {
+  const priorPackagerCommit = textValue(toolchain?.packagerCommit);
+  if (priorPackagerCommit === QA_PSADT_TOOLCHAIN.packagerCommit) {
     return validation;
   }
 
-  const psadtConfig = record(profile?.psadtConfig);
-  const configuredProcesses = Array.isArray(psadtConfig?.processesToClose)
-    ? psadtConfig.processesToClose
-    : [];
-  if (configuredProcesses.length > 0) {
-    return { valid: false, reason: 'compatible-process-lifecycle-changed' };
-  }
+  const compatibilityReason = profile
+    ? passingProfileCompatibilityReason(priorPackagerCommit, profile)
+    : 'compatible-profile-invalid';
+  if (compatibilityReason) return { valid: false, reason: compatibilityReason };
 
+  const psadtConfig = record(profile?.psadtConfig);
   const app = record(profile?.app);
   const wingetId = textValue(app?.wingetId);
   if (!wingetId || !psadtConfig) {
@@ -401,6 +463,55 @@ export function validateCompatiblePassedCatalogQaProfile(
   }
 
   return validation;
+}
+
+export function validateCompatiblePassedDeploymentQaProfile(input: {
+  prior: QaPackageProfileValidationInput;
+  currentCanonicalJson: string;
+  currentPackageProfileSha256: string;
+}): QaPackageProfileValidation {
+  const priorValidation = validateQaPackageProfile(
+    input.prior,
+    QA_COMPATIBLE_PASSED_PACKAGER_COMMITS
+  );
+  if (!priorValidation.valid || !priorValidation.canonicalJson) return priorValidation;
+
+  let priorProfile: Record<string, unknown> | null = null;
+  let currentProfile: Record<string, unknown> | null = null;
+  try {
+    priorProfile = record(JSON.parse(priorValidation.canonicalJson));
+    currentProfile = record(JSON.parse(input.currentCanonicalJson));
+  } catch {
+    return { valid: false, reason: 'compatible-profile-invalid' };
+  }
+  if (!priorProfile || !currentProfile) {
+    return { valid: false, reason: 'compatible-profile-invalid' };
+  }
+  if (priorProfile.profileKind !== 'deployment-config' || currentProfile.profileKind !== 'deployment-config') {
+    return { valid: false, reason: 'compatible-profile-kind-mismatch' };
+  }
+  if (qaSha256(input.currentCanonicalJson) !== sha256(input.currentPackageProfileSha256)) {
+    return { valid: false, reason: 'compatible-current-profile-sha-mismatch' };
+  }
+  const currentToolchain = record(currentProfile.toolchain);
+  if (textValue(currentToolchain?.packagerCommit) !== QA_PSADT_TOOLCHAIN.packagerCommit) {
+    return { valid: false, reason: 'compatible-current-packager-mismatch' };
+  }
+
+  const priorComparable = canonicalQaJson(profileWithoutPackagerCommit(priorProfile));
+  const currentComparable = canonicalQaJson(profileWithoutPackagerCommit(currentProfile));
+  if (priorComparable !== currentComparable) {
+    return { valid: false, reason: 'compatible-execution-profile-changed' };
+  }
+
+  const priorToolchain = record(priorProfile.toolchain);
+  const compatibilityReason = passingProfileCompatibilityReason(
+    textValue(priorToolchain?.packagerCommit),
+    priorProfile
+  );
+  if (compatibilityReason) return { valid: false, reason: compatibilityReason };
+
+  return priorValidation;
 }
 
 export function normalizeQaPsadtConfig(

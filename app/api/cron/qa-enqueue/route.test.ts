@@ -60,6 +60,7 @@ function query(result: QueryResult) {
 }
 
 function createSupabaseStub(options: {
+  paused?: boolean;
   coverage?: number;
   coverageError?: string;
   supportedApps?: Array<Record<string, unknown>>;
@@ -88,6 +89,16 @@ function createSupabaseStub(options: {
       });
     }),
     from: vi.fn((table: string) => {
+      if (table === 'qa_pipeline_control') {
+        return query({
+          data: {
+            paused: options.paused === true,
+            reason: options.paused ? 'Golden VM maintenance' : null,
+            updated_at: '2026-08-11T12:00:00.000Z',
+          },
+          error: null,
+        });
+      }
       if (table === 'qa_poll_runs') {
         return {
           insert: vi.fn((row: Record<string, unknown>) => {
@@ -295,6 +306,25 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-enqueue', () => {
+  it('does not poll or mutate the queue while maintenance is paused', async () => {
+    const { client, pollRunInserts, candidateInserts } = createSupabaseStub({ paused: true });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      paused: true,
+      reason: 'maintenance_paused',
+      maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(pollRunInserts).toHaveLength(0);
+    expect(candidateInserts).toHaveLength(0);
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+  });
+
   it('persists a successful full-catalog poll and advances its cursor', async () => {
     const { client, pollRunInserts, pollRunUpdates, cursorUpdates, rpcCalls } =
       createSupabaseStub({});

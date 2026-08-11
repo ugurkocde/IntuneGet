@@ -27,6 +27,7 @@ import {
   shouldRetryTerminalToolchainCandidate,
   type QaToolchainBackfillCandidate,
 } from '@/lib/qa/toolchain-backfill';
+import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
 import {
   createWingetManifestClient,
@@ -313,6 +314,16 @@ export async function GET(request: Request) {
 
   try {
     supabase = createServerClient();
+    const control = await getQaPipelineControl(supabase);
+    if (control.paused) {
+      return NextResponse.json({
+        success: true,
+        paused: true,
+        reason: 'maintenance_paused',
+        maintenanceReason: control.reason,
+        pausedAt: control.updatedAt,
+      });
+    }
     const { data: pollRun, error: pollRunError } = await supabase
       .from('qa_poll_runs')
       .insert({ request_id: requestId, started_at: startedAt })

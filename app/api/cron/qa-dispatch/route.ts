@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
 import { validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
+import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
@@ -43,6 +44,16 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServerClient();
+  const control = await getQaPipelineControl(supabase);
+  if (control.paused) {
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'maintenance_paused',
+      maintenanceReason: control.reason,
+      pausedAt: control.updatedAt,
+    });
+  }
   const now = new Date();
   const { data: active, error: activeError } = await supabase
     .from('qa_candidates')

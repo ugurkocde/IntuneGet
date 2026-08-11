@@ -252,4 +252,35 @@ describe('buildQaLiveResponse', () => {
       issue: 'github_rate_limit',
     });
   });
+
+  it('shows deliberate maintenance instead of reporting the scheduler as degraded', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-11T12:05:00.000Z'),
+      current: null,
+      queuedCount: 12,
+      queued: [],
+      poll: {
+        status: 'failed',
+        started_at: '2026-08-11T12:00:00.000Z',
+        finished_at: '2026-08-11T12:00:01.000Z',
+        errors: ['upstream failed'],
+      },
+      consecutivePollFailures: 3,
+      recent: [],
+      apps: [],
+      frame: null,
+      control: {
+        paused: true,
+        reason: 'Golden VM wallpaper maintenance',
+        updatedAt: '2026-08-11T12:04:00.000Z',
+      },
+    });
+
+    expect(response.scheduler).toMatchObject({
+      state: 'paused',
+      issue: 'maintenance',
+      maintenanceReason: 'Golden VM wallpaper maintenance',
+      pausedAt: '2026-08-11T12:04:00.000Z',
+    });
+  });
 });

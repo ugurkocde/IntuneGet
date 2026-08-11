@@ -54,7 +54,7 @@ function candidate(profileKind: 'catalog-default' | 'deployment-config') {
     nestedInstallerFiles: [],
     psadtConfig: DEFAULT_PSADT_CONFIG,
     detectionRules: [],
-  } as const;
+  };
   const identity = buildQaPackageIdentity(profileInput);
   return {
     id: profileKind === 'deployment-config' ? DEPLOYMENT_ID : CATALOG_ID,
@@ -80,6 +80,7 @@ function createSupabaseStub(
   queued: Array<ReturnType<typeof candidate>>,
   additionalPages: Array<Array<ReturnType<typeof candidate>>> = [],
   options: {
+    paused?: boolean;
     claimNullIds?: string[];
     claimErrorById?: Record<string, { message: string; code?: string }>;
     supersedeError?: { message: string; code?: string };
@@ -97,6 +98,16 @@ function createSupabaseStub(
 
   const client = {
     from: vi.fn((table: string) => {
+      if (table === 'qa_pipeline_control') {
+        return query({
+          data: {
+            paused: options.paused === true,
+            reason: options.paused ? 'Golden VM maintenance' : null,
+            updated_at: '2026-08-11T12:00:00.000Z',
+          },
+          error: null,
+        });
+      }
       if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
       return {
         select: vi.fn((columns: string) => {
@@ -193,6 +204,25 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-dispatch', () => {
+  it('does not reconcile or dispatch candidates while maintenance is paused', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds } = createSupabaseStub([row], [], { paused: true });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      dispatched: false,
+      reason: 'maintenance_paused',
+      maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
   it('supersedes an invalid row and dispatches the valid row behind it', async () => {
     const invalid = candidate('catalog-default');
     invalid.id = testUuid(10);

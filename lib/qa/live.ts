@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createServerClient } from '@/lib/supabase';
 import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
+import { getQaPipelineControl, type QaPipelineControl } from '@/lib/qa/pipeline-control';
 import type { Json } from '@/types/database';
 import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome } from '@/types/qa';
 
@@ -71,6 +72,7 @@ export interface QaLiveSnapshotInput {
   recent: ResultRow[];
   apps: AppRow[];
   frame: FrameRow | null;
+  control?: QaPipelineControl;
 }
 
 const VALID_PHASES = new Set<QaLivePhase>([
@@ -269,6 +271,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
           ? 'healthy'
           : 'degraded';
   }
+  if (input.control?.paused) schedulerState = 'paused';
 
   const currentApp = input.current ? appById.get(input.current.winget_id) : null;
   const frameIsCurrent = Boolean(
@@ -295,8 +298,10 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       state: schedulerState,
       lastPollAt: input.poll?.finished_at || input.poll?.started_at || null,
       lastOutcome: input.poll?.status || null,
-      issue: schedulerIssue(input.poll, stalePoll),
+      issue: input.control?.paused ? 'maintenance' : schedulerIssue(input.poll, stalePoll),
       consecutiveFailures: input.consecutivePollFailures,
+      maintenanceReason: input.control?.paused ? input.control.reason : null,
+      pausedAt: input.control?.paused ? input.control.updatedAt : null,
     },
     current: input.current && currentStartedAt
       ? {
@@ -354,7 +359,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const candidateColumns =
     'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config';
 
-  const [activeResult, queueResult, countResult, pollResult, recentResult] = await Promise.all([
+  const [activeResult, queueResult, countResult, pollResult, recentResult, control] = await Promise.all([
     supabase
       .from('qa_candidates')
       .select(candidateColumns)
@@ -389,6 +394,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       )
       .order('tested_at_utc', { ascending: false })
       .limit(10),
+    getQaPipelineControl(supabase),
   ]);
 
   for (const result of [activeResult, queueResult, countResult, pollResult, recentResult]) {
@@ -440,5 +446,6 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     recent,
     apps,
     frame,
+    control,
   });
 }

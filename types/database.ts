@@ -249,6 +249,24 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['qa_package_results']['Insert']>;
         Relationships: GenericRelationship[];
       };
+      qa_pipeline_control: {
+        Row: {
+          id: string;
+          paused: boolean;
+          reason: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id: string;
+          paused?: boolean;
+          reason?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['qa_pipeline_control']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_poll_runs: {
         Row: {
           id: string;
