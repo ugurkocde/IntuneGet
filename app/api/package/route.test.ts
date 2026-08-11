@@ -378,6 +378,47 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
+  it('repairs empty catalog detection rules for both QA and customer packaging', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Anysphere.Cursor',
+          displayName: 'Cursor',
+          version: '3.14.27',
+          detectionRules: [],
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: [] },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const expectedRule = expect.objectContaining({
+      type: 'registry',
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Anysphere_Cursor',
+      detectionValue: '3.14.27',
+    });
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].detectionRules)).toEqual([
+      expectedRule,
+    ]);
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].detectionRules)).toEqual([
+      expectedRule,
+    ]);
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject({
+      detectionRules: [expectedRule],
+    });
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      detectionRules: [expectedRule],
+      psadtConfig: { detectionRules: [expectedRule] },
+    });
+  });
+
   it('parks a customer deployment until its exact execution profile passes QA', async () => {
     ensureQaDemandMock.mockResolvedValueOnce({
       state: 'waiting',

@@ -103,7 +103,7 @@ export function generateDetectionRules(
  * The SOFTWARE\IntuneGet\Apps root is customizable per package via
  * psadtConfig.registryMarkerPath (issue #106)
  */
-function generateRegistryMarkerDetectionRules(
+export function generateRegistryMarkerDetectionRules(
   wingetId: string,
   version: string,
   scope?: WingetScope,

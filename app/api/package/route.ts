@@ -38,6 +38,8 @@ import {
 } from '@/lib/installer-preflight';
 import { ensureQaDemand } from '@/lib/qa/demand';
 import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 export const maxDuration = 300;
 
@@ -397,9 +399,18 @@ export async function POST(request: NextRequest) {
         for (const item of win32Items) {
           try {
             if (item.sourceType !== 'custom') {
+              const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
+              const detectionRules = normalizeCatalogDetectionRules({
+                detectionRules: item.detectionRules || requestedPsadtConfig.detectionRules,
+                wingetId: item.wingetId,
+                version: item.version,
+                installScope: item.installScope,
+                markerPath: requestedPsadtConfig.registryMarkerPath,
+              });
+              item.detectionRules = detectionRules;
               item.psadtConfig = applyApplicationPackagingAdapter(
                 item.wingetId,
-                item.psadtConfig
+                { ...requestedPsadtConfig, detectionRules }
               );
             }
             const jobId = crypto.randomUUID();

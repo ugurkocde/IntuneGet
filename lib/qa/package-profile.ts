@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
+import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { assertPackagingContract } from '@/lib/packaging-contract';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
@@ -43,10 +43,12 @@ export const QA_COMPATIBLE_PASSED_PACKAGER_COMMITS = [
 ].reverse();
 
 /**
- * Increment this whenever profile-building semantics change without a corresponding
- * toolchain-pin change (for example, default PSADT settings or detection derivation),
- * and update the protected workflow verifier in the same rollout. Existing candidates
- * then fail closed and are rebuilt before they can be dispatched.
+ * Increment this whenever profile-building semantics can change without changing a
+ * canonical behavior field and there is no corresponding toolchain-pin change. A
+ * scoped normalization that adds or rewrites a canonical field (such as repairing an
+ * empty detection-rule list) invalidates only affected profiles through their hash and
+ * does not require a global schema bump. Update the protected workflow verifier with
+ * every schema bump so existing candidates fail closed before dispatch.
  */
 export const QA_PACKAGE_PROFILE_SCHEMA_VERSION = 4;
 
@@ -629,7 +631,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
   const parsedConfig = parseJsonObject<unknown>(input.psadtConfig, {});
   const rawConfig = (record(parsedConfig) || {}) as Partial<PSADTConfig>;
   const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, parsedDetectionRules);
-  const detectionRules = reconcileManagedMarkerDetectionRules({
+  const detectionRules = normalizeCatalogDetectionRules({
     detectionRules: parsedDetectionRules,
     wingetId: input.wingetId,
     version: input.version,

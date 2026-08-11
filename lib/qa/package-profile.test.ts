@@ -184,6 +184,34 @@ describe('PSADT QA package identity', () => {
       splitQaPsadtConfig(JSON.parse(normalized.psadtConfigJson)).execution
     ).toEqual(profile.psadtConfig);
   });
+
+  it('repairs a legacy deployment profile that has no detection rules', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Anysphere.Cursor',
+      displayName: 'Cursor',
+      publisher: 'Anysphere',
+      version: '3.14.27',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Cursor',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        type: 'registry',
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Anysphere_Cursor',
+        detectionValue: '3.14.27',
+      }),
+    ]);
+    expect(JSON.parse(normalized.psadtConfigJson).detectionRules).toEqual(
+      normalized.detectionRules
+    );
+  });
 });
 
 describe('current catalog QA package validation', () => {
