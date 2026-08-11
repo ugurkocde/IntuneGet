@@ -47,6 +47,7 @@ export interface QaPackageProfileInput {
   installerSha256: string;
   sourceInstallerType: string;
   silentArgs: string;
+  successCodes?: readonly number[];
   uninstallCommand: string;
   installScope: string;
   nestedInstallerType: string;
@@ -156,6 +157,7 @@ export interface QaWorkflowPackageInput {
   nestedInstallerType?: string;
   nestedInstallerPath?: string;
   silentSwitches: string;
+  installerSuccessCodes?: number[];
   uninstallCommand: string;
   installScope?: string;
   psadtConfig?: string;
@@ -411,6 +413,9 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
       sha256: input.installerSha256.toUpperCase(),
       sourceType: input.sourceInstallerType.toLowerCase(),
       silentArgs: input.silentArgs,
+      ...(normalizeSuccessCodes(input.successCodes).length > 0
+        ? { successCodes: normalizeSuccessCodes(input.successCodes) }
+        : {}),
       uninstallCommand: input.uninstallCommand,
       installScope: input.installScope || 'machine',
       nestedInstallerType: input.nestedInstallerType.toLowerCase(),
@@ -441,6 +446,13 @@ function parseJsonObject<T>(value: string | undefined, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function normalizeSuccessCodes(value: readonly number[] | undefined): number[] {
+  return Array.from(new Set((value || [])
+    .map((code) => Number(code))
+    .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)))
+    .sort((left, right) => left - right);
 }
 
 export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): {
@@ -482,6 +494,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     installerSha256: input.installerSha256,
     sourceInstallerType: input.installerType,
     silentArgs: input.silentSwitches,
+    successCodes: input.installerSuccessCodes,
     uninstallCommand: input.uninstallCommand,
     installScope: input.installScope || 'machine',
     nestedInstallerType: input.nestedInstallerType || '',

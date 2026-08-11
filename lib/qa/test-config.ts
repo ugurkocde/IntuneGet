@@ -17,6 +17,7 @@ export interface QaCatalogTestConfig {
   publisher: string;
   sourceInstallerType: string;
   silentArgs: string;
+  successCodes: number[];
   productCode: string;
   scope: string;
   nestedInstallerType: string;
@@ -134,6 +135,9 @@ export function buildQaCatalogTestConfig({
     })),
     Scope: scope,
     InstallerSwitches: normalizeInstallerSwitches(effectiveSwitches),
+    InstallerSuccessCodes: normalizeSuccessCodes(
+      installer.InstallerSuccessCodes ?? manifest.InstallerSuccessCodes
+    ),
     ProductCode: productCode || undefined,
     PackageFamilyName: packageFamilyName || undefined,
   };
@@ -165,6 +169,7 @@ export function buildQaCatalogTestConfig({
     publisher: app.publisher,
     sourceInstallerType,
     silentArgs: normalizedInstaller.silentArgs || '',
+    successCodes: normalizedInstaller.installerSuccessCodes || [],
     productCode,
     scope,
     nestedInstallerType: nestedInstallerType || '',
@@ -174,6 +179,14 @@ export function buildQaCatalogTestConfig({
     detectionRules,
     profileKind: 'catalog-default',
   };
+}
+
+function normalizeSuccessCodes(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const codes = Array.from(new Set(value
+    .map((code) => typeof code === 'number' ? code : Number(code))
+    .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)));
+  return codes.length > 0 ? codes : undefined;
 }
 
 function isRecord(value: unknown): value is ManifestRecord {

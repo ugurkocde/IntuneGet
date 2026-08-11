@@ -52,6 +52,18 @@ function uninstallScript(job: PackagingJob): string {
 }
 
 describe('nested portable PSADT generation', () => {
+  it('preserves manifest-declared installer success exit codes', () => {
+    const script = generator.generateDeployScript.call(generator, packagingJob({
+      package_config: {
+        nestedInstallerType: 'portable',
+        nestedInstallerPath: 'piicrawler.exe',
+        installerSuccessCodes: [1168],
+        psadtConfig: {},
+      },
+    }), 'piicrawler.zip');
+    expect(script).toContain('AppSuccessExitCodes = @(0, 1168)');
+  });
+
   it('safely stages the full archive and never executes the nested portable file', () => {
     const script = installScript(packagingJob());
 

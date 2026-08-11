@@ -411,6 +411,7 @@ export class JobProcessor {
    */
   private generateDeployScript(job: PackagingJob, installerFileName: string): string {
     const silentSwitches = this.extractSilentSwitches(job.install_command, job.installer_type).replace(/'/g, "''");
+    const successExitCodes = this.getInstallerSuccessCodes(job);
     const psadtVersion = '4.1.8';
     const appVendor = job.publisher.replace(/'/g, "''");
     const appName = job.display_name.replace(/'/g, "''");
@@ -456,7 +457,7 @@ $adtSession = @{
     AppArch = '${appArch}'
     AppLang = 'EN'
     AppRevision = '01'
-    AppSuccessExitCodes = @(0)
+    AppSuccessExitCodes = @(${successExitCodes.join(', ')})
     AppRebootExitCodes = @(1641, 3010)
     AppScriptVersion = '1.0.0'
     AppScriptDate = (Get-Date -Format 'yyyy-MM-dd')
@@ -1462,13 +1463,29 @@ ${capturedIdentityValues}
       msix: '',
     };
 
-    // Try to extract switches from the install command
-    const switchMatch = installCommand.match(/(?:\/\S+|-\S+)(?:\s+(?:\/\S+|-\S+))*/);
-    if (switchMatch && switchMatch[0] !== '-DeploymentType') {
-      return switchMatch[0];
+    const cleaned = installCommand
+      .replace(/^"[^"]+"\s*/, '')
+      .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, '')
+      .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '')
+      .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '')
+      .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '')
+      .trim();
+    if (/^(?:\/\S+|-{1,2}\S+)/.test(cleaned) && cleaned !== '-DeploymentType') {
+      return cleaned;
     }
 
     return defaultSwitches[installerType] || '/S';
+  }
+
+  private getInstallerSuccessCodes(job: PackagingJob): number[] {
+    const config = job.package_config && typeof job.package_config === 'object' && !Array.isArray(job.package_config)
+      ? job.package_config as Record<string, unknown>
+      : {};
+    const raw = Array.isArray(config.installerSuccessCodes) ? config.installerSuccessCodes : [];
+    return Array.from(new Set([0, ...raw
+      .map((code) => typeof code === 'number' ? code : Number(code))
+      .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)]))
+      .sort((left, right) => left - right);
   }
 
   /**

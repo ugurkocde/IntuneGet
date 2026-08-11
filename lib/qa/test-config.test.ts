@@ -187,6 +187,20 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
+  it('inherits installer success codes from the manifest contract', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'HP.ImageAssistant',
+        name: 'HP Image Assistant',
+        publisher: 'HP',
+        version: '5.3.6',
+      },
+      manifest: { InstallerType: 'exe', InstallerSuccessCodes: [1168] },
+      installer: { Architecture: 'x64', InstallerType: 'exe' },
+    });
+    expect(config.successCodes).toEqual([1168]);
+  });
+
   it('uses an EXE AppsAndFeatures product code as the exact uninstall identity', () => {
     const config = buildQaCatalogTestConfig({
       app: {

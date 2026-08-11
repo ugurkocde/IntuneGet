@@ -444,6 +444,7 @@ function coerceInstallersArray(
       defaultSilentArgs ? { Silent: defaultSilentArgs } : undefined,
       inst.InstallerSwitches
     ),
+    InstallerSuccessCodes: normalizeInstallerSuccessCodes(inst.InstallerSuccessCodes),
     ProductCode: explicitProductCode
       ? normalizeProductCode(explicitProductCode)
       : appsAndFeaturesProductCode(inst.AppsAndFeaturesEntries),
@@ -592,6 +593,7 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     normalizeProductCode(manifest.ProductCode) ||
     appsAndFeaturesProductCode(manifest.AppsAndFeaturesEntries);
   const defaultPackageFamilyName = manifest.PackageFamilyName as string;
+  const defaultSuccessCodes = normalizeInstallerSuccessCodes(manifest.InstallerSuccessCodes);
 
   return rawInstallers.map((installer) => {
     const explicitInstallerProductCode = typeof installer.ProductCode === 'string'
@@ -618,6 +620,8 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     // WinGet inherits installer switches per field. An installer-level Custom
     // value must not discard a root-level Silent value (Vivaldi is one example).
     InstallerSwitches: mergeInstallerSwitches(defaultSwitches, installer.InstallerSwitches),
+    InstallerSuccessCodes:
+      normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes) || defaultSuccessCodes,
     // A non-empty installer-level ProductCode is authoritative. If it is an
     // Inno/EXE registry key rather than a canonical GUID, do not replace it
     // with an unrelated inherited identity; name-based discovery is safer.
@@ -633,6 +637,14 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
                   defaultDependencies,
     });
   });
+}
+
+function normalizeInstallerSuccessCodes(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const codes = Array.from(new Set(value
+    .map((code) => typeof code === 'number' ? code : Number(code))
+    .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)));
+  return codes.length > 0 ? codes : undefined;
 }
 
 /**
@@ -747,6 +759,9 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
     nestedInstallerPath: installer.NestedInstallerFiles?.[0]?.RelativeFilePath,
     scope: installer.Scope,
     silentArgs,
+    ...(normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes)
+      ? { installerSuccessCodes: normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes) }
+      : {}),
     productCode: normalizeProductCode(installer.ProductCode),
     packageFamilyName: installer.PackageFamilyName,
     packageDependencies: packageDependencies.length > 0 ? packageDependencies : undefined,

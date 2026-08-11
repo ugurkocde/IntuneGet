@@ -37,6 +37,7 @@ export interface WingetInstaller {
   NestedInstallerFiles?: Array<{ RelativeFilePath: string; PortableCommandAlias?: string }>;
   Scope?: WingetScope;
   InstallerSwitches?: WingetInstallerSwitches;
+  InstallerSuccessCodes?: number[];
   ProductCode?: string;
   PackageFamilyName?: string;
   UpgradeBehavior?: 'install' | 'uninstallPrevious';
@@ -171,6 +172,7 @@ export interface NormalizedInstaller {
   nestedInstallerPath?: string;
   scope?: WingetScope;
   silentArgs?: string;
+  installerSuccessCodes?: number[];
   productCode?: string;
   packageFamilyName?: string;
   packageDependencies?: Array<{ packageIdentifier: string; minimumVersion?: string }>;

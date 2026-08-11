@@ -562,6 +562,7 @@ export async function GET(request: Request) {
               installerSha256,
               sourceInstallerType: testConfig.sourceInstallerType,
               silentArgs: testConfig.silentArgs,
+              successCodes: testConfig.successCodes,
               uninstallCommand: testConfig.uninstallCommand,
               installScope: testConfig.scope,
               nestedInstallerType: testConfig.nestedInstallerType,

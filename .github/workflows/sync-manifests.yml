@@ -397,6 +397,8 @@ jobs:
                       ...(rootSwitches || {}),
                       ...(inst.InstallerSwitches || {}),
                     } : undefined,
+                    InstallerSuccessCodes:
+                      inst.InstallerSuccessCodes || installerManifest.InstallerSuccessCodes,
                     ProductCode: inst.ProductCode || installerManifest.ProductCode,
                     PackageFamilyName: inst.PackageFamilyName || installerManifest.PackageFamilyName,
                     AppsAndFeaturesEntries: inst.AppsAndFeaturesEntries || installerManifest.AppsAndFeaturesEntries,

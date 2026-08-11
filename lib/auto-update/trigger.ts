@@ -47,6 +47,7 @@ interface UpdateInfo {
   installerType: string;
   installCommand?: string;
   silentSwitches?: string;
+  installerSuccessCodes?: number[];
   installScope?: WingetScope;
   nestedInstallerType?: string;
   nestedInstallerPath?: string;
@@ -230,6 +231,7 @@ export class AutoUpdateTrigger {
               sourceInstallerType,
               updateInfo.nestedInstallerType
             ),
+        installerSuccessCodes: updateInfo.installerSuccessCodes,
         uninstallCommand: deploymentConfig.uninstallCommand || '',
         installScope: updateInfo.installScope ||
           (deploymentConfig.installScope === 'user' ? 'user' : 'machine'),
@@ -626,6 +628,7 @@ export class AutoUpdateTrigger {
         psadtConfig: config.psadtConfig,
         nestedInstallerType: updateInfo.nestedInstallerType,
         nestedInstallerPath: updateInfo.nestedInstallerPath,
+        installerSuccessCodes: updateInfo.installerSuccessCodes,
         forceCreate: config.forceCreateNewApp !== false,
         sourceIntuneAppId,
         autoSupersede,
@@ -897,6 +900,7 @@ export async function getLatestInstallerInfo(
     installerType: installerType || 'exe',
     installCommand: buildCurrentVersionInstallCommand(normalizedInstaller),
     silentSwitches: normalizedInstaller.silentArgs,
+    installerSuccessCodes: normalizedInstaller.installerSuccessCodes,
     installScope: normalizedInstaller.scope,
     nestedInstallerType,
     nestedInstallerPath,

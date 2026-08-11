@@ -430,6 +430,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           installerType: selectedInstaller!.type,
           installerUrl: selectedInstaller!.url,
           installerSha256: selectedInstaller!.sha256,
+          installerSuccessCodes: selectedInstaller!.installerSuccessCodes,
           nestedInstallerType: selectedInstaller!.nestedInstallerType,
           nestedInstallerPath: selectedInstaller!.nestedInstallerPath,
           manifestDependencies: selectedInstaller!.packageDependencies,

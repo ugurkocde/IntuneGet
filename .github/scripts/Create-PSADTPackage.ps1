@@ -23,6 +23,23 @@
 $JobId = $env:INPUT_JOB_ID
 $CallbackUrl = $env:INPUT_CALLBACK_URL
 $SilentSwitches = $env:INPUT_SILENT_SWITCHES
+$InstallerSuccessCodes = @()
+if (-not [string]::IsNullOrWhiteSpace($env:INPUT_INSTALLER_SUCCESS_CODES)) {
+    try {
+        $InstallerSuccessCodes = @($env:INPUT_INSTALLER_SUCCESS_CODES | ConvertFrom-Json -ErrorAction Stop)
+    }
+    catch {
+        throw 'INPUT_INSTALLER_SUCCESS_CODES must be a JSON array of integer exit codes.'
+    }
+}
+$InstallerSuccessCodes = @($InstallerSuccessCodes | ForEach-Object {
+    $parsedCode = 0
+    if (-not [int]::TryParse([string]$_, [ref]$parsedCode) -or $parsedCode -lt 0 -or $parsedCode -gt 65535) {
+        throw "Invalid installer success exit code: $_"
+    }
+    $parsedCode
+} | Sort-Object -Unique)
+$appSuccessExitCodesLiteral = (@(0) + $InstallerSuccessCodes | Sort-Object -Unique) -join ', '
 $UninstallCommand = $env:INPUT_UNINSTALL_COMMAND
 $DisplayName = $env:INPUT_DISPLAY_NAME
 $Publisher = $env:INPUT_PUBLISHER
@@ -962,7 +979,7 @@ $lines = @(
     '    AppArch = '''''
     '    AppLang = ''EN'''
     '    AppRevision = ''01'''
-    '    AppSuccessExitCodes = @(0)'
+    "    AppSuccessExitCodes = @($appSuccessExitCodesLiteral)"
     '    AppRebootExitCodes = @(1641, 3010)'
     '    AppScriptVersion = ''1.0.0'''
     '    AppScriptDate = (Get-Date -Format ''yyyy-MM-dd'')'

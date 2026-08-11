@@ -27,6 +27,7 @@ export interface WorkflowInputs {
   nestedInstallerType?: string; // Nested installer type for zip installers
   nestedInstallerPath?: string; // Relative path to the nested installer inside the zip
   silentSwitches: string;
+  installerSuccessCodes?: number[];
   uninstallCommand: string;
   callbackUrl: string;
   psadtConfig?: string; // JSON-serialized PSADTConfig
@@ -186,6 +187,7 @@ export async function triggerPackagingWorkflow(
           nestedInstallerType: inputs.nestedInstallerType || '',
           nestedInstallerPath: inputs.nestedInstallerPath || '',
           silentSwitches: inputs.silentSwitches,
+          successCodes: JSON.stringify(inputs.installerSuccessCodes || []),
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {

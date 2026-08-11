@@ -68,6 +68,7 @@ export async function GET(request: Request) {
           installerType,
           item.nestedInstallerType
         ),
+        installerSuccessCodes: item.installerSuccessCodes,
         uninstallCommand: job.uninstall_command || item.uninstallCommand,
         installScope: job.install_scope || item.installScope,
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
@@ -186,6 +187,7 @@ export async function GET(request: Request) {
           job.installer_type || item.installerType,
           item.nestedInstallerType
         ),
+        installerSuccessCodes: item.installerSuccessCodes,
         uninstallCommand: job.uninstall_command || item.uninstallCommand,
         callbackUrl,
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,

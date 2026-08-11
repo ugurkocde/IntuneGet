@@ -30,7 +30,8 @@ const canRunWindowsPowerShellPackager =
 
 function generateRegistryUninstallPackage(
   installerType: 'inno' | 'burn',
-  displayName = 'Contract Test App'
+  displayName = 'Contract Test App',
+  installerSuccessCodes: number[] = []
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -67,6 +68,7 @@ function generateRegistryUninstallPackage(
         INPUT_INSTALLER_TYPE: installerType,
         INPUT_INSTALL_SCOPE: 'machine',
         INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+        INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
         INPUT_UNINSTALL_COMMAND: `REGISTRY_UNINSTALL:${displayName}`,
         INSTALLER_PATH: installerPath,
         INSTALLER_FILENAME: 'setup.exe',
@@ -136,6 +138,16 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it('honors additional success exit codes declared by the WinGet manifest', () => {
+    if (!canRunWindowsPowerShellPackager) return;
+    const generated = generateRegistryUninstallPackage(
+      'inno',
+      'Exit Code Contract App',
+      [1168]
+    );
+    expect(generated).toContain('AppSuccessExitCodes = @(0, 1168)');
+  });
+
   it('does not rewrite dollar signs or backticks in generic silent switches', () => {
     expect(packager).toContain('$silentSwitchesEscaped = $SilentSwitches -replace "\'", "\'\'"');
     const assignment = packager.match(/^\$silentSwitchesEscaped\s*=.*$/m)?.[0] ?? '';

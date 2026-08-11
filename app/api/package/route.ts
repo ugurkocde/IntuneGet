@@ -415,6 +415,7 @@ export async function POST(request: NextRequest) {
                     item.installerType,
                     item.nestedInstallerType
                   ),
+                  installerSuccessCodes: item.installerSuccessCodes,
                   uninstallCommand: item.uninstallCommand,
                   installScope: item.installScope,
                   psadtConfig: JSON.stringify(item.psadtConfig),
@@ -545,6 +546,7 @@ export async function POST(request: NextRequest) {
                 item.installerType,
                 item.nestedInstallerType
               ),
+              installerSuccessCodes: item.installerSuccessCodes,
               uninstallCommand: item.uninstallCommand,
               callbackUrl,
               psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,

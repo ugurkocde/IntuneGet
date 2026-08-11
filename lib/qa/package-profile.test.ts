@@ -124,6 +124,14 @@ describe('PSADT QA package identity', () => {
     ).not.toBe(buildQaPackageIdentity(input).packageProfileSha256);
   });
 
+  it('hashes manifest-declared success exit codes without changing empty profiles', () => {
+    const baseline = buildQaPackageIdentity(input);
+    const withSuccessCode = buildQaPackageIdentity({ ...input, successCodes: [1168] });
+    expect(withSuccessCode.packageProfileSha256).not.toBe(baseline.packageProfileSha256);
+    expect(withSuccessCode.profile.installer).toMatchObject({ successCodes: [1168] });
+    expect(buildQaPackageIdentity({ ...input, successCodes: [] })).toEqual(baseline);
+  });
+
   it('reconciles an IntuneGet marker with the current workflow scope and version', () => {
     const workflowInput = {
       wingetId: 'Asana.Asana',

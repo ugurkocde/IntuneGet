@@ -25,6 +25,7 @@ export interface StagedPackage {
   intunewinSizeBytes?: number;
   installerUrl: string;
   installerSha256: string;
+  installerSuccessCodes?: number[];
 
   // Commands
   installCommand: string;
@@ -176,6 +177,7 @@ export interface Win32CartItem extends CartItemBase {
   nestedInstallerPath?: string;
   installerUrl: string;
   installerSha256: string;
+  installerSuccessCodes?: number[];
   installCommand: string;
   uninstallCommand: string;
   detectionRules: DetectionRule[];
