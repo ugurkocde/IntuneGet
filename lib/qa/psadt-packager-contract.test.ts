@@ -651,6 +651,10 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain(
       "$msiProductCode = [string](Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode')"
     );
+    expect(packager).toContain("if ($fileExtension -eq '.msi') {");
+    expect(packager).not.toContain(
+      "$fileExtension -eq '.msi' -and ($useRegistryUninstall -or $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED')"
+    );
     expect(packager).toContain(
       'Using MSI database product code for registry identity'
     );
@@ -682,9 +686,7 @@ describe('PSADT registry uninstall identity contract', () => {
   });
 
   it('repairs missing MSI identities and rejects unresolved MSI or unsafe MSIX identities', () => {
-    expect(packager).toContain(
-      "$useRegistryUninstall -or $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED'"
-    );
+    expect(packager).toContain("if ($fileExtension -eq '.msi') {");
     expect(packager).toContain("$uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED'");
     expect(packager).toContain(
       'The MSI database did not expose a valid ProductCode; refusing ambiguous detection or removal.'

@@ -583,11 +583,11 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
     $registryUninstallDisplayName = $DisplayName
 }
 
-# WinGet metadata can omit, decorate, or stale-cache an MSI ProductCode. Read
-# the authoritative identity from the downloaded MSI so the customer package
-# and QA both target the exact Windows Installer product. This also repairs the
-# explicit missing-identity sentinel without guessing from a display name.
-if ($fileExtension -eq '.msi' -and ($useRegistryUninstall -or $uninstallCmd -eq 'MSI_UNINSTALL_IDENTITY_REQUIRED')) {
+# WinGet metadata can omit, decorate, stale-cache, or leave a literal
+# {PRODUCT_CODE} placeholder in an MSI uninstall command. Always read the
+# authoritative identity from the downloaded MSI so neither customer packages
+# nor QA can execute an unresolved template such as `msiexec /x {PRODUCT_CODE}`.
+if ($fileExtension -eq '.msi') {
     $msiProductCode = [string](Get-MsiPropertyValue -Path $env:INSTALLER_PATH -Property 'ProductCode')
     if ($msiProductCode -match '^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$') {
         $useRegistryUninstall = $true

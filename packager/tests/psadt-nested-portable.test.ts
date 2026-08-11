@@ -411,6 +411,25 @@ describe('Burn bundle PSADT generation', () => {
 });
 
 describe('EXE product identity PSADT generation', () => {
+  it('captures MSI identity when Winget leaves a PRODUCT_CODE placeholder', () => {
+    const job = packagingJob({
+      winget_id: 'Yealink.YealinkUSBConnect',
+      display_name: 'Yealink USB Connect',
+      installer_type: 'msi',
+      uninstall_command: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+    });
+
+    const script = generator.generateDeployScript.call(generator, job, 'yealink.msi');
+    const uninstall = generator.getUninstallCommand.call(generator, job, 'yealink.msi');
+
+    expect(script).toContain('$preInstallApplications = @(Get-ADTApplication');
+    expect(script).toContain('$capturedUninstallKey = [string]$selectedApplications[0].PSChildName');
+    expect(uninstall).toContain('$capturedMsiProductCode');
+    expect(uninstall).toContain("Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode");
+    expect(uninstall).not.toContain('{PRODUCT_CODE}');
+    expect(uninstall).not.toContain("-ArgumentList '/c msiexec");
+  });
+
   it('uses the same fail-closed architecture-label comparison as hosted packaging', () => {
     const verification = generator.getPostInstallVerificationBlock.call(
       generator,

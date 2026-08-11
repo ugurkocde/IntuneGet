@@ -946,6 +946,17 @@ ${steps}
       };
     }
 
+    const installerType = job.installer_type.toLowerCase();
+    if (installerType === 'msi' || installerType === 'wix') {
+      const productCodeMatch = job.uninstall_command?.match(
+        /\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}/
+      );
+      return {
+        productCode: productCodeMatch?.[0] || '',
+        displayName: job.display_name.replace(/'/g, "''"),
+      };
+    }
+
     return null;
   }
 
@@ -1308,11 +1319,7 @@ ${steps}
     }`;
     }
 
-    if (!job.uninstall_command) {
-      return "Write-ADTLogEntry -Message 'No uninstall command specified' -Severity 'Warning' -Source 'Uninstall-ADTDeployment'";
-    }
-
-    if (/^MSIX_UNINSTALL:/.test(job.uninstall_command)) {
+    if (/^MSIX_UNINSTALL:/.test(job.uninstall_command || '')) {
       const packageName = this.getMsixPackageName(job);
       if (!packageName) {
         return 'throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous removal."';
@@ -1354,6 +1361,7 @@ ${steps}
     } else {
         @(Get-ADTApplication -Name $configuredDisplayName -NameMatch 'Exact')
     }
+
     if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey) {
         $installedApps = @(Get-ADTApplication -Name $configuredDisplayName -NameMatch 'Exact')
     }
@@ -1556,6 +1564,10 @@ ${steps}
     if ($remainingApplications.Count -gt 0) {
         throw "The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."
     }`;
+    }
+
+    if (!job.uninstall_command) {
+      return "Write-ADTLogEntry -Message 'No uninstall command specified' -Severity 'Warning' -Source 'Uninstall-ADTDeployment'";
     }
 
     if (/^REGISTRY_UNINSTALL_PRODUCT:/.test(job.uninstall_command)) {
