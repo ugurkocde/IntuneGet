@@ -11,6 +11,11 @@ export interface QaToolchainBackfillCandidate {
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
   '99edd0a9f4b7e10d4cc4272f90d763f3bd681440': ['Figma.Figma'],
+  'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028': [
+    'Figma.Figma',
+    'HP.ImageAssistant',
+    'Microsoft.Office',
+  ],
 };
 
 export function shouldRetryTerminalToolchainCandidate(
