@@ -489,14 +489,14 @@ describe('GET /api/cron/qa-enqueue', () => {
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
-        winget_id: 'OCSInventoryNG.WindowsAgent',
-        name: 'OCS Inventory NG Agent',
-        publisher: 'OCS Inventory NG',
+        winget_id: 'Greenshot.Greenshot',
+        name: 'Greenshot',
+        publisher: 'Greenshot',
       }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'OCSInventoryNG.WindowsAgent',
+          wingetId: 'Greenshot.Greenshot',
           packagerCommit: '430f817da1120f6a14f421b7016b628a06854aba',
           status: 'failed',
         }),
@@ -518,7 +518,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'OCSInventoryNG.WindowsAgent',
+      winget_id: 'Greenshot.Greenshot',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {
