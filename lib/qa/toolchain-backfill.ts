@@ -10,6 +10,10 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'ef75edee9fcabaf904bcf80e02ead9aa58490dc9': [
+    'Google.Chrome',
+    'Yealink.YealinkUSBConnect',
+  ],
   '66448ea49841c2c9f3ebf56e455ce8797e2b2abb': ['Google.Chrome'],
   '430f817da1120f6a14f421b7016b628a06854aba': [
     'Adobe.CreativeCloud',
