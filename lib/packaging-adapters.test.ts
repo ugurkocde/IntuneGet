@@ -51,6 +51,17 @@ describe('application packaging adapters', () => {
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
 
+  it('closes Greenshot before install and removal lifecycle actions', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Greenshot.Greenshot',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'Greenshot', description: 'Greenshot' },
+    ]);
+  });
+
   it('closes the vendor-documented OCS Inventory processes before package lifecycle actions', () => {
     const adapted = applyApplicationPackagingAdapter(
       'OCSInventoryNG.WindowsAgent',

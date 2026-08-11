@@ -35,6 +35,12 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    wingetId: 'Greenshot.Greenshot',
+    requiredProcessesToClose: [
+      { name: 'Greenshot', description: 'Greenshot' },
+    ],
+  },
+  {
     wingetId: 'OCSInventoryNG.WindowsAgent',
     requiredProcessesToClose: [
       { name: 'OcsSystray', description: 'OCS Inventory system tray' },
