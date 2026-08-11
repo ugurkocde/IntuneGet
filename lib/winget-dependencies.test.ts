@@ -146,6 +146,25 @@ describe('resolveWingetPackageDependencies', () => {
     }, io)).rejects.toThrow('declares unsupported dependencies');
   });
 
+  it('refuses machine-wide prerequisites in a user-scope package', async () => {
+    const io = fixtureIo(
+      { 'Example.App@1.0.0': [installer({
+        packageDependencies: [{
+          packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+        }],
+      })] },
+      {}
+    );
+
+    await expect(resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+      installScope: 'user',
+    }, io)).rejects.toThrow('cannot be installed safely in user scope');
+  });
+
   it('requires the exact trusted root installer hash', async () => {
     const io = fixtureIo(
       { 'Example.App@1.0.0': [installer()] },

@@ -134,6 +134,7 @@ export async function resolveWingetPackageDependencies(
     version: string;
     architecture?: string;
     installerSha256: string;
+    installScope?: string;
   },
   io: WingetDependencyResolverIo = defaultIo
 ): Promise<PackagedWingetDependency[]> {
@@ -152,6 +153,14 @@ export async function resolveWingetPackageDependencies(
     );
   }
   ensureSupportedDependencyShape(input.wingetId, rootInstaller);
+  if (
+    input.installScope?.trim().toLowerCase() === 'user' &&
+    (rootInstaller.packageDependencies || []).length > 0
+  ) {
+    throw new Error(
+      `${input.wingetId} declares machine-wide package dependencies that cannot be installed safely in user scope.`
+    );
+  }
 
   const ordered: PackagedWingetDependency[] = [];
   const resolved = new Map<string, PackagedWingetDependency>();

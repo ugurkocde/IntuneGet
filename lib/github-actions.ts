@@ -145,6 +145,7 @@ export async function triggerPackagingWorkflow(
         version: inputs.version,
         architecture: inputs.architecture,
         installerSha256: inputs.installerSha256,
+        installScope: inputs.installScope,
       });
   const normalizedPackageInput = inputs.sourceType === 'custom'
     ? null

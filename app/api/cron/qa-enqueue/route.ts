@@ -559,18 +559,21 @@ export async function GET(request: Request) {
             }
 
             const architecture = selectedForVm.architecture;
+            const testConfig = buildQaCatalogTestConfig({
+              app: { ...app, wingetId: app.winget_id, version: resolution.version },
+              manifest,
+              installer: selectedForVm.installer as never,
+            });
             const packageDependencies = await resolveWingetPackageDependencies({
               wingetId: app.winget_id,
               version: resolution.version,
               architecture,
               installerSha256,
+              installScope: testConfig.scope,
             });
-            const testConfig = buildQaCatalogTestConfig({
-              app: { ...app, wingetId: app.winget_id, version: resolution.version },
-              manifest,
-              installer: selectedForVm.installer as never,
-              packageDependencies,
-            });
+            if (packageDependencies.length > 0) {
+              testConfig.packageDependencies = packageDependencies;
+            }
             const packageIdentity = buildQaPackageIdentity({
               profileKind: testConfig.profileKind,
               wingetId: app.winget_id,
