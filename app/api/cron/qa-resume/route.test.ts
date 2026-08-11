@@ -275,6 +275,64 @@ describe('GET /api/cron/qa-resume', () => {
     expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
   });
 
+  it('releases an unlinked upload immediately when the app payload already passed QA', async () => {
+    const job = {
+      id: 'job-already-passed',
+      qa_candidate_id: null,
+      execution_profile_sha256: 'A'.repeat(64),
+      status_message: 'Testing the app installation before upload',
+      created_at: '2026-08-09T12:00:00Z',
+      winget_id: 'Google.Chrome',
+      display_name: 'Google Chrome',
+      publisher: 'Google',
+      version: '151.0.7922.109',
+      architecture: 'x64',
+      installer_url: 'https://example.test/chrome.msi',
+      installer_sha256: 'C'.repeat(64),
+      installer_type: 'wix',
+      install_command: 'msiexec /i chrome.msi /qn',
+      uninstall_command: 'msiexec /x {11111111-1111-1111-1111-111111111111} /qn',
+      install_scope: 'machine',
+      package_config: { psadtConfig: { deployMode: 'Interactive' }, detectionRules: [] },
+      is_auto_update: false,
+    };
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'passed',
+      candidateId: null,
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
+    const relinkUpdate = chain({ data: null, error: null });
+    const claimUpdate = chain({ data: { id: job.id }, error: null });
+    let packagingCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table !== 'packaging_jobs') throw new Error(`Unexpected table ${table}`);
+        packagingCall++;
+        if (packagingCall === 1) return chain({ data: [job], error: null });
+        if (packagingCall === 2) return relinkUpdate;
+        return claimUpdate;
+      }),
+    };
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ resumed: 1, failed: 0, waiting: 0 });
+    expect(claimUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'queued',
+      qa_completed_at: expect.any(String),
+    }));
+    expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
+    expect(client.from).not.toHaveBeenCalledWith('qa_package_results');
+  });
+
   it('finalizes auto-update tracking when packaging dispatch fails after QA passes', async () => {
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     triggerPackagingWorkflowMock.mockRejectedValue(new Error('GitHub dispatch unavailable'));

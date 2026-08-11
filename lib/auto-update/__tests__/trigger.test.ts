@@ -10,16 +10,14 @@ import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 const {
   getQaResultMock,
-  getPackageResultMock,
   getAppForInstallerMock,
   getVersionInstallerInfoMock,
-  resolveWingetPackageDependenciesMock,
+  ensureQaDemandMock,
 } = vi.hoisted(() => ({
   getQaResultMock: vi.fn(),
-  getPackageResultMock: vi.fn(),
   getAppForInstallerMock: vi.fn(),
   getVersionInstallerInfoMock: vi.fn(),
-  resolveWingetPackageDependenciesMock: vi.fn(),
+  ensureQaDemandMock: vi.fn(),
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({
@@ -28,17 +26,8 @@ vi.mock('@/lib/catalog', () => ({
     getVersionInstallerInfo: getVersionInstallerInfoMock,
   }),
 }));
-vi.mock('@/lib/supabase', () => ({
-  createServerClient: () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({ maybeSingle: getPackageResultMock }),
-      }),
-    }),
-  }),
-}));
-vi.mock('@/lib/winget-dependencies', () => ({
-  resolveWingetPackageDependencies: resolveWingetPackageDependenciesMock,
+vi.mock('@/lib/qa/demand', () => ({
+  ensureQaDemand: ensureQaDemandMock,
 }));
 
 interface TableHandlers {
@@ -150,10 +139,16 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getQaResultMock.mockResolvedValue(null);
-    getPackageResultMock.mockResolvedValue({ data: null, error: null });
     getAppForInstallerMock.mockReset();
     getVersionInstallerInfoMock.mockReset();
-    resolveWingetPackageDependenciesMock.mockResolvedValue([]);
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'waiting',
+      candidateId: 'candidate-1',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
   });
 
   it('builds the current version command from normalized WinGet switches', async () => {
@@ -225,15 +220,17 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       package_content_sha256: 'F'.repeat(64),
     } satisfies QaResultRow;
     getQaResultMock.mockResolvedValue(failedPackageResult);
-    getPackageResultMock.mockResolvedValue({ data: failedPackageResult, error: null });
-
-    const candidateInsertSpy = vi.fn();
-    const supabase = createSupabaseMock({
-      qa_package_results: {
-        maybeSingleResult: { data: { outcome: 'Failed' }, error: null },
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'failed',
+      candidateId: null,
+      failureSummary: 'The isolated installation test failed.',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
       },
-      qa_candidates: { insertSpy: candidateInsertSpy },
     });
+
+    const supabase = createSupabaseMock({});
     const trigger = makeTrigger(supabase);
     const policy = makePolicy({
       displayName: 'Test App',
@@ -252,25 +249,13 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       skipped: true,
       code: 'QA_FAILED_CURRENT_VERSION',
     });
-    expect(result.skipReason).toBe('This app did not pass the isolated installation test.');
+    expect(result.skipReason).toBe('The isolated installation test failed.');
     expect(createHistorySpy).not.toHaveBeenCalled();
-    expect(candidateInsertSpy).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
   });
 
   it('applies the same app adapter to auto-update QA and customer packaging', async () => {
-    const candidateInsertSpy = vi.fn();
-    const supabase = createSupabaseMock({
-      qa_package_results: {
-        maybeSingleResult: { data: null, error: null },
-      },
-      qa_candidates: {
-        insertSpy: candidateInsertSpy,
-        maybeSingleResult: {
-          data: { id: 'candidate-elgato', status: 'queued', failure_summary: null },
-          error: null,
-        },
-      },
-    });
+    const supabase = createSupabaseMock({});
     const trigger = makeTrigger(supabase);
     const storedConfig: DeploymentConfig = {
       displayName: 'Elgato Stream Deck',
@@ -307,13 +292,11 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     }, { skipRateLimits: true });
 
     expect(result).toMatchObject({ success: true, packagingJobId: 'job-elgato' });
-    const candidateRow = candidateInsertSpy.mock.calls[0][0] as {
-      test_config: { psadtConfig: { processesToClose: unknown[] } };
+    const qaInput = ensureQaDemandMock.mock.calls[0][1] as {
+      psadtConfig: string;
     };
-    expect(candidateRow.test_config.psadtConfig.processesToClose).toEqual([
-      // Presentation-only descriptions are deliberately normalized in the QA
-      // execution profile; the process name and lifecycle behavior are exact.
-      { name: 'StreamDeck', description: 'StreamDeck' },
+    expect(JSON.parse(qaInput.psadtConfig).processesToClose).toEqual([
+      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
     ]);
     const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
     expect(
@@ -451,13 +434,8 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
 
     it('persists the corrected profile before looking up QA demand', async () => {
       const updateSpy = vi.fn();
-      const qaLookupSpy = vi.fn(async () => ({
-        data: { outcome: 'Failed' },
-        error: null,
-      }));
       const supabase = createSupabaseMock({
         app_update_policies: { updateSpy },
-        qa_package_results: { maybeSingleSpy: qaLookupSpy },
       });
       const trigger = makeTrigger(supabase);
       const legacyRule = {
@@ -497,10 +475,10 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
         installScope: 'machine',
       }, { skipRateLimits: true });
 
-      expect(updateSpy).toHaveBeenCalledTimes(1);
-      expect(qaLookupSpy).toHaveBeenCalledTimes(1);
+      expect(updateSpy).toHaveBeenCalled();
+      expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
       expect(updateSpy.mock.invocationCallOrder[0]).toBeLessThan(
-        qaLookupSpy.mock.invocationCallOrder[0]
+        ensureQaDemandMock.mock.invocationCallOrder[0]
       );
     });
 

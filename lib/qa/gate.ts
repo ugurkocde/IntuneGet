@@ -79,42 +79,33 @@ export async function enforceQaGate(input: {
 }): Promise<void> {
   if (input.sourceType === 'custom' || (!input.requirePassed && input.qaOverride)) return;
 
-  if (input.requirePassed) {
-    const architecture = (input.architecture || 'x64').toLowerCase();
-    const installerSha256 = input.installerSha256?.trim().toUpperCase() || '';
-    const packageProfileSha256 = input.packageProfileSha256?.trim().toUpperCase() || '';
-    const { data: row, error } = packageProfileSha256
-      ? await createServerClient()
-          .from('qa_package_results')
-          .select(
-            'winget_id, tested_version, architecture, installer_sha256, package_profile_sha256, outcome'
-          )
-          .eq('package_profile_sha256', packageProfileSha256)
-          .maybeSingle()
-      : { data: null, error: null };
-    if (error) throw new Error(`Could not read package QA result: ${error.message}`);
-    const reason = !packageProfileSha256
-      ? 'package_profile'
-      : !row
-      ? 'missing'
-      : row.outcome !== 'Passed'
-        ? 'failed'
-        : row.tested_version !== input.version
-          ? 'version'
-          : row.architecture.toLowerCase() !== architecture
-            ? 'architecture'
-            : !installerSha256 || row.installer_sha256?.toUpperCase() !== installerSha256
-              ? 'installer_sha256'
-              : null;
+  const architecture = (input.architecture || 'x64').toLowerCase();
+  const installerSha256 = input.installerSha256?.trim().toUpperCase() || '';
+  const packageProfileSha256 = input.packageProfileSha256?.trim().toUpperCase() || '';
+  const { data: passedRow, error: passedError } = installerSha256
+    ? await createServerClient()
+        .from('qa_package_results')
+        .select('winget_id, tested_version, architecture, installer_sha256, outcome')
+        .eq('winget_id', input.wingetId)
+        .eq('tested_version', input.version)
+        .eq('architecture', architecture)
+        .eq('installer_sha256', installerSha256)
+        .eq('outcome', 'Passed')
+        .order('tested_at_utc', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (passedError) throw new Error(`Could not read app-version QA result: ${passedError.message}`);
+  if (passedRow) return;
 
-    if (!reason) return;
+  if (input.requirePassed) {
     throw new QaGateNotPassedError({
       wingetId: input.wingetId,
       version: input.version,
       architecture,
       installerSha256,
       packageProfileSha256,
-      reason,
+      reason: installerSha256 ? 'missing' : 'installer_sha256',
     });
   }
 
@@ -125,9 +116,7 @@ export async function enforceQaGate(input: {
     row.outcome !== 'Failed' ||
     row.tested_version !== input.version ||
     (input.architecture && row.architecture.toLowerCase() !== input.architecture.toLowerCase()) ||
-    row.test_level !== 'psadt-package' ||
-    (input.packageProfileSha256 &&
-      row.package_profile_sha256?.toUpperCase() !== input.packageProfileSha256.toUpperCase())
+    row.test_level !== 'psadt-package'
   ) {
     return;
   }

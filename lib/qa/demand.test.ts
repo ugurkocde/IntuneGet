@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
-import {
-  buildQaPackageIdentityFromWorkflowInput,
-  canonicalQaJson,
-  qaSha256,
-} from '@/lib/qa/package-profile';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 const { resolveWingetPackageDependenciesMock } = vi.hoisted(() => ({
@@ -22,7 +17,7 @@ type QueryResult = {
 
 function query(result: QueryResult) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'in', 'contains', 'order', 'limit']) {
+  for (const method of ['select', 'eq', 'in', 'contains', 'order', 'limit', 'update']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -53,31 +48,7 @@ function demandInput(): QaDemandInput {
   };
 }
 
-function priorCandidate(input: QaDemandInput, packagerCommit: string) {
-  const identity = buildQaPackageIdentityFromWorkflowInput(input);
-  const current = JSON.parse(identity.canonicalJson) as Record<string, unknown> & {
-    toolchain: Record<string, unknown>;
-  };
-  const canonical = canonicalQaJson({
-    ...current,
-    toolchain: { ...current.toolchain, packagerCommit },
-  });
-  return {
-    winget_id: input.wingetId,
-    version: input.version,
-    architecture: input.architecture,
-    installer_sha256: input.installerSha256,
-    package_profile_sha256: qaSha256(canonical),
-    test_config: {
-      profileKind: 'deployment-config',
-      packageProfileCanonicalJson: canonical,
-      packageProfileSha256: qaSha256(canonical),
-    },
-    finished_at: '2026-08-10T10:00:00.000Z',
-  };
-}
-
-describe('ensureQaDemand compatible evidence reuse', () => {
+describe('ensureQaDemand app-version evidence reuse', () => {
   beforeEach(() => {
     resolveWingetPackageDependenciesMock.mockReset();
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);
@@ -109,7 +80,7 @@ describe('ensureQaDemand compatible evidence reuse', () => {
         }
         if (table === 'qa_candidates') {
           candidateCall++;
-          if (candidateCall === 1) return query({ data: [], error: null });
+          if (candidateCall === 1) return query({ data: null, error: null });
           return {
             insert: vi.fn((row: Record<string, unknown>) => {
               candidateInserts.push(row);
@@ -135,6 +106,14 @@ describe('ensureQaDemand compatible evidence reuse', () => {
     expect(candidateInserts[0]).toEqual(expect.objectContaining({
       test_config: expect.objectContaining({ packageDependencies: [dependency] }),
     }));
+    expect((candidateInserts[0].test_config as Record<string, unknown>).psadtConfig).toMatchObject({
+      deployMode: 'Auto',
+      progressDialog: {
+        enabled: true,
+        statusMessage: 'IntuneGet is validating this application package.',
+        windowLocation: 'BottomRight',
+      },
+    });
   });
 
   it('refreshes dependency metadata when reactivating an exact candidate', async () => {
@@ -163,7 +142,7 @@ describe('ensureQaDemand compatible evidence reuse', () => {
         }
         if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
         candidateCall++;
-        if (candidateCall === 1) return query({ data: [], error: null });
+        if (candidateCall === 1) return query({ data: null, error: null });
         if (candidateCall === 2) {
           return {
             insert: vi.fn(() => query({
@@ -172,7 +151,8 @@ describe('ensureQaDemand compatible evidence reuse', () => {
             })),
           };
         }
-        if (candidateCall === 3) {
+        if (candidateCall === 3) return query({ data: null, error: null });
+        if (candidateCall === 4) {
           return {
             select: vi.fn(() => query({
               data: { id: 'candidate-1', status: 'superseded', priority: 500 },
@@ -201,49 +181,52 @@ describe('ensureQaDemand compatible evidence reuse', () => {
     ]);
   });
 
-  it('aliases a behavior-identical prior pass instead of queueing the app again', async () => {
+  it('joins the active payload test when a concurrent insert wins the race', async () => {
     const input = demandInput();
-    const prior = priorCandidate(
-      input,
-      '66448ea49841c2c9f3ebf56e455ce8797e2b2abb'
-    );
-    const aliasInserts: Array<Record<string, unknown>> = [];
-    let packageResultRead = 0;
+    let candidateCall = 0;
     const client = {
       from: vi.fn((table: string) => {
-        if (table === 'qa_candidates') {
-          return query({ data: [prior], error: null });
+        if (table === 'qa_package_results') {
+          return { select: vi.fn(() => query({ data: null, error: null })) };
         }
+        if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
+        candidateCall++;
+        if (candidateCall === 1) return query({ data: null, error: null });
+        if (candidateCall === 2) {
+          return {
+            insert: vi.fn(() => query({
+              data: null,
+              error: { message: 'duplicate active payload', code: '23505' },
+            })),
+          };
+        }
+        return {
+          select: vi.fn(() => query({
+            data: { id: 'candidate-concurrent', status: 'queued', priority: 2_000 },
+            error: null,
+          })),
+        };
+      }),
+    };
+
+    const result = await ensureQaDemand(client as never, input);
+
+    expect(result).toMatchObject({
+      state: 'waiting',
+      candidateId: 'candidate-concurrent',
+    });
+  });
+
+  it('reuses a prior pass for the same app payload regardless of PSADT configuration', async () => {
+    const input = demandInput();
+    const client = {
+      from: vi.fn((table: string) => {
         if (table === 'qa_package_results') {
           return {
-            select: vi.fn(() => {
-              packageResultRead++;
-              if (packageResultRead === 1) return query({ data: null, error: null });
-              return query({
-                data: [{
-                  package_profile_sha256: prior.package_profile_sha256,
-                  winget_id: input.wingetId,
-                  tested_version: input.version,
-                  architecture: 'x64',
-                  installer_sha256: input.installerSha256,
-                  outcome: 'Passed',
-                  tested_at_utc: '2026-08-10T10:10:00.000Z',
-                  psadt_version: '4.1.8',
-                  psadt_template_sha256: 'B'.repeat(64),
-                  psadt_config_sha256: 'C'.repeat(64),
-                  detection_rules_sha256: 'D'.repeat(64),
-                  packager_commit: '66448ea49841c2c9f3ebf56e455ce8797e2b2abb',
-                  package_content_sha256: 'E'.repeat(64),
-                  github_run_id: '123',
-                  github_run_url: 'https://github.test/run/123',
-                }],
-                error: null,
-              });
-            }),
-            insert: vi.fn((row: Record<string, unknown>) => {
-              aliasInserts.push(row);
-              return query({ data: null, error: null });
-            }),
+            select: vi.fn(() => query({
+              data: { package_profile_sha256: 'B'.repeat(64) },
+              error: null,
+            })),
           };
         }
         throw new Error(`Unexpected table: ${table}`);
@@ -254,30 +237,37 @@ describe('ensureQaDemand compatible evidence reuse', () => {
 
     expect(result.state).toBe('passed');
     expect(result.candidateId).toBeNull();
-    expect(aliasInserts).toEqual([
-      expect.objectContaining({
-        package_profile_sha256: result.identity.executionProfileSha256,
-        packager_commit: '66448ea49841c2c9f3ebf56e455ce8797e2b2abb',
-        github_run_id: '123',
-      }),
-    ]);
+    expect(client.from).toHaveBeenCalledTimes(1);
   });
 
-  it('uses an exact current result without scanning historical candidates', async () => {
+  it('attaches another upload configuration to an active app-version test', async () => {
     const input = demandInput();
+    const priorityUpdate = query({ data: null, error: null });
+    let candidateCall = 0;
     const client = {
       from: vi.fn((table: string) => {
-        if (table !== 'qa_package_results') throw new Error(`Unexpected table: ${table}`);
-        return {
-          select: vi.fn(() => query({ data: { outcome: 'Passed' }, error: null })),
-        };
+        if (table === 'qa_package_results') {
+          return { select: vi.fn(() => query({ data: null, error: null })) };
+        }
+        if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
+        candidateCall++;
+        if (candidateCall === 1) {
+          return query({
+            data: { id: 'candidate-active', status: 'queued', priority: 10 },
+            error: null,
+          });
+        }
+        return priorityUpdate;
       }),
     };
 
     const result = await ensureQaDemand(client as never, input);
 
-    expect(result.state).toBe('passed');
-    expect(client.from).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-active' });
+    expect(priorityUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      priority: 1_000,
+      demand_source: 'customer',
+    }));
   });
 
   it('fails closed before creating QA state when dependency resolution fails', async () => {

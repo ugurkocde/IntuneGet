@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 
     let candidateStatus = candidate?.status;
     let candidateFailureSummary = candidate?.failure_summary;
-    let executionProfileSha256 = job.execution_profile_sha256;
+    let appVersionAlreadyPassed = false;
 
     if (!candidate || candidateStatus === 'superseded') {
       const item = job.package_config as unknown as Win32CartItem;
@@ -84,9 +84,9 @@ export async function GET(request: Request) {
         priority: 2000,
         demandSource: job.is_auto_update ? 'auto_update' : 'customer',
       });
-      executionProfileSha256 = demand.identity.executionProfileSha256;
       candidateStatus = demand.state === 'waiting' ? 'queued' : demand.state;
       candidateFailureSummary = demand.failureSummary || null;
+      appVersionAlreadyPassed = demand.state === 'passed';
 
       const { error: relinkError } = await supabase
         .from('packaging_jobs')
@@ -136,15 +136,19 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const { data: result, error: resultError } = await supabase
-      .from('qa_package_results')
-      .select('outcome')
-      .eq('package_profile_sha256', executionProfileSha256!)
-      .maybeSingle();
-    if (resultError) throw resultError;
-    if (result?.outcome !== 'Passed') {
-      waiting++;
-      continue;
+    if (!appVersionAlreadyPassed) {
+      const { data: result, error: resultError } = candidate?.package_profile_sha256
+        ? await supabase
+            .from('qa_package_results')
+            .select('outcome')
+            .eq('package_profile_sha256', candidate.package_profile_sha256)
+            .maybeSingle()
+        : { data: null, error: null };
+      if (resultError) throw resultError;
+      if (result?.outcome !== 'Passed') {
+        waiting++;
+        continue;
+      }
     }
 
     const now = new Date().toISOString();

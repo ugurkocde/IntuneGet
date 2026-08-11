@@ -1,13 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeQaInstallerType, qaInstallerFileName } from '@/lib/qa/candidate';
 import {
-  buildQaPackageIdentityFromWorkflowInput,
-  validateCompatiblePassedDeploymentQaProfile,
+  normalizeQaWorkflowPackageInput,
   type QaPackageIdentity,
   type QaWorkflowPackageInput,
 } from '@/lib/qa/package-profile';
 import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import type { Json } from '@/types/database';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
@@ -25,125 +25,6 @@ export interface QaDemandResult {
   failureSummary?: string;
 }
 
-const PACKAGE_RESULT_COLUMNS = [
-  'package_profile_sha256',
-  'winget_id',
-  'tested_version',
-  'architecture',
-  'installer_sha256',
-  'outcome',
-  'tested_at_utc',
-  'psadt_version',
-  'psadt_template_sha256',
-  'psadt_config_sha256',
-  'detection_rules_sha256',
-  'packager_commit',
-  'package_content_sha256',
-  'github_run_id',
-  'github_run_url',
-].join(', ');
-
-interface CompatiblePackageResult {
-  package_profile_sha256: string;
-  winget_id: string;
-  tested_version: string;
-  architecture: string;
-  installer_sha256: string;
-  outcome: 'Passed';
-  tested_at_utc: string;
-  psadt_version: string;
-  psadt_template_sha256: string;
-  psadt_config_sha256: string;
-  detection_rules_sha256: string;
-  packager_commit: string;
-  package_content_sha256: string;
-  github_run_id: string | null;
-  github_run_url: string | null;
-}
-
-async function aliasCompatiblePassedDeploymentResult(
-  supabase: SupabaseClient,
-  input: QaDemandInput,
-  identity: QaPackageIdentity
-): Promise<boolean> {
-  const architecture = (input.architecture || 'x64').toLowerCase();
-  const installerSha256 = input.installerSha256.toUpperCase();
-  const { data: candidates, error: candidateError } = await supabase
-    .from('qa_candidates')
-    .select(
-      'winget_id, version, architecture, installer_sha256, package_profile_sha256, test_config, finished_at'
-    )
-    .eq('winget_id', input.wingetId)
-    .eq('version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .eq('test_level', 'psadt-package')
-    .eq('status', 'passed')
-    .contains('test_config', { profileKind: 'deployment-config' })
-    .order('finished_at', { ascending: false })
-    .limit(100);
-  if (candidateError) {
-    throw new Error(`Could not read compatible package QA candidates: ${candidateError.message}`);
-  }
-
-  const compatibleHashes: string[] = [];
-  for (const candidate of candidates || []) {
-    if (!candidate.package_profile_sha256) continue;
-    const validation = validateCompatiblePassedDeploymentQaProfile({
-      prior: {
-        testConfig: candidate.test_config,
-        candidatePackageProfileSha256: candidate.package_profile_sha256,
-        candidateWingetId: candidate.winget_id,
-        candidateVersion: candidate.version,
-        candidateArchitecture: candidate.architecture,
-        candidateInstallerSha256: candidate.installer_sha256,
-      },
-      currentCanonicalJson: identity.canonicalJson,
-      currentPackageProfileSha256: identity.executionProfileSha256,
-    });
-    if (validation.valid) compatibleHashes.push(candidate.package_profile_sha256);
-  }
-  if (compatibleHashes.length === 0) return false;
-
-  const { data: compatibleResults, error: resultError } = await supabase
-    .from('qa_package_results')
-    .select(PACKAGE_RESULT_COLUMNS)
-    .in('package_profile_sha256', compatibleHashes)
-    .eq('outcome', 'Passed')
-    .order('tested_at_utc', { ascending: false })
-    .limit(1);
-  if (resultError) {
-    throw new Error(`Could not read compatible package QA results: ${resultError.message}`);
-  }
-  const source = (compatibleResults as unknown as CompatiblePackageResult[] | null)?.[0];
-  if (!source) return false;
-
-  const { error: aliasError } = await supabase
-    .from('qa_package_results')
-    .insert({
-      package_profile_sha256: identity.executionProfileSha256,
-      winget_id: source.winget_id,
-      tested_version: source.tested_version,
-      architecture: source.architecture,
-      installer_sha256: source.installer_sha256,
-      outcome: source.outcome,
-      tested_at_utc: source.tested_at_utc,
-      psadt_version: source.psadt_version,
-      psadt_template_sha256: source.psadt_template_sha256,
-      psadt_config_sha256: source.psadt_config_sha256,
-      detection_rules_sha256: source.detection_rules_sha256,
-      packager_commit: source.packager_commit,
-      package_content_sha256: source.package_content_sha256,
-      github_run_id: source.github_run_id,
-      github_run_url: source.github_run_url,
-      synced_at: new Date().toISOString(),
-    });
-  if (aliasError && aliasError.code !== '23505') {
-    throw new Error(`Could not preserve compatible package QA evidence: ${aliasError.message}`);
-  }
-  return true;
-}
-
 export async function ensureQaDemand(
   supabase: SupabaseClient,
   input: QaDemandInput
@@ -158,20 +39,93 @@ export async function ensureQaDemand(
     installerSha256: input.installerSha256,
     installScope: input.installScope,
   });
-  const resolvedInput: QaDemandInput = { ...input, packageDependencies };
-  const identity = buildQaPackageIdentityFromWorkflowInput(resolvedInput);
+  // The VM validates the same PSADT packaging route used for customer uploads,
+  // with one deterministic, non-blocking visual profile per immutable payload.
+  // Customer presentation choices are applied later by customer packaging and
+  // must neither suppress QA evidence nor multiply app-version tests.
+  const resolvedInput: QaDemandInput = {
+    ...input,
+    psadtConfig: JSON.stringify({
+      ...DEFAULT_PSADT_CONFIG,
+      deployMode: 'Auto',
+      progressDialog: {
+        enabled: true,
+        statusMessage: 'IntuneGet is validating this application package.',
+        windowLocation: 'BottomRight',
+      },
+    }),
+    packageDependencies,
+  };
+  const normalizedPackage = normalizeQaWorkflowPackageInput(resolvedInput);
+  const identity = normalizedPackage.identity;
   const profileSha256 = identity.executionProfileSha256;
+  const architecture = (input.architecture || 'x64').toLowerCase();
+  const installerSha256 = input.installerSha256.toUpperCase();
 
+  // QA qualifies the immutable application payload, not every possible PSADT
+  // presentation or policy combination. One successful test for this exact
+  // app/version/architecture/installer is sufficient for every customer upload.
   const { data: passedResult, error: resultError } = await supabase
     .from('qa_package_results')
-    .select('outcome')
-    .eq('package_profile_sha256', profileSha256)
+    .select('package_profile_sha256')
+    .eq('winget_id', input.wingetId)
+    .eq('tested_version', input.version)
+    .eq('architecture', architecture)
+    .eq('installer_sha256', installerSha256)
+    .eq('outcome', 'Passed')
+    .order('tested_at_utc', { ascending: false })
+    .limit(1)
     .maybeSingle();
-  if (resultError) throw new Error(`Could not read exact package QA result: ${resultError.message}`);
-  if (passedResult?.outcome === 'Passed') {
+  if (resultError) throw new Error(`Could not read app-version QA result: ${resultError.message}`);
+  if (passedResult) {
     return { identity, candidateId: null, state: 'passed' };
   }
-  if (passedResult?.outcome === 'Failed') {
+
+  // If the same payload is already queued or running, attach this upload to
+  // that test instead of multiplying VM runs for different PSADT settings.
+  const { data: activeCandidate, error: activeError } = await supabase
+    .from('qa_candidates')
+    .select('id, status, priority')
+    .eq('winget_id', input.wingetId)
+    .eq('version', input.version)
+    .eq('architecture', architecture)
+    .eq('installer_sha256', installerSha256)
+    .eq('test_level', 'psadt-package')
+    .in('status', ['queued', 'dispatched', 'running'])
+    .order('priority', { ascending: false })
+    .order('enqueued_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (activeError) throw new Error(`Could not read active app-version QA: ${activeError.message}`);
+  if (activeCandidate) {
+    if (activeCandidate.status === 'queued' && activeCandidate.priority < input.priority) {
+      const { error: priorityError } = await supabase
+        .from('qa_candidates')
+        .update({
+          priority: input.priority,
+          demand_source: input.demandSource,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', activeCandidate.id)
+        .eq('status', 'queued');
+      if (priorityError) throw new Error(`Could not prioritize app-version QA: ${priorityError.message}`);
+    }
+    return { identity, candidateId: activeCandidate.id, state: 'waiting' };
+  }
+
+  const { data: failedResult, error: failedError } = await supabase
+    .from('qa_package_results')
+    .select('package_profile_sha256')
+    .eq('winget_id', input.wingetId)
+    .eq('tested_version', input.version)
+    .eq('architecture', architecture)
+    .eq('installer_sha256', installerSha256)
+    .eq('outcome', 'Failed')
+    .order('tested_at_utc', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (failedError) throw new Error(`Could not read failed app-version QA: ${failedError.message}`);
+  if (failedResult) {
     return {
       identity,
       candidateId: null,
@@ -179,18 +133,7 @@ export async function ensureQaDemand(
       failureSummary: 'This app did not pass the isolated installation test.',
     };
   }
-
-  if (await aliasCompatiblePassedDeploymentResult(supabase, resolvedInput, identity)) {
-    return { identity, candidateId: null, state: 'passed' };
-  }
-
-  const architecture = (input.architecture || 'x64').toLowerCase();
-  const installerSha256 = input.installerSha256.toUpperCase();
   const now = new Date().toISOString();
-  const profile = identity.profile as {
-    psadtConfig: unknown;
-    detectionRules: unknown;
-  };
   const testConfig = {
     mode: 'psadt-package',
     profileKind: 'deployment-config',
@@ -203,8 +146,10 @@ export async function ensureQaDemand(
     presentationProfileSha256: identity.presentationProfileSha256,
     psadtConfigSha256: identity.psadtConfigSha256,
     detectionRulesSha256: identity.detectionRulesSha256,
-    psadtConfig: profile.psadtConfig as Json,
-    detectionRules: profile.detectionRules as Json,
+    // Keep the real presentation values for the VM. The canonical execution
+    // identity intentionally strips those values only for hashing/deduplication.
+    psadtConfig: normalizedPackage.psadtConfig as unknown as Json,
+    detectionRules: normalizedPackage.detectionRules as unknown as Json,
   };
 
   const row = {
@@ -235,6 +180,29 @@ export async function ensureQaDemand(
   }
   if (insertError?.code !== '23505') {
     throw new Error(`Could not queue exact package QA: ${insertError?.message || 'unknown error'}`);
+  }
+
+  // A database-level active-payload constraint closes the small race between
+  // the lookup above and this insert. If another request won that race, join
+  // its test even when it carries a different PSADT presentation profile.
+  const { data: concurrentCandidate, error: concurrentError } = await supabase
+    .from('qa_candidates')
+    .select('id, status, priority')
+    .eq('winget_id', input.wingetId)
+    .eq('version', input.version)
+    .eq('architecture', architecture)
+    .eq('installer_sha256', installerSha256)
+    .eq('test_level', 'psadt-package')
+    .in('status', ['queued', 'dispatched', 'running'])
+    .order('priority', { ascending: false })
+    .order('enqueued_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (concurrentError) {
+    throw new Error(`Could not resolve concurrent app-version QA: ${concurrentError.message}`);
+  }
+  if (concurrentCandidate) {
+    return { identity, candidateId: concurrentCandidate.id, state: 'waiting' };
   }
 
   const { data: existing, error: existingError } = await supabase
