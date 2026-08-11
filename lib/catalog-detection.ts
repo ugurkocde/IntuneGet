@@ -36,7 +36,7 @@ export function normalizeCatalogDetectionRules({
 
   // Match the PowerShell packager's scope semantics. PowerShell string
   // equality is case-insensitive but does not ignore surrounding whitespace.
-  const scope: WingetScope = installScope?.toLowerCase() === 'user'
+  const scope: WingetScope = typeof installScope === 'string' && installScope.toLowerCase() === 'user'
     ? 'user'
     : 'machine';
   const primaryRules = usableDetectionRules(detectionRules);

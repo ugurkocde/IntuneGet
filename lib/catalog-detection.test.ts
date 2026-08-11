@@ -83,6 +83,30 @@ describe('catalog detection normalization', () => {
     expect(result).toEqual([fileRule]);
   });
 
+  it('prefers valid primary rules when both sources are usable', () => {
+    const primaryRule = {
+      type: 'file' as const,
+      path: '%ProgramFiles%\\Primary',
+      fileOrFolderName: 'Primary.exe',
+      detectionType: 'exists' as const,
+    };
+    const fallbackRule = {
+      type: 'file' as const,
+      path: '%ProgramFiles%\\Fallback',
+      fileOrFolderName: 'Fallback.exe',
+      detectionType: 'exists' as const,
+    };
+    const result = normalizeCatalogDetectionRules({
+      detectionRules: [primaryRule],
+      fallbackDetectionRules: [fallbackRule],
+      wingetId: 'Example.App',
+      version: '1.0.0',
+    });
+
+    expect(result).toEqual([primaryRule]);
+    expect(result[0]).toBe(primaryRule);
+  });
+
   it.each([
     { wingetId: '', version: '1.0.0', message: 'non-empty Winget ID' },
     { wingetId: 'Example.App', version: '   ', message: 'non-empty version' },
