@@ -182,6 +182,9 @@ export async function ensureQaDemand(
   const testConfig = {
     mode: 'psadt-package',
     profileKind: 'deployment-config',
+    ...(input.packageDependencies?.length
+      ? { packageDependencies: input.packageDependencies as unknown as Json }
+      : {}),
     packageProfileCanonicalJson: identity.canonicalJson,
     packageProfileSha256: profileSha256,
     executionProfileSha256: profileSha256,
@@ -251,6 +254,7 @@ export async function ensureQaDemand(
         status: 'queued',
         priority: Math.max(existing.priority, input.priority),
         demand_source: input.demandSource,
+        test_config: testConfig as unknown as Json,
         attempts: 0,
         dispatched_at: null,
         started_at: null,
@@ -263,10 +267,15 @@ export async function ensureQaDemand(
       .eq('id', existing.id)
       .in('status', ['error', 'superseded']);
     if (reactivateError) throw new Error(`Could not reactivate exact QA: ${reactivateError.message}`);
-  } else if (existing.status === 'queued' && existing.priority < input.priority) {
+  } else if (existing.status === 'queued') {
     await supabase
       .from('qa_candidates')
-      .update({ priority: input.priority, demand_source: input.demandSource, updated_at: now })
+      .update({
+        priority: Math.max(existing.priority, input.priority),
+        demand_source: input.demandSource,
+        test_config: testConfig as unknown as Json,
+        updated_at: now,
+      })
       .eq('id', existing.id)
       .eq('status', 'queued');
   }

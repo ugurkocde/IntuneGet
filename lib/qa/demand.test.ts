@@ -70,6 +70,115 @@ function priorCandidate(input: QaDemandInput, packagerCommit: string) {
 }
 
 describe('ensureQaDemand compatible evidence reuse', () => {
+  it('persists dependency download metadata on a newly queued customer candidate', async () => {
+    const dependency = {
+      packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+      version: '14.51.36247.0',
+      architecture: 'x64' as const,
+      installerUrl: 'https://download.visualstudio.microsoft.com/vc_redist.x64.exe',
+      installerSha256: 'B'.repeat(64),
+      installerType: 'burn' as const,
+      silentArgs: '/quiet /norestart',
+      successCodes: [-2147023258, 0, 1638, 3010],
+      rebootCodes: [1641, 3010],
+      fileName: 'Microsoft.VCRedist.2015+.x64-VC_redist.x64.exe',
+      order: 1,
+      depth: 1,
+    };
+    const input = { ...demandInput(), packageDependencies: [dependency] };
+    const candidateInserts: Array<Record<string, unknown>> = [];
+    let candidateCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') {
+          return { select: vi.fn(() => query({ data: null, error: null })) };
+        }
+        if (table === 'qa_candidates') {
+          candidateCall++;
+          if (candidateCall === 1) return query({ data: [], error: null });
+          return {
+            insert: vi.fn((row: Record<string, unknown>) => {
+              candidateInserts.push(row);
+              return query({ data: { id: 'candidate-1', status: 'queued' }, error: null });
+            }),
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    };
+
+    const result = await ensureQaDemand(client as never, input);
+
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-1' });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toEqual(expect.objectContaining({
+      test_config: expect.objectContaining({ packageDependencies: [dependency] }),
+    }));
+  });
+
+  it('refreshes dependency metadata when reactivating an exact candidate', async () => {
+    const dependency = {
+      packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+      version: '14.51.36247.0',
+      architecture: 'x64' as const,
+      installerUrl: 'https://download.visualstudio.microsoft.com/vc_redist.x64.exe',
+      installerSha256: 'B'.repeat(64),
+      installerType: 'burn' as const,
+      silentArgs: '/quiet /norestart',
+      successCodes: [-2147023258, 0, 1638, 3010],
+      rebootCodes: [1641, 3010],
+      fileName: 'Microsoft.VCRedist.2015+.x64-VC_redist.x64.exe',
+      order: 1,
+      depth: 1,
+    };
+    const input = { ...demandInput(), packageDependencies: [dependency] };
+    const updates: Array<Record<string, unknown>> = [];
+    let candidateCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') {
+          return { select: vi.fn(() => query({ data: null, error: null })) };
+        }
+        if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
+        candidateCall++;
+        if (candidateCall === 1) return query({ data: [], error: null });
+        if (candidateCall === 2) {
+          return {
+            insert: vi.fn(() => query({
+              data: null,
+              error: { message: 'duplicate', code: '23505' },
+            })),
+          };
+        }
+        if (candidateCall === 3) {
+          return {
+            select: vi.fn(() => query({
+              data: { id: 'candidate-1', status: 'superseded', priority: 500 },
+              error: null,
+            })),
+          };
+        }
+        return {
+          update: vi.fn((values: Record<string, unknown>) => {
+            updates.push(values);
+            return query({ data: null, error: null });
+          }),
+        };
+      }),
+    };
+
+    const result = await ensureQaDemand(client as never, input);
+
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-1' });
+    expect(updates).toEqual([
+      expect.objectContaining({
+        status: 'queued',
+        priority: 1_000,
+        test_config: expect.objectContaining({ packageDependencies: [dependency] }),
+      }),
+    ]);
+  });
+
   it('aliases a behavior-identical prior pass instead of queueing the app again', async () => {
     const input = demandInput();
     const prior = priorCandidate(
