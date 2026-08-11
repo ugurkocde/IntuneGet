@@ -10,6 +10,9 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'bafea79a8dde42be074c385c35b4887fb5833aa0': [
+    'Oracle.VirtualBox',
+  ],
   'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99': [
     'Greenshot.Greenshot',
   ],

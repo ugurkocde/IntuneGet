@@ -3,7 +3,7 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it.each(['Greenshot.Greenshot'])(
+  it.each(['Oracle.VirtualBox'])(
     'retries the terminal %s failure changed by the current toolchain release',
     (wingetId) => {
       expect(shouldRetryTerminalToolchainCandidate(
@@ -12,6 +12,17 @@ describe('QA toolchain targeted retries', () => {
       )).toBe(true);
     }
   );
+
+  it('keeps the Greenshot retry scoped to its historical toolchain release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99',
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(false);
+  });
 
   it('keeps the OCS retry scoped to its historical toolchain release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
