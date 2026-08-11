@@ -34,6 +34,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       { name: 'StreamDeck', description: 'Elgato Stream Deck' },
     ],
   },
+  {
+    wingetId: 'OCSInventoryNG.WindowsAgent',
+    requiredProcessesToClose: [
+      { name: 'OcsSystray', description: 'OCS Inventory system tray' },
+      { name: 'OcsService', description: 'OCS Inventory service' },
+      { name: 'OCSInventory', description: 'OCS Inventory agent' },
+      { name: 'download', description: 'OCS Inventory download helper' },
+    ],
+  },
 ];
 
 function normalizeProcessName(name: string): string {

@@ -51,6 +51,38 @@ describe('application packaging adapters', () => {
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
 
+  it('closes the vendor-documented OCS Inventory processes before package lifecycle actions', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'OCSInventoryNG.WindowsAgent',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'OcsSystray', description: 'OCS Inventory system tray' },
+      { name: 'OcsService', description: 'OCS Inventory service' },
+      { name: 'OCSInventory', description: 'OCS Inventory agent' },
+      { name: 'download', description: 'OCS Inventory download helper' },
+    ]);
+  });
+
+  it('preserves customer OCS Inventory processes without adding duplicate executable names', () => {
+    const adapted = applyApplicationPackagingAdapter('OCSInventoryNG.WindowsAgent', {
+      ...DEFAULT_PSADT_CONFIG,
+      processesToClose: [
+        { name: 'ocsservice.exe', description: 'Customer-managed OCS service' },
+        { name: 'OcsNotifyUser', description: 'Customer notification helper' },
+      ],
+    });
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'ocsservice', description: 'Customer-managed OCS service' },
+      { name: 'OcsNotifyUser', description: 'Customer notification helper' },
+      { name: 'OcsSystray', description: 'OCS Inventory system tray' },
+      { name: 'OCSInventory', description: 'OCS Inventory agent' },
+      { name: 'download', description: 'OCS Inventory download helper' },
+    ]);
+  });
+
   it('matches WinGet identities case-insensitively', () => {
     expect(
       applyApplicationPackagingAdapter('  elgato.streamdeck  ', DEFAULT_PSADT_CONFIG)
