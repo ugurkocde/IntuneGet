@@ -11,6 +11,7 @@ import {
 import {
   normalizeInstallerSha256,
   normalizeQaInstallerType,
+  qaInstallerFileName,
   selectQaVmInstaller,
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
@@ -212,16 +213,6 @@ async function findToolchainBackfillIds(
     }
     cursor = { enqueuedAt: last.enqueued_at, id: last.id };
   }
-}
-
-function installerFileName(installerUrl: string, installerType: string): string {
-  try {
-    const decoded = decodeURIComponent(new URL(installerUrl).pathname.split('/').pop() || '');
-    if (decoded && !/[\\/:*?"<>|]/.test(decoded)) return decoded;
-  } catch {
-    // Validation below reports the malformed URL.
-  }
-  return `installer.${installerType || 'exe'}`;
 }
 
 function errorMessage(error: unknown): string {
@@ -642,7 +633,7 @@ export async function GET(request: Request) {
                 installer_url: installerUrl,
                 installer_sha256: installerSha256,
                 installer_type: installerType,
-                installer_file_name: installerFileName(installerUrl, installerType),
+                installer_file_name: qaInstallerFileName(installerUrl, installerType),
                 test_level: 'psadt-package',
                 package_profile_sha256: packageIdentity.packageProfileSha256,
                 test_config: testConfig as never,

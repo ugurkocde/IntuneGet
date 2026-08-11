@@ -99,11 +99,6 @@ export function normalizeQaInstallerType(
 }
 
 export function qaInstallerFileName(installerUrl: string, installerType: string): string {
-  try {
-    const decoded = decodeURIComponent(new URL(installerUrl).pathname.split('/').pop() || '');
-    if (decoded && !/[\\/:*?"<>|]/.test(decoded)) return decoded;
-  } catch {
-    // Use a deterministic safe fallback below.
-  }
-  return `installer.${normalizeQaInstallerType(installerType)}`;
+  return resolveInstallerFileName(installerUrl, normalizeQaInstallerType(installerType));
 }
+import { resolveInstallerFileName } from '@/lib/installer-filename';

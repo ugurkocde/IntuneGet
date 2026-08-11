@@ -3,6 +3,7 @@ import {
   normalizeInstallerSha256,
   normalizeQaArchitecture,
   normalizeQaInstallerType,
+  qaInstallerFileName,
   selectQaVmInstaller,
   selectWingetInstaller,
 } from './candidate';
@@ -67,5 +68,14 @@ describe('QA candidate normalization', () => {
     expect(normalizeQaInstallerType('nullsoft', 'exe')).toBe('exe');
     expect(normalizeQaInstallerType('wix', 'exe')).toBe('msi');
     expect(normalizeQaInstallerType('portable', 'exe')).toBe('exe');
+  });
+
+  it('gives extensionless executable URLs a runnable filename', () => {
+    expect(
+      qaInstallerFileName(
+        'https://dl.pstmn.io/download/version/12.23.1/windows_64',
+        'exe'
+      )
+    ).toBe('windows_64.exe');
   });
 });
