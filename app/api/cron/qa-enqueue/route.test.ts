@@ -458,12 +458,18 @@ describe('GET /api/cron/qa-enqueue', () => {
 
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
-      supportedApps: [{ winget_id: 'Figma.Figma', name: 'Figma', publisher: 'Figma' }],
+      supportedApps: [
+        {
+          winget_id: 'Adobe.CreativeCloud',
+          name: 'Adobe Creative Cloud',
+          publisher: 'Adobe',
+        },
+      ],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'Figma.Figma',
-          packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
+          wingetId: 'Adobe.CreativeCloud',
+          packagerCommit: 'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028',
           status: 'failed',
         }),
       ],
@@ -484,7 +490,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Figma.Figma',
+      winget_id: 'Adobe.CreativeCloud',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {

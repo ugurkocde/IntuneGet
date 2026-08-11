@@ -16,6 +16,7 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'HP.ImageAssistant',
     'Microsoft.Office',
   ],
+  'c414b88589edca2d3d82401525091db9417fbae0': ['Adobe.CreativeCloud'],
 };
 
 export function shouldRetryTerminalToolchainCandidate(
