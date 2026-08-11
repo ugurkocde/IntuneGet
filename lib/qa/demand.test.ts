@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
 import {
   buildQaPackageIdentityFromWorkflowInput,
@@ -6,6 +6,14 @@ import {
   qaSha256,
 } from '@/lib/qa/package-profile';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+
+const { resolveWingetPackageDependenciesMock } = vi.hoisted(() => ({
+  resolveWingetPackageDependenciesMock: vi.fn(),
+}));
+
+vi.mock('@/lib/winget-dependencies', () => ({
+  resolveWingetPackageDependencies: resolveWingetPackageDependenciesMock,
+}));
 
 type QueryResult = {
   data: unknown;
@@ -70,6 +78,11 @@ function priorCandidate(input: QaDemandInput, packagerCommit: string) {
 }
 
 describe('ensureQaDemand compatible evidence reuse', () => {
+  beforeEach(() => {
+    resolveWingetPackageDependenciesMock.mockReset();
+    resolveWingetPackageDependenciesMock.mockResolvedValue([]);
+  });
+
   it('persists dependency download metadata on a newly queued customer candidate', async () => {
     const dependency = {
       packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
@@ -85,7 +98,8 @@ describe('ensureQaDemand compatible evidence reuse', () => {
       order: 1,
       depth: 1,
     };
-    const input = { ...demandInput(), packageDependencies: [dependency] };
+    const input = demandInput();
+    resolveWingetPackageDependenciesMock.mockResolvedValue([dependency]);
     const candidateInserts: Array<Record<string, unknown>> = [];
     let candidateCall = 0;
     const client = {
@@ -110,6 +124,13 @@ describe('ensureQaDemand compatible evidence reuse', () => {
     const result = await ensureQaDemand(client as never, input);
 
     expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-1' });
+    expect(resolveWingetPackageDependenciesMock).toHaveBeenCalledWith({
+      wingetId: input.wingetId,
+      version: input.version,
+      architecture: input.architecture,
+      installerSha256: input.installerSha256,
+      installScope: input.installScope,
+    });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toEqual(expect.objectContaining({
       test_config: expect.objectContaining({ packageDependencies: [dependency] }),
@@ -131,7 +152,8 @@ describe('ensureQaDemand compatible evidence reuse', () => {
       order: 1,
       depth: 1,
     };
-    const input = { ...demandInput(), packageDependencies: [dependency] };
+    const input = demandInput();
+    resolveWingetPackageDependenciesMock.mockResolvedValue([dependency]);
     const updates: Array<Record<string, unknown>> = [];
     let candidateCall = 0;
     const client = {
@@ -256,5 +278,17 @@ describe('ensureQaDemand compatible evidence reuse', () => {
 
     expect(result.state).toBe('passed');
     expect(client.from).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed before creating QA state when dependency resolution fails', async () => {
+    const client = { from: vi.fn() };
+    resolveWingetPackageDependenciesMock.mockRejectedValue(
+      new Error('Unreviewed package dependency')
+    );
+
+    await expect(ensureQaDemand(client as never, demandInput())).rejects.toThrow(
+      'Unreviewed package dependency'
+    );
+    expect(client.from).not.toHaveBeenCalled();
   });
 });

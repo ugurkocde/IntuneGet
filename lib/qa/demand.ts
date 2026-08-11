@@ -6,6 +6,7 @@ import {
   type QaPackageIdentity,
   type QaWorkflowPackageInput,
 } from '@/lib/qa/package-profile';
+import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import type { Json } from '@/types/database';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
@@ -147,7 +148,18 @@ export async function ensureQaDemand(
   supabase: SupabaseClient,
   input: QaDemandInput
 ): Promise<QaDemandResult> {
-  const identity = buildQaPackageIdentityFromWorkflowInput(input);
+  // Resolve at the QA-demand boundary as well as at final packaging dispatch.
+  // This keeps both gates bound to the same server-trusted dependency graph;
+  // caller-supplied dependency metadata is never authoritative.
+  const packageDependencies = await resolveWingetPackageDependencies({
+    wingetId: input.wingetId,
+    version: input.version,
+    architecture: input.architecture,
+    installerSha256: input.installerSha256,
+    installScope: input.installScope,
+  });
+  const resolvedInput: QaDemandInput = { ...input, packageDependencies };
+  const identity = buildQaPackageIdentityFromWorkflowInput(resolvedInput);
   const profileSha256 = identity.executionProfileSha256;
 
   const { data: passedResult, error: resultError } = await supabase
@@ -168,7 +180,7 @@ export async function ensureQaDemand(
     };
   }
 
-  if (await aliasCompatiblePassedDeploymentResult(supabase, input, identity)) {
+  if (await aliasCompatiblePassedDeploymentResult(supabase, resolvedInput, identity)) {
     return { identity, candidateId: null, state: 'passed' };
   }
 
@@ -182,8 +194,8 @@ export async function ensureQaDemand(
   const testConfig = {
     mode: 'psadt-package',
     profileKind: 'deployment-config',
-    ...(input.packageDependencies?.length
-      ? { packageDependencies: input.packageDependencies as unknown as Json }
+    ...(packageDependencies.length
+      ? { packageDependencies: packageDependencies as unknown as Json }
       : {}),
     packageProfileCanonicalJson: identity.canonicalJson,
     packageProfileSha256: profileSha256,

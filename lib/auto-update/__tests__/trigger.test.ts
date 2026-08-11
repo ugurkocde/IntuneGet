@@ -13,11 +13,13 @@ const {
   getPackageResultMock,
   getAppForInstallerMock,
   getVersionInstallerInfoMock,
+  resolveWingetPackageDependenciesMock,
 } = vi.hoisted(() => ({
   getQaResultMock: vi.fn(),
   getPackageResultMock: vi.fn(),
   getAppForInstallerMock: vi.fn(),
   getVersionInstallerInfoMock: vi.fn(),
+  resolveWingetPackageDependenciesMock: vi.fn(),
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({
@@ -34,6 +36,9 @@ vi.mock('@/lib/supabase', () => ({
       }),
     }),
   }),
+}));
+vi.mock('@/lib/winget-dependencies', () => ({
+  resolveWingetPackageDependencies: resolveWingetPackageDependenciesMock,
 }));
 
 interface TableHandlers {
@@ -148,6 +153,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     getPackageResultMock.mockResolvedValue({ data: null, error: null });
     getAppForInstallerMock.mockReset();
     getVersionInstallerInfoMock.mockReset();
+    resolveWingetPackageDependenciesMock.mockResolvedValue([]);
   });
 
   it('builds the current version command from normalized WinGet switches', async () => {
