@@ -78,6 +78,7 @@ function createSupabaseStub(options: {
   candidatePages?: Array<Array<Record<string, unknown>>>;
   demandBackfillApps?: string[];
   pollState?: Record<string, unknown>;
+  packageResults?: Array<Record<string, unknown>>;
 }) {
   const pollRunInserts: Array<Record<string, unknown>> = [];
   const pollRunUpdates: Array<Record<string, unknown>> = [];
@@ -161,8 +162,11 @@ function createSupabaseStub(options: {
           error: null,
         });
       }
-      if (table === 'app_update_policies' || table === 'qa_results') {
+      if (table === 'app_update_policies') {
         return query({ data: [], error: null });
+      }
+      if (table === 'qa_package_results') {
+        return query({ data: options.packageResults || [], error: null });
       }
       if (table === 'qa_candidates') {
         return {
@@ -450,6 +454,46 @@ describe('GET /api/cron/qa-enqueue', () => {
       demand_backfill_requested_count: 1,
       demand_backfill_count: 1,
     });
+  });
+
+  it('does not queue an app payload that already passed under another PSADT profile', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Covered.App'],
+      supportedApps: [
+        {
+          winget_id: 'Covered.App',
+          name: 'Covered',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      packageResults: [
+        {
+          winget_id: 'Covered.App',
+          tested_version: '1.0.0',
+          architecture: 'x64',
+          installer_sha256: 'A'.repeat(64),
+          outcome: 'Passed',
+          tested_at_utc: '2026-08-10T12:00:00.000Z',
+          package_profile_sha256: 'B'.repeat(64),
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, alreadyKnown: 1 });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Covered.App',
+      version: '1.0.0',
+      status: 'passed',
+    });
+    expect(candidateInserts[0].package_profile_sha256).not.toBe('B'.repeat(64));
   });
 
   it('records a changed supported app failure and advances the completed comparison cursor', async () => {

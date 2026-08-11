@@ -447,7 +447,6 @@ export async function GET(request: Request) {
       installer_sha256: string | null;
       outcome: string;
       tested_at_utc: string;
-      test_level: string;
       package_profile_sha256: string | null;
     }> = [];
     if (supportedIds.length > 0) {
@@ -468,9 +467,9 @@ export async function GET(request: Request) {
           .select('winget_id')
           .in('winget_id', supportedIds),
         supabase
-          .from('qa_results')
+          .from('qa_package_results')
           .select(
-            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, test_level, package_profile_sha256'
+            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, package_profile_sha256'
           )
           .in('winget_id', supportedIds),
       ]);
@@ -508,7 +507,20 @@ export async function GET(request: Request) {
       demandBackfillIdSet.has(app.winget_id)
     ).length;
     const recipeById = new Map(recipes.map((row) => [row.winget_id, row]));
-    const resultById = new Map(results.map((row) => [row.winget_id, row]));
+    const passedResultByPayload = new Map<string, (typeof results)[number]>();
+    for (const result of results) {
+      if (result.outcome !== 'Passed' || !result.installer_sha256) continue;
+      const key = [
+        result.winget_id.toLowerCase(),
+        result.tested_version,
+        result.architecture.toLowerCase(),
+        result.installer_sha256.toUpperCase(),
+      ].join('|');
+      const existing = passedResultByPayload.get(key);
+      if (!existing || result.tested_at_utc > existing.tested_at_utc) {
+        passedResultByPayload.set(key, result);
+      }
+    }
     const client = createWingetManifestClient({ token: process.env.GITHUB_PAT, maxRetries: 2 });
 
     for (let index = 0; index < supportedApps.length; index += BATCH_SIZE) {
@@ -605,23 +617,22 @@ export async function GET(request: Request) {
             testConfig.packageProfileSha256 = packageIdentity.packageProfileSha256;
             testConfig.psadtConfigSha256 = packageIdentity.psadtConfigSha256;
             testConfig.detectionRulesSha256 = packageIdentity.detectionRulesSha256;
-            const previous = resultById.get(app.winget_id);
-            const previousMatches = Boolean(
-              previous &&
-                previous.test_level === 'psadt-package' &&
-                previous.tested_version === resolution.version &&
-                previous.architecture.toLowerCase() === architecture.toLowerCase() &&
-                previous.installer_sha256?.toUpperCase() === installerSha256 &&
-                previous.package_profile_sha256?.toUpperCase() ===
-                  packageIdentity.packageProfileSha256
-            );
+            const payloadKey = [
+              app.winget_id.toLowerCase(),
+              resolution.version,
+              architecture.toLowerCase(),
+              installerSha256,
+            ].join('|');
+            const previous = passedResultByPayload.get(payloadKey);
+            // A successful QA run qualifies the immutable installer payload.
+            // Presentation-only PSADT profile changes must not schedule the same
+            // app version repeatedly.
+            const previousMatches = Boolean(previous);
             const now = new Date().toISOString();
             const initialStatus = !packagingContract.valid
               ? 'failed'
               : previousMatches
-                ? previous?.outcome === 'Passed'
-                  ? 'passed'
-                  : 'failed'
+                ? 'passed'
                 : 'queued';
             const { data: inserted, error: insertError } = await supabase!
               .from('qa_candidates')
