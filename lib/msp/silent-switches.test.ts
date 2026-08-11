@@ -26,6 +26,20 @@ describe('extractSilentSwitches', () => {
     )).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
   });
 
+  it('keeps positional operands required by vendor switches', () => {
+    expect(extractSilentSwitches(
+      '"setup.exe" /configure https://aka.ms/fhlwingetconfig',
+      'exe'
+    )).toBe('/configure https://aka.ms/fhlwingetconfig');
+  });
+
+  it('keeps MSI properties after removing the install action target', () => {
+    expect(extractSilentSwitches(
+      'msiexec.exe /i "agent.msi" /qn REBOOT=ReallySuppress ALLUSERS=1',
+      'msi'
+    )).toBe('/qn REBOOT=ReallySuppress ALLUSERS=1');
+  });
+
   it('fails closed for an archive with no nested installer type', () => {
     expect(extractSilentSwitches(
       'Expand-Archive -Path "app.zip" -DestinationPath "%ProgramFiles%\\App" -Force',

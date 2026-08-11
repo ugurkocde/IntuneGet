@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
+import { assertPackagingContract } from '@/lib/packaging-contract';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 
@@ -449,6 +450,13 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
   psadtConfigJson: string;
   identity: QaPackageIdentity;
 } {
+  assertPackagingContract({
+    wingetId: input.wingetId,
+    installerType: input.installerType,
+    silentArgs: input.silentSwitches,
+    nestedInstallerType: input.nestedInstallerType,
+    nestedInstallerFiles: input.nestedInstallerPath ? [input.nestedInstallerPath] : [],
+  });
   const parsedDetectionRulesValue = parseJsonObject<unknown>(input.detectionRules, []);
   const parsedDetectionRules = Array.isArray(parsedDetectionRulesValue)
     ? (parsedDetectionRulesValue as DetectionRule[])

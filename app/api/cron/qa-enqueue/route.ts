@@ -15,6 +15,7 @@ import {
   selectWingetInstaller,
 } from '@/lib/qa/candidate';
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
+import { evaluatePackagingContract } from '@/lib/packaging-contract';
 import {
   QA_PSADT_TOOLCHAIN,
   buildQaPackageIdentity,
@@ -568,6 +569,13 @@ export async function GET(request: Request) {
               psadtConfig: testConfig.psadtConfig,
               detectionRules: testConfig.detectionRules,
             });
+            const packagingContract = evaluatePackagingContract({
+              wingetId: app.winget_id,
+              installerType: sourceInstallerType,
+              silentArgs: testConfig.silentArgs,
+              nestedInstallerType: testConfig.nestedInstallerType,
+              nestedInstallerFiles: testConfig.nestedInstallerFiles,
+            });
             testConfig.packageProfileCanonicalJson = packageIdentity.canonicalJson;
             testConfig.packageProfileSha256 = packageIdentity.packageProfileSha256;
             testConfig.psadtConfigSha256 = packageIdentity.psadtConfigSha256;
@@ -583,11 +591,13 @@ export async function GET(request: Request) {
                   packageIdentity.packageProfileSha256
             );
             const now = new Date().toISOString();
-            const initialStatus = previousMatches
-              ? previous?.outcome === 'Passed'
-                ? 'passed'
-                : 'failed'
-              : 'queued';
+            const initialStatus = !packagingContract.valid
+              ? 'failed'
+              : previousMatches
+                ? previous?.outcome === 'Passed'
+                  ? 'passed'
+                  : 'failed'
+                : 'queued';
             const { data: inserted, error: insertError } = await supabase!
               .from('qa_candidates')
               .insert({
@@ -608,7 +618,14 @@ export async function GET(request: Request) {
                 demand_source: policies.some((policy) => policy.winget_id === app.winget_id)
                   ? 'auto_update'
                   : 'managed',
-                finished_at: initialStatus === 'queued' ? null : previous?.tested_at_utc || now,
+                failure_summary: !packagingContract.valid
+                  ? `Packaging preflight: ${packagingContract.message}`
+                  : null,
+                finished_at: initialStatus === 'queued'
+                  ? null
+                  : !packagingContract.valid
+                    ? now
+                    : previous?.tested_at_utc || now,
                 updated_at: now,
               })
               .select('id')

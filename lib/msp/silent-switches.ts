@@ -47,10 +47,15 @@ export function extractSilentSwitches(
     .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '') // /i filename.msi
     .replace(/\/[ixp]\s+/gi, ''); // /i alone (leftover)
 
-  // Extract switches from remaining string (starts with / or -)
-  const switchMatch = cleaned.match(/(?:\/\S+|-{1,2}\S+)(?:\s+(?:\/\S+|-{1,2}\S+))*/);
-  if (switchMatch && switchMatch[0] !== '-DeploymentType') {
-    return switchMatch[0];
+  // Preserve the complete vendor argument tail, including positional operands.
+  // Commands such as Office Deployment Tool's
+  //   /configure https://aka.ms/fhlwingetconfig
+  // are incomplete (and silently do nothing) if we retain only slash-prefixed
+  // tokens. The executable token and MSI action target were removed above, so
+  // everything remaining belongs to the vendor's install contract.
+  cleaned = cleaned.trim();
+  if (/^(?:\/\S+|-{1,2}\S+)/.test(cleaned) && cleaned !== '-DeploymentType') {
+    return cleaned;
   }
 
   return defaultSwitches[effectiveType] ?? (sourceType === 'zip' ? '' : '/S');
