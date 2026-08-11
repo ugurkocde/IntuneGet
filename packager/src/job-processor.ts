@@ -687,6 +687,9 @@ catch
       if (!Number.isFinite(deferDays) || deferDays < 0 || deferDays > 3_650) {
         throw new Error('PSADT deferDays must be a number from 0 through 3650');
       }
+      // Zero is IntuneGet's UI/API sentinel for no day-based limit. PSADT
+      // v4.1 rejects an explicitly supplied -DeferDays 0 value.
+      if (deferDays === 0) deferDays = null;
     }
     let deferDeadline: string | null = null;
     if (config?.deferDeadline !== undefined && config.deferDeadline !== null) {

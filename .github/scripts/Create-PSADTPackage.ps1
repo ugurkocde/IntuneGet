@@ -750,7 +750,12 @@ if ($psadtConfig.ContainsKey('deferDays') -and $null -ne $psadtConfig.deferDays)
         ) -or $parsedDeferDays -lt 0 -or $parsedDeferDays -gt 3650) {
         throw 'PSADT deferDays must be a number from 0 through 3650.'
     }
-    $deferDays = [Convert]::ToString($parsedDeferDays, [System.Globalization.CultureInfo]::InvariantCulture)
+    # IntuneGet uses zero as the UI/API sentinel for no day-based limit. PSADT
+    # v4.1 rejects an explicitly supplied DeferDays value of zero, so omit the
+    # parameter unless the configured duration is positive.
+    if ($parsedDeferDays -gt 0) {
+        $deferDays = [Convert]::ToString($parsedDeferDays, [System.Globalization.CultureInfo]::InvariantCulture)
+    }
 }
 $forceCloseCountdown = $null
 if ($psadtConfig.ContainsKey('forceCloseProcessesCountdown') -and

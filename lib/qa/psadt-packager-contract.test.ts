@@ -484,6 +484,41 @@ describe('PSADT registry uninstall identity contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'treats zero defer days as no day-based limit for PSADT v4.1',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Zero Defer Days Contract App',
+        [],
+        {
+          processesToClose: [{ name: 'Example', description: 'Example' }],
+          allowDefer: true,
+          deferTimes: 3,
+          deferDays: 0,
+        }
+      );
+
+      expect(generated).toContain('-AllowDeferCloseProcesses');
+      expect(generated).not.toContain('-DeferDays 0');
+
+      const positive = generateRegistryUninstallPackage(
+        'inno',
+        'Positive Defer Days Contract App',
+        [],
+        { allowDefer: true, deferDays: 1.5 }
+      );
+      expect(positive).toContain('-DeferDays 1.5');
+
+      expect(() => generateRegistryUninstallPackage(
+        'inno',
+        'Negative Defer Days Contract App',
+        [],
+        { allowDefer: true, deferDays: -1 }
+      )).toThrow('deferDays must be a number from 0 through 3650');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects non-object configs and string booleans before generation',
     () => {
       expect(() => generateRegistryUninstallPackage(

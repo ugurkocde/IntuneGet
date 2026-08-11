@@ -127,6 +127,43 @@ describe('nested portable PSADT generation', () => {
       .toThrow('Invalid PSADT process name');
   });
 
+  it('treats zero defer days as no day-based limit for PSADT v4.1', () => {
+    const script = generator.generateDeployScript.call(generator, packagingJob({
+      package_config: {
+        nestedInstallerType: 'portable',
+        nestedInstallerPath: 'piicrawler.exe',
+        psadtConfig: {
+          processesToClose: [{ name: 'Example', description: 'Example' }],
+          allowDefer: true,
+          deferTimes: 3,
+          deferDays: 0,
+        },
+      },
+    }), 'piicrawler.zip');
+
+    expect(script).toContain('-AllowDeferCloseProcesses');
+    expect(script).not.toContain('-DeferDays 0');
+
+    const positiveScript = generator.generateDeployScript.call(generator, packagingJob({
+      package_config: {
+        nestedInstallerType: 'portable',
+        nestedInstallerPath: 'piicrawler.exe',
+        psadtConfig: { allowDefer: true, deferDays: 1.5 },
+      },
+    }), 'piicrawler.zip');
+    expect(positiveScript).toContain('-DeferDays 1.5');
+
+    const negativeJob = packagingJob({
+      package_config: {
+        nestedInstallerType: 'portable',
+        nestedInstallerPath: 'piicrawler.exe',
+        psadtConfig: { allowDefer: true, deferDays: -1 },
+      },
+    });
+    expect(() => generator.generateDeployScript.call(generator, negativeJob, 'piicrawler.zip'))
+      .toThrow('deferDays must be a number from 0 through 3650');
+  });
+
   it('rejects string booleans and malformed deferral deadlines', () => {
     const stringBooleanJob = packagingJob({
       package_config: {
