@@ -14,21 +14,23 @@ import { reconcileManagedMarkerDetectionRules } from '@/lib/registry-marker';
  */
 export function normalizeCatalogDetectionRules({
   detectionRules,
+  fallbackDetectionRules,
   wingetId,
   version,
   installScope,
   markerPath,
 }: {
   detectionRules: readonly unknown[] | null | undefined;
+  fallbackDetectionRules?: readonly unknown[] | null;
   wingetId: string;
   version: string;
   installScope?: string;
   markerPath?: string | null;
 }): DetectionRule[] {
-  if (!wingetId.trim()) {
+  if (typeof wingetId !== 'string' || !wingetId.trim()) {
     throw new Error('Catalog package detection requires a non-empty Winget ID');
   }
-  if (!version.trim()) {
+  if (typeof version !== 'string' || !version.trim()) {
     throw new Error('Catalog package detection requires a non-empty version');
   }
 
@@ -37,9 +39,10 @@ export function normalizeCatalogDetectionRules({
   const scope: WingetScope = installScope?.toLowerCase() === 'user'
     ? 'user'
     : 'machine';
-  const usableRules = Array.isArray(detectionRules)
-    ? detectionRules.filter(isUsableDetectionRule)
-    : [];
+  const primaryRules = usableDetectionRules(detectionRules);
+  const usableRules = primaryRules.length > 0
+    ? primaryRules
+    : usableDetectionRules(fallbackDetectionRules);
   const reconciled = reconcileManagedMarkerDetectionRules({
     detectionRules: usableRules,
     wingetId,
@@ -51,6 +54,10 @@ export function normalizeCatalogDetectionRules({
   return reconciled.length > 0
     ? reconciled
     : generateRegistryMarkerDetectionRules(wingetId, version, scope, markerPath || undefined);
+}
+
+function usableDetectionRules(values: readonly unknown[] | null | undefined): DetectionRule[] {
+  return Array.isArray(values) ? values.filter(isUsableDetectionRule) : [];
 }
 
 function isUsableDetectionRule(value: unknown): value is DetectionRule {

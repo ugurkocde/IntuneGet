@@ -66,6 +66,23 @@ describe('catalog detection normalization', () => {
     })]);
   });
 
+  it('uses valid fallback rules when the primary legacy list is malformed', () => {
+    const fileRule = {
+      type: 'file' as const,
+      path: '%ProgramFiles%\\Example',
+      fileOrFolderName: 'Example.exe',
+      detectionType: 'exists' as const,
+    };
+    const result = normalizeCatalogDetectionRules({
+      detectionRules: [null, {}],
+      fallbackDetectionRules: [fileRule],
+      wingetId: 'Example.App',
+      version: '1.0.0',
+    });
+
+    expect(result).toEqual([fileRule]);
+  });
+
   it.each([
     { wingetId: '', version: '1.0.0', message: 'non-empty Winget ID' },
     { wingetId: 'Example.App', version: '   ', message: 'non-empty version' },

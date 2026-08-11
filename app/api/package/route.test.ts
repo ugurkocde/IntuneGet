@@ -419,7 +419,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
-  it('preserves configured PSADT rules when the top-level list is empty', async () => {
+  it('preserves configured PSADT rules when the top-level list is unusable', async () => {
     const fileRule = {
       type: 'file',
       path: '%ProgramFiles%\\Cursor',
@@ -434,7 +434,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       },
       body: JSON.stringify({
         items: [makeWin32Item({
-          detectionRules: [],
+          detectionRules: [{}],
           psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: [fileRule] },
         })],
       }),
@@ -486,6 +486,31 @@ describe('POST /api/package (workflow dispatch)', () => {
       sourceType: 'custom',
       detectionRules: [fileRule],
     });
+  });
+
+  it('fails closed before job creation when a catalog identity is missing', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({ wingetId: undefined })],
+      }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: false,
+      errors: [{ error: 'Catalog package detection requires a non-empty Winget ID' }],
+    });
+    expect(createMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
   it('parks a customer deployment until its exact execution profile passes QA', async () => {

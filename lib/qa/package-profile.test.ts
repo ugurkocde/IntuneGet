@@ -213,7 +213,7 @@ describe('PSADT QA package identity', () => {
     );
   });
 
-  it('preserves PSADT detection rules when the top-level workflow list is empty', () => {
+  it('preserves PSADT detection rules when the top-level workflow list is unusable', () => {
     const fileRule = {
       type: 'file' as const,
       path: '%ProgramFiles%\\Cursor',
@@ -231,7 +231,7 @@ describe('PSADT QA package identity', () => {
       silentSwitches: '/VERYSILENT',
       uninstallCommand: 'REGISTRY_UNINSTALL:Cursor',
       installScope: 'machine',
-      detectionRules: '[]',
+      detectionRules: '[{}]',
       psadtConfig: JSON.stringify({ detectionRules: [fileRule] }),
     });
 

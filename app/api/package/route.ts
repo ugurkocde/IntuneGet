@@ -400,11 +400,9 @@ export async function POST(request: NextRequest) {
           try {
             if (item.sourceType !== 'custom') {
               const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
-              const requestedDetectionRules = Array.isArray(item.detectionRules) && item.detectionRules.length > 0
-                ? item.detectionRules
-                : requestedPsadtConfig.detectionRules;
               const detectionRules = normalizeCatalogDetectionRules({
-                detectionRules: requestedDetectionRules,
+                detectionRules: item.detectionRules,
+                fallbackDetectionRules: requestedPsadtConfig.detectionRules,
                 wingetId: item.wingetId,
                 version: item.version,
                 installScope: item.installScope,
