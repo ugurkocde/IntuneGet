@@ -6,9 +6,10 @@ import {
 } from './github-actions';
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 
-const { enforceInstallerPreflightMock, enforceQaGateMock } = vi.hoisted(() => ({
+const { enforceInstallerPreflightMock, enforceQaGateMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
   enforceQaGateMock: vi.fn(),
+  resolveDependenciesMock: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('./installer-preflight', async (importOriginal) => {
@@ -22,6 +23,14 @@ vi.mock('./installer-preflight', async (importOriginal) => {
 vi.mock('./qa/gate', async (importOriginal) => {
   const original = await importOriginal<typeof import('./qa/gate')>();
   return { ...original, enforceQaGate: enforceQaGateMock };
+});
+
+vi.mock('./winget-dependencies', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./winget-dependencies')>();
+  return {
+    ...original,
+    resolveWingetPackageDependencies: resolveDependenciesMock,
+  };
 });
 
 const config: GitHubActionsConfig = {
@@ -49,6 +58,7 @@ function workflowInputs(overrides: Partial<WorkflowInputs> = {}): WorkflowInputs
     uninstallCommand: 'uninstall.exe /S',
     callbackUrl: 'https://example.test/api/package/callback',
     hashValidationMode: 'calculate',
+    sourceType: 'custom',
     ...overrides,
   };
 }
@@ -96,6 +106,48 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     const request = fetchMock.mock.calls[0][1] as RequestInit;
     const payload = JSON.parse(String(request.body));
     expect(payload.client_payload.installer.hashValidationMode).toBe('strict');
+  });
+
+  it('dispatches only server-resolved dependency metadata and binds it to the QA profile', async () => {
+    const dependency = {
+      packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+      version: '14.51.36210.0',
+      architecture: 'x64' as const,
+      installerUrl: 'https://aka.ms/vc14/vc_redist.x64.exe',
+      installerSha256: 'B'.repeat(64),
+      installerType: 'exe' as const,
+      silentArgs: '/install /quiet /norestart',
+      successCodes: [-2147023258, 0, 1638],
+      rebootCodes: [1641, 3010],
+      fileName: 'Microsoft.VCRedist.2015+.x64-vc_redist.x64.exe',
+      order: 1,
+      depth: 1,
+    };
+    resolveDependenciesMock.mockResolvedValueOnce([dependency]);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Oracle.VirtualBox',
+      version: '7.2.14',
+      installerSha256: 'A'.repeat(64),
+      hashValidationMode: 'strict',
+      sourceType: 'winget',
+      packageDependencies: [],
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.installer.packageDependencies)).toEqual([
+      dependency,
+    ]);
+    expect(resolveDependenciesMock).toHaveBeenCalledWith(expect.objectContaining({
+      wingetId: 'Oracle.VirtualBox',
+      installerSha256: 'A'.repeat(64),
+    }));
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({
+      packageProfileSha256: expect.stringMatching(/^[A-F0-9]{64}$/),
+    }));
   });
 
   it('dispatches the same reconciled marker rules that are used for the QA gate', async () => {

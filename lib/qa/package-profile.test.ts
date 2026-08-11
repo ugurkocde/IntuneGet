@@ -135,6 +135,43 @@ describe('PSADT QA package identity', () => {
     expect(buildQaPackageIdentity({ ...input, successCodes: [] })).toEqual(baseline);
   });
 
+  it('binds offline dependency installers to the execution profile only when present', () => {
+    const baseline = buildQaPackageIdentity(input);
+    const dependency = {
+      packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+      version: '14.51.36210.0',
+      architecture: 'x64' as const,
+      installerUrl: 'https://aka.ms/vc14/vc_redist.x64.exe',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe' as const,
+      silentArgs: '/install /quiet /norestart',
+      successCodes: [-2147023258, 0, 1638],
+      rebootCodes: [1641, 3010],
+      fileName: 'Microsoft.VCRedist.2015+.x64-vc_redist.x64.exe',
+      order: 1,
+      depth: 1,
+    };
+    const withDependency = buildQaPackageIdentity({
+      ...input,
+      packageDependencies: [dependency],
+    });
+    const installer = withDependency.profile.installer as Record<string, unknown>;
+
+    expect(withDependency.packageProfileSha256).not.toBe(
+      baseline.packageProfileSha256
+    );
+    expect(installer.packageDependencies).toEqual([
+      expect.objectContaining({
+        packageIdentifier: dependency.packageIdentifier,
+        sha256: dependency.installerSha256.toUpperCase(),
+      }),
+    ]);
+    expect(installer.dependenciesSha256).toMatch(/^[A-F0-9]{64}$/);
+    expect((baseline.profile.installer as Record<string, unknown>).packageDependencies)
+      .toBeUndefined();
+    expect(buildQaPackageIdentity({ ...input, packageDependencies: [] })).toEqual(baseline);
+  });
+
   it('reconciles an IntuneGet marker with the current workflow scope and version', () => {
     const workflowInput = {
       wingetId: 'Asana.Asana',

@@ -11,6 +11,7 @@ import type {
   WingetScope,
 } from '@/types/winget';
 import type { WingetInstallerCandidate } from './candidate';
+import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export interface QaCatalogTestConfig {
   mode: 'psadt-package';
@@ -26,6 +27,7 @@ export interface QaCatalogTestConfig {
   uninstallCommand: string;
   psadtConfig: PSADTConfig;
   detectionRules: DetectionRule[];
+  packageDependencies?: PackagedWingetDependency[];
   profileKind: 'catalog-default';
   packageProfileCanonicalJson?: string;
   packageProfileSha256?: string;
@@ -68,10 +70,12 @@ export function buildQaCatalogTestConfig({
   app,
   manifest,
   installer,
+  packageDependencies = [],
 }: {
   app: { wingetId: string; name: string; publisher: string; version: string };
   manifest: ManifestRecord;
   installer: WingetInstallerCandidate & ManifestRecord;
+  packageDependencies?: PackagedWingetDependency[];
 }): QaCatalogTestConfig {
   // WinGet installer defaults are inherited per switch field, not as one
   // replaceable object. Preserve root Silent when a selected installer only
@@ -181,6 +185,7 @@ export function buildQaCatalogTestConfig({
     uninstallCommand: generateUninstallCommand(normalizedInstaller, app.name),
     psadtConfig,
     detectionRules,
+    ...(packageDependencies.length > 0 ? { packageDependencies } : {}),
     profileKind: 'catalog-default',
   };
 }

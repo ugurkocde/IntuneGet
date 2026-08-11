@@ -1,0 +1,162 @@
+import { describe, expect, it } from 'vitest';
+import type { NormalizedInstaller } from '@/types/winget';
+import {
+  resolveWingetPackageDependencies,
+  type WingetDependencyResolverIo,
+} from './winget-dependencies';
+
+const ROOT_SHA = 'A'.repeat(64);
+const VC_SHA = 'B'.repeat(64);
+
+function installer(
+  overrides: Partial<NormalizedInstaller> = {}
+): NormalizedInstaller {
+  return {
+    architecture: 'x64',
+    url: 'https://example.invalid/setup.exe',
+    sha256: ROOT_SHA,
+    type: 'exe',
+    silentArgs: '/quiet',
+    ...overrides,
+  };
+}
+
+function fixtureIo(
+  installers: Record<string, NormalizedInstaller[]>,
+  versions: Record<string, string[]>
+): WingetDependencyResolverIo {
+  return {
+    getInstallers: async (packageIdentifier, version) =>
+      installers[`${packageIdentifier}@${version}`] || [],
+    getVersions: async (packageIdentifier) => versions[packageIdentifier] || [],
+  };
+}
+
+describe('resolveWingetPackageDependencies', () => {
+  it('returns no bundle metadata when the exact root installer has no dependencies', async () => {
+    const io = fixtureIo(
+      { 'Example.App@1.0.0': [installer()] },
+      {}
+    );
+
+    await expect(resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io)).resolves.toEqual([]);
+  });
+
+  it('bundles the current VC++ runtime for VirtualBox with idempotent exit codes', async () => {
+    const io = fixtureIo(
+      {
+        'Oracle.VirtualBox@7.2.14': [installer({
+          packageDependencies: [{
+            packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+          }],
+        })],
+        'Microsoft.VCRedist.2015+.x64@14.51.36210.0': [installer({
+          url: 'https://aka.ms/vc14/vc_redist.x64.exe',
+          sha256: VC_SHA,
+          silentArgs: '/install /quiet /norestart',
+        })],
+      },
+      {
+        'Microsoft.VCRedist.2015+.x64': ['14.51.36210.0'],
+      }
+    );
+
+    const result = await resolveWingetPackageDependencies({
+      wingetId: 'Oracle.VirtualBox',
+      version: '7.2.14',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+        version: '14.51.36210.0',
+        installerSha256: VC_SHA,
+        order: 1,
+        successCodes: [-2147023258, 0, 1638],
+        rebootCodes: [1641, 3010],
+      }),
+    ]);
+    expect(result[0].fileName).toBe(
+      'Microsoft.VCRedist.2015+.x64-vc_redist.x64.exe'
+    );
+  });
+
+  it('selects the newest version satisfying the declared minimum', async () => {
+    const io = fixtureIo(
+      {
+        'Example.App@1.0.0': [installer({
+          packageDependencies: [{
+            packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+            minimumVersion: '14.40.0.0',
+          }],
+        })],
+        'Microsoft.VCRedist.2015+.x64@14.30.0.0': [installer({ sha256: VC_SHA })],
+        'Microsoft.VCRedist.2015+.x64@14.40.0.0': [installer({ sha256: VC_SHA })],
+        'Microsoft.VCRedist.2015+.x64@14.50.0.0': [installer({ sha256: VC_SHA })],
+      },
+      {
+        'Microsoft.VCRedist.2015+.x64': ['14.40.0.0', '14.30.0.0', '14.50.0.0'],
+      }
+    );
+
+    const [dependency] = await resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io);
+    expect(dependency.version).toBe('14.50.0.0');
+    expect(dependency.minimumVersion).toBe('14.40.0.0');
+  });
+
+  it('fails closed for dependency families that have not been reviewed', async () => {
+    const io = fixtureIo(
+      { 'Example.App@1.0.0': [installer({
+        packageDependencies: [{ packageIdentifier: 'Vendor.Runtime' }],
+      })] },
+      {}
+    );
+
+    await expect(resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io)).rejects.toThrow('not in the reviewed redistribution allowlist');
+  });
+
+  it('fails closed when WinGet declares an unsupported external dependency', async () => {
+    const io = fixtureIo(
+      { 'Example.App@1.0.0': [installer({ externalDependencies: ['Vendor account'] })] },
+      {}
+    );
+
+    await expect(resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io)).rejects.toThrow('declares unsupported dependencies');
+  });
+
+  it('requires the exact trusted root installer hash', async () => {
+    const io = fixtureIo(
+      { 'Example.App@1.0.0': [installer()] },
+      {}
+    );
+
+    await expect(resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: 'C'.repeat(64),
+    }, io)).rejects.toThrow('trusted WinGet installer tuple');
+  });
+});

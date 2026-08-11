@@ -765,6 +765,9 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
     productCode: normalizeProductCode(installer.ProductCode),
     packageFamilyName: installer.PackageFamilyName,
     packageDependencies: packageDependencies.length > 0 ? packageDependencies : undefined,
+    windowsFeatures: installer.Dependencies?.WindowsFeatures,
+    windowsLibraries: installer.Dependencies?.WindowsLibraries,
+    externalDependencies: installer.Dependencies?.ExternalDependencies,
   };
 }
 

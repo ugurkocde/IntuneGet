@@ -176,6 +176,9 @@ export interface NormalizedInstaller {
   productCode?: string;
   packageFamilyName?: string;
   packageDependencies?: Array<{ packageIdentifier: string; minimumVersion?: string }>;
+  windowsFeatures?: string[];
+  windowsLibraries?: string[];
+  externalDependencies?: string[];
 }
 
 // Microsoft Store manifest enrichment (fetched from public Store APIs)

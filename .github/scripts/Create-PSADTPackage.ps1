@@ -50,6 +50,46 @@ $NestedInstallerType = $env:INPUT_NESTED_INSTALLER_TYPE
 $NestedInstallerPath = $env:INPUT_NESTED_INSTALLER_PATH
 $InstallScope = if ($env:INPUT_INSTALL_SCOPE) { $env:INPUT_INSTALL_SCOPE } else { 'machine' }
 $IsUserScope = $InstallScope -eq 'user'
+$PackageDependencies = @()
+if (-not [string]::IsNullOrWhiteSpace($env:INPUT_PACKAGE_DEPENDENCIES)) {
+    try {
+        $PackageDependencies = @($env:INPUT_PACKAGE_DEPENDENCIES | ConvertFrom-Json -ErrorAction Stop)
+    }
+    catch {
+        throw 'INPUT_PACKAGE_DEPENDENCIES must be a JSON array.'
+    }
+}
+if ($PackageDependencies.Count -gt 8) {
+    throw 'INPUT_PACKAGE_DEPENDENCIES cannot contain more than 8 packages.'
+}
+
+foreach ($dependency in $PackageDependencies) {
+    if ([string]::IsNullOrWhiteSpace([string]$dependency.packageIdentifier) -or
+        [string]::IsNullOrWhiteSpace([string]$dependency.version) -or
+        [string]::IsNullOrWhiteSpace([string]$dependency.fileName) -or
+        [string]::IsNullOrWhiteSpace([string]$dependency.installerSha256)) {
+        throw 'Every package dependency must include an identifier, version, filename, and SHA-256.'
+    }
+    if ([string]$dependency.packageIdentifier -notmatch '^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(x86|x64|arm64)$') {
+        throw "Package dependency is not in the reviewed redistribution allowlist: $($dependency.packageIdentifier)"
+    }
+    if ([string]$dependency.installerType -notin @('exe', 'burn')) {
+        throw "Package dependency uses an unreviewed installer type: $($dependency.installerType)"
+    }
+    if ([string]$dependency.fileName -match '[\\/:*?"<>|]' -or
+        [System.IO.Path]::GetFileName([string]$dependency.fileName) -ne [string]$dependency.fileName) {
+        throw "Package dependency filename is unsafe: $($dependency.fileName)"
+    }
+    if ([string]$dependency.installerSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+        throw "Package dependency SHA-256 is invalid: $($dependency.packageIdentifier)"
+    }
+    foreach ($exitCode in @($dependency.successCodes) + @($dependency.rebootCodes)) {
+        $parsedDependencyExitCode = 0
+        if (-not [int]::TryParse([string]$exitCode, [ref]$parsedDependencyExitCode)) {
+            throw "Package dependency exit code is invalid: $exitCode"
+        }
+    }
+}
 
 # Validate required inputs
 $requiredVars = @('INPUT_JOB_ID', 'INPUT_CALLBACK_URL', 'INPUT_DISPLAY_NAME', 'INPUT_PUBLISHER', 'INPUT_VERSION', 'INPUT_WINGET_ID', 'INPUT_INSTALLER_TYPE')
@@ -95,6 +135,26 @@ if (-not $env:INSTALLER_FILENAME) {
 }
 # Use -LiteralPath to handle filenames with special characters like brackets
 Copy-Item -LiteralPath $env:INSTALLER_PATH -Destination $filesDir
+
+if ($PackageDependencies.Count -gt 0) {
+    if ([string]::IsNullOrWhiteSpace($env:DEPENDENCIES_PATH) -or
+        -not (Test-Path -LiteralPath $env:DEPENDENCIES_PATH -PathType Container)) {
+        throw 'DEPENDENCIES_PATH must point to the verified dependency download directory.'
+    }
+    $dependencyFilesDir = Join-Path $filesDir 'Dependencies'
+    $null = New-Item -ItemType Directory -Path $dependencyFilesDir -Force
+    foreach ($dependency in $PackageDependencies) {
+        $dependencySource = Join-Path $env:DEPENDENCIES_PATH ([string]$dependency.fileName)
+        if (-not (Test-Path -LiteralPath $dependencySource -PathType Leaf)) {
+            throw "Verified package dependency file was not found: $($dependency.packageIdentifier)"
+        }
+        $dependencyHash = (Get-FileHash -LiteralPath $dependencySource -Algorithm SHA256).Hash
+        if ($dependencyHash -ne ([string]$dependency.installerSha256).ToUpperInvariant()) {
+            throw "Package dependency hash changed before packaging: $($dependency.packageIdentifier)"
+        }
+        Copy-Item -LiteralPath $dependencySource -Destination (Join-Path $dependencyFilesDir ([string]$dependency.fileName)) -Force
+    }
+}
 
 # Parse PSADT configuration
 $psadtConfig = @{}
@@ -1111,6 +1171,43 @@ if ($restartPromptConfig -and $restartPromptConfig.enabled) {
     ) -join "`r`n"
 }
 
+# Build a deterministic, offline prerequisite sequence. Dependency files were
+# hash-verified before being copied into Files\Dependencies above. They are
+# installed before the primary-app uninstall snapshot so their registry entries
+# cannot be mistaken for the application's vendor identity.
+$dependencyInstallLines = @()
+foreach ($dependency in @($PackageDependencies | Sort-Object order)) {
+    $dependencyIdEscaped = ([string]$dependency.packageIdentifier) -replace "'", "''"
+    $dependencyVersionEscaped = ([string]$dependency.version) -replace "'", "''"
+    $dependencyFileEscaped = ([string]$dependency.fileName) -replace "'", "''"
+    $dependencyArgumentsEscaped = ([string]$dependency.silentArgs) -replace "'", "''"
+    $dependencySuccessCodes = @(
+        0
+        @($dependency.successCodes) | ForEach-Object { [int]$_ }
+    ) | Sort-Object -Unique
+    $dependencyRebootCodes = @(
+        @($dependency.rebootCodes) | ForEach-Object { [int]$_ }
+    ) | Sort-Object -Unique
+    if ($dependencyRebootCodes.Count -eq 0) {
+        $dependencyRebootCodes = @(1641, 3010)
+    }
+    $dependencySuccessLiteral = $dependencySuccessCodes -join ', '
+    $dependencyRebootLiteral = $dependencyRebootCodes -join ', '
+    $dependencyInstallLines += @(
+        ''
+        "    # Install offline WinGet dependency: $dependencyIdEscaped $dependencyVersionEscaped"
+        "    `$dependencyPath = Join-Path `$adtSession.DirFiles 'Dependencies\$dependencyFileEscaped'"
+        '    if (-not (Test-Path -LiteralPath $dependencyPath -PathType Leaf)) {'
+        "        throw 'Bundled dependency file is missing: $dependencyIdEscaped'"
+        '    }'
+        "    Write-ADTLogEntry -Message 'Installing bundled dependency [$dependencyIdEscaped] version [$dependencyVersionEscaped].' -Severity 'Info' -Source 'Install-ADTDeployment'"
+        "    `$dependencyResult = Start-ADTProcess -FilePath `$dependencyPath -ArgumentList '$dependencyArgumentsEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
+        "    if (`$dependencyResult.ExitCode -in @($dependencyRebootLiteral)) {"
+        '        $script:DependencyRebootExitCode = 3010'
+        '    }'
+    )
+}
+
 # Build Invoke-AppDeployToolkit.ps1 script content using PSADT v4 native syntax
 $lines = @(
     '<#'
@@ -1189,6 +1286,7 @@ $lines += @(
     '    }'
     ''
 )
+$lines += $dependencyInstallLines
 
 if ($useRegistryUninstall) {
     $lines += @(
@@ -2191,6 +2289,7 @@ $lines += @(
     '$ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop'
     '$ProgressPreference = [System.Management.Automation.ActionPreference]::SilentlyContinue'
     '$script:UninstallRebootExitCode = $null'
+    '$script:DependencyRebootExitCode = $null'
     'Set-StrictMode -Version 1'
     ''
     'try'
@@ -2235,8 +2334,8 @@ $lines += @(
     'try'
     '{'
     '    & "$($adtSession.DeploymentType)-ADTDeployment"'
-    '    if ($script:UninstallRebootExitCode) {'
-    '        Close-ADTSession -ExitCode $script:UninstallRebootExitCode'
+    '    if ($script:UninstallRebootExitCode -or $script:DependencyRebootExitCode) {'
+    '        Close-ADTSession -ExitCode 3010'
     '    } else {'
     '        Close-ADTSession'
     '    }'

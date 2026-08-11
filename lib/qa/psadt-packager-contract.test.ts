@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   mkdirSync,
   mkdtempSync,
@@ -32,7 +33,8 @@ function generateRegistryUninstallPackage(
   installerType: 'inno' | 'burn',
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
-  psadtConfig: unknown = {}
+  psadtConfig: unknown = {},
+  packageDependencies: Array<Record<string, unknown>> = []
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -53,6 +55,16 @@ function generateRegistryUninstallPackage(
       join(fixtureRoot, 'Send-Callback.ps1'),
       'function Send-Callback { param($Body, $CallbackUrl, $CallbackSecret) return $null }'
     );
+    const dependencyPath = join(fixtureRoot, 'dependencies');
+    if (packageDependencies.length > 0) {
+      mkdirSync(dependencyPath, { recursive: true });
+      for (const dependency of packageDependencies) {
+        writeFileSync(
+          join(dependencyPath, String(dependency.fileName)),
+          'dependency-fixture'
+        );
+      }
+    }
 
     const result = spawnSync('pwsh', ['-NoProfile', '-File', packagerPath], {
       cwd: fixtureRoot,
@@ -70,9 +82,13 @@ function generateRegistryUninstallPackage(
         INPUT_INSTALL_SCOPE: 'machine',
         INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
         INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
+        INPUT_PACKAGE_DEPENDENCIES: JSON.stringify(packageDependencies),
         INPUT_UNINSTALL_COMMAND: `REGISTRY_UNINSTALL:${displayName}`,
         INSTALLER_PATH: installerPath,
         INSTALLER_FILENAME: 'setup.exe',
+        ...(packageDependencies.length > 0
+          ? { DEPENDENCIES_PATH: dependencyPath }
+          : {}),
         PSADT_CONFIG: JSON.stringify(psadtConfig),
       },
     });
@@ -155,6 +171,50 @@ describe('PSADT vendor argument contract', () => {
     expect(assignment).not.toContain("-replace '`'");
     expect(assignment).not.toContain("-replace '\\$'");
   });
+});
+
+describe('PSADT offline dependency contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'bundles and installs reviewed hash-pinned dependencies before the primary app',
+    () => {
+      const dependencySha256 = createHash('sha256')
+        .update('dependency-fixture')
+        .digest('hex')
+        .toUpperCase();
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Dependency Contract App',
+        [],
+        {},
+        [{
+          packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+          version: '14.51.36210.0',
+          fileName: 'Microsoft.VCRedist.2015+.x64-vc_redist.x64.exe',
+          installerSha256: dependencySha256,
+          installerType: 'exe',
+          silentArgs: '/install /quiet /norestart',
+          successCodes: [-2147023258, 0, 1638],
+          rebootCodes: [1641, 3010],
+          order: 1,
+        }]
+      );
+
+      expect(generated).toContain(
+        'Install offline WinGet dependency: Microsoft.VCRedist.2015+.x64 14.51.36210.0'
+      );
+      expect(generated).toContain(
+        "-SuccessExitCodes @(-2147023258, 0, 1638) -RebootExitCodes @(1641, 3010)"
+      );
+      expect(generated.indexOf('Install offline WinGet dependency')).toBeLessThan(
+        generated.indexOf('# Snapshot uninstall entries')
+      );
+      expect(generated).toContain('$script:DependencyRebootExitCode = 3010');
+      expect(generated).toContain(
+        'if ($script:UninstallRebootExitCode -or $script:DependencyRebootExitCode)'
+      );
+    },
+    30_000
+  );
 });
 
 describe.skipIf(!canRunWindowsPowerShellPackager)(
@@ -631,8 +691,9 @@ describe('PSADT registry uninstall identity contract', () => {
       '$script:UninstallRebootExitCode = 3010'
     );
     expect(packager).toContain(
-      'Close-ADTSession -ExitCode $script:UninstallRebootExitCode'
+      'if ($script:UninstallRebootExitCode -or $script:DependencyRebootExitCode)'
     );
+    expect(packager).toContain('Close-ADTSession -ExitCode 3010');
   });
 
   it('still fails closed when asynchronous registry removal never completes', () => {

@@ -10,6 +10,10 @@ import { enforceQaGate } from './qa/gate';
 import {
   normalizeQaWorkflowPackageInput,
 } from './qa/package-profile';
+import {
+  resolveWingetPackageDependencies,
+  type PackagedWingetDependency,
+} from './winget-dependencies';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -47,6 +51,7 @@ export interface WorkflowInputs {
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
   sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
   packageProfileSha256?: string; // Upstream QA identity; final dispatch recalculates from effective inputs
+  packageDependencies?: PackagedWingetDependency[]; // Server-resolved; caller values are never trusted
 }
 
 export interface GitHubActionsConfig {
@@ -119,9 +124,6 @@ export async function triggerPackagingWorkflow(
     inputs.architecture ?? '',
     inputs.installerUrl,
   );
-  const normalizedPackageInput =
-    inputs.sourceType === 'custom' ? null : normalizeQaWorkflowPackageInput(inputs);
-
   // This is the final dispatch boundary shared by manual, MSP, update-policy,
   // and auto-update paths. Never create a packaging run for a known-bad tuple.
   await enforceInstallerPreflight({
@@ -134,6 +136,17 @@ export async function triggerPackagingWorkflow(
     installScope: inputs.installScope,
     sourceType: inputs.sourceType,
   });
+  const packageDependencies = inputs.sourceType === 'custom'
+    ? []
+    : await resolveWingetPackageDependencies({
+        wingetId: inputs.wingetId,
+        version: inputs.version,
+        architecture: inputs.architecture,
+        installerSha256: inputs.installerSha256,
+      });
+  const normalizedPackageInput = inputs.sourceType === 'custom'
+    ? null
+    : normalizeQaWorkflowPackageInput({ ...inputs, packageDependencies });
   const calculatedPackageProfileSha256 = normalizedPackageInput?.identity.packageProfileSha256;
   const packageProfileSha256 = calculatedPackageProfileSha256;
   await enforceQaGate({
@@ -188,6 +201,7 @@ export async function triggerPackagingWorkflow(
           nestedInstallerPath: inputs.nestedInstallerPath || '',
           silentSwitches: inputs.silentSwitches,
           successCodes: JSON.stringify(inputs.installerSuccessCodes || []),
+          packageDependencies: JSON.stringify(packageDependencies),
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {

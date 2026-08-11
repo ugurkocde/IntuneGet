@@ -4,6 +4,7 @@ import { assertPackagingContract } from '@/lib/packaging-contract';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
@@ -69,6 +70,7 @@ export interface QaPackageProfileInput {
   nestedInstallerFiles: readonly string[];
   psadtConfig: PSADTConfig;
   detectionRules: DetectionRule[];
+  packageDependencies?: readonly PackagedWingetDependency[];
 }
 
 export interface QaPackageIdentity {
@@ -177,6 +179,7 @@ export interface QaWorkflowPackageInput {
   installScope?: string;
   psadtConfig?: string;
   detectionRules?: string;
+  packageDependencies?: readonly PackagedWingetDependency[];
 }
 
 export type QaPackageProfileValidation =
@@ -415,6 +418,32 @@ function validateQaPackageProfile(
   if (canonicalInstallerSha256 !== candidateInstallerSha256) {
     return { valid: false, reason: 'candidate-installer-sha-mismatch' };
   }
+  if (installer.packageDependencies !== undefined) {
+    if (!Array.isArray(installer.packageDependencies) || installer.packageDependencies.length === 0) {
+      return { valid: false, reason: 'canonical-dependencies-invalid' };
+    }
+    const dependencySha256 = sha256(installer.dependenciesSha256);
+    if (!dependencySha256) {
+      return { valid: false, reason: 'canonical-dependencies-sha-invalid' };
+    }
+    if (
+      dependencySha256 !== qaSha256(canonicalQaJson(installer.packageDependencies))
+    ) {
+      return { valid: false, reason: 'canonical-dependencies-sha-mismatch' };
+    }
+    for (const dependencyValue of installer.packageDependencies) {
+      const dependency = record(dependencyValue);
+      if (
+        !dependency ||
+        !textValue(dependency.packageIdentifier) ||
+        !textValue(dependency.version) ||
+        !sha256(dependency.sha256) ||
+        !textValue(dependency.fileName)
+      ) {
+        return { valid: false, reason: 'canonical-dependency-entry-invalid' };
+      }
+    }
+  }
 
   return {
     valid: true,
@@ -552,6 +581,30 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
     psadt: presentation,
   }));
   const detectionRulesSha256 = qaSha256(canonicalQaJson(input.detectionRules));
+  const packageDependencies = (input.packageDependencies || []).map((dependency) => ({
+    packageIdentifier: dependency.packageIdentifier,
+    ...(dependency.minimumVersion
+      ? { minimumVersion: dependency.minimumVersion }
+      : {}),
+    version: dependency.version,
+    architecture: dependency.architecture,
+    sha256: dependency.installerSha256.toUpperCase(),
+    installerType: dependency.installerType,
+    ...(dependency.nestedInstallerType
+      ? { nestedInstallerType: dependency.nestedInstallerType }
+      : {}),
+    ...(dependency.nestedInstallerPath
+      ? { nestedInstallerPath: dependency.nestedInstallerPath }
+      : {}),
+    silentArgs: dependency.silentArgs,
+    successCodes: dependency.successCodes,
+    rebootCodes: dependency.rebootCodes,
+    fileName: dependency.fileName,
+    order: dependency.order,
+  }));
+  const dependenciesSha256 = packageDependencies.length > 0
+    ? qaSha256(canonicalQaJson(packageDependencies))
+    : '';
   const profile = {
     schemaVersion: QA_PACKAGE_PROFILE_SCHEMA_VERSION,
     testLevel: 'psadt-package',
@@ -575,6 +628,9 @@ export function buildQaPackageIdentity(input: QaPackageProfileInput): QaPackageI
       installScope: input.installScope || 'machine',
       nestedInstallerType: input.nestedInstallerType.toLowerCase(),
       nestedInstallerFiles: input.nestedInstallerFiles,
+      ...(packageDependencies.length > 0
+        ? { packageDependencies, dependenciesSha256 }
+        : {}),
     },
     psadtConfig: executionPsadtConfig,
     detectionRules: input.detectionRules,
@@ -660,6 +716,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     nestedInstallerFiles: input.nestedInstallerPath ? [input.nestedInstallerPath] : [],
     psadtConfig,
     detectionRules,
+    packageDependencies: input.packageDependencies,
   });
 
   return {

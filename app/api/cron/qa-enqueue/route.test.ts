@@ -5,11 +5,13 @@ const {
   createManifestClientMock,
   detectWingetChangesMock,
   resolveManifestMock,
+  resolveDependenciesMock,
 } = vi.hoisted(() => ({
   createServerClientMock: vi.fn(),
   createManifestClientMock: vi.fn(() => ({ kind: 'manifest-client' })),
   detectWingetChangesMock: vi.fn(),
   resolveManifestMock: vi.fn(),
+  resolveDependenciesMock: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
@@ -18,6 +20,13 @@ vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
   createWingetManifestClient: createManifestClientMock,
   resolveWingetManifest: resolveManifestMock,
 }));
+vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/winget-dependencies')>();
+  return {
+    ...original,
+    resolveWingetPackageDependencies: resolveDependenciesMock,
+  };
+});
 
 import { GET } from './route';
 import { prioritizeToolchainBackfill } from '@/lib/qa/toolchain-backfill';
