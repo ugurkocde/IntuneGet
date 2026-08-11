@@ -1231,6 +1231,7 @@ ${steps}
         [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
         [string[]]$additionalUninstallArguments = @()
         $isVivaldiUninstall = $false
+        $isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq 'Creative Cloud Uninstaller.exe'
         if (-not $hasQuietUninstall) {
             $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
             if ((Split-Path -Leaf $registeredUninstallFile) -ieq 'setup.exe' -and $registeredArgumentText -match '(?i)(^|\\s)--vivaldi(\\s|$)') {
@@ -1256,6 +1257,10 @@ ${steps}
         if ($isVivaldiUninstall) {
             $registeredUninstallFile = [string]$registeredApplication.UninstallStringFilePath
             $registeredUninstallArguments = @('--uninstall', '--vivaldi', '--force-uninstall')
+        } elseif ($isAdobeCreativeCloudUninstall) {
+            # Adobe's desktop client registers an interactive uninstaller. Use its unattended
+            # desktop-client command and never forward the install-only --mode=stub value.
+            $registeredUninstallArguments = @('-u', '--silent')
         }
         $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile
         $isRegisteredMsiExec = $registeredUninstallLeaf -in @('msiexec', 'msiexec.exe')
@@ -1273,7 +1278,7 @@ ${steps}
             if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {
                 throw "The registered vendor uninstaller was not found: $registeredUninstallFile"
             }
-            if (-not $hasQuietUninstall -and -not $isVivaldiUninstall) {
+            if (-not $hasQuietUninstall -and -not $isVivaldiUninstall -and -not $isAdobeCreativeCloudUninstall) {
                 $registeredUninstallArguments += $additionalUninstallArguments
             }
         }

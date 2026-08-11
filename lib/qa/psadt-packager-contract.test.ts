@@ -331,6 +331,18 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
+  it('uses the Adobe Creative Cloud desktop client unattended removal contract', () => {
+    expect(packager).toContain(
+      "$isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq ''Creative Cloud Uninstaller.exe''"
+    );
+    expect(packager).toContain(
+      "$registeredUninstallArguments = @(''-u'', ''--silent'')"
+    );
+    expect(packager).toContain(
+      'never forward the install-only --mode=stub value'
+    );
+  });
+
   it('adds verified silent arguments when other vendors only register an interactive uninstall', () => {
     expect(packager).toContain("$registeredInstallerType -eq ''inno''");
     expect(packager).toContain("$registeredInstallerType -eq ''nullsoft''");

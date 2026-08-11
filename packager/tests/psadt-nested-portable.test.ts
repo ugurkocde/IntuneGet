@@ -376,6 +376,24 @@ describe('EXE product identity PSADT generation', () => {
     expect(inno).toContain("$safeManifestUninstallArguments = @('/VERYSILENT /NORESTART' -split '\\s+'");
   });
 
+  it('uses the Adobe Creative Cloud desktop client unattended removal contract', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'exe',
+        install_command: 'Creative_Cloud_Set-Up.exe --mode=stub',
+        uninstall_command: 'REGISTRY_UNINSTALL:Adobe Creative Cloud',
+      }),
+      'Creative_Cloud_Set-Up.exe'
+    );
+
+    expect(uninstall).toContain(
+      "$isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq 'Creative Cloud Uninstaller.exe'"
+    );
+    expect(uninstall).toContain("$registeredUninstallArguments = @('-u', '--silent')");
+    expect(uninstall).not.toContain("$registeredUninstallArguments = @('--mode=stub')");
+  });
+
   it('fails closed when an exact product marker is malformed', () => {
     const uninstall = generator.getUninstallCommand.call(
       generator,
