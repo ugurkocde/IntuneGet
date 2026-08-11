@@ -3,8 +3,8 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it.each(['Adobe.CreativeCloud', 'Elgato.StreamDeck'])(
-    'retries the terminal %s failure for the lifecycle-adapter toolchain',
+  it.each(['Google.Chrome'])(
+    'retries the terminal %s failure for the zero-day deferral toolchain',
     (wingetId) => {
       expect(shouldRetryTerminalToolchainCandidate(
         QA_PSADT_TOOLCHAIN.packagerCommit,

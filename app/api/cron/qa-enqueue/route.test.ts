@@ -459,15 +459,15 @@ describe('GET /api/cron/qa-enqueue', () => {
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
-        winget_id: 'Elgato.StreamDeck',
-        name: 'Elgato Stream Deck',
-        publisher: 'Elgato',
+        winget_id: 'Google.Chrome',
+        name: 'Google Chrome',
+        publisher: 'Google',
       }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'Elgato.StreamDeck',
-          packagerCommit: 'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028',
+          wingetId: 'Google.Chrome',
+          packagerCommit: '430f817da1120f6a14f421b7016b628a06854aba',
           status: 'failed',
         }),
       ],
@@ -488,7 +488,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Elgato.StreamDeck',
+      winget_id: 'Google.Chrome',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {
