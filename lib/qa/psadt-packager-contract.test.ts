@@ -332,6 +332,14 @@ describe('PSADT registry uninstall identity contract', () => {
   });
 
   it('uses the Adobe Creative Cloud desktop client unattended removal contract', () => {
+    const registeredPathAssignment = packager.indexOf(
+      '$registeredUninstallFile = [string]$registeredApplication.'
+    );
+    const adobeSignatureCheck = packager.indexOf(
+      "$isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq ''Creative Cloud Uninstaller.exe''"
+    );
+    expect(registeredPathAssignment).toBeGreaterThan(-1);
+    expect(adobeSignatureCheck).toBeGreaterThan(registeredPathAssignment);
     expect(packager).toContain(
       "$isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq ''Creative Cloud Uninstaller.exe''"
     );
