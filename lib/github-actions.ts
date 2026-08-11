@@ -4,6 +4,8 @@
  * Uses repository_dispatch to a private workflows repository
  */
 
+import { createHmac } from 'node:crypto';
+
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { enforceInstallerPreflight } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
@@ -147,6 +149,18 @@ export async function triggerPackagingWorkflow(
   const normalizedPackageInput = inputs.sourceType === 'custom'
     ? null
     : normalizeQaWorkflowPackageInput({ ...inputs, packageDependencies });
+  const packageDependenciesJson = JSON.stringify(packageDependencies);
+  const dependencyBundleSignature = packageDependencies.length > 0
+    ? (() => {
+        const callbackSecret = process.env.CALLBACK_SECRET;
+        if (!callbackSecret) {
+          throw new Error('CALLBACK_SECRET is required to sign package dependencies.');
+        }
+        return createHmac('sha256', callbackSecret)
+          .update(packageDependenciesJson, 'utf8')
+          .digest('hex');
+      })()
+    : '';
   const calculatedPackageProfileSha256 = normalizedPackageInput?.identity.packageProfileSha256;
   const packageProfileSha256 = calculatedPackageProfileSha256;
   await enforceQaGate({
@@ -201,7 +215,8 @@ export async function triggerPackagingWorkflow(
           nestedInstallerPath: inputs.nestedInstallerPath || '',
           silentSwitches: inputs.silentSwitches,
           successCodes: JSON.stringify(inputs.installerSuccessCodes || []),
-          packageDependencies: JSON.stringify(packageDependencies),
+          packageDependencies: packageDependenciesJson,
+          dependencyBundleSignature,
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {

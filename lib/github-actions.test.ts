@@ -124,6 +124,7 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       depth: 1,
     };
     resolveDependenciesMock.mockResolvedValueOnce([dependency]);
+    vi.stubEnv('CALLBACK_SECRET', 'dependency-signing-secret');
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -141,6 +142,9 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(JSON.parse(payload.client_payload.installer.packageDependencies)).toEqual([
       dependency,
     ]);
+    expect(payload.client_payload.installer.dependencyBundleSignature).toMatch(
+      /^[a-f0-9]{64}$/
+    );
     expect(resolveDependenciesMock).toHaveBeenCalledWith(expect.objectContaining({
       wingetId: 'Oracle.VirtualBox',
       installerSha256: 'A'.repeat(64),
