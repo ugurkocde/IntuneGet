@@ -7,7 +7,7 @@ import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'ef75edee9fcabaf904bcf80e02ead9aa58490dc9',
+  packagerCommit: 'fc18fffd40f6d362be251e05e2bc784373dfc735',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -33,6 +33,7 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   '42bf6e2af604a5e6bb44f2feff38e941ab2222c1',
   '430f817da1120f6a14f421b7016b628a06854aba',
   '66448ea49841c2c9f3ebf56e455ce8797e2b2abb',
+  'ef75edee9fcabaf904bcf80e02ead9aa58490dc9',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -10,6 +10,9 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'fc18fffd40f6d362be251e05e2bc784373dfc735': [
+    'OCSInventoryNG.WindowsAgent',
+  ],
   'ef75edee9fcabaf904bcf80e02ead9aa58490dc9': [
     'Google.Chrome',
     'Yealink.YealinkUSBConnect',

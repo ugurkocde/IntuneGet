@@ -3,8 +3,8 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it.each(['Google.Chrome', 'Yealink.YealinkUSBConnect'])(
-    'retries the terminal %s failure for the current cumulative toolchain fixes',
+  it.each(['OCSInventoryNG.WindowsAgent'])(
+    'retries the terminal %s failure changed by the current toolchain release',
     (wingetId) => {
       expect(shouldRetryTerminalToolchainCandidate(
         QA_PSADT_TOOLCHAIN.packagerCommit,
