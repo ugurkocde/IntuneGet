@@ -452,7 +452,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
   });
 
-  it('records a changed supported app failure without advancing the cursor', async () => {
+  it('records a changed supported app failure and advances the completed comparison cursor', async () => {
     detectWingetChangesMock.mockResolvedValue({
       baseSha: 'a'.repeat(40),
       headSha: 'b'.repeat(40),
@@ -477,7 +477,12 @@ describe('GET /api/cron/qa-enqueue', () => {
       errorCount: 1,
       errors: ['Example.App: GitHub returned HTTP 503'],
     });
-    expect(cursorUpdates).toHaveLength(0);
+    expect(cursorUpdates).toEqual([
+      expect.objectContaining({
+        head_sha: 'b'.repeat(40),
+        github_rate_limited_until: null,
+      }),
+    ]);
     expect(pollRunUpdates[0]).toMatchObject({ status: 'partial', error_count: 1 });
   });
 

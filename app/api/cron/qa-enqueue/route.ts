@@ -746,7 +746,13 @@ export async function GET(request: Request) {
       );
     }
 
-    if (summary.errorCount === 0) {
+    // The change-feed cursor represents a successful GitHub comparison, not
+    // the outcome of every package inspected from that comparison. Advancing
+    // it must not be blocked by an isolated manifest, policy, or packaging
+    // error; demanded apps that still lack QA are retried by the bounded
+    // reconciliation query on subsequent polls. A GitHub rate-limit deferral
+    // is different: no new comparison was performed, so preserve the cursor.
+    if (!changes.rateLimitedUntil) {
       const { error: cursorError } = await supabase
         .from('qa_winget_poll_state')
         .update({
