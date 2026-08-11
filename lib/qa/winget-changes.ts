@@ -26,6 +26,7 @@ export interface WingetChangeSet {
   initialized: boolean;
   etag: string | null;
   rateLimitedUntil: string | null;
+  comparisonTruncated?: boolean;
 }
 
 export interface DetectWingetChangesOptions {
@@ -127,7 +128,11 @@ async function compare(
   baseSha: string,
   headSha: string,
   token?: string
-): Promise<{ changedFiles: number; changedPackageIds: string[] }> {
+): Promise<{
+  changedFiles: number;
+  changedPackageIds: string[];
+  comparisonTruncated?: boolean;
+}> {
   if (baseSha === headSha) return { changedFiles: 0, changedPackageIds: [] };
   const response = await githubJson<GitHubComparison>(
     fetchImpl,
@@ -140,7 +145,16 @@ async function compare(
   }
   const files = result.files || [];
   if ((result.total_commits || 0) >= 250 || files.length >= 300) {
-    throw new Error('WinGet change window exceeded GitHub compare limits; cursor was not advanced');
+    // GitHub caps compare results at 250 commits / 300 files. Keeping the old
+    // cursor here creates a permanent failure loop as the repository moves
+    // farther ahead. Process the bounded file sample and re-anchor; the QA
+    // poller's demanded-app reconciliation independently queues every customer-
+    // deployed app whose current catalog version has no QA candidate.
+    return {
+      changedFiles: files.length,
+      changedPackageIds: changedPackageIds(files),
+      comparisonTruncated: true,
+    };
   }
   return { changedFiles: files.length, changedPackageIds: changedPackageIds(files) };
 }

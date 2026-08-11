@@ -76,7 +76,7 @@ describe('detectWingetChanges', () => {
     expect(changes.changedPackageIds).toEqual(['Mozilla.Firefox']);
   });
 
-  it('refuses to advance a truncated comparison', async () => {
+  it('re-anchors a truncated comparison and returns the bounded package sample', async () => {
     const files = Array.from({ length: 300 }, (_, index) => ({
       status: 'modified',
       filename: `manifests/e/Example/App/${index}/Example.App.yaml`,
@@ -88,9 +88,13 @@ describe('detectWingetChanges', () => {
         new Response(JSON.stringify({ status: 'ahead', total_commits: 10, files }), { status: 200 })
       );
 
-    await expect(detectWingetChanges({ baseSha: BASE, fetchImpl })).rejects.toThrow(
-      'compare limits'
-    );
+    await expect(detectWingetChanges({ baseSha: BASE, fetchImpl })).resolves.toMatchObject({
+      baseSha: BASE,
+      headSha: HEAD,
+      changedFiles: 300,
+      changedPackageIds: ['Example.App'],
+      comparisonTruncated: true,
+    });
   });
 
   it('persists the authenticated reset time without falling back to a shared public IP quota', async () => {

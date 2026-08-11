@@ -369,6 +369,16 @@ export async function GET(request: Request) {
     baseSha = changes.baseSha;
     headSha = changes.headSha;
     changedPackageCount = changes.changedPackageIds.length;
+    if (changes.comparisonTruncated) {
+      structuredQaPollLog('info', 'qa_winget_compare_reanchored', {
+        runId,
+        requestId,
+        baseSha,
+        headSha,
+        sampledChangedPackageCount: changedPackageCount,
+        recovery: 'demanded_app_reconciliation',
+      });
+    }
     if (changes.rateLimitedUntil) {
       const { error: rateLimitStateError } = await supabase
         .from('qa_winget_poll_state')
