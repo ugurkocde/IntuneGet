@@ -18,7 +18,7 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('keeps the carried xTool retry scoped to its historical releases', () => {
+  it('carries the queued xTool retry across the current pin', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'b3b2729bab6959a554c0e6d41af0a841d6177386',
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
@@ -30,10 +30,10 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
-    )).toBe(false);
+    )).toBe(true);
   });
 
-  it('keeps the LTspice retry scoped to its enterprise-mode release', () => {
+  it('carries the queued LTspice retry across the current pin', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e',
       { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
@@ -41,6 +41,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Opera once on the reviewed silent-uninstall release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9ff409ddabd3b1b4f8c65ad03b1f9e37778589fc',
+      { wingetId: 'Opera.Opera', status: 'failed' }
     )).toBe(false);
   });
 
@@ -105,7 +116,7 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('keeps the Greenshot retry scoped to its historical toolchain release', () => {
+  it('carries the queued Greenshot retry across the current pin', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99',
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }
@@ -113,7 +124,14 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }
-    )).toBe(false);
+    )).toBe(true);
+  });
+
+  it.each(['Autodesk.DesktopApp'])('carries the queued %s retry across the current pin', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
   });
 
   it('keeps the OCS retry scoped to its historical toolchain release', () => {

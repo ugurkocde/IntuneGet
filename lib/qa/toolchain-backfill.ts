@@ -10,6 +10,21 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '7d389dbd6e55b719e3d71772717cda0c8f724469': [
+    // Opera's registered uninstaller is interactive unless /silent is added.
+    // This release applies that reviewed lifecycle adapter to QA and customer
+    // packages, so the exact failing version receives one bounded replay.
+    'Opera.Opera',
+    // These bounded retries were queued on the preceding release when this
+    // pin superseded it. Carry them once so a toolchain rollout cannot discard
+    // already-selected customer coverage work.
+    'AnalogDevices.LTspice',
+    'Autodesk.DesktopApp',
+    'Granola.Granola',
+    'Greenshot.Greenshot',
+    'Makeblock.xToolStudio',
+    'Microsoft.EdgeWebView2Runtime',
+  ],
   '9ff409ddabd3b1b4f8c65ad03b1f9e37778589fc': [
     // One bounded replay is required after the QA runner learned to collect
     // PSADT logs from the active interactive-user profile. Granola's newer
