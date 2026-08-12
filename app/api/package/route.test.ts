@@ -573,7 +573,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
-  it('applies the reviewed Opera silent-uninstall contract to QA and customer packaging', async () => {
+  it('applies the reviewed Opera immediate-uninstall contract to QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',
       headers: {
@@ -594,7 +594,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     const expectedAdapter = {
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-      reviewedUninstallArguments: ['/silent'],
+      reviewedUninstallArguments: ['--runimmediately'],
     };
     expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
       expectedAdapter

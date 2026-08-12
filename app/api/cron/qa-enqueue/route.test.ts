@@ -504,7 +504,7 @@ describe('GET /api/cron/qa-enqueue', () => {
         profileKind: 'catalog-default',
         psadtConfig: {
           processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-          reviewedUninstallArguments: ['/silent'],
+          reviewedUninstallArguments: ['--runimmediately'],
         },
       },
     });
