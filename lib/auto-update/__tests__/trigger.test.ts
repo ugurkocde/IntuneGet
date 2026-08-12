@@ -183,6 +183,58 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     });
   });
 
+  it('selects the stored deployment scope when a release has user and machine variants', async () => {
+    getAppForInstallerMock.mockResolvedValue({
+      latest_version: '134.0.5954.46',
+      name: 'Opera Browser',
+    });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/opera.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installers: [
+        {
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/opera.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'exe',
+          Scope: 'user',
+          InstallerSwitches: { Silent: '/silent /allusers=0' },
+        },
+        {
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/opera.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'exe',
+          Scope: 'machine',
+          InstallerSwitches: { Silent: '/silent /allusers=1' },
+        },
+      ],
+    });
+
+    const machine = await getLatestInstallerInfo(
+      {} as never,
+      'Opera.Opera',
+      'x64',
+      'machine'
+    );
+    const user = await getLatestInstallerInfo(
+      {} as never,
+      'Opera.Opera',
+      'x64',
+      'user'
+    );
+
+    expect(machine).toMatchObject({
+      installScope: 'machine',
+      silentSwitches: '/silent /allusers=1',
+    });
+    expect(user).toMatchObject({
+      installScope: 'user',
+      silentSwitches: '/silent /allusers=0',
+    });
+  });
+
   it('records a current QA failure as a safety skip before creating history or a job', async () => {
     const failedPackageResult = {
       winget_id: 'Test.App',

@@ -212,7 +212,7 @@ export class AutoUpdateTrigger {
       const storedDeploymentConfig = policy.deployment_config as DeploymentConfig;
       const effectiveInstallScope = resolveApplicationInstallScope(
         updateInfo.wingetId,
-        updateInfo.installScope || storedDeploymentConfig.installScope
+        storedDeploymentConfig.installScope || updateInfo.installScope
       );
       updateInfo = { ...updateInfo, installScope: effectiveInstallScope };
       const deploymentConfig: DeploymentConfig = {
@@ -842,7 +842,8 @@ export async function getLatestInstallerInfo(
   // Kept for call-site compatibility; the catalog source owns client creation.
   _supabase: SupabaseClient,
   wingetId: string,
-  architecture?: string
+  architecture?: string,
+  installScope?: string
 ): Promise<UpdateInfo | null> {
   const catalog = getCatalogSource();
 
@@ -873,7 +874,14 @@ export async function getLatestInstallerInfo(
 
   // The installers JSONB uses PascalCase from WinGet manifests.
   if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    const selectedInstaller = selectWingetInstaller(versionInfo.installers, architecture);
+    const requestedScope = installScope === undefined
+      ? undefined
+      : resolveApplicationInstallScope(wingetId, installScope);
+    const selectedInstaller = selectWingetInstaller(
+      versionInfo.installers,
+      architecture,
+      requestedScope
+    );
     if (!selectedInstaller) return null;
     installerUrl = selectedInstaller.InstallerUrl || installerUrl;
     installerSha256 = selectedInstaller.InstallerSha256 || installerSha256;

@@ -58,6 +58,25 @@ describe('QA candidate normalization', () => {
     expect(selectQaVmInstaller([userInstaller])?.installer).toBe(userInstaller);
   });
 
+  it('honors an explicit deployment scope and never substitutes the opposite scope', () => {
+    const scopedInstallers = [
+      {
+        Architecture: 'x64',
+        Scope: 'user',
+        InstallerUrl: 'https://example.test/current-user.exe',
+      },
+      {
+        Architecture: 'x64',
+        Scope: 'machine',
+        InstallerUrl: 'https://example.test/all-users.exe',
+      },
+    ];
+
+    expect(selectWingetInstaller(scopedInstallers, 'x64', 'user')?.InstallerUrl)
+      .toContain('current-user');
+    expect(selectWingetInstaller([scopedInstallers[0]], 'x64', 'machine')).toBeNull();
+  });
+
   it('accepts and uppercases only complete SHA-256 values', () => {
     expect(normalizeInstallerSha256('a'.repeat(64))).toBe('A'.repeat(64));
     expect(normalizeInstallerSha256('abc')).toBe('');

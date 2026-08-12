@@ -43,6 +43,8 @@ import {
 } from '@/lib/packaging-adapters';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import type { NormalizedInstaller } from '@/types/winget';
 
 export const maxDuration = 300;
 
@@ -227,21 +229,71 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Re-resolve catalog metadata from the live trusted manifest after the
+    // requested scope has been finalized. This prevents a stale cart command
+    // from combining a machine deployment with a per-user installer (or the
+    // reverse). Explicit PSADT command overrides remain authoritative.
+    const trustedInstallersByItem = new Map<Win32CartItem, NormalizedInstaller[]>();
+    for (let i = 0; i < win32Items.length; i += 2) {
+      const batch = win32Items.slice(i, i + 2);
+      const reconciliationResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          if (
+            item.sourceType === 'custom' ||
+            typeof item.wingetId !== 'string' ||
+            !item.wingetId.trim()
+          ) return null;
+          const reconciled = await reconcileCatalogInstaller(item);
+          Object.assign(item, reconciled.item);
+          trustedInstallersByItem.set(item, reconciled.trustedInstallers);
+          return reconciled;
+        })
+      );
+
+      const failedIndex = reconciliationResults.findIndex(
+        (result) => result.status === 'rejected'
+      );
+      if (failedIndex !== -1) {
+        const failed = reconciliationResults[failedIndex] as PromiseRejectedResult;
+        const failedItem = batch[failedIndex];
+        const error = failed.reason;
+        if (error instanceof InstallerPreflightError) {
+          return NextResponse.json({
+            error: 'Installer validation blocked this deployment',
+            message: error.message,
+            code: error.code,
+            retryable: error.retryable,
+            package: {
+              wingetId: failedItem.wingetId,
+              displayName: failedItem.displayName || failedItem.wingetId,
+              version: failedItem.version,
+            },
+            expectedSha256: failedItem.installerSha256?.toUpperCase(),
+            actualSha256: error.actualSha256,
+          }, { status: error.retryable ? 503 : 409 });
+        }
+        throw error;
+      }
+    }
+
     // Enforce installer health before creating job rows. Work in pairs to
     // bound outbound bandwidth for a ten-app cart while keeping normal
     // batches responsive.
     for (let i = 0; i < win32Items.length; i += 2) {
       const preflightResults = await Promise.allSettled(
-        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight({
-          wingetId: item.wingetId,
-          version: item.version,
-          architecture: item.architecture,
-          installerUrl: item.installerUrl,
-          installerSha256: item.installerSha256,
-          installerType: item.installerType,
-          installScope: item.installScope,
-          sourceType: item.sourceType,
-        })),
+        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight(
+          {
+            wingetId: item.wingetId,
+            version: item.version,
+            architecture: item.architecture,
+            installerUrl: item.installerUrl,
+            installerSha256: item.installerSha256,
+            installerType: item.installerType,
+            installScope: item.installScope,
+            sourceType: item.sourceType,
+          },
+          trustedInstallersByItem.get(item),
+        )),
       );
 
       const failedIndex = preflightResults.findIndex((result) => result.status === 'rejected');

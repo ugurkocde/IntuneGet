@@ -18,6 +18,7 @@ vi.mock('@/lib/installer-download', async (importOriginal) => {
 });
 
 import {
+  createInstallerHealthKey,
   enforceInstallerPreflight,
   InstallerPreflightError,
   resetInstallerPreflightStateForTests,
@@ -43,6 +44,7 @@ describe('installer dispatch preflight', () => {
     resetInstallerPreflightStateForTests();
     getLiveInstallersMock.mockResolvedValue([{
       architecture: 'x64',
+      url: request.installerUrl,
       sha256: expectedSha256,
       type: 'exe',
       scope: 'machine',
@@ -80,6 +82,26 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
   });
 
+  it('reuses an already-fetched trusted manifest during preflight', async () => {
+    await expect(enforceInstallerPreflight(request, [{
+      architecture: 'x64',
+      url: request.installerUrl,
+      sha256: expectedSha256,
+      type: 'exe',
+      scope: 'machine',
+    }])).resolves.toMatchObject({ status: 'healthy', source: 'live' });
+
+    expect(getLiveInstallersMock).not.toHaveBeenCalled();
+    expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps user and machine health identities separate', () => {
+    expect(createInstallerHealthKey(request)).not.toBe(createInstallerHealthKey({
+      ...request,
+      installScope: 'user',
+    }));
+  });
+
   it('quarantines a hash mismatch and blocks later dispatch without another download', async () => {
     hashRemoteInstallerMock.mockResolvedValueOnce({
       sha256: actualSha256,
@@ -105,6 +127,7 @@ describe('installer dispatch preflight', () => {
   it('quarantines a stale tuple when the trusted manifest has changed', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
+      url: request.installerUrl,
       sha256: actualSha256,
       type: 'exe',
       scope: 'machine',

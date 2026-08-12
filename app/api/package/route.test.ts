@@ -16,6 +16,7 @@ const {
   getAppConfigMock,
   getFeatureFlagsMock,
   enforceInstallerPreflightMock,
+  getLiveInstallersMock,
   ensureQaDemandMock,
 } = vi.hoisted(() => ({
   getDatabaseMock: vi.fn(),
@@ -31,7 +32,12 @@ const {
   getAppConfigMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
   enforceInstallerPreflightMock: vi.fn(),
+  getLiveInstallersMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
+}));
+
+vi.mock('@/lib/manifest-api', () => ({
+  getLiveInstallers: getLiveInstallersMock,
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -291,6 +297,46 @@ describe('POST /api/package (workflow dispatch)', () => {
       status: 'healthy',
       source: 'cache',
     });
+    getLiveInstallersMock.mockImplementation(async (wingetId: string) => {
+      if (wingetId === 'VNGCorp.Zalo') {
+        return [{
+          architecture: 'x86',
+          url: 'https://example.com/setup.exe',
+          sha256: 'A'.repeat(64),
+          type: 'exe',
+          scope: 'user',
+          silentArgs: '/S',
+        }];
+      }
+      if (wingetId === 'Opera.Opera') {
+        return [
+          {
+            architecture: 'x64',
+            url: 'https://example.com/opera.exe',
+            sha256: 'A'.repeat(64),
+            type: 'exe',
+            scope: 'user',
+            silentArgs: '/silent /allusers=0',
+          },
+          {
+            architecture: 'x64',
+            url: 'https://example.com/opera.exe',
+            sha256: 'A'.repeat(64),
+            type: 'exe',
+            scope: 'machine',
+            silentArgs: '/silent /allusers=1',
+          },
+        ];
+      }
+      return [{
+        architecture: 'x64',
+        url: 'https://example.com/setup.exe',
+        sha256: 'A'.repeat(64),
+        type: 'exe',
+        scope: 'machine',
+        silentArgs: '/S',
+      }];
+    });
     ensureQaDemandMock.mockResolvedValue({
       state: 'passed',
       candidateId: null,
@@ -367,7 +413,8 @@ describe('POST /api/package (workflow dispatch)', () => {
 
     expect(response.status).toBe(200);
     expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
-      expect.objectContaining({ installScope: 'user' })
+      expect.objectContaining({ installScope: 'user' }),
+      expect.any(Array)
     );
     expect(ensureQaDemandMock).toHaveBeenCalledWith(
       undefined,
@@ -378,6 +425,48 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({ installScope: 'user' }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
+  it('rebuilds machine-scope commands before both QA and customer packaging', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Opera.Opera',
+          displayName: 'Opera Browser',
+          installerUrl: 'https://example.com/opera.exe',
+          installScope: 'machine',
+          installCommand: '"opera.exe" /silent /allusers=0',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        installScope: 'machine',
+        silentSwitches: '/silent /allusers=1',
+      })
+    );
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      install_scope: 'machine',
+      install_command: '"opera.exe" /silent /allusers=1',
+    }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        installScope: 'machine',
+        silentSwitches: '/silent /allusers=1',
+      }),
       undefined,
       expect.any(Object)
     );

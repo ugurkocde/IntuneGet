@@ -752,6 +752,7 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
 
   return {
     architecture: installer.Architecture,
+    installerLocale: installer.InstallerLocale,
     url: installer.InstallerUrl,
     sha256: installer.InstallerSha256,
     type: installer.InstallerType,
@@ -813,7 +814,8 @@ export async function getLiveInstallers(
 export async function getBestInstaller(
   wingetId: string,
   version?: string,
-  preferredArch: 'x64' | 'x86' | 'arm64' = 'x64'
+  preferredArch: 'x64' | 'x86' | 'arm64' = 'x64',
+  preferredScope?: 'machine' | 'user'
 ): Promise<NormalizedInstaller | null> {
   const installers = await getInstallers(wingetId, version);
 
@@ -830,13 +832,26 @@ export async function getBestInstaller(
   const priority = archPriority[preferredArch] || archPriority.x64;
 
   for (const arch of priority) {
-    const installer = installers.find((i) => i.architecture === arch);
+    const architectureInstallers = installers.filter((i) => i.architecture === arch);
+    const installer = preferredScope
+      ? architectureInstallers.find((i) => i.scope === preferredScope) ||
+        architectureInstallers.find((i) => !i.scope)
+      : architectureInstallers.find((i) => i.scope === 'machine') ||
+        architectureInstallers.find((i) => !i.scope) ||
+        architectureInstallers.find((i) => i.scope === 'user');
     if (installer) {
       return installer;
     }
   }
 
-  return installers[0];
+  return preferredScope
+    ? installers.find((i) => i.scope === preferredScope) ||
+      installers.find((i) => !i.scope) ||
+      null
+    : installers.find((i) => i.scope === 'machine') ||
+      installers.find((i) => !i.scope) ||
+      installers.find((i) => i.scope === 'user') ||
+      installers[0];
 }
 
 /**

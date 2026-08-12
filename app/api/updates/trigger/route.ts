@@ -272,10 +272,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Get installer info
+        const deploymentConfig = policy.deployment_config as unknown as DeploymentConfig | null;
         const installerInfo = await getLatestInstallerInfo(
           supabase,
           req.winget_id,
-          (policy.deployment_config as unknown as DeploymentConfig | null)?.architecture
+          deploymentConfig?.architecture,
+          deploymentConfig?.installScope
         );
 
         if (!installerInfo) {

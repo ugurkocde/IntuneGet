@@ -55,9 +55,11 @@ export async function GET(request: NextRequest) {
     const installers = await getInstallers(packageId, version || manifest.Version);
 
     // Get best installer for requested architecture
-    const bestInstaller = architecture
-      ? await getBestInstaller(packageId, version || manifest.Version, architecture)
-      : installers[0] || null;
+    const bestInstaller = await getBestInstaller(
+      packageId,
+      version || manifest.Version,
+      architecture || 'x64'
+    );
 
     // List of all available versions (Supabase-backed) so the catalog can offer
     // a version selector. Best-effort: an empty list just hides the selector.

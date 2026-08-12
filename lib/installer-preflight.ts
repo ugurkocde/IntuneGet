@@ -6,6 +6,7 @@ import {
   hashesEqual,
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
+import type { NormalizedInstaller } from '@/types/winget';
 
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
@@ -99,6 +100,8 @@ export function createInstallerHealthKey(input: InstallerPreflightRequest): stri
       input.wingetId.trim().toLowerCase(),
       input.version.trim(),
       (input.architecture || 'x64').trim().toLowerCase(),
+      (input.installerType || '').trim().toLowerCase(),
+      (input.installScope || '').trim().toLowerCase(),
       input.installerUrl.trim(),
       input.installerSha256.trim().toUpperCase(),
     ].join('\0'))
@@ -219,15 +222,24 @@ function buildHealthRow(
   };
 }
 
-function installerExistsInManifest(input: InstallerPreflightRequest, installers: Awaited<ReturnType<typeof getLiveInstallers>>): boolean {
+function installerExistsInManifest(
+  input: InstallerPreflightRequest,
+  installers: NormalizedInstaller[],
+): boolean {
   const expectedHash = input.installerSha256.toUpperCase();
   const requestedArchitecture = (input.architecture || 'x64').toLowerCase();
   const requestedType = input.installerType?.toLowerCase();
   const requestedScope = input.installScope?.toLowerCase();
+  const requestedUrl = input.installerUrl.trim();
 
   return installers.some((installer) => {
     if (!hashesEqual(installer.sha256 || '', expectedHash)) return false;
-    if (installer.architecture && installer.architecture.toLowerCase() !== requestedArchitecture) return false;
+    if (installer.url?.trim() !== requestedUrl) return false;
+    if (
+      installer.architecture &&
+      installer.architecture.toLowerCase() !== requestedArchitecture &&
+      installer.architecture.toLowerCase() !== 'neutral'
+    ) return false;
     if (requestedType && installer.type && installer.type.toLowerCase() !== requestedType) return false;
     if (requestedScope && installer.scope && installer.scope.toLowerCase() !== requestedScope) return false;
     return true;
@@ -266,9 +278,11 @@ async function waitForSharedResult(cacheKey: string): Promise<InstallerPreflight
 async function performLivePreflight(
   cacheKey: string,
   input: InstallerPreflightRequest,
+  trustedInstallers?: NormalizedInstaller[],
 ): Promise<InstallerPreflightResult> {
   try {
-    const installers = await getLiveInstallers(input.wingetId, input.version);
+    const installers = trustedInstallers ||
+      await getLiveInstallers(input.wingetId, input.version);
     if (installers.length === 0) {
       throw new InstallerPreflightError(
         'MANIFEST_UNAVAILABLE',
@@ -340,7 +354,10 @@ async function performLivePreflight(
   }
 }
 
-async function enforceInternal(input: InstallerPreflightRequest): Promise<InstallerPreflightResult> {
+async function enforceInternal(
+  input: InstallerPreflightRequest,
+  trustedInstallers?: NormalizedInstaller[],
+): Promise<InstallerPreflightResult> {
   assertTrustedInput(input);
   const cacheKey = createInstallerHealthKey(input);
   const cached = await readHealth(cacheKey);
@@ -357,11 +374,12 @@ async function enforceInternal(input: InstallerPreflightRequest): Promise<Instal
 
   const claimed = await claimHealth(cacheKey, input);
   if (!claimed) return waitForSharedResult(cacheKey);
-  return performLivePreflight(cacheKey, input);
+  return performLivePreflight(cacheKey, input, trustedInstallers);
 }
 
 export async function enforceInstallerPreflight(
   input: InstallerPreflightRequest,
+  trustedInstallers?: NormalizedInstaller[],
 ): Promise<InstallerPreflightResult> {
   if (input.sourceType === 'custom' || input.wingetId.startsWith('Custom.')) {
     return { cacheKey: '', status: 'skipped', source: 'custom' };
@@ -378,7 +396,8 @@ export async function enforceInstallerPreflight(
   const existing = inFlight.get(cacheKey);
   if (existing) return existing;
 
-  const promise = enforceInternal(input).finally(() => inFlight.delete(cacheKey));
+  const promise = enforceInternal(input, trustedInstallers)
+    .finally(() => inFlight.delete(cacheKey));
   inFlight.set(cacheKey, promise);
   return promise;
 }

@@ -165,6 +165,7 @@ export interface NormalizedPackage {
 // Normalized installer for internal use
 export interface NormalizedInstaller {
   architecture: WingetArchitecture;
+  installerLocale?: string;
   url: string;
   sha256: string;
   type: WingetInstallerType;
