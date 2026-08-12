@@ -4,9 +4,11 @@ import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
   it.each([
+    'HandBrake.HandBrake',
     'Microsoft.VisualStudio.2019.Enterprise',
     'Microsoft.VisualStudio.Enterprise',
     'Microsoft.VisualStudio.Professional',
+    'Microsoft.WindowsApp',
     'PostgreSQL.PostgreSQL.18',
     'RARLab.WinRAR',
     'SoftwareOK.Q-Dir',

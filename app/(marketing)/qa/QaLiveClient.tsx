@@ -44,7 +44,9 @@ function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): strin
   if (issue === 'partial_failure') return 'Some package checks failed';
   if (issue === 'stalled') return 'Poll did not finish';
   if (issue === 'upstream_error') return 'Upstream polling error';
-  if (issue === 'maintenance') return 'Testing is temporarily paused for maintenance';
+  // Maintenance is an operator concern. Do not expose internal coordination
+  // details or implementation terminology on the public QA page.
+  if (issue === 'maintenance') return null;
   return null;
 }
 
@@ -96,7 +98,8 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
   const runnerAge = formatRelativeTime(data.runner.heartbeatAt, data.serverTime);
   const pollAge = formatRelativeTime(data.scheduler.lastPollAt, data.serverTime);
   const schedulerIssue = schedulerIssueLabel(data.scheduler.issue);
-  const hasIncident = data.runner.state === 'stalled' || data.scheduler.state === 'degraded' || data.scheduler.state === 'paused';
+  const publicSchedulerState = data.scheduler.state === 'paused' ? 'healthy' : data.scheduler.state;
+  const hasIncident = data.runner.state === 'stalled' || publicSchedulerState === 'degraded';
   const passCount = data.recent.filter((item) => item.outcome === 'Passed').length;
 
   return (
@@ -106,7 +109,7 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
         'overflow-hidden rounded-2xl border bg-bg-elevated',
         data.runner.state === 'stalled'
           ? 'border-status-error/30 bg-status-error/[0.04]'
-          : data.scheduler.state === 'degraded' || data.scheduler.state === 'paused'
+          : publicSchedulerState === 'degraded'
             ? 'border-status-warning/30 bg-status-warning/[0.04]'
             : 'border-overlay/10'
       )}
@@ -132,8 +135,8 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-wide text-text-muted"><T>WinGet polling</T></p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <StatusBadge tone={healthTone(data.scheduler.state)}>
-                <T>{data.scheduler.state === 'healthy' ? 'Healthy' : data.scheduler.state === 'paused' ? 'Paused' : data.scheduler.state === 'degraded' ? 'Degraded' : 'Waiting for first scan'}</T>
+              <StatusBadge tone={healthTone(publicSchedulerState)}>
+                <T>{publicSchedulerState === 'healthy' ? 'Healthy' : publicSchedulerState === 'degraded' ? 'Degraded' : 'Waiting for first scan'}</T>
               </StatusBadge>
               <span className="text-xs text-text-muted">
                 {pollAge ? <T>Last scan <Var>{pollAge}</Var></T> : <T>No scan recorded yet</T>}
@@ -169,9 +172,6 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
         <div className="border-t border-status-warning/20 px-4 py-2 text-xs text-status-warning" role="status">
           <AlertTriangle className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />
           <T>{schedulerIssue}</T>
-          {data.scheduler.issue === 'maintenance' && data.scheduler.maintenanceReason
-            ? <> · <T>{data.scheduler.maintenanceReason}</T></>
-            : null}
           {data.scheduler.consecutiveFailures > 1
             ? data.scheduler.issue === 'github_rate_limit'
               ? <> · <T><Var>{data.scheduler.consecutiveFailures}</Var> affected scans</T></>
