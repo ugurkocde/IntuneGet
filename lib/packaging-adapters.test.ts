@@ -190,6 +190,17 @@ describe('application packaging adapters', () => {
     ]);
   });
 
+  it('closes Qfinder Pro before its NSIS removal lifecycle', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'QNAP.QfinderPro',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'QfinderPro', description: 'QNAP Qfinder Pro' },
+    ]);
+  });
+
   it('closes the vendor-documented OCS Inventory processes before package lifecycle actions', () => {
     const adapted = applyApplicationPackagingAdapter(
       'OCSInventoryNG.WindowsAgent',

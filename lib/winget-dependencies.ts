@@ -24,6 +24,24 @@ const DOTNET_DESKTOP_RUNTIME_PACKAGE_PATTERN =
   /^Microsoft\.DotNet\.DesktopRuntime\.\d+$/i;
 const VCLIBS_DESKTOP_PACKAGE_PATTERN = /^Microsoft\.VCLibs\.Desktop\.14$/i;
 
+interface PackageDependencyReference {
+  packageIdentifier: string;
+  minimumVersion?: string;
+}
+
+// Some vendors omit redistributable prerequisites from their WinGet
+// manifests even though the installed executable imports them. Keep these
+// corrections explicit and reviewed so QA and customer packages use the same
+// offline dependency bundle. Qfinder Pro fails to start on a clean Windows VM
+// without MSVCP140_1.dll; its current vendor manifest declares no dependency.
+const REVIEWED_ROOT_DEPENDENCY_OVERRIDES: Readonly<
+  Record<string, readonly PackageDependencyReference[]>
+> = {
+  'qnap.qfinderpro': [
+    { packageIdentifier: 'Microsoft.VCRedist.2015+.x86' },
+  ],
+};
+
 interface ReviewedDependencyPolicy {
   packagePattern: RegExp;
   installerTypes: ReadonlySet<WingetInstallerType>;
@@ -187,6 +205,32 @@ function highestMinimum(left?: string, right?: string): string | undefined {
   return compareVersions(left, right) >= 0 ? left : right;
 }
 
+function rootPackageDependencies(
+  wingetId: string,
+  declared: readonly PackageDependencyReference[] | undefined
+): PackageDependencyReference[] {
+  const merged = new Map<string, PackageDependencyReference>();
+  for (const dependency of [
+    ...(declared || []),
+    ...(REVIEWED_ROOT_DEPENDENCY_OVERRIDES[wingetId.toLowerCase()] || []),
+  ]) {
+    const key = dependency.packageIdentifier.toLowerCase();
+    const existing = merged.get(key);
+    merged.set(key, {
+      packageIdentifier: existing?.packageIdentifier || dependency.packageIdentifier,
+      ...(highestMinimum(existing?.minimumVersion, dependency.minimumVersion)
+        ? {
+            minimumVersion: highestMinimum(
+              existing?.minimumVersion,
+              dependency.minimumVersion
+            ),
+          }
+        : {}),
+    });
+  }
+  return Array.from(merged.values());
+}
+
 export async function resolveWingetPackageDependencies(
   input: {
     wingetId: string;
@@ -212,9 +256,13 @@ export async function resolveWingetPackageDependencies(
     );
   }
   ensureSupportedDependencyShape(input.wingetId, rootInstaller);
+  const rootDependencies = rootPackageDependencies(
+    input.wingetId,
+    rootInstaller.packageDependencies
+  );
   if (
     input.installScope?.trim().toLowerCase() === 'user' &&
-    (rootInstaller.packageDependencies || []).length > 0
+    rootDependencies.length > 0
   ) {
     throw new WingetDependencyCompatibilityError(
       `${input.wingetId} declares machine-wide package dependencies that cannot be installed safely in user scope.`
@@ -370,7 +418,7 @@ export async function resolveWingetPackageDependencies(
     }
   };
 
-  for (const dependency of rootInstaller.packageDependencies || []) {
+  for (const dependency of rootDependencies) {
     await visit(dependency.packageIdentifier, dependency.minimumVersion, 1);
   }
 

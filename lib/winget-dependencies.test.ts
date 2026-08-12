@@ -88,6 +88,45 @@ describe('resolveWingetPackageDependencies', () => {
     );
   });
 
+  it('adds the reviewed x86 VC++ runtime omitted by the Qfinder Pro manifest', async () => {
+    const io = fixtureIo(
+      {
+        'QNAP.QfinderPro@7.14.0.0626': [installer({
+          architecture: 'x86',
+          type: 'nullsoft',
+          sha256: ROOT_SHA,
+        })],
+        'Microsoft.VCRedist.2015+.x86@14.51.36210.0': [installer({
+          architecture: 'x86',
+          url: 'https://aka.ms/vc14/vc_redist.x86.exe',
+          sha256: VC_SHA,
+          silentArgs: '/install /quiet /norestart',
+        })],
+      },
+      {
+        'Microsoft.VCRedist.2015+.x86': ['14.51.36210.0'],
+      }
+    );
+
+    const result = await resolveWingetPackageDependencies({
+      wingetId: 'QNAP.QfinderPro',
+      version: '7.14.0.0626',
+      architecture: 'x86',
+      installerSha256: ROOT_SHA,
+      installScope: 'machine',
+    }, io);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        packageIdentifier: 'Microsoft.VCRedist.2015+.x86',
+        architecture: 'x86',
+        version: '14.51.36210.0',
+        installerSha256: VC_SHA,
+        successCodes: [-2147023258, 0, 1638],
+      }),
+    ]);
+  });
+
   it('selects the newest version satisfying the declared minimum', async () => {
     const io = fixtureIo(
       {

@@ -143,6 +143,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Qfinder Pro starts its desktop process after a silent install. Close it
+    // before removal so the NSIS uninstaller can delete the product instead
+    // of waiting behind the running application or its startup-error dialog.
+    wingetId: 'QNAP.QfinderPro',
+    requiredProcessesToClose: [
+      { name: 'QfinderPro', description: 'QNAP Qfinder Pro' },
+    ],
+  },
+  {
     wingetId: 'OCSInventoryNG.WindowsAgent',
     requiredProcessesToClose: [
       { name: 'OcsSystray', description: 'OCS Inventory system tray' },
