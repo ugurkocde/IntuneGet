@@ -17,6 +17,7 @@ describe('QA toolchain targeted retries', () => {
     'Microsoft.VisualStudio.2022.Community',
     'Microsoft.VisualStudio.2022.Enterprise',
     'Microsoft.VisualStudio.2022.Professional',
+    'Mozilla.Firefox.de',
   ])(
     'retries the terminal %s failure changed by the current toolchain release',
     (wingetId) => {

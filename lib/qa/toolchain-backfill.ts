@@ -10,7 +10,7 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
-  'ca37c9eadd7b64d4d926f60a158e3dafb4554788': [
+  'bbd8948f2bbefeaba9caf51f6e36ce5d26fdff35': [
     'Microsoft.SQLServerManagementStudio.22',
     'Microsoft.VisualStudio.BuildTools',
     'Microsoft.VisualStudio.Community',
@@ -24,6 +24,7 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Microsoft.VisualStudio.2022.Community',
     'Microsoft.VisualStudio.2022.Enterprise',
     'Microsoft.VisualStudio.2022.Professional',
+    'Mozilla.Firefox.de',
   ],
   '1b130924ecc68909d6bb15f8cdf295944255a2f9': [
     'HandBrake.HandBrake',
