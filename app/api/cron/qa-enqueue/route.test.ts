@@ -78,6 +78,7 @@ function createSupabaseStub(options: {
   candidates?: Array<Record<string, unknown>>;
   candidatePages?: Array<Array<Record<string, unknown>>>;
   demandBackfillApps?: string[];
+  deployedApps?: string[];
   pollState?: Record<string, unknown>;
   packageResults?: Array<Record<string, unknown>>;
 }) {
@@ -160,7 +161,8 @@ function createSupabaseStub(options: {
       }
       if (table === 'upload_history') {
         return query({
-          data: (options.supportedApps || []).map((app) => ({ winget_id: app.winget_id })),
+          data: (options.deployedApps || (options.supportedApps || []).map((app) => String(app.winget_id)))
+            .map((winget_id) => ({ winget_id })),
           error: null,
         });
       }
@@ -299,8 +301,8 @@ function resolvedManifest() {
   };
 }
 
-function cronRequest(): Request {
-  return new Request('https://intuneget.com/api/cron/qa-enqueue', {
+function cronRequest(query = ''): Request {
+  return new Request(`https://intuneget.com/api/cron/qa-enqueue${query}`, {
     headers: {
       authorization: 'Bearer test-cron-secret',
       'x-vercel-id': 'fra1::request-1',
@@ -466,6 +468,68 @@ describe('GET /api/cron/qa-enqueue', () => {
       demand_backfill_requested_count: 1,
       demand_backfill_count: 1,
     });
+  });
+
+  it('immediately rebuilds a targeted customer-deployed app through the catalog QA path', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        {
+          winget_id: 'Opera.Opera',
+          name: 'Opera',
+          publisher: 'Opera Software',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest('?ids=Opera.Opera'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      targetedRequestedCount: 1,
+      targetedCount: 1,
+    });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Opera.Opera',
+      status: 'queued',
+      priority: 1_000,
+      demand_source: 'operator',
+      test_config: { profileKind: 'catalog-default' },
+    });
+  });
+
+  it('does not let a targeted request expand QA beyond customer-deployed apps', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        {
+          winget_id: 'Undeployed.App',
+          name: 'Undeployed',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      deployedApps: [],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest('?id=Undeployed.App'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 0,
+      queued: 0,
+      targetedRequestedCount: 1,
+      targetedCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
   });
 
   it('persists a user-scope dependency compatibility block without degrading polling', async () => {

@@ -47,6 +47,23 @@ const MAX_ERROR_LENGTH = 1_000;
 const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
 const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
 const DEMAND_BACKFILL_BATCH_SIZE = 3;
+const MAX_TARGETED_PACKAGE_IDS = 20;
+const TARGETED_QA_PRIORITY = 1_000;
+
+function targetedPackageIds(request: Request): string[] {
+  const url = new URL(request.url);
+  const values = [
+    ...url.searchParams.getAll('id'),
+    ...url.searchParams.getAll('ids').flatMap((value) => value.split(',')),
+  ];
+  const ids = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  if (ids.length > MAX_TARGETED_PACKAGE_IDS) {
+    throw new Error(`At most ${MAX_TARGETED_PACKAGE_IDS} targeted package IDs are allowed.`);
+  }
+  const invalid = ids.find((id) => !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(id));
+  if (invalid) throw new Error(`Invalid targeted WinGet package ID: ${invalid}`);
+  return ids;
+}
 
 interface QaCandidateProfileRow {
   id: string;
@@ -250,6 +267,12 @@ export async function GET(request: Request) {
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  let requestedPackageIds: string[];
+  try {
+    requestedPackageIds = targetedPackageIds(request);
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
+  }
 
   const startedAt = new Date().toISOString();
   const startedAtMs = Date.now();
@@ -270,6 +293,7 @@ export async function GET(request: Request) {
   let toolchainBackfillPagesScanned = 0;
   let demandBackfillRequestedCount = 0;
   let demandBackfillCount = 0;
+  let targetedCount = 0;
   let baseSha: string | null = null;
   let headSha: string | null = null;
   let runId: string | null = null;
@@ -399,8 +423,9 @@ export async function GET(request: Request) {
     const changedIds = new Set(changes.changedPackageIds);
     const backfillIds = new Set(backfill.ids);
     const demandBackfillIdSet = new Set(demandBackfillIds);
+    const targetedIdSet = new Set(requestedPackageIds);
     const targetPackageIds = Array.from(
-      new Set([...changedIds, ...backfillIds, ...demandBackfillIdSet])
+      new Set([...changedIds, ...backfillIds, ...demandBackfillIdSet, ...targetedIdSet])
     );
 
     structuredQaPollLog('info', 'qa_poll_started', {
@@ -414,6 +439,7 @@ export async function GET(request: Request) {
       toolchainBackfillRequestedCount: backfill.ids.length,
       toolchainBackfillPagesScanned,
       demandBackfillRequestedCount,
+      targetedRequestedCount: requestedPackageIds.length,
     });
 
     let supportedApps: Array<{
@@ -504,6 +530,15 @@ export async function GET(request: Request) {
       if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
     }
     supportedApps = supportedApps.filter((app) => demandedIds.has(app.winget_id));
+    targetedCount = supportedApps.filter((app) => targetedIdSet.has(app.winget_id)).length;
+    for (const app of supportedApps) {
+      if (targetedIdSet.has(app.winget_id)) {
+        priorities.set(
+          app.winget_id,
+          Math.max(priorities.get(app.winget_id) || 0, TARGETED_QA_PRIORITY)
+        );
+      }
+    }
     supportedChangedCount = supportedApps.filter((app) => changedIds.has(app.winget_id)).length;
     toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
     demandBackfillCount = supportedApps.filter((app) =>
@@ -689,6 +724,8 @@ export async function GET(request: Request) {
                 priority: priorities.get(app.winget_id) || 0,
                 demand_source: policies.some((policy) => policy.winget_id === app.winget_id)
                   ? 'auto_update'
+                  : targetedIdSet.has(app.winget_id)
+                    ? 'operator'
                   : 'managed',
                 failure_summary: !packagingContract.valid
                   ? `Packaging preflight: ${packagingContract.message}`
@@ -834,6 +871,8 @@ export async function GET(request: Request) {
       toolchainBackfillPagesScanned,
       demandBackfillRequestedCount,
       demandBackfillCount,
+      targetedRequestedCount: requestedPackageIds.length,
+      targetedCount,
       ...summary,
     });
 
@@ -852,6 +891,8 @@ export async function GET(request: Request) {
         toolchainBackfillPagesScanned,
         demandBackfillRequestedCount,
         demandBackfillCount,
+        targetedRequestedCount: requestedPackageIds.length,
+        targetedCount,
         ...summary,
       },
       { status: status === 'succeeded' ? 200 : 207 }
@@ -892,6 +933,8 @@ export async function GET(request: Request) {
         toolchainBackfillPagesScanned,
         demandBackfillRequestedCount,
         demandBackfillCount,
+        targetedRequestedCount: requestedPackageIds.length,
+        targetedCount,
         ...summary,
       },
       { status: 500 }
