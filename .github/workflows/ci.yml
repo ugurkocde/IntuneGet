@@ -108,6 +108,9 @@ jobs:
 
   docker:
     name: Docker build and smoke test
+    # Keep the self-hosted QA repair loop responsive. The same commit is still
+    # built, scanned, and smoke-tested after it lands on main.
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
