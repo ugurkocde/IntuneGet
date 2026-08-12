@@ -56,6 +56,30 @@ function QaPhaseLabel({ phase }: { phase: QaLivePhase }) {
   return <T>Publishing result</T>;
 }
 
+function QaResultStatus({ outcome }: { outcome: 'Passed' | 'Failed' }) {
+  const passed = outcome === 'Passed';
+  const Icon = passed ? CheckCircle2 : XCircle;
+
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-medium text-text-primary">
+      <Icon
+        className={cn(
+          'h-4 w-4 shrink-0',
+          passed ? 'text-status-success' : 'text-status-error'
+        )}
+        aria-hidden="true"
+      />
+      <T>{outcome}</T>
+    </span>
+  );
+}
+
+function resultEdgeClass(outcome: 'Passed' | 'Failed'): string {
+  return outcome === 'Passed'
+    ? 'border-l-status-success/60'
+    : 'border-l-status-error/60';
+}
+
 function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
   const [visibleSrc, setVisibleSrc] = useState<string | null>(null);
 
@@ -379,7 +403,10 @@ function DashboardContent() {
                     key={`${item.wingetId}-${item.testedVersion}-${item.architecture}`}
                     type="button"
                     onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
-                    className="flex min-h-20 w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-overlay/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan"
+                    className={cn(
+                      'flex min-h-20 w-full items-center gap-3 border-l-2 px-5 py-3 text-left transition-colors hover:bg-overlay/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan',
+                      resultEdgeClass(item.outcome)
+                    )}
                   >
                     <AppIcon packageId={item.wingetId} packageName={item.displayName} size="sm" />
                     <span className="min-w-0 flex-1">
@@ -391,9 +418,7 @@ function DashboardContent() {
                         {formatRelativeTime(item.testedAtUtc, data.serverTime) ?? <T>Test time unavailable</T>}
                       </span>
                     </span>
-                    <StatusBadge tone={item.outcome === 'Passed' ? 'success' : 'error'} icon={item.outcome === 'Passed' ? CheckCircle2 : XCircle}>
-                      <T>{item.outcome}</T>
-                    </StatusBadge>
+                    <QaResultStatus outcome={item.outcome} />
                   </button>
                 ))}
               </div>
@@ -415,7 +440,7 @@ function DashboardContent() {
                         onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
                         className="cursor-pointer transition-colors hover:bg-overlay/5"
                       >
-                        <td className="px-6 py-3">
+                        <td className={cn('border-l-2 px-6 py-3', resultEdgeClass(item.outcome))}>
                           <button
                             type="button"
                             onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
@@ -429,9 +454,7 @@ function DashboardContent() {
                           </button>
                         </td>
                         <td className="px-3 py-3">
-                          <StatusBadge tone={item.outcome === 'Passed' ? 'success' : 'error'} icon={item.outcome === 'Passed' ? CheckCircle2 : XCircle}>
-                            <T>{item.outcome}</T>
-                          </StatusBadge>
+                          <QaResultStatus outcome={item.outcome} />
                         </td>
                         <td className="px-3 py-3 font-mono text-xs text-text-secondary">{formatQaDuration(item.durationSeconds)}</td>
                         <td className="whitespace-nowrap px-6 py-3 text-xs text-text-muted">
