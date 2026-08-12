@@ -93,7 +93,7 @@ function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
           unoptimized
           loading="eager"
           sizes="(min-width: 1024px) 960px, 100vw"
-          className="object-contain"
+          className="animate-fade-in object-contain motion-reduce:animate-none"
         />
       ) : null}
       {src !== visibleSrc ? (
@@ -208,6 +208,95 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
   });
 
   if (!data.current) {
+    const next = data.queue.next[0];
+    if (next) {
+      return (
+        <section
+          className="overflow-hidden rounded-2xl border border-accent-cyan/20 bg-bg-elevated shadow-glow-cyan"
+          aria-labelledby="current-test-heading"
+          aria-live="polite"
+        >
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <AppIcon packageId={next.wingetId} packageName={next.displayName} size="xl" />
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <StatusBadge
+                      tone="accent"
+                      icon={Loader2}
+                      iconClassName="animate-spin motion-reduce:animate-none"
+                    >
+                      <T>Preparing next test</T>
+                    </StatusBadge>
+                    <span className="text-xs text-text-muted"><T>Starting automatically</T></span>
+                  </div>
+                  <h2 id="current-test-heading" className="truncate text-xl font-semibold text-text-primary">
+                    {next.displayName}
+                  </h2>
+                  <p className="truncate text-sm text-text-muted">{next.wingetId}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-5 sm:text-right">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-text-muted"><T>Version</T></p>
+                  <p className="font-mono text-sm text-text-primary">{next.version} · {next.architecture}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-text-muted"><T>Queue</T></p>
+                  <p className="text-sm font-medium text-accent-cyan"><T>Next</T></p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="h-0.5 overflow-hidden rounded-full bg-overlay/10"
+              role="progressbar"
+              aria-label="Waiting for the QA runner to start the next test"
+            >
+              <div className="h-full w-full animate-shimmer bg-accent-cyan/30 motion-reduce:animate-none" />
+            </div>
+
+            <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+              <div
+                className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl lg:aspect-auto lg:min-h-[36rem]"
+                aria-label={`Preparing the isolated QA VM for ${next.displayName}`}
+              >
+                <div className="absolute inset-0 animate-shimmer bg-[radial-gradient(circle_at_center,rgba(8,145,178,0.12),transparent_45%)] motion-reduce:animate-none" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+                  <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-accent-cyan">
+                    <span className="absolute inset-0 animate-ping rounded-2xl border border-accent-cyan/20 motion-reduce:animate-none" aria-hidden="true" />
+                    <Monitor className="h-7 w-7" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="font-medium text-white/85"><T>Preparing a clean test VM</T></p>
+                    <p className="mt-1 max-w-md text-sm text-white/50">
+                      <T>The runner will start <Var>{next.displayName}</Var> automatically and the live preview will appear here.</T>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <QaLiveStepTimeline
+                phase="queued"
+                className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
+              />
+
+              <div className="flex min-h-16 items-center gap-3 rounded-xl border border-overlay/10 bg-bg-surface/45 px-4 py-3 lg:col-start-1 lg:row-start-2">
+                <span className="rounded-lg bg-accent-cyan/10 p-2 text-accent-cyan" aria-hidden="true">
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                </span>
+                <span>
+                  <span className="block text-sm font-medium text-text-primary"><T>Waiting for test evidence</T></span>
+                  <span className="mt-0.5 block text-xs text-text-muted"><T>Files, registry activity, and PSADT logs will appear after the test starts.</T></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section className="rounded-2xl border border-overlay/10 bg-bg-elevated px-5 py-4" aria-labelledby="current-test-heading">
         <div className="flex items-center gap-3">
