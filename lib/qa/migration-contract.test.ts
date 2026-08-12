@@ -205,3 +205,27 @@ describe('QA package compatibility block migration contract', () => {
     expect(sql).not.toContain('union all');
   });
 });
+
+describe('QA package result duration migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260812114805_qa_package_result_duration.sql'
+    ),
+    'utf8'
+  );
+
+  it('stores measured duration for every exact package profile', () => {
+    expect(sql).toContain('add column if not exists overall_duration_seconds numeric');
+    expect(sql).toContain('row_data.overall_duration_seconds');
+    expect(sql).toContain('overall_duration_seconds = excluded.overall_duration_seconds');
+    expect(sql).toContain('overall_duration_seconds is null or overall_duration_seconds >= 0');
+  });
+
+  it('retains the authenticated replay guard and restricted RPC grants', () => {
+    expect(sql).toContain('QA result rows must share one non-null source synchronization timestamp');
+    expect(sql).toContain('Stale or replayed QA synchronization payload');
+    expect(sql).toContain('from public, authenticated, service_role');
+    expect(sql).toContain('to anon');
+  });
+});

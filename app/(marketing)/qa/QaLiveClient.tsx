@@ -419,10 +419,13 @@ function DashboardContent() {
                           <button
                             type="button"
                             onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
-                            className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+                            className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                           >
-                            <span className="block font-medium text-text-primary">{item.displayName}</span>
-                            <span className="text-xs text-text-muted">{item.testedVersion} · {item.architecture}</span>
+                            <AppIcon packageId={item.wingetId} packageName={item.displayName} size="sm" />
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-text-primary">{item.displayName}</span>
+                              <span className="block text-xs text-text-muted">{item.testedVersion} · {item.architecture}</span>
+                            </span>
                           </button>
                         </td>
                         <td className="px-3 py-3">

@@ -8,6 +8,8 @@ import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResp
 
 const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
+export const QA_LIVE_RECENT_RESULT_COLUMNS =
+  'winget_id, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds';
 
 interface CandidateRow {
   id: string;
@@ -406,9 +408,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .limit(10),
     supabase
       .from('qa_package_results')
-      .select(
-        'winget_id, tested_version, architecture, outcome, tested_at_utc'
-      )
+      .select(QA_LIVE_RECENT_RESULT_COLUMNS)
       .order('tested_at_utc', { ascending: false })
       .limit(10),
     getQaPipelineControl(supabase),

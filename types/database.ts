@@ -233,6 +233,7 @@ export interface Database {
           installer_sha256: string;
           outcome: 'Passed' | 'Failed';
           tested_at_utc: string;
+          overall_duration_seconds: number | null;
           psadt_version: string;
           psadt_template_sha256: string;
           psadt_config_sha256: string;

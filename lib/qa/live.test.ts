@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { buildQaLiveResponse, countConsecutiveFailedPolls } from './live';
+import {
+  buildQaLiveResponse,
+  countConsecutiveFailedPolls,
+  QA_LIVE_RECENT_RESULT_COLUMNS,
+} from './live';
 
 describe('countConsecutiveFailedPolls', () => {
   it('does not describe partial package checks as consecutive polling failures', () => {
@@ -28,6 +32,35 @@ describe('countConsecutiveFailedPolls', () => {
 });
 
 describe('buildQaLiveResponse', () => {
+  it('projects and publishes measured duration for recent results', () => {
+    expect(QA_LIVE_RECENT_RESULT_COLUMNS).toContain('overall_duration_seconds');
+
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-12T12:00:00.000Z'),
+      current: null,
+      queuedCount: 0,
+      queued: [],
+      poll: null,
+      consecutivePollFailures: 0,
+      recent: [{
+        winget_id: 'Example.App',
+        display_name: 'Example',
+        tested_version: '2.0.0',
+        architecture: 'x64',
+        outcome: 'Passed',
+        tested_at_utc: '2026-08-12T11:55:00.000Z',
+        overall_duration_seconds: 94.25,
+      }],
+      apps: [],
+      frame: null,
+    });
+
+    expect(response.recent[0]).toMatchObject({
+      displayName: 'Example',
+      durationSeconds: 94.25,
+    });
+  });
+
   it('returns a sanitized live projection and derives health', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-08T17:00:00.000Z'),
