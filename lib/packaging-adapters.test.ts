@@ -48,6 +48,28 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('adds the vendor-supported LTspice enterprise install mode', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'AnalogDevices.LTspice',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArguments).toEqual(['MY_SPECIAL_MODE=2']);
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
+  it('preserves and deduplicates reviewed install arguments case-insensitively', () => {
+    const adapted = applyApplicationPackagingAdapter('AnalogDevices.LTspice', {
+      ...DEFAULT_PSADT_CONFIG,
+      reviewedInstallArguments: ['my_special_mode=2', 'EXAMPLE=1'],
+    });
+
+    expect(adapted.reviewedInstallArguments).toEqual([
+      'my_special_mode=2',
+      'EXAMPLE=1',
+    ]);
+  });
+
   it.each([
     'Microsoft.SQLServerManagementStudio.21',
     'Microsoft.SQLServerManagementStudio.22',

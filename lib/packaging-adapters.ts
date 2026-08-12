@@ -5,6 +5,7 @@ interface ApplicationPackagingAdapter {
   wingetId: string;
   requiredInstallScope?: WingetScope;
   requiredProcessesToClose?: readonly ProcessToClose[];
+  reviewedInstallArguments?: readonly string[];
   reviewedUninstallArguments?: readonly string[];
   uninstallCompletionTimeoutMinutes?: number;
 }
@@ -51,6 +52,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // systemprofile that is unavailable for the later Intune removal cycle.
     wingetId: 'Makeblock.xToolStudio',
     requiredInstallScope: 'user',
+  },
+  {
+    // Analog Devices documents this enterprise/server mode for silent SYSTEM
+    // deployment. It prevents the MSI from extracting example data into the
+    // LocalSystem AppData profile, which otherwise rolls back with exit 1603.
+    wingetId: 'AnalogDevices.LTspice',
+    reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
     wingetId: 'RARLab.WinRAR',
@@ -143,7 +151,7 @@ function normalizeProcessName(name: string): string {
   return name.trim().replace(/\.exe$/i, '');
 }
 
-function normalizeUninstallArgument(argument: string, wingetId: string): string {
+function normalizeReviewedArgument(argument: string, wingetId: string): string {
   const normalized = argument.trim();
   if (!normalized || normalized.length > 256 || /[\x00-\x1f\x7f]/.test(normalized)) {
     throw new Error(`Invalid reviewed uninstall argument for ${wingetId}`);
@@ -177,14 +185,28 @@ export function applyApplicationPackagingAdapter(
     }
   }
 
+  const reviewedInstallArguments = (config.reviewedInstallArguments || []).map(
+    (argument) => normalizeReviewedArgument(argument, adapter.wingetId)
+  );
+  const configuredInstallArguments = new Set(
+    reviewedInstallArguments.map((argument) => argument.toLowerCase())
+  );
+  for (const required of adapter.reviewedInstallArguments || []) {
+    const normalized = normalizeReviewedArgument(required, adapter.wingetId);
+    if (!configuredInstallArguments.has(normalized.toLowerCase())) {
+      reviewedInstallArguments.push(normalized);
+      configuredInstallArguments.add(normalized.toLowerCase());
+    }
+  }
+
   const reviewedUninstallArguments = (config.reviewedUninstallArguments || []).map(
-    (argument) => normalizeUninstallArgument(argument, adapter.wingetId)
+    (argument) => normalizeReviewedArgument(argument, adapter.wingetId)
   );
   const configuredArguments = new Set(
     reviewedUninstallArguments.map((argument) => argument.toLowerCase())
   );
   for (const required of adapter.reviewedUninstallArguments || []) {
-    const normalized = normalizeUninstallArgument(required, adapter.wingetId);
+    const normalized = normalizeReviewedArgument(required, adapter.wingetId);
     if (!configuredArguments.has(normalized.toLowerCase())) {
       reviewedUninstallArguments.push(normalized);
       configuredArguments.add(normalized.toLowerCase());
@@ -194,6 +216,7 @@ export function applyApplicationPackagingAdapter(
   return {
     ...config,
     processesToClose,
+    reviewedInstallArguments,
     reviewedUninstallArguments,
     ...(adapter.uninstallCompletionTimeoutMinutes
       ? { uninstallCompletionTimeoutMinutes: adapter.uninstallCompletionTimeoutMinutes }

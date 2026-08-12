@@ -194,6 +194,11 @@ export interface PSADTConfig {
   installCommand?: string;
   uninstallCommand?: string;
 
+  // Internal, reviewed vendor arguments appended to the manifest-derived
+  // install command. Application adapters populate this field; it is not a
+  // customer-facing free-form command surface.
+  reviewedInstallArguments?: string[];
+
   // Internal, reviewed vendor arguments appended to an exact registered
   // uninstaller. Application adapters populate this field; it is intentionally
   // not exposed as a customer-facing free-form command surface.
@@ -282,6 +287,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   // Commands will be auto-generated based on installer type
   installCommand: undefined,
   uninstallCommand: undefined,
+  reviewedInstallArguments: [],
   reviewedUninstallArguments: [],
 };
 

@@ -198,6 +198,37 @@ if ($env:PSADT_CONFIG -and $env:PSADT_CONFIG -ne '{}') {
 
 # Parse the bounded values supplied only by reviewed application adapters.
 # These are not a customer-facing free-form command surface.
+$reviewedInstallArguments = @()
+if ($psadtConfig.Contains('reviewedInstallArguments') -and
+    $null -ne $psadtConfig['reviewedInstallArguments']) {
+    $rawReviewedInstallArguments = $psadtConfig['reviewedInstallArguments']
+    if ($rawReviewedInstallArguments -is [string] -or
+        $rawReviewedInstallArguments -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedInstallArguments must be an array.'
+    }
+
+    $seenReviewedInstallArguments = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($rawReviewedInstallArgument in @($rawReviewedInstallArguments)) {
+        if ($rawReviewedInstallArgument -isnot [string]) {
+            throw 'Every PSADT reviewed install argument must be a string.'
+        }
+        $reviewedInstallArgument = $rawReviewedInstallArgument.Trim()
+        if ([string]::IsNullOrWhiteSpace($reviewedInstallArgument) -or
+            $reviewedInstallArgument.Length -gt 256 -or
+            [regex]::IsMatch($reviewedInstallArgument, '[\x00-\x1F\x7F]')) {
+            throw 'Every PSADT reviewed install argument must be a non-empty, bounded, single-line string.'
+        }
+        if ($seenReviewedInstallArguments.Add($reviewedInstallArgument)) {
+            $reviewedInstallArguments += $reviewedInstallArgument
+        }
+    }
+    if ($reviewedInstallArguments.Count -gt 20) {
+        throw 'PSADT reviewedInstallArguments must contain at most 20 entries.'
+    }
+}
+
 $reviewedUninstallArguments = @()
 if ($psadtConfig.Contains('reviewedUninstallArguments') -and
     $null -ne $psadtConfig['reviewedUninstallArguments']) {
@@ -496,10 +527,21 @@ function Get-PSADTAssetFileName {
 }
 
 # Extract config values with defaults
+# Reviewed application adapters may append bounded vendor properties to the
+# manifest-derived command. Do this before quote encoding so MSI properties are
+# passed identically by QA and customer packages.
+$effectiveSilentSwitches = $SilentSwitches.Trim()
+foreach ($reviewedInstallArgument in $reviewedInstallArguments) {
+    $argumentPattern = '(?i)(^|\s)' + [regex]::Escape($reviewedInstallArgument) + '(\s|$)'
+    if ($effectiveSilentSwitches -notmatch $argumentPattern) {
+        $effectiveSilentSwitches = "$effectiveSilentSwitches $reviewedInstallArgument".Trim()
+    }
+}
+
 # This value is embedded in a single-quoted string in the generated script.
 # Only a single quote needs escaping; changing backticks or dollar signs would
 # silently change valid vendor arguments.
-$silentSwitchesEscaped = $SilentSwitches -replace "'", "''"
+$silentSwitchesEscaped = $effectiveSilentSwitches -replace "'", "''"
 $versionSingleQuoteEscaped = $Version -replace "'", "''"
 $uninstallCmd = [string]$UninstallCommand
 $uninstallCmdSingleQuoteEscaped = $uninstallCmd -replace "'", "''"
@@ -1466,7 +1508,7 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
 } else {
     $installerArgumentList = "'$silentSwitchesEscaped'"
     if ($installerTypeLower -eq 'inno') {
-        $innoSwitches = $SilentSwitches.Trim()
+        $innoSwitches = $effectiveSilentSwitches.Trim()
         if ($innoSwitches -notmatch '(?i)(^|\s)/SP-(\s|$)') { $innoSwitches = "$innoSwitches /SP-".Trim() }
         # Keep automatic observability out of the vendor command line. Some Inno
         # packages fail during initialization when an injected /LOG target cannot

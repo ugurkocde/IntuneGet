@@ -168,11 +168,39 @@ describe('PSADT vendor argument contract', () => {
   });
 
   it('does not rewrite dollar signs or backticks in generic silent switches', () => {
-    expect(packager).toContain('$silentSwitchesEscaped = $SilentSwitches -replace "\'", "\'\'"');
+    expect(packager).toContain('$silentSwitchesEscaped = $effectiveSilentSwitches -replace "\'", "\'\'"');
     const assignment = packager.match(/^\$silentSwitchesEscaped\s*=.*$/m)?.[0] ?? '';
     expect(assignment).not.toContain("-replace '`'");
     expect(assignment).not.toContain("-replace '\\$'");
   });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'appends bounded reviewed install arguments to the synthesized vendor command',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Reviewed Install Contract App',
+        [],
+        { reviewedInstallArguments: ['MY_SPECIAL_MODE=2'] }
+      );
+
+      expect(generated).toContain(
+        "-ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- MY_SPECIAL_MODE=2'"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects an unbounded reviewed install argument surface',
+    () => {
+      expect(() => generateRegistryUninstallPackage(
+        'inno',
+        'Unsafe Install Contract App',
+        [],
+        { reviewedInstallArguments: ['x'.repeat(257)] }
+      )).toThrow('reviewed install argument must be a non-empty, bounded');
+    }
+  );
 });
 
 describe('PSADT offline dependency contract', () => {
