@@ -482,6 +482,32 @@ describe('EXE product identity PSADT generation', () => {
     );
   });
 
+  it('matches one localized registry identity without accepting helper entries', () => {
+    const job = packagingJob({
+      winget_id: 'Mozilla.Firefox.de',
+      publisher: 'Mozilla',
+      display_name: 'Mozilla Firefox (Deutsch)',
+      installer_type: 'nullsoft',
+      uninstall_command: 'REGISTRY_UNINSTALL:Mozilla Firefox (en-US)',
+    });
+    const script = generator.generateDeployScript.call(generator, job, 'firefox.exe');
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      job,
+      'Mozilla Firefox (Deutsch)'
+    );
+
+    expect(script).toContain("$configuredUninstallLocaleHint = 'de'");
+    expect(verification).toContain('$configuredUninstallLocaleAgnosticName');
+    expect(verification).toContain('$localeAgnosticMatches = @($changedApplications');
+    expect(verification).toContain(
+      'if ($localeAgnosticMatches.Count -eq 1) { $selectedApplications = $localeAgnosticMatches }'
+    );
+    expect(verification.indexOf('$localeAgnosticMatches')).toBeLessThan(
+      verification.indexOf('$bundleCandidates')
+    );
+  });
+
   it('verifies and removes only the exact AppsAndFeatures product identity', () => {
     const job = packagingJob({
       winget_id: 'Adobe.Acrobat.Reader.64-bit',

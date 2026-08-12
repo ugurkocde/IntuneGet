@@ -507,6 +507,11 @@ $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replac
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherSingleQuoteEscaped = $Publisher -replace "'", "''"
 $sanitizedWingetId = $WingetId -replace '[\.\-]', '_'
+$registryUninstallLocaleHint = ''
+if ($WingetId -cmatch '\.([a-z]{2,3}(?:-[A-Z]{2})?)$') {
+    $registryUninstallLocaleHint = $Matches[1]
+}
+$registryUninstallLocaleHintEscaped = $registryUninstallLocaleHint -replace "'", "''"
 $installerFileName = $env:INSTALLER_FILENAME
 # Escaped variant for embedding in single-quoted strings in the generated script
 $installerFileNameSingleQuoteEscaped = $installerFileName -replace "'", "''"
@@ -1424,6 +1429,7 @@ if ($useRegistryUninstall) {
         '    $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
         "    `$configuredUninstallProductCode = '$registryUninstallProductCode'"
         "    `$configuredUninstallDisplayName = '$registryUninstallDisplayNameEscaped'"
+        "    `$configuredUninstallLocaleHint = '$registryUninstallLocaleHintEscaped'"
         '    $capturedUninstallKey = $null'
         '    $capturedUninstallName = $null'
         ''
@@ -1762,6 +1768,18 @@ if ($useRegistryUninstall) {
         '    $configuredUninstallPublisherAgnosticName = if ($configuredUninstallPublisherName) {'
         '        ($configuredUninstallComparableName -replace (''(?i)^'' + [regex]::Escape($configuredUninstallPublisherName) + ''(?:\s+|[._-]+)''), '''').Trim()'
         '    } else { $configuredUninstallComparableName }'
+        '    # Some language-specific WinGet manifests carry a default-locale ARP name even though'
+        '    # the selected installer registers its requested locale (for example en-US versus de).'
+        '    # Only enable locale-agnostic comparison when the package ID has a locale suffix and the'
+        '    # configured name has a strict locale qualifier. The observed install delta and one-match'
+        '    # requirement remain authoritative, so helper products and parallel editions stay excluded.'
+        '    $configuredLocaleSuffixPattern = ''\(\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\s+)?[a-z]{2,3}(?:-[A-Z]{2})?\s*\)$'''
+        '    $configuredUninstallLocaleAgnosticName = if ($configuredUninstallLocaleHint -and $configuredUninstallDisplayName -cmatch $configuredLocaleSuffixPattern) {'
+        '        ($configuredUninstallDisplayName -creplace $configuredLocaleSuffixPattern, '''').Trim()'
+        '    } else { $null }'
+        '    $candidateLocaleSuffixPattern = if ($configuredUninstallLocaleAgnosticName) {'
+        '        ''\(\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\s+)?'' + [regex]::Escape($configuredUninstallLocaleHint) + ''\s*\)$'''
+        '    } else { $null }'
         '    foreach ($verificationAttempt in 1..30) {'
         '        $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
         '        $changedApplications = @($postInstallApplications | Where-Object {'
@@ -1793,6 +1811,15 @@ if ($useRegistryUninstall) {
         '                $candidatePublisherAgnosticName -eq $configuredUninstallPublisherAgnosticName'
         '            })'
         '            if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0 -and $candidateLocaleSuffixPattern) {'
+        '            $localeAgnosticMatches = @($changedApplications | Where-Object {'
+        '                $candidateDisplayName = [string]$_.DisplayName'
+        '                if ($candidateDisplayName -cnotmatch $candidateLocaleSuffixPattern) { return $false }'
+        '                $candidateLocaleAgnosticName = ($candidateDisplayName -creplace $candidateLocaleSuffixPattern, '''').Trim()'
+        '                $candidateLocaleAgnosticName -eq $configuredUninstallLocaleAgnosticName'
+        '            })'
+        '            if ($localeAgnosticMatches.Count -eq 1) { $selectedApplications = $localeAgnosticMatches }'
         '        }'
         '        if ($selectedApplications.Count -eq 0) {'
         '            $bundleCandidates = @($changedApplications | Where-Object {'

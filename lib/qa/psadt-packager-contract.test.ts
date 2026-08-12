@@ -34,7 +34,9 @@ function generateRegistryUninstallPackage(
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
   psadtConfig: unknown = {},
-  packageDependencies: Array<Record<string, unknown>> = []
+  packageDependencies: Array<Record<string, unknown>> = [],
+  wingetId = 'IntuneGet.ContractTest',
+  uninstallDisplayName = displayName
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -77,13 +79,13 @@ function generateRegistryUninstallPackage(
         INPUT_DISPLAY_NAME: displayName,
         INPUT_PUBLISHER: 'IntuneGet',
         INPUT_VERSION: '1.0.0',
-        INPUT_WINGET_ID: 'IntuneGet.ContractTest',
+        INPUT_WINGET_ID: wingetId,
         INPUT_INSTALLER_TYPE: installerType,
         INPUT_INSTALL_SCOPE: 'machine',
         INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
         INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
         INPUT_PACKAGE_DEPENDENCIES: JSON.stringify(packageDependencies),
-        INPUT_UNINSTALL_COMMAND: `REGISTRY_UNINSTALL:${displayName}`,
+        INPUT_UNINSTALL_COMMAND: `REGISTRY_UNINSTALL:${uninstallDisplayName}`,
         INSTALLER_PATH: installerPath,
         INSTALLER_FILENAME: 'setup.exe',
         ...(packageDependencies.length > 0
@@ -360,6 +362,36 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
+  it('limits locale-aware ARP matching to one observed localized product entry', () => {
+    expect(packager).toContain('$configuredUninstallLocaleHint');
+    expect(packager).toContain('$configuredUninstallLocaleAgnosticName');
+    expect(packager).toContain('$localeAgnosticMatches = @($changedApplications');
+    expect(packager).toContain(
+      'if ($localeAgnosticMatches.Count -eq 1) { $selectedApplications = $localeAgnosticMatches }'
+    );
+    expect(packager.indexOf('$localeAgnosticMatches')).toBeLessThan(
+      packager.indexOf('$bundleCandidates')
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits the locale hint for a language-specific package and valid PowerShell',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Mozilla Firefox (Deutsch)',
+        [],
+        {},
+        [],
+        'Mozilla.Firefox.de',
+        'Mozilla Firefox (en-US)'
+      );
+
+      expect(generated).toContain("$configuredUninstallLocaleHint = 'de'");
+      expect(generated).toContain('$localeAgnosticMatches = @($changedApplications');
+    }
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'normalizes a manifest publisher prefix while preserving ambiguous matches',
     () => {
@@ -419,6 +451,37 @@ $ambiguous = @('SQL Server Management Studio 22', 'Microsoft SQL Server Manageme
       };
       expect(names.Product).toBe(names.Configured);
       expect(names.Helper).not.toBe(names.Configured);
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'matches a single requested locale while preserving ambiguity',
+    () => {
+      const result = spawnSync(
+        'pwsh',
+        [
+          '-NoProfile',
+          '-Command',
+          `$localeHint = 'de'
+$configuredName = 'Mozilla Firefox (en-US)'
+$configuredPattern = '\\(\\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\\s+)?[a-z]{2,3}(?:-[A-Z]{2})?\\s*\\)$'
+$configuredBase = if ($configuredName -cmatch $configuredPattern) { ($configuredName -creplace $configuredPattern, '').Trim() } else { $null }
+$candidatePattern = '\\(\\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\\s+)?' + [regex]::Escape($localeHint) + '\\s*\\)$'
+function Select-Localized([string[]]$Names) {
+  return @($Names | Where-Object {
+    if ($_ -cnotmatch $candidatePattern) { return $false }
+    (($_ -creplace $candidatePattern, '').Trim()) -eq $configuredBase
+  })
+}
+$oneMatch = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Maintenance Service', 'Microsoft Edge')
+$ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x86 de)', 'Mozilla Maintenance Service')
+[pscustomobject]@{ OneMatch = @($oneMatch).Count; Ambiguous = @($ambiguous).Count } | ConvertTo-Json -Compress`,
+        ],
+        { encoding: 'utf8' }
+      );
+
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual({ OneMatch: 1, Ambiguous: 2 });
     }
   );
 

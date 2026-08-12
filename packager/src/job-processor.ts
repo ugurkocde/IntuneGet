@@ -1014,12 +1014,16 @@ ${steps}
       return '';
     }
 
+    const localeHint =
+      job.winget_id.match(/\.([a-z]{2,3}(?:-[A-Z]{2})?)$/)?.[1] || '';
+
     return `
     # Snapshot uninstall entries before install. Manifest identity is a preference,
     # while the observed registry delta remains authoritative when metadata is stale.
     $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)
     $configuredUninstallProductCode = '${identity.productCode}'
     $configuredUninstallDisplayName = '${identity.displayName || escapedAppName}'
+    $configuredUninstallLocaleHint = '${localeHint}'
     $capturedUninstallKey = $null
     $capturedUninstallName = $null
 `;
@@ -1044,6 +1048,17 @@ ${steps}
     $configuredUninstallPublisherAgnosticName = if ($configuredUninstallPublisherName) {
         ($configuredUninstallComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\s+|[._-]+)'), '').Trim()
     } else { $configuredUninstallComparableName }
+    # Some language-specific WinGet manifests carry a default-locale ARP name even though
+    # the selected installer registers its requested locale (for example en-US versus de).
+    # Limit locale-agnostic comparison to locale-suffixed package IDs, the observed install
+    # delta, and exactly one result so helper products and parallel editions stay excluded.
+    $configuredLocaleSuffixPattern = '\\(\\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\\s+)?[a-z]{2,3}(?:-[A-Z]{2})?\\s*\\)$'
+    $configuredUninstallLocaleAgnosticName = if ($configuredUninstallLocaleHint -and $configuredUninstallDisplayName -cmatch $configuredLocaleSuffixPattern) {
+        ($configuredUninstallDisplayName -creplace $configuredLocaleSuffixPattern, '').Trim()
+    } else { $null }
+    $candidateLocaleSuffixPattern = if ($configuredUninstallLocaleAgnosticName) {
+        '\\(\\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\\s+)?' + [regex]::Escape($configuredUninstallLocaleHint) + '\\s*\\)$'
+    } else { $null }
     foreach ($verificationAttempt in 1..30) {
         $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)
         $changedApplications = @($postInstallApplications | Where-Object {
@@ -1075,6 +1090,15 @@ ${steps}
                 $candidatePublisherAgnosticName -eq $configuredUninstallPublisherAgnosticName
             })
             if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }
+        }
+        if ($selectedApplications.Count -eq 0 -and $candidateLocaleSuffixPattern) {
+            $localeAgnosticMatches = @($changedApplications | Where-Object {
+                $candidateDisplayName = [string]$_.DisplayName
+                if ($candidateDisplayName -cnotmatch $candidateLocaleSuffixPattern) { return $false }
+                $candidateLocaleAgnosticName = ($candidateDisplayName -creplace $candidateLocaleSuffixPattern, '').Trim()
+                $candidateLocaleAgnosticName -eq $configuredUninstallLocaleAgnosticName
+            })
+            if ($localeAgnosticMatches.Count -eq 1) { $selectedApplications = $localeAgnosticMatches }
         }
         if ($selectedApplications.Count -eq 0) {
             $bundleCandidates = @($changedApplications | Where-Object {
