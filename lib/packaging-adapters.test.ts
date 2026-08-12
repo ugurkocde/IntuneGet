@@ -3,6 +3,36 @@ import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { applyApplicationPackagingAdapter } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('adds reviewed silent removal arguments for failing vendor lifecycles', () => {
+    expect(
+      applyApplicationPackagingAdapter('RARLab.WinRAR', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['/S']);
+    expect(
+      applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['/silent', 'forall']);
+    expect(
+      applyApplicationPackagingAdapter('PostgreSQL.PostgreSQL.18', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['--mode', 'unattended', '--unattendedmodeui', 'none']);
+    expect(
+      applyApplicationPackagingAdapter(
+        'Microsoft.VisualStudio.Professional',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['--quiet', '--norestart']);
+  });
+
+  it('preserves and deduplicates reviewed uninstall arguments case-insensitively', () => {
+    const adapted = applyApplicationPackagingAdapter('RARLab.WinRAR', {
+      ...DEFAULT_PSADT_CONFIG,
+      reviewedUninstallArguments: ['/s', '--custom'],
+    });
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/s', '--custom']);
+  });
+
   it('closes the reviewed Adobe desktop processes before Creative Cloud removal', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Adobe.CreativeCloud',

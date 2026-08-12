@@ -860,6 +860,36 @@ catch
   }
 
   /**
+   * Read the bounded, declarative arguments supplied by a reviewed application
+   * adapter. These are appended only to the exact captured vendor uninstaller.
+   */
+  private getReviewedUninstallArguments(job: PackagingJob): string[] {
+    const raw = this.getPsadtConfig(job)?.reviewedUninstallArguments;
+    if (raw === undefined || raw === null) return [];
+    if (!Array.isArray(raw) || raw.length > 20) {
+      throw new Error('PSADT reviewedUninstallArguments must be an array of at most 20 entries');
+    }
+
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (const value of raw) {
+      if (typeof value !== 'string') {
+        throw new Error('Each reviewed uninstall argument must be a string');
+      }
+      const argument = value.trim();
+      if (!argument || argument.length > 256 || /[\x00-\x1f\x7f]/.test(argument)) {
+        throw new Error('Each reviewed uninstall argument must be non-empty, bounded, and single-line');
+      }
+      const key = argument.toLowerCase();
+      if (!seen.has(key)) {
+        result.push(argument);
+        seen.add(key);
+      }
+    }
+    return result;
+  }
+
+  /**
    * Generate PowerShell for additional post-install / post-uninstall commands
    * (issue #118). Each entry runs as its own Start-ADTProcess (cmd.exe /c) step,
    * in order, mirroring the custom-override pattern. Returns '' when none.
@@ -1350,6 +1380,15 @@ ${steps}
       ).replace(/'/g, "''");
       const hiveLongName = job.install_scope === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE';
       const markerProviderPath = `Registry::${hiveLongName}\\${this.getRegistryMarkerPath(job)}\\${this.sanitizeWingetId(job.winget_id)}`;
+      const reviewedUninstallArguments = this.getReviewedUninstallArguments(job)
+        .map((argument) => `'${argument.replace(/'/g, "''")}'`)
+        .join(', ');
+      const reviewedUninstallArgumentsBlock = `$reviewedUninstallArguments = @(${reviewedUninstallArguments})
+    foreach ($reviewedArgument in $reviewedUninstallArguments) {
+        if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {
+            $registeredUninstallArguments += $reviewedArgument
+        }
+    }`;
       const selectionBlock = `$configuredProductCode = '${registryIdentity.productCode}'
     $configuredDisplayName = '${registryIdentity.displayName}'
     $markerProviderPath = '${markerProviderPath}'
@@ -1384,6 +1423,7 @@ ${steps}
     if ($registeredUninstallArguments.Count -eq 0) {
         $registeredUninstallArguments = @('/uninstall', '/quiet', '/norestart')
     }
+    ${reviewedUninstallArgumentsBlock}
     $bundledUninstaller = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
     if (-not (Test-Path -LiteralPath $bundledUninstaller -PathType Leaf)) {
         throw "The packaged Burn uninstaller was not found: $bundledUninstaller"
@@ -1490,6 +1530,7 @@ ${steps}
             # desktop-client command and never forward the install-only --mode=stub value.
             $registeredUninstallArguments = @('-u', '--silent')
         }
+        ${reviewedUninstallArgumentsBlock}
         $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile
         $isRegisteredMsiExec = $registeredUninstallLeaf -in @('msiexec', 'msiexec.exe')
         if ($isRegisteredMsiExec) {

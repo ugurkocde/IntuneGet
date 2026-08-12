@@ -569,6 +569,7 @@ export function normalizeQaPsadtConfig(
     detectionRules,
     postInstallCommands: value?.postInstallCommands || [],
     postUninstallCommands: value?.postUninstallCommands || [],
+    reviewedUninstallArguments: value?.reviewedUninstallArguments || [],
   };
 }
 

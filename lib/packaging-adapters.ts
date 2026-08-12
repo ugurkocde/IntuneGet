@@ -3,7 +3,19 @@ import type { ProcessToClose, PSADTConfig } from '@/types/psadt';
 interface ApplicationPackagingAdapter {
   wingetId: string;
   requiredProcessesToClose?: readonly ProcessToClose[];
+  reviewedUninstallArguments?: readonly string[];
 }
+
+const VISUAL_STUDIO_WINGET_IDS = [
+  'Microsoft.VisualStudio.BuildTools',
+  'Microsoft.VisualStudio.Community',
+  'Microsoft.VisualStudio.Enterprise',
+  'Microsoft.VisualStudio.Professional',
+  'Microsoft.VisualStudio.2019.BuildTools',
+  'Microsoft.VisualStudio.2019.Community',
+  'Microsoft.VisualStudio.2019.Enterprise',
+  'Microsoft.VisualStudio.2019.Professional',
+] as const;
 
 /**
  * Reviewed application-specific behavior that cannot be derived safely from a
@@ -12,6 +24,22 @@ interface ApplicationPackagingAdapter {
  * in the QA execution-profile hash.
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
+  {
+    wingetId: 'RARLab.WinRAR',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
+    wingetId: 'SoftwareOK.Q-Dir',
+    reviewedUninstallArguments: ['/silent', 'forall'],
+  },
+  {
+    wingetId: 'PostgreSQL.PostgreSQL.18',
+    reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
+  },
+  ...VISUAL_STUDIO_WINGET_IDS.map((wingetId) => ({
+    wingetId,
+    reviewedUninstallArguments: ['--quiet', '--norestart'],
+  })),
   {
     wingetId: 'Adobe.CreativeCloud',
     requiredProcessesToClose: [
@@ -55,6 +83,14 @@ function normalizeProcessName(name: string): string {
   return name.trim().replace(/\.exe$/i, '');
 }
 
+function normalizeUninstallArgument(argument: string, wingetId: string): string {
+  const normalized = argument.trim();
+  if (!normalized || normalized.length > 256 || /[\x00-\x1f\x7f]/.test(normalized)) {
+    throw new Error(`Invalid reviewed uninstall argument for ${wingetId}`);
+  }
+  return normalized;
+}
+
 export function applyApplicationPackagingAdapter(
   wingetId: string,
   config: PSADTConfig
@@ -63,7 +99,7 @@ export function applyApplicationPackagingAdapter(
   const adapter = APPLICATION_PACKAGING_ADAPTERS.find(
     ({ wingetId: adapterWingetId }) => adapterWingetId.toLowerCase() === normalizedWingetId
   );
-  if (!adapter?.requiredProcessesToClose?.length) return config;
+  if (!adapter) return config;
 
   const processesToClose = (config.processesToClose || []).map((process) => {
     const name = normalizeProcessName(process.name);
@@ -76,7 +112,7 @@ export function applyApplicationPackagingAdapter(
     processesToClose.map(({ name }) => name.toLowerCase())
   );
 
-  for (const required of adapter.requiredProcessesToClose) {
+  for (const required of adapter.requiredProcessesToClose || []) {
     const normalizedName = normalizeProcessName(required.name);
     if (!configuredNames.has(normalizedName.toLowerCase())) {
       processesToClose.push({ ...required, name: normalizedName });
@@ -84,5 +120,19 @@ export function applyApplicationPackagingAdapter(
     }
   }
 
-  return { ...config, processesToClose };
+  const reviewedUninstallArguments = (config.reviewedUninstallArguments || []).map(
+    (argument) => normalizeUninstallArgument(argument, adapter.wingetId)
+  );
+  const configuredArguments = new Set(
+    reviewedUninstallArguments.map((argument) => argument.toLowerCase())
+  );
+  for (const required of adapter.reviewedUninstallArguments || []) {
+    const normalized = normalizeUninstallArgument(required, adapter.wingetId);
+    if (!configuredArguments.has(normalized.toLowerCase())) {
+      reviewedUninstallArguments.push(normalized);
+      configuredArguments.add(normalized.toLowerCase());
+    }
+  }
+
+  return { ...config, processesToClose, reviewedUninstallArguments };
 }

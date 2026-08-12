@@ -567,6 +567,44 @@ describe('EXE product identity PSADT generation', () => {
     expect(inno).toContain("$safeManifestUninstallArguments = @('/VERYSILENT /NORESTART' -split '\\s+'");
   });
 
+  it('appends only bounded reviewed arguments to the exact registered vendor uninstaller', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'exe',
+        uninstall_command: 'REGISTRY_UNINSTALL:WinRAR',
+        package_config: {
+          psadtConfig: {
+            reviewedUninstallArguments: ['/S', "vendor's-argument", '/S'],
+          },
+        },
+      }),
+      'winrar.exe'
+    );
+
+    expect(uninstall).toContain("$reviewedUninstallArguments = @('/S', 'vendor''s-argument')");
+    expect(uninstall).toContain(
+      "@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0"
+    );
+    expect(uninstall.indexOf('$reviewedUninstallArguments = @(')).toBeLessThan(
+      uninstall.indexOf('$uninstallHandle = Start-ADTProcess @uninstallProcessParameters')
+    );
+  });
+
+  it('rejects unsafe reviewed uninstall argument collections', () => {
+    expect(() => generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'exe',
+        uninstall_command: 'REGISTRY_UNINSTALL:Example',
+        package_config: {
+          psadtConfig: { reviewedUninstallArguments: ['--quiet\nRemove-Item C:\\'] },
+        },
+      }),
+      'example.exe'
+    )).toThrow('single-line');
+  });
+
   it('uses the Adobe Creative Cloud desktop client unattended removal contract', () => {
     const uninstall = generator.getUninstallCommand.call(
       generator,
