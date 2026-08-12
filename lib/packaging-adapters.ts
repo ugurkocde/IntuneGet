@@ -45,6 +45,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // xTool Studio's NSIS bootstrapper likewise installs below the invoking
+    // account's LocalAppData even when the WinGet manifest is selected as a
+    // machine package. LocalSystem therefore registers an uninstaller below
+    // systemprofile that is unavailable for the later Intune removal cycle.
+    wingetId: 'Makeblock.xToolStudio',
+    requiredInstallScope: 'user',
+  },
+  {
     wingetId: 'RARLab.WinRAR',
     reviewedUninstallArguments: ['/S'],
   },

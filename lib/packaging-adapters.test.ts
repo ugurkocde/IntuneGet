@@ -9,6 +9,8 @@ describe('application packaging adapters', () => {
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
+    expect(resolveApplicationInstallScope('Makeblock.xToolStudio', 'machine')).toBe('user');
+    expect(resolveApplicationInstallScope(' makeblock.xtoolstudio ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
   });
