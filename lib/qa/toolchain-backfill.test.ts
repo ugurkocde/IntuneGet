@@ -4,6 +4,7 @@ import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
   it.each([
+    'Microsoft.SQLServerManagementStudio.22',
     'Microsoft.VisualStudio.BuildTools',
     'Microsoft.VisualStudio.Community',
     'Microsoft.VisualStudio.Enterprise',

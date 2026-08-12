@@ -11,7 +11,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '267c8cbb3c520feaec04c2254de1a667b8fa90d4',
+  packagerCommit: 'ca37c9eadd7b64d4d926f60a158e3dafb4554788',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -41,6 +41,7 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   'fc18fffd40f6d362be251e05e2bc784373dfc735',
   'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99',
   '354756f01cb572cfd410f95dd6af5ab3a9cb8efb',
+  '267c8cbb3c520feaec04c2254de1a667b8fa90d4',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
