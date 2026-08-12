@@ -25,8 +25,8 @@ interface ProgressStepperProps {
 
 const QA_STAGE: ProgressStage = {
   id: 'qa',
-  label: 'Test',
-  description: 'Running an isolated installation test before deployment',
+  label: 'Installation check',
+  description: 'Checking for a successful installation test for this app version and configuration',
   minProgress: 0,
   maxProgress: 0,
 };
@@ -102,7 +102,7 @@ export function ProgressStepper({
                     <Check className="w-[18px] h-[18px] text-status-success" />
                   ) : isCurrent ? (
                     isQaStage ? (
-                      <ShieldCheck className="w-[18px] h-[18px] text-accent-violet animate-pulse" aria-label="Installation test in progress" />
+                      <ShieldCheck className="w-[18px] h-[18px] text-accent-violet animate-pulse" aria-label="Installation check in progress" />
                     ) : (
                       <Loader2 className="w-[18px] h-[18px] text-accent-cyan animate-spin" aria-label="Processing" />
                     )
