@@ -608,14 +608,14 @@ describe('GET /api/cron/qa-enqueue', () => {
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
-        winget_id: 'Microsoft.SQLServerManagementStudio.22',
-        name: 'Microsoft SQL Server Management Studio 22',
-        publisher: 'Microsoft',
+        winget_id: 'Makeblock.xToolStudio',
+        name: 'xTool Studio',
+        publisher: 'Makeblock',
       }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'Microsoft.SQLServerManagementStudio.22',
+          wingetId: 'Makeblock.xToolStudio',
           packagerCommit: 'bafea79a8dde42be074c385c35b4887fb5833aa0',
           status: 'failed',
         }),
@@ -637,15 +637,14 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Microsoft.SQLServerManagementStudio.22',
+      winget_id: 'Makeblock.xToolStudio',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {
         profileKind: 'catalog-default',
         silentArgs: '/S',
         psadtConfig: {
-          reviewedUninstallArguments: ['--quiet', '--norestart', '--noweb'],
-          uninstallCompletionTimeoutMinutes: 15,
+          reviewedUninstallArguments: [],
         },
       },
     });

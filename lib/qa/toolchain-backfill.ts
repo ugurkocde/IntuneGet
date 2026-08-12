@@ -10,6 +10,9 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'b3b2729bab6959a554c0e6d41af0a841d6177386': [
+    'Makeblock.xToolStudio',
+  ],
   '072dc26c5c25369bf01f265af5af17c47c0e50e5': [
     'Microsoft.SQLServerManagementStudio.21',
     'Microsoft.SQLServerManagementStudio.22',

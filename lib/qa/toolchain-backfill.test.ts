@@ -7,10 +7,21 @@ describe('QA toolchain targeted retries', () => {
     'Microsoft.SQLServerManagementStudio.21',
     'Microsoft.SQLServerManagementStudio.22',
     'Microsoft.SQLServerManagementStudio.22.Preview',
-  ])('retries the SSMS Visual Studio Installer lifecycle for %s', (wingetId) => {
+  ])('keeps the SSMS retry scoped to its historical toolchain release for %s', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '072dc26c5c25369bf01f265af5af17c47c0e50e5',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries xTool Studio for the current user-scope correction', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
     )).toBe(true);
   });
 
