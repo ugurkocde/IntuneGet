@@ -271,6 +271,8 @@ describe('SnapshotCatalogSource', () => {
     expect(result?.detection.minimumVersion).toBe('120.0');
     expect(result?.phase_results.detectionAfterUninstall?.exitCode).toBe(1);
     expect(result?.effective_configuration?.deployMode).toBe('Silent');
+    expect(await source.getQaResult('Google.Chrome', 'B'.repeat(64))).not.toBeNull();
+    expect(await source.getQaResult('Google.Chrome', 'A'.repeat(64))).toBeNull();
     expect(await source.getQaResult('Mozilla.Firefox')).toBeNull();
   });
 

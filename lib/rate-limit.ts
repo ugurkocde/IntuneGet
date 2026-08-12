@@ -90,6 +90,12 @@ export const PUBLIC_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60 * 1000,
 };
 
+/** QA details: independent allowance for opening exact recent-run evidence. */
+export const QA_DETAILS_RATE_LIMIT: RateLimitConfig = {
+  limit: 90,
+  windowMs: 60 * 1000,
+};
+
 /** Live QA status: two-second foreground polling with room for shared egress. */
 export const QA_LIVE_RATE_LIMIT: RateLimitConfig = {
   limit: 180,

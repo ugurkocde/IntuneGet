@@ -566,15 +566,19 @@ export class SnapshotCatalogSource implements CatalogSource {
     );
   }
 
-  async getQaResult(wingetId: string): Promise<QaResultRow | null> {
+  async getQaResult(
+    wingetId: string,
+    packageProfileSha256?: string
+  ): Promise<QaResultRow | null> {
     return withDb(
       (db) => {
         if (!hasCompatibleQaResultsTable(db)) return null;
+        const sql = packageProfileSha256
+          ? "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' AND package_profile_sha256 = ? LIMIT 1"
+          : "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' LIMIT 1";
         const row = db
-          .prepare(
-            "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' LIMIT 1"
-          )
-          .get(wingetId) as
+          .prepare(sql)
+          .get(...(packageProfileSha256 ? [wingetId, packageProfileSha256.toUpperCase()] : [wingetId])) as
           | (Omit<QaResultRow, 'detection' | 'phase_results' | 'changes' | 'environment' | 'effective_configuration'> & {
               detection: string;
               phase_results: string;

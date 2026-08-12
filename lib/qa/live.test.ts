@@ -44,6 +44,7 @@ describe('buildQaLiveResponse', () => {
       consecutivePollFailures: 0,
       recent: [{
         winget_id: 'Example.App',
+        package_profile_sha256: 'A'.repeat(64),
         display_name: 'Example',
         tested_version: '2.0.0',
         architecture: 'x64',
@@ -57,6 +58,7 @@ describe('buildQaLiveResponse', () => {
 
     expect(response.recent[0]).toMatchObject({
       displayName: 'Example',
+      packageProfileSha256: 'A'.repeat(64),
       durationSeconds: 94.25,
     });
   });

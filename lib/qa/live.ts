@@ -9,7 +9,7 @@ import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResp
 const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
 export const QA_LIVE_RECENT_RESULT_COLUMNS =
-  'winget_id, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds';
+  'winget_id, package_profile_sha256, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds';
 
 interface CandidateRow {
   id: string;
@@ -49,6 +49,7 @@ interface PollRow {
 
 interface ResultRow {
   winget_id: string;
+  package_profile_sha256: string;
   display_name?: string | null;
   tested_version: string;
   architecture: string;
@@ -351,6 +352,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     },
     recent: input.recent.map((result) => ({
       wingetId: result.winget_id,
+      packageProfileSha256: result.package_profile_sha256,
       displayName: result.display_name || appById.get(result.winget_id)?.name || result.winget_id,
       testedVersion: result.tested_version,
       catalogVersion: appById.get(result.winget_id)?.latest_version || result.tested_version,

@@ -228,12 +228,25 @@ export interface Database {
         Row: {
           package_profile_sha256: string;
           winget_id: string;
+          display_name: string | null;
+          publisher: string | null;
           tested_version: string;
           architecture: string;
           installer_sha256: string;
           outcome: 'Passed' | 'Failed';
           tested_at_utc: string;
           overall_duration_seconds: number | null;
+          installer_type: string | null;
+          install_command: string | null;
+          uninstall_command: string | null;
+          detection: Json | null;
+          phase_results: Json | null;
+          changes: Json | null;
+          relevant_event_count: number | null;
+          environment: Json | null;
+          effective_configuration: Json | null;
+          qa_schema_version: number | null;
+          profile_kind: 'catalog-default' | 'deployment-config';
           psadt_version: string;
           psadt_template_sha256: string;
           psadt_config_sha256: string;

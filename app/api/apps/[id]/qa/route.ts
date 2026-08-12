@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCatalogSource } from '@/lib/catalog';
 import { classifyQaFailure } from '@/lib/qa/classify';
-import { applyRateLimit, getIpKey, PUBLIC_RATE_LIMIT } from '@/lib/rate-limit';
+import { applyRateLimit, getIpKey, QA_DETAILS_RATE_LIMIT } from '@/lib/rate-limit';
 import type { QaDetailsResponse } from '@/types/qa';
 
 interface RouteParams {
@@ -9,9 +9,13 @@ interface RouteParams {
 }
 
 const APP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*\.[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+const PACKAGE_PROFILE_PATTERN = /^[A-Fa-f0-9]{64}$/;
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const rateLimitResponse = await applyRateLimit(getIpKey(request), PUBLIC_RATE_LIMIT);
+  const rateLimitResponse = await applyRateLimit(
+    `qa-details:${getIpKey(request)}`,
+    QA_DETAILS_RATE_LIMIT
+  );
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await params;
@@ -24,11 +28,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!APP_ID_PATTERN.test(wingetId)) {
     return NextResponse.json({ error: 'Invalid WinGet package ID' }, { status: 400 });
   }
+  const requestedProfile = request.nextUrl.searchParams.get('profile');
+  if (requestedProfile && !PACKAGE_PROFILE_PATTERN.test(requestedProfile)) {
+    return NextResponse.json({ error: 'Invalid QA package profile' }, { status: 400 });
+  }
+  const packageProfileSha256 = requestedProfile?.toUpperCase();
 
   try {
-    const row = await getCatalogSource().getQaResult(wingetId);
+    const row = await getCatalogSource().getQaResult(wingetId, packageProfileSha256);
     if (!row) {
-      return NextResponse.json({ error: 'No QA result is available for this app' }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: packageProfileSha256
+            ? 'This exact QA result is still being published'
+            : 'No QA result is available for this app',
+        },
+        { status: 404, headers: { 'Cache-Control': 'no-store', 'Retry-After': '2' } }
+      );
     }
 
     const response: QaDetailsResponse = {
@@ -67,6 +83,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error('Failed to load QA details:', error);
-    return NextResponse.json({ error: 'Failed to load QA details' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'QA evidence is temporarily unavailable' },
+      { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '2' } }
+    );
   }
 }

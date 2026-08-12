@@ -168,6 +168,7 @@ export interface QaLiveResponse {
   };
   recent: Array<{
     wingetId: string;
+    packageProfileSha256: string;
     displayName: string;
     testedVersion: string;
     catalogVersion: string;

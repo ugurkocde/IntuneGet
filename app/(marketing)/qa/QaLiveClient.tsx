@@ -418,7 +418,11 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
 
 function DashboardContent() {
   const { data, isLoading, isError, refetch } = useQaLive();
-  const [selected, setSelected] = useState<{ wingetId: string; catalogVersion: string } | null>(null);
+  const [selected, setSelected] = useState<{
+    wingetId: string;
+    catalogVersion: string;
+    packageProfileSha256: string;
+  } | null>(null);
   const [showFullQueue, setShowFullQueue] = useState(false);
 
   if (isLoading) {
@@ -489,9 +493,13 @@ function DashboardContent() {
               <div className="divide-y divide-overlay/10 sm:hidden">
                 {data.recent.map((item) => (
                   <button
-                    key={`${item.wingetId}-${item.testedVersion}-${item.architecture}`}
+                    key={item.packageProfileSha256}
                     type="button"
-                    onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
+                    onClick={() => setSelected({
+                      wingetId: item.wingetId,
+                      catalogVersion: item.catalogVersion,
+                      packageProfileSha256: item.packageProfileSha256,
+                    })}
                     className={cn(
                       'flex min-h-20 w-full items-center gap-3 border-l-2 px-5 py-3 text-left transition-colors hover:bg-overlay/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan',
                       resultEdgeClass(item.outcome)
@@ -525,14 +533,22 @@ function DashboardContent() {
                   <tbody className="divide-y divide-overlay/10">
                     {data.recent.map((item) => (
                       <tr
-                        key={`${item.wingetId}-${item.testedVersion}-${item.architecture}`}
-                        onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
+                        key={item.packageProfileSha256}
+                        onClick={() => setSelected({
+                          wingetId: item.wingetId,
+                          catalogVersion: item.catalogVersion,
+                          packageProfileSha256: item.packageProfileSha256,
+                        })}
                         className="cursor-pointer transition-colors hover:bg-overlay/5"
                       >
                         <td className={cn('border-l-2 px-6 py-3', resultEdgeClass(item.outcome))}>
                           <button
                             type="button"
-                            onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion })}
+                            onClick={() => setSelected({
+                              wingetId: item.wingetId,
+                              catalogVersion: item.catalogVersion,
+                              packageProfileSha256: item.packageProfileSha256,
+                            })}
                             className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                           >
                             <AppIcon packageId={item.wingetId} packageName={item.displayName} size="sm" />
@@ -565,6 +581,7 @@ function DashboardContent() {
         <QaDetailsDialog
           wingetId={selected.wingetId}
           catalogVersion={selected.catalogVersion}
+          packageProfileSha256={selected.packageProfileSha256}
           open={Boolean(selected)}
           onOpenChange={(open) => { if (!open) setSelected(null); }}
         />

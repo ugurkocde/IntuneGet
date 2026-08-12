@@ -11,7 +11,7 @@ vi.mock('@/lib/catalog', () => ({
 vi.mock('@/lib/rate-limit', () => ({
   applyRateLimit: applyRateLimitMock,
   getIpKey: () => 'ip:test',
-  PUBLIC_RATE_LIMIT: { limit: 30, windowMs: 60_000 },
+  QA_DETAILS_RATE_LIMIT: { limit: 90, windowMs: 60_000 },
 }));
 
 import { GET } from './route';
@@ -75,6 +75,22 @@ describe('GET /api/apps/[id]/qa', () => {
     expect(JSON.stringify(body)).not.toMatch(/runUrl|runId|runAttempt|testId|computerName|executedAs/);
     expect(JSON.stringify(body)).not.toMatch(/processName|promptMessage|brandingPath/);
     expect(body.classification).toBeNull();
+    expect(applyRateLimitMock).toHaveBeenCalledWith(
+      'qa-details:ip:test',
+      { limit: 90, windowMs: 60_000 }
+    );
+  });
+
+  it('loads the exact package profile selected in recent results', async () => {
+    getQaResultMock.mockResolvedValue(row);
+    const profile = 'a'.repeat(64);
+    const response = await GET(
+      new NextRequest(`http://localhost/api/apps/OpenJS.NodeJS/qa?profile=${profile}`),
+      { params: Promise.resolve({ id: 'OpenJS.NodeJS' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(getQaResultMock).toHaveBeenCalledWith('OpenJS.NodeJS', 'A'.repeat(64));
   });
 
   it('returns 404 for an untested app', async () => {
@@ -91,5 +107,24 @@ describe('GET /api/apps/[id]/qa', () => {
     });
     expect(response.status).toBe(400);
     expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for an invalid package profile without querying QA data', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost/api/apps/OpenJS.NodeJS/qa?profile=not-a-hash'),
+      { params: Promise.resolve({ id: 'OpenJS.NodeJS' }) }
+    );
+    expect(response.status).toBe(400);
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable service response when the evidence store fails', async () => {
+    getQaResultMock.mockRejectedValue(new Error('temporary database failure'));
+    const response = await GET(new NextRequest('http://localhost/api/apps/OpenJS.NodeJS/qa'), {
+      params: Promise.resolve({ id: 'OpenJS.NodeJS' }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('2');
   });
 });

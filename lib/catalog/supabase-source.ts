@@ -380,7 +380,36 @@ export class SupabaseCatalogSource implements CatalogSource {
     return (data || []) as QaStatusRow[];
   }
 
-  async getQaResult(wingetId: string): Promise<QaResultRow | null> {
+  async getQaResult(
+    wingetId: string,
+    packageProfileSha256?: string
+  ): Promise<QaResultRow | null> {
+    if (packageProfileSha256) {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('qa_package_results')
+        .select(
+          'package_profile_sha256, winget_id, display_name, publisher, tested_version, architecture, installer_sha256, outcome, tested_at_utc, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, effective_configuration, qa_schema_version, psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256, packager_commit, package_content_sha256'
+        )
+        .eq('winget_id', wingetId)
+        .eq('package_profile_sha256', packageProfileSha256.toUpperCase())
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Failed to read exact QA package result: ${error.message}`);
+      }
+      if (!data?.detection || !data.phase_results || !data.install_command || !data.uninstall_command) {
+        return null;
+      }
+
+      return {
+        ...data,
+        display_name: data.display_name || wingetId,
+        publisher: data.publisher || '',
+        test_level: 'psadt-package',
+      } as unknown as QaResultRow;
+    }
+
     const supabase = serviceOrAnonClient();
     if (!supabase) return null;
 
@@ -394,8 +423,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       .maybeSingle();
 
     if (error) {
-      console.error('Failed to read QA result:', error.message);
-      return null;
+      throw new Error(`Failed to read QA result: ${error.message}`);
     }
 
     return (data as QaResultRow | null) || null;

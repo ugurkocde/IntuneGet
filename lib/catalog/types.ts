@@ -218,8 +218,8 @@ export interface CatalogSource {
   /** Latest active queued/running candidate for each requested app. */
   getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]>;
 
-  /** Latest compact QA result for one catalog app. */
-  getQaResult(wingetId: string): Promise<QaResultRow | null>;
+  /** Exact package-profile QA result, or the latest catalog result when omitted. */
+  getQaResult(wingetId: string, packageProfileSha256?: string): Promise<QaResultRow | null>;
 
   // --- update detection ---
 
