@@ -74,6 +74,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
   },
   {
+    // Opera registers `opera.exe /uninstall`, which presents a confirmation
+    // dialog and leaves the ARP entry intact under unattended SYSTEM removal.
+    // Its Chromium-derived uninstaller accepts /silent; close the browser
+    // first so both upgrades and removals can complete deterministically.
+    wingetId: 'Opera.Opera',
+    requiredProcessesToClose: [
+      { name: 'opera', description: 'Opera browser' },
+    ],
+    reviewedUninstallArguments: ['/silent'],
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the

@@ -500,7 +500,13 @@ describe('GET /api/cron/qa-enqueue', () => {
       status: 'queued',
       priority: 1_000,
       demand_source: 'operator',
-      test_config: { profileKind: 'catalog-default' },
+      test_config: {
+        profileKind: 'catalog-default',
+        psadtConfig: {
+          processesToClose: [{ name: 'opera', description: 'Opera browser' }],
+          reviewedUninstallArguments: ['/silent'],
+        },
+      },
     });
   });
 

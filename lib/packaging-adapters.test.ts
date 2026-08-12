@@ -29,6 +29,12 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['--mode', 'unattended', '--unattendedmodeui', 'none']);
     expect(
+      applyApplicationPackagingAdapter('Opera.Opera', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      processesToClose: [{ name: 'opera', description: 'Opera browser' }],
+      reviewedUninstallArguments: ['/silent'],
+    });
+    expect(
       applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2022.Professional',
         DEFAULT_PSADT_CONFIG
@@ -108,6 +114,21 @@ describe('application packaging adapters', () => {
     });
 
     expect(adapted.reviewedUninstallArguments).toEqual(['/s', '--custom']);
+  });
+
+  it('preserves customer Opera lifecycle settings while adding the reviewed silent removal contract', () => {
+    const adapted = applyApplicationPackagingAdapter('opera.opera', {
+      ...DEFAULT_PSADT_CONFIG,
+      processesToClose: [
+        { name: 'Opera.exe', description: 'Customer browser session' },
+      ],
+      reviewedUninstallArguments: ['/SILENT', '--custom'],
+    });
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'Opera', description: 'Customer browser session' },
+    ]);
+    expect(adapted.reviewedUninstallArguments).toEqual(['/SILENT', '--custom']);
   });
 
   it('closes the reviewed Adobe desktop processes before Creative Cloud removal', () => {
