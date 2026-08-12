@@ -179,3 +179,29 @@ describe('customer-deployed QA campaign migration contract', () => {
     expect(sql).not.toContain('union all');
   });
 });
+
+describe('QA package compatibility block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260812072500_qa_package_compatibility_blocks.sql'
+    ),
+    'utf8'
+  );
+
+  it('records an exact immutable installer tuple and keeps it private', () => {
+    expect(sql).toContain('primary key (winget_id, version, architecture, installer_sha256)');
+    expect(sql).toContain("block_code in ('user_scope_machine_dependencies')");
+    expect(sql).toContain('enable row level security');
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+  });
+
+  it('skips only the blocked version while preserving deployed-only demand', () => {
+    expect(sql).toContain('from public.qa_package_blocks as block');
+    expect(sql).toContain('block.version = app.latest_version');
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain('from deployed');
+    expect(sql).not.toContain('union all');
+  });
+});

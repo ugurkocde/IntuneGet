@@ -37,6 +37,7 @@ import {
   qaSha256,
 } from '@/lib/qa/package-profile';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
 
 type QueryResult = {
   data: unknown;
@@ -84,6 +85,7 @@ function createSupabaseStub(options: {
   const pollRunUpdates: Array<Record<string, unknown>> = [];
   const cursorUpdates: Array<Record<string, unknown>> = [];
   const candidateInserts: Array<Record<string, unknown>> = [];
+  const compatibilityBlocks: Array<Record<string, unknown>> = [];
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   let candidatePageIndex = 0;
 
@@ -168,6 +170,14 @@ function createSupabaseStub(options: {
       if (table === 'qa_package_results') {
         return query({ data: options.packageResults || [], error: null });
       }
+      if (table === 'qa_package_blocks') {
+        return {
+          upsert: vi.fn((row: Record<string, unknown>) => {
+            compatibilityBlocks.push(row);
+            return query({ data: null, error: null });
+          }),
+        };
+      }
       if (table === 'qa_candidates') {
         return {
           insert: vi.fn((row: Record<string, unknown>) => {
@@ -194,6 +204,7 @@ function createSupabaseStub(options: {
     pollRunUpdates,
     cursorUpdates,
     candidateInserts,
+    compatibilityBlocks,
     rpcCalls,
   };
 }
@@ -311,6 +322,7 @@ beforeEach(() => {
     etag: '"next"',
     rateLimitedUntil: null,
   });
+  resolveDependenciesMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -453,6 +465,55 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(pollRunUpdates[0]).toMatchObject({
       demand_backfill_requested_count: 1,
       demand_backfill_count: 1,
+    });
+  });
+
+  it('persists a user-scope dependency compatibility block without degrading polling', async () => {
+    const { client, candidateInserts, compatibilityBlocks, pollRunUpdates } =
+      createSupabaseStub({
+        demandBackfillApps: ['Blocked.App'],
+        supportedApps: [
+          {
+            winget_id: 'Blocked.App',
+            name: 'Blocked',
+            publisher: 'Contoso',
+            latest_version: '1.0.0',
+          },
+        ],
+      });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    resolveDependenciesMock.mockRejectedValueOnce(
+      new WingetDependencyCompatibilityError(
+        'Blocked.App declares machine-wide package dependencies that cannot be installed safely in user scope.'
+      )
+    );
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(compatibilityBlocks).toEqual([
+      expect.objectContaining({
+        winget_id: 'Blocked.App',
+        version: '1.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        block_code: 'user_scope_machine_dependencies',
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({
+      status: 'succeeded',
+      unavailable_count: 1,
+      error_count: 0,
     });
   });
 

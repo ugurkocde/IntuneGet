@@ -249,6 +249,27 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['qa_package_results']['Insert']>;
         Relationships: GenericRelationship[];
       };
+      qa_package_blocks: {
+        Row: {
+          winget_id: string;
+          version: string;
+          architecture: 'x64' | 'x86' | 'arm64';
+          installer_sha256: string;
+          block_code: 'user_scope_machine_dependencies';
+          detail: string;
+          observed_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['qa_package_blocks']['Row'],
+          'observed_at' | 'updated_at'
+        > & {
+          observed_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_package_blocks']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_pipeline_control: {
         Row: {
           id: string;

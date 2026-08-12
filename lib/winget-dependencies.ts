@@ -43,6 +43,25 @@ const REVIEWED_DEPENDENCY_POLICIES: readonly ReviewedDependencyPolicy[] = [
   },
 ];
 
+export class WingetDependencyCompatibilityError extends Error {
+  readonly blockCode: 'user_scope_machine_dependencies';
+
+  constructor(
+    message: string,
+    blockCode: 'user_scope_machine_dependencies' = 'user_scope_machine_dependencies'
+  ) {
+    super(message);
+    this.name = 'WingetDependencyCompatibilityError';
+    this.blockCode = blockCode;
+  }
+}
+
+export function isWingetDependencyCompatibilityError(
+  value: unknown
+): value is WingetDependencyCompatibilityError {
+  return value instanceof WingetDependencyCompatibilityError;
+}
+
 function reviewedDependencyPolicy(
   packageIdentifier: string
 ): ReviewedDependencyPolicy | null {
@@ -188,7 +207,7 @@ export async function resolveWingetPackageDependencies(
     input.installScope?.trim().toLowerCase() === 'user' &&
     (rootInstaller.packageDependencies || []).length > 0
   ) {
-    throw new Error(
+    throw new WingetDependencyCompatibilityError(
       `${input.wingetId} declares machine-wide package dependencies that cannot be installed safely in user scope.`
     );
   }

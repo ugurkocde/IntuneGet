@@ -17,7 +17,10 @@ import {
 } from '@/lib/qa/candidate';
 import { buildQaCatalogTestConfig } from '@/lib/qa/test-config';
 import { evaluatePackagingContract } from '@/lib/packaging-contract';
-import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
+import {
+  isWingetDependencyCompatibilityError,
+  resolveWingetPackageDependencies,
+} from '@/lib/winget-dependencies';
 import {
   QA_PSADT_TOOLCHAIN,
   buildQaPackageIdentity,
@@ -577,13 +580,46 @@ export async function GET(request: Request) {
               manifest,
               installer: selectedForVm.installer as never,
             });
-            const packageDependencies = await resolveWingetPackageDependencies({
-              wingetId: app.winget_id,
-              version: resolution.version,
-              architecture,
-              installerSha256,
-              installScope: testConfig.scope,
-            });
+            let packageDependencies: Awaited<
+              ReturnType<typeof resolveWingetPackageDependencies>
+            >;
+            try {
+              packageDependencies = await resolveWingetPackageDependencies({
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                installerSha256,
+                installScope: testConfig.scope,
+              });
+            } catch (error) {
+              if (!isWingetDependencyCompatibilityError(error)) throw error;
+              const { error: blockError } = await supabase!
+                .from('qa_package_blocks')
+                .upsert({
+                  winget_id: app.winget_id,
+                  version: resolution.version,
+                  architecture,
+                  installer_sha256: installerSha256,
+                  block_code: error.blockCode,
+                  detail: error.message,
+                  observed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }, {
+                  onConflict: 'winget_id,version,architecture,installer_sha256',
+                });
+              if (blockError) {
+                throw new Error(`Could not persist the QA compatibility block: ${blockError.message}`);
+              }
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_package_compatibility_blocked', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                blockCode: error.blockCode,
+              });
+              return;
+            }
             if (packageDependencies.length > 0) {
               testConfig.packageDependencies = packageDependencies;
             }
