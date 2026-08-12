@@ -229,3 +229,40 @@ describe('QA package result duration migration contract', () => {
     expect(sql).toContain('to anon');
   });
 });
+
+describe('QA candidate operator recovery migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260812174000_qa_candidate_operator_recovery.sql'
+    ),
+    'utf8'
+  );
+
+  it('uses the bounded synchronization credential and only terminal infrastructure states', () => {
+    expect(sql).toContain("extensions.digest(coalesce(p_secret, ''), 'sha256')");
+    expect(sql).toContain("test_level = 'psadt-package'");
+    expect(sql).toContain("status in ('error', 'superseded')");
+    expect(sql).not.toContain("status in ('failed'");
+    expect(sql).not.toContain("status in ('dispatched', 'running')");
+  });
+
+  it('clears all prior attempt state and exposes only the narrow RPC', () => {
+    for (const column of [
+      'attempts = 0',
+      'dispatched_at = null',
+      'started_at = null',
+      'finished_at = null',
+      'github_run_id = null',
+      'github_run_url = null',
+      'phase = null',
+      'live_activity = null',
+      'live_log = null',
+      'failure_summary = null',
+    ]) {
+      expect(sql).toContain(column);
+    }
+    expect(sql).toContain('from public, authenticated, service_role');
+    expect(sql).toContain('to anon');
+  });
+});
