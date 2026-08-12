@@ -42,7 +42,7 @@ interface TriggerResult {
   code?: 'QA_FAILED_CURRENT_VERSION' | 'QA_NOT_PASSED_CURRENT_VERSION';
 }
 
-interface UpdateInfo {
+export interface UpdateInfo {
   wingetId: string;
   currentVersion: string;
   latestVersion: string;
@@ -58,6 +58,24 @@ interface UpdateInfo {
   nestedInstallerPath?: string;
   currentIntuneAppId?: string;
 }
+
+export type InstallerResolutionFailureReason =
+  | 'app_not_in_catalog'
+  | 'version_record_missing'
+  | 'installer_metadata_missing'
+  | 'no_compatible_installer'
+  | 'installer_url_missing'
+  | 'installer_hash_invalid';
+
+export interface InstallerResolutionFailure {
+  reason: InstallerResolutionFailureReason;
+  /** Human-readable, user-facing message with app/version/arch/scope context. */
+  message: string;
+}
+
+export type InstallerResolutionResult =
+  | { ok: true; info: UpdateInfo }
+  | { ok: false; failure: InstallerResolutionFailure };
 
 interface RateLimitCheck {
   allowed: boolean;
@@ -844,24 +862,48 @@ export async function getLatestInstallerInfo(
   wingetId: string,
   architecture?: string,
   installScope?: string
-): Promise<UpdateInfo | null> {
+): Promise<InstallerResolutionResult> {
   const catalog = getCatalogSource();
 
   // Get the curated app info
   const curatedApp = await catalog.getAppForInstaller(wingetId);
 
-  if (!curatedApp?.latest_version) {
-    return null;
+  if (!curatedApp) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'app_not_in_catalog',
+        message: `${wingetId} is not in the app catalog, so an update cannot be packaged for it.`,
+      },
+    };
   }
+
+  if (!curatedApp.latest_version) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'version_record_missing',
+        message: `The catalog has no latest version recorded for ${wingetId} yet. Try again after the next catalog sync.`,
+      },
+    };
+  }
+
+  const latestVersion = curatedApp.latest_version;
 
   // Get the version history for the latest version
   const versionInfo = await catalog.getVersionInstallerInfo(
     wingetId,
-    curatedApp.latest_version
+    latestVersion
   );
 
   if (!versionInfo) {
-    return null;
+    return {
+      ok: false,
+      failure: {
+        reason: 'version_record_missing',
+        message: `The catalog has not synced the installer manifest for ${wingetId} ${latestVersion} yet. Try again after the next catalog sync.`,
+      },
+    };
   }
 
   // Bind the selected installer to the deployment's requested architecture.
@@ -871,18 +913,26 @@ export async function getLatestInstallerInfo(
   let nestedInstallerType: string | undefined;
   let nestedInstallerPath: string | undefined;
   let selectedManifestInstaller: WingetInstaller | null = null;
+  const requestedScope = installScope === undefined
+    ? undefined
+    : resolveApplicationInstallScope(wingetId, installScope);
 
   // The installers JSONB uses PascalCase from WinGet manifests.
-  if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    const requestedScope = installScope === undefined
-      ? undefined
-      : resolveApplicationInstallScope(wingetId, installScope);
+  if (Array.isArray(versionInfo.installers) && versionInfo.installers.length > 0) {
     const selectedInstaller = selectWingetInstaller(
       versionInfo.installers,
       architecture,
       requestedScope
     );
-    if (!selectedInstaller) return null;
+    if (!selectedInstaller) {
+      return {
+        ok: false,
+        failure: {
+          reason: 'no_compatible_installer',
+          message: `No installer for ${wingetId} ${latestVersion} matches architecture ${architecture || 'x64'}${requestedScope ? ` and ${requestedScope} install scope` : ''}.`,
+        },
+      };
+    }
     installerUrl = selectedInstaller.InstallerUrl || installerUrl;
     installerSha256 = selectedInstaller.InstallerSha256 || installerSha256;
     installerType = selectedInstaller.InstallerType || installerType;
@@ -892,12 +942,34 @@ export async function getLatestInstallerInfo(
       : undefined;
     selectedManifestInstaller = selectedInstaller as WingetInstaller;
   } else if (architecture) {
-    return null;
+    return {
+      ok: false,
+      failure: {
+        reason: 'installer_metadata_missing',
+        message: `The catalog entry for ${wingetId} ${latestVersion} is missing per-architecture installer metadata.`,
+      },
+    };
+  }
+
+  if (!installerUrl) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'installer_url_missing',
+        message: `The installer manifest for ${wingetId} ${latestVersion} does not include a download URL.`,
+      },
+    };
   }
 
   const normalizedSha256 = normalizeInstallerSha256(installerSha256);
-  if (!installerUrl || !normalizedSha256) {
-    return null;
+  if (!normalizedSha256) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'installer_hash_invalid',
+        message: `The installer manifest for ${wingetId} ${latestVersion} has a missing or invalid SHA-256 hash, so the download cannot be verified.`,
+      },
+    };
   }
 
   const manifestInstaller = {
@@ -921,18 +993,21 @@ export async function getLatestInstallerInfo(
   const normalizedInstaller = normalizeInstaller(manifestInstaller);
 
   return {
-    wingetId,
-    currentVersion: '', // Will be filled by caller
-    latestVersion: curatedApp.latest_version,
-    displayName: curatedApp.name,
-    installerUrl,
-    installerSha256: normalizedSha256,
-    installerType: installerType || 'exe',
-    installCommand: buildCurrentVersionInstallCommand(normalizedInstaller),
-    silentSwitches: normalizedInstaller.silentArgs,
-    installerSuccessCodes: normalizedInstaller.installerSuccessCodes,
-    installScope: normalizedInstaller.scope,
-    nestedInstallerType,
-    nestedInstallerPath,
+    ok: true,
+    info: {
+      wingetId,
+      currentVersion: '', // Will be filled by caller
+      latestVersion,
+      displayName: curatedApp.name,
+      installerUrl,
+      installerSha256: normalizedSha256,
+      installerType: installerType || 'exe',
+      installCommand: buildCurrentVersionInstallCommand(normalizedInstaller),
+      silentSwitches: normalizedInstaller.silentArgs,
+      installerSuccessCodes: normalizedInstaller.installerSuccessCodes,
+      installScope: normalizedInstaller.scope,
+      nestedInstallerType,
+      nestedInstallerPath,
+    },
   };
 }

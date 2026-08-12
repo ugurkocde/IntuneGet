@@ -195,7 +195,14 @@ describe('POST /api/updates/trigger', () => {
 
     const { supabase, policyUpdatePayloads } = createTriggerSupabaseMocks(policy);
     createServerClientMock.mockReturnValue(supabase);
-    getLatestInstallerInfoMock.mockResolvedValue(null);
+    const failureMessage = 'The catalog has not synced the installer manifest for Microsoft.Edge 2.0.0 yet. Try again after the next catalog sync.';
+    getLatestInstallerInfoMock.mockResolvedValue({
+      ok: false,
+      failure: {
+        reason: 'version_record_missing',
+        message: failureMessage,
+      },
+    });
 
     const request = new NextRequest('http://localhost:3000/api/updates/trigger', {
       method: 'POST',
@@ -215,6 +222,7 @@ describe('POST /api/updates/trigger', () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(false);
     expect(body.failed).toBe(1);
+    expect(body.results[0].error).toBe(failureMessage);
     expect(policyUpdatePayloads).toEqual([
       { policy_type: 'auto_update', is_enabled: true },
       { policy_type: 'notify', is_enabled: false },
@@ -242,7 +250,8 @@ describe('POST /api/updates/trigger', () => {
     const { supabase, policyUpdatePayloads } = createTriggerSupabaseMocks(policy);
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      currentVersion: '',
+      ok: true,
+      info: { currentVersion: '' },
     });
     triggerAutoUpdateMock.mockRejectedValue(new Error('trigger crashed'));
 
@@ -292,9 +301,12 @@ describe('POST /api/updates/trigger', () => {
     const { supabase } = createTriggerSupabaseMocks(policy);
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      wingetId: 'Microsoft.Edge',
-      currentVersion: '',
-      latestVersion: '2.0.0',
+      ok: true,
+      info: {
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+      },
     });
     triggerAutoUpdateMock.mockResolvedValue({
       success: false,
@@ -368,13 +380,16 @@ describe('POST /api/updates/trigger', () => {
     });
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      wingetId: 'Microsoft.Edge',
-      currentVersion: '',
-      latestVersion: '2.0.0',
-      displayName: 'Microsoft Edge',
-      installerUrl: 'https://example.com/edge.exe',
-      installerSha256: 'abc123',
-      installerType: 'exe',
+      ok: true,
+      info: {
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+        displayName: 'Microsoft Edge',
+        installerUrl: 'https://example.com/edge.exe',
+        installerSha256: 'abc123',
+        installerType: 'exe',
+      },
     });
     triggerAutoUpdateMock.mockResolvedValue({
       success: true,
@@ -450,13 +465,16 @@ describe('POST /api/updates/trigger', () => {
     });
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      wingetId: 'Microsoft.Edge',
-      currentVersion: '',
-      latestVersion: '2.0.0',
-      displayName: 'Microsoft Edge',
-      installerUrl: 'https://example.com/edge.exe',
-      installerSha256: 'abc123',
-      installerType: 'exe',
+      ok: true,
+      info: {
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+        displayName: 'Microsoft Edge',
+        installerUrl: 'https://example.com/edge.exe',
+        installerSha256: 'abc123',
+        installerType: 'exe',
+      },
     });
     triggerAutoUpdateMock.mockResolvedValue({
       success: true,

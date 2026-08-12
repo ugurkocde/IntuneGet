@@ -176,7 +176,9 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
 
     const result = await getLatestInstallerInfo({} as never, 'Vivaldi.Vivaldi', 'x64');
 
-    expect(result).toMatchObject({
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) throw new Error('Expected installer resolution to succeed');
+    expect(result.info).toMatchObject({
       installCommand: '"Vivaldi.8.1.4087.62.x64.exe" --vivaldi-silent --do-not-launch-chrome',
       silentSwitches: '--vivaldi-silent --do-not-launch-chrome',
       installScope: 'user',
@@ -225,14 +227,144 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       'user'
     );
 
-    expect(machine).toMatchObject({
+    expect(machine).toMatchObject({ ok: true });
+    if (!machine.ok) throw new Error('Expected machine installer resolution to succeed');
+    expect(machine.info).toMatchObject({
       installScope: 'machine',
       silentSwitches: '/silent /allusers=1',
     });
-    expect(user).toMatchObject({
+    expect(user).toMatchObject({ ok: true });
+    if (!user.ok) throw new Error('Expected user installer resolution to succeed');
+    expect(user.info).toMatchObject({
       installScope: 'user',
       silentSwitches: '/silent /allusers=0',
     });
+  });
+
+  it('reports when the app is not in the catalog', async () => {
+    getAppForInstallerMock.mockResolvedValue(null);
+
+    const result = await getLatestInstallerInfo({} as never, 'Missing.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'app_not_in_catalog' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Missing.App');
+  });
+
+  it('reports when the catalog has no latest version', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: null });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'version_record_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports when the latest version manifest has not been synced', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue(null);
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'version_record_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports missing per-architecture installer metadata', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/setup.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installers: [],
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App', 'x64');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'installer_metadata_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports when no installer matches architecture and scope', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/setup.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installers: [{
+        Architecture: 'arm64',
+        Scope: 'user',
+        InstallerUrl: 'https://example.com/setup.exe',
+        InstallerSha256: 'A'.repeat(64),
+      }],
+    });
+
+    const result = await getLatestInstallerInfo(
+      {} as never,
+      'Test.App',
+      'x64',
+      'machine'
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'no_compatible_installer' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+    expect(result.failure.message).toContain('x64');
+    expect(result.failure.message).toContain('machine install scope');
+  });
+
+  it('reports a missing installer URL', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: null,
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'installer_url_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports a missing or invalid installer hash', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/setup.exe',
+      installer_sha256: 'not-a-sha256',
+      installer_type: 'exe',
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'installer_hash_invalid' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
   });
 
   it('records a current QA failure as a safety skip before creating history or a job', async () => {

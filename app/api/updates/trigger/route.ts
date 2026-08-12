@@ -273,23 +273,24 @@ export async function POST(request: NextRequest) {
 
         // Get installer info
         const deploymentConfig = policy.deployment_config as unknown as DeploymentConfig | null;
-        const installerInfo = await getLatestInstallerInfo(
+        const installerResolution = await getLatestInstallerInfo(
           supabase,
           req.winget_id,
           deploymentConfig?.architecture,
           deploymentConfig?.installScope
         );
 
-        if (!installerInfo) {
+        if (!installerResolution.ok) {
           response.failed++;
           response.results.push({
             winget_id: req.winget_id,
             tenant_id: req.tenant_id,
             success: false,
-            error: 'Could not get installer information for latest version',
+            error: installerResolution.failure.message,
           });
           continue;
         }
+        const installerInfo = installerResolution.info;
 
         installerInfo.currentVersion = updateResult.current_version;
 
