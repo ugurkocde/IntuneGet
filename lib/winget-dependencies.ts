@@ -1,6 +1,6 @@
 import { resolveInstallerFileName } from '@/lib/installer-filename';
 import {
-  fetchAvailableVersionsLive,
+  fetchAvailableVersions,
   getLiveInstallers,
 } from '@/lib/manifest-api';
 import { assertPackagingContract } from '@/lib/packaging-contract';
@@ -22,6 +22,7 @@ const VC_REDISTRIBUTABLE_PACKAGE_PATTERN =
   /^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(?:x86|x64|arm64)$/i;
 const DOTNET_DESKTOP_RUNTIME_PACKAGE_PATTERN =
   /^Microsoft\.DotNet\.DesktopRuntime\.\d+$/i;
+const VCLIBS_DESKTOP_PACKAGE_PATTERN = /^Microsoft\.VCLibs\.Desktop\.14$/i;
 
 interface ReviewedDependencyPolicy {
   packagePattern: RegExp;
@@ -40,6 +41,10 @@ const REVIEWED_DEPENDENCY_POLICIES: readonly ReviewedDependencyPolicy[] = [
   {
     packagePattern: /^Microsoft\.PowerShell$/i,
     installerTypes: new Set<WingetInstallerType>(['msi', 'wix']),
+  },
+  {
+    packagePattern: VCLIBS_DESKTOP_PACKAGE_PATTERN,
+    installerTypes: new Set<WingetInstallerType>(['zip']),
   },
 ];
 
@@ -80,6 +85,7 @@ export interface PackagedWingetDependency {
   installerType: WingetInstallerType;
   nestedInstallerType?: WingetInstallerType;
   nestedInstallerPath?: string;
+  packageFamilyName?: string;
   silentArgs: string;
   successCodes: number[];
   rebootCodes: number[];
@@ -95,7 +101,10 @@ export interface WingetDependencyResolverIo {
 
 const defaultIo: WingetDependencyResolverIo = {
   getInstallers: getLiveInstallers,
-  getVersions: fetchAvailableVersionsLive,
+  // Version history is already synchronized into the catalog. Using it first
+  // avoids spending GitHub API quota on one directory listing per dependency;
+  // exact installer metadata still comes from the raw signed manifest below.
+  getVersions: fetchAvailableVersions,
 };
 
 function normalizeSha256(value: string): string {
@@ -331,6 +340,9 @@ export async function resolveWingetPackageDependencies(
           : {}),
         ...(selectedInstaller.nestedInstallerPath
           ? { nestedInstallerPath: selectedInstaller.nestedInstallerPath }
+          : {}),
+        ...(selectedInstaller.packageFamilyName
+          ? { packageFamilyName: selectedInstaller.packageFamilyName }
           : {}),
         silentArgs: selectedInstaller.silentArgs || '',
         successCodes: dependencySuccessCodes(packageIdentifier, selectedInstaller),

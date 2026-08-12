@@ -75,12 +75,33 @@ foreach ($dependency in $PackageDependencies) {
     $isVCRedistributable = $dependencyIdentifier -match '^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(x86|x64|arm64)$'
     $isDotNetDesktopRuntime = $dependencyIdentifier -match '^Microsoft\.DotNet\.DesktopRuntime\.\d+$'
     $isPowerShell = $dependencyIdentifier -eq 'Microsoft.PowerShell'
-    if (-not ($isVCRedistributable -or $isDotNetDesktopRuntime -or $isPowerShell)) {
+    $isVCLibsDesktop = $dependencyIdentifier -eq 'Microsoft.VCLibs.Desktop.14'
+    if (-not ($isVCRedistributable -or $isDotNetDesktopRuntime -or $isPowerShell -or $isVCLibsDesktop)) {
         throw "Package dependency is not in the reviewed redistribution allowlist: $($dependency.packageIdentifier)"
     }
-    $reviewedInstallerTypes = if ($isPowerShell) { @('msi', 'wix') } else { @('exe', 'burn') }
+    $reviewedInstallerTypes = if ($isPowerShell) {
+        @('msi', 'wix')
+    }
+    elseif ($isVCLibsDesktop) {
+        @('zip')
+    }
+    else {
+        @('exe', 'burn')
+    }
     if ($dependencyInstallerType -notin $reviewedInstallerTypes) {
         throw "Package dependency uses an unreviewed installer type: $($dependency.installerType)"
+    }
+    if ($isVCLibsDesktop) {
+        $dependencyNestedType = ([string]$dependency.nestedInstallerType).ToLowerInvariant()
+        $dependencyNestedPath = ([string]$dependency.nestedInstallerPath).Replace('/', '\')
+        $dependencyPackageFamilyName = [string]$dependency.packageFamilyName
+        if ($dependencyNestedType -ne 'appx' -or
+            [string]::IsNullOrWhiteSpace($dependencyNestedPath) -or
+            [string]::IsNullOrWhiteSpace($dependencyPackageFamilyName) -or
+            [System.IO.Path]::IsPathRooted($dependencyNestedPath) -or
+            @($dependencyNestedPath.Split('\')) -contains '..') {
+            throw 'Microsoft.VCLibs.Desktop.14 must use the reviewed relative APPX payload from its ZIP package.'
+        }
     }
     if ([string]$dependency.fileName -match '[\\/:*?"<>|]' -or
         [System.IO.Path]::GetFileName([string]$dependency.fileName) -ne [string]$dependency.fileName) {
@@ -1188,6 +1209,8 @@ foreach ($dependency in @($PackageDependencies | Sort-Object order)) {
     $dependencyFileEscaped = ([string]$dependency.fileName) -replace "'", "''"
     $dependencyArgumentsEscaped = ([string]$dependency.silentArgs) -replace "'", "''"
     $dependencyInstallerType = ([string]$dependency.installerType).ToLowerInvariant()
+    $dependencyNestedPathEscaped = ([string]$dependency.nestedInstallerPath) -replace "'", "''"
+    $dependencyPackageNameEscaped = (([string]$dependency.packageFamilyName -split '_')[0]) -replace "'", "''"
     $dependencySuccessCodes = @(
         0
         @($dependency.successCodes) | ForEach-Object { [int]$_ }
@@ -1213,6 +1236,42 @@ foreach ($dependency in @($PackageDependencies | Sort-Object order)) {
         $dependencyInstallLines += @(
             "    `$dependencyArgumentList = '/i `"{0}`" {1}' -f `$dependencyPath, '$dependencyArgumentsEscaped'"
             "    `$dependencyResult = Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\msiexec.exe`" -ArgumentList `$dependencyArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
+        )
+    }
+    elseif ($dependencyInstallerType -eq 'zip') {
+        $dependencyInstallLines += @(
+            "    `$dependencyExtractRoot = Join-Path `$env:TEMP 'IntuneGet-Dependency-$([int]$dependency.order)'"
+            '    if (Test-Path -LiteralPath $dependencyExtractRoot) {'
+            '        Remove-Item -LiteralPath $dependencyExtractRoot -Recurse -Force'
+            '    }'
+            '    $null = New-Item -ItemType Directory -Path $dependencyExtractRoot -Force'
+            '    try {'
+            '        Expand-Archive -LiteralPath $dependencyPath -DestinationPath $dependencyExtractRoot -Force'
+            "        `$dependencyNestedPath = [System.IO.Path]::GetFullPath((Join-Path `$dependencyExtractRoot '$dependencyNestedPathEscaped'))"
+            '        $dependencyRootPrefix = [System.IO.Path]::GetFullPath($dependencyExtractRoot).TrimEnd(''\'') + ''\'''
+            '        if (-not $dependencyNestedPath.StartsWith($dependencyRootPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or'
+            '            -not (Test-Path -LiteralPath $dependencyNestedPath -PathType Leaf)) {'
+            "            throw 'Reviewed dependency APPX payload is missing or escaped its extraction root: $dependencyIdEscaped'"
+            '        }'
+            "        `$existingDependency = Get-AppxProvisionedPackage -Online | Where-Object { `$_.DisplayName -eq '$dependencyPackageNameEscaped' } | Sort-Object Version -Descending | Select-Object -First 1"
+            '        $dependencyNeedsInstall = $true'
+            '        if ($existingDependency) {'
+            "            try { `$dependencyNeedsInstall = [version]`$existingDependency.Version -lt [version]'$dependencyVersionEscaped' } catch { `$dependencyNeedsInstall = `$true }"
+            '        }'
+            '        if ($dependencyNeedsInstall) {'
+            '            Add-AppxProvisionedPackage -Online -PackagePath $dependencyNestedPath -SkipLicense -ErrorAction Stop | Out-Null'
+            "            Write-ADTLogEntry -Message 'Provisioned bundled APPX dependency [$dependencyIdEscaped].' -Severity 'Success' -Source 'Install-ADTDeployment'"
+            '        }'
+            '        else {'
+            "            Write-ADTLogEntry -Message 'Bundled APPX dependency [$dependencyIdEscaped] is already satisfied.' -Severity 'Success' -Source 'Install-ADTDeployment'"
+            '        }'
+            '        $dependencyResult = [pscustomobject]@{ ExitCode = 0 }'
+            '    }'
+            '    finally {'
+            '        if (Test-Path -LiteralPath $dependencyExtractRoot) {'
+            '            Remove-Item -LiteralPath $dependencyExtractRoot -Recurse -Force -ErrorAction SilentlyContinue'
+            '        }'
+            '    }'
         )
     }
     else {

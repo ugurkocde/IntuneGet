@@ -250,6 +250,45 @@ describe('PSADT offline dependency contract', () => {
     },
     30_000
   );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'extracts and provisions the reviewed Microsoft VCLibs APPX dependency',
+    () => {
+      const dependencySha256 = createHash('sha256')
+        .update('dependency-fixture')
+        .digest('hex')
+        .toUpperCase();
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'VCLibs Dependency Contract App',
+        [],
+        {},
+        [{
+          packageIdentifier: 'Microsoft.VCLibs.Desktop.14',
+          version: '14.0.33728.0',
+          fileName: 'Microsoft.VCLibs.Desktop.14-DesktopAppInstaller_Dependencies.zip',
+          installerSha256: dependencySha256,
+          installerType: 'zip',
+          nestedInstallerType: 'appx',
+          nestedInstallerPath: 'x64/Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_x64.appx',
+          packageFamilyName: 'Microsoft.VCLibs.140.00.UWPDesktop_8wekyb3d8bbwe',
+          silentArgs: '',
+          successCodes: [0],
+          rebootCodes: [1641, 3010],
+          order: 1,
+        }]
+      );
+
+      expect(generated).toContain('Expand-Archive -LiteralPath $dependencyPath');
+      expect(generated).toContain(
+        'Add-AppxProvisionedPackage -Online -PackagePath $dependencyNestedPath -SkipLicense'
+      );
+      expect(generated).toContain(
+        "Where-Object { $_.DisplayName -eq 'Microsoft.VCLibs.140.00.UWPDesktop' }"
+      );
+    },
+    30_000
+  );
 });
 
 describe.skipIf(!canRunWindowsPowerShellPackager)(

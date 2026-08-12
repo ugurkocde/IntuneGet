@@ -189,6 +189,42 @@ describe('resolveWingetPackageDependencies', () => {
     });
   });
 
+  it('bundles the reviewed Microsoft VCLibs APPX payload for MSIX packages', async () => {
+    const io = fixtureIo(
+      {
+        'Microsoft.WindowsApp@2.0.1314.0': [installer({
+          type: 'msix',
+          packageDependencies: [{ packageIdentifier: 'Microsoft.VCLibs.Desktop.14' }],
+        })],
+        'Microsoft.VCLibs.Desktop.14@14.0.33728.0': [installer({
+          type: 'zip',
+          nestedInstallerType: 'appx',
+          nestedInstallerPath: 'x64/Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_x64.appx',
+          packageFamilyName: 'Microsoft.VCLibs.140.00.UWPDesktop_8wekyb3d8bbwe',
+          url: 'https://github.com/microsoft/winget-cli/releases/download/v1.9.25180/DesktopAppInstaller_Dependencies.zip',
+          sha256: VC_SHA,
+          silentArgs: '',
+        })],
+      },
+      { 'Microsoft.VCLibs.Desktop.14': ['14.0.33728.0'] }
+    );
+
+    const [dependency] = await resolveWingetPackageDependencies({
+      wingetId: 'Microsoft.WindowsApp',
+      version: '2.0.1314.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io);
+
+    expect(dependency).toMatchObject({
+      packageIdentifier: 'Microsoft.VCLibs.Desktop.14',
+      installerType: 'zip',
+      nestedInstallerType: 'appx',
+      nestedInstallerPath: 'x64/Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_x64.appx',
+      packageFamilyName: 'Microsoft.VCLibs.140.00.UWPDesktop_8wekyb3d8bbwe',
+    });
+  });
+
   it('fails closed for dependency families that have not been reviewed', async () => {
     const io = fixtureIo(
       { 'Example.App@1.0.0': [installer({
