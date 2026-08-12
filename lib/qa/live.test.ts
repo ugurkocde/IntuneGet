@@ -63,6 +63,51 @@ describe('buildQaLiveResponse', () => {
     });
   });
 
+  it('shows only the newest result for an app version and architecture', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-12T12:00:00.000Z'),
+      current: null,
+      queuedCount: 0,
+      queued: [],
+      poll: null,
+      consecutivePollFailures: 0,
+      recent: [
+        {
+          winget_id: 'Google.Chrome',
+          package_profile_sha256: 'B'.repeat(64),
+          tested_version: '151.0.0',
+          architecture: 'x64',
+          outcome: 'Passed',
+          tested_at_utc: '2026-08-12T11:59:00.000Z',
+          overall_duration_seconds: 82,
+        },
+        {
+          winget_id: 'google.chrome',
+          package_profile_sha256: 'A'.repeat(64),
+          tested_version: '151.0.0',
+          architecture: 'x64',
+          outcome: 'Failed',
+          tested_at_utc: '2026-08-12T11:30:00.000Z',
+          overall_duration_seconds: 300,
+        },
+      ],
+      apps: [{
+        winget_id: 'Google.Chrome',
+        name: 'Google Chrome',
+        publisher: 'Google',
+        latest_version: '151.0.0',
+      }],
+      frame: null,
+    });
+
+    expect(response.recent).toHaveLength(1);
+    expect(response.recent[0]).toMatchObject({
+      wingetId: 'Google.Chrome',
+      outcome: 'Passed',
+      packageProfileSha256: 'B'.repeat(64),
+    });
+  });
+
   it('returns a sanitized live projection and derives health', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-08T17:00:00.000Z'),

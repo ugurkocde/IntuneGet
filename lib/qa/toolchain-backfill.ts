@@ -10,6 +10,15 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '681b7510f7f30bec92c17581213c9ebc7f72765a': [
+    // Opera's former /silent adapter was removed by the vendor. This release
+    // switches both QA and customer packaging to --runimmediately.
+    'Opera.Opera',
+    // Greenshot never reached the VM because the pinned PSADT template download
+    // was interrupted. The protected runner now has a verified persistent tool
+    // cache, so carry that infrastructure error through one bounded replay.
+    'Greenshot.Greenshot',
+  ],
   '7d389dbd6e55b719e3d71772717cda0c8f724469': [
     // Opera's registered uninstaller is interactive unless /silent is added.
     // This release applies that reviewed lifecycle adapter to QA and customer

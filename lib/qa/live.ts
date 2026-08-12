@@ -94,6 +94,23 @@ function architecture(value: string): QaArchitecture {
   return value === 'x86' || value === 'arm64' ? value : 'x64';
 }
 
+function latestRecentResultPerRelease(results: ResultRow[]): ResultRow[] {
+  const newestByRelease = new Map<string, ResultRow>();
+  for (const result of results) {
+    const key = [
+      result.winget_id.trim().toLowerCase(),
+      result.tested_version.trim(),
+      architecture(result.architecture),
+    ].join('|');
+    const existing = newestByRelease.get(key);
+    if (!existing || Date.parse(result.tested_at_utc) > Date.parse(existing.tested_at_utc)) {
+      newestByRelease.set(key, result);
+    }
+  }
+  return [...newestByRelease.values()]
+    .sort((left, right) => Date.parse(right.tested_at_utc) - Date.parse(left.tested_at_utc));
+}
+
 function phase(value: string | null): QaLivePhase {
   return value && VALID_PHASES.has(value as QaLivePhase)
     ? (value as QaLivePhase)
@@ -350,7 +367,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
         enqueuedAt: candidate.enqueued_at,
       })),
     },
-    recent: input.recent.map((result) => ({
+    recent: latestRecentResultPerRelease(input.recent).slice(0, 10).map((result) => ({
       wingetId: result.winget_id,
       packageProfileSha256: result.package_profile_sha256,
       displayName: result.display_name || appById.get(result.winget_id)?.name || result.winget_id,
@@ -412,7 +429,9 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .from('qa_package_results')
       .select(QA_LIVE_RECENT_RESULT_COLUMNS)
       .order('tested_at_utc', { ascending: false })
-      .limit(10),
+      // Fetch enough history to return ten distinct app/version/architecture
+      // releases even when a bounded failure retry produced another profile.
+      .limit(50),
     getQaPipelineControl(supabase),
   ]);
 

@@ -675,7 +675,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(pollRunUpdates[0]).toMatchObject({ status: 'failed', error_count: 1 });
   });
 
-  it('queues a targeted shared-runtime failure when its fix is in the current packager', async () => {
+  it('does not replay a shared-runtime failure after its scoped release has passed', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
         winget_id: 'Microsoft.EdgeWebView2Runtime',
@@ -700,30 +700,12 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({
       success: true,
-      checked: 1,
-      queued: 1,
-      toolchainBackfillCount: 1,
+      checked: 0,
+      queued: 0,
+      toolchainBackfillCount: 0,
       toolchainBackfillPagesScanned: 1,
     });
-    expect(candidateInserts).toHaveLength(1);
-    expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Microsoft.EdgeWebView2Runtime',
-      status: 'queued',
-      test_level: 'psadt-package',
-      test_config: {
-        profileKind: 'catalog-default',
-        silentArgs: '/S',
-        psadtConfig: {
-          preserveVendorInstallationOnUninstall: true,
-          reviewedInstallArguments: [],
-          reviewedUninstallArguments: [],
-        },
-      },
-    });
-    const canonical = JSON.parse(
-      String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
-    );
-    expect(canonical.toolchain.packagerCommit).toBe(CURRENT_PACKAGER_COMMIT);
+    expect(candidateInserts).toHaveLength(0);
   });
 
   it('preserves an unrelated terminal failure across a packager release', async () => {
@@ -749,14 +731,14 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(resolveManifestMock).not.toHaveBeenCalled();
   });
 
-  it('preserves a passing catalog result from an explicitly compatible packager', async () => {
+  it('reuses a passing release from the immediately preceding compatible packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{ winget_id: 'Example.App', name: 'Example', publisher: 'Contoso' }],
       candidates: [
         profileCandidate({
           id: 'compatible-passed-candidate',
           wingetId: 'Example.App',
-          packagerCommit: 'de49775e759b693b92db09bc99aa116f197c4850',
+          packagerCommit: '7d389dbd6e55b719e3d71772717cda0c8f724469',
           status: 'passed',
         }),
       ],

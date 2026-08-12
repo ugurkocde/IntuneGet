@@ -18,7 +18,7 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('carries the queued xTool retry across the current pin', () => {
+  it('does not replay the already-resolved xTool failure on the current pin', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'b3b2729bab6959a554c0e6d41af0a841d6177386',
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
@@ -28,23 +28,31 @@ describe('QA toolchain targeted retries', () => {
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(false);
   });
 
-  it('carries the queued LTspice retry across the current pin', () => {
+  it('does not replay the already-resolved LTspice failure on the current pin', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e',
       { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
       { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(false);
   });
 
-  it('retries Opera once on the reviewed silent-uninstall release', () => {
+  it('retries Opera once on the reviewed immediate-uninstall release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Opera.Opera', status: 'failed' }
@@ -55,24 +63,32 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries WebView2 for the current shared-runtime lifecycle correction', () => {
+  it('keeps WebView2 replay scoped to its shared-runtime lifecycle releases', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'f4bc37886e490ece525c701562869734a7e366d5',
       { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
       { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
     )).toBe(true);
-  });
-
-  it('allows one current-toolchain Granola replay for corrected user-context diagnostics', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the Granola diagnostics replay scoped to its historical releases', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7d389dbd6e55b719e3d71772717cda0c8f724469',
       { wingetId: 'Granola.Granola', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       'f4bc37886e490ece525c701562869734a7e366d5',
+      { wingetId: 'Granola.Granola', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Granola.Granola', status: 'failed' }
     )).toBe(false);
   });
@@ -127,11 +143,11 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
-  it.each(['Autodesk.DesktopApp'])('carries the queued %s retry across the current pin', (wingetId) => {
+  it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it('keeps the OCS retry scoped to its historical toolchain release', () => {
