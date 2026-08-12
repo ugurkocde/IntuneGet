@@ -277,6 +277,31 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds shared-runtime retention to both the normalized config and QA identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.EdgeWebView2Runtime',
+      displayName: 'Microsoft Edge WebView2 Runtime',
+      publisher: 'Microsoft',
+      version: '151.0.4129.78',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/silent /install',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft Edge WebView2 Runtime',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { preserveVendorInstallationOnUninstall?: boolean };
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+    });
+    expect(profile.psadtConfig.preserveVendorInstallationOnUninstall).toBe(true);
+  });
+
   it('preserves PSADT detection rules when the top-level workflow list is unusable', () => {
     const fileRule = {
       type: 'file' as const,

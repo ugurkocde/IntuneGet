@@ -58,6 +58,24 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('retains the shared WebView2 runtime while removing IntuneGet ownership', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'Microsoft.EdgeWebView2Runtime',
+        DEFAULT_PSADT_CONFIG
+      ).preserveVendorInstallationOnUninstall
+    ).toBe(true);
+  });
+
+  it('does not accept shared-runtime retention from customer-controlled config', () => {
+    const adapted = applyApplicationPackagingAdapter('Example.App', {
+      ...DEFAULT_PSADT_CONFIG,
+      preserveVendorInstallationOnUninstall: true,
+    });
+
+    expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
+  });
+
   it('preserves and deduplicates reviewed install arguments case-insensitively', () => {
     const adapted = applyApplicationPackagingAdapter('AnalogDevices.LTspice', {
       ...DEFAULT_PSADT_CONFIG,

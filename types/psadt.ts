@@ -209,6 +209,11 @@ export interface PSADTConfig {
   // the exact registry identity remains the authoritative completion signal.
   uninstallCompletionTimeoutMinutes?: number;
 
+  // Internal lifecycle policy for shared Windows runtimes that must remain on
+  // the device when Intune relinquishes management. Application adapters are
+  // the only trusted source for this value; it is not customer-configurable.
+  preserveVendorInstallationOnUninstall?: boolean;
+
   // Additional commands run as extra PSADT steps after the main install /
   // uninstall (e.g. delete a desktop shortcut after installing). Each entry is a
   // full command line executed via cmd.exe /c, in order. Empty/absent = none.

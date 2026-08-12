@@ -8,6 +8,7 @@ interface ApplicationPackagingAdapter {
   reviewedInstallArguments?: readonly string[];
   reviewedUninstallArguments?: readonly string[];
   uninstallCompletionTimeoutMinutes?: number;
+  preserveVendorInstallationOnUninstall?: boolean;
 }
 
 const VISUAL_STUDIO_WINGET_IDS = [
@@ -71,6 +72,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   {
     wingetId: 'PostgreSQL.PostgreSQL.18',
     reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
+  },
+  {
+    // The Evergreen WebView2 Runtime is shared by every WebView2 application,
+    // automatically serviced by Microsoft, and preinstalled on Windows 11.
+    // Removing the shared runtime can break unrelated applications, while the
+    // Windows 11 registration can remain even after its vendor command exits.
+    // IntuneGet therefore removes only its own management marker on uninstall.
+    wingetId: 'Microsoft.EdgeWebView2Runtime',
+    preserveVendorInstallationOnUninstall: true,
   },
   ...VISUAL_STUDIO_WINGET_IDS.map((wingetId) => ({
     wingetId,
@@ -164,7 +174,11 @@ export function applyApplicationPackagingAdapter(
   config: PSADTConfig
 ): PSADTConfig {
   const adapter = applicationPackagingAdapter(wingetId);
-  if (!adapter) return config;
+  if (!adapter) {
+    // This internal switch is never accepted from customer-controlled config.
+    if (!config.preserveVendorInstallationOnUninstall) return config;
+    return { ...config, preserveVendorInstallationOnUninstall: undefined };
+  }
 
   const processesToClose = (config.processesToClose || []).map((process) => {
     const name = normalizeProcessName(process.name);
@@ -221,5 +235,7 @@ export function applyApplicationPackagingAdapter(
     ...(adapter.uninstallCompletionTimeoutMinutes
       ? { uninstallCompletionTimeoutMinutes: adapter.uninstallCompletionTimeoutMinutes }
       : {}),
+    preserveVendorInstallationOnUninstall:
+      adapter.preserveVendorInstallationOnUninstall || undefined,
   };
 }

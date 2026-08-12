@@ -298,6 +298,10 @@ function Get-StrictPSADTBoolean {
     return [bool]$Config[$Name]
 }
 
+$preserveVendorInstallationOnUninstall = Get-StrictPSADTBoolean `
+    -Config $psadtConfig `
+    -Name 'preserveVendorInstallationOnUninstall'
+
 function ConvertTo-PSADTConfigValue {
     param(
         [AllowNull()][string]$Value,
@@ -2047,8 +2051,19 @@ if ($preUninstallPromptCalls) {
     $lines += $preUninstallPromptCalls
 }
 
-# Generate uninstall command - custom override takes precedence over registry lookup
-if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
+# Generate uninstall command. A reviewed shared-runtime adapter takes
+# precedence because executing the vendor command could remove a prerequisite
+# used by Windows or unrelated applications. The ordinary marker cleanup below
+# still makes Intune's exact package detection transition to not installed.
+if ($preserveVendorInstallationOnUninstall) {
+    Write-Host 'Preserving the shared vendor installation during package removal'
+    $lines += @(
+        ''
+        '    # This reviewed package represents ownership of a shared Windows runtime.'
+        '    # Relinquish IntuneGet management without removing the shared vendor payload.'
+        '    Write-ADTLogEntry -Message "Retaining the shared vendor installation and removing only the IntuneGet management marker." -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
+    )
+} elseif (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
     Write-Host "Using custom uninstall command override from PSADT config"
     $lines += @(
         ''

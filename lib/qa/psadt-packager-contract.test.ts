@@ -157,6 +157,45 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'retains reviewed shared runtimes and removes only the IntuneGet marker',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Microsoft Edge WebView2 Runtime',
+        [],
+        { preserveVendorInstallationOnUninstall: true },
+        [],
+        'Microsoft.EdgeWebView2Runtime'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        'Retaining the shared vendor installation and removing only the IntuneGet management marker.'
+      );
+      expect(uninstallFunction).toContain('IntuneGet detection marker removed from HKLM');
+      expect(uninstallFunction).not.toContain('Waiting for vendor uninstall registration');
+      expect(uninstallFunction).not.toContain('Start-ADTProcess @uninstallProcessParameters');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects a non-boolean shared-runtime lifecycle flag',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'inno',
+          'Invalid Shared Runtime',
+          [],
+          { preserveVendorInstallationOnUninstall: 'true' }
+        )
+      ).toThrow('preserveVendorInstallationOnUninstall must be a JSON boolean');
+    }
+  );
+
   it('honors additional success exit codes declared by the WinGet manifest', () => {
     if (!canRunWindowsPowerShellPackager) return;
     const generated = generateRegistryUninstallPackage(
