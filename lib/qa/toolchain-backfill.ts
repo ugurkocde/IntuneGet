@@ -11,6 +11,11 @@ export interface QaToolchainBackfillCandidate {
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
   '9ff409ddabd3b1b4f8c65ad03b1f9e37778589fc': [
+    // One bounded replay is required after the QA runner learned to collect
+    // PSADT logs from the active interactive-user profile. Granola's newer
+    // user-scoped release failed without those diagnostics, while its prior
+    // version passed through the same customer packaging path.
+    'Granola.Granola',
     'Microsoft.EdgeWebView2Runtime',
   ],
   'f4bc37886e490ece525c701562869734a7e366d5': [

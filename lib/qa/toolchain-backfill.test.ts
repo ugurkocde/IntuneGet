@@ -55,6 +55,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('allows one current-toolchain Granola replay for corrected user-context diagnostics', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Granola.Granola', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f4bc37886e490ece525c701562869734a7e366d5',
+      { wingetId: 'Granola.Granola', status: 'failed' }
+    )).toBe(false);
+  });
+
   it.each([
     'Microsoft.VisualStudio.BuildTools',
     'Microsoft.VisualStudio.Community',
