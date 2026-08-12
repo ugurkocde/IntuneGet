@@ -215,6 +215,41 @@ describe('PSADT offline dependency contract', () => {
     },
     30_000
   );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'installs a reviewed Wix dependency through explicit silent msiexec',
+    () => {
+      const dependencySha256 = createHash('sha256')
+        .update('dependency-fixture')
+        .digest('hex')
+        .toUpperCase();
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'PowerShell Dependency Contract App',
+        [],
+        {},
+        [{
+          packageIdentifier: 'Microsoft.PowerShell',
+          version: '7.6.4.0',
+          fileName: 'Microsoft.PowerShell-PowerShell-7.6.4-win-x64.msi',
+          installerSha256: dependencySha256,
+          installerType: 'wix',
+          silentArgs: '/qn /norestart',
+          successCodes: [0],
+          rebootCodes: [1641, 3010],
+          order: 1,
+        }]
+      );
+
+      expect(generated).toContain(
+        "Start-ADTProcess -FilePath \"$env:SystemRoot\\System32\\msiexec.exe\""
+      );
+      expect(generated).toContain(
+        "$dependencyArgumentList = '/i \"{0}\" {1}' -f $dependencyPath, '/qn /norestart'"
+      );
+    },
+    30_000
+  );
 });
 
 describe.skipIf(!canRunWindowsPowerShellPackager)(

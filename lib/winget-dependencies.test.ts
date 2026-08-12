@@ -116,6 +116,79 @@ describe('resolveWingetPackageDependencies', () => {
     expect(dependency.minimumVersion).toBe('14.40.0.0');
   });
 
+  it('bundles a reviewed .NET Desktop Runtime Burn prerequisite', async () => {
+    const io = fixtureIo(
+      {
+        'Example.App@1.0.0': [installer({
+          packageDependencies: [{
+            packageIdentifier: 'Microsoft.DotNet.DesktopRuntime.10',
+            minimumVersion: '10.0.10',
+          }],
+        })],
+        'Microsoft.DotNet.DesktopRuntime.10@10.0.11': [installer({
+          type: 'burn',
+          url: 'https://download.microsoft.com/windowsdesktop-runtime-10.0.11-win-x64.exe',
+          sha256: VC_SHA,
+          silentArgs: '/quiet /norestart',
+        })],
+      },
+      { 'Microsoft.DotNet.DesktopRuntime.10': ['10.0.11'] }
+    );
+
+    const [dependency] = await resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io);
+
+    expect(dependency).toMatchObject({
+      packageIdentifier: 'Microsoft.DotNet.DesktopRuntime.10',
+      version: '10.0.11',
+      installerType: 'burn',
+      silentArgs: '/quiet /norestart',
+    });
+  });
+
+  it('selects the reviewed PowerShell Wix installer instead of its MSIX variant', async () => {
+    const io = fixtureIo(
+      {
+        'Example.App@1.0.0': [installer({
+          packageDependencies: [{ packageIdentifier: 'Microsoft.PowerShell' }],
+        })],
+        'Microsoft.PowerShell@7.6.4.0': [
+          installer({
+            type: 'msix',
+            url: 'https://github.com/PowerShell/PowerShell/releases/PowerShell-7.6.4.msixbundle',
+            sha256: 'C'.repeat(64),
+            silentArgs: '',
+          }),
+          installer({
+            type: 'wix',
+            url: 'https://github.com/PowerShell/PowerShell/releases/PowerShell-7.6.4-win-x64.msi',
+            sha256: VC_SHA,
+            silentArgs: '/qn /norestart',
+          }),
+        ],
+      },
+      { 'Microsoft.PowerShell': ['7.6.4.0'] }
+    );
+
+    const [dependency] = await resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io);
+
+    expect(dependency).toMatchObject({
+      packageIdentifier: 'Microsoft.PowerShell',
+      installerType: 'wix',
+      silentArgs: '/qn /norestart',
+      installerSha256: VC_SHA,
+    });
+  });
+
   it('fails closed for dependency families that have not been reviewed', async () => {
     const io = fixtureIo(
       { 'Example.App@1.0.0': [installer({

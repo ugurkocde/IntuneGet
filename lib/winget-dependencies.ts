@@ -15,16 +15,41 @@ const MAX_DEPENDENCY_DEPTH = 3;
 const MAX_PACKAGE_DEPENDENCIES = 8;
 const SHA256_PATTERN = /^[A-F0-9]{64}$/;
 
-// Start with the Microsoft redistributable family that is safe to redistribute
-// and that WinGet packages commonly declare. Other package dependency families
-// fail closed until their redistribution and unattended-install contracts have
-// been reviewed explicitly.
-const REDISTRIBUTABLE_PACKAGE_PATTERN =
+// Keep dependency redistribution explicit and fail closed. Each reviewed
+// family also constrains the installer formats we are prepared to invoke
+// offline inside the PSADT package.
+const VC_REDISTRIBUTABLE_PACKAGE_PATTERN =
   /^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(?:x86|x64|arm64)$/i;
-const REVIEWED_DEPENDENCY_INSTALLER_TYPES = new Set<WingetInstallerType>([
-  'exe',
-  'burn',
-]);
+const DOTNET_DESKTOP_RUNTIME_PACKAGE_PATTERN =
+  /^Microsoft\.DotNet\.DesktopRuntime\.\d+$/i;
+
+interface ReviewedDependencyPolicy {
+  packagePattern: RegExp;
+  installerTypes: ReadonlySet<WingetInstallerType>;
+}
+
+const REVIEWED_DEPENDENCY_POLICIES: readonly ReviewedDependencyPolicy[] = [
+  {
+    packagePattern: VC_REDISTRIBUTABLE_PACKAGE_PATTERN,
+    installerTypes: new Set<WingetInstallerType>(['exe', 'burn']),
+  },
+  {
+    packagePattern: DOTNET_DESKTOP_RUNTIME_PACKAGE_PATTERN,
+    installerTypes: new Set<WingetInstallerType>(['exe', 'burn']),
+  },
+  {
+    packagePattern: /^Microsoft\.PowerShell$/i,
+    installerTypes: new Set<WingetInstallerType>(['msi', 'wix']),
+  },
+];
+
+function reviewedDependencyPolicy(
+  packageIdentifier: string
+): ReviewedDependencyPolicy | null {
+  return REVIEWED_DEPENDENCY_POLICIES.find((policy) =>
+    policy.packagePattern.test(packageIdentifier)
+  ) || null;
+}
 
 export interface PackagedWingetDependency {
   packageIdentifier: string;
@@ -66,16 +91,22 @@ function normalizedArchitecture(value: string): 'x64' | 'x86' | 'arm64' {
 
 function chooseInstaller(
   installers: NormalizedInstaller[],
-  targetArchitecture: 'x64' | 'x86' | 'arm64'
+  targetArchitecture: 'x64' | 'x86' | 'arm64',
+  allowedTypes?: ReadonlySet<WingetInstallerType>
 ): NormalizedInstaller | null {
-  const exact = installers.find((installer) => installer.architecture === targetArchitecture);
+  const reviewedInstallers = allowedTypes
+    ? installers.filter((installer) => allowedTypes.has(installer.type))
+    : installers;
+  const exact = reviewedInstallers.find(
+    (installer) => installer.architecture === targetArchitecture
+  );
   if (exact) return exact;
-  const neutral = installers.find((installer) => installer.architecture === 'neutral');
+  const neutral = reviewedInstallers.find((installer) => installer.architecture === 'neutral');
   if (neutral) return neutral;
   // WinGet's dependency resolver permits an x86 prerequisite for an x64 app.
   // Never make the inverse substitution and never use x86 for ARM64.
   if (targetArchitecture === 'x64') {
-    return installers.find((installer) => installer.architecture === 'x86') || null;
+    return reviewedInstallers.find((installer) => installer.architecture === 'x86') || null;
   }
   return null;
 }
@@ -112,7 +143,7 @@ function safeDependencyFileName(
 
 function dependencySuccessCodes(packageIdentifier: string, installer: NormalizedInstaller): number[] {
   const codes = new Set<number>([0, ...(installer.installerSuccessCodes || [])]);
-  if (REDISTRIBUTABLE_PACKAGE_PATTERN.test(packageIdentifier)) {
+  if (VC_REDISTRIBUTABLE_PACKAGE_PATTERN.test(packageIdentifier)) {
     // VC++ redistributables return ERROR_PRODUCT_VERSION (1638), sometimes
     // surfaced as signed HRESULT 0x80070666, when the same or a newer runtime
     // is already installed. Both are successful idempotent outcomes.
@@ -177,7 +208,8 @@ export async function resolveWingetPackageDependencies(
         `WinGet dependency depth exceeds ${MAX_DEPENDENCY_DEPTH} at ${packageIdentifier}.`
       );
     }
-    if (!REDISTRIBUTABLE_PACKAGE_PATTERN.test(packageIdentifier)) {
+    const dependencyPolicy = reviewedDependencyPolicy(packageIdentifier);
+    if (!dependencyPolicy) {
       throw new Error(
         `WinGet dependency ${packageIdentifier} is not in the reviewed redistribution allowlist.`
       );
@@ -218,7 +250,11 @@ export async function resolveWingetPackageDependencies(
       let selectedInstaller: NormalizedInstaller | null = null;
       for (const version of versions) {
         const installers = await io.getInstallers(packageIdentifier, version);
-        const candidate = chooseInstaller(installers, targetArchitecture);
+        const candidate = chooseInstaller(
+          installers,
+          targetArchitecture,
+          dependencyPolicy.installerTypes
+        );
         if (candidate) {
           selectedVersion = version;
           selectedInstaller = candidate;
@@ -232,7 +268,7 @@ export async function resolveWingetPackageDependencies(
         );
       }
       ensureSupportedDependencyShape(packageIdentifier, selectedInstaller);
-      if (!REVIEWED_DEPENDENCY_INSTALLER_TYPES.has(selectedInstaller.type)) {
+      if (!dependencyPolicy.installerTypes.has(selectedInstaller.type)) {
         throw new Error(
           `WinGet dependency ${packageIdentifier} uses unreviewed installer type ${selectedInstaller.type}.`
         );

@@ -70,10 +70,16 @@ foreach ($dependency in $PackageDependencies) {
         [string]::IsNullOrWhiteSpace([string]$dependency.installerSha256)) {
         throw 'Every package dependency must include an identifier, version, filename, and SHA-256.'
     }
-    if ([string]$dependency.packageIdentifier -notmatch '^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(x86|x64|arm64)$') {
+    $dependencyIdentifier = [string]$dependency.packageIdentifier
+    $dependencyInstallerType = ([string]$dependency.installerType).ToLowerInvariant()
+    $isVCRedistributable = $dependencyIdentifier -match '^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(x86|x64|arm64)$'
+    $isDotNetDesktopRuntime = $dependencyIdentifier -match '^Microsoft\.DotNet\.DesktopRuntime\.\d+$'
+    $isPowerShell = $dependencyIdentifier -eq 'Microsoft.PowerShell'
+    if (-not ($isVCRedistributable -or $isDotNetDesktopRuntime -or $isPowerShell)) {
         throw "Package dependency is not in the reviewed redistribution allowlist: $($dependency.packageIdentifier)"
     }
-    if ([string]$dependency.installerType -notin @('exe', 'burn')) {
+    $reviewedInstallerTypes = if ($isPowerShell) { @('msi', 'wix') } else { @('exe', 'burn') }
+    if ($dependencyInstallerType -notin $reviewedInstallerTypes) {
         throw "Package dependency uses an unreviewed installer type: $($dependency.installerType)"
     }
     if ([string]$dependency.fileName -match '[\\/:*?"<>|]' -or
@@ -1181,6 +1187,7 @@ foreach ($dependency in @($PackageDependencies | Sort-Object order)) {
     $dependencyVersionEscaped = ([string]$dependency.version) -replace "'", "''"
     $dependencyFileEscaped = ([string]$dependency.fileName) -replace "'", "''"
     $dependencyArgumentsEscaped = ([string]$dependency.silentArgs) -replace "'", "''"
+    $dependencyInstallerType = ([string]$dependency.installerType).ToLowerInvariant()
     $dependencySuccessCodes = @(
         0
         @($dependency.successCodes) | ForEach-Object { [int]$_ }
@@ -1201,7 +1208,17 @@ foreach ($dependency in @($PackageDependencies | Sort-Object order)) {
         "        throw 'Bundled dependency file is missing: $dependencyIdEscaped'"
         '    }'
         "    Write-ADTLogEntry -Message 'Installing bundled dependency [$dependencyIdEscaped] version [$dependencyVersionEscaped].' -Severity 'Info' -Source 'Install-ADTDeployment'"
-        "    `$dependencyResult = Start-ADTProcess -FilePath `$dependencyPath -ArgumentList '$dependencyArgumentsEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
+    )
+    if ($dependencyInstallerType -in @('msi', 'wix')) {
+        $dependencyInstallLines += @(
+            "    `$dependencyArgumentList = '/i `"{0}`" {1}' -f `$dependencyPath, '$dependencyArgumentsEscaped'"
+            "    `$dependencyResult = Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\msiexec.exe`" -ArgumentList `$dependencyArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
+        )
+    }
+    else {
+        $dependencyInstallLines += "    `$dependencyResult = Start-ADTProcess -FilePath `$dependencyPath -ArgumentList '$dependencyArgumentsEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
+    }
+    $dependencyInstallLines += @(
         "    if (`$dependencyResult.ExitCode -in @($dependencyRebootLiteral)) {"
         '        $script:DependencyRebootExitCode = 3010'
         '    }'
