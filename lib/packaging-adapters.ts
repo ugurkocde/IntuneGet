@@ -78,7 +78,8 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the
     // Windows 11 registration can remain even after its vendor command exits.
-    // IntuneGet therefore removes only its own management marker on uninstall.
+    // IntuneGet accepts an exact preinstalled identity at the requested or a
+    // newer version, then removes only its own management marker on uninstall.
     wingetId: 'Microsoft.EdgeWebView2Runtime',
     preserveVendorInstallationOnUninstall: true,
   },

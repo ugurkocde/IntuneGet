@@ -172,13 +172,46 @@ describe('PSADT vendor argument contract', () => {
         generated.indexOf('function Uninstall-ADTDeployment'),
         generated.indexOf('function Repair-ADTDeployment')
       );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
 
+      expect(installFunction).toContain(
+        '$sharedRuntimeMatches = @($postInstallApplications | Where-Object {'
+      );
+      expect(installFunction).toContain(
+        '$previousApplication.DisplayVersion -ne $candidateApplication.DisplayVersion'
+      );
+      expect(installFunction).toContain(
+        '[string]$candidateApplication.DisplayName -eq $configuredUninstallDisplayName'
+      );
+      expect(installFunction).toContain(
+        '[version]::TryParse($installedVersionText, [ref]$installedVersion)'
+      );
+      expect(installFunction).toContain('$installedVersion -ge $requestedVersion');
+      expect(installFunction).toContain(
+        'Reusing already-installed shared runtime identity'
+      );
       expect(uninstallFunction).toContain(
         'Retaining the shared vendor installation and removing only the IntuneGet management marker.'
       );
       expect(uninstallFunction).toContain('IntuneGet detection marker removed from HKLM');
       expect(uninstallFunction).not.toContain('Waiting for vendor uninstall registration');
       expect(uninstallFunction).not.toContain('Start-ADTProcess @uninstallProcessParameters');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'does not reuse unchanged uninstall entries for ordinary applications',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Ordinary Application'
+      );
+
+      expect(generated).not.toContain('$sharedRuntimeMatches');
+      expect(generated).not.toContain('Reusing already-installed shared runtime identity');
     }
   );
 

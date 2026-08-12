@@ -1905,6 +1905,44 @@ if ($useRegistryUninstall) {
         '            $configuredMatches = @($postInstallApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
         '            if ($configuredMatches.Count -eq 1) { $selectedApplications = $configuredMatches }'
         '        }'
+    )
+
+    # Shared Windows runtimes can already be installed at the requested (or a
+    # newer) version. Their vendor installer then succeeds without changing ARP.
+    # Accept that no-op only for a reviewed retention adapter, and only when one
+    # unchanged pre-install identity exactly matches and satisfies the requested
+    # version. Ordinary applications must still prove an observed install delta.
+    if ($preserveVendorInstallationOnUninstall) {
+        $lines += @(
+            '        if ($selectedApplications.Count -eq 0) {'
+            '            $sharedRuntimeMatches = @($postInstallApplications | Where-Object {'
+            '                $candidateApplication = $_'
+            '                $previousApplication = $preInstallApplications | Where-Object { $_.PSPath -eq $candidateApplication.PSPath } | Select-Object -First 1'
+            '                if (-not $previousApplication -or $previousApplication.DisplayVersion -ne $candidateApplication.DisplayVersion) { return $false }'
+            '                $identityMatches = if ($configuredUninstallProductCode) {'
+            '                    [string]$candidateApplication.PSChildName -eq $configuredUninstallProductCode'
+            '                } else {'
+            '                    [string]$candidateApplication.DisplayName -eq $configuredUninstallDisplayName'
+            '                }'
+            '                if (-not $identityMatches) { return $false }'
+            '                $installedVersionText = [string]$candidateApplication.DisplayVersion'
+            '                $requestedVersionText = [string]$adtSession.AppVersion'
+            '                if ($installedVersionText -eq $requestedVersionText) { return $true }'
+            '                $installedVersion = $null'
+            '                $requestedVersion = $null'
+            '                [version]::TryParse($installedVersionText, [ref]$installedVersion) -and'
+            '                    [version]::TryParse($requestedVersionText, [ref]$requestedVersion) -and'
+            '                    $installedVersion -ge $requestedVersion'
+            '            })'
+            '            if ($sharedRuntimeMatches.Count -eq 1) {'
+            '                $selectedApplications = $sharedRuntimeMatches'
+            '                Write-ADTLogEntry -Message "Reusing already-installed shared runtime identity [$($selectedApplications[0].DisplayName)] version [$($selectedApplications[0].DisplayVersion)]." -Source ''Install-ADTDeployment'''
+            '            }'
+            '        }'
+        )
+    }
+
+    $lines += @(
         '        if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1) {'
         '            $selectedApplications = @($changedApplications[0])'
         '        }'
