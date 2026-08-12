@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '7e83c363bcbafca153f00113b12ede2e332b2d2d': [
+    // Qfinder Pro omitted its x86 Visual C++ runtime from the WinGet
+    // manifest and left its launched process blocking NSIS removal. This
+    // release corrects both paths in QA and customer packages.
+    'QNAP.QfinderPro',
+  ],
   '681b7510f7f30bec92c17581213c9ebc7f72765a': [
     // Opera's former /silent adapter was removed by the vendor. This release
     // switches both QA and customer packaging to --runimmediately.

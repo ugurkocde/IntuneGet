@@ -54,11 +54,15 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Opera once on the reviewed immediate-uninstall release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '681b7510f7f30bec92c17581213c9ebc7f72765a',
       { wingetId: 'Opera.Opera', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '9ff409ddabd3b1b4f8c65ad03b1f9e37778589fc',
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Opera.Opera', status: 'failed' }
     )).toBe(false);
   });
@@ -132,15 +136,30 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('carries the queued Greenshot retry across the current pin', () => {
+  it('keeps the resolved Greenshot retry on its tool-cache release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99',
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '681b7510f7f30bec92c17581213c9ebc7f72765a',
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Qfinder Pro once with its runtime and process lifecycle fix', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '681b7510f7f30bec92c17581213c9ebc7f72765a',
+      { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(false);
   });
 
   it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
