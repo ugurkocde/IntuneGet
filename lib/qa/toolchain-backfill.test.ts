@@ -4,7 +4,17 @@ import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
   it.each([
+    'Microsoft.SQLServerManagementStudio.21',
     'Microsoft.SQLServerManagementStudio.22',
+    'Microsoft.SQLServerManagementStudio.22.Preview',
+  ])('retries the SSMS Visual Studio Installer lifecycle for %s', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+  });
+
+  it.each([
     'Microsoft.VisualStudio.BuildTools',
     'Microsoft.VisualStudio.Community',
     'Microsoft.VisualStudio.Enterprise',
@@ -19,12 +29,16 @@ describe('QA toolchain targeted retries', () => {
     'Microsoft.VisualStudio.2022.Professional',
     'Mozilla.Firefox.de',
   ])(
-    'retries the terminal %s failure changed by the current toolchain release',
+    'keeps the terminal %s retry scoped to its historical toolchain release',
     (wingetId) => {
+      expect(shouldRetryTerminalToolchainCandidate(
+        'bbd8948f2bbefeaba9caf51f6e36ce5d26fdff35',
+        { wingetId, status: 'failed' }
+      )).toBe(true);
       expect(shouldRetryTerminalToolchainCandidate(
         QA_PSADT_TOOLCHAIN.packagerCommit,
         { wingetId, status: 'failed' }
-      )).toBe(true);
+      )).toBe(false);
     }
   );
 
