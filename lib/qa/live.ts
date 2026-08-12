@@ -271,7 +271,9 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
           ? 'healthy'
           : 'degraded';
   }
-  if (input.control?.paused) schedulerState = 'paused';
+  // Pipeline maintenance is private operator state. Keep the public projection
+  // neutral and never expose maintenance notes, commit hashes, or timestamps.
+  if (input.control?.paused) schedulerState = 'healthy';
 
   const currentApp = input.current ? appById.get(input.current.winget_id) : null;
   const frameIsCurrent = Boolean(
@@ -298,10 +300,8 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       state: schedulerState,
       lastPollAt: input.poll?.finished_at || input.poll?.started_at || null,
       lastOutcome: input.poll?.status || null,
-      issue: input.control?.paused ? 'maintenance' : schedulerIssue(input.poll, stalePoll),
-      consecutiveFailures: input.consecutivePollFailures,
-      maintenanceReason: input.control?.paused ? input.control.reason : null,
-      pausedAt: input.control?.paused ? input.control.updatedAt : null,
+      issue: input.control?.paused ? null : schedulerIssue(input.poll, stalePoll),
+      consecutiveFailures: input.control?.paused ? 0 : input.consecutivePollFailures,
     },
     current: input.current && currentStartedAt
       ? {

@@ -33,7 +33,6 @@ import type { QaLivePhase, QaLiveResponse } from '@/types/qa';
 
 function healthTone(state: string): StatusTone {
   if (state === 'healthy' || state === 'testing') return 'success';
-  if (state === 'paused') return 'warning';
   if (state === 'degraded') return 'warning';
   if (state === 'stalled') return 'error';
   return 'neutral';
@@ -44,9 +43,6 @@ function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): strin
   if (issue === 'partial_failure') return 'Some package checks failed';
   if (issue === 'stalled') return 'Poll did not finish';
   if (issue === 'upstream_error') return 'Upstream polling error';
-  // Maintenance is an operator concern. Do not expose internal coordination
-  // details or implementation terminology on the public QA page.
-  if (issue === 'maintenance') return null;
   return null;
 }
 
@@ -98,8 +94,7 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
   const runnerAge = formatRelativeTime(data.runner.heartbeatAt, data.serverTime);
   const pollAge = formatRelativeTime(data.scheduler.lastPollAt, data.serverTime);
   const schedulerIssue = schedulerIssueLabel(data.scheduler.issue);
-  const publicSchedulerState = data.scheduler.state === 'paused' ? 'healthy' : data.scheduler.state;
-  const hasIncident = data.runner.state === 'stalled' || publicSchedulerState === 'degraded';
+  const hasIncident = data.runner.state === 'stalled' || data.scheduler.state === 'degraded';
   const passCount = data.recent.filter((item) => item.outcome === 'Passed').length;
 
   return (
@@ -109,7 +104,7 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
         'overflow-hidden rounded-2xl border bg-bg-elevated',
         data.runner.state === 'stalled'
           ? 'border-status-error/30 bg-status-error/[0.04]'
-          : publicSchedulerState === 'degraded'
+          : data.scheduler.state === 'degraded'
             ? 'border-status-warning/30 bg-status-warning/[0.04]'
             : 'border-overlay/10'
       )}
@@ -135,8 +130,8 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-wide text-text-muted"><T>WinGet polling</T></p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <StatusBadge tone={healthTone(publicSchedulerState)}>
-                <T>{publicSchedulerState === 'healthy' ? 'Healthy' : publicSchedulerState === 'degraded' ? 'Degraded' : 'Waiting for first scan'}</T>
+              <StatusBadge tone={healthTone(data.scheduler.state)}>
+                <T>{data.scheduler.state === 'healthy' ? 'Healthy' : data.scheduler.state === 'degraded' ? 'Degraded' : 'Waiting for first scan'}</T>
               </StatusBadge>
               <span className="text-xs text-text-muted">
                 {pollAge ? <T>Last scan <Var>{pollAge}</Var></T> : <T>No scan recorded yet</T>}

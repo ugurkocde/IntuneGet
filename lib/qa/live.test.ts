@@ -276,7 +276,7 @@ describe('buildQaLiveResponse', () => {
     });
   });
 
-  it('shows deliberate maintenance instead of reporting the scheduler as degraded', () => {
+  it('keeps operator maintenance details out of the public response', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-11T12:05:00.000Z'),
       current: null,
@@ -299,11 +299,13 @@ describe('buildQaLiveResponse', () => {
       },
     });
 
-    expect(response.scheduler).toMatchObject({
-      state: 'paused',
-      issue: 'maintenance',
-      maintenanceReason: 'Golden VM wallpaper maintenance',
-      pausedAt: '2026-08-11T12:04:00.000Z',
+    expect(response.scheduler).toEqual({
+      state: 'healthy',
+      lastPollAt: '2026-08-11T12:00:01.000Z',
+      lastOutcome: 'failed',
+      issue: null,
+      consecutiveFailures: 0,
     });
+    expect(JSON.stringify(response)).not.toContain('Golden VM wallpaper maintenance');
   });
 });

@@ -124,13 +124,11 @@ export interface QaLiveResponse {
     heartbeatAt: string | null;
   };
   scheduler: {
-    state: 'healthy' | 'degraded' | 'paused' | 'unknown';
+    state: 'healthy' | 'degraded' | 'unknown';
     lastPollAt: string | null;
     lastOutcome: 'running' | 'succeeded' | 'partial' | 'failed' | null;
-    issue: 'github_rate_limit' | 'upstream_error' | 'partial_failure' | 'stalled' | 'maintenance' | null;
+    issue: 'github_rate_limit' | 'upstream_error' | 'partial_failure' | 'stalled' | null;
     consecutiveFailures: number;
-    maintenanceReason: string | null;
-    pausedAt: string | null;
   };
   current: {
     wingetId: string;
