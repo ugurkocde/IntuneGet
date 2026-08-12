@@ -10,6 +10,14 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '354756f01cb572cfd410f95dd6af5ab3a9cb8efb': [
+    'Microsoft.VisualStudio.2019.Enterprise',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'PostgreSQL.PostgreSQL.18',
+    'RARLab.WinRAR',
+    'SoftwareOK.Q-Dir',
+  ],
   'd9b55d1f1717bed2f1119347faf4984fed4eae53': [
     'Microsoft.VisualStudio.2019.Enterprise',
     'Microsoft.VisualStudio.Enterprise',
