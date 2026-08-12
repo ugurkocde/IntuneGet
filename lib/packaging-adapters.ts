@@ -9,6 +9,8 @@ interface ApplicationPackagingAdapter {
   reviewedUninstallArguments?: readonly string[];
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
+  reviewedMultiProductInstallDisplayNamePrefixes?: readonly string[];
+  reviewedMultiProductInstallMinimumCount?: number;
 }
 
 const VISUAL_STUDIO_WINGET_IDS = [
@@ -94,6 +96,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // newer version, then removes only its own management marker on uninstall.
     wingetId: 'Microsoft.EdgeWebView2Runtime',
     preserveVendorInstallationOnUninstall: true,
+  },
+  {
+    // VisualCppRedist AIO is intentionally a bundle of independently registered
+    // Visual C++ runtimes. Version 104+ creates several unified ARP entries, so
+    // no single vendor identity represents the package. These runtimes are also
+    // shared prerequisites: Intune removal relinquishes the IntuneGet marker
+    // instead of invoking the vendor's /aiR switch, which removes every runtime.
+    wingetId: 'abbodi1406.vcredist',
+    preserveVendorInstallationOnUninstall: true,
+    reviewedMultiProductInstallDisplayNamePrefixes: [
+      'Microsoft Visual C++',
+      'Visual C++',
+    ],
+    reviewedMultiProductInstallMinimumCount: 10,
   },
   ...VISUAL_STUDIO_WINGET_IDS.map((wingetId) => ({
     wingetId,
@@ -191,15 +207,35 @@ function normalizeReviewedArgument(argument: string, wingetId: string): string {
   return normalized;
 }
 
+function normalizeReviewedDisplayNamePrefix(
+  prefix: string,
+  wingetId: string
+): string {
+  const normalized = prefix.trim();
+  if (!normalized || normalized.length > 128 || /[\x00-\x1f\x7f]/.test(normalized)) {
+    throw new Error(`Invalid reviewed install display-name prefix for ${wingetId}`);
+  }
+  return normalized;
+}
+
 export function applyApplicationPackagingAdapter(
   wingetId: string,
   config: PSADTConfig
 ): PSADTConfig {
   const adapter = applicationPackagingAdapter(wingetId);
   if (!adapter) {
-    // This internal switch is never accepted from customer-controlled config.
-    if (!config.preserveVendorInstallationOnUninstall) return config;
-    return { ...config, preserveVendorInstallationOnUninstall: undefined };
+    // These internal lifecycle fields are never accepted from customer config.
+    if (
+      !config.preserveVendorInstallationOnUninstall &&
+      !config.reviewedMultiProductInstallDisplayNamePrefixes &&
+      !config.reviewedMultiProductInstallMinimumCount
+    ) return config;
+    return {
+      ...config,
+      preserveVendorInstallationOnUninstall: undefined,
+      reviewedMultiProductInstallDisplayNamePrefixes: undefined,
+      reviewedMultiProductInstallMinimumCount: undefined,
+    };
   }
 
   const processesToClose = (config.processesToClose || []).map((process) => {
@@ -249,6 +285,11 @@ export function applyApplicationPackagingAdapter(
     }
   }
 
+  const reviewedMultiProductInstallDisplayNamePrefixes =
+    adapter.reviewedMultiProductInstallDisplayNamePrefixes?.map((prefix) =>
+      normalizeReviewedDisplayNamePrefix(prefix, adapter.wingetId)
+    );
+
   return {
     ...config,
     processesToClose,
@@ -259,5 +300,8 @@ export function applyApplicationPackagingAdapter(
       : {}),
     preserveVendorInstallationOnUninstall:
       adapter.preserveVendorInstallationOnUninstall || undefined,
+    reviewedMultiProductInstallDisplayNamePrefixes,
+    reviewedMultiProductInstallMinimumCount:
+      adapter.reviewedMultiProductInstallMinimumCount,
   };
 }

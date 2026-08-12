@@ -263,6 +263,54 @@ $reviewedUninstallArgumentsLiteral = @(
     $reviewedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
 ) -join ', '
 
+$reviewedMultiProductInstallDisplayNamePrefixes = @()
+if ($psadtConfig.Contains('reviewedMultiProductInstallDisplayNamePrefixes') -and
+    $null -ne $psadtConfig['reviewedMultiProductInstallDisplayNamePrefixes']) {
+    $rawMultiProductPrefixes = $psadtConfig['reviewedMultiProductInstallDisplayNamePrefixes']
+    if ($rawMultiProductPrefixes -is [string] -or
+        $rawMultiProductPrefixes -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedMultiProductInstallDisplayNamePrefixes must be an array.'
+    }
+
+    $seenMultiProductPrefixes = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($rawMultiProductPrefix in @($rawMultiProductPrefixes)) {
+        if ($rawMultiProductPrefix -isnot [string]) {
+            throw 'Every reviewed multi-product display-name prefix must be a string.'
+        }
+        $multiProductPrefix = $rawMultiProductPrefix.Trim()
+        if ([string]::IsNullOrWhiteSpace($multiProductPrefix) -or
+            $multiProductPrefix.Length -gt 128 -or
+            [regex]::IsMatch($multiProductPrefix, '[\x00-\x1F\x7F]')) {
+            throw 'Every reviewed multi-product display-name prefix must be non-empty, bounded, and single-line.'
+        }
+        if ($seenMultiProductPrefixes.Add($multiProductPrefix)) {
+            $reviewedMultiProductInstallDisplayNamePrefixes += $multiProductPrefix
+        }
+    }
+    if ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 20) {
+        throw 'PSADT reviewedMultiProductInstallDisplayNamePrefixes must contain at most 20 entries.'
+    }
+}
+$reviewedMultiProductInstallDisplayNamePrefixesLiteral = @(
+    $reviewedMultiProductInstallDisplayNamePrefixes | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
+) -join ', '
+$reviewedMultiProductInstallMinimumCount = 0
+if ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
+    $rawMultiProductMinimumCount = $psadtConfig['reviewedMultiProductInstallMinimumCount']
+    if (-not $psadtConfig.Contains('reviewedMultiProductInstallMinimumCount') -or
+        ($rawMultiProductMinimumCount -isnot [byte] -and
+         $rawMultiProductMinimumCount -isnot [int16] -and
+         $rawMultiProductMinimumCount -isnot [int32] -and
+         $rawMultiProductMinimumCount -isnot [int64]) -or
+        [int]$rawMultiProductMinimumCount -lt 2 -or
+        [int]$rawMultiProductMinimumCount -gt 100) {
+        throw 'PSADT reviewedMultiProductInstallMinimumCount must be an integer from 2 to 100 when multi-product evidence is configured.'
+    }
+    $reviewedMultiProductInstallMinimumCount = [int]$rawMultiProductMinimumCount
+}
+
 $uninstallCompletionTimeoutMinutes = 5
 if ($psadtConfig.Contains('uninstallCompletionTimeoutMinutes') -and
     $null -ne $psadtConfig['uninstallCompletionTimeoutMinutes']) {
@@ -1478,6 +1526,7 @@ if ($useRegistryUninstall) {
         "    `$configuredUninstallLocaleHint = '$registryUninstallLocaleHintEscaped'"
         '    $capturedUninstallKey = $null'
         '    $capturedUninstallName = $null'
+        '    $multiProductInstallationVerified = $false'
         ''
     )
 }
@@ -1907,6 +1956,19 @@ if ($useRegistryUninstall) {
         '        }'
     )
 
+    if ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
+        $lines += @(
+            "        `$reviewedMultiProductPrefixes = @($reviewedMultiProductInstallDisplayNamePrefixesLiteral)"
+            '        $reviewedMultiProductMatches = @($postInstallApplications | Where-Object {'
+            '            $candidateDisplayName = [string]$_.DisplayName'
+            '            @($reviewedMultiProductPrefixes | Where-Object { $candidateDisplayName.StartsWith($_, [System.StringComparison]::OrdinalIgnoreCase) }).Count -gt 0'
+            '        })'
+            "        if (`$reviewedMultiProductMatches.Count -ge $reviewedMultiProductInstallMinimumCount) {"
+            '            $multiProductInstallationVerified = $true'
+            '        }'
+        )
+    }
+
     # Shared Windows runtimes can already be installed at the requested (or a
     # newer) version. Their vendor installer then succeeds without changing ARP.
     # Accept that no-op only for a reviewed retention adapter, and only when one
@@ -1947,12 +2009,15 @@ if ($useRegistryUninstall) {
         '            $selectedApplications = @($changedApplications[0])'
         '        }'
         '        if ($selectedApplications.Count -eq 1) { break }'
+        '        if ($multiProductInstallationVerified) { break }'
         '        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }'
         '    }'
         '    if ($selectedApplications.Count -eq 1) {'
         '        $capturedUninstallKey = [string]$selectedApplications[0].PSChildName'
         '        $capturedUninstallName = [string]$selectedApplications[0].DisplayName'
         '        Write-ADTLogEntry -Message "Captured vendor uninstall entry [$capturedUninstallName] ($capturedUninstallKey)." -Source ''Install-ADTDeployment'''
+        '    } elseif ($multiProductInstallationVerified) {'
+        '        Write-ADTLogEntry -Message "Verified reviewed multi-product installation from $($reviewedMultiProductMatches.Count) matching vendor registrations." -Source ''Install-ADTDeployment'''
         '    } else {'
         '        throw "Could not select one vendor uninstall entry. The installer changed $($changedApplications.Count) entries and $($selectedApplications.Count) matched the configured identity."'
         '    }'
@@ -1963,7 +2028,17 @@ if ($useRegistryUninstall) {
 if ($verifyInstall) {
     Write-Host "Post-install verification enabled"
     if ($useRegistryUninstall) {
-        $lines += @(
+        if ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
+            $lines += @(
+                ''
+                '    ## Verify the reviewed multi-product bundle evidence established above.'
+                '    if (-not $multiProductInstallationVerified) {'
+                '        throw "Post-install verification failed: the reviewed multi-product registrations were not found."'
+                '    }'
+                "    Write-ADTLogEntry -Message `"Post-install verification passed for reviewed multi-product bundle`" -Source 'Install-ADTDeployment'"
+            )
+        } else {
+            $lines += @(
             ''
             '    ## Verify the exact uninstall identity captured from this installation.'
             '    $verifyApps = if ($capturedUninstallKey) {'
@@ -1973,7 +2048,8 @@ if ($verifyInstall) {
             '        throw "Post-install verification failed: the captured vendor uninstall entry was not found."'
             '    }'
             "    Write-ADTLogEntry -Message `"Post-install verification passed for captured vendor identity`" -Source 'Install-ADTDeployment'"
-        )
+            )
+        }
     } else {
         $lines += @(
             ''

@@ -214,6 +214,13 @@ export interface PSADTConfig {
   // the only trusted source for this value; it is not customer-configurable.
   preserveVendorInstallationOnUninstall?: boolean;
 
+  // Internal install-evidence contract for reviewed bundles that intentionally
+  // install several independently registered products. The generated package
+  // requires multiple matching ARP entries instead of weakening the ordinary
+  // single-product identity rule. Application adapters are the only source.
+  reviewedMultiProductInstallDisplayNamePrefixes?: string[];
+  reviewedMultiProductInstallMinimumCount?: number;
+
   // Additional commands run as extra PSADT steps after the main install /
   // uninstall (e.g. delete a desktop shortcut after installing). Each entry is a
   // full command line executed via cmd.exe /c, in order. Empty/absent = none.

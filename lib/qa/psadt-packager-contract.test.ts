@@ -216,6 +216,82 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies a reviewed multi-product runtime without weakening ordinary identity selection',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Visual C++ Redistributable AIO',
+        [],
+        {
+          preserveVendorInstallationOnUninstall: true,
+          reviewedMultiProductInstallDisplayNamePrefixes: [
+            'Microsoft Visual C++',
+            'Visual C++',
+          ],
+          reviewedMultiProductInstallMinimumCount: 10,
+        },
+        [],
+        'abbodi1406.vcredist'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "$reviewedMultiProductPrefixes = @('Microsoft Visual C++', 'Visual C++')"
+      );
+      expect(installFunction).toContain('$reviewedMultiProductMatches.Count -ge 10');
+      expect(installFunction).toContain(
+        'if ($multiProductInstallationVerified) { break }'
+      );
+      expect(installFunction).toContain('Verified reviewed multi-product installation');
+      expect(uninstallFunction).toContain(
+        'Retaining the shared vendor installation and removing only the IntuneGet management marker.'
+      );
+      expect(uninstallFunction).not.toContain('Could not find one unambiguous vendor uninstall');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects malformed reviewed multi-product evidence',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'inno',
+          'Unsafe Multi Product',
+          [],
+          {
+            reviewedMultiProductInstallDisplayNamePrefixes: [''],
+            reviewedMultiProductInstallMinimumCount: 2,
+          }
+        )
+      ).toThrow('reviewed multi-product display-name prefix must be non-empty');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'requires a bounded evidence threshold for reviewed multi-product installs',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'inno',
+          'Unsafe Multi Product Threshold',
+          [],
+          {
+            reviewedMultiProductInstallDisplayNamePrefixes: ['Visual C++'],
+            reviewedMultiProductInstallMinimumCount: 1,
+          }
+        )
+      ).toThrow('reviewedMultiProductInstallMinimumCount must be an integer from 2 to 100');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects a non-boolean shared-runtime lifecycle flag',
     () => {
       expect(() =>

@@ -73,13 +73,30 @@ describe('application packaging adapters', () => {
     ).toBe(true);
   });
 
+  it('uses reviewed multi-product evidence for the shared Visual C++ runtime bundle', () => {
+    expect(
+      applyApplicationPackagingAdapter('ABBODI1406.VCREDIST', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+      reviewedMultiProductInstallDisplayNamePrefixes: [
+        'Microsoft Visual C++',
+        'Visual C++',
+      ],
+      reviewedMultiProductInstallMinimumCount: 10,
+    });
+  });
+
   it('does not accept shared-runtime retention from customer-controlled config', () => {
     const adapted = applyApplicationPackagingAdapter('Example.App', {
       ...DEFAULT_PSADT_CONFIG,
       preserveVendorInstallationOnUninstall: true,
+      reviewedMultiProductInstallDisplayNamePrefixes: ['Anything'],
+      reviewedMultiProductInstallMinimumCount: 2,
     });
 
     expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
+    expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
+    expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
   });
 
   it('preserves and deduplicates reviewed install arguments case-insensitively', () => {
