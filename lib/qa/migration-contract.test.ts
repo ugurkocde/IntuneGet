@@ -206,6 +206,35 @@ describe('QA package compatibility block migration contract', () => {
   });
 });
 
+describe('failed QA backfill priority migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260812184500_prioritize_failed_qa_backfill.sql'
+    ),
+    'utf8'
+  );
+
+  it('prioritizes only failures for the current catalog version', () => {
+    expect(sql).toContain('current_app.latest_version = candidate.version');
+    expect(sql).toContain("candidate.status in ('failed', 'error')");
+    expect(sql).toContain('failure.last_failed_at desc nulls last');
+    expect(sql.indexOf('failure.last_failed_at desc nulls last')).toBeLessThan(
+      sql.indexOf('demand.has_auto_update desc')
+    );
+  });
+
+  it('preserves the customer-demand, compatibility, and service-only boundaries', () => {
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain('from public.qa_package_blocks as block');
+    expect(sql).toContain("candidate.test_config @> '{\"profileKind\":\"catalog-default\"}'::jsonb");
+    expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 100))');
+    expect(sql).toContain("set search_path = ''");
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
