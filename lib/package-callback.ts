@@ -45,7 +45,7 @@ export const packageCallbackSchema = z.object({
   runId: z.union([z.string(), z.number().int().nonnegative()]).optional(),
   runUrl: z.string().url().max(2_048).optional(),
   errorStage: z.enum(['download', 'package', 'upload', 'authenticate', 'finalize', 'unknown']).optional(),
-  errorCategory: z.enum(['network', 'validation', 'permission', 'installer', 'intune_api', 'system']).optional(),
+  errorCategory: z.enum(['network', 'validation', 'permission', 'approval', 'installer', 'intune_api', 'system']).optional(),
   errorCode: z.string().regex(/^[A-Z0-9_]{1,80}$/).optional(),
   errorDetails: z.record(z.string(), z.unknown()).optional(),
   retryable: z.boolean().optional(),

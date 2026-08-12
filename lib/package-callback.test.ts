@@ -33,6 +33,19 @@ describe('package callback contract', () => {
     expect(packageCallbackSchema.safeParse({ jobId, status: 'packaging', installerSha256: 'bad' }).success).toBe(false);
   });
 
+  it('accepts a distinct Intune administrator approval requirement', () => {
+    const result = packageCallbackSchema.safeParse({
+      jobId,
+      status: 'failed',
+      errorStage: 'upload',
+      errorCategory: 'approval',
+      errorCode: 'INTUNE_APPROVAL_REQUIRED',
+      message: 'Administrator approval is required before this upload can continue.',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('prevents regressions and terminal-state overwrites', () => {
     expect(shouldApplyCallback('uploading', 'packaging', '2026-07-09T10:00:00.000Z')).toBe(false);
     expect(shouldApplyCallback('cancelled', 'deployed', '2026-07-09T10:00:00.000Z')).toBe(false);

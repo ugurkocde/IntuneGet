@@ -54,6 +54,9 @@ const categoryHints: Record<string, { message: string; showReVerify?: boolean }>
     message: 'This appears to be a permissions issue. Your Global Administrator may need to grant admin consent with Intune permissions.',
     showReVerify: true,
   },
+  approval: {
+    message: 'Your organization requires another Intune administrator to approve this app change. Approve the pending request in the Intune admin center, then retry the upload.',
+  },
   network: {
     message: 'This is a network-related error. The download server may be unavailable or rate-limiting requests. You can try again later or package a different version.',
   },
@@ -93,6 +96,7 @@ const errorCodeMessages: Record<string, string> = {
   AUTH_NO_CONSENT: 'Admin consent has not been granted for the required permissions',
   INTUNE_UNAUTHORIZED: 'Microsoft Graph rejected the service principal credentials (401)',
   INTUNE_FORBIDDEN: 'Access denied (403) - missing DeviceManagementApps.ReadWrite.All permission',
+  INTUNE_APPROVAL_REQUIRED: 'Your organization requires administrator approval before Intune can apply this app change.',
   INTUNE_SERVICE_TRANSIENT: 'Intune returned a temporary backend error. A safe retry is recommended.',
   INTUNE_BAD_REQUEST: 'Intune rejected the app or content request. Review the workflow log for the rejected field.',
   INTUNE_API_ERROR: 'The Intune API returned an unexpected error',
