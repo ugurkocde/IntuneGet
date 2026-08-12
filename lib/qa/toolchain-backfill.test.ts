@@ -4,14 +4,18 @@ import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
   it.each([
-    'HandBrake.HandBrake',
-    'Microsoft.VisualStudio.2019.Enterprise',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
     'Microsoft.VisualStudio.Enterprise',
     'Microsoft.VisualStudio.Professional',
-    'Microsoft.WindowsApp',
-    'PostgreSQL.PostgreSQL.18',
-    'RARLab.WinRAR',
-    'SoftwareOK.Q-Dir',
+    'Microsoft.VisualStudio.2019.BuildTools',
+    'Microsoft.VisualStudio.2019.Community',
+    'Microsoft.VisualStudio.2019.Enterprise',
+    'Microsoft.VisualStudio.2019.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
   ])(
     'retries the terminal %s failure changed by the current toolchain release',
     (wingetId) => {

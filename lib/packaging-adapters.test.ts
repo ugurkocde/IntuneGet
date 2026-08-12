@@ -28,7 +28,7 @@ describe('application packaging adapters', () => {
     ).toEqual(['--mode', 'unattended', '--unattendedmodeui', 'none']);
     expect(
       applyApplicationPackagingAdapter(
-        'Microsoft.VisualStudio.Professional',
+        'Microsoft.VisualStudio.2022.Professional',
         DEFAULT_PSADT_CONFIG
       )
     ).toMatchObject({

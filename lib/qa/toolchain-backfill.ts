@@ -10,6 +10,20 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '267c8cbb3c520feaec04c2254de1a667b8fa90d4': [
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2019.BuildTools',
+    'Microsoft.VisualStudio.2019.Community',
+    'Microsoft.VisualStudio.2019.Enterprise',
+    'Microsoft.VisualStudio.2019.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+  ],
   '1b130924ecc68909d6bb15f8cdf295944255a2f9': [
     'HandBrake.HandBrake',
     'Microsoft.VisualStudio.2019.Enterprise',

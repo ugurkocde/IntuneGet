@@ -18,6 +18,10 @@ const VISUAL_STUDIO_WINGET_IDS = [
   'Microsoft.VisualStudio.2019.Community',
   'Microsoft.VisualStudio.2019.Enterprise',
   'Microsoft.VisualStudio.2019.Professional',
+  'Microsoft.VisualStudio.2022.BuildTools',
+  'Microsoft.VisualStudio.2022.Community',
+  'Microsoft.VisualStudio.2022.Enterprise',
+  'Microsoft.VisualStudio.2022.Professional',
 ] as const;
 
 /**

@@ -608,14 +608,14 @@ describe('GET /api/cron/qa-enqueue', () => {
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
-        winget_id: 'RARLab.WinRAR',
-        name: 'WinRAR',
-        publisher: 'RARLab',
+        winget_id: 'Microsoft.VisualStudio.2022.Professional',
+        name: 'Visual Studio Professional 2022',
+        publisher: 'Microsoft',
       }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'RARLab.WinRAR',
+          wingetId: 'Microsoft.VisualStudio.2022.Professional',
           packagerCommit: 'bafea79a8dde42be074c385c35b4887fb5833aa0',
           status: 'failed',
         }),
@@ -637,12 +637,16 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'RARLab.WinRAR',
+      winget_id: 'Microsoft.VisualStudio.2022.Professional',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {
         profileKind: 'catalog-default',
         silentArgs: '/S',
+        psadtConfig: {
+          reviewedUninstallArguments: ['--quiet', '--norestart'],
+          uninstallCompletionTimeoutMinutes: 15,
+        },
       },
     });
     const canonical = JSON.parse(
