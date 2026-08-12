@@ -177,6 +177,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries PostgreSQL 13 once with the family unattended lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'postgresql.postgresql.13', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '670357c92fefa433036d8667dd5f382731d8326e',
+      { wingetId: 'PostgreSQL.PostgreSQL.13', status: 'failed' }
+    )).toBe(false);
+  });
+
   it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

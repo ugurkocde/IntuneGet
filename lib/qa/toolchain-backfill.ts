@@ -10,6 +10,14 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '2c40f49e2cb0b5a1f7a1c27996f5aee72553a074': [
+    // Carry the multi-product runtime replay through the atomic rollout; it
+    // was queued but had not run before the PostgreSQL family fix superseded it.
+    'abbodi1406.vcredist',
+    // EnterpriseDB PostgreSQL releases share the same BitRock uninstaller.
+    // This release applies the reviewed unattended arguments to the family.
+    'PostgreSQL.PostgreSQL.13',
+  ],
   '670357c92fefa433036d8667dd5f382731d8326e': [
     // VisualCppRedist AIO deliberately creates many independently registered
     // shared runtimes. This release verifies that reviewed multi-product
