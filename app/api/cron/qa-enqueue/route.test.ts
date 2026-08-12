@@ -547,15 +547,15 @@ describe('GET /api/cron/qa-enqueue', () => {
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
-        winget_id: 'Oracle.VirtualBox',
-        name: 'Oracle VirtualBox',
-        publisher: 'Oracle',
+        winget_id: 'RARLab.WinRAR',
+        name: 'WinRAR',
+        publisher: 'RARLab',
       }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'Oracle.VirtualBox',
-          packagerCommit: 'acfe2d8692cc2b910281236ff47d3ee5b2ce2b99',
+          wingetId: 'RARLab.WinRAR',
+          packagerCommit: 'bafea79a8dde42be074c385c35b4887fb5833aa0',
           status: 'failed',
         }),
       ],
@@ -576,7 +576,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Oracle.VirtualBox',
+      winget_id: 'RARLab.WinRAR',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {

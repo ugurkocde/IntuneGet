@@ -3,7 +3,14 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it.each(['Oracle.VirtualBox'])(
+  it.each([
+    'Microsoft.VisualStudio.2019.Enterprise',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'PostgreSQL.PostgreSQL.18',
+    'RARLab.WinRAR',
+    'SoftwareOK.Q-Dir',
+  ])(
     'retries the terminal %s failure changed by the current toolchain release',
     (wingetId) => {
       expect(shouldRetryTerminalToolchainCandidate(
@@ -12,6 +19,17 @@ describe('QA toolchain targeted retries', () => {
       )).toBe(true);
     }
   );
+
+  it('keeps the VirtualBox retry scoped to its historical toolchain release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'bafea79a8dde42be074c385c35b4887fb5833aa0',
+      { wingetId: 'Oracle.VirtualBox', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Oracle.VirtualBox', status: 'failed' }
+    )).toBe(false);
+  });
 
   it('keeps the Greenshot retry scoped to its historical toolchain release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
