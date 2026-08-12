@@ -608,14 +608,14 @@ describe('GET /api/cron/qa-enqueue', () => {
   it('queues a targeted terminal failure when its fix is in the current packager', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       supportedApps: [{
-        winget_id: 'Makeblock.xToolStudio',
-        name: 'xTool Studio',
-        publisher: 'Makeblock',
+        winget_id: 'AnalogDevices.LTspice',
+        name: 'LTspice',
+        publisher: 'Analog Devices',
       }],
       candidates: [
         profileCandidate({
           id: 'old-candidate',
-          wingetId: 'Makeblock.xToolStudio',
+          wingetId: 'AnalogDevices.LTspice',
           packagerCommit: 'bafea79a8dde42be074c385c35b4887fb5833aa0',
           status: 'failed',
         }),
@@ -637,13 +637,14 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(candidateInserts).toHaveLength(1);
     expect(candidateInserts[0]).toMatchObject({
-      winget_id: 'Makeblock.xToolStudio',
+      winget_id: 'AnalogDevices.LTspice',
       status: 'queued',
       test_level: 'psadt-package',
       test_config: {
         profileKind: 'catalog-default',
         silentArgs: '/S',
         psadtConfig: {
+          reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
           reviewedUninstallArguments: [],
         },
       },

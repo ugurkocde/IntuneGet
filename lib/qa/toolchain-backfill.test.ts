@@ -18,10 +18,21 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries xTool Studio for the current user-scope correction', () => {
+  it('keeps the xTool retry scoped to its historical toolchain release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b3b2729bab6959a554c0e6d41af0a841d6177386',
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries LTspice for the current enterprise-mode correction', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
     )).toBe(true);
   });
 
