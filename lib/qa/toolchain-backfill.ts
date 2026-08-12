@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '670357c92fefa433036d8667dd5f382731d8326e': [
+    // VisualCppRedist AIO deliberately creates many independently registered
+    // shared runtimes. This release verifies that reviewed multi-product
+    // evidence without weakening the ordinary one-product identity rule.
+    'abbodi1406.vcredist',
+  ],
   '7e83c363bcbafca153f00113b12ede2e332b2d2d': [
     // Qfinder Pro omitted its x86 Visual C++ runtime from the WinGet
     // manifest and left its launched process blocking NSIS removal. This
@@ -143,8 +149,9 @@ export function shouldRetryTerminalToolchainCandidate(
   candidate: Pick<QaToolchainBackfillCandidate, 'wingetId' | 'status'>
 ): boolean {
   if (!['failed', 'error'].includes(candidate.status)) return true;
-  return (TOOLCHAIN_TERMINAL_RETRY_TARGETS[packagerCommit] || []).includes(
-    candidate.wingetId
+  const normalizedWingetId = candidate.wingetId.trim().toLowerCase();
+  return (TOOLCHAIN_TERMINAL_RETRY_TARGETS[packagerCommit] || []).some(
+    (wingetId) => wingetId.toLowerCase() === normalizedWingetId
   );
 }
 

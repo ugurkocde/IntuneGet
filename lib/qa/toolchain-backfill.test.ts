@@ -153,12 +153,27 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Qfinder Pro once with its runtime and process lifecycle fix', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '7e83c363bcbafca153f00113b12ede2e332b2d2d',
       { wingetId: 'QNAP.QfinderPro', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
       '681b7510f7f30bec92c17581213c9ebc7f72765a',
       { wingetId: 'QNAP.QfinderPro', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries VisualCppRedist once with reviewed multi-product evidence', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ABBODI1406.VCREDIST', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7e83c363bcbafca153f00113b12ede2e332b2d2d',
+      { wingetId: 'abbodi1406.vcredist', status: 'failed' }
     )).toBe(false);
   });
 
