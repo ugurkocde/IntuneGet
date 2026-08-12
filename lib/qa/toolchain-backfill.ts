@@ -12,6 +12,9 @@ export interface QaToolchainBackfillCandidate {
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
   '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e': [
     'AnalogDevices.LTspice',
+    // The xTool retry was superseded while this release was deploying, so
+    // carry it forward until it receives one bounded run on the new toolchain.
+    'Makeblock.xToolStudio',
   ],
   'b3b2729bab6959a554c0e6d41af0a841d6177386': [
     'Makeblock.xToolStudio',
