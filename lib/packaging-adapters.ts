@@ -13,6 +13,19 @@ interface ApplicationPackagingAdapter {
   reviewedMultiProductInstallMinimumCount?: number;
 }
 
+const POSTGRESQL_PACKAGING_ADAPTER: ApplicationPackagingAdapter = {
+  // EnterpriseDB's registered uninstaller is interactive unless BitRock's
+  // unattended mode is supplied. Apply this to every versioned PostgreSQL
+  // package ID so a new major release cannot silently lose the lifecycle fix.
+  wingetId: 'PostgreSQL.PostgreSQL.*',
+  reviewedUninstallArguments: [
+    '--mode',
+    'unattended',
+    '--unattendedmodeui',
+    'none',
+  ],
+};
+
 const VISUAL_STUDIO_WINGET_IDS = [
   'Microsoft.VisualStudio.BuildTools',
   'Microsoft.VisualStudio.Community',
@@ -70,10 +83,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   {
     wingetId: 'SoftwareOK.Q-Dir',
     reviewedUninstallArguments: ['/silent', 'forall'],
-  },
-  {
-    wingetId: 'PostgreSQL.PostgreSQL.18',
-    reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
   },
   {
     // Opera registers `opera.exe --uninstall`, which waits for confirmation
@@ -182,9 +191,14 @@ function applicationPackagingAdapter(
   wingetId: string
 ): ApplicationPackagingAdapter | undefined {
   const normalizedWingetId = wingetId.trim().toLowerCase();
-  return APPLICATION_PACKAGING_ADAPTERS.find(
+  const exactAdapter = APPLICATION_PACKAGING_ADAPTERS.find(
     ({ wingetId: adapterWingetId }) => adapterWingetId.toLowerCase() === normalizedWingetId
   );
+  if (exactAdapter) return exactAdapter;
+  if (/^postgresql\.postgresql\.\d+(?:\.\d+)?$/.test(normalizedWingetId)) {
+    return POSTGRESQL_PACKAGING_ADAPTER;
+  }
+  return undefined;
 }
 
 export function resolveApplicationInstallScope(
