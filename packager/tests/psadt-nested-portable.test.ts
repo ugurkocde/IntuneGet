@@ -460,6 +460,28 @@ describe('EXE product identity PSADT generation', () => {
     );
   });
 
+  it('matches one publisher-decorated registry identity without widening the delta', () => {
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      packagingJob({
+        publisher: 'Microsoft',
+        display_name: 'Microsoft SQL Server Management Studio 22',
+        installer_type: 'exe',
+        uninstall_command: 'REGISTRY_UNINSTALL:Microsoft SQL Server Management Studio 22',
+      }),
+      'Microsoft SQL Server Management Studio 22'
+    );
+
+    expect(verification).toContain("$configuredUninstallPublisherName = 'Microsoft'");
+    expect(verification).toContain('$publisherAgnosticMatches = @($changedApplications');
+    expect(verification).toContain(
+      'if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }'
+    );
+    expect(verification.indexOf('$publisherAgnosticMatches')).toBeLessThan(
+      verification.indexOf('$bundleCandidates')
+    );
+  });
+
   it('verifies and removes only the exact AppsAndFeatures product identity', () => {
     const job = packagingJob({
       winget_id: 'Adobe.Acrobat.Reader.64-bit',

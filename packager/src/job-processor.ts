@@ -1034,11 +1034,16 @@ ${steps}
   private getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string): string {
     const identity = this.getRegistryUninstallIdentity(job);
     if (identity) {
+      const escapedPublisher = job.publisher.replace(/'/g, "''");
       return `
     ## Capture and verify the exact uninstall identity observed for this installation.
     $selectedApplications = @()
     $changedApplications = @()
     $configuredUninstallComparableName = (($configuredUninstallDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+    $configuredUninstallPublisherName = '${escapedPublisher}'
+    $configuredUninstallPublisherAgnosticName = if ($configuredUninstallPublisherName) {
+        ($configuredUninstallComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\s+|[._-]+)'), '').Trim()
+    } else { $configuredUninstallComparableName }
     foreach ($verificationAttempt in 1..30) {
         $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)
         $changedApplications = @($postInstallApplications | Where-Object {
@@ -1060,6 +1065,16 @@ ${steps}
                 $candidateComparableName -eq $configuredUninstallComparableName
             })
             if ($architectureAgnosticMatches.Count -eq 1) { $selectedApplications = $architectureAgnosticMatches }
+        }
+        if ($selectedApplications.Count -eq 0 -and $configuredUninstallPublisherAgnosticName) {
+            $publisherAgnosticMatches = @($changedApplications | Where-Object {
+                $candidateComparableName = (([string]$_.DisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+                $candidatePublisherAgnosticName = if ($configuredUninstallPublisherName) {
+                    ($candidateComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\s+|[._-]+)'), '').Trim()
+                } else { $candidateComparableName }
+                $candidatePublisherAgnosticName -eq $configuredUninstallPublisherAgnosticName
+            })
+            if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }
         }
         if ($selectedApplications.Count -eq 0) {
             $bundleCandidates = @($changedApplications | Where-Object {

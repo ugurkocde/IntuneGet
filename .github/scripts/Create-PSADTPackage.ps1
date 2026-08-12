@@ -505,6 +505,7 @@ $uninstallCmd = [string]$UninstallCommand
 $uninstallCmdSingleQuoteEscaped = $uninstallCmd -replace "'", "''"
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
+$publisherSingleQuoteEscaped = $Publisher -replace "'", "''"
 $sanitizedWingetId = $WingetId -replace '[\.\-]', '_'
 $installerFileName = $env:INSTALLER_FILENAME
 # Escaped variant for embedding in single-quoted strings in the generated script
@@ -1757,6 +1758,10 @@ if ($useRegistryUninstall) {
         '    $selectedApplications = @()'
         '    $changedApplications = @()'
         '    $configuredUninstallComparableName = (($configuredUninstallDisplayName -replace ''(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])'', '''' -replace ''\(\s*\)'', '''' -replace ''\(\s+'', ''('' -replace ''\s+\)'', '')'' -replace ''\s{2,}'', '' '')).Trim()'
+        "    `$configuredUninstallPublisherName = '$publisherSingleQuoteEscaped'"
+        '    $configuredUninstallPublisherAgnosticName = if ($configuredUninstallPublisherName) {'
+        '        ($configuredUninstallComparableName -replace (''(?i)^'' + [regex]::Escape($configuredUninstallPublisherName) + ''(?:\s+|[._-]+)''), '''').Trim()'
+        '    } else { $configuredUninstallComparableName }'
         '    foreach ($verificationAttempt in 1..30) {'
         '        $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
         '        $changedApplications = @($postInstallApplications | Where-Object {'
@@ -1778,6 +1783,16 @@ if ($useRegistryUninstall) {
         '                $candidateComparableName -eq $configuredUninstallComparableName'
         '            })'
         '            if ($architectureAgnosticMatches.Count -eq 1) { $selectedApplications = $architectureAgnosticMatches }'
+        '        }'
+        '        if ($selectedApplications.Count -eq 0 -and $configuredUninstallPublisherAgnosticName) {'
+        '            $publisherAgnosticMatches = @($changedApplications | Where-Object {'
+        '                $candidateComparableName = (([string]$_.DisplayName -replace ''(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])'', '''' -replace ''\(\s*\)'', '''' -replace ''\(\s+'', ''('' -replace ''\s+\)'', '')'' -replace ''\s{2,}'', '' '')).Trim()'
+        '                $candidatePublisherAgnosticName = if ($configuredUninstallPublisherName) {'
+        '                    ($candidateComparableName -replace (''(?i)^'' + [regex]::Escape($configuredUninstallPublisherName) + ''(?:\s+|[._-]+)''), '''').Trim()'
+        '                } else { $candidateComparableName }'
+        '                $candidatePublisherAgnosticName -eq $configuredUninstallPublisherAgnosticName'
+        '            })'
+        '            if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }'
         '        }'
         '        if ($selectedApplications.Count -eq 0) {'
         '            $bundleCandidates = @($changedApplications | Where-Object {'

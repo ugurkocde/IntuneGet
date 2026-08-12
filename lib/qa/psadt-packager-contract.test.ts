@@ -349,6 +349,48 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
+  it('accepts one ARP entry after removing only the configured publisher prefix', () => {
+    expect(packager).toContain('$configuredUninstallPublisherAgnosticName = if (');
+    expect(packager).toContain('$publisherAgnosticMatches = @($changedApplications');
+    expect(packager).toContain(
+      'if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }'
+    );
+    expect(packager.indexOf('$publisherAgnosticMatches')).toBeLessThan(
+      packager.indexOf('$bundleCandidates')
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'normalizes a manifest publisher prefix while preserving ambiguous matches',
+    () => {
+      const result = spawnSync(
+        'pwsh',
+        [
+          '-NoProfile',
+          '-Command',
+          `function ConvertTo-ComparableName([string]$Name) {
+  return (($Name -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\\(\\s*\\)', '' -replace '\\(\\s+', '(' -replace '\\s+\\)', ')' -replace '\\s{2,}', ' ')).Trim()
+}
+function Remove-PublisherPrefix([string]$Name, [string]$Publisher) {
+  return ($Name -replace ('(?i)^' + [regex]::Escape($Publisher) + '(?:\\s+|[._-]+)'), '').Trim()
+}
+$configured = Remove-PublisherPrefix (ConvertTo-ComparableName 'Microsoft SQL Server Management Studio 22') 'Microsoft'
+$oneMatch = @('SQL Server Management Studio 22', 'Microsoft Visual Studio Installer') | Where-Object {
+  (Remove-PublisherPrefix (ConvertTo-ComparableName $_) 'Microsoft') -eq $configured
+}
+$ambiguous = @('SQL Server Management Studio 22', 'Microsoft SQL Server Management Studio 22') | Where-Object {
+  (Remove-PublisherPrefix (ConvertTo-ComparableName $_) 'Microsoft') -eq $configured
+}
+[pscustomobject]@{ OneMatch = @($oneMatch).Count; Ambiguous = @($ambiguous).Count } | ConvertTo-Json -Compress`,
+        ],
+        { encoding: 'utf8' }
+      );
+
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual({ OneMatch: 1, Ambiguous: 2 });
+    }
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'normalizes Firefox architecture metadata while leaving helper entries distinct',
     () => {
