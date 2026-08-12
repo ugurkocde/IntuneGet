@@ -18,21 +18,36 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('carries the superseded xTool retry into the current toolchain release', () => {
+  it('keeps the carried xTool retry scoped to its historical releases', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'b3b2729bab6959a554c0e6d41af0a841d6177386',
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e',
       { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Makeblock.xToolStudio', status: 'failed' }
+    )).toBe(false);
   });
 
-  it('retries LTspice for the current enterprise-mode correction', () => {
+  it('keeps the LTspice retry scoped to its enterprise-mode release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e',
+      { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'AnalogDevices.LTspice', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries WebView2 for the current shared-runtime lifecycle correction', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
     )).toBe(true);
   });
 

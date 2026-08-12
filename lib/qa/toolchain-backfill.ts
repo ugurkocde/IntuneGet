@@ -10,6 +10,9 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'f4bc37886e490ece525c701562869734a7e366d5': [
+    'Microsoft.EdgeWebView2Runtime',
+  ],
   '93321ef6f7abd287f0fd6f37e37c5f4c199f3c4e': [
     'AnalogDevices.LTspice',
     // The xTool retry was superseded while this release was deploying, so
