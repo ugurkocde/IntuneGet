@@ -74,15 +74,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
   },
   {
-    // Opera registers `opera.exe /uninstall`, which presents a confirmation
-    // dialog and leaves the ARP entry intact under unattended SYSTEM removal.
-    // Its Chromium-derived uninstaller accepts /silent; close the browser
-    // first so both upgrades and removals can complete deterministically.
+    // Opera registers `opera.exe --uninstall`, which waits for confirmation
+    // unless --runimmediately is supplied. Opera removed support for its old
+    // silent switch, so use the vendor's current unattended-start argument
+    // without deleting user profiles. Close the browser first so both upgrades
+    // and removals can complete deterministically.
     wingetId: 'Opera.Opera',
     requiredProcessesToClose: [
       { name: 'opera', description: 'Opera browser' },
     ],
-    reviewedUninstallArguments: ['/silent'],
+    reviewedUninstallArguments: ['--runimmediately'],
   },
   {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,

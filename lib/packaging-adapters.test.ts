@@ -32,7 +32,7 @@ describe('application packaging adapters', () => {
       applyApplicationPackagingAdapter('Opera.Opera', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-      reviewedUninstallArguments: ['/silent'],
+      reviewedUninstallArguments: ['--runimmediately'],
     });
     expect(
       applyApplicationPackagingAdapter(
@@ -116,19 +116,19 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual(['/s', '--custom']);
   });
 
-  it('preserves customer Opera lifecycle settings while adding the reviewed silent removal contract', () => {
+  it('preserves customer Opera lifecycle settings while adding the reviewed immediate removal contract', () => {
     const adapted = applyApplicationPackagingAdapter('opera.opera', {
       ...DEFAULT_PSADT_CONFIG,
       processesToClose: [
         { name: 'Opera.exe', description: 'Customer browser session' },
       ],
-      reviewedUninstallArguments: ['/SILENT', '--custom'],
+      reviewedUninstallArguments: ['--RUNIMMEDIATELY', '--custom'],
     });
 
     expect(adapted.processesToClose).toEqual([
       { name: 'Opera', description: 'Customer browser session' },
     ]);
-    expect(adapted.reviewedUninstallArguments).toEqual(['/SILENT', '--custom']);
+    expect(adapted.reviewedUninstallArguments).toEqual(['--RUNIMMEDIATELY', '--custom']);
   });
 
   it('closes the reviewed Adobe desktop processes before Creative Cloud removal', () => {
