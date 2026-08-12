@@ -386,4 +386,31 @@ describe('buildQaCatalogTestConfig', () => {
       'CreativeCloudHelper',
     ]);
   });
+
+  it('tests a reviewed per-user bootstrapper in user context when WinGet omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'VNGCorp.Zalo',
+        name: 'Zalo',
+        publisher: 'VNGCorp',
+        version: '26.8.10',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        ProductCode: 'f0c47de4-c117-54e4-97d9-eb3fd2985e6c',
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\VNGCorp_Zalo',
+      }),
+    ]);
+  });
 });

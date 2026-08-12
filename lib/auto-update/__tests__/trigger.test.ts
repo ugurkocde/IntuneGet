@@ -307,6 +307,54 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     expect(storedConfig.psadtConfig?.processesToClose).toEqual([]);
   });
 
+  it('uses a reviewed user scope for both auto-update QA and the packaging job', async () => {
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const storedConfig: DeploymentConfig = {
+      displayName: 'Zalo',
+      publisher: 'VNGCorp',
+      architecture: 'x86',
+      installerType: 'exe',
+      installCommand: 'ZaloSetup.exe /S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zalo',
+      installScope: 'machine',
+      detectionRules: [],
+      psadtConfig: DEFAULT_PSADT_CONFIG,
+    };
+    const policy = makePolicy(storedConfig);
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never)
+      .mockResolvedValue({ id: 'history-zalo' } as never);
+    const createPackagingJobSpy = vi.spyOn(trigger as never, 'createPackagingJob' as never)
+      .mockResolvedValue({ id: 'job-zalo' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, {
+      ...UPDATE_INFO,
+      wingetId: 'VNGCorp.Zalo',
+      displayName: 'Zalo',
+      installerType: 'exe',
+      installScope: 'machine',
+    }, { skipRateLimits: true });
+
+    expect(result).toMatchObject({ success: true, packagingJobId: 'job-zalo' });
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ installScope: 'user' })
+    );
+    const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
+    expect((effectivePolicy.deployment_config as DeploymentConfig).installScope).toBe('user');
+    const effectiveUpdate = createPackagingJobSpy.mock.calls[0][1] as { installScope?: string };
+    expect(effectiveUpdate.installScope).toBe('user');
+    expect(storedConfig.installScope).toBe('machine');
+  });
+
   describe('ensurePsadtConfig', () => {
     it('backfills psadtConfig from the most recent packaging job and persists it', async () => {
       const updateSpy = vi.fn();

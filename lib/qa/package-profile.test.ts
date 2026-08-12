@@ -250,6 +250,33 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('normalizes reviewed per-user apps before hashing deployment QA identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'VNGCorp.Zalo',
+      displayName: 'Zalo',
+      publisher: 'VNGCorp',
+      version: '26.8.10',
+      architecture: 'x86',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{F0C47DE4-C117-54E4-97D9-EB3FD2985E6C}:Zalo',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\VNGCorp_Zalo',
+      }),
+    ]);
+  });
+
   it('preserves PSADT detection rules when the top-level workflow list is unusable', () => {
     const fileRule = {
       type: 'file' as const,

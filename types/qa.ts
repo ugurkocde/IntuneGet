@@ -127,7 +127,7 @@ export interface QaLiveResponse {
     state: 'healthy' | 'degraded' | 'unknown';
     lastPollAt: string | null;
     lastOutcome: 'running' | 'succeeded' | 'partial' | 'failed' | null;
-    issue: 'github_rate_limit' | 'upstream_error' | 'partial_failure' | 'stalled' | null;
+    issue: 'github_rate_limit' | 'upstream_error' | 'stalled' | null;
     consecutiveFailures: number;
   };
   current: {

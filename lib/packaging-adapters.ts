@@ -1,7 +1,9 @@
 import type { ProcessToClose, PSADTConfig } from '@/types/psadt';
+import type { WingetScope } from '@/types/winget';
 
 interface ApplicationPackagingAdapter {
   wingetId: string;
+  requiredInstallScope?: WingetScope;
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedUninstallArguments?: readonly string[];
 }
@@ -24,6 +26,13 @@ const VISUAL_STUDIO_WINGET_IDS = [
  * in the QA execution-profile hash.
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
+  {
+    // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
+    // currently omits Scope. Under LocalSystem it registers a disposable
+    // systemprofile path and leaves no usable vendor uninstaller.
+    wingetId: 'VNGCorp.Zalo',
+    requiredInstallScope: 'user',
+  },
   {
     wingetId: 'RARLab.WinRAR',
     reviewedUninstallArguments: ['/S'],
@@ -79,6 +88,23 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   },
 ];
 
+function applicationPackagingAdapter(
+  wingetId: string
+): ApplicationPackagingAdapter | undefined {
+  const normalizedWingetId = wingetId.trim().toLowerCase();
+  return APPLICATION_PACKAGING_ADAPTERS.find(
+    ({ wingetId: adapterWingetId }) => adapterWingetId.toLowerCase() === normalizedWingetId
+  );
+}
+
+export function resolveApplicationInstallScope(
+  wingetId: string,
+  requestedScope?: string | null
+): WingetScope {
+  const requested = requestedScope?.trim().toLowerCase() === 'user' ? 'user' : 'machine';
+  return applicationPackagingAdapter(wingetId)?.requiredInstallScope || requested;
+}
+
 function normalizeProcessName(name: string): string {
   return name.trim().replace(/\.exe$/i, '');
 }
@@ -95,10 +121,7 @@ export function applyApplicationPackagingAdapter(
   wingetId: string,
   config: PSADTConfig
 ): PSADTConfig {
-  const normalizedWingetId = wingetId.trim().toLowerCase();
-  const adapter = APPLICATION_PACKAGING_ADAPTERS.find(
-    ({ wingetId: adapterWingetId }) => adapterWingetId.toLowerCase() === normalizedWingetId
-  );
+  const adapter = applicationPackagingAdapter(wingetId);
   if (!adapter) return config;
 
   const processesToClose = (config.processesToClose || []).map((process) => {

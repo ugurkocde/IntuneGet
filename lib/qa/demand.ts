@@ -8,6 +8,7 @@ import {
 import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import type { Json } from '@/types/database';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
@@ -29,6 +30,7 @@ export async function ensureQaDemand(
   supabase: SupabaseClient,
   input: QaDemandInput
 ): Promise<QaDemandResult> {
+  const installScope = resolveApplicationInstallScope(input.wingetId, input.installScope);
   // Resolve at the QA-demand boundary as well as at final packaging dispatch.
   // This keeps both gates bound to the same server-trusted dependency graph;
   // caller-supplied dependency metadata is never authoritative.
@@ -37,7 +39,7 @@ export async function ensureQaDemand(
     version: input.version,
     architecture: input.architecture,
     installerSha256: input.installerSha256,
-    installScope: input.installScope,
+    installScope,
   });
   // The VM validates the same PSADT packaging route used for customer uploads,
   // with one deterministic, non-blocking visual profile per immutable payload.
@@ -45,6 +47,7 @@ export async function ensureQaDemand(
   // must neither suppress QA evidence nor multiply app-version tests.
   const resolvedInput: QaDemandInput = {
     ...input,
+    installScope,
     psadtConfig: JSON.stringify({
       ...DEFAULT_PSADT_CONFIG,
       deployMode: 'Auto',
@@ -120,6 +123,7 @@ export async function ensureQaDemand(
     .eq('tested_version', input.version)
     .eq('architecture', architecture)
     .eq('installer_sha256', installerSha256)
+    .eq('package_profile_sha256', profileSha256)
     .eq('outcome', 'Failed')
     .order('tested_at_utc', { ascending: false })
     .limit(1)

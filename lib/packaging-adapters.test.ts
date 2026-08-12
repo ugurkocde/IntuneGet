@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
-import { applyApplicationPackagingAdapter } from './packaging-adapters';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('forces reviewed per-user installers out of the LocalSystem profile', () => {
+    expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
+    expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
+    expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
+    expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
+  });
+
   it('adds reviewed silent removal arguments for failing vendor lifecycles', () => {
     expect(
       applyApplicationPackagingAdapter('RARLab.WinRAR', DEFAULT_PSADT_CONFIG)

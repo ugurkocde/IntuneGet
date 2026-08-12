@@ -2,7 +2,10 @@ import { generateDetectionRules, generateUninstallCommand } from '@/lib/detectio
 import { normalizeInstaller } from '@/lib/manifest-api';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
-import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
 import { normalizeQaPsadtConfig } from './package-profile';
 import type {
   WingetInstaller,
@@ -119,7 +122,7 @@ export function buildQaCatalogTestConfig({
     ? (rawNestedInstallerType.toLowerCase() as WingetInstallerType)
     : undefined;
   const rawScope = text(installer.Scope) || text(manifest.Scope);
-  const scope: WingetScope = rawScope.toLowerCase() === 'user' ? 'user' : 'machine';
+  const scope: WingetScope = resolveApplicationInstallScope(app.wingetId, rawScope);
   const explicitInstallerProductCode = text(installer.ProductCode);
   const productCode = explicitInstallerProductCode
     ? msiProductCode(explicitInstallerProductCode)

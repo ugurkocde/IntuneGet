@@ -270,6 +270,67 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     }));
   });
 
+  it('applies a required user scope before dependency resolution and QA identity', async () => {
+    const input = { ...demandInput(), wingetId: 'VNGCorp.Zalo' };
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') {
+          return { select: vi.fn(() => query({ data: null, error: null })) };
+        }
+        if (table === 'qa_candidates') {
+          return query({
+            data: { id: 'candidate-active', status: 'running', priority: 2_000 },
+            error: null,
+          });
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    };
+
+    const result = await ensureQaDemand(client as never, input);
+    const profile = JSON.parse(result.identity.canonicalJson) as {
+      installer: { installScope: string };
+    };
+
+    expect(resolveWingetPackageDependenciesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ installScope: 'user' })
+    );
+    expect(profile.installer.installScope).toBe('user');
+  });
+
+  it('only reuses a failed result for the current execution profile', async () => {
+    const input = demandInput();
+    let resultCall = 0;
+    const failedResultQuery = query({
+      data: { package_profile_sha256: 'A'.repeat(64) },
+      error: null,
+    });
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') {
+          return {
+            select: vi.fn(() => {
+              resultCall++;
+              return resultCall === 1
+                ? query({ data: null, error: null })
+                : failedResultQuery;
+            }),
+          };
+        }
+        if (table === 'qa_candidates') return query({ data: null, error: null });
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    };
+
+    const result = await ensureQaDemand(client as never, input);
+
+    expect(result.state).toBe('failed');
+    expect(failedResultQuery.eq).toHaveBeenCalledWith(
+      'package_profile_sha256',
+      result.identity.executionProfileSha256
+    );
+  });
+
   it('fails closed before creating QA state when dependency resolution fails', async () => {
     const client = { from: vi.fn() };
     resolveWingetPackageDependenciesMock.mockRejectedValue(

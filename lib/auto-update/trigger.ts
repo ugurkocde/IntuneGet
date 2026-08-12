@@ -24,7 +24,10 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { generateInstallCommand } from '@/lib/detection-rules';
 import { normalizeInstaller } from '@/lib/manifest-api';
 import { upgradeLegacyPackageDefaults } from '@/lib/update-policies/upgrade-legacy-package-defaults';
-import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
 import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
@@ -207,10 +210,16 @@ export class AutoUpdateTrigger {
       await this.ensureCurrentPackageDefaults(policy, updateInfo);
 
       const storedDeploymentConfig = policy.deployment_config as DeploymentConfig;
+      const effectiveInstallScope = resolveApplicationInstallScope(
+        updateInfo.wingetId,
+        updateInfo.installScope || storedDeploymentConfig.installScope
+      );
+      updateInfo = { ...updateInfo, installScope: effectiveInstallScope };
       const deploymentConfig: DeploymentConfig = {
         ...storedDeploymentConfig,
+        installScope: effectiveInstallScope,
         psadtConfig: applyApplicationPackagingAdapter(
-        updateInfo.wingetId,
+          updateInfo.wingetId,
           storedDeploymentConfig.psadtConfig || DEFAULT_PSADT_CONFIG
         ),
       };

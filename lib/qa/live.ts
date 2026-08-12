@@ -237,7 +237,16 @@ function schedulerIssue(
   ) {
     return 'github_rate_limit';
   }
-  if (poll.status === 'partial') return 'partial_failure';
+  // A partial scan means one or more individual packages could not be
+  // evaluated. The scheduler itself still completed and can keep processing
+  // the rest of the catalog, so this is operator diagnostic data rather than
+  // a customer-facing service incident. Only system-level partial failures
+  // degrade the public health projection.
+  if (poll.status === 'partial') {
+    return errors.some((error) => typeof error === 'string' && /^system:/i.test(error))
+      ? 'upstream_error'
+      : null;
+  }
   return 'upstream_error';
 }
 
@@ -260,16 +269,13 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
 
   let schedulerState: QaLiveResponse['scheduler']['state'] = 'unknown';
   let stalePoll = false;
+  let pollIssue: QaLiveResponse['scheduler']['issue'] = null;
   if (input.poll) {
     stalePoll =
       input.poll.status === 'running' &&
       input.now.getTime() - new Date(input.poll.started_at).getTime() > POLL_STALE_MS;
-    schedulerState =
-      input.poll.status === 'succeeded'
-        ? 'healthy'
-        : input.poll.status === 'running' && !stalePoll
-          ? 'healthy'
-          : 'degraded';
+    pollIssue = schedulerIssue(input.poll, stalePoll);
+    schedulerState = pollIssue ? 'degraded' : 'healthy';
   }
   // Pipeline maintenance is private operator state. Keep the public projection
   // neutral and never expose maintenance notes, commit hashes, or timestamps.
@@ -300,7 +306,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       state: schedulerState,
       lastPollAt: input.poll?.finished_at || input.poll?.started_at || null,
       lastOutcome: input.poll?.status || null,
-      issue: input.control?.paused ? null : schedulerIssue(input.poll, stalePoll),
+      issue: input.control?.paused ? null : pollIssue,
       consecutiveFailures: input.control?.paused ? 0 : input.consecutivePollFailures,
     },
     current: input.current && currentStartedAt

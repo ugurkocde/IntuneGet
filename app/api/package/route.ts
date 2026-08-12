@@ -37,7 +37,10 @@ import {
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
 import { ensureQaDemand } from '@/lib/qa/demand';
-import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
@@ -172,6 +175,22 @@ export async function POST(request: NextRequest) {
       } else {
         // Treat missing appSource as win32 for backward compatibility
         win32Items.push(item as Win32CartItem);
+      }
+    }
+
+    // Apply reviewed behavior constraints before preflight, QA identity, job
+    // persistence, and Intune run-as selection so every packaging route uses
+    // the same effective scope. Custom packages remain fully user-controlled.
+    for (const item of win32Items) {
+      if (
+        item.sourceType !== 'custom' &&
+        typeof item.wingetId === 'string' &&
+        item.wingetId.trim()
+      ) {
+        item.installScope = resolveApplicationInstallScope(
+          item.wingetId,
+          item.installScope
+        );
       }
     }
 

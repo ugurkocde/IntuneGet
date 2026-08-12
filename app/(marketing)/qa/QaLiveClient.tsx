@@ -40,7 +40,6 @@ function healthTone(state: string): StatusTone {
 
 function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): string | null {
   if (issue === 'github_rate_limit') return 'GitHub temporarily limited WinGet checks; scanning will retry automatically';
-  if (issue === 'partial_failure') return 'Some package checks failed';
   if (issue === 'stalled') return 'Poll did not finish';
   if (issue === 'upstream_error') return 'Upstream polling error';
   return null;

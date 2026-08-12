@@ -276,6 +276,32 @@ describe('buildQaLiveResponse', () => {
     });
   });
 
+  it('keeps individual package-check failures out of public service health', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-10T07:11:00.000Z'),
+      current: null,
+      queuedCount: 3,
+      queued: [],
+      poll: {
+        status: 'partial',
+        started_at: '2026-08-10T07:10:47.000Z',
+        finished_at: '2026-08-10T07:10:49.000Z',
+        errors: ['Example.App: No compatible installer was found.'],
+      },
+      consecutivePollFailures: 0,
+      recent: [],
+      apps: [],
+      frame: null,
+    });
+
+    expect(response.scheduler).toMatchObject({
+      state: 'healthy',
+      lastOutcome: 'partial',
+      issue: null,
+      consecutiveFailures: 0,
+    });
+  });
+
   it('keeps operator maintenance details out of the public response', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-11T12:05:00.000Z'),

@@ -3,7 +3,10 @@ import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { assertPackagingContract } from '@/lib/packaging-contract';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
-import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
 import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
@@ -690,12 +693,16 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
   const parsedConfig = parseJsonObject<unknown>(input.psadtConfig, {});
   const rawConfig = (record(parsedConfig) || {}) as Partial<PSADTConfig>;
   const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, parsedDetectionRules);
+  const installScope = resolveApplicationInstallScope(
+    input.wingetId,
+    input.installScope || 'machine'
+  );
   const detectionRules = normalizeCatalogDetectionRules({
     detectionRules: parsedDetectionRules,
     fallbackDetectionRules: rawConfig.detectionRules,
     wingetId: input.wingetId,
     version: input.version,
-    installScope: input.installScope || 'machine',
+    installScope,
     markerPath: preliminaryConfig.registryMarkerPath,
   });
   const psadtConfig = applyApplicationPackagingAdapter(
@@ -714,7 +721,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     silentArgs: input.silentSwitches,
     successCodes: input.installerSuccessCodes,
     uninstallCommand: input.uninstallCommand,
-    installScope: input.installScope || 'machine',
+    installScope,
     nestedInstallerType: input.nestedInstallerType || '',
     nestedInstallerFiles: input.nestedInstallerPath ? [input.nestedInstallerPath] : [],
     psadtConfig,
