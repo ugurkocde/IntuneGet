@@ -10,6 +10,9 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '9ff409ddabd3b1b4f8c65ad03b1f9e37778589fc': [
+    'Microsoft.EdgeWebView2Runtime',
+  ],
   'f4bc37886e490ece525c701562869734a7e366d5': [
     'Microsoft.EdgeWebView2Runtime',
   ],

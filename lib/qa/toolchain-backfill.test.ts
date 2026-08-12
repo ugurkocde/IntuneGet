@@ -46,6 +46,10 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries WebView2 for the current shared-runtime lifecycle correction', () => {
     expect(shouldRetryTerminalToolchainCandidate(
+      'f4bc37886e490ece525c701562869734a7e366d5',
+      { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Microsoft.EdgeWebView2Runtime', status: 'failed' }
     )).toBe(true);
