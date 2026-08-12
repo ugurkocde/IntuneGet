@@ -35,6 +35,28 @@ describe('application packaging adapters', () => {
       reviewedUninstallArguments: ['--quiet', '--norestart'],
       uninstallCompletionTimeoutMinutes: 15,
     });
+    expect(
+      applyApplicationPackagingAdapter(
+        'Microsoft.SQLServerManagementStudio.22',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedUninstallArguments: ['--quiet', '--norestart', '--noweb'],
+      uninstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
+  it.each([
+    'Microsoft.SQLServerManagementStudio.21',
+    'Microsoft.SQLServerManagementStudio.22',
+    'Microsoft.SQLServerManagementStudio.22.Preview',
+  ])('applies the Visual Studio Installer lifecycle to %s', (wingetId) => {
+    expect(
+      applyApplicationPackagingAdapter(wingetId.toLowerCase(), DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedUninstallArguments: ['--quiet', '--norestart', '--noweb'],
+      uninstallCompletionTimeoutMinutes: 15,
+    });
   });
 
   it('preserves and deduplicates reviewed uninstall arguments case-insensitively', () => {

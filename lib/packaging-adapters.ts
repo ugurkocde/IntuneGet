@@ -24,6 +24,12 @@ const VISUAL_STUDIO_WINGET_IDS = [
   'Microsoft.VisualStudio.2022.Professional',
 ] as const;
 
+const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
+  'Microsoft.SQLServerManagementStudio.21',
+  'Microsoft.SQLServerManagementStudio.22',
+  'Microsoft.SQLServerManagementStudio.22.Preview',
+] as const;
+
 /**
  * Reviewed application-specific behavior that cannot be derived safely from a
  * WinGet manifest. Keep this registry declarative: executable implementation
@@ -57,6 +63,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // installer engine has removed the exact product registration. Microsoft
     // documents --wait for the bootstrapper only, not setup.exe, so retain
     // registry-aware completion polling for this longer vendor lifecycle.
+    uninstallCompletionTimeoutMinutes: 15,
+  })),
+  ...SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS.map((wingetId) => ({
+    wingetId,
+    // SSMS 21+ is serviced by the Visual Studio Installer. Its setup.exe
+    // parent can return while the installer engine is still removing the
+    // product, so keep exact ARP polling active for the longer lifecycle.
+    // --noweb is part of Microsoft's documented SSMS removal command and
+    // prevents an unnecessary installer update check during unattended runs.
+    reviewedUninstallArguments: ['--quiet', '--norestart', '--noweb'],
     uninstallCompletionTimeoutMinutes: 15,
   })),
   {
