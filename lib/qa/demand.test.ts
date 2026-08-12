@@ -2,13 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
-const { resolveWingetPackageDependenciesMock } = vi.hoisted(() => ({
+const { resolveWingetPackageDependenciesMock, getPackageEligibilityBlocksMock } = vi.hoisted(() => ({
   resolveWingetPackageDependenciesMock: vi.fn(),
+  getPackageEligibilityBlocksMock: vi.fn(),
 }));
 
 vi.mock('@/lib/winget-dependencies', () => ({
   resolveWingetPackageDependencies: resolveWingetPackageDependenciesMock,
 }));
+
+vi.mock('@/lib/package-eligibility', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/package-eligibility')>();
+  return {
+    ...original,
+    getPackageEligibilityBlocks: getPackageEligibilityBlocksMock,
+  };
+});
 
 type QueryResult = {
   data: unknown;
@@ -52,6 +61,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
   beforeEach(() => {
     resolveWingetPackageDependenciesMock.mockReset();
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);
+    getPackageEligibilityBlocksMock.mockReset();
+    getPackageEligibilityBlocksMock.mockResolvedValue([]);
+  });
+
+  it('does not queue or resolve dependencies for a retired catalog app', async () => {
+    getPackageEligibilityBlocksMock.mockResolvedValue([
+      { wingetId: 'Example.App', code: 'vendor_retired' },
+    ]);
+    const client = { from: vi.fn() };
+
+    const result = await ensureQaDemand(client as never, demandInput());
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      candidateId: null,
+      failureSummary: 'This app is no longer available for deployment.',
+    });
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
   });
 
   it('persists dependency download metadata on a newly queued customer candidate', async () => {

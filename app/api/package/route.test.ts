@@ -18,6 +18,7 @@ const {
   enforceInstallerPreflightMock,
   getLiveInstallersMock,
   ensureQaDemandMock,
+  getPackageEligibilityBlocksMock,
 } = vi.hoisted(() => ({
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
@@ -34,6 +35,7 @@ const {
   enforceInstallerPreflightMock: vi.fn(),
   getLiveInstallersMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
+  getPackageEligibilityBlocksMock: vi.fn(),
 }));
 
 vi.mock('@/lib/manifest-api', () => ({
@@ -78,6 +80,14 @@ vi.mock('@/lib/installer-preflight', async (importOriginal) => {
 });
 
 vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: ensureQaDemandMock }));
+
+vi.mock('@/lib/package-eligibility', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/package-eligibility')>();
+  return {
+    ...original,
+    getPackageEligibilityBlocks: getPackageEligibilityBlocksMock,
+  };
+});
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: vi.fn(),
@@ -346,6 +356,64 @@ describe('POST /api/package (workflow dispatch)', () => {
         presentationProfileSha256: 'B'.repeat(64),
       },
     });
+    getPackageEligibilityBlocksMock.mockResolvedValue([]);
+  });
+
+  it('blocks a retired catalog app before QA or customer packaging begins', async () => {
+    getPackageEligibilityBlocksMock.mockResolvedValueOnce([
+      { wingetId: 'Autodesk.DesktopApp', code: 'vendor_retired' },
+    ]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Autodesk.DesktopApp',
+          displayName: 'Autodesk Desktop App',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body).toMatchObject({
+      error: 'App unavailable',
+      message: 'This app is no longer available for deployment.',
+      code: 'PACKAGE_UNAVAILABLE',
+      package: { wingetId: 'Autodesk.DesktopApp' },
+    });
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('does not apply catalog retirement policy to a custom package', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Autodesk.DesktopApp',
+          sourceType: 'custom',
+          installerSha256: '',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(getPackageEligibilityBlocksMock.mock.calls[0][1]).toEqual([]);
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
   });
 
   it('forwards item relationships into the workflow inputs', async () => {

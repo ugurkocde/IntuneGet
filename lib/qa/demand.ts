@@ -9,6 +9,10 @@ import { resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 import type { Json } from '@/types/database';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
+import {
+  getPackageEligibilityBlocks,
+  PACKAGE_UNAVAILABLE_MESSAGE,
+} from '@/lib/package-eligibility';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
@@ -31,6 +35,28 @@ export async function ensureQaDemand(
   input: QaDemandInput
 ): Promise<QaDemandResult> {
   const installScope = resolveApplicationInstallScope(input.wingetId, input.installScope);
+  const baseResolvedInput: QaDemandInput = {
+    ...input,
+    installScope,
+    psadtConfig: JSON.stringify({
+      ...DEFAULT_PSADT_CONFIG,
+      deployMode: 'Auto',
+      progressDialog: {
+        enabled: true,
+        statusMessage: 'IntuneGet is validating this application package.',
+        windowLocation: 'BottomRight',
+      },
+    }),
+  };
+  const eligibilityBlocks = await getPackageEligibilityBlocks(supabase, [input.wingetId]);
+  if (eligibilityBlocks.length > 0) {
+    return {
+      identity: normalizeQaWorkflowPackageInput(baseResolvedInput).identity,
+      candidateId: null,
+      state: 'failed',
+      failureSummary: PACKAGE_UNAVAILABLE_MESSAGE,
+    };
+  }
   // Resolve at the QA-demand boundary as well as at final packaging dispatch.
   // This keeps both gates bound to the same server-trusted dependency graph;
   // caller-supplied dependency metadata is never authoritative.
@@ -46,17 +72,7 @@ export async function ensureQaDemand(
   // Customer presentation choices are applied later by customer packaging and
   // must neither suppress QA evidence nor multiply app-version tests.
   const resolvedInput: QaDemandInput = {
-    ...input,
-    installScope,
-    psadtConfig: JSON.stringify({
-      ...DEFAULT_PSADT_CONFIG,
-      deployMode: 'Auto',
-      progressDialog: {
-        enabled: true,
-        statusMessage: 'IntuneGet is validating this application package.',
-        windowLocation: 'BottomRight',
-      },
-    }),
+    ...baseResolvedInput,
     packageDependencies,
   };
   const normalizedPackage = normalizeQaWorkflowPackageInput(resolvedInput);

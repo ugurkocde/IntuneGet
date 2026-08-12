@@ -45,6 +45,10 @@ import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import type { NormalizedInstaller } from '@/types/winget';
+import {
+  getPackageEligibilityBlocks,
+  PACKAGE_UNAVAILABLE_MESSAGE,
+} from '@/lib/package-eligibility';
 
 export const maxDuration = 300;
 
@@ -178,6 +182,30 @@ export async function POST(request: NextRequest) {
         // Treat missing appSource as win32 for backward compatibility
         win32Items.push(item as Win32CartItem);
       }
+    }
+
+    const catalogWin32Items = win32Items.filter(
+      (item) => item.sourceType !== 'custom' && typeof item.wingetId === 'string'
+    );
+    const eligibilityBlocks = await getPackageEligibilityBlocks(
+      createServerClient(),
+      catalogWin32Items.map((item) => item.wingetId)
+    );
+    if (eligibilityBlocks.length > 0) {
+      const block = eligibilityBlocks[0];
+      const blockedItem = catalogWin32Items.find(
+        (item) => item.wingetId === block.wingetId
+      );
+      return NextResponse.json({
+        error: 'App unavailable',
+        message: PACKAGE_UNAVAILABLE_MESSAGE,
+        code: 'PACKAGE_UNAVAILABLE',
+        package: {
+          wingetId: block.wingetId,
+          displayName: blockedItem?.displayName || block.wingetId,
+          version: blockedItem?.version,
+        },
+      }, { status: 409 });
     }
 
     // Apply reviewed behavior constraints before preflight, QA identity, job

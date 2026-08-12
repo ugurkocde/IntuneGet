@@ -235,6 +235,35 @@ describe('failed QA backfill priority migration contract', () => {
   });
 });
 
+describe('retired catalog app migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260812205027_block_retired_catalog_apps.sql'
+    ),
+    'utf8'
+  );
+
+  it('defines a private application-level block and keeps catalog verification false', () => {
+    expect(sql).toContain('create table public.package_eligibility_blocks');
+    expect(sql).toContain("block_code in ('vendor_retired')");
+    expect(sql).toContain('before insert or update on public.curated_apps');
+    expect(sql).toContain('new.is_verified := false');
+    expect(sql).toContain('enable row level security');
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+  });
+
+  it('blocks Autodesk Desktop App from retries and customer-deployed backfill', () => {
+    expect(sql).toContain("'Autodesk.DesktopApp'");
+    expect(sql).toContain("candidate.status = 'queued'");
+    expect(sql).toContain('from public.package_eligibility_blocks as eligibility_block');
+    expect(sql).toContain('from public.qa_package_blocks as block');
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain('failure.last_failed_at desc nulls last');
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(

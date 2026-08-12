@@ -284,6 +284,27 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['qa_package_blocks']['Insert']>;
         Relationships: GenericRelationship[];
       };
+      package_eligibility_blocks: {
+        Row: {
+          winget_id: string;
+          block_code: 'vendor_retired';
+          detail: string;
+          source_url: string;
+          blocked_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['package_eligibility_blocks']['Row'],
+          'blocked_at' | 'updated_at'
+        > & {
+          blocked_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['package_eligibility_blocks']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
       qa_pipeline_control: {
         Row: {
           id: string;
