@@ -890,6 +890,20 @@ catch
   }
 
   /**
+   * Bound the registry-aware vendor completion window. Most uninstallers use
+   * five minutes; reviewed adapters can extend it for asynchronous vendor
+   * engines without turning it into an unbounded customer-controlled wait.
+   */
+  private getUninstallCompletionTimeoutMinutes(job: PackagingJob): number {
+    const raw = this.getPsadtConfig(job)?.uninstallCompletionTimeoutMinutes;
+    if (raw === undefined || raw === null) return 5;
+    if (!Number.isInteger(raw) || raw < 1 || raw > 30) {
+      throw new Error('PSADT uninstallCompletionTimeoutMinutes must be an integer from 1 to 30');
+    }
+    return raw;
+  }
+
+  /**
    * Generate PowerShell for additional post-install / post-uninstall commands
    * (issue #118). Each entry runs as its own Start-ADTProcess (cmd.exe /c) step,
    * in order, mirroring the custom-override pattern. Returns '' when none.
@@ -1383,6 +1397,8 @@ ${steps}
       const reviewedUninstallArguments = this.getReviewedUninstallArguments(job)
         .map((argument) => `'${argument.replace(/'/g, "''")}'`)
         .join(', ');
+      const uninstallCompletionTimeoutMinutes =
+        this.getUninstallCompletionTimeoutMinutes(job);
       const reviewedUninstallArgumentsBlock = `$reviewedUninstallArguments = @(${reviewedUninstallArguments})
     foreach ($reviewedArgument in $reviewedUninstallArguments) {
         if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {
@@ -1438,7 +1454,7 @@ ${steps}
         NoWait = $true
         PassThru = $true
     }
-    $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)
+    $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(${uninstallCompletionTimeoutMinutes})
     $uninstallHandle = Start-ADTProcess @uninstallProcessParameters
     $uninstallProcessExitLogged = $false
     $nextUninstallProgressLog = [DateTime]::UtcNow
@@ -1562,7 +1578,7 @@ ${steps}
         if ($registeredUninstallArguments.Count -gt 0) {
             $uninstallProcessParameters.ArgumentList = $registeredUninstallArguments
         }
-        $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)
+        $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(${uninstallCompletionTimeoutMinutes})
         $uninstallHandle = Start-ADTProcess @uninstallProcessParameters
         $uninstallProcessExitLogged = $false
         $nextUninstallProgressLog = [DateTime]::UtcNow

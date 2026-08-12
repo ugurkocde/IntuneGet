@@ -701,7 +701,10 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain(
       'if ($registeredUninstallArguments.Count -gt 0) {'
     );
-    expect(packager).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)');
+    expect(packager).toContain('$uninstallCompletionTimeoutMinutes = 5');
+    expect(packager).toContain(
+      '$uninstallDeadline = [DateTime]::UtcNow.AddMinutes($uninstallCompletionTimeoutMinutes)'
+    );
     expect(packager).toContain('Waiting for vendor uninstall registration');
     expect(packager).toContain('$uninstallHandle.Task.IsCompleted');
     expect(packager).toContain('$uninstallHandle.Task.GetAwaiter().GetResult().ExitCode');

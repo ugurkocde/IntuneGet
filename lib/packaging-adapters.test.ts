@@ -30,8 +30,11 @@ describe('application packaging adapters', () => {
       applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.Professional',
         DEFAULT_PSADT_CONFIG
-      ).reviewedUninstallArguments
-    ).toEqual(['--quiet', '--norestart']);
+      )
+    ).toMatchObject({
+      reviewedUninstallArguments: ['--quiet', '--norestart'],
+      uninstallCompletionTimeoutMinutes: 15,
+    });
   });
 
   it('preserves and deduplicates reviewed uninstall arguments case-insensitively', () => {

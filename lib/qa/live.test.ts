@@ -320,7 +320,8 @@ describe('buildQaLiveResponse', () => {
       frame: null,
       control: {
         paused: true,
-        reason: 'Golden VM wallpaper maintenance',
+        reason:
+          'Testing is temporarily paused for maintenance · Coordinating protected QA and customer packager pins for commit 1b130924ecc68909d6bb15f8cdf295944255a2f9.',
         updatedAt: '2026-08-11T12:04:00.000Z',
       },
     });
@@ -332,6 +333,7 @@ describe('buildQaLiveResponse', () => {
       issue: null,
       consecutiveFailures: 0,
     });
-    expect(JSON.stringify(response)).not.toContain('Golden VM wallpaper maintenance');
+    expect(JSON.stringify(response)).not.toContain('Testing is temporarily paused');
+    expect(JSON.stringify(response)).not.toContain('1b130924ecc68909d6bb15f8cdf295944255a2f9');
   });
 });

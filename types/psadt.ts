@@ -199,6 +199,11 @@ export interface PSADTConfig {
   // not exposed as a customer-facing free-form command surface.
   reviewedUninstallArguments?: string[];
 
+  // Internal completion window for vendor uninstallers that hand work to a
+  // child process. Application adapters may extend the five-minute default;
+  // the exact registry identity remains the authoritative completion signal.
+  uninstallCompletionTimeoutMinutes?: number;
+
   // Additional commands run as extra PSADT steps after the main install /
   // uninstall (e.g. delete a desktop shortcut after installing). Each entry is a
   // full command line executed via cmd.exe /c, in order. Empty/absent = none.

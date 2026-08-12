@@ -196,6 +196,59 @@ if ($env:PSADT_CONFIG -and $env:PSADT_CONFIG -ne '{}') {
     }
 }
 
+# Parse the bounded values supplied only by reviewed application adapters.
+# These are not a customer-facing free-form command surface.
+$reviewedUninstallArguments = @()
+if ($psadtConfig.Contains('reviewedUninstallArguments') -and
+    $null -ne $psadtConfig['reviewedUninstallArguments']) {
+    $rawReviewedArguments = $psadtConfig['reviewedUninstallArguments']
+    if ($rawReviewedArguments -is [string] -or
+        $rawReviewedArguments -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedUninstallArguments must be an array.'
+    }
+
+    $seenReviewedArguments = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($rawReviewedArgument in @($rawReviewedArguments)) {
+        if ($rawReviewedArgument -isnot [string]) {
+            throw 'Every PSADT reviewed uninstall argument must be a string.'
+        }
+        $reviewedArgument = $rawReviewedArgument.Trim()
+        if ([string]::IsNullOrWhiteSpace($reviewedArgument) -or
+            $reviewedArgument.Length -gt 256 -or
+            [regex]::IsMatch($reviewedArgument, '[\x00-\x1F\x7F]')) {
+            throw 'Every PSADT reviewed uninstall argument must be a non-empty, bounded, single-line string.'
+        }
+        if ($seenReviewedArguments.Add($reviewedArgument)) {
+            $reviewedUninstallArguments += $reviewedArgument
+        }
+    }
+    if ($reviewedUninstallArguments.Count -gt 20) {
+        throw 'PSADT reviewedUninstallArguments must contain at most 20 entries.'
+    }
+}
+$reviewedUninstallArgumentsLiteral = @(
+    $reviewedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
+) -join ', '
+
+$uninstallCompletionTimeoutMinutes = 5
+if ($psadtConfig.Contains('uninstallCompletionTimeoutMinutes') -and
+    $null -ne $psadtConfig['uninstallCompletionTimeoutMinutes']) {
+    $rawUninstallTimeout = $psadtConfig['uninstallCompletionTimeoutMinutes']
+    if ($rawUninstallTimeout -isnot [byte] -and
+        $rawUninstallTimeout -isnot [int16] -and
+        $rawUninstallTimeout -isnot [int32] -and
+        $rawUninstallTimeout -isnot [int64]) {
+        throw 'PSADT uninstallCompletionTimeoutMinutes must be an integer from 1 to 30.'
+    }
+    $uninstallCompletionTimeoutMinutes = [int]$rawUninstallTimeout
+    if ($uninstallCompletionTimeoutMinutes -lt 1 -or
+        $uninstallCompletionTimeoutMinutes -gt 30) {
+        throw 'PSADT uninstallCompletionTimeoutMinutes must be an integer from 1 to 30.'
+    }
+}
+
 function Get-StrictPSADTBoolean {
     param(
         [Parameter(Mandatory = $true)]
@@ -1981,13 +2034,19 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '    if ($registeredUninstallArguments.Count -eq 0) {'
             '        $registeredUninstallArguments = @(''/uninstall'', ''/quiet'', ''/norestart'')'
             '    }'
+            "    `$reviewedUninstallArguments = @($reviewedUninstallArgumentsLiteral)"
+            '    foreach ($reviewedArgument in $reviewedUninstallArguments) {'
+            '        if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {'
+            '            $registeredUninstallArguments += $reviewedArgument'
+            '        }'
+            '    }'
             "    `$bundledUninstaller = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
             '    if (-not (Test-Path -LiteralPath $bundledUninstaller -PathType Leaf)) {'
             '        throw "The packaged Burn uninstaller was not found: $bundledUninstaller"'
             '    }'
             '    Write-ADTLogEntry -Message "Using packaged Burn bundle because the registered vendor cache may be disposable." -Source ''Uninstall-ADTDeployment'''
             '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
-            '    $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)'
+            "    `$uninstallDeadline = [DateTime]::UtcNow.AddMinutes($uninstallCompletionTimeoutMinutes)"
             '    $uninstallHandle = Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
             '    $uninstallProcessExitLogged = $false'
             '    $nextUninstallProgressLog = [DateTime]::UtcNow'
@@ -2104,6 +2163,12 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '            $registeredUninstallArguments = @(''-u'', ''--silent'')'
             '            Write-ADTLogEntry -Message "Executing the Adobe Creative Cloud desktop client silent uninstall command." -Source ''Uninstall-ADTDeployment'''
             '        }'
+            "        `$reviewedUninstallArguments = @($reviewedUninstallArgumentsLiteral)"
+            '        foreach ($reviewedArgument in $reviewedUninstallArguments) {'
+            '            if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {'
+            '                $registeredUninstallArguments += $reviewedArgument'
+            '            }'
+            '        }'
             '        $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile'
             '        $isRegisteredMsiExec = $registeredUninstallLeaf -in @(''msiexec'', ''msiexec.exe'')'
             '        if ($isRegisteredMsiExec) {'
@@ -2138,7 +2203,7 @@ if (-not [string]::IsNullOrWhiteSpace($customUninstallCommand)) {
             '        if ($registeredUninstallArguments.Count -gt 0) {'
             '            $uninstallProcessParameters.ArgumentList = $registeredUninstallArguments'
             '        }'
-            '        $uninstallDeadline = [DateTime]::UtcNow.AddMinutes(5)'
+            "        `$uninstallDeadline = [DateTime]::UtcNow.AddMinutes($uninstallCompletionTimeoutMinutes)"
             '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
             '        $uninstallProcessExitLogged = $false'
             '        $nextUninstallProgressLog = [DateTime]::UtcNow'

@@ -319,6 +319,12 @@ describe('hosted PSADT portable generator', () => {
     );
     expect(script).toContain('$uninstallHandle.Task.IsCompleted');
     expect(script).toContain('$uninstallHandle.Task.GetAwaiter().GetResult().ExitCode');
+    expect(script).toContain("$psadtConfig.Contains('reviewedUninstallArguments')");
+    expect(script).toContain('$registeredUninstallArguments += $reviewedArgument');
+    expect(script).toContain("$psadtConfig.Contains('uninstallCompletionTimeoutMinutes')");
+    expect(script).toContain(
+      '$uninstallDeadline = [DateTime]::UtcNow.AddMinutes($uninstallCompletionTimeoutMinutes)'
+    );
     expect(script).not.toContain('Start-ADTProcess -FilePath $wingetExe');
     expect(script).not.toContain('uninstall --id $wingetId');
   });
@@ -603,6 +609,45 @@ describe('EXE product identity PSADT generation', () => {
       }),
       'example.exe'
     )).toThrow('single-line');
+  });
+
+  it('extends registry-aware completion only for a reviewed vendor profile', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        winget_id: 'Microsoft.VisualStudio.Professional',
+        installer_type: 'exe',
+        uninstall_command: 'REGISTRY_UNINSTALL:Visual Studio Professional',
+        package_config: {
+          psadtConfig: {
+            reviewedUninstallArguments: ['--quiet', '--norestart'],
+            uninstallCompletionTimeoutMinutes: 15,
+          },
+        },
+      }),
+      'vs_Professional.exe'
+    );
+
+    expect(uninstall).toContain(
+      "$reviewedUninstallArguments = @('--quiet', '--norestart')"
+    );
+    expect(uninstall).toContain(
+      '$uninstallDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+    );
+  });
+
+  it('rejects unbounded vendor uninstall completion windows', () => {
+    expect(() => generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'exe',
+        uninstall_command: 'REGISTRY_UNINSTALL:Example',
+        package_config: {
+          psadtConfig: { uninstallCompletionTimeoutMinutes: 31 },
+        },
+      }),
+      'example.exe'
+    )).toThrow('integer from 1 to 30');
   });
 
   it('uses the Adobe Creative Cloud desktop client unattended removal contract', () => {

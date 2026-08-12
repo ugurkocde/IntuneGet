@@ -6,6 +6,7 @@ interface ApplicationPackagingAdapter {
   requiredInstallScope?: WingetScope;
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedUninstallArguments?: readonly string[];
+  uninstallCompletionTimeoutMinutes?: number;
 }
 
 const VISUAL_STUDIO_WINGET_IDS = [
@@ -48,6 +49,11 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   ...VISUAL_STUDIO_WINGET_IDS.map((wingetId) => ({
     wingetId,
     reviewedUninstallArguments: ['--quiet', '--norestart'],
+    // Visual Studio's registered setup.exe command returns before its child
+    // installer engine has removed the exact product registration. Microsoft
+    // documents --wait for the bootstrapper only, not setup.exe, so retain
+    // registry-aware completion polling for this longer vendor lifecycle.
+    uninstallCompletionTimeoutMinutes: 15,
   })),
   {
     wingetId: 'Adobe.CreativeCloud',
@@ -157,5 +163,12 @@ export function applyApplicationPackagingAdapter(
     }
   }
 
-  return { ...config, processesToClose, reviewedUninstallArguments };
+  return {
+    ...config,
+    processesToClose,
+    reviewedUninstallArguments,
+    ...(adapter.uninstallCompletionTimeoutMinutes
+      ? { uninstallCompletionTimeoutMinutes: adapter.uninstallCompletionTimeoutMinutes }
+      : {}),
+  };
 }
