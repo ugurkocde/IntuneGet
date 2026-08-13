@@ -122,6 +122,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // The VSTO redistributable registers a visible External Installer command
+    // with no arguments. Invoking that bare install.exe returns successfully
+    // without removing the runtime. Supply the redistributable's unattended
+    // removal switches so Intune and QA use the same deterministic lifecycle.
+    wingetId: 'Microsoft.VSTOR',
+    reviewedUninstallArguments: ['/uninstall', '/quiet', '/norestart'],
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the

@@ -19,6 +19,10 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // custom action waits for that process. The shared application adapter now
     // closes it before invoking the exact MSI product uninstall.
     'Elgato.CameraHub',
+    // VSTO's visible External Installer entry contains a bare install.exe.
+    // The shared application adapter now supplies its unattended removal
+    // switches instead of accepting the helper's no-op exit code.
+    'Microsoft.VSTOR',
   ],
   '2dca138ee2fe27dc45166dba536511aa80d8937e': [
     // EAUninstall.exe remains blocked while the EA client/background process

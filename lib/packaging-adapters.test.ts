@@ -66,6 +66,10 @@ describe('application packaging adapters', () => {
       { name: 'Camera Hub', description: 'Elgato Camera Hub' },
     ]);
     expect(
+      applyApplicationPackagingAdapter('Microsoft.VSTOR', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['/uninstall', '/quiet', '/norestart']);
+    expect(
       applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2022.Professional',
         DEFAULT_PSADT_CONFIG
