@@ -33,12 +33,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ugurkocde/IntuneGet-Website.git",
+    "url": "https://github.com/ugurkocde/IntuneGet.git",
     "directory": "packager"
   },
-  "homepage": "https://github.com/ugurkocde/IntuneGet-Website/tree/main/packager#readme",
+  "homepage": "https://github.com/ugurkocde/IntuneGet/tree/main/packager#readme",
   "bugs": {
-    "url": "https://github.com/ugurkocde/IntuneGet-Website/issues"
+    "url": "https://github.com/ugurkocde/IntuneGet/issues"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
