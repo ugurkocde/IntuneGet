@@ -47,6 +47,18 @@ describe('application packaging adapters', () => {
     });
     expect(
       applyApplicationPackagingAdapter(
+        'ElectronicArts.EADesktop',
+        DEFAULT_PSADT_CONFIG
+      ).processesToClose
+    ).toEqual([
+      { name: 'EADesktop', description: 'EA app' },
+      { name: 'EALauncher', description: 'EA app launcher' },
+      { name: 'EACefSubProcess', description: 'EA app web process' },
+      { name: 'EALocalHostSvc', description: 'EA local host service' },
+      { name: 'EABackgroundService', description: 'EA background service' },
+    ]);
+    expect(
+      applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2022.Professional',
         DEFAULT_PSADT_CONFIG
       )

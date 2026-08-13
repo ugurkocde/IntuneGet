@@ -97,6 +97,21 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['--runimmediately'],
   },
   {
+    // EA Desktop's registered EAUninstall.exe helper is unattended, but it
+    // leaves the product registration intact while the client or its
+    // background service still owns the installation. Close the reviewed EA
+    // process family before both upgrades and Intune removal so the exact
+    // registered helper can complete under LocalSystem.
+    wingetId: 'ElectronicArts.EADesktop',
+    requiredProcessesToClose: [
+      { name: 'EADesktop', description: 'EA app' },
+      { name: 'EALauncher', description: 'EA app launcher' },
+      { name: 'EACefSubProcess', description: 'EA app web process' },
+      { name: 'EALocalHostSvc', description: 'EA local host service' },
+      { name: 'EABackgroundService', description: 'EA background service' },
+    ],
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the
