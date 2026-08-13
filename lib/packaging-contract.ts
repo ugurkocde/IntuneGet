@@ -103,7 +103,7 @@ export function evaluatePackagingContract(
   if (family === 'archive') {
     const nestedType = input.nestedInstallerType?.trim().toLowerCase() || '';
     const nestedFiles = (input.nestedInstallerFiles || []).filter((value) => value.trim());
-    if (!nestedType || nestedFiles.length === 0) {
+    if (Boolean(nestedType) !== (nestedFiles.length > 0)) {
       return {
         valid: false,
         family,

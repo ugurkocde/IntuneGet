@@ -1009,6 +1009,9 @@ $registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip' -and
 $isNestedPortable = $installerTypeLower -eq 'zip' -and
     -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
     $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable'
+$isPlainPortableArchive = $installerTypeLower -eq 'zip' -and
+    [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
+    [string]::IsNullOrWhiteSpace($NestedInstallerPath)
 
 $portableFolderName = ($DisplayName -replace '[<>:"/\\|?*\x00-\x1f]', '_').Trim().TrimEnd('.')
 if ([string]::IsNullOrWhiteSpace($portableFolderName) -or
@@ -1030,7 +1033,7 @@ $registryUninstallDisplayName = ''
 $registryUninstallProductCode = ''
 $msixPackageName = ''
 
-if ($installerTypeLower -eq 'portable' -or $isNestedPortable) {
+if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) {
     $usePortableUninstall = $true
     Write-Host "Using portable uninstall (folder removal)"
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$') {
@@ -1881,20 +1884,12 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
             }
         }
         'zip' {
-            # Zip archives carry a nested installer (winget nestedInstallerType/nestedInstallerPath)
-            # Never execute the .zip itself - extract it and run the declared nested installer
-            if ([string]::IsNullOrWhiteSpace($NestedInstallerPath)) {
-                Write-Host "Zip installer without nested installer path - emitting install-time error"
-                $lines += @(
-                    '    # Zip archives cannot be executed directly and no nested installer was declared'
-                    '    throw "Zip package does not declare a nested installer; cannot install"'
-                )
-            } else {
-                $nestedInstallerPathEscaped = $NestedInstallerPath -replace "'", "''"
-                $nestedInstallerTypeLower = if ($NestedInstallerType) { $NestedInstallerType.ToLower() } else { '' }
-                Write-Host "Zip installer with nested installer: type='$nestedInstallerTypeLower' path='$NestedInstallerPath'"
-
-                if ($isNestedPortable) {
+            # Archives without a nested contract and nested portable archives are
+            # safely staged as complete portable application folders.
+            $nestedInstallerPathEscaped = $NestedInstallerPath -replace "'", "''"
+            $nestedInstallerTypeLower = if ($NestedInstallerType) { $NestedInstallerType.ToLower() } else { '' }
+            if ($isNestedPortable -or $isPlainPortableArchive) {
+                    Write-Host "Staging zip as portable archive"
                     $lines += @(
                         ''
                         '    # Safely stage every portable archive entry before replacing the installed app'
@@ -1928,13 +1923,19 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                         '        finally {'
                         '            if ($archive) { $archive.Dispose() }'
                         '        }'
-                        "        `$declaredNestedPath = [System.IO.Path]::GetFullPath((Join-Path `$stageRoot '$nestedInstallerPathEscaped'))"
-                        '        if (-not $declaredNestedPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {'
-                        '            throw "Nested installer path escapes the portable staging directory"'
-                        '        }'
-                        '        if (-not (Test-Path -LiteralPath $declaredNestedPath -PathType Leaf)) {'
-                        "            throw `"Nested installer not found in archive: $nestedInstallerPathEscaped`""
-                        '        }'
+                    )
+                    if ($isNestedPortable) {
+                        $lines += @(
+                            "        `$declaredNestedPath = [System.IO.Path]::GetFullPath((Join-Path `$stageRoot '$nestedInstallerPathEscaped'))"
+                            '        if (-not $declaredNestedPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {'
+                            '            throw "Nested installer path escapes the portable staging directory"'
+                            '        }'
+                            '        if (-not (Test-Path -LiteralPath $declaredNestedPath -PathType Leaf)) {'
+                            "            throw `"Nested installer not found in archive: $nestedInstallerPathEscaped`""
+                            '        }'
+                        )
+                    }
+                    $lines += @(
                         '        $installParent = [System.IO.Path]::GetDirectoryName($installPath)'
                         '        if ($installParent) { $null = New-Item -Path $installParent -ItemType Directory -Force }'
                         '        $replacementStarted = $true'
@@ -2010,7 +2011,6 @@ if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
                         '    }'
                     )
                 }
-            }
         }
         'portable' {
             $lines += @(

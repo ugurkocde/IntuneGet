@@ -85,10 +85,24 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Viber once on the reviewed user-scope release', () => {
+  it('keeps the Viber retry scoped to its user-scope release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9214e4b5b71508bfba9aa1a2d4de5c3c771d3fea',
+      { wingetId: 'Rakuten.Viber', status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Rakuten.Viber', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Anthropic.ClaudeCode',
+    'Google.PlatformTools',
+  ])('retries %s once on the portable archive release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
     )).toBe(true);
   });
 
