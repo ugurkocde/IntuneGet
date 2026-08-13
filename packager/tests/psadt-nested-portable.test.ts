@@ -627,6 +627,26 @@ describe('EXE product identity PSADT generation', () => {
     expect(inno).toContain("$safeManifestUninstallArguments = @('/VERYSILENT /NORESTART' -split '\\s+'");
   });
 
+  it('uses the nested engine for ZIP-wrapped Inno uninstall normalization', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'zip',
+        install_command: 'MPC-BE.zip /VERYSILENT /NORESTART',
+        uninstall_command: 'REGISTRY_UNINSTALL:MPC-BE x64 1.9.1',
+        package_config: {
+          nestedInstallerType: 'inno',
+          nestedInstallerPath: 'MPC-BE.1.9.1.x64.exe',
+          psadtConfig: {},
+        },
+      }),
+      'MPC-BE.zip'
+    );
+
+    expect(uninstall).toContain("'inno' -eq 'inno'");
+    expect(uninstall).not.toContain("'zip' -eq 'inno'");
+  });
+
   it('appends only bounded reviewed arguments to the exact registered vendor uninstaller', () => {
     const uninstall = generator.getUninstallCommand.call(
       generator,

@@ -998,6 +998,13 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     }
   });
 
+  it('carries the effective nested installer engine into uninstall normalization', () => {
+    expect(packager).toContain("$registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip'");
+    expect(packager).toContain("`$registeredInstallerType = '$registeredInstallerTypeLower'");
+    expect(hostedPackager).toContain("const registeredInstallerType = installerType === 'zip'");
+    expect(hostedPackager).toContain("'${registeredInstallerType}' -eq 'inno'");
+  });
+
   it('monitors exact registry removal for both quiet and fallback EXE uninstall commands', () => {
     expect(packager).toContain(
       "$registeredUninstallProperty = if ($hasQuietUninstall) { ''QuietUninstallString'' } else { ''UninstallString'' }"
@@ -1120,7 +1127,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
 
   it('keeps non-MSI fallback visible, non-WindowsInstaller, and fail-closed', () => {
     expect(packager).toContain(
-      "$allowContainsFallback = '$installerTypeLower' -notin @('msi', 'wix')"
+      "$allowContainsFallback = '$registeredInstallerTypeLower' -notin @('msi', 'wix')"
     );
     expect(packager).toContain(
       "$systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']"

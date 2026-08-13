@@ -777,6 +777,16 @@ if ($installerTypeLower -eq 'zip' -and -not [string]::IsNullOrWhiteSpace($Nested
     }
 }
 
+# Registry uninstall behavior belongs to the executable inside an archive, not
+# to the ZIP transport. Preserve the outer type for extraction while carrying
+# the effective nested engine into quiet-uninstall normalization.
+$registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip' -and
+    -not [string]::IsNullOrWhiteSpace($NestedInstallerType)) {
+    $NestedInstallerType.Trim().ToLowerInvariant()
+} else {
+    $installerTypeLower
+}
+
 $isNestedPortable = $installerTypeLower -eq 'zip' -and
     -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
     $NestedInstallerType.Trim().ToLowerInvariant() -eq 'portable'
@@ -2212,7 +2222,7 @@ if ($preserveVendorInstallationOnUninstall) {
         '        @(Get-ADTApplication -Name $appName -NameMatch ''Exact'')'
         '    }'
         ''
-        "    `$allowContainsFallback = '$installerTypeLower' -notin @('msi', 'wix')"
+        "    `$allowContainsFallback = '$registeredInstallerTypeLower' -notin @('msi', 'wix')"
         '    if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey -and -not $configuredProductCode -and $allowContainsFallback) {'
         '        $containsMatches = @(Get-ADTApplication -Name $appName -NameMatch ''Contains'')'
         '        $bundleMatches = @($containsMatches | Where-Object {'
@@ -2318,7 +2328,7 @@ if ($preserveVendorInstallationOnUninstall) {
     } else {
         $lines += @(
             '    $registeredApplication = $installedApps[0]'
-            "    `$registeredInstallerType = '$installerTypeLower'"
+            "    `$registeredInstallerType = '$registeredInstallerTypeLower'"
             '    $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName'
             '    $capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {'
             '        $registeredApplication.ProductCode'

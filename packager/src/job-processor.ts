@@ -1426,6 +1426,10 @@ ${steps}
     const registryIdentity = this.getRegistryUninstallIdentity(job);
     if (registryIdentity) {
       const installerType = job.installer_type.toLowerCase();
+      const nestedInstaller = this.getNestedInstaller(job);
+      const registeredInstallerType = installerType === 'zip' && nestedInstaller.type
+        ? nestedInstaller.type.toLowerCase()
+        : installerType;
       const fileNameEscaped = installerFileName.replace(/'/g, "''");
       const silentSwitches = this.extractSilentSwitches(
         job.install_command,
@@ -1575,7 +1579,7 @@ ${steps}
         if (-not $hasQuietUninstall) {
             if ((Split-Path -Leaf $registeredUninstallFile) -ieq 'setup.exe' -and $registeredArgumentText -match '(?i)(^|\\s)--vivaldi(\\s|$)') {
                 $isVivaldiUninstall = $true
-            } elseif ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${installerType}' -eq 'nullsoft' -and $registeredArgumentText -notmatch '(?i)(^|\\s)/S(\\s|$)') {
+            } elseif ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${registeredInstallerType}' -eq 'nullsoft' -and $registeredArgumentText -notmatch '(?i)(^|\\s)/S(\\s|$)') {
                 $additionalUninstallArguments += '/S'
             }
             if ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and $registeredArgumentText -match '(?i)(^|\\s)(/uninstall|-uninstall|--uninstall|/x)(\\s|$|\\{)') {
@@ -1587,7 +1591,7 @@ ${steps}
                 }
             }
         }
-        if (-not $isVivaldiUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${installerType}' -eq 'inno') {
+        if (-not $isVivaldiUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${registeredInstallerType}' -eq 'inno') {
             # Inno's registered QuietUninstallString is not consistently fully unattended.
             # Normalize weak /SILENT registrations to the vendor-documented, message-box-free
             # switches so SYSTEM deployments cannot wait behind an invisible prompt.
