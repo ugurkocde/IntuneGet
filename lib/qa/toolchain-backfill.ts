@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '4ca55ff8ac8d4d5f6d07665adbe06a07f0110006': [
+    // Dell Optimizer's registered removal command is interactive and leaves
+    // its exact ARP identity. This release applies Dell's documented
+    // unattended /silent /remove lifecycle to QA and customer packages.
+    'Dell.Optimizer',
+  ],
   '3fce249f5021c120a23ed0ab5dc726baaf060f3e': [
     // Claude Code ships as a bare portable executable. Earlier releases
     // generated an incomplete archive command for it; this release installs

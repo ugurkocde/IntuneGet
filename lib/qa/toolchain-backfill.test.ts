@@ -101,8 +101,19 @@ describe('QA toolchain targeted retries', () => {
     'Google.PlatformTools',
   ])('retries %s once on the portable archive release', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
+      '3fce249f5021c120a23ed0ab5dc726baaf060f3e',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Dell Optimizer once on the unattended removal release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Dell.Optimizer', status: 'failed' }
     )).toBe(true);
   });
 
