@@ -189,6 +189,41 @@ describe('resolveWingetPackageDependencies', () => {
     });
   });
 
+  it('bundles a reviewed ASP.NET Core Runtime Burn prerequisite', async () => {
+    const io = fixtureIo(
+      {
+        'Example.App@1.0.0': [installer({
+          packageDependencies: [{
+            packageIdentifier: 'Microsoft.DotNet.AspNetCore.8',
+            minimumVersion: '8.0.29',
+          }],
+        })],
+        'Microsoft.DotNet.AspNetCore.8@8.0.30': [installer({
+          type: 'burn',
+          url: 'https://download.microsoft.com/aspnetcore-runtime-8.0.30-win-x64.exe',
+          sha256: VC_SHA,
+          silentArgs: '/quiet /norestart',
+        })],
+      },
+      { 'Microsoft.DotNet.AspNetCore.8': ['8.0.30'] }
+    );
+
+    const [dependency] = await resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+    }, io);
+
+    expect(dependency).toMatchObject({
+      packageIdentifier: 'Microsoft.DotNet.AspNetCore.8',
+      minimumVersion: '8.0.29',
+      version: '8.0.30',
+      installerType: 'burn',
+      silentArgs: '/quiet /norestart',
+    });
+  });
+
   it('selects the reviewed PowerShell Wix installer instead of its MSIX variant', async () => {
     const io = fixtureIo(
       {

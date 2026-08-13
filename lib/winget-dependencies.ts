@@ -22,6 +22,8 @@ const VC_REDISTRIBUTABLE_PACKAGE_PATTERN =
   /^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(?:x86|x64|arm64)$/i;
 const DOTNET_DESKTOP_RUNTIME_PACKAGE_PATTERN =
   /^Microsoft\.DotNet\.DesktopRuntime\.\d+$/i;
+const DOTNET_ASPNETCORE_RUNTIME_PACKAGE_PATTERN =
+  /^Microsoft\.DotNet\.AspNetCore\.\d+$/i;
 const VCLIBS_DESKTOP_PACKAGE_PATTERN = /^Microsoft\.VCLibs\.Desktop\.14$/i;
 
 interface PackageDependencyReference {
@@ -54,6 +56,10 @@ const REVIEWED_DEPENDENCY_POLICIES: readonly ReviewedDependencyPolicy[] = [
   },
   {
     packagePattern: DOTNET_DESKTOP_RUNTIME_PACKAGE_PATTERN,
+    installerTypes: new Set<WingetInstallerType>(['exe', 'burn']),
+  },
+  {
+    packagePattern: DOTNET_ASPNETCORE_RUNTIME_PACKAGE_PATTERN,
     installerTypes: new Set<WingetInstallerType>(['exe', 'burn']),
   },
   {

@@ -74,9 +74,10 @@ foreach ($dependency in $PackageDependencies) {
     $dependencyInstallerType = ([string]$dependency.installerType).ToLowerInvariant()
     $isVCRedistributable = $dependencyIdentifier -match '^Microsoft\.VCRedist\.[A-Za-z0-9+.-]+\.(x86|x64|arm64)$'
     $isDotNetDesktopRuntime = $dependencyIdentifier -match '^Microsoft\.DotNet\.DesktopRuntime\.\d+$'
+    $isDotNetAspNetCoreRuntime = $dependencyIdentifier -match '^Microsoft\.DotNet\.AspNetCore\.\d+$'
     $isPowerShell = $dependencyIdentifier -eq 'Microsoft.PowerShell'
     $isVCLibsDesktop = $dependencyIdentifier -eq 'Microsoft.VCLibs.Desktop.14'
-    if (-not ($isVCRedistributable -or $isDotNetDesktopRuntime -or $isPowerShell -or $isVCLibsDesktop)) {
+    if (-not ($isVCRedistributable -or $isDotNetDesktopRuntime -or $isDotNetAspNetCoreRuntime -or $isPowerShell -or $isVCLibsDesktop)) {
         throw "Package dependency is not in the reviewed redistribution allowlist: $($dependency.packageIdentifier)"
     }
     $reviewedInstallerTypes = if ($isPowerShell) {
