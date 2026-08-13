@@ -18,6 +18,7 @@ import {
   type CustomInstallerType,
 } from '@/lib/custom-app';
 import type { WingetArchitecture, WingetScope } from '@/types/winget';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 
 interface CustomAppModalProps {
   onClose: () => void;
@@ -147,7 +148,15 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
         iconUrl,
       });
 
-      addItem(item);
+      addItem({
+        ...item,
+        requirementRules: buildCartItemRequirementRules(
+          item.displayName,
+          item.installerType,
+          undefined,
+          item.assignments
+        ),
+      });
       toast.success(`${item.displayName} added`, {
         description: `v${item.version} -- ${item.architecture}`,
       });

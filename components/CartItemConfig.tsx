@@ -40,7 +40,7 @@ import { EspProfileSelector } from '@/components/EspProfileSelector';
 import type { CartItem, StoreCartItem, IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { EspProfileSelection } from '@/types/esp';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
-import type { RequirementRule, AppRelationship } from '@/types/intune';
+import type { AppRelationship, MsiDetectionRule } from '@/types/intune';
 import type {
   PSADTConfig,
   ProcessToClose,
@@ -54,7 +54,7 @@ import type {
 } from '@/types/psadt';
 import type { WingetScope } from '@/types/winget';
 import { useCartStore } from '@/stores/cart-store';
-import { generateRequirementRules } from '@/lib/requirement-rules';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 
 interface CartItemConfigProps {
@@ -191,13 +191,17 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
       } else {
         // Win32 apps: full config update
         // Generate requirement rules if any assignment uses "Update Only"
-        let requirementRules: RequirementRule[] | undefined;
-        if (isWin32 && assignments.some((a) => a.intent === 'updateOnly')) {
-          requirementRules = generateRequirementRules(
-            item.displayName,
-            item.installerType
-          );
-        }
+        const msiProductCode = isWin32
+          ? (item.detectionRules.find((rule) => rule.type === 'msi') as MsiDetectionRule | undefined)?.productCode
+          : undefined;
+        const requirementRules = isWin32
+          ? buildCartItemRequirementRules(
+              item.displayName,
+              item.installerType,
+              msiProductCode,
+              assignments
+            )
+          : undefined;
 
         updateItem(item.id, {
           installScope: selectedScope,

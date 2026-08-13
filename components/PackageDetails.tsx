@@ -25,6 +25,7 @@ import {
 } from '@/lib/detection-rules';
 import { cn } from '@/lib/utils';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 
 interface PackageDetailsProps {
   package: NormalizedPackage;
@@ -123,6 +124,12 @@ export function PackageDetails({ package: pkg, onClose }: PackageDetailsProps) {
       installCommand: generateInstallCommand(selectedInstaller, selectedScope),
       uninstallCommand: generateUninstallCommand(selectedInstaller, pkg.name),
       detectionRules,
+      requirementRules: buildCartItemRequirementRules(
+        pkg.name,
+        selectedInstaller.type,
+        selectedInstaller.productCode,
+        undefined
+      ),
       psadtConfig: {
         ...DEFAULT_PSADT_CONFIG,
         processesToClose,

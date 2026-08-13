@@ -21,6 +21,7 @@ import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { checkStoredConsent } from '@/lib/msp/consent-cache';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
+import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { acquireGraphToken } from '@/lib/graph-token';
 import { deployStoreApp } from '@/lib/store-app-deploy';
 import {
@@ -670,7 +671,14 @@ export async function POST(request: NextRequest) {
               psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
               detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
               requirementRules: item.requirementRules ? JSON.stringify(item.requirementRules) : undefined,
-              assignments: item.assignments ? JSON.stringify(item.assignments) : undefined,
+              assignments: item.assignments
+                ? JSON.stringify(
+                    sanitizeAssignmentsForDispatch(
+                      item.assignments,
+                      Boolean(item.requirementRules?.length)
+                    )
+                  )
+                : undefined,
               categories: item.categories ? JSON.stringify(item.categories) : undefined,
               espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
               relationships: item.relationships && item.relationships.length > 0
