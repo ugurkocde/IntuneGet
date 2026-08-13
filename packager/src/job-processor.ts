@@ -1479,15 +1479,31 @@ ${steps}
         $registeredUninstallArguments = @('/uninstall', '/quiet', '/norestart')
     }
     ${reviewedUninstallArgumentsBlock}
+    $registeredUninstallFile = [string]$registeredApplication."$($registeredUninstallProperty)FilePath"
     $bundledUninstaller = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
     if (-not (Test-Path -LiteralPath $bundledUninstaller -PathType Leaf)) {
         throw "The packaged Burn uninstaller was not found: $bundledUninstaller"
     }
-    Write-ADTLogEntry -Message "Using packaged Burn bundle because the registered vendor cache may be disposable." -Source 'Uninstall-ADTDeployment'
+    if (-not [string]::IsNullOrWhiteSpace($registeredUninstallFile) -and (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {
+        # Some Burn packages register a purpose-built vendor removal helper
+        # rather than the original bootstrapper. Prefer that exact executable
+        # while it exists, then retain the packaged bundle as the durable
+        # fallback for disposable Package Cache registrations.
+        $burnUninstaller = $registeredUninstallFile
+        $burnUninstallWorkingDirectory = Split-Path -Parent $registeredUninstallFile
+        if ([string]::IsNullOrWhiteSpace($burnUninstallWorkingDirectory) -or -not (Test-Path -LiteralPath $burnUninstallWorkingDirectory -PathType Container)) {
+            $burnUninstallWorkingDirectory = $adtSession.DirFiles
+        }
+        Write-ADTLogEntry -Message "Using the exact registered Burn uninstaller [$registeredUninstallFile]." -Source 'Uninstall-ADTDeployment'
+    } else {
+        $burnUninstaller = $bundledUninstaller
+        $burnUninstallWorkingDirectory = $adtSession.DirFiles
+        Write-ADTLogEntry -Message "The registered Burn uninstaller is unavailable; using the hash-verified packaged bundle." -Severity 'Warning' -Source 'Uninstall-ADTDeployment'
+    }
     $uninstallProcessParameters = @{
-        FilePath = $bundledUninstaller
+        FilePath = $burnUninstaller
         ArgumentList = $registeredUninstallArguments
-        WorkingDirectory = $adtSession.DirFiles
+        WorkingDirectory = $burnUninstallWorkingDirectory
         WindowStyle = 'Hidden'
         WaitForMsiExec = $true
         NoWait = $true

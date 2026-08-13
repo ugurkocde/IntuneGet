@@ -331,7 +331,7 @@ describe('hosted PSADT portable generator', () => {
 });
 
 describe('Burn bundle PSADT generation', () => {
-  it('reuses the packaged bundle with the registered quiet uninstall arguments', () => {
+  it('prefers an exact registered Burn helper and retains the packaged fallback', () => {
     const job = packagingJob({
       winget_id: 'Python.Python.3.14',
       display_name: 'Python 3.14',
@@ -357,7 +357,13 @@ describe('Burn bundle PSADT generation', () => {
       '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object'
     );
     expect(script).toContain("Join-Path $adtSession.DirFiles 'python-3.14.7-amd64.exe'");
-    expect(script).toContain('WorkingDirectory = $adtSession.DirFiles');
+    expect(script).toContain(
+      '$registeredUninstallFile = [string]$registeredApplication."$($registeredUninstallProperty)FilePath"'
+    );
+    expect(script).toContain('$burnUninstaller = $registeredUninstallFile');
+    expect(script).toContain('$burnUninstaller = $bundledUninstaller');
+    expect(script).toContain('FilePath = $burnUninstaller');
+    expect(script).toContain('WorkingDirectory = $burnUninstallWorkingDirectory');
     expect(script).toContain("WindowStyle = 'Hidden'");
     expect(script).toContain(
       'The Burn uninstall command did not remove registration [$registeredUninstallRegistryKey]'

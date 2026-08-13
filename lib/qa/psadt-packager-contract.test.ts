@@ -486,7 +486,7 @@ describe.skipIf(!canRunWindowsPowerShellPackager)(
           );
         } else {
           expect(generated).toContain(
-            'Start-ADTProcess -FilePath $bundledUninstaller'
+            'Start-ADTProcess -FilePath $burnUninstaller'
           );
         }
       }
@@ -690,7 +690,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
-  it('uses the packaged Burn bundle when the registered vendor cache is disposable', () => {
+  it('prefers a registered Burn helper and keeps the packaged fallback for disposable caches', () => {
     expect(packager).toContain("if ($originalInstallerType -eq 'burn')");
     expect(packager).toContain(
       '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })'
@@ -699,7 +699,12 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       "`$bundledUninstaller = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
     );
     expect(packager).toContain(
-      'Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $adtSession.DirFiles'
+      '$registeredUninstallFile = [string]$registeredApplication."$($registeredUninstallProperty)FilePath"'
+    );
+    expect(packager).toContain('$burnUninstaller = $registeredUninstallFile');
+    expect(packager).toContain('$burnUninstaller = $bundledUninstaller');
+    expect(packager).toContain(
+      'Start-ADTProcess -FilePath $burnUninstaller -ArgumentList $registeredUninstallArguments -WorkingDirectory $burnUninstallWorkingDirectory'
     );
     expect(packager).toContain('-WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru');
     expect(packager).toContain(
@@ -997,9 +1002,9 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(packager).not.toContain('TotalSeconds -ge 15');
   });
 
-  it('uses the same registry-aware completion rule for packaged Burn uninstallers', () => {
+  it('uses the same registry-aware completion rule for selected Burn uninstallers', () => {
     expect(packager).toContain(
-      'Start-ADTProcess -FilePath $bundledUninstaller -ArgumentList $registeredUninstallArguments'
+      'Start-ADTProcess -FilePath $burnUninstaller -ArgumentList $registeredUninstallArguments'
     );
     expect(packager).toContain(
       'Waiting for Burn uninstall registration [$registeredUninstallRegistryKey] to be removed.'
