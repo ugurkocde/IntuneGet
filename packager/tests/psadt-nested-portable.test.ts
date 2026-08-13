@@ -9,6 +9,11 @@ type ScriptGenerator = {
   getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string;
   getUninstallCommand(job: PackagingJob, fileName: string): string;
   getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string): string;
+  extractSilentSwitches(
+    installCommand: string,
+    installerType: string,
+    nestedInstallerType?: string
+  ): string;
 };
 
 const generator = JobProcessor.prototype as unknown as ScriptGenerator;
@@ -52,6 +57,46 @@ function uninstallScript(job: PackagingJob): string {
 }
 
 describe('nested portable PSADT generation', () => {
+  it('safely stages a top-level portable zip payload', () => {
+    const script = installScript(packagingJob({
+      installer_type: 'portable',
+      package_config: {},
+    }));
+
+    expect(script).toContain('[System.IO.Compression.ZipFile]::OpenRead($archivePath)');
+    expect(script).toContain('Move-Item -LiteralPath $portableStageDir -Destination $installPath');
+    expect(script).not.toContain('Zip package does not declare');
+  });
+
+  it('treats a zip without nested metadata as a portable archive', () => {
+    const job = packagingJob({ package_config: {} });
+    const script = installScript(job);
+
+    expect(script).toContain('[System.IO.Compression.ZipFile]::OpenRead($archivePath)');
+    expect(script).toContain('Move-Item -LiteralPath $portableStageDir -Destination $installPath');
+    expect(script).not.toContain('$declaredNestedPath');
+    expect(uninstallScript(job)).toContain('Remove-Item -LiteralPath $installPath -Recurse -Force');
+  });
+
+  it.each([
+    ['Expand-Archive -Path "app.zip" -DestinationPath app -Force', 'zip', 'inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
+    ['powershell.exe -Command Expand-Archive -Path app.zip -DestinationPath app', 'zip', 'inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
+    ['"setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-', 'zip', 'inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
+    ['"setup.exe" /configure https://aka.ms/fhlwingetconfig', 'exe', undefined, '/configure https://aka.ms/fhlwingetconfig'],
+    ['msiexec.exe /i "agent.msi" /qn REBOOT=ReallySuppress ALLUSERS=1', 'msi', undefined, '/qn REBOOT=ReallySuppress ALLUSERS=1'],
+    ['Expand-Archive -Path "app.zip" -DestinationPath app -Force', 'zip', undefined, ''],
+    ['Expand-Archive -Path "app.zip" -DestinationPath app -Force', 'portable', undefined, ''],
+  ])('extracts local silent switches without archive arguments', (command, type, nestedType, expected) => {
+    expect(generator.extractSilentSwitches.call(generator, command, type, nestedType)).toBe(expected);
+  });
+
+  it('does not emit PowerShell archive tokens into a generated argument list', () => {
+    const script = generator.generateDeployScript.call(generator, packagingJob({
+      install_command: 'powershell.exe -Command Expand-Archive -Path app.zip -DestinationPath app',
+    }), 'piicrawler.zip');
+
+    expect(script).not.toMatch(/-ArgumentList '[^']*(?:-Command|-Archive)/);
+  });
   it('preserves manifest-declared installer success exit codes', () => {
     const script = generator.generateDeployScript.call(generator, packagingJob({
       package_config: {
@@ -274,10 +319,13 @@ describe('hosted PSADT portable generator', () => {
     const script = readFileSync(scriptPath, 'utf8');
 
     expect(script).toContain("$isNestedPortable = $installerTypeLower -eq 'zip'");
-    expect(script).toContain("if ($installerTypeLower -eq 'portable' -or $isNestedPortable)");
+    expect(script).toContain("if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive)");
     expect(script).toContain('[System.IO.Compression.ZipFile]::OpenRead($installerPath)');
     expect(script).toContain('Archive entry escapes the portable staging directory');
     expect(script).not.toContain('Portable nested installers are not supported yet');
+    expect(script).not.toContain('Zip package does not declare a nested installer');
+    expect(script).toContain('if ($isNestedPortable -or $isPlainPortableArchive)');
+    expect(script).toContain('Move-Item -LiteralPath $portableStageDir -Destination $installPath');
   });
 
   it('uses the non-admin PSADT log setting for user-scope packages', () => {

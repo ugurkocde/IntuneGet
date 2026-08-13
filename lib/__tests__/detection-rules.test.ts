@@ -710,6 +710,32 @@ describe('generateInstallCommand', () => {
     expect(generateInstallCommand(installer)).toContain('Expand-Archive');
   });
 
+  it('should describe copying a bare portable executable', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/claude.exe',
+      sha256: 'abc123',
+      type: 'portable',
+    };
+
+    expect(generateInstallCommand(installer)).toBe(
+      'Copy-Item -Path "claude.exe" -Destination "%ProgramFiles%\\claude\\claude.exe" -Force'
+    );
+  });
+
+  it('should describe extracting a portable zip archive', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/claude.zip',
+      sha256: 'abc123',
+      type: 'portable',
+    };
+
+    expect(generateInstallCommand(installer)).toContain(
+      'Expand-Archive -Path "claude.zip" -DestinationPath "%ProgramFiles%\\claude"'
+    );
+  });
+
   it('should reject a nested path without a nested installer type', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',
