@@ -7,7 +7,8 @@
 import { createHmac } from 'node:crypto';
 
 import { applyInstallerUrlOverride } from './installer-url-overrides';
-import { enforceInstallerPreflight } from './installer-preflight';
+import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
+import { enforceInstallerPreflight, InstallerPreflightError } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
 import {
   normalizeQaWorkflowPackageInput,
@@ -16,6 +17,8 @@ import {
   resolveWingetPackageDependencies,
   type PackagedWingetDependency,
 } from './winget-dependencies';
+import type { Win32CartItem } from '@/types/upload';
+import type { NormalizedInstaller } from '@/types/winget';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -120,24 +123,76 @@ export async function triggerPackagingWorkflow(
 ): Promise<TriggerResult> {
   const cfg = config || getGitHubActionsConfig();
 
+  let effectiveInputs = inputs;
+  let trustedInstallers: NormalizedInstaller[] | undefined;
+  if (inputs.sourceType !== 'custom') {
+    try {
+      const reconciled = await reconcileCatalogInstaller({
+        id: inputs.jobId,
+        addedAt: new Date().toISOString(),
+        appSource: 'win32',
+        sourceType: 'winget',
+        wingetId: inputs.wingetId,
+        displayName: inputs.displayName,
+        description: inputs.description,
+        publisher: inputs.publisher,
+        version: inputs.version,
+        architecture: (inputs.architecture || 'x64') as Win32CartItem['architecture'],
+        installScope: inputs.installScope || 'machine',
+        installerType: inputs.installerType as Win32CartItem['installerType'],
+        installerUrl: inputs.installerUrl,
+        installerSha256: inputs.installerSha256,
+        installerSuccessCodes: inputs.installerSuccessCodes,
+        installCommand: inputs.silentSwitches,
+        uninstallCommand: inputs.uninstallCommand,
+        detectionRules: [],
+        requirementRules: [],
+        psadtConfig: {
+          installCommand: inputs.silentSwitches,
+          uninstallCommand: inputs.uninstallCommand,
+        } as Win32CartItem['psadtConfig'],
+      });
+      effectiveInputs = {
+        ...inputs,
+        installerUrl: reconciled.item.installerUrl,
+        installerSha256: reconciled.item.installerSha256,
+        installerType: reconciled.item.installerType,
+        nestedInstallerType: reconciled.item.nestedInstallerType,
+        nestedInstallerPath: reconciled.item.nestedInstallerPath,
+        silentSwitches: reconciled.item.installCommand,
+        installerSuccessCodes: reconciled.item.installerSuccessCodes,
+        uninstallCommand: reconciled.item.uninstallCommand,
+        installScope: reconciled.item.installScope,
+      };
+      trustedInstallers = reconciled.trustedInstallers;
+    } catch (error) {
+      if (!(error instanceof InstallerPreflightError && error.retryable)) {
+        throw error;
+      }
+      console.warn(`Live installer reconciliation unavailable for ${inputs.wingetId} ${inputs.version}; using the catalog tuple.`);
+    }
+  }
+
   const finalInstallerUrl = applyInstallerUrlOverride(
-    inputs.wingetId,
-    inputs.version,
-    inputs.architecture ?? '',
-    inputs.installerUrl,
+    effectiveInputs.wingetId,
+    effectiveInputs.version,
+    effectiveInputs.architecture ?? '',
+    effectiveInputs.installerUrl,
   );
   // This is the final dispatch boundary shared by manual, MSP, update-policy,
   // and auto-update paths. Never create a packaging run for a known-bad tuple.
   await enforceInstallerPreflight({
-    wingetId: inputs.wingetId,
-    version: inputs.version,
-    architecture: inputs.architecture,
+    wingetId: effectiveInputs.wingetId,
+    version: effectiveInputs.version,
+    architecture: effectiveInputs.architecture,
     installerUrl: finalInstallerUrl,
-    installerSha256: inputs.installerSha256,
-    installerType: inputs.installerType,
-    installScope: inputs.installScope,
-    sourceType: inputs.sourceType,
-  });
+    manifestInstallerUrl: effectiveInputs.installerUrl,
+    installerSha256: effectiveInputs.installerSha256,
+    installerType: effectiveInputs.installerType,
+    installScope: effectiveInputs.installScope,
+    sourceType: effectiveInputs.sourceType,
+  }, trustedInstallers);
+  inputs = effectiveInputs;
   const packageDependencies = inputs.sourceType === 'custom'
     ? []
     : await resolveWingetPackageDependencies({

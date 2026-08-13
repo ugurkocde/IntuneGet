@@ -41,6 +41,7 @@ import {
   useCategories,
   useInfinitePackages,
   useCatalogPackage,
+  ManifestFetchError,
 } from '@/hooks/use-packages';
 import { useDeployedPackages } from '@/hooks/use-deployed-packages';
 import { useDeployedConfig } from '@/hooks/use-deployed-config';
@@ -235,7 +236,12 @@ export default function AppCatalogPage() {
   );
 
   const isSelectedStoreApp = selectedPackage?.appSource === 'store';
-  const { data: manifestData, isLoading: isLoadingInstallers } = usePackageManifest(
+  const {
+    data: manifestData,
+    isLoading: isLoadingInstallers,
+    isError: isInstallerError,
+    error: installerError,
+  } = usePackageManifest(
     selectedPackage?.id || '',
     selectedPackage?.version,
     undefined,
@@ -1058,8 +1064,17 @@ export default function AppCatalogPage() {
               </div>
               <h3 className="text-text-primary font-medium mb-2"><T>No installers found</T></h3>
               <p className="text-text-secondary text-sm mb-4">
-                <T>Unable to find installer information for this package version.</T>
+                {isInstallerError && installerError instanceof Error ? (
+                  installerError.message
+                ) : (
+                  <T>Unable to find installer information for this package version.</T>
+                )}
               </p>
+              {installerError instanceof ManifestFetchError && installerError.suggestions.length > 0 && (
+                <p className="text-text-secondary text-sm mb-4">
+                  <T>Suggestions:</T> {installerError.suggestions.join(', ')}
+                </p>
+              )}
               <button
                 onClick={handleCloseConfig}
                 className="px-4 py-2 bg-bg-elevated hover:bg-overlay/10 text-text-primary rounded-lg transition-colors"

@@ -30,6 +30,7 @@ interface CuratedAppUpdate {
   homepage?: string;
   license?: string;
   updated_at: string;
+  upstream_miss_count: number;
 }
 
 export async function GET(request: Request) {
@@ -124,6 +125,26 @@ export async function GET(request: Request) {
                 id: winget_id,
                 reason: resolution.reason || 'upstream_unavailable',
               });
+              if (resolution.reason === 'package_or_version_missing') {
+                const missCount = (app.upstream_miss_count || 0) + 1;
+                if (missCount >= 3) {
+                  const { error: blockError } = await supabase
+                    .from('package_eligibility_blocks')
+                    .upsert({
+                      winget_id,
+                      block_code: 'upstream_removed',
+                      detail: `WinGet package resolution failed ${missCount} consecutive times with package_or_version_missing.`,
+                      source_url: `https://github.com/microsoft/winget-pkgs/tree/master/manifests/${winget_id[0].toLowerCase()}`,
+                      updated_at: new Date().toISOString(),
+                    }, { onConflict: 'winget_id' });
+                  if (blockError) throw new Error(`eligibility block upsert failed: ${blockError.message}`);
+                }
+                const { error: missError } = await supabase
+                  .from('curated_apps')
+                  .update({ upstream_miss_count: missCount, updated_at: new Date().toISOString() })
+                  .eq('winget_id', winget_id);
+                if (missError) throw new Error(`upstream miss update failed: ${missError.message}`);
+              }
               return;
             }
 
@@ -171,6 +192,7 @@ export async function GET(request: Request) {
             const appUpdate: CuratedAppUpdate = {
               winget_id,
               latest_version: latestVersion,
+              upstream_miss_count: 0,
               updated_at: new Date().toISOString(),
             };
 

@@ -19,11 +19,15 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { queueWebhookDelivery } from '@/lib/msp/webhook-service';
 import { createAuditLog } from '@/lib/audit-logger';
 import { describeQaGateError, enforceQaGate, QaGateError } from '@/lib/qa/gate';
+import { normalizeInstaller } from '@/lib/manifest-api';
+import { selectTrustedCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import type { WingetInstaller } from '@/types/winget';
 
 // Stale timeout: items in_progress longer than this are marked failed
 const STALE_TIMEOUT_MINUTES = 45;
 
 interface InstallerDetails {
+  architecture: string;
   installer_url: string;
   installer_sha256: string;
   installer_type: string;
@@ -248,7 +252,8 @@ async function startBatchItems(batchId: string): Promise<number> {
   // Get installer details from version_history
   const installerDetails = await lookupInstallerDetails(
     batch.winget_id,
-    batch.version
+    batch.version,
+    batch.architecture || 'x64',
   );
 
   // Get the curated app description (falls back to the generic marker text)
@@ -272,6 +277,7 @@ async function startBatchItems(batchId: string): Promise<number> {
       await enforceQaGate({
         wingetId: batch.winget_id,
         version: batch.version,
+        architecture: installerDetails.architecture,
       });
     } catch (error) {
       if (error instanceof QaGateError) qaGateError = error;
@@ -592,9 +598,10 @@ async function lookupAppDescription(wingetId: string): Promise<string | undefine
  * Look up installer details from the version_history table.
  * Falls back to parsing the installers JSONB if the top-level fields are null.
  */
-async function lookupInstallerDetails(
+export async function lookupInstallerDetails(
   wingetId: string,
-  version: string
+  version: string,
+  architecture: string,
 ): Promise<InstallerDetails | null> {
   const data = await getCatalogSource().getLatestVersionInstallerInfo(wingetId, version);
 
@@ -602,35 +609,24 @@ async function lookupInstallerDetails(
     return null;
   }
 
-  // Try top-level fields first
-  if (data.installer_url) {
-    const type = data.installer_type || 'exe';
-    return {
-      installer_url: data.installer_url,
-      installer_sha256: data.installer_sha256 || '',
-      installer_type: type,
-      silent_args: extractSilentSwitches('', type),
-      installer_scope: data.installer_scope || 'machine',
-    };
-  }
-
-  // Fall back to installers JSONB array
   if (data.installers && Array.isArray(data.installers) && data.installers.length > 0) {
-    // Prefer x64 architecture
-    const installers = data.installers as Array<Record<string, unknown>>;
-    const preferred =
-      installers.find((i) => i.architecture === 'x64') || installers[0];
-
-    if (preferred && typeof preferred.url === 'string') {
-      const type = (typeof preferred.type === 'string' ? preferred.type : 'exe').toLowerCase();
+    const installers = (data.installers as Array<Record<string, unknown>>)
+      .map((value) => normalizeInstaller(value as unknown as WingetInstaller));
+    const preferred = selectTrustedCatalogInstaller(installers, {
+      wingetId,
+      version,
+      architecture,
+      installScope: 'machine',
+    });
+    if (preferred?.url) {
+      const type = preferred.type || 'exe';
       return {
+        architecture: preferred.architecture || architecture,
         installer_url: preferred.url,
-        installer_sha256: typeof preferred.sha256 === 'string' ? preferred.sha256 : '',
+        installer_sha256: preferred.sha256 || '',
         installer_type: type,
-        silent_args: typeof preferred.silent_args === 'string'
-          ? preferred.silent_args
-          : extractSilentSwitches('', type),
-        installer_scope: typeof preferred.scope === 'string' ? preferred.scope : 'machine',
+        silent_args: preferred.silentArgs || extractSilentSwitches('', type),
+        installer_scope: preferred.scope || 'machine',
       };
     }
   }

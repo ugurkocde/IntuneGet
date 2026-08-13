@@ -6,10 +6,15 @@ import {
 } from './github-actions';
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 
-const { enforceInstallerPreflightMock, enforceQaGateMock, resolveDependenciesMock } = vi.hoisted(() => ({
+const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
   enforceQaGateMock: vi.fn(),
+  reconcileCatalogInstallerMock: vi.fn(),
   resolveDependenciesMock: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('./catalog-installer-reconciliation', () => ({
+  reconcileCatalogInstaller: reconcileCatalogInstallerMock,
 }));
 
 vi.mock('./installer-preflight', async (importOriginal) => {
@@ -68,7 +73,55 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
+  item,
+  trustedInstallers: [],
+}));
+
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('reconciles a WinGet tuple and passes trusted installers to preflight', async () => {
+    const trustedInstallers = [{
+      architecture: 'x64',
+      url: 'https://example.com/refreshed.exe',
+      sha256: 'B'.repeat(64),
+      type: 'exe',
+      scope: 'machine',
+    }];
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: {
+        ...item,
+        installerUrl: trustedInstallers[0].url,
+        installerSha256: trustedInstallers[0].sha256,
+        installCommand: '/quiet',
+        uninstallCommand: 'uninstall.exe /quiet',
+      },
+      trustedInstallers,
+    }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Example.App',
+      sourceType: 'winget',
+      installerSha256: 'A'.repeat(64),
+    }), config, { skipRunCapture: true });
+
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        installerUrl: trustedInstallers[0].url,
+        installerSha256: trustedInstallers[0].sha256,
+      }),
+      trustedInstallers,
+    );
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer).toEqual(expect.objectContaining({
+      url: trustedInstallers[0].url,
+      sha256: trustedInstallers[0].sha256,
+      silentSwitches: '/quiet',
+    }));
+  });
+
   it('dispatches calculate mode for a custom installer without a trusted hash', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

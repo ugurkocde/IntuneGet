@@ -210,6 +210,7 @@ export class SnapshotCatalogSource implements CatalogSource {
             JOIN curated_apps ca ON ca.id = f.rowid
             WHERE curated_fts MATCH @match
               AND ca.is_verified = 1
+              AND ca.latest_version IS NOT NULL
               AND ca.is_locale_variant = 0
               ${categoryClause}
             ORDER BY
@@ -239,6 +240,7 @@ export class SnapshotCatalogSource implements CatalogSource {
             SELECT ${CURATED_RPC_COLUMNS}
             FROM curated_apps ca
             WHERE ca.is_verified = 1
+              AND ca.latest_version IS NOT NULL
               AND ca.is_locale_variant = 0
               ${categoryClause}
               AND (
@@ -284,7 +286,7 @@ export class SnapshotCatalogSource implements CatalogSource {
         const countRow = db
           .prepare(
             `SELECT COUNT(*) AS c FROM curated_apps
-             WHERE is_verified = 1 AND is_locale_variant = 0 ${categoryClause}`
+             WHERE is_verified = 1 AND latest_version IS NOT NULL AND is_locale_variant = 0 ${categoryClause}`
           )
           .get(baseParams) as { c: number };
 
@@ -306,7 +308,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           .prepare(
             `SELECT ${CURATED_RPC_COLUMNS}
              FROM curated_apps
-             WHERE is_verified = 1 AND is_locale_variant = 0 ${categoryClause}
+             WHERE is_verified = 1 AND latest_version IS NOT NULL AND is_locale_variant = 0 ${categoryClause}
              ORDER BY ${orderBy}
              LIMIT @limit OFFSET @offset`
           )
@@ -335,7 +337,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           .prepare(
             `SELECT ${CURATED_RPC_COLUMNS}
              FROM curated_apps
-             WHERE is_verified = 1 AND is_locale_variant = 0 ${categoryClause}
+             WHERE is_verified = 1 AND latest_version IS NOT NULL AND is_locale_variant = 0 ${categoryClause}
              ORDER BY popularity_rank IS NULL, popularity_rank ASC, name ASC
              LIMIT @limit`
           )
@@ -354,7 +356,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           .prepare(
             `SELECT category, COUNT(*) AS count
              FROM curated_apps
-             WHERE is_verified = 1 AND category IS NOT NULL
+             WHERE is_verified = 1 AND latest_version IS NOT NULL AND category IS NOT NULL
              GROUP BY category`
           )
           .all() as { category: string; count: number }[];
@@ -368,7 +370,9 @@ export class SnapshotCatalogSource implements CatalogSource {
   async getCategoryCount(opts: { verifiedOnly: boolean }): Promise<number | null> {
     return withDb(
       (db) => {
-        const where = opts.verifiedOnly ? 'WHERE is_verified = 1' : '';
+        const where = opts.verifiedOnly
+          ? 'WHERE is_verified = 1 AND latest_version IS NOT NULL'
+          : 'WHERE latest_version IS NOT NULL';
         const row = db
           .prepare(`SELECT COUNT(*) AS c FROM curated_apps ${where}`)
           .get() as { c: number };

@@ -10,6 +10,7 @@ import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
 import { hashesEqual } from '@/lib/installer-download';
 import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller, WingetScope } from '@/types/winget';
+import { createClient } from '@supabase/supabase-js';
 
 export interface TrustedCatalogInstallerRequest {
   wingetId: string;
@@ -125,21 +126,69 @@ export async function reconcileCatalogInstaller(
 
   const customInstallCommand = item.psadtConfig?.installCommand?.trim();
   const customUninstallCommand = item.psadtConfig?.uninstallCommand?.trim();
+  const refreshedItem: Win32CartItem = {
+    ...item,
+    installScope,
+    installerUrl: installer.url,
+    installerSha256: installer.sha256.toUpperCase(),
+    installerType: installer.type,
+    nestedInstallerType: installer.nestedInstallerType,
+    nestedInstallerPath: installer.nestedInstallerPath,
+    installerSuccessCodes: installer.installerSuccessCodes,
+    manifestDependencies: installer.packageDependencies,
+    installCommand: customInstallCommand || generateInstallCommand(installer, installScope),
+    uninstallCommand: customUninstallCommand ||
+      generateUninstallCommand(installer, item.displayName),
+  };
+
+  if (
+    item.installerUrl !== refreshedItem.installerUrl ||
+    !hashesEqual(item.installerSha256, refreshedItem.installerSha256)
+  ) {
+    await healCatalogInstaller(item.wingetId, item.version, installer, trustedInstallers);
+  }
+
   return {
-    item: {
-      ...item,
-      installScope,
-      installerUrl: installer.url,
-      installerSha256: installer.sha256.toUpperCase(),
-      installerType: installer.type,
-      nestedInstallerType: installer.nestedInstallerType,
-      nestedInstallerPath: installer.nestedInstallerPath,
-      installerSuccessCodes: installer.installerSuccessCodes,
-      manifestDependencies: installer.packageDependencies,
-      installCommand: customInstallCommand || generateInstallCommand(installer, installScope),
-      uninstallCommand: customUninstallCommand ||
-        generateUninstallCommand(installer, item.displayName),
-    },
+    item: refreshedItem,
     trustedInstallers,
   };
+}
+
+async function healCatalogInstaller(
+  wingetId: string,
+  version: string,
+  selected: NormalizedInstaller,
+  installers: NormalizedInstaller[],
+): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return;
+
+  const rawInstallers = installers.map((value) => ({
+    Architecture: value.architecture,
+    InstallerLocale: value.installerLocale,
+    InstallerUrl: value.url,
+    InstallerSha256: value.sha256,
+    InstallerType: value.type,
+    NestedInstallerType: value.nestedInstallerType,
+    Scope: value.scope,
+    InstallerSuccessCodes: value.installerSuccessCodes,
+    ProductCode: value.productCode,
+    PackageFamilyName: value.packageFamilyName,
+  }));
+  const { error } = await createClient(url, key).from('version_history').upsert({
+    winget_id: wingetId,
+    version,
+    installer_url: selected.url,
+    installer_sha256: selected.sha256.toUpperCase(),
+    installer_type: selected.type,
+    installer_scope: selected.scope || null,
+    silent_args: selected.silentArgs || null,
+    installers: rawInstallers,
+    manifest_fetched_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'winget_id,version' });
+  if (error) {
+    console.warn(`Could not refresh catalog installer for ${wingetId} ${version}: ${error.message}`);
+  }
 }

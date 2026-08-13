@@ -124,7 +124,7 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
   });
 
-  it('quarantines a stale tuple when the trusted manifest has changed', async () => {
+  it('caches manifest drift as a retryable TTL error instead of permanent quarantine', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
       url: request.installerUrl,
@@ -136,7 +136,7 @@ describe('installer dispatch preflight', () => {
     await expect(enforceInstallerPreflight(request)).rejects.toBeInstanceOf(InstallerPreflightError);
     await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
       code: 'MANIFEST_CHANGED',
-      retryable: false,
+      retryable: true,
     });
     expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
   });

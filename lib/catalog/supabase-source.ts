@@ -77,7 +77,9 @@ export class SupabaseCatalogSource implements CatalogSource {
     );
 
     return {
-      data: (curatedData || null) as CuratedAppRpcRow[] | null,
+      data: curatedData
+        ? (curatedData as CuratedAppRpcRow[]).filter((app) => app.latest_version != null)
+        : null,
       error: curatedError,
     };
   }
@@ -104,6 +106,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       .from('curated_apps')
       .select('*', { count: 'exact', head: true })
       .eq('is_verified', true)
+      .not('latest_version', 'is', null)
       .eq('is_locale_variant', false);
 
     const countQuery = category ? baseQuery.eq('category', category) : baseQuery;
@@ -120,6 +123,7 @@ export class SupabaseCatalogSource implements CatalogSource {
         'id, winget_id, name, publisher, latest_version, description, homepage, category, tags, icon_path, popularity_rank, app_source, store_package_id'
       )
       .eq('is_verified', true)
+      .not('latest_version', 'is', null)
       .eq('is_locale_variant', false);
 
     if (category) {
@@ -172,7 +176,9 @@ export class SupabaseCatalogSource implements CatalogSource {
     );
 
     return {
-      data: (curatedData || null) as CuratedAppRpcRow[] | null,
+      data: curatedData
+        ? (curatedData as CuratedAppRpcRow[]).filter((app) => app.latest_version != null)
+        : null,
       error: curatedError,
     };
   }
@@ -213,6 +219,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     if (opts.verifiedOnly) {
       query = query.eq('is_verified', true);
     }
+    query = query.not('latest_version', 'is', null);
 
     const { count } = await query;
     return count ?? null;

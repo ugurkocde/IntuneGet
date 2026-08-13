@@ -11,6 +11,7 @@ import type { NormalizedInstaller } from '@/types/winget';
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
+const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
 const LEASE_SECONDS = 240;
 const WAIT_FOR_CLAIM_MS = 240_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -38,6 +39,7 @@ export interface InstallerPreflightRequest {
   version: string;
   architecture?: string;
   installerUrl: string;
+  manifestInstallerUrl?: string;
   installerSha256: string;
   installerType?: string;
   installScope?: 'machine' | 'user';
@@ -230,7 +232,7 @@ function installerExistsInManifest(
   const requestedArchitecture = (input.architecture || 'x64').toLowerCase();
   const requestedType = input.installerType?.toLowerCase();
   const requestedScope = input.installScope?.toLowerCase();
-  const requestedUrl = input.installerUrl.trim();
+  const requestedUrl = (input.manifestInstallerUrl || input.installerUrl).trim();
 
   return installers.some((installer) => {
     if (!hashesEqual(installer.sha256 || '', expectedHash)) return false;
@@ -296,9 +298,10 @@ async function performLivePreflight(
         'MANIFEST_CHANGED',
         `The selected installer for ${input.wingetId} ${input.version} no longer matches the trusted WinGet manifest`,
       );
-      await writeHealth(buildHealthRow(cacheKey, input, 'quarantined', {
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
         reason_code: error.code,
         reason_message: error.message,
+        expires_at: new Date(Date.now() + MANIFEST_CHANGED_TTL_MS).toISOString(),
       }));
       throw error;
     }

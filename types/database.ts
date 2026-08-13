@@ -287,7 +287,7 @@ export interface Database {
       package_eligibility_blocks: {
         Row: {
           winget_id: string;
-          block_code: 'vendor_retired';
+          block_code: 'vendor_retired' | 'upstream_removed';
           detail: string;
           source_url: string;
           blocked_at: string;
@@ -1418,6 +1418,7 @@ export interface Database {
           winget_id: string;
           display_name: string;
           version: string;
+          architecture: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
           total_tenants: number;
           completed_tenants: number;
           failed_tenants: number;
@@ -1438,6 +1439,7 @@ export interface Database {
           winget_id: string;
           display_name: string;
           version: string;
+          architecture?: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
           total_tenants: number;
           completed_tenants?: number;
           failed_tenants?: number;
@@ -1458,6 +1460,7 @@ export interface Database {
           winget_id?: string;
           display_name?: string;
           version?: string;
+          architecture?: 'x64' | 'x86' | 'arm64' | 'arm' | 'neutral';
           total_tenants?: number;
           completed_tenants?: number;
           failed_tenants?: number;
@@ -1538,6 +1541,7 @@ export interface Database {
           is_winget_verified: boolean | null;
           is_locale_variant: boolean | null;
           app_source: string | null;
+          upstream_miss_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -1564,6 +1568,7 @@ export interface Database {
           is_winget_verified?: boolean | null;
           is_locale_variant?: boolean | null;
           app_source?: string | null;
+          upstream_miss_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -1590,6 +1595,7 @@ export interface Database {
           is_winget_verified?: boolean | null;
           is_locale_variant?: boolean | null;
           app_source?: string | null;
+          upstream_miss_count?: number;
           created_at?: string;
           updated_at?: string;
         };

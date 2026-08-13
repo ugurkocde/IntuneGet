@@ -28,6 +28,13 @@ interface ManifestResponse {
   versions?: string[];
 }
 
+export class ManifestFetchError extends Error {
+  constructor(message: string, public readonly suggestions: string[]) {
+    super(message);
+    this.name = 'ManifestFetchError';
+  }
+}
+
 interface Category {
   category: string;
   count: number;
@@ -164,7 +171,7 @@ export function useCatalogPackage(packageId: string | null) {
 }
 
 export function usePackageManifest(id: string, version?: string, arch?: string, skip?: boolean) {
-  return useQuery<ManifestResponse>({
+  return useQuery<ManifestResponse, ManifestFetchError>({
     queryKey: ['packages', 'manifest', id, version, arch],
     queryFn: async () => {
       const params = new URLSearchParams({ id });
@@ -173,7 +180,18 @@ export function usePackageManifest(id: string, version?: string, arch?: string, 
 
       const response = await fetch(`/api/winget/manifest?${params.toString()}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch manifest');
+        const body = await response.json().catch(() => null) as {
+          message?: string;
+          suggestions?: Array<{ id?: string; name?: string }>;
+        } | null;
+        const suggestions = body?.suggestions
+          ?.map((suggestion) => suggestion.name || suggestion.id)
+          .filter(Boolean)
+          .map(String) || [];
+        throw new ManifestFetchError(
+          body?.message || 'Failed to fetch manifest',
+          suggestions,
+        );
       }
       return response.json();
     },
