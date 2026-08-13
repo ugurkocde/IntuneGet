@@ -26,6 +26,10 @@ describe('application packaging adapters', () => {
       applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['/silent', 'forall']);
+    expect(
+      applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['/silent', '/remove']);
     for (const wingetId of [
       'PostgreSQL.PostgreSQL.9.6',
       'PostgreSQL.PostgreSQL.13',
