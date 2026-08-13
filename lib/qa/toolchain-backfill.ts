@@ -15,6 +15,10 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // an invisible prompt in SYSTEM context. This release normalizes all Inno
     // registrations to the fully unattended, message-box-free switch set.
     'MPC-BE.MPC-BE',
+    // Camera Hub starts its desktop process during install and its MSI removal
+    // custom action waits for that process. The shared application adapter now
+    // closes it before invoking the exact MSI product uninstall.
+    'Elgato.CameraHub',
   ],
   '2dca138ee2fe27dc45166dba536511aa80d8937e': [
     // EAUninstall.exe remains blocked while the EA client/background process

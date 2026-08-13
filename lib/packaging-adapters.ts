@@ -112,6 +112,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Camera Hub starts its desktop process after MSI installation. The MSI
+    // Pre_Uninstall custom action launches that same executable with --quit
+    // and waits indefinitely when the original process remains open under the
+    // interactive user. Close it through PSADT before upgrades and removal.
+    wingetId: 'Elgato.CameraHub',
+    requiredProcessesToClose: [
+      { name: 'Camera Hub', description: 'Elgato Camera Hub' },
+    ],
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the

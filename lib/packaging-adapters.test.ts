@@ -59,6 +59,14 @@ describe('application packaging adapters', () => {
     ]);
     expect(
       applyApplicationPackagingAdapter(
+        'Elgato.CameraHub',
+        DEFAULT_PSADT_CONFIG
+      ).processesToClose
+    ).toEqual([
+      { name: 'Camera Hub', description: 'Elgato Camera Hub' },
+    ]);
+    expect(
+      applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2022.Professional',
         DEFAULT_PSADT_CONFIG
       )

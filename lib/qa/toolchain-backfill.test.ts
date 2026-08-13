@@ -221,6 +221,13 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Camera Hub once after adding its process-close lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'elgato.camerahub', status: 'failed' }
+    )).toBe(true);
+  });
+
   it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
