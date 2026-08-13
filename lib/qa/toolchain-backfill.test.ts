@@ -76,8 +76,19 @@ describe('QA toolchain targeted retries', () => {
       { wingetId: 'Opera.Opera', status: 'failed' }
     )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
+      '8235887e7126972b89c264e2053c1c4f7418ea74',
+      { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Opera.Opera', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Viber once on the reviewed user-scope release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Rakuten.Viber', status: 'failed' }
     )).toBe(true);
   });
 
