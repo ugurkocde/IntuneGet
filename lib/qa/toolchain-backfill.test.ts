@@ -190,7 +190,7 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries EA Desktop once with the registered Burn helper lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      'e6a4ae2f4f9a3a672c6912ab8e309483f53003b7',
       { wingetId: 'electronicarts.eadesktop', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
@@ -201,13 +201,24 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries EA Desktop once after adding its process-close lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '2dca138ee2fe27dc45166dba536511aa80d8937e',
       { wingetId: 'ELECTRONICARTS.EADESKTOP', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       'e6a4ae2f4f9a3a672c6912ab8e309483f53003b7',
       { wingetId: 'ElectronicArts.EADesktop', status: 'failed' }
     )).toBe(true);
+  });
+
+  it('retries MPC-BE once after strengthening Inno quiet uninstall arguments', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'mpc-be.mpc-be', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2dca138ee2fe27dc45166dba536511aa80d8937e',
+      { wingetId: 'MPC-BE.MPC-BE', status: 'failed' }
+    )).toBe(false);
   });
 
   it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {

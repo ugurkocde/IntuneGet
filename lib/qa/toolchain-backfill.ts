@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '2eea7f106971cda783665a60eb4d0e25846dae46': [
+    // MPC-BE's Inno QuietUninstallString uses only /SILENT and can wait behind
+    // an invisible prompt in SYSTEM context. This release normalizes all Inno
+    // registrations to the fully unattended, message-box-free switch set.
+    'MPC-BE.MPC-BE',
+  ],
   '2dca138ee2fe27dc45166dba536511aa80d8937e': [
     // EAUninstall.exe remains blocked while the EA client/background process
     // family owns the installation. This release closes those reviewed
