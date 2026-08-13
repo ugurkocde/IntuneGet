@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord } from '../types';
+import type {
+  DatabaseAdapter,
+  PackagingJob,
+  UpdateCheckResult,
+  UploadHistoryRecord,
+} from '../types';
 
 // Create an in-memory SQLite adapter for testing
 function createTestAdapter(): DatabaseAdapter & { close: () => void } {
@@ -52,6 +57,9 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
       completed_at TEXT,
       cancelled_at TEXT,
       cancelled_by TEXT,
+      -- Mirrors the real schema in lib/db/sqlite.ts; the tenant-scoped
+      -- queries exclude archived jobs.
+      archived_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
@@ -85,6 +93,45 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
     CREATE INDEX IF NOT EXISTS idx_upload_history_user_id ON upload_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_upload_history_deployed_at ON upload_history(deployed_at);
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT PRIMARY KEY,
+      settings TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS update_check_results (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      winget_id TEXT NOT NULL,
+      intune_app_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      current_version TEXT NOT NULL,
+      latest_version TEXT NOT NULL,
+      is_critical INTEGER NOT NULL DEFAULT 0,
+      is_managed INTEGER NOT NULL DEFAULT 1,
+      large_icon_type TEXT,
+      large_icon_value TEXT,
+      notified_at TEXT,
+      dismissed_at TEXT,
+      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, tenant_id, winget_id, intune_app_id)
+    )
+  `);
+
+  function parseUpdateCheckRow(row: Record<string, unknown>): UpdateCheckResult {
+    return {
+      ...row,
+      is_critical: Boolean(row.is_critical),
+      is_managed: Boolean(row.is_managed),
+    } as UpdateCheckResult;
+  }
 
   function parseJobRow(row: Record<string, unknown>): PackagingJob {
     return {
@@ -124,6 +171,37 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
           LIMIT ?
         `);
         const rows = stmt.all(userId, limit) as Record<string, unknown>[];
+        return rows.map(parseJobRow);
+      },
+
+      async getAllByUserId(userId: string): Promise<PackagingJob[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM packaging_jobs
+          WHERE user_id = ? AND archived_at IS NULL
+          ORDER BY created_at DESC
+        `);
+        const rows = stmt.all(userId) as Record<string, unknown>[];
+        return rows.map(parseJobRow);
+      },
+
+      async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM packaging_jobs
+          WHERE tenant_id = ? AND archived_at IS NULL
+          ORDER BY created_at DESC
+          LIMIT ?
+        `);
+        const rows = stmt.all(tenantId, limit) as Record<string, unknown>[];
+        return rows.map(parseJobRow);
+      },
+
+      async getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM packaging_jobs
+          WHERE tenant_id = ? AND status = ? AND archived_at IS NULL
+          ORDER BY created_at DESC
+        `);
+        const rows = stmt.all(tenantId, status) as Record<string, unknown>[];
         return rows.map(parseJobRow);
       },
 
@@ -366,6 +444,142 @@ function createTestAdapter(): DatabaseAdapter & { close: () => void } {
         `);
         return stmt.all(userId, limit) as UploadHistoryRecord[];
       },
+
+      async getByUserIdAndTenantId(
+        userId: string,
+        tenantId: string
+      ): Promise<UploadHistoryRecord[]> {
+        const stmt = db.prepare(`
+          SELECT * FROM upload_history
+          WHERE user_id = ? AND intune_tenant_id = ?
+          ORDER BY deployed_at DESC
+        `);
+        return stmt.all(userId, tenantId) as UploadHistoryRecord[];
+      },
+    },
+
+    userSettings: {
+      async get(userId: string): Promise<Record<string, unknown> | null> {
+        const row = db
+          .prepare('SELECT settings FROM user_settings WHERE user_id = ?')
+          .get(userId) as { settings: string } | undefined;
+        if (!row) return null;
+        try {
+          return JSON.parse(row.settings) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      },
+
+      async merge(
+        userId: string,
+        partial: Record<string, unknown>
+      ): Promise<Record<string, unknown>> {
+        const now = new Date().toISOString();
+        const row = db
+          .prepare('SELECT settings FROM user_settings WHERE user_id = ?')
+          .get(userId) as { settings: string } | undefined;
+        let current: Record<string, unknown> = {};
+        if (row) {
+          try {
+            current = JSON.parse(row.settings) as Record<string, unknown>;
+          } catch {
+            current = {};
+          }
+        }
+        const merged = { ...current, ...partial };
+        db.prepare(
+          `INSERT INTO user_settings (user_id, settings, created_at, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`
+        ).run(userId, JSON.stringify(merged), now, now);
+        return merged;
+      },
+    },
+
+    updateCheckResults: {
+      async getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]> {
+        const stmt = tenantId
+          ? db.prepare(`
+              SELECT * FROM update_check_results
+              WHERE user_id = ? AND tenant_id = ?
+              ORDER BY detected_at DESC
+            `)
+          : db.prepare(`
+              SELECT * FROM update_check_results
+              WHERE user_id = ?
+              ORDER BY detected_at DESC
+            `);
+        const rows = (
+          tenantId ? stmt.all(userId, tenantId) : stmt.all(userId)
+        ) as Record<string, unknown>[];
+        return rows.map(parseUpdateCheckRow);
+      },
+
+      async replaceForUserAndTenant(
+        userId: string,
+        tenantId: string,
+        rows: Array<Partial<UpdateCheckResult>>
+      ): Promise<UpdateCheckResult[]> {
+        const now = new Date().toISOString();
+        db.prepare('DELETE FROM update_check_results WHERE user_id = ? AND tenant_id = ?').run(
+          userId,
+          tenantId
+        );
+        const insert = db.prepare(`
+          INSERT INTO update_check_results (
+            id, user_id, tenant_id, winget_id, intune_app_id, display_name,
+            current_version, latest_version, is_critical, is_managed,
+            large_icon_type, large_icon_value, notified_at, dismissed_at,
+            detected_at, updated_at
+          ) VALUES (
+            @id, @user_id, @tenant_id, @winget_id, @intune_app_id, @display_name,
+            @current_version, @latest_version, @is_critical, @is_managed,
+            @large_icon_type, @large_icon_value, @notified_at, @dismissed_at,
+            @detected_at, @updated_at
+          )
+        `);
+        for (const row of rows) {
+          insert.run({
+            id: row.id || crypto.randomUUID(),
+            user_id: userId,
+            tenant_id: tenantId,
+            winget_id: row.winget_id,
+            intune_app_id: row.intune_app_id,
+            display_name: row.display_name,
+            current_version: row.current_version,
+            latest_version: row.latest_version,
+            is_critical: row.is_critical ? 1 : 0,
+            is_managed: row.is_managed === false ? 0 : 1,
+            large_icon_type: row.large_icon_type ?? null,
+            large_icon_value: row.large_icon_value ?? null,
+            notified_at: row.notified_at ?? null,
+            dismissed_at: row.dismissed_at ?? null,
+            detected_at: row.detected_at || now,
+            updated_at: now,
+          });
+        }
+        return this.getByUserId(userId, tenantId);
+      },
+
+      async setDismissedAt(
+        id: string,
+        userId: string,
+        dismissedAt: string | null
+      ): Promise<UpdateCheckResult | null> {
+        const result = db
+          .prepare(
+            'UPDATE update_check_results SET dismissed_at = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+          )
+          .run(dismissedAt, new Date().toISOString(), id, userId);
+        if (result.changes === 0) {
+          return null;
+        }
+        const row = db
+          .prepare('SELECT * FROM update_check_results WHERE id = ?')
+          .get(id) as Record<string, unknown> | undefined;
+        return row ? parseUpdateCheckRow(row) : null;
+      },
     },
   };
 
@@ -496,6 +710,39 @@ describe('SQLite Database Adapter', () => {
       expect(jobs.map(j => j.id)).toContain(job1.id);
       expect(jobs.map(j => j.id)).toContain(job2.id);
       expect(jobs.map(j => j.id)).toContain(job3.id);
+    });
+  });
+
+  describe('jobs.getByTenantIdAndStatus', () => {
+    it('should return only the requested status within the tenant', async () => {
+      await adapter.jobs.create(
+        createTestJob({ tenant_id: 'tenant-1', status: 'deployed', winget_id: 'A.App' })
+      );
+      await adapter.jobs.create(
+        createTestJob({ tenant_id: 'tenant-1', status: 'failed', winget_id: 'B.App' })
+      );
+      await adapter.jobs.create(
+        createTestJob({ tenant_id: 'tenant-2', status: 'deployed', winget_id: 'C.App' })
+      );
+
+      const jobs = await adapter.jobs.getByTenantIdAndStatus('tenant-1', 'deployed');
+
+      expect(jobs.map((j) => j.winget_id)).toEqual(['A.App']);
+    });
+
+    it('should not truncate the result set', async () => {
+      // The route behind this ("is this app already deployed in the tenant?")
+      // reads a missing row as "not deployed", so a capped page would report
+      // older deployments as undeployed.
+      for (let i = 0; i < 120; i++) {
+        await adapter.jobs.create(
+          createTestJob({ tenant_id: 'tenant-1', status: 'deployed', winget_id: `App.${i}` })
+        );
+      }
+
+      const jobs = await adapter.jobs.getByTenantIdAndStatus('tenant-1', 'deployed');
+
+      expect(jobs).toHaveLength(120);
     });
   });
 
@@ -817,6 +1064,210 @@ describe('SQLite Database Adapter', () => {
       const history = await adapter.uploadHistory.getByUserId('non-existent-user');
 
       expect(history).toEqual([]);
+    });
+  });
+
+  describe('uploadHistory.getByUserIdAndTenantId', () => {
+    it('should return only the given tenant rows for that user', async () => {
+      await adapter.uploadHistory.create({
+        user_id: 'user-1',
+        winget_id: 'Microsoft.VSCode',
+        version: '1.85.0',
+        display_name: 'VS Code',
+        intune_app_id: 'app-1',
+        intune_tenant_id: 'tenant-1',
+      });
+      await adapter.uploadHistory.create({
+        user_id: 'user-1',
+        winget_id: 'Git.Git',
+        version: '2.43.0',
+        display_name: 'Git',
+        intune_app_id: 'app-2',
+        intune_tenant_id: 'tenant-2',
+      });
+      await adapter.uploadHistory.create({
+        user_id: 'user-2',
+        winget_id: 'Mozilla.Firefox',
+        version: '121.0',
+        display_name: 'Firefox',
+        intune_app_id: 'app-3',
+        intune_tenant_id: 'tenant-1',
+      });
+
+      const history = await adapter.uploadHistory.getByUserIdAndTenantId('user-1', 'tenant-1');
+
+      expect(history.map((h) => h.winget_id)).toEqual(['Microsoft.VSCode']);
+    });
+
+    it('should filter the tenant in the query rather than after the fact', async () => {
+      // The regression this guards against: fetching a capped page by user and
+      // filtering the tenant in the caller, which drops this tenant's older
+      // deployments once a busier tenant fills the page.
+      for (let i = 0; i < 120; i++) {
+        await adapter.uploadHistory.create({
+          user_id: 'user-1',
+          winget_id: `Noise.${i}`,
+          version: '1.0',
+          display_name: `Noise ${i}`,
+          intune_app_id: `noise-${i}`,
+          intune_tenant_id: 'tenant-loud',
+        });
+      }
+      await adapter.uploadHistory.create({
+        user_id: 'user-1',
+        winget_id: 'Quiet.App',
+        version: '1.0',
+        display_name: 'Quiet App',
+        intune_app_id: 'quiet-1',
+        intune_tenant_id: 'tenant-quiet',
+      });
+
+      const history = await adapter.uploadHistory.getByUserIdAndTenantId('user-1', 'tenant-quiet');
+
+      expect(history.map((h) => h.winget_id)).toEqual(['Quiet.App']);
+    });
+  });
+  describe('updateCheckResults', () => {
+    function makeUpdate(overrides: Partial<UpdateCheckResult> = {}): Partial<UpdateCheckResult> {
+      return {
+        winget_id: 'Microsoft.Edge',
+        intune_app_id: 'app-1',
+        display_name: 'Edge',
+        current_version: '1.0.0',
+        latest_version: '1.1.0',
+        is_critical: false,
+        is_managed: true,
+        ...overrides,
+      };
+    }
+
+    it('round-trips booleans rather than leaking SQLite 0/1', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ is_critical: true, is_managed: false }),
+      ]);
+
+      const [row] = await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1');
+
+      expect(row.is_critical).toBe(true);
+      expect(row.is_managed).toBe(false);
+    });
+
+    it('replaces a tenant set instead of merging into it', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge', intune_app_id: 'app-1' }),
+        makeUpdate({ winget_id: 'Git.Git', intune_app_id: 'app-2' }),
+      ]);
+
+      // Git.Git is no longer detected: it must disappear rather than linger as
+      // a phantom update the user can never clear.
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge', intune_app_id: 'app-1' }),
+      ]);
+
+      const rows = await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1');
+      expect(rows.map((r) => r.winget_id)).toEqual(['Microsoft.Edge']);
+    });
+
+    it('leaves other tenants alone when replacing one', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge' }),
+      ]);
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-2', [
+        makeUpdate({ winget_id: 'Git.Git' }),
+      ]);
+
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', []);
+
+      expect(await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1')).toEqual([]);
+      expect(
+        (await adapter.updateCheckResults.getByUserId('user-1', 'tenant-2')).map((r) => r.winget_id)
+      ).toEqual(['Git.Git']);
+    });
+
+    it('returns every tenant when no tenant is given', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ winget_id: 'Microsoft.Edge' }),
+      ]);
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-2', [
+        makeUpdate({ winget_id: 'Git.Git' }),
+      ]);
+
+      const rows = await adapter.updateCheckResults.getByUserId('user-1');
+
+      expect(rows.map((r) => r.winget_id).sort()).toEqual(['Git.Git', 'Microsoft.Edge']);
+    });
+
+    it('persists dismissed_at handed back through a replace', async () => {
+      // The refresh route re-derives rows from a live scan and passes the prior
+      // dismissed_at back for unchanged versions, so dismissing an update
+      // survives a refresh. The store must keep what it is given.
+      const dismissedAt = '2026-02-01T10:00:00.000Z';
+
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ dismissed_at: dismissedAt }),
+      ]);
+
+      const [row] = await adapter.updateCheckResults.getByUserId('user-1', 'tenant-1');
+      expect(row.dismissed_at).toBe(dismissedAt);
+    });
+
+    it('dismisses only the owning user rows', async () => {
+      await adapter.updateCheckResults.replaceForUserAndTenant('user-1', 'tenant-1', [
+        makeUpdate({ id: 'upd-1' }),
+      ]);
+
+      const foreign = await adapter.updateCheckResults.setDismissedAt(
+        'upd-1',
+        'someone-else',
+        '2026-02-01T10:00:00.000Z'
+      );
+      expect(foreign).toBeNull();
+
+      const own = await adapter.updateCheckResults.setDismissedAt(
+        'upd-1',
+        'user-1',
+        '2026-02-01T10:00:00.000Z'
+      );
+      expect(own?.dismissed_at).toBe('2026-02-01T10:00:00.000Z');
+
+      const restored = await adapter.updateCheckResults.setDismissedAt('upd-1', 'user-1', null);
+      expect(restored?.dismissed_at).toBeNull();
+    });
+  });
+
+  describe('userSettings', () => {
+    it('returns null for a user who never saved settings', async () => {
+      expect(await adapter.userSettings.get('nobody')).toBeNull();
+    });
+
+    it('merges into stored settings rather than replacing them', async () => {
+      await adapter.userSettings.merge('user-1', {
+        carryOverAssignments: true,
+        supersedePreviousApp: true,
+      });
+
+      // Saving one toggle must not clear the other - the settings page sends
+      // only the key that changed.
+      const merged = await adapter.userSettings.merge('user-1', {
+        carryOverAssignments: false,
+      });
+
+      expect(merged).toEqual({
+        carryOverAssignments: false,
+        supersedePreviousApp: true,
+      });
+      expect(await adapter.userSettings.get('user-1')).toEqual({
+        carryOverAssignments: false,
+        supersedePreviousApp: true,
+      });
+    });
+
+    it('keeps users apart', async () => {
+      await adapter.userSettings.merge('user-1', { carryOverAssignments: true });
+      await adapter.userSettings.merge('user-2', { carryOverAssignments: false });
+
+      expect(await adapter.userSettings.get('user-1')).toEqual({ carryOverAssignments: true });
+      expect(await adapter.userSettings.get('user-2')).toEqual({ carryOverAssignments: false });
     });
   });
 });

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 
 /**
@@ -19,6 +19,14 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    // Notifications live in user_notifications, a Supabase-only table with no
+    // SQLite equivalent. Report an empty badge rather than crashing on
+    // createServerClient(), which throws without Supabase config and made this
+    // route answer 500 on every dashboard load in a self-hosted install.
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ unread_count: 0 });
     }
 
     const supabase = createServerClient();

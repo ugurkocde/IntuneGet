@@ -4,7 +4,13 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import type {
+  DatabaseAdapter,
+  PackagingJob,
+  UpdateCheckResult,
+  UploadHistoryRecord,
+  JobStats,
+} from './types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -94,6 +100,37 @@ function getPackagingJobsQuery(supabase: ReturnType<typeof createServerClient>):
   return supabase.from('packaging_jobs') as unknown as PackagingJobsQueryBuilder;
 }
 
+interface UserSettingsRow {
+  settings: Record<string, unknown>;
+}
+
+interface UserSettingsQueryBuilder {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      maybeSingle(): Promise<QueryResult<UserSettingsRow>>;
+    };
+  };
+  upsert(
+    data: Record<string, unknown>,
+    options: { onConflict: string }
+  ): Promise<{ error: PostgrestError | null }>;
+}
+
+/**
+ * Get a query builder for user_settings. The generated Database type does not
+ * cover this table, so the client is cast the same way the settings route
+ * already does it.
+ */
+function getUserSettingsQuery(
+  supabase: ReturnType<typeof createServerClient>
+): UserSettingsQueryBuilder {
+  // The table name itself is unknown to the generated type, so the client is
+  // widened before the call rather than the result after it.
+  return (supabase as unknown as { from: (table: string) => unknown }).from(
+    'user_settings'
+  ) as UserSettingsQueryBuilder;
+}
+
 /**
  * Get a typed query builder for upload_history table
  */
@@ -176,6 +213,25 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getAllByUserId(userId: string): Promise<PackagingJob[]> {
+      const supabase = createServerClient();
+
+      // No .limit(): callers aggregate over the full set, where a page would
+      // undercount rather than just shorten the answer.
+      const { data, error } = await supabase
+        .from('packaging_jobs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (isError(error)) {
+        console.error('Error fetching all jobs by user ID:', error);
+        throw error;
+      }
+
+      return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const supabase = createServerClient();
 
@@ -189,6 +245,26 @@ export const supabaseDb: DatabaseAdapter = {
 
       if (isError(error)) {
         console.error('Error fetching jobs by tenant ID:', error);
+        throw error;
+      }
+
+      return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
+    async getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]> {
+      const supabase = createServerClient();
+
+      // No .limit(): the caller needs the complete set to answer "is this app
+      // already deployed in the tenant", where a missing row is meaningful.
+      const { data, error } = await supabase
+        .from('packaging_jobs')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('status', status)
+        .order('created_at', { ascending: false });
+
+      if (isError(error)) {
+        console.error('Error fetching jobs by tenant ID and status:', error);
         throw error;
       }
 
@@ -514,6 +590,188 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return data || [];
+    },
+
+    /**
+     * Get a user's upload history within one tenant
+     */
+    async getByUserIdAndTenantId(
+      userId: string,
+      tenantId: string
+    ): Promise<UploadHistoryRecord[]> {
+      const supabase = createServerClient();
+      const query = getUploadHistoryQuery(supabase);
+
+      // No .limit(): the caller needs the complete set to answer "did this
+      // user already deploy this app", where a missing row is meaningful.
+      const { data, error } = await query
+        .select('*')
+        .eq('user_id', userId)
+        .eq('intune_tenant_id', tenantId)
+        .order('deployed_at', { ascending: false });
+
+      if (isError(error)) {
+        console.error('Error fetching upload history by tenant:', error);
+        throw error;
+      }
+
+      return data || [];
+    },
+  },
+
+  userSettings: {
+    async get(userId: string): Promise<Record<string, unknown> | null> {
+      const supabase = createServerClient();
+
+      const { data, error } = await getUserSettingsQuery(supabase)
+        .select('settings')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (isError(error)) {
+        console.error('Error fetching user settings:', error);
+        throw error;
+      }
+
+      return data?.settings ?? null;
+    },
+
+    async merge(
+      userId: string,
+      partial: Record<string, unknown>
+    ): Promise<Record<string, unknown>> {
+      const supabase = createServerClient();
+
+      const { data: existing, error: readError } = await getUserSettingsQuery(supabase)
+        .select('settings')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (isError(readError)) {
+        console.error('Error reading user settings before merge:', readError);
+        throw readError;
+      }
+
+      const current = existing?.settings ?? {};
+      const merged = { ...current, ...partial };
+
+      const { error: writeError } = await getUserSettingsQuery(supabase).upsert(
+        {
+          user_id: userId,
+          settings: merged,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+
+      if (isError(writeError)) {
+        console.error('Error writing user settings:', writeError);
+        throw writeError;
+      }
+
+      return merged;
+    },
+  },
+
+  updateCheckResults: {
+    async getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]> {
+      const supabase = createServerClient();
+
+      let query = supabase
+        .from('update_check_results')
+        .select('*')
+        .eq('user_id', userId)
+        .order('detected_at', { ascending: false });
+
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query;
+
+      if (isError(error)) {
+        console.error('Error fetching update check results:', error);
+        throw error;
+      }
+
+      return (data as unknown as UpdateCheckResult[]) || [];
+    },
+
+    async replaceForUserAndTenant(
+      userId: string,
+      tenantId: string,
+      rows: Array<Partial<UpdateCheckResult>>
+    ): Promise<UpdateCheckResult[]> {
+      const supabase = createServerClient();
+      const now = new Date().toISOString();
+
+      const { error: deleteError } = await supabase
+        .from('update_check_results')
+        .delete()
+        .eq('user_id', userId)
+        .eq('tenant_id', tenantId);
+
+      if (isError(deleteError)) {
+        console.error('Error clearing update check results:', deleteError);
+        throw deleteError;
+      }
+
+      if (rows.length === 0) {
+        return [];
+      }
+
+      const payload = rows.map((row) => ({
+        user_id: userId,
+        tenant_id: tenantId,
+        winget_id: row.winget_id,
+        intune_app_id: row.intune_app_id,
+        display_name: row.display_name,
+        current_version: row.current_version,
+        latest_version: row.latest_version,
+        is_critical: Boolean(row.is_critical),
+        is_managed: row.is_managed !== false,
+        large_icon_type: row.large_icon_type ?? null,
+        large_icon_value: row.large_icon_value ?? null,
+        notified_at: row.notified_at ?? null,
+        dismissed_at: row.dismissed_at ?? null,
+        detected_at: row.detected_at || now,
+        updated_at: now,
+      }));
+
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .insert(payload as never)
+        .select();
+
+      if (isError(error)) {
+        console.error('Error writing update check results:', error);
+        throw error;
+      }
+
+      return (data as unknown as UpdateCheckResult[]) || [];
+    },
+
+    async setDismissedAt(
+      id: string,
+      userId: string,
+      dismissedAt: string | null
+    ): Promise<UpdateCheckResult | null> {
+      const supabase = createServerClient();
+
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .update({ dismissed_at: dismissedAt, updated_at: new Date().toISOString() } as never)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .maybeSingle();
+
+      if (isError(error)) {
+        console.error('Error updating update check result:', error);
+        throw error;
+      }
+
+      return (data as unknown as UpdateCheckResult) || null;
     },
   },
 };

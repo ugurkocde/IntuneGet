@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { ManualAppMapping, CreateMappingRequest } from '@/types/unmanaged';
@@ -24,6 +24,14 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    // Manual mappings (manual_app_mappings/discovered_apps_cache) have no
+    // SQLite equivalent - a Supabase-only part of the Discovered Apps
+    // feature, unlike the discovered-apps scan itself (unmanaged-apps/route.ts),
+    // which runs live and cache-less without Supabase.
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ mappings: [] });
     }
 
     const supabase = createServerClient();
@@ -96,6 +104,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields: discoveredAppName and wingetPackageId' },
         { status: 400 }
+      );
+    }
+
+    // Manual mappings have no SQLite equivalent (Supabase-only feature).
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { error: 'Manual app mappings are not available without Supabase configured.' },
+        { status: 503 }
       );
     }
 
@@ -213,6 +229,14 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing mapping ID' },
         { status: 400 }
+      );
+    }
+
+    // Manual mappings have no SQLite equivalent (Supabase-only feature).
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { error: 'Manual app mappings are not available without Supabase configured.' },
+        { status: 503 }
       );
     }
 

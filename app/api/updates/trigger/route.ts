@@ -6,10 +6,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
   AutoUpdateTrigger,
   getLatestInstallerInfo,
+  normalizeAssignments,
+  normalizeCategories,
 } from '@/lib/auto-update/trigger';
 import {
   isGitHubActionsConfigured,
@@ -74,24 +77,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Without Supabase there are no update policies and no auto-update
+    // bookkeeping, but a manual trigger needs neither: it only has to queue a
+    // packaging job, exactly as a normal deployment does. The policy round
+    // trip below (create a policy, flip it to auto_update, restore it) is a
+    // vehicle for AutoUpdateTrigger, not something the user asked for.
     if (!isSupabaseConfigured()) {
-      const unavailableError =
-        'Update deployment requires Supabase and is not available on this self-hosted deployment';
-      return NextResponse.json(
-        {
-          success: false,
-          triggered: 0,
-          failed: updateRequests.length,
-          results: updateRequests.map((req) => ({
-            winget_id: req.winget_id,
-            tenant_id: req.tenant_id,
-            success: false,
-            error: unavailableError,
-          })),
-          error: unavailableError,
-        },
-        { status: 503 }
-      );
+      return triggerWithoutSupabase(user, updateRequests);
     }
 
     const supabase = createServerClient();
@@ -493,4 +485,185 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Manual update trigger for Supabase-less (SQLite self-hosting) installs.
+ *
+ * The Supabase path routes through AutoUpdateTrigger, which needs a policy
+ * row to carry the deployment config and writes auto_update_history,
+ * user_settings and user_profiles alongside. None of that exists here, and a
+ * manual trigger does not need it: the user already decided, so there is no
+ * policy to consult, no rate limit to respect and no automation history to
+ * record. What remains is what a normal deployment does - resolve the config
+ * and the installer, then queue a packaging job for the local packager.
+ */
+async function triggerWithoutSupabase(
+  user: { userId: string; userEmail?: string | null; tenantId: string },
+  updateRequests: { winget_id: string; tenant_id: string }[]
+): Promise<NextResponse> {
+  const db = getDatabase();
+
+  // carryOverAssignments and supersedePreviousApp are user settings, and they
+  // decide what happens to the app being replaced: whether its assignments
+  // move to the new version and whether Intune records the new app as
+  // superseding it. Reading them is not optional - defaulting to false leaves
+  // both versions assigned and nothing superseded.
+  const storedSettings = (await db.userSettings.get(user.userId)) ?? {};
+  const globalCarryOver = Boolean(storedSettings.carryOverAssignments);
+  const supersedePrevious = Boolean(storedSettings.supersedePreviousApp);
+
+  const response: TriggerUpdateResponse = {
+    success: true,
+    triggered: 0,
+    failed: 0,
+    results: [],
+  };
+
+  // Without a local packager nothing would ever pick the job up, and the
+  // GitHub Actions dispatch below needs Supabase-backed policy state, so say
+  // so rather than queueing a job that silently never runs.
+  const canRunJobs = getFeatureFlags().localPackager;
+
+  for (const req of updateRequests) {
+    const fail = (error: string) => {
+      response.failed++;
+      response.results.push({
+        winget_id: req.winget_id,
+        tenant_id: req.tenant_id,
+        success: false,
+        error,
+      });
+    };
+
+    try {
+      if (isSelfUpdatingApp(req.winget_id)) {
+        fail(
+          `${req.winget_id} keeps itself up to date on the device (Click-to-Run); IntuneGet does not deploy updates for it. Refresh the updates list to remove it.`
+        );
+        continue;
+      }
+
+      if (!canRunJobs) {
+        fail(
+          'Update deployment needs the local packager on this self-hosted deployment; no packager is configured to run the job.'
+        );
+        continue;
+      }
+
+      const detected = await db.updateCheckResults.getByUserId(user.userId, req.tenant_id);
+      const updateResult = detected.find((row) => row.winget_id === req.winget_id);
+
+      if (!updateResult) {
+        fail('Update not found');
+        continue;
+      }
+
+      const built = await buildDeploymentConfigForApp(null, {
+        userId: user.userId,
+        tenantId: req.tenant_id,
+        wingetId: req.winget_id,
+        latestVersion: updateResult.latest_version,
+        globalCarryOver,
+      });
+
+      if (built.status === 'orphaned_job') {
+        fail('Could not retrieve deployment configuration');
+        continue;
+      }
+
+      if (built.status === 'unavailable') {
+        const inCatalog = await getCatalogSource().appExists(req.winget_id);
+        fail(
+          inCatalog
+            ? `No installer data is available for ${req.winget_id} ${updateResult.latest_version} yet - the catalog snapshot has not synced this version's manifest. Try again after the next catalog refresh.`
+            : `${req.winget_id} is not in the app catalog, so a deployment configuration cannot be built for it.`
+        );
+        continue;
+      }
+
+      const config = built.deploymentConfig;
+      const installerResolution = await getLatestInstallerInfo(
+        null as never,
+        req.winget_id,
+        config.architecture,
+        config.installScope
+      );
+
+      if (!installerResolution.ok) {
+        fail(installerResolution.failure.message);
+        continue;
+      }
+      const installerInfo = installerResolution.info;
+
+      // The detected result's intune_app_id can be stale if the app was
+      // redeployed since the last check, so prefer the newest deployment.
+      const tenantHistory = await db.uploadHistory.getByUserIdAndTenantId(
+        user.userId,
+        req.tenant_id
+      );
+      const latestUpload = tenantHistory.find((row) => row.winget_id === req.winget_id);
+      const sourceIntuneAppId =
+        latestUpload?.intune_app_id || updateResult.intune_app_id || null;
+
+      // Supersedence needs something to supersede; without a source app id
+      // Intune has no previous version to point at.
+      const autoSupersede = supersedePrevious && Boolean(sourceIntuneAppId);
+
+      const job = await db.jobs.create({
+        user_id: user.userId,
+        user_email: user.userEmail || null,
+        tenant_id: req.tenant_id,
+        winget_id: req.winget_id,
+        version: installerInfo.latestVersion,
+        display_name: config.displayName || installerInfo.displayName,
+        publisher: config.publisher,
+        architecture: config.architecture,
+        installer_type: installerInfo.installerType || config.installerType,
+        installer_url: installerInfo.installerUrl,
+        installer_sha256: installerInfo.installerSha256,
+        install_command: config.installCommand,
+        uninstall_command: config.uninstallCommand,
+        install_scope: config.installScope,
+        detection_rules: config.detectionRules as unknown as Json,
+        package_config: {
+          assignments: normalizeAssignments(config),
+          categories: normalizeCategories(config),
+          assignedGroups: config.assignedGroups,
+          requirementRules: config.requirementRules,
+          relationships: config.relationships,
+          psadtConfig: config.psadtConfig,
+          nestedInstallerType: installerInfo.nestedInstallerType,
+          nestedInstallerPath: installerInfo.nestedInstallerPath,
+          forceCreate: config.forceCreateNewApp !== false,
+          sourceIntuneAppId,
+          autoSupersede,
+          supersedenceType: autoSupersede ? 'update' : undefined,
+          // The current setting wins over whatever the original deployment
+          // stored, matching how the Supabase path re-reads it per run.
+          assignmentMigration: {
+            carryOverAssignments: globalCarryOver,
+            removeAssignmentsFromPreviousApp: globalCarryOver,
+          },
+          description: config.description,
+          notes: config.notes,
+        } as unknown as Json,
+        status: 'queued',
+        progress_percent: 0,
+      });
+
+      response.triggered++;
+      response.results.push({
+        winget_id: req.winget_id,
+        tenant_id: req.tenant_id,
+        success: true,
+        packaging_job_id: job.id,
+      });
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+
+  response.success = response.failed === 0;
+  return NextResponse.json(response);
 }

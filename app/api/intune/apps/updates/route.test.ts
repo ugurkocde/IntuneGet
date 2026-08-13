@@ -7,12 +7,22 @@ const {
   resolveTargetTenantIdMock,
   matchAppToWingetMock,
   matchAppToWingetWithDatabaseMock,
+  isSupabaseConfiguredMock,
+  getDatabaseMock,
+  getHistoryMock,
+  getCatalogSourceMock,
+  getAppsByWingetIdsMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
   createServerClientMock: vi.fn(),
   resolveTargetTenantIdMock: vi.fn(),
   matchAppToWingetMock: vi.fn(),
   matchAppToWingetWithDatabaseMock: vi.fn(),
+  isSupabaseConfiguredMock: vi.fn(),
+  getDatabaseMock: vi.fn(),
+  getHistoryMock: vi.fn(),
+  getCatalogSourceMock: vi.fn(),
+  getAppsByWingetIdsMock: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -21,9 +31,19 @@ vi.mock('@/lib/auth-utils', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
-  // getCatalogSource() now branches on isSupabaseConfigured(); the route
-  // imports it transitively, so the mock must provide it (Supabase mode).
-  isSupabaseConfigured: () => true,
+  // getCatalogSource() branches on isSupabaseConfigured(), and so does the
+  // route itself now, so each case decides which mode it runs in.
+  isSupabaseConfigured: isSupabaseConfiguredMock,
+}));
+
+vi.mock('@/lib/db', () => ({
+  getDatabase: getDatabaseMock,
+}));
+
+// The catalog picks its own backing store from isSupabaseConfigured(); mock it
+// so the Supabase-less cases don't reach for a real snapshot file.
+vi.mock('@/lib/catalog', () => ({
+  getCatalogSource: getCatalogSourceMock,
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
@@ -56,6 +76,14 @@ function createSupabaseMock(
     }>;
   } = {}
 ) {
+  // Deployment history moved to the db abstraction (it exists in both
+  // backends), so the same options object wires that mock rather than a
+  // supabase table branch.
+  getHistoryMock.mockResolvedValue(options.uploadHistoryRows || []);
+  // Latest versions come from the catalog abstraction, which serves a local
+  // snapshot when Supabase is absent.
+  getAppsByWingetIdsMock.mockResolvedValue(curatedRows);
+
   return {
     from: (table: string) => {
       if (table === 'tenant_consent') {
@@ -63,15 +91,6 @@ function createSupabaseMock(
         chain.select = vi.fn(() => chain);
         chain.eq = vi.fn(() => chain);
         chain.single = vi.fn(async () => ({ data: { id: 'consent-1' }, error: null }));
-        return chain;
-      }
-
-      if (table === 'upload_history') {
-        const chain: Record<string, unknown> = {};
-        chain.select = vi.fn(() => chain);
-        chain.eq = vi.fn(() => chain);
-        chain.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
-          Promise.resolve({ data: options.uploadHistoryRows || [], error: null }).then(resolve);
         return chain;
       }
 
@@ -93,14 +112,6 @@ function createSupabaseMock(
         return chain;
       }
 
-      if (table === 'curated_apps') {
-        return {
-          select: vi.fn(() => ({
-            in: vi.fn(async () => ({ data: curatedRows, error: null })),
-          })),
-        };
-      }
-
       throw new Error(`Unexpected table: ${table}`);
     },
   };
@@ -109,6 +120,13 @@ function createSupabaseMock(
 describe('GET /api/intune/apps/updates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isSupabaseConfiguredMock.mockReturnValue(true);
+    getDatabaseMock.mockReturnValue({
+      uploadHistory: { getByUserIdAndTenantId: getHistoryMock },
+    });
+    getHistoryMock.mockResolvedValue([]);
+    getCatalogSourceMock.mockReturnValue({ getAppsByWingetIds: getAppsByWingetIdsMock });
+    getAppsByWingetIdsMock.mockResolvedValue([]);
     // The shared service-principal token helper caches per tenant; clear it so
     // each case's mocked token fetch is exercised fresh.
     invalidateServicePrincipalToken('tenant-1');
@@ -416,5 +434,62 @@ describe('GET /api/intune/apps/updates', () => {
     expect(body.updates[0].isManaged).toBe(true);
     expect(matchAppToWingetMock).not.toHaveBeenCalled();
     expect(matchAppToWingetWithDatabaseMock).not.toHaveBeenCalled();
+  });
+
+  it('checks for updates without Supabase (DATABASE_MODE=sqlite self-hosting)', async () => {
+    // Regression: the route refused every request with a blanket 503 when
+    // Supabase was absent, so the App Updates page in a self-hosted install
+    // could only ever report "all apps are up to date". Nothing in the
+    // comparison needs Supabase: deployed apps come from Graph, latest
+    // versions from the catalog (snapshot-backed in this mode) and deployment
+    // history from the db abstraction.
+    isSupabaseConfiguredMock.mockReturnValue(false);
+    getHistoryMock.mockResolvedValue([
+      { intune_app_id: 'app-git', winget_id: 'Git.Git', version: '2.40.0' },
+    ]);
+    getAppsByWingetIdsMock.mockResolvedValue([
+      { winget_id: 'Git.Git', latest_version: '2.45.0' },
+    ]);
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'graph-token' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          value: [
+            {
+              id: 'app-git',
+              displayName: 'Git',
+              publisher: 'The Git Development Community',
+              displayVersion: '2.40.0',
+              lastModifiedDateTime: '2026-02-02T00:00:00Z',
+            },
+          ],
+        }),
+      });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = new NextRequest('http://localhost:3000/api/intune/apps/updates', {
+      headers: {
+        Authorization: 'Bearer mock-token',
+      },
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.updateCount).toBe(1);
+    expect(body.updates[0].wingetId).toBe('Git.Git');
+    expect(body.updates[0].latestVersion).toBe('2.45.0');
+    // No Supabase client is created, and the tenant falls back to the token's
+    // own tenant instead of going through MSP resolution.
+    expect(createServerClientMock).not.toHaveBeenCalled();
+    expect(resolveTargetTenantIdMock).not.toHaveBeenCalled();
+    expect(getHistoryMock).toHaveBeenCalledWith('user-1', 'tenant-1');
   });
 });

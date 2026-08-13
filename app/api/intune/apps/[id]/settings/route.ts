@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -32,36 +32,45 @@ export async function PATCH(
       );
     }
 
-    // Resolve tenant (MSP-aware)
-    const supabase = createServerClient();
-    const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+    // MSP tenant resolution and the tenant_consent check both require
+    // Supabase. In Supabase-less SQLite installs there is no MSP membership
+    // data and no consent table to check - fall back to the token's own
+    // tenant and let the service-principal token acquired below prove
+    // consent (matches the pattern in unmanaged-apps/route.ts). `supabase`
+    // stays undefined in that case; the packaging_jobs history sync near the
+    // end of this handler is Supabase-only and already guards on it.
+    let tenantId = user.tenantId;
+    const supabase = isSupabaseConfigured() ? createServerClient() : undefined;
+    if (supabase) {
+      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
-      supabase,
-      userId: user.userId,
-      tokenTenantId: user.tenantId,
-      requestedTenantId: mspTenantId,
-    });
+      const tenantResolution = await resolveTargetTenantId({
+        supabase,
+        userId: user.userId,
+        tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
 
-    if (tenantResolution.errorResponse) {
-      return tenantResolution.errorResponse;
-    }
+      if (tenantResolution.errorResponse) {
+        return tenantResolution.errorResponse;
+      }
 
-    const tenantId = tenantResolution.tenantId;
+      tenantId = tenantResolution.tenantId;
 
-    // Verify admin consent
-    const { data: consentData, error: consentError } = await supabase
-      .from('tenant_consent')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .single();
+      // Verify admin consent
+      const { data: consentData, error: consentError } = await supabase
+        .from('tenant_consent')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .single();
 
-    if (consentError || !consentData) {
-      return NextResponse.json(
-        { error: 'Admin consent not found. Please complete the admin consent flow.' },
-        { status: 403 }
-      );
+      if (consentError || !consentData) {
+        return NextResponse.json(
+          { error: 'Admin consent not found. Please complete the admin consent flow.' },
+          { status: 403 }
+        );
+      }
     }
 
     // Get service principal token
@@ -108,7 +117,7 @@ export async function PATCH(
     }
 
     // Persist updated assignments/categories in the most recent packaging_jobs row
-    if (wingetId) {
+    if (wingetId && supabase) {
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
         .select('id, package_config')

@@ -91,6 +91,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: vi.fn(),
+  isSupabaseConfigured: vi.fn(() => true),
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
@@ -110,6 +111,8 @@ vi.mock('@/lib/store-app-deploy', () => ({
 
 import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 function makeJob(overrides: Partial<PackagingJob>): PackagingJob {
@@ -280,6 +283,10 @@ describe('POST /api/package (workflow dispatch)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Re-established per test because clearAllMocks() drops call history but
+    // keeps implementations, so a test that flips this must not leak into the
+    // next one.
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
     getDatabaseMock.mockReturnValue({
       jobs: {
         create: createMock,
@@ -440,6 +447,35 @@ describe('POST /api/package (workflow dispatch)', () => {
       undefined,
       expect.any(Object)
     );
+  });
+
+  it('deploys without touching Supabase when running Supabase-less (DATABASE_MODE=sqlite, no MSP config)', async () => {
+    // Not `Once`: the route asks several times (tenant resolution, the
+    // retirement blocklist, QA gating) and all of them must see it unset.
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    // The regression this guards against: resolveTargetTenantId() called
+    // createServerClient() unconditionally, which throws when Supabase env
+    // vars are unset, and the route's catch-all swallowed it into a bare
+    // 500 "Internal server error" with no logged cause.
+    expect(createServerClient).not.toHaveBeenCalled();
+    expect(resolveTargetTenantId).not.toHaveBeenCalled();
+    // Falls back to the access token's own tenant.
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0].tenantId).toBe('tenant-1');
   });
 
   it('omits relationships from the workflow inputs when none are configured', async () => {

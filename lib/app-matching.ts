@@ -140,7 +140,11 @@ export function matchAppToWinget(app: IntuneWin32App): MatchResult | null {
  */
 export async function matchAppToWingetWithDatabase(
   app: IntuneWin32App,
-  supabaseClient: { from: (table: string) => unknown }
+  // Vestigial: searchCuratedApps() resolves its own backing store through
+  // getCatalogSource(), which serves the snapshot catalog when Supabase is
+  // absent - so this matcher works in both modes. Kept optional so
+  // Supabase-less callers can omit it and existing call sites still compile.
+  supabaseClient?: { from: (table: string) => unknown } | null
 ): Promise<MatchResult | null> {
   const displayName = app.displayName;
   const publisher = app.publisher || '';
@@ -168,7 +172,7 @@ export async function matchAppToWingetWithDatabase(
 
   // Pass 3: Database lookup for verified curated apps
   try {
-    const curatedApps = await searchCuratedApps(displayName, supabaseClient);
+    const curatedApps = await searchCuratedApps(displayName, supabaseClient ?? undefined);
     if (curatedApps.length > 0) {
       const bestMatch = findBestCuratedMatch(displayName, publisher, curatedApps);
       if (bestMatch) {

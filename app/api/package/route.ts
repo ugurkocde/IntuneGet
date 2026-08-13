@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import {
   isGitHubActionsConfigured,
@@ -87,17 +87,24 @@ export async function POST(request: NextRequest) {
     const tokenTenantId = user.tenantId;
 
     // Check for MSP tenant override header and enforce tenant access checks
-    // (membership, managed tenant consent, and customer-only access mode)
-    const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
-    const { tenantId, errorResponse: tenantError } = await resolveTargetTenantId({
-      supabase: createServerClient(),
-      userId,
-      tokenTenantId,
-      requestedTenantId: mspTenantId,
-    });
+    // (membership, managed tenant consent, and customer-only access mode).
+    // MSP features require Supabase; in Supabase-less SQLite installs there
+    // is no MSP membership data to resolve against, so skip straight to the
+    // token's own tenant (matches the pattern in unmanaged-apps/route.ts).
+    let tenantId = tokenTenantId;
+    if (isSupabaseConfigured()) {
+      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+      const { tenantId: resolvedTenantId, errorResponse: tenantError } = await resolveTargetTenantId({
+        supabase: createServerClient(),
+        userId,
+        tokenTenantId,
+        requestedTenantId: mspTenantId,
+      });
 
-    if (tenantError) {
-      return tenantError;
+      if (tenantError) {
+        return tenantError;
+      }
+      tenantId = resolvedTenantId;
     }
 
     // Verify admin consent for the target tenant before accepting jobs
@@ -187,10 +194,15 @@ export async function POST(request: NextRequest) {
     const catalogWin32Items = win32Items.filter(
       (item) => item.sourceType !== 'custom' && typeof item.wingetId === 'string'
     );
-    const eligibilityBlocks = await getPackageEligibilityBlocks(
-      createServerClient(),
-      catalogWin32Items.map((item) => item.wingetId)
-    );
+    // The retirement blocklist lives in a Supabase-only table. A self-hosted
+    // SQLite install has no such list, so nothing is blocked rather than the
+    // deploy failing on a table that does not exist.
+    const eligibilityBlocks = isSupabaseConfigured()
+      ? await getPackageEligibilityBlocks(
+          createServerClient(),
+          catalogWin32Items.map((item) => item.wingetId)
+        )
+      : [];
     if (eligibilityBlocks.length > 0) {
       const block = eligibilityBlocks[0];
       const blockedItem = catalogWin32Items.find(
@@ -515,7 +527,10 @@ export async function POST(request: NextRequest) {
             }
             const jobId = crypto.randomUUID();
             const installerSha256 = item.installerSha256?.trim() || '';
-            const qaDemand = item.sourceType === 'custom'
+            // QA gating is a hosted-service feature: the candidate tables and
+            // the runners that fill them are Supabase-side. Without it the job
+            // simply carries no QA state, the same as a custom-source item.
+            const qaDemand = item.sourceType === 'custom' || !isSupabaseConfigured()
               ? null
               : await ensureQaDemand(createServerClient(), {
                   wingetId: item.wingetId,
@@ -886,15 +901,21 @@ export async function GET(request: NextRequest) {
     // one tenant can see each other's IntuneGet apps and avoid duplicates).
     const scope = searchParams.get('scope');
     if (scope === 'tenant') {
-      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
-      const { tenantId, errorResponse } = await resolveTargetTenantId({
-        supabase: createServerClient(),
-        userId: user.userId,
-        tokenTenantId: user.tenantId,
-        requestedTenantId: mspTenantId,
-      });
-      if (errorResponse) {
-        return errorResponse;
+      // MSP tenant resolution requires Supabase; fall back to the token's
+      // own tenant in Supabase-less SQLite installs.
+      let tenantId = user.tenantId;
+      if (isSupabaseConfigured()) {
+        const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+        const { tenantId: resolvedTenantId, errorResponse } = await resolveTargetTenantId({
+          supabase: createServerClient(),
+          userId: user.userId,
+          tokenTenantId: user.tenantId,
+          requestedTenantId: mspTenantId,
+        });
+        if (errorResponse) {
+          return errorResponse;
+        }
+        tenantId = resolvedTenantId;
       }
 
       const tenantJobs = await db.jobs.getByTenantId(tenantId, 50);

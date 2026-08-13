@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
@@ -17,22 +17,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
-
-    // Define the shape of jobs returned from the queries
-    interface PackagingJobStats {
-      status: string;
-      completed_at: string | null;
-    }
-
-    interface PackagingJobRecent {
-      id: string;
-      winget_id: string;
-      display_name: string;
-      status: string;
-      created_at: string;
-      intune_app_url: string | null;
-    }
+    // These stats are derived entirely from packaging_jobs, which exists in
+    // both backends, so this route works in Supabase-less SQLite installs too.
+    // It previously called createServerClient() unconditionally, which throws
+    // without Supabase config and made the dashboard answer 500.
+    const db = getDatabase();
 
     // Get start of month in UTC for consistent timezone handling
     const now = new Date();
@@ -42,33 +31,9 @@ export async function GET(request: NextRequest) {
       1
     ));
 
-    // Fetch all jobs in a single query and aggregate in memory
-    // This is more efficient than 4 separate count queries
-    const { data: jobs, error: jobsError } = await supabase
-      .from('packaging_jobs')
-      .select('status, completed_at')
-      .eq('user_id', user.userId);
-
-    // Fetch 5 most recent jobs for activity feed
-    const { data: recentJobs, error: recentJobsError } = await supabase
-      .from('packaging_jobs')
-      .select('id, winget_id, display_name, status, created_at, intune_app_url')
-      .eq('user_id', user.userId)
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (recentJobsError) {
-      // Failed to fetch recent jobs - continue with empty array
-    }
-
-    if (jobsError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch statistics' },
-        { status: 500 }
-      );
-    }
-
-    const allJobs = (jobs || []) as PackagingJobStats[];
+    // One uncapped read serves both the aggregate counts and the activity
+    // feed; a page would undercount the totals rather than just shorten them.
+    const allJobs = await db.jobs.getAllByUserId(user.userId);
 
     // Aggregate stats in memory
     let totalDeployed = 0;
@@ -108,8 +73,8 @@ export async function GET(request: NextRequest) {
       intuneAppUrl?: string;
     }
 
-    const allRecentJobs = (recentJobs || []) as PackagingJobRecent[];
-    const recentActivity: RecentActivityItem[] = allRecentJobs.map((job) => {
+    // getAllByUserId returns newest first, so the feed is just the head of it.
+    const recentActivity: RecentActivityItem[] = allJobs.slice(0, 5).map((job) => {
       let type: 'upload' | 'package' | 'error' = 'package';
       let status: 'success' | 'pending' | 'failed' = 'pending';
       let description = '';

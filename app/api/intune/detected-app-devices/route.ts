@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
@@ -126,55 +126,67 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing appId parameter' }, { status: 400 });
     }
 
-    const supabase = createServerClient();
-    const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+    // MSP tenant resolution, the tenant_consent check, and the discovered-apps
+    // cache lookup all require Supabase. In Supabase-less SQLite installs
+    // there is no MSP membership data, no consent table, and no cache -
+    // fall back to the token's own tenant, let the service-principal token
+    // acquired below prove consent, and use the single appId as the only
+    // version id (matches the pattern in unmanaged-apps/route.ts).
+    let tenantId = user.tenantId;
+    let allVersionIds = [appId];
+    let summedDeviceCount: number | undefined;
+    if (isSupabaseConfigured()) {
+      const supabase = createServerClient();
+      const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
-      supabase,
-      userId: user.userId,
-      tokenTenantId: user.tenantId,
-      requestedTenantId: mspTenantId,
-    });
+      const tenantResolution = await resolveTargetTenantId({
+        supabase,
+        userId: user.userId,
+        tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
 
-    if (tenantResolution.errorResponse) {
-      return tenantResolution.errorResponse;
+      if (tenantResolution.errorResponse) {
+        return tenantResolution.errorResponse;
+      }
+
+      tenantId = tenantResolution.tenantId;
+
+      // Verify admin consent (mirrors the unmanaged-apps route)
+      const { data: consentData, error: consentError } = await supabase
+        .from('tenant_consent')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .single();
+
+      if (consentError || !consentData) {
+        return NextResponse.json(
+          { error: 'Admin consent not found. Please complete the admin consent flow.' },
+          { status: 403 }
+        );
+      }
+
+      // Resolve the full set of detected-app (version) ids for this app from
+      // the sync cache; fall back to the single id for rows written before
+      // this field existed or evicted rows.
+      const { data: cacheRow } = await supabase
+        .from('discovered_apps_cache')
+        .select('app_data, device_count')
+        .eq('tenant_id', tenantId)
+        .eq('discovered_app_id', appId)
+        .maybeSingle();
+
+      const appData = (cacheRow?.app_data ?? null) as unknown as { mergedAppIds?: string[] } | null;
+      allVersionIds =
+        appData?.mergedAppIds && appData.mergedAppIds.length > 0
+          ? appData.mergedAppIds
+          : [appId];
+      summedDeviceCount = cacheRow?.device_count ?? undefined;
     }
 
-    const tenantId = tenantResolution.tenantId;
-
-    // Verify admin consent (mirrors the unmanaged-apps route)
-    const { data: consentData, error: consentError } = await supabase
-      .from('tenant_consent')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .single();
-
-    if (consentError || !consentData) {
-      return NextResponse.json(
-        { error: 'Admin consent not found. Please complete the admin consent flow.' },
-        { status: 403 }
-      );
-    }
-
-    // Resolve the full set of detected-app (version) ids for this app from the
-    // sync cache; fall back to the single id for rows written before this field
-    // existed or evicted rows.
-    const { data: cacheRow } = await supabase
-      .from('discovered_apps_cache')
-      .select('app_data, device_count')
-      .eq('tenant_id', tenantId)
-      .eq('discovered_app_id', appId)
-      .maybeSingle();
-
-    const appData = (cacheRow?.app_data ?? null) as unknown as { mergedAppIds?: string[] } | null;
-    const allVersionIds =
-      appData?.mergedAppIds && appData.mergedAppIds.length > 0
-        ? appData.mergedAppIds
-        : [appId];
     const truncated = allVersionIds.length > MAX_VERSIONS;
     const versionIds = truncated ? allVersionIds.slice(0, MAX_VERSIONS) : allVersionIds;
-    const summedDeviceCount = cacheRow?.device_count ?? undefined;
 
     const token = await getServicePrincipalToken(tenantId);
     if (!token) {

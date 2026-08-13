@@ -84,6 +84,47 @@ export interface UploadHistoryRecord {
 }
 
 /**
+ * A detected available update for one deployed app.
+ *
+ * Mirrors the update_check_results table (supabase/migrations 011, 018, 031).
+ * The row is a cache: the comparison itself runs live against Intune and the
+ * app catalog, and a refresh replaces a tenant's rows wholesale. What only
+ * lives here is per-user state - dismissed_at and notified_at.
+ */
+export interface UpdateCheckResult {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  winget_id: string;
+  intune_app_id: string;
+  display_name: string;
+  current_version: string;
+  latest_version: string;
+  is_critical: boolean;
+  is_managed: boolean;
+  large_icon_type: string | null;
+  large_icon_value: string | null;
+  notified_at: string | null;
+  dismissed_at: string | null;
+  detected_at: string;
+  updated_at: string;
+}
+
+/**
+ * Per-user settings blob.
+ *
+ * Mirrors the user_settings table (supabase/migrations/020). A single JSON
+ * object per user; the app treats unknown keys as pass-through, so the shape
+ * is deliberately open.
+ */
+export interface UserSettingsRecord {
+  user_id: string;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Job statistics
  */
 export interface JobStats {
@@ -117,9 +158,26 @@ export interface DatabaseAdapter {
     getByUserId(userId: string, limit?: number): Promise<PackagingJob[]>;
 
     /**
+     * Every job belonging to a user, newest first and uncapped.
+     *
+     * For aggregate statistics, where a page would silently undercount rather
+     * than merely shorten the answer. Use getByUserId() for list views.
+     */
+    getAllByUserId(userId: string): Promise<PackagingJob[]>;
+
+    /**
      * Get jobs for every user in a tenant (tenant-wide deployments view)
      */
     getByTenantId(tenantId: string, limit?: number): Promise<PackagingJob[]>;
+
+    /**
+     * Get every job in a tenant that reached a given status. Filters on the
+     * status in the query rather than in the caller, so a tenant with more
+     * jobs than any page size still yields a complete set - callers use this
+     * to decide whether an app is already deployed, where a missing row reads
+     * as "not deployed" rather than as a truncated list.
+     */
+    getByTenantIdAndStatus(tenantId: string, status: string): Promise<PackagingJob[]>;
 
     /**
      * Create a new job
@@ -181,5 +239,61 @@ export interface DatabaseAdapter {
      * Get upload history by user ID
      */
     getByUserId(userId: string, limit?: number): Promise<UploadHistoryRecord[]>;
+
+    /**
+     * Get a user's upload history within one tenant. Filters on the tenant in
+     * the query rather than in the caller, so a user active in several
+     * tenants cannot have this tenant's rows pushed out by another tenant's.
+     */
+    getByUserIdAndTenantId(userId: string, tenantId: string): Promise<UploadHistoryRecord[]>;
+  };
+
+  userSettings: {
+    /**
+     * A user's settings object, or null if they never saved any.
+     */
+    get(userId: string): Promise<Record<string, unknown> | null>;
+
+    /**
+     * Merge a partial settings object into the stored one and return the
+     * result. Callers send only the keys they are changing, so this must
+     * merge rather than replace.
+     */
+    merge(
+      userId: string,
+      partial: Record<string, unknown>
+    ): Promise<Record<string, unknown>>;
+  };
+
+  updateCheckResults: {
+    /**
+     * Every detected update for a user, newest first. tenantId narrows to one
+     * tenant; omit it for all tenants the user has results in.
+     */
+    getByUserId(userId: string, tenantId?: string | null): Promise<UpdateCheckResult[]>;
+
+    /**
+     * Replace a tenant's results for this user with a freshly detected set.
+     *
+     * A refresh re-derives every row from a live scan, so rows that are gone
+     * from the scan must disappear rather than linger as phantom updates -
+     * hence replace rather than merge. Callers carry notified_at forward
+     * themselves, since only they know whether the version changed.
+     */
+    replaceForUserAndTenant(
+      userId: string,
+      tenantId: string,
+      rows: Array<Partial<UpdateCheckResult>>
+    ): Promise<UpdateCheckResult[]>;
+
+    /**
+     * Mark one detected update dismissed (or un-dismissed with null), scoped
+     * to the owning user so one user cannot dismiss another's row.
+     */
+    setDismissedAt(
+      id: string,
+      userId: string,
+      dismissedAt: string | null
+    ): Promise<UpdateCheckResult | null>;
   };
 }

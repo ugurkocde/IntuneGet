@@ -3,11 +3,19 @@ import { NextRequest } from 'next/server';
 const {
   parseAccessTokenMock,
   createServerClientMock,
+  isSupabaseConfiguredMock,
+  getDatabaseMock,
+  getHistoryMock,
+  getJobByIdMock,
   getCatalogSourceMock,
   getAppForInstallerMock,
 } = vi.hoisted(() => ({
   parseAccessTokenMock: vi.fn(),
   createServerClientMock: vi.fn(),
+  isSupabaseConfiguredMock: vi.fn(),
+  getDatabaseMock: vi.fn(),
+  getHistoryMock: vi.fn(),
+  getJobByIdMock: vi.fn(),
   getCatalogSourceMock: vi.fn(),
   getAppForInstallerMock: vi.fn(),
 }));
@@ -18,10 +26,17 @@ vi.mock('@/lib/auth-utils', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
+  isSupabaseConfigured: isSupabaseConfiguredMock,
 }));
 
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: getCatalogSourceMock,
+}));
+
+// upload_history and packaging_jobs exist in both backends, so the deployment
+// config builder reads them through the db abstraction rather than Supabase.
+vi.mock('@/lib/db', () => ({
+  getDatabase: getDatabaseMock,
 }));
 
 import { POST } from '@/app/api/update-policies/route';
@@ -42,6 +57,11 @@ interface TableData {
 function createSupabaseMock(data: TableData) {
   const insertPayloads: Array<Record<string, unknown>> = [];
   const updatePayloads: Array<Record<string, unknown>> = [];
+
+  // The deployment config builder reads these two through the db abstraction,
+  // so the same fixture object feeds both mocks.
+  getHistoryMock.mockResolvedValue(data.upload_history ? [data.upload_history] : []);
+  getJobByIdMock.mockResolvedValue(data.packaging_jobs ?? null);
 
   const resultFor = (table: string): { data: unknown; error: null } => {
     switch (table) {
@@ -140,6 +160,13 @@ function makeRequest(body: Record<string, unknown>) {
 describe('POST /api/update-policies', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isSupabaseConfiguredMock.mockReturnValue(true);
+    getDatabaseMock.mockReturnValue({
+      uploadHistory: { getByUserIdAndTenantId: getHistoryMock },
+      jobs: { getById: getJobByIdMock },
+    });
+    getHistoryMock.mockResolvedValue([]);
+    getJobByIdMock.mockResolvedValue(null);
     parseAccessTokenMock.mockResolvedValue({
       userId: 'user-1',
       userEmail: 'user@example.com',
@@ -199,7 +226,11 @@ describe('POST /api/update-policies', () => {
   it('derives a deployment_config from a prior deployment for auto_update', async () => {
     const { supabase, insertPayloads } = createSupabaseMock({
       update_check_results: { current_version: '1.0.0', latest_version: '2.0.0' },
-      upload_history: { id: 'upload-1', packaging_job_id: 'job-1' },
+      upload_history: {
+        id: 'upload-1',
+        packaging_job_id: 'job-1',
+        winget_id: 'Microsoft.Edge',
+      },
       packaging_jobs: {
         id: 'job-1',
         display_name: 'Microsoft Edge',
@@ -306,5 +337,25 @@ describe('POST /api/update-policies', () => {
     expect(response.status).toBe(200);
     expect(insertPayloads[0].policy_type).toBe('notify');
     expect(body.created).toBe(true);
+  });
+
+  it('reports policies unavailable instead of crashing when Supabase is absent', async () => {
+    // Regression: the route called createServerClient() unconditionally, which
+    // throws without Supabase config, so a self-hosted SQLite install got a
+    // 500 here. Policies genuinely need Supabase - say so with a 503.
+    isSupabaseConfiguredMock.mockReturnValue(false);
+
+    const response = await POST(
+      makeRequest({
+        winget_id: 'Microsoft.Edge',
+        tenant_id: 'tenant-1',
+        policy_type: 'notify',
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toMatch(/not available on this self-hosted deployment/);
+    expect(createServerClientMock).not.toHaveBeenCalled();
   });
 });

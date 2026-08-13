@@ -95,7 +95,7 @@ function buildCurrentVersionInstallCommand(installer: NormalizedInstaller): stri
   return generateInstallCommand(installer, installer.scope || 'machine');
 }
 
-function normalizeAssignments(config: DeploymentConfig): PackageAssignment[] {
+export function normalizeAssignments(config: DeploymentConfig): PackageAssignment[] {
   if (Array.isArray(config.assignments) && config.assignments.length > 0) {
     return config.assignments;
   }
@@ -114,7 +114,7 @@ function normalizeAssignments(config: DeploymentConfig): PackageAssignment[] {
     }));
 }
 
-function normalizeCategories(config: DeploymentConfig): IntuneAppCategorySelection[] {
+export function normalizeCategories(config: DeploymentConfig): IntuneAppCategorySelection[] {
   if (!Array.isArray(config.categories) || config.categories.length === 0) {
     return [];
   }
