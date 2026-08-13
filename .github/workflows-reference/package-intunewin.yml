@@ -35,9 +35,13 @@ jobs:
       NESTED_INSTALLER_TYPE: ${{ github.event.client_payload.installer.nestedInstallerType }}
       NESTED_INSTALLER_PATH: ${{ github.event.client_payload.installer.nestedInstallerPath }}
       SILENT_SWITCHES: ${{ github.event.client_payload.installer.silentSwitches }}
+      INSTALLER_SUCCESS_CODES: ${{ github.event.client_payload.installer.successCodes }}
+      PACKAGE_DEPENDENCIES: ${{ github.event.client_payload.installer.packageDependencies }}
+      PACKAGE_DEPENDENCY_SIGNATURE: ${{ github.event.client_payload.installer.dependencyBundleSignature }}
       UNINSTALL_COMMAND: ${{ github.event.client_payload.installer.uninstallCommand }}
       PSADT_CONFIG: ${{ github.event.client_payload.config.psadtConfig }}
       DETECTION_RULES: ${{ github.event.client_payload.config.detectionRules }}
+      REQUIREMENT_RULES: ${{ github.event.client_payload.config.requirementRules }}
       ASSIGNMENTS: ${{ github.event.client_payload.config.assignments }}
       CATEGORIES: ${{ github.event.client_payload.config.categories }}
       ESP_PROFILES: ${{ github.event.client_payload.config.espProfiles }}
@@ -65,7 +69,7 @@ jobs:
         with:
           repository: ugurkocde/IntuneGet
           # Update only after reviewing the referenced scripts in this commit.
-          ref: c533063a250c2c3f92adae9a55b4ddbc50d81a0c
+          ref: 9214e4b5b71508bfba9aa1a2d4de5c3c771d3fea
           path: intuneget
           persist-credentials: false
 
@@ -197,48 +201,46 @@ jobs:
               [int]$TimeoutSec = 300
             )
 
-            $attempt = 0
-            while ($attempt -lt $MaxRetries) {
-              $attempt++
-              try {
-                Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
-                Invoke-WebRequest -Uri $Uri -OutFile $OutFile -Headers $Headers -UseBasicParsing -MaximumRedirection 10 -TimeoutSec $TimeoutSec -ErrorAction Stop
-                if (-not (Test-Path -LiteralPath $OutFile)) {
-                  throw "Downloaded file not found after request: $OutFile"
+            $primaryUserAgent = if ($Headers.ContainsKey('User-Agent')) { [string]$Headers['User-Agent'] } else { 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+            $clientIdentities = @(
+              @{ Label = 'browser'; UserAgent = $primaryUserAgent },
+              @{ Label = 'WinGet'; UserAgent = 'winget-cli WindowsPackageManager/1.12.460' },
+              @{ Label = 'plain tool'; UserAgent = 'curl/8.4.0' }
+            )
+            $lastError = $null
+            for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+              foreach ($identity in $clientIdentities) {
+                $requestHeaders = @{}
+                foreach ($key in $Headers.Keys) {
+                  if ($key -ne 'User-Agent') { $requestHeaders[$key] = $Headers[$key] }
                 }
-                return
-              } catch {
-                $statusCode = $null
-                if ($_.Exception.Response) {
-                  $statusCode = [int]$_.Exception.Response.StatusCode
-                }
-                # Some vendor CDNs (e.g. downloads.tableau.com) reject Mozilla/5.0
-                # User-Agents that fail browser fingerprinting (including the
-                # PowerShell default) while accepting plain tool User-Agents;
-                # retry once with a simple tool identity before the normal retry loop
-                if ($statusCode -eq 403 -or $statusCode -eq 406) {
-                  try {
-                    Write-Host "Download refused with status $statusCode, retrying with plain tool User-Agent..."
-                    Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
-                    Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UserAgent 'curl/8.4.0' -UseBasicParsing -MaximumRedirection 10 -TimeoutSec $TimeoutSec -ErrorAction Stop
-                    if (Test-Path -LiteralPath $OutFile) {
-                      return
-                    }
-                  } catch {
-                    Write-Host "Fallback download with plain tool User-Agent also failed"
+                try {
+                  Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+                  Invoke-WebRequest -Uri $Uri -OutFile $OutFile -Headers $requestHeaders -UserAgent $identity.UserAgent -UseBasicParsing -MaximumRedirection 10 -TimeoutSec $TimeoutSec -ErrorAction Stop
+                  if (-not (Test-Path -LiteralPath $OutFile)) {
+                    throw "Downloaded file not found after request: $OutFile"
                   }
+                  return
+                } catch {
+                  $lastError = $_
+                  $statusCode = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+                  Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+                  if ($statusCode -in @(403, 406)) {
+                    Write-Host "Download refused with status $statusCode using the $($identity.Label) User-Agent; trying the next bounded identity."
+                    continue
+                  }
+                  break
                 }
-                if ($attempt -ge $MaxRetries) {
-                  throw
-                }
-                $baseDelay = [Math]::Min(60, $InitialDelaySeconds * [Math]::Pow(2, $attempt - 1))
-                $jitter = Get-Random -Minimum 1 -Maximum 6
-                $delay = $baseDelay + $jitter
-                Write-Host "Download attempt $attempt/$MaxRetries failed for $Uri"
-                Write-Host "Retrying in $delay seconds..."
-                Start-Sleep -Seconds $delay
               }
+              if ($attempt -ge $MaxRetries) { break }
+              $baseDelay = [Math]::Min(60, $InitialDelaySeconds * [Math]::Pow(2, $attempt - 1))
+              $jitter = Get-Random -Minimum 1 -Maximum 6
+              $delay = $baseDelay + $jitter
+              Write-Host "Download attempt $attempt/$MaxRetries failed; retrying in $delay seconds..."
+              Start-Sleep -Seconds $delay
             }
+            Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+            throw $lastError
           }
           '@
 
@@ -385,9 +387,11 @@ jobs:
               [string]$Body,
               [string]$ContentType = "application/json",
               [int]$MaxRetries = 3,
-              [switch]$Idempotent
+              [switch]$Idempotent,
+              [string]$ApprovalJustification
             )
 
+            $normalizedMethod = $Method.ToUpperInvariant()
             for ($attempt = 0; $attempt -le $MaxRetries; $attempt++) {
               $token = Get-GraphToken
               $headers = @{
@@ -395,6 +399,23 @@ jobs:
                 "Content-Type"  = $ContentType
                 "client-request-id" = [guid]::NewGuid().ToString()
                 "return-client-request-id" = "true"
+              }
+              if ($normalizedMethod -ne "GET") {
+                # Intune Multi Admin Approval requires every protected app-auth
+                # mutation to include a Base64-encoded justification. Supplying
+                # it is harmless for tenants without an approval policy and lets
+                # protected tenants create a reviewable approval request instead
+                # of failing with an opaque 400 response.
+                $justification = if ($ApprovalJustification) {
+                  $ApprovalJustification
+                } elseif ($env:JOB_ID) {
+                  "IntuneGet application deployment job $env:JOB_ID"
+                } else {
+                  "IntuneGet Microsoft Intune application management request"
+                }
+                $headers["x-msft-approval-justification"] = [Convert]::ToBase64String(
+                  [Text.Encoding]::UTF8.GetBytes($justification)
+                )
               }
 
               try {
@@ -415,7 +436,6 @@ jobs:
                 }
                 $errMsg = $_.Exception.Message
                 $errDetail = $_.ErrorDetails.Message
-                $normalizedMethod = $Method.ToUpperInvariant()
                 $isSafeMethod = @("GET", "PUT", "PATCH", "DELETE") -contains $normalizedMethod
 
                 # The Intune backend sometimes returns HTTP 401 with an internal
@@ -733,6 +753,7 @@ jobs:
           . "$env:GITHUB_WORKSPACE\Send-ErrorCallback.ps1"
           . "$env:GITHUB_WORKSPACE\Invoke-DownloadWithRetry.ps1"
           . "$env:GITHUB_WORKSPACE\Resolve-InstallerFileName.ps1"
+          . "$env:GITHUB_WORKSPACE\qa\host\IntuneQA.PackageDependencyPolicy.ps1"
 
           try {
           Send-Callback -Body @{
@@ -1013,6 +1034,94 @@ jobs:
             throw "Strict mode reached hash verification without an expected SHA256"
           }
 
+          # Download every server-resolved WinGet dependency beside the primary
+          # installer. URLs are never printed, and each file must match the exact
+          # manifest SHA-256 before the production packager can copy it.
+          $packageDependencies = @()
+          if (-not [string]::IsNullOrWhiteSpace($env:PACKAGE_DEPENDENCIES)) {
+            try {
+              $packageDependencies = @($env:PACKAGE_DEPENDENCIES | ConvertFrom-Json -ErrorAction Stop)
+            } catch {
+              throw "Package dependency metadata is not valid JSON"
+            }
+          }
+          if ($packageDependencies.Count -gt 8) {
+            throw "Package dependency count exceeds the reviewed maximum"
+          }
+          if ($packageDependencies.Count -gt 0) {
+            if ([string]::IsNullOrWhiteSpace($env:CALLBACK_SECRET) -or
+                $env:PACKAGE_DEPENDENCY_SIGNATURE -notmatch '^[A-Fa-f0-9]{64}$') {
+              throw "Package dependency metadata is missing its server signature"
+            }
+            $dependencyHmac = [Security.Cryptography.HMACSHA256]::new(
+              [Text.Encoding]::UTF8.GetBytes($env:CALLBACK_SECRET)
+            )
+            try {
+              $computedDependencySignature = [BitConverter]::ToString(
+                $dependencyHmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($env:PACKAGE_DEPENDENCIES))
+              ).Replace('-', '').ToLowerInvariant()
+            } finally {
+              $dependencyHmac.Dispose()
+            }
+            if ($computedDependencySignature -cne $env:PACKAGE_DEPENDENCY_SIGNATURE.ToLowerInvariant()) {
+              throw "Package dependency metadata signature is invalid"
+            }
+
+            $dependenciesPath = Join-Path ([IO.Path]::GetFullPath($installerDir)) 'dependencies'
+            $null = New-Item -ItemType Directory -Path $dependenciesPath -Force
+            $dependencyIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            $dependencyFileNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            $dependencyOrders = [Collections.Generic.HashSet[int]]::new()
+            foreach ($dependency in @($packageDependencies | Sort-Object order)) {
+              $dependencyId = [string]$dependency.packageIdentifier
+              $dependencyFileName = [string]$dependency.fileName
+              $dependencySha256 = ([string]$dependency.installerSha256).Trim().ToUpperInvariant()
+              $dependencyUri = [Uri][string]$dependency.installerUrl
+              $dependencyOrder = 0
+              [void](Assert-IntuneQAPackageDependencyPolicy -Dependency $dependency -ErrorPrefix 'Package dependency')
+              if (-not $dependencyFileName -or
+                  [IO.Path]::GetFileName($dependencyFileName) -ne $dependencyFileName -or
+                  $dependencyFileName -notmatch '^[A-Za-z0-9._+-]{1,240}$' -or
+                  $dependencyFileName -in @('.', '..')) {
+                throw "Package dependency filename is invalid: $dependencyId"
+              }
+              if ($dependencySha256 -notmatch '^[A-F0-9]{64}$') {
+                throw "Package dependency SHA-256 is invalid: $dependencyId"
+              }
+              if ([string]$dependency.silentArgs -match '[\x00\r\n]' -or ([string]$dependency.silentArgs).Length -gt 4096) {
+                throw "Package dependency arguments are invalid: $dependencyId"
+              }
+              if (-not [int]::TryParse([string]$dependency.order, [ref]$dependencyOrder) -or
+                  $dependencyOrder -lt 1 -or $dependencyOrder -gt $packageDependencies.Count) {
+                throw "Package dependency order is invalid: $dependencyId"
+              }
+              foreach ($exitCode in @($dependency.successCodes) + @($dependency.rebootCodes)) {
+                $parsedExitCode = 0
+                if (-not [int]::TryParse([string]$exitCode, [ref]$parsedExitCode)) {
+                  throw "Package dependency exit code is invalid: $dependencyId"
+                }
+              }
+              if (-not $dependencyIds.Add($dependencyId) -or
+                  -not $dependencyFileNames.Add($dependencyFileName) -or
+                  -not $dependencyOrders.Add($dependencyOrder)) {
+                throw "Package dependency identifiers, filenames, and order values must be unique"
+              }
+              Write-Host "::add-mask::$($dependencyUri.AbsoluteUri)"
+              $dependencyPath = Join-Path $dependenciesPath $dependencyFileName
+              Invoke-DownloadWithRetry -Uri $dependencyUri.AbsoluteUri -OutFile $dependencyPath -Headers $downloadHeaders -TimeoutSec 300
+              $dependencyFile = Get-Item -LiteralPath $dependencyPath -ErrorAction Stop
+              if ($dependencyFile.Length -lt 1024) {
+                throw "Package dependency download was unexpectedly small: $dependencyId"
+              }
+              $dependencyActualHash = (Get-FileHash -LiteralPath $dependencyPath -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
+              if ($dependencyActualHash -ne $dependencySha256) {
+                throw "Package dependency SHA-256 mismatch: $dependencyId"
+              }
+              Write-Host "Verified offline package dependency: $dependencyId $($dependency.version)"
+            }
+            echo "DEPENDENCIES_PATH=$dependenciesPath" >> $env:GITHUB_ENV
+          }
+
           echo "INSTALLER_PATH=$installerFullPath" >> $env:GITHUB_ENV
           echo "INSTALLER_FILENAME=$fileName" >> $env:GITHUB_ENV
 
@@ -1033,6 +1142,10 @@ jobs:
                 Send-ErrorCallback -Stage 'download' -Category 'network' -Code 'DOWNLOAD_RATE_LIMITED' `
                   -Message "Rate limited by download server - try again later" `
                   -Details @{ installerHost = $installerHost; error = $errorMsg }
+              } elseif ($errorMsg -match 'Package dependency|DEPENDENCIES_PATH') {
+                Send-ErrorCallback -Stage 'download' -Category 'validation' -Code 'DEPENDENCY_POLICY_REJECTED' `
+                  -Message "Package dependency validation failed: $errorMsg" `
+                  -Details @{ installerHost = $installerHost; error = $errorMsg }
               } else {
                 Send-ErrorCallback -Stage 'download' -Category 'network' -Code 'DOWNLOAD_FAILED' `
                   -Message "Failed to download installer: $errorMsg" `
@@ -1048,6 +1161,8 @@ jobs:
           INPUT_JOB_ID: ${{ github.event.client_payload.job.jobId }}
           INPUT_CALLBACK_URL: ${{ github.event.client_payload.job.callbackUrl }}
           INPUT_SILENT_SWITCHES: ${{ github.event.client_payload.installer.silentSwitches }}
+          INPUT_INSTALLER_SUCCESS_CODES: ${{ github.event.client_payload.installer.successCodes }}
+          INPUT_PACKAGE_DEPENDENCIES: ${{ github.event.client_payload.installer.packageDependencies }}
           INPUT_UNINSTALL_COMMAND: ${{ github.event.client_payload.installer.uninstallCommand }}
           INPUT_DISPLAY_NAME: ${{ github.event.client_payload.app.displayName }}
           INPUT_PUBLISHER: ${{ github.event.client_payload.app.publisher }}
@@ -1490,6 +1605,22 @@ jobs:
 
           Write-Host "Detection rules configured: $($graphRules.Count) rule(s)"
 
+          # Requirement rule scriptContent is already base64-encoded by the caller
+          $requirementRulesJson = $env:REQUIREMENT_RULES
+          if ($requirementRulesJson -and $requirementRulesJson -ne '[]') {
+            try {
+              $requirementRules = $requirementRulesJson | ConvertFrom-Json
+              $requirementRuleCount = 0
+              foreach ($requirementRule in $requirementRules) {
+                $graphRules += $requirementRule
+                $requirementRuleCount++
+              }
+              Write-Host "Requirement rules appended: $requirementRuleCount rule(s)"
+            } catch {
+              Write-Host "::warning::Could not parse requirement rules: $($_.Exception.Message)"
+            }
+          }
+
           # Load app icon if available - prefer the largest available size
           # so the Company Portal renders crisply on high-DPI displays.
           $largeIcon = $null
@@ -1570,7 +1701,10 @@ jobs:
             try {
               $escapedDisplayName = $env:DISPLAY_NAME.Replace("'", "''")
               $filter = [System.Uri]::EscapeDataString("displayName eq '$escapedDisplayName'")
-              $lookupUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?`$filter=$filter&`$select=id,displayName,notes,createdDateTime,committedContentVersion&`$top=100"
+              # The collection is typed as mobileApp, so selecting a property
+              # declared only on mobileLobApp/win32LobApp makes Graph reject the
+              # entire query. This reconciliation only needs the durable marker.
+              $lookupUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?`$filter=$filter&`$select=id,displayName,notes,createdDateTime&`$top=100"
               $lookup = Invoke-GraphRequest -Uri $lookupUri -MaxRetries 3
               return @($lookup.value) | Where-Object { $_.notes -eq $jobMarker } | Select-Object -First 1
             } catch {
@@ -2068,6 +2202,8 @@ jobs:
             if ($_.Exception.Response) {
               $statusCode = [int]$_.Exception.Response.StatusCode
             }
+            $isApprovalRequired = $errorDetail -match 'ApprovalRequired|x-msft-approval-justification|request approval|awaiting approval' -or
+              $errorMsg -match 'ApprovalRequired|x-msft-approval-justification|request approval|awaiting approval'
 
             # Log full error details for GitHub Actions visibility
             Write-Host "::error::Upload step failed"
@@ -2077,8 +2213,11 @@ jobs:
 
             # Remove an app only when Graph confirms that no content version was
             # committed. If reconciliation is unavailable, retain it for safety.
-            $orphanCleanupState = "not_applicable"
-            if ($appId) {
+            # An MAA-protected mutation can still be executed after an admin
+            # approves it, so deleting the resource here would race the pending
+            # approval and corrupt a legitimate deployment request.
+            $orphanCleanupState = if ($isApprovalRequired) { "retained_pending_approval" } else { "not_applicable" }
+            if ($appId -and -not $isApprovalRequired) {
               try {
                 $failedApp = Invoke-GraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId" -MaxRetries 2
                 if ([string]::IsNullOrWhiteSpace([string]$failedApp.committedContentVersion)) {
@@ -2096,7 +2235,11 @@ jobs:
 
             # Only send error callback if not already sent
             if ($env:ERROR_SENT -ne "true") {
-              if ($statusCode -eq 403 -or $errorMsg -match '403|Forbidden|Authorization_RequestDenied') {
+              if ($isApprovalRequired) {
+                Send-ErrorCallback -Stage 'upload' -Category 'approval' -Code 'INTUNE_APPROVAL_REQUIRED' `
+                  -Message "This Intune tenant requires an administrator to approve the requested app change before deployment can continue." `
+                  -Details @{ statusCode = $statusCode; error = $errorMsg; errorDetail = $errorDetail; intuneResourceState = $orphanCleanupState }
+              } elseif ($statusCode -eq 403 -or $errorMsg -match '403|Forbidden|Authorization_RequestDenied') {
                 Send-ErrorCallback -Stage 'upload' -Category 'permission' -Code 'INTUNE_FORBIDDEN' `
                   -Message "Access denied (403) - check that DeviceManagementApps.ReadWrite.All permission is granted" `
                   -Details @{ statusCode = $statusCode; operation = 'createApp'; error = $errorMsg; errorDetail = $errorDetail; intuneResourceState = $orphanCleanupState }
@@ -2192,9 +2335,15 @@ jobs:
                 $target['deviceAndAppManagementAssignmentFilterType'] = if ($assignment.filterType) { $assignment.filterType } else { 'include' }
               }
 
+              # Map updateOnly to required for Graph, requirement rules handle the gating.
+              # Only map when the payload actually carries requirement rules; without them
+              # a required intent would install on every targeted device.
+              $hasRequirementRules = $env:REQUIREMENT_RULES -and $env:REQUIREMENT_RULES -ne '[]'
+              $intent = if ($assignment.intent -eq 'updateOnly' -and $hasRequirementRules) { 'required' } else { $assignment.intent }
+
               $graphAssignment = @{
                 '@odata.type' = '#microsoft.graph.mobileAppAssignment'
-                intent = $assignment.intent
+                intent = $intent
                 target = $target
               }
 
@@ -2202,8 +2351,8 @@ jobs:
               if ($assignment.type -ne 'exclusionGroup') {
                 $graphAssignment['settings'] = @{
                   '@odata.type' = '#microsoft.graph.win32LobAppAssignmentSettings'
-                  notifications = 'showAll'
-                  deliveryOptimizationPriority = 'notConfigured'
+                  notifications = if ($assignment.notifications) { $assignment.notifications } else { 'showAll' }
+                  deliveryOptimizationPriority = if ($assignment.deliveryOptimizationPriority) { $assignment.deliveryOptimizationPriority } else { 'notConfigured' }
                 }
               }
 
@@ -2275,7 +2424,6 @@ jobs:
 
           $assignMaxAttempts = 3
           $assignSuccess = $false
-          $assignLastError = $null
 
           for ($assignAttempt = 1; $assignAttempt -le $assignMaxAttempts; $assignAttempt++) {
             try {
@@ -2283,8 +2431,38 @@ jobs:
               $assignSuccess = $true
               break
             } catch {
-              $assignLastError = $_
-              Write-Host "::warning::Assign attempt $assignAttempt/$assignMaxAttempts failed: $($_.Exception.Message)"
+              $assignErrorMessage = $_.Exception.Message
+              $assignErrorBody = $_.ErrorDetails.Message
+
+              if (-not $assignErrorBody -and $_.Exception.Response) {
+                try {
+                  if ($_.Exception.Response.Content) {
+                    $assignErrorBody = $_.Exception.Response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                  } elseif ($_.Exception.Response -is [System.Net.WebResponse]) {
+                    $responseStream = $_.Exception.Response.GetResponseStream()
+                    $streamReader = [System.IO.StreamReader]::new($responseStream)
+                    $assignErrorBody = $streamReader.ReadToEnd()
+                    $streamReader.Dispose()
+                  }
+                } catch {
+                  Write-Host "::warning::Could not read Graph assignment error response: $($_.Exception.Message)"
+                }
+              }
+
+              if ($assignErrorBody) {
+                try {
+                  $graphError = $assignErrorBody | ConvertFrom-Json
+                  if ($graphError.error.code -or $graphError.error.message) {
+                    $assignErrorMessage = "Graph error $($graphError.error.code): $($graphError.error.message)"
+                  } else {
+                    $assignErrorMessage = "$assignErrorMessage. Response body: $assignErrorBody"
+                  }
+                } catch {
+                  $assignErrorMessage = "$assignErrorMessage. Response body: $assignErrorBody"
+                }
+              }
+
+              Write-Host "::warning::Assign attempt $assignAttempt/$assignMaxAttempts failed: $assignErrorMessage"
               if ($assignAttempt -lt $assignMaxAttempts) {
                 $delay = 15 * $assignAttempt
                 Write-Host "Retrying assignment in ${delay}s..."
@@ -2294,7 +2472,7 @@ jobs:
           }
 
           if (-not $assignSuccess) {
-            $errMsg = $assignLastError.Exception.Message
+            $errMsg = $assignErrorMessage
             Write-Host "::warning::All $assignMaxAttempts assign attempts failed: $errMsg"
             Write-Host "::warning::App was deployed to Intune but assignments could not be applied. The admin can apply them manually."
             $warningMsg = "Assignments could not be applied automatically ($errMsg). You can apply them manually in the Intune portal."
@@ -2695,3 +2873,4 @@ jobs:
             "Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
           ) -join "`n"
           $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
