@@ -167,6 +167,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%ProgramW6432%\\OfficeDeploymentTool',
   },
   {
+    // HP Image Assistant is distributed as a SoftPaq extractor rather than an
+    // ARP-installed application. Its reviewed WinGet command extracts the
+    // portable payload to this exact machine-wide SWSetup directory. Verify
+    // and own only that directory instead of requiring a nonexistent vendor
+    // uninstall registration.
+    wingetId: 'HP.ImageAssistant',
+    reviewedManagedInstallDirectory: '%SystemDrive%\\SWSetup\\HPImageAssistant',
+  },
+  {
     // Visual Studio 2026 instances are owned by the Visual Studio Installer,
     // which intentionally creates several component registrations rather than
     // one ARP entry named after the bootstrapper. Use Microsoft's documented

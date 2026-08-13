@@ -453,9 +453,9 @@ if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
     }
     $reviewedManagedInstallDirectory = ([string]$psadtConfig['reviewedManagedInstallDirectory']).Trim()
     if ($reviewedManagedInstallDirectory.Length -gt 260 -or
-        $reviewedManagedInstallDirectory -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+$' -or
+        $reviewedManagedInstallDirectory -notmatch '^(?:%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\|%SystemDrive%\\SWSetup\\)[^*?"<>|\x00-\x1f]+$' -or
         @($reviewedManagedInstallDirectory -split '\\') -contains '..') {
-        throw 'PSADT reviewedManagedInstallDirectory must be a safe path below a Program Files environment variable.'
+        throw 'PSADT reviewedManagedInstallDirectory must be a safe path below Program Files or the reviewed SystemDrive SWSetup root.'
     }
 }
 

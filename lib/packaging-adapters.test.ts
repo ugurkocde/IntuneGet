@@ -67,6 +67,10 @@ describe('application packaging adapters', () => {
       ).reviewedManagedInstallDirectory
     ).toBe('%ProgramW6432%\\OfficeDeploymentTool');
     expect(
+      applyApplicationPackagingAdapter('HP.ImageAssistant', DEFAULT_PSADT_CONFIG)
+        .reviewedManagedInstallDirectory
+    ).toBe('%SystemDrive%\\SWSetup\\HPImageAssistant');
+    expect(
       applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.BuildTools',
         DEFAULT_PSADT_CONFIG

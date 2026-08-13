@@ -413,6 +413,36 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies and removes the reviewed HP Image Assistant SWSetup payload',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'HP Image Assistant',
+        [],
+        { reviewedManagedInstallDirectory: '%SystemDrive%\\SWSetup\\HPImageAssistant' },
+        [],
+        'HP.ImageAssistant'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%SystemDrive%\\SWSetup\\HPImageAssistant')"
+      );
+      expect(installFunction).toContain('Verified managed extracted payload');
+      expect(installFunction).not.toContain('Captured vendor uninstall entry');
+      expect(uninstallFunction).toContain('Remove-Item -LiteralPath $managedInstallDirectory');
+      expect(uninstallFunction).not.toContain('Waiting for vendor uninstall registration');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects an unsafe reviewed managed install directory',
     () => {
       expect(() =>
@@ -422,7 +452,15 @@ describe('PSADT vendor argument contract', () => {
           [],
           { reviewedManagedInstallDirectory: '%ProgramFiles%\\..\\Windows' }
         )
-      ).toThrow('must be a safe path below a Program Files environment variable');
+      ).toThrow('must be a safe path below Program Files');
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe System Drive Extractor',
+          [],
+          { reviewedManagedInstallDirectory: '%SystemDrive%\\Windows' }
+        )
+      ).toThrow('must be a safe path below Program Files');
     }
   );
 
