@@ -354,6 +354,52 @@ describe('PSADT vendor argument contract', () => {
     }
   );
 
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'uses a reviewed vendor command for a managed installation instance',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Visual Studio BuildTools 2026',
+        [],
+        {
+          reviewedManagedInstallDirectory:
+            '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+          reviewedManagedUninstall: {
+            executablePath:
+              '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+            arguments: [
+              'uninstall',
+              '--installPath',
+              '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+              '--quiet',
+              '--norestart',
+            ],
+            completionTimeoutMinutes: 15,
+          },
+        },
+        [],
+        'Microsoft.VisualStudio.BuildTools'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$managedUninstallArguments = @('uninstall', '--installPath', '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools', '--quiet', '--norestart')"
+      );
+      expect(uninstallFunction).toContain(
+        '$managedUninstallDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+      );
+      expect(uninstallFunction).not.toContain(
+        'Remove-Item -LiteralPath $managedInstallDirectory'
+      );
+    }
+  );
+
   it('honors additional success exit codes declared by the WinGet manifest', () => {
     if (!canRunWindowsPowerShellPackager) return;
     const generated = generateRegistryUninstallPackage(

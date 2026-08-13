@@ -458,6 +458,58 @@ if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
     }
 }
 
+$reviewedManagedUninstallConfigured = $false
+$reviewedManagedUninstallExecutable = ''
+$reviewedManagedUninstallArguments = @()
+$reviewedManagedUninstallTimeoutMinutes = 0
+if ($psadtConfig.Contains('reviewedManagedUninstall') -and
+    $null -ne $psadtConfig['reviewedManagedUninstall']) {
+    $rawManagedUninstall = $psadtConfig['reviewedManagedUninstall']
+    if ($rawManagedUninstall -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedManagedUninstall must be an object.'
+    }
+    if ([string]::IsNullOrWhiteSpace($reviewedManagedInstallDirectory)) {
+        throw 'PSADT reviewedManagedUninstall requires reviewedManagedInstallDirectory.'
+    }
+    $reviewedManagedUninstallExecutable = ([string]$rawManagedUninstall['executablePath']).Trim()
+    if ($reviewedManagedUninstallExecutable.Length -gt 260 -or
+        $reviewedManagedUninstallExecutable -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+\.exe$' -or
+        @($reviewedManagedUninstallExecutable -split '\\') -contains '..') {
+        throw 'PSADT reviewedManagedUninstall.executablePath must be a safe executable below a Program Files environment variable.'
+    }
+    $rawManagedUninstallArguments = $rawManagedUninstall['arguments']
+    if ($rawManagedUninstallArguments -is [string] -or
+        $rawManagedUninstallArguments -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedManagedUninstall.arguments must be an array.'
+    }
+    foreach ($rawManagedUninstallArgument in @($rawManagedUninstallArguments)) {
+        if ($rawManagedUninstallArgument -isnot [string]) {
+            throw 'Every PSADT reviewed managed uninstall argument must be a string.'
+        }
+        $managedUninstallArgument = $rawManagedUninstallArgument.Trim()
+        if ([string]::IsNullOrWhiteSpace($managedUninstallArgument) -or
+            $managedUninstallArgument.Length -gt 260 -or
+            [regex]::IsMatch($managedUninstallArgument, '[\x00-\x1F\x7F]')) {
+            throw 'Every PSADT reviewed managed uninstall argument must be non-empty, bounded, and single-line.'
+        }
+        $reviewedManagedUninstallArguments += $managedUninstallArgument
+    }
+    if ($reviewedManagedUninstallArguments.Count -gt 20) {
+        throw 'PSADT reviewedManagedUninstall.arguments must contain at most 20 entries.'
+    }
+    $rawManagedUninstallTimeoutMinutes = $rawManagedUninstall['completionTimeoutMinutes']
+    if (($rawManagedUninstallTimeoutMinutes -isnot [byte] -and
+         $rawManagedUninstallTimeoutMinutes -isnot [int16] -and
+         $rawManagedUninstallTimeoutMinutes -isnot [int32] -and
+         $rawManagedUninstallTimeoutMinutes -isnot [int64]) -or
+        [int]$rawManagedUninstallTimeoutMinutes -lt 1 -or
+        [int]$rawManagedUninstallTimeoutMinutes -gt 60) {
+        throw 'PSADT reviewedManagedUninstall.completionTimeoutMinutes must be an integer from 1 to 60.'
+    }
+    $reviewedManagedUninstallTimeoutMinutes = [int]$rawManagedUninstallTimeoutMinutes
+    $reviewedManagedUninstallConfigured = $true
+}
+
 function ConvertTo-PSADTConfigValue {
     param(
         [AllowNull()][string]$Value,
@@ -706,6 +758,10 @@ $versionSingleQuoteEscaped = $Version -replace "'", "''"
 $uninstallCmd = [string]$UninstallCommand
 $uninstallCmdSingleQuoteEscaped = $uninstallCmd -replace "'", "''"
 $reviewedManagedInstallDirectoryEscaped = $reviewedManagedInstallDirectory -replace "'", "''"
+$reviewedManagedUninstallExecutableEscaped = $reviewedManagedUninstallExecutable -replace "'", "''"
+$reviewedManagedUninstallArgumentsLiteral = @(
+    $reviewedManagedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
+) -join ', '
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherSingleQuoteEscaped = $Publisher -replace "'", "''"
@@ -2313,16 +2369,39 @@ if ($preUninstallPromptCalls) {
 # still makes Intune's exact package detection transition to not installed.
 if ($useManagedDirectoryLifecycle) {
     Write-Host 'Using reviewed managed-directory removal'
-    $lines += @(
-        ''
-        "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')"
-        '    if (Test-Path -LiteralPath $managedInstallDirectory) {'
-        '        Remove-Item -LiteralPath $managedInstallDirectory -Recurse -Force -ErrorAction Stop'
-        '        Write-ADTLogEntry -Message "Removed managed extracted payload from [$managedInstallDirectory]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
-        '    } else {'
-        '        Write-ADTLogEntry -Message "Managed extracted payload was already absent: $managedInstallDirectory" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
-        '    }'
-    )
+    $lines += @('', "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')")
+    if ($reviewedManagedUninstallConfigured) {
+        $lines += @(
+            "    `$managedUninstallExecutable = [Environment]::ExpandEnvironmentVariables('$reviewedManagedUninstallExecutableEscaped')"
+            "    `$managedUninstallArguments = @($reviewedManagedUninstallArgumentsLiteral) | ForEach-Object { [Environment]::ExpandEnvironmentVariables(`$_) }"
+            '    if (-not (Test-Path -LiteralPath $managedUninstallExecutable -PathType Leaf)) {'
+            '        throw "The reviewed managed uninstaller was not found: $managedUninstallExecutable"'
+            '    }'
+            '    if (Test-Path -LiteralPath $managedInstallDirectory) {'
+            '        Write-ADTLogEntry -Message "Starting reviewed managed uninstaller [$managedUninstallExecutable]." -Source ''Uninstall-ADTDeployment'''
+            '        $null = Start-ADTProcess -FilePath $managedUninstallExecutable -ArgumentList $managedUninstallArguments -WindowStyle Hidden -NoWait -PassThru'
+            "        `$managedUninstallDeadline = [DateTime]::UtcNow.AddMinutes($reviewedManagedUninstallTimeoutMinutes)"
+            '        while ((Test-Path -LiteralPath $managedInstallDirectory) -and [DateTime]::UtcNow -lt $managedUninstallDeadline) {'
+            '            Start-Sleep -Seconds 5'
+            '        }'
+            '        if (Test-Path -LiteralPath $managedInstallDirectory) {'
+            '            throw "The reviewed managed uninstaller did not remove [$managedInstallDirectory] before the completion deadline."'
+            '        }'
+            '        Write-ADTLogEntry -Message "Reviewed managed uninstall completed for [$managedInstallDirectory]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+            '    } else {'
+            '        Write-ADTLogEntry -Message "Managed installation was already absent: $managedInstallDirectory" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '    }'
+        )
+    } else {
+        $lines += @(
+            '    if (Test-Path -LiteralPath $managedInstallDirectory) {'
+            '        Remove-Item -LiteralPath $managedInstallDirectory -Recurse -Force -ErrorAction Stop'
+            '        Write-ADTLogEntry -Message "Removed managed extracted payload from [$managedInstallDirectory]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+            '    } else {'
+            '        Write-ADTLogEntry -Message "Managed extracted payload was already absent: $managedInstallDirectory" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '    }'
+        )
+    }
 } elseif ($preserveVendorInstallationOnUninstall) {
     Write-Host 'Preserving the shared vendor installation during package removal'
     $lines += @(

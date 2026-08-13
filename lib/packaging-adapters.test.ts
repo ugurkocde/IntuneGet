@@ -53,6 +53,27 @@ describe('application packaging adapters', () => {
     ).toBe('%ProgramW6432%\\OfficeDeploymentTool');
     expect(
       applyApplicationPackagingAdapter(
+        'Microsoft.VisualStudio.BuildTools',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    });
+    expect(
+      applyApplicationPackagingAdapter(
         'ElectronicArts.EADesktop',
         DEFAULT_PSADT_CONFIG
       ).processesToClose
@@ -138,12 +159,18 @@ describe('application packaging adapters', () => {
       reviewedMultiProductInstallDisplayNamePrefixes: ['Anything'],
       reviewedMultiProductInstallMinimumCount: 2,
       reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
+      reviewedManagedUninstall: {
+        executablePath: '%ProgramFiles%\\Example\\uninstall.exe',
+        arguments: ['/quiet'],
+        completionTimeoutMinutes: 5,
+      },
     });
 
     expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
+    expect(adapted.reviewedManagedUninstall).toBeUndefined();
   });
 
   it('preserves and deduplicates reviewed install arguments case-insensitively', () => {

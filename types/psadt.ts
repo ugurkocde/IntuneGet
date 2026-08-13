@@ -229,6 +229,11 @@ export interface PSADTConfig {
   // verifies this exact directory after install and removes it on uninstall.
   // Application adapters are the only trusted source for this value.
   reviewedManagedInstallDirectory?: string;
+  reviewedManagedUninstall?: {
+    executablePath: string;
+    arguments: string[];
+    completionTimeoutMinutes: number;
+  };
 
   // Internal install-evidence contract for reviewed bundles that intentionally
   // install several independently registered products. The generated package
