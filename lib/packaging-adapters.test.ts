@@ -43,8 +43,7 @@ describe('application packaging adapters', () => {
       applyApplicationPackagingAdapter('Opera.Opera', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-      reviewedManagedInstallDirectory: '%ProgramFiles%\\Opera',
-      reviewedManagedUninstall: {
+      reviewedExactUninstall: {
         executablePath: '%ProgramFiles%\\Opera\\opera.exe',
         arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
         completionTimeoutMinutes: 5,
@@ -169,6 +168,11 @@ describe('application packaging adapters', () => {
         arguments: ['/quiet'],
         completionTimeoutMinutes: 5,
       },
+      reviewedExactUninstall: {
+        executablePath: '%ProgramFiles%\\Example\\exact-uninstall.exe',
+        arguments: ['/quiet'],
+        completionTimeoutMinutes: 5,
+      },
     });
 
     expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
@@ -176,6 +180,7 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
     expect(adapted.reviewedManagedUninstall).toBeUndefined();
+    expect(adapted.reviewedExactUninstall).toBeUndefined();
   });
 
   it('preserves and deduplicates reviewed install arguments case-insensitively', () => {
@@ -225,8 +230,7 @@ describe('application packaging adapters', () => {
       { name: 'Opera', description: 'Customer browser session' },
     ]);
     expect(adapted.reviewedUninstallArguments).toEqual(['--RUNIMMEDIATELY', '--custom']);
-    expect(adapted.reviewedManagedInstallDirectory).toBe('%ProgramFiles%\\Opera');
-    expect(adapted.reviewedManagedUninstall).toEqual({
+    expect(adapted.reviewedExactUninstall).toEqual({
       executablePath: '%ProgramFiles%\\Opera\\opera.exe',
       arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
       completionTimeoutMinutes: 5,

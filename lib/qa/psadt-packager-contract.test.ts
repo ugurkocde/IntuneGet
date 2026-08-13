@@ -311,6 +311,44 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses a reviewed exact vendor command while retaining ARP completion verification',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Opera Stable',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath: '%ProgramFiles%\\Opera\\opera.exe',
+            arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Opera.Opera'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\Opera\\opera.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallArguments = @('--uninstall', '--runimmediately', '--deleteuserprofile=0')"
+      );
+      expect(uninstallFunction).toContain(
+        '$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 5 }'
+      );
+      expect(uninstallFunction).toContain(
+        'Waiting for vendor uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+      );
+      expect(uninstallFunction).not.toContain('Using reviewed managed-directory removal');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'verifies and removes a reviewed self-extracted managed directory without ARP capture',
     () => {
       const generated = generateRegistryUninstallPackage(

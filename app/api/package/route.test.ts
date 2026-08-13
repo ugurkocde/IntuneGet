@@ -594,8 +594,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     const expectedAdapter = {
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-      reviewedManagedInstallDirectory: '%ProgramFiles%\\Opera',
-      reviewedManagedUninstall: {
+      reviewedExactUninstall: {
         executablePath: '%ProgramFiles%\\Opera\\opera.exe',
         arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
         completionTimeoutMinutes: 5,

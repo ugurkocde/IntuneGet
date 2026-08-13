@@ -20,6 +20,11 @@ interface ApplicationPackagingAdapter {
     arguments: readonly string[];
     completionTimeoutMinutes: number;
   }>;
+  reviewedExactUninstall?: Readonly<{
+    executablePath: string;
+    arguments: readonly string[];
+    completionTimeoutMinutes: number;
+  }>;
   reviewedMultiProductInstallDisplayNamePrefixes?: readonly string[];
   reviewedMultiProductInstallMinimumCount?: number;
 }
@@ -100,14 +105,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // the double-dash uninstall verb for a non-interactive removal. Appending
     // unattended arguments to the registered slash command exits successfully
     // without removing the application. Execute the reviewed launcher command
-    // exactly and verify that its machine installation directory disappears.
-    // Keep the browser profile and close the browser before upgrades/removals.
+    // exactly and retain the captured ARP identity as the completion signal.
+    // Opera removes its browser registration but intentionally leaves a small
+    // assistant payload, so directory disappearance would be a false failure.
+    // Keep the browser profile and close it before upgrades/removals.
     wingetId: 'Opera.Opera',
     requiredProcessesToClose: [
       { name: 'opera', description: 'Opera browser' },
     ],
-    reviewedManagedInstallDirectory: '%ProgramFiles%\\Opera',
-    reviewedManagedUninstall: {
+    reviewedExactUninstall: {
       executablePath: '%ProgramFiles%\\Opera\\opera.exe',
       arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
       completionTimeoutMinutes: 5,
@@ -333,7 +339,8 @@ export function applyApplicationPackagingAdapter(
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedUninstallProcessGuard &&
       !config.reviewedManagedInstallDirectory &&
-      !config.reviewedManagedUninstall
+      !config.reviewedManagedUninstall &&
+      !config.reviewedExactUninstall
     ) return config;
     return {
       ...config,
@@ -343,6 +350,7 @@ export function applyApplicationPackagingAdapter(
       reviewedUninstallProcessGuard: undefined,
       reviewedManagedInstallDirectory: undefined,
       reviewedManagedUninstall: undefined,
+      reviewedExactUninstall: undefined,
     };
   }
 
@@ -419,6 +427,14 @@ export function applyApplicationPackagingAdapter(
           arguments: [...adapter.reviewedManagedUninstall.arguments],
           completionTimeoutMinutes:
             adapter.reviewedManagedUninstall.completionTimeoutMinutes,
+        }
+      : undefined,
+    reviewedExactUninstall: adapter.reviewedExactUninstall
+      ? {
+          executablePath: adapter.reviewedExactUninstall.executablePath,
+          arguments: [...adapter.reviewedExactUninstall.arguments],
+          completionTimeoutMinutes:
+            adapter.reviewedExactUninstall.completionTimeoutMinutes,
         }
       : undefined,
     reviewedMultiProductInstallDisplayNamePrefixes,

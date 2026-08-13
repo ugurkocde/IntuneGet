@@ -504,8 +504,7 @@ describe('GET /api/cron/qa-enqueue', () => {
         profileKind: 'catalog-default',
         psadtConfig: {
           processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-          reviewedManagedInstallDirectory: '%ProgramFiles%\\Opera',
-          reviewedManagedUninstall: {
+          reviewedExactUninstall: {
             executablePath: '%ProgramFiles%\\Opera\\opera.exe',
             arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
             completionTimeoutMinutes: 5,

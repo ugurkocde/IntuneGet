@@ -235,6 +235,15 @@ export interface PSADTConfig {
     completionTimeoutMinutes: number;
   };
 
+  // Internal exact-command contract for a reviewed vendor uninstaller whose
+  // registered command is interactive or syntactically incorrect. The normal
+  // captured ARP identity remains the authoritative completion signal.
+  reviewedExactUninstall?: {
+    executablePath: string;
+    arguments: string[];
+    completionTimeoutMinutes: number;
+  };
+
   // Internal install-evidence contract for reviewed bundles that intentionally
   // install several independently registered products. The generated package
   // requires multiple matching ARP entries instead of weakening the ordinary

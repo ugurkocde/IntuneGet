@@ -511,6 +511,55 @@ if ($psadtConfig.Contains('reviewedManagedUninstall') -and
     $reviewedManagedUninstallConfigured = $true
 }
 
+$reviewedExactUninstallConfigured = $false
+$reviewedExactUninstallExecutable = ''
+$reviewedExactUninstallArguments = @()
+$reviewedExactUninstallTimeoutMinutes = 0
+if ($psadtConfig.Contains('reviewedExactUninstall') -and
+    $null -ne $psadtConfig['reviewedExactUninstall']) {
+    $rawExactUninstall = $psadtConfig['reviewedExactUninstall']
+    if ($rawExactUninstall -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedExactUninstall must be an object.'
+    }
+    $reviewedExactUninstallExecutable = ([string]$rawExactUninstall['executablePath']).Trim()
+    if ($reviewedExactUninstallExecutable.Length -gt 260 -or
+        $reviewedExactUninstallExecutable -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+\.exe$' -or
+        @($reviewedExactUninstallExecutable -split '\\') -contains '..') {
+        throw 'PSADT reviewedExactUninstall.executablePath must be a safe executable below a Program Files environment variable.'
+    }
+    $rawExactUninstallArguments = $rawExactUninstall['arguments']
+    if ($rawExactUninstallArguments -is [string] -or
+        $rawExactUninstallArguments -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedExactUninstall.arguments must be an array.'
+    }
+    foreach ($rawExactUninstallArgument in @($rawExactUninstallArguments)) {
+        if ($rawExactUninstallArgument -isnot [string]) {
+            throw 'Every PSADT reviewed exact uninstall argument must be a string.'
+        }
+        $exactUninstallArgument = $rawExactUninstallArgument.Trim()
+        if ([string]::IsNullOrWhiteSpace($exactUninstallArgument) -or
+            $exactUninstallArgument.Length -gt 260 -or
+            [regex]::IsMatch($exactUninstallArgument, '[\x00-\x1F\x7F]')) {
+            throw 'Every PSADT reviewed exact uninstall argument must be non-empty, bounded, and single-line.'
+        }
+        $reviewedExactUninstallArguments += $exactUninstallArgument
+    }
+    if ($reviewedExactUninstallArguments.Count -gt 20) {
+        throw 'PSADT reviewedExactUninstall.arguments must contain at most 20 entries.'
+    }
+    $rawExactUninstallTimeoutMinutes = $rawExactUninstall['completionTimeoutMinutes']
+    if (($rawExactUninstallTimeoutMinutes -isnot [byte] -and
+         $rawExactUninstallTimeoutMinutes -isnot [int16] -and
+         $rawExactUninstallTimeoutMinutes -isnot [int32] -and
+         $rawExactUninstallTimeoutMinutes -isnot [int64]) -or
+        [int]$rawExactUninstallTimeoutMinutes -lt 1 -or
+        [int]$rawExactUninstallTimeoutMinutes -gt 60) {
+        throw 'PSADT reviewedExactUninstall.completionTimeoutMinutes must be an integer from 1 to 60.'
+    }
+    $reviewedExactUninstallTimeoutMinutes = [int]$rawExactUninstallTimeoutMinutes
+    $reviewedExactUninstallConfigured = $true
+}
+
 function ConvertTo-PSADTConfigValue {
     param(
         [AllowNull()][string]$Value,
@@ -762,6 +811,10 @@ $reviewedManagedInstallDirectoryEscaped = $reviewedManagedInstallDirectory -repl
 $reviewedManagedUninstallExecutableEscaped = $reviewedManagedUninstallExecutable -replace "'", "''"
 $reviewedManagedUninstallArgumentsLiteral = @(
     $reviewedManagedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
+) -join ', '
+$reviewedExactUninstallExecutableEscaped = $reviewedExactUninstallExecutable -replace "'", "''"
+$reviewedExactUninstallArgumentsLiteral = @(
+    $reviewedExactUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
 ) -join ', '
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
@@ -2368,6 +2421,20 @@ if ($preUninstallPromptCalls) {
 # precedence because executing the vendor command could remove a prerequisite
 # used by Windows or unrelated applications. The ordinary marker cleanup below
 # still makes Intune's exact package detection transition to not installed.
+$reviewedExactUninstallOverrideLines = @(
+    '    $useReviewedExactUninstall = $false'
+)
+if ($reviewedExactUninstallConfigured) {
+    $reviewedExactUninstallOverrideLines += @(
+        '    $useReviewedExactUninstall = $true'
+        "    `$registeredUninstallFile = [Environment]::ExpandEnvironmentVariables('$reviewedExactUninstallExecutableEscaped')"
+        "    [string[]]`$registeredUninstallArguments = @($reviewedExactUninstallArgumentsLiteral) | ForEach-Object { [Environment]::ExpandEnvironmentVariables(`$_) }"
+        '    $hasQuietUninstall = $true'
+        '    $isVivaldiUninstall = $false'
+        '    $isAdobeCreativeCloudUninstall = $false'
+        '    Write-ADTLogEntry -Message "Using the reviewed exact vendor uninstall command [$registeredUninstallFile]." -Source ''Uninstall-ADTDeployment'''
+    )
+}
 if ($useManagedDirectoryLifecycle) {
     Write-Host 'Using reviewed managed-directory removal'
     $lines += @('', "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')")
@@ -2568,6 +2635,7 @@ if ($useManagedDirectoryLifecycle) {
             '    $registeredUninstallFile = [string]$registeredApplication."$($registeredUninstallProperty)FilePath"'
             '    $isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq ''Creative Cloud Uninstaller.exe'''
             '    [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })'
+            $reviewedExactUninstallOverrideLines
             '    $registeredArgumentText = ($registeredUninstallArguments -join '' '').Trim()'
             '    if (-not $hasQuietUninstall) {'
             ''
@@ -2628,9 +2696,11 @@ if ($useManagedDirectoryLifecycle) {
             '            Write-ADTLogEntry -Message "Executing the Adobe Creative Cloud desktop client silent uninstall command." -Source ''Uninstall-ADTDeployment'''
             '        }'
             "        `$reviewedUninstallArguments = @($reviewedUninstallArgumentsLiteral)"
-            '        foreach ($reviewedArgument in $reviewedUninstallArguments) {'
-            '            if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {'
-            '                $registeredUninstallArguments += $reviewedArgument'
+            '        if (-not $useReviewedExactUninstall) {'
+            '            foreach ($reviewedArgument in $reviewedUninstallArguments) {'
+            '                if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {'
+            '                    $registeredUninstallArguments += $reviewedArgument'
+            '                }'
             '            }'
             '        }'
             '        $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile'
@@ -2667,7 +2737,8 @@ if ($useManagedDirectoryLifecycle) {
             '        if ($registeredUninstallArguments.Count -gt 0) {'
             '            $uninstallProcessParameters.ArgumentList = $registeredUninstallArguments'
             '        }'
-            "        `$uninstallDeadline = [DateTime]::UtcNow.AddMinutes($uninstallCompletionTimeoutMinutes)"
+            "        `$effectiveUninstallCompletionTimeoutMinutes = if (`$useReviewedExactUninstall) { $reviewedExactUninstallTimeoutMinutes } else { $uninstallCompletionTimeoutMinutes }"
+            '        $uninstallDeadline = [DateTime]::UtcNow.AddMinutes($effectiveUninstallCompletionTimeoutMinutes)'
             '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
             '        $uninstallProcessExitLogged = $false'
             '        $nextUninstallProgressLog = [DateTime]::UtcNow'
