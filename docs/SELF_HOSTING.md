@@ -215,11 +215,11 @@ The app registration is still used for interactive user sign-in.
 
 ### 1. Database Setup
 
-See [DATABASE_SETUP.md](DATABASE_SETUP.md) for detailed Supabase configuration.
+See [DATABASE_SETUP.md](DATABASE_SETUP.md) for the supported migration procedure and detailed Supabase configuration. The `000_user_profiles.sql` migration is required for authentication and Microsoft token persistence.
 
 Quick start:
 1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Run the SQL migrations from the `supabase/migrations` folder
+2. Apply the migrations from `supabase/migrations` in filename order, starting with `000_user_profiles.sql`
 3. Copy the project URL and keys to your `.env.local`
 
 ### 2. Azure AD Setup
