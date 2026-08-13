@@ -312,7 +312,10 @@ describe('resolveWingetPackageDependencies', () => {
       version: '1.0.0',
       architecture: 'x64',
       installerSha256: ROOT_SHA,
-    }, io)).rejects.toThrow('not in the reviewed redistribution allowlist');
+    }, io)).rejects.toMatchObject({
+      blockCode: 'unreviewed_dependency',
+      message: expect.stringContaining('not in the reviewed redistribution allowlist'),
+    });
   });
 
   it('fails closed when WinGet declares an unsupported external dependency', async () => {
@@ -359,6 +362,9 @@ describe('resolveWingetPackageDependencies', () => {
       version: '1.0.0',
       architecture: 'x64',
       installerSha256: 'C'.repeat(64),
-    }, io)).rejects.toThrow('trusted WinGet installer tuple');
+    }, io)).rejects.toMatchObject({
+      blockCode: 'trusted_installer_tuple_unavailable',
+      message: expect.stringContaining('trusted WinGet installer tuple'),
+    });
   });
 });

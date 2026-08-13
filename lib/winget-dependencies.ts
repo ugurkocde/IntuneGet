@@ -73,11 +73,17 @@ const REVIEWED_DEPENDENCY_POLICIES: readonly ReviewedDependencyPolicy[] = [
 ];
 
 export class WingetDependencyCompatibilityError extends Error {
-  readonly blockCode: 'user_scope_machine_dependencies';
+  readonly blockCode:
+    | 'user_scope_machine_dependencies'
+    | 'trusted_installer_tuple_unavailable'
+    | 'unreviewed_dependency';
 
   constructor(
     message: string,
-    blockCode: 'user_scope_machine_dependencies' = 'user_scope_machine_dependencies'
+    blockCode:
+      | 'user_scope_machine_dependencies'
+      | 'trusted_installer_tuple_unavailable'
+      | 'unreviewed_dependency' = 'user_scope_machine_dependencies'
   ) {
     super(message);
     this.name = 'WingetDependencyCompatibilityError';
@@ -257,8 +263,9 @@ export async function resolveWingetPackageDependencies(
   );
   const rootInstaller = chooseInstaller(rootCandidates, targetArchitecture);
   if (!rootInstaller) {
-    throw new Error(
-      `The trusted WinGet installer tuple for ${input.wingetId} ${input.version} could not be resolved.`
+    throw new WingetDependencyCompatibilityError(
+      `The trusted WinGet installer tuple for ${input.wingetId} ${input.version} could not be resolved.`,
+      'trusted_installer_tuple_unavailable'
     );
   }
   ensureSupportedDependencyShape(input.wingetId, rootInstaller);
@@ -292,8 +299,9 @@ export async function resolveWingetPackageDependencies(
     }
     const dependencyPolicy = reviewedDependencyPolicy(packageIdentifier);
     if (!dependencyPolicy) {
-      throw new Error(
-        `WinGet dependency ${packageIdentifier} is not in the reviewed redistribution allowlist.`
+      throw new WingetDependencyCompatibilityError(
+        `WinGet dependency ${packageIdentifier} is not in the reviewed redistribution allowlist.`,
+        'unreviewed_dependency'
       );
     }
 
