@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useCartStore } from '@/stores/cart-store';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
 import { toast } from 'sonner';
 import type { NormalizedPackage } from '@/types/winget';
@@ -97,6 +98,12 @@ export function useQuickAdd(
             installCommand: generateInstallCommand(installer, installer.scope || 'machine'),
             uninstallCommand: generateUninstallCommand(installer, pkg.name),
             detectionRules,
+            requirementRules: buildCartItemRequirementRules(
+              pkg.name,
+              installer.type,
+              installer.productCode,
+              undefined
+            ),
             psadtConfig: {
               ...DEFAULT_PSADT_CONFIG,
               processesToClose,

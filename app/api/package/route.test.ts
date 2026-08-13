@@ -19,6 +19,7 @@ const {
   getLiveInstallersMock,
   ensureQaDemandMock,
   getPackageEligibilityBlocksMock,
+  isSupabaseServerConfiguredMock,
 } = vi.hoisted(() => ({
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
@@ -36,6 +37,7 @@ const {
   getLiveInstallersMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
+  isSupabaseServerConfiguredMock: vi.fn(),
 }));
 
 vi.mock('@/lib/manifest-api', () => ({
@@ -91,6 +93,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
 
 vi.mock('@/lib/supabase', () => ({
   createServerClient: vi.fn(),
+  isSupabaseServerConfigured: isSupabaseServerConfiguredMock,
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({
@@ -357,6 +360,38 @@ describe('POST /api/package (workflow dispatch)', () => {
       },
     });
     getPackageEligibilityBlocksMock.mockResolvedValue([]);
+    isSupabaseServerConfiguredMock.mockReturnValue(true);
+  });
+
+  it('creates a queued local-packager job without Supabase or QA', async () => {
+    isSupabaseServerConfiguredMock.mockReturnValue(false);
+    getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: true });
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'waiting',
+      candidateId: 'candidate-1',
+      identity: {
+        executionProfileSha256: 'A'.repeat(64),
+        packageProfileSha256: 'A'.repeat(64),
+        presentationProfileSha256: 'B'.repeat(64),
+      },
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(getPackageEligibilityBlocksMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }));
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
   it('blocks a retired catalog app before QA or customer packaging begins', async () => {

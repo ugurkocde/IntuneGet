@@ -95,6 +95,7 @@ export class JobProcessor {
       try {
         intuneApp = await this.uploader.uploadToIntune(
           job,
+          path.basename(result.intunewinPath),
           result.encryptedContentPath,
           result.encryptionInfo,
           {

@@ -184,6 +184,7 @@ export class IntuneUploader {
    */
   async uploadToIntune(
     job: PackagingJob,
+    packageFileName: string,
     encryptedContentPath: string,
     encryptionInfo: EncryptionInfo,
     sizes: { unencryptedSize: number; encryptedSize: number },
@@ -202,7 +203,7 @@ export class IntuneUploader {
 
     // Step 1: Create Win32 LOB App (5%)
     await onProgress?.(5, 'Creating app in Intune...');
-    const app = await this.createWin32App(graphClient, job);
+    const app = await this.createWin32App(graphClient, job, packageFileName);
     this.logger.info('Created Win32 LOB App', { appId: app.id });
 
     // Step 2: Create content version (10%)
@@ -275,10 +276,9 @@ export class IntuneUploader {
     await this.commitContentVersion(graphClient, app.id, contentVersion.id);
     this.logger.info('Content version committed');
 
-    // Step 9: Add detection rules (98%)
-    await onProgress?.(98, 'Adding detection rules...');
-    await this.addDetectionRules(graphClient, app.id, job);
-    this.logger.info('Detection rules added');
+    // Step 9: Add requirement rules (98%)
+    await onProgress?.(98, 'Adding requirement rules...');
+    await this.addRequirementRules(graphClient, app.id, job);
 
     // Step 10: Apply assignment configuration (99%)
     await onProgress?.(99, 'Applying assignments...');
@@ -333,7 +333,8 @@ export class IntuneUploader {
    */
   private async createWin32App(
     graphClient: GraphClient,
-    job: PackagingJob
+    job: PackagingJob,
+    packageFileName: string
   ): Promise<{ id: string }> {
     const commands = this.buildCommandLines(job);
     const baseDescription = extractPackageDescription(
@@ -357,9 +358,10 @@ export class IntuneUploader {
       installCommandLine: commands.install,
       uninstallCommandLine: commands.uninstall,
       applicableArchitectures: this.mapArchitecture(job.architecture),
-      minimumSupportedWindowsRelease: 'v10_1903',
+      minimumSupportedWindowsRelease: '1903',
       runAs32Bit: false,
       setupFilePath: 'Invoke-AppDeployToolkit.exe',
+      fileName: packageFileName,
       installExperience: {
         runAsAccount: job.install_scope === 'user' ? 'user' : 'system',
         deviceRestartBehavior: 'suppress',
@@ -371,7 +373,7 @@ export class IntuneUploader {
         { returnCode: 1641, type: 'hardReboot' },
         { returnCode: 1618, type: 'retry' },
       ],
-      rules: [], // Will add detection/requirement rules later
+      rules: this.buildDetectionRules(job),
     };
 
     if (largeIcon) {
@@ -672,29 +674,15 @@ export class IntuneUploader {
   }
 
   /**
-   * Add detection rules (and requirement rules if present) to the app
+   * Append requirement rules to the detection rules supplied at creation time
    */
-  private async addDetectionRules(
+  private async addRequirementRules(
     graphClient: GraphClient,
     appId: string,
     job: PackagingJob
   ): Promise<void> {
-    const detectionRules = this.buildDetectionRules(job);
     const requirementRules = this.extractRequirementRules(job);
 
-    // Set detection rules using the detectionRules property (old format,
-    // compatible with the win32LobAppDetection type names used by buildDetectionRules)
-    if (detectionRules.length > 0) {
-      await graphClient.patch(`/deviceAppManagement/mobileApps/${appId}`, {
-        '@odata.type': '#microsoft.graph.win32LobApp',
-        detectionRules: detectionRules,
-      });
-    }
-
-    // If requirement rules exist (for "Update Only" mode), read the current
-    // unified rules array (which now includes the detection rules set above,
-    // converted to win32LobAppRule format by Graph internally), append the
-    // requirement rules, and PATCH back the complete set.
     if (requirementRules.length > 0) {
       const app = await graphClient.get<{ rules?: unknown[] }>(
         `/deviceAppManagement/mobileApps/${appId}`
@@ -1222,37 +1210,42 @@ export class IntuneUploader {
 
         if (ruleObj.type === 'file') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppFileSystemDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppFileSystemRule',
+            ruleType: 'detection',
             path: ruleObj.path,
             fileOrFolderName: ruleObj.fileOrFolderName,
             check32BitOn64System: ruleObj.check32BitOn64System || false,
-            detectionType: ruleObj.detectionType || 'exists',
-            operator: ruleObj.operator,
-            detectionValue: ruleObj.detectionValue,
+            operationType: this.mapFileDetectionType(String(ruleObj.detectionType || 'exists')),
+            operator: ruleObj.operator || 'notConfigured',
+            comparisonValue: ruleObj.detectionValue,
           });
         } else if (ruleObj.type === 'registry') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppRegistryDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppRegistryRule',
+            ruleType: 'detection',
             keyPath: ruleObj.keyPath,
             valueName: ruleObj.valueName,
             check32BitOn64System: ruleObj.check32BitOn64System || false,
-            detectionType: ruleObj.detectionType || 'exists',
-            operator: ruleObj.operator,
-            detectionValue: ruleObj.detectionValue,
+            operationType: this.mapRegistryDetectionType(String(ruleObj.detectionType || 'exists')),
+            operator: ruleObj.operator || 'notConfigured',
+            comparisonValue: ruleObj.detectionValue,
           });
         } else if (ruleObj.type === 'msi') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppProductCodeDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppProductCodeRule',
+            ruleType: 'detection',
             productCode: ruleObj.productCode,
             productVersionOperator: ruleObj.productVersionOperator || 'notConfigured',
             productVersion: ruleObj.productVersion,
           });
         } else if (ruleObj.type === 'script') {
           rules.push({
-            '@odata.type': '#microsoft.graph.win32LobAppPowerShellScriptDetectionRule',
+            '@odata.type': '#microsoft.graph.win32LobAppPowerShellScriptRule',
+            ruleType: 'detection',
             scriptContent: Buffer.from(ruleObj.scriptContent as string).toString('base64'),
             enforceSignatureCheck: ruleObj.enforceSignatureCheck || false,
             runAs32Bit: ruleObj.runAs32Bit || false,
+            operationType: 'notConfigured',
           });
         }
       }
@@ -1261,15 +1254,43 @@ export class IntuneUploader {
     // Add default detection rule if none specified
     if (rules.length === 0) {
       rules.push({
-        '@odata.type': '#microsoft.graph.win32LobAppFileSystemDetectionRule',
+        '@odata.type': '#microsoft.graph.win32LobAppFileSystemRule',
+        ruleType: 'detection',
         path: '%ProgramFiles%',
         fileOrFolderName: job.display_name.replace(/[^a-zA-Z0-9]/g, ''),
         check32BitOn64System: false,
-        detectionType: 'exists',
+        operationType: 'exists',
+        operator: 'notConfigured',
+        comparisonValue: undefined,
       });
     }
 
     return rules;
+  }
+
+  // Mirrors the unified detection rule mappings in lib/intune-api.ts.
+  private mapFileDetectionType(type: string): string {
+    const mapping: Record<string, string> = {
+      exists: 'exists',
+      notExists: 'doesNotExist',
+      version: 'version',
+      dateModified: 'modifiedDate',
+      dateCreated: 'createdDate',
+      string: 'string',
+      sizeInMB: 'sizeInMB',
+    };
+    return mapping[type] || 'exists';
+  }
+
+  private mapRegistryDetectionType(type: string): string {
+    const mapping: Record<string, string> = {
+      exists: 'exists',
+      notExists: 'doesNotExist',
+      string: 'string',
+      integer: 'integer',
+      version: 'version',
+    };
+    return mapping[type] || 'exists';
   }
 
   /**

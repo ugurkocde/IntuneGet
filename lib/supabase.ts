@@ -63,6 +63,14 @@ export function createServerClient(): SupabaseClientType {
   });
 }
 
+export function isSupabaseServerConfigured(): boolean {
+  return Boolean(supabaseUrl && supabaseServiceKey);
+}
+
+export function getServerClientOrNull(): SupabaseClientType | null {
+  return isSupabaseServerConfigured() ? createServerClient() : null;
+}
+
 // Check if Supabase is configured
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);

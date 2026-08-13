@@ -12,7 +12,9 @@ import {
   assignToGroups,
   convertToGraphAssignments,
   syncAppCategories,
+  setAppRules,
 } from '@/lib/intune-api';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { PackageAssignment, IntuneAppCategorySelection } from '@/types/upload';
 import type { Json } from '@/types/database';
@@ -98,6 +100,26 @@ export async function PATCH(
 
     // Apply assignments
     if (assignments) {
+      const productCode = existingApp.msiInformation?.productCode;
+      const requirementRules = buildCartItemRequirementRules(
+        existingApp.displayName,
+        productCode ? 'msi' : 'exe',
+        productCode,
+        assignments
+      );
+      // Skip when the app already carries requirement rules so repeated
+      // settings updates do not stack duplicates onto the rules array.
+      const existingRules = existingApp.rules ?? [];
+      const hasRequirementRule = existingRules.some(
+        (rule) => rule.ruleType === 'requirement'
+      );
+      if (requirementRules && !hasRequirementRule) {
+        await setAppRules(graphToken, intuneAppId, [
+          ...existingRules,
+          ...requirementRules,
+        ]);
+      }
+
       const graphAssignments = convertToGraphAssignments(assignments);
       await assignToGroups(graphToken, intuneAppId, graphAssignments);
     }

@@ -15,6 +15,10 @@ vi.mock('@/lib/db', () => ({
   getDatabase: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase', () => ({
+  isSupabaseServerConfigured: vi.fn(() => true),
+}));
+
 import { GET } from '@/app/api/health/route';
 
 describe('GET /api/health', () => {
@@ -48,6 +52,7 @@ describe('GET /api/health', () => {
       status: 'healthy',
       mode: 'hosted',
       databaseMode: 'supabase',
+      supabaseServerConfigured: true,
       services: {
         database: true,
         auth: true,
