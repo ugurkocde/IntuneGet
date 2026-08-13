@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
@@ -368,7 +369,12 @@ export async function POST(request: NextRequest) {
                 ? JSON.stringify(deploymentConfig.psadtConfig)
                 : undefined,
               assignments: deploymentConfig.assignments
-                ? JSON.stringify(deploymentConfig.assignments)
+                ? JSON.stringify(
+                    sanitizeAssignmentsForDispatch(
+                      deploymentConfig.assignments,
+                      Boolean(deploymentConfig.requirementRules?.length)
+                    )
+                  )
                 : undefined,
               categories: deploymentConfig.categories
                 ? JSON.stringify(deploymentConfig.categories)

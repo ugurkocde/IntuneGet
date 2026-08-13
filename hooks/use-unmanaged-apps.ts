@@ -6,6 +6,7 @@ import { useMspOptional } from '@/hooks/useMspOptional';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { useCartStore } from '@/stores/cart-store';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
 import { toast } from '@/hooks/use-toast';
 import type {
@@ -421,6 +422,12 @@ export function useUnmanagedApps(): UseUnmanagedAppsReturn {
           manifest?.name || app.displayName
         ),
         detectionRules,
+        requirementRules: buildCartItemRequirementRules(
+          manifest?.name || app.displayName,
+          recommendedInstaller.type,
+          recommendedInstaller.productCode,
+          undefined
+        ),
         psadtConfig: {
           ...DEFAULT_PSADT_CONFIG,
           processesToClose,

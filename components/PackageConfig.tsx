@@ -66,6 +66,7 @@ import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
 import { INTUNE_APP_SOURCE_MARKER } from '@/lib/intune-description';
+import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 
 // Strip the auto-appended "Source: IntuneGet.com" marker so the description
 // editor shows only the human-authored text. The marker is re-appended at
@@ -452,6 +453,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           detectionRules: config.detectionRules,
           psadtConfig: config,
           assignments: assignments.length > 0 ? assignments : undefined,
+          requirementRules: buildCartItemRequirementRules(
+            displayName,
+            selectedInstaller!.type,
+            selectedInstaller!.productCode,
+            assignments
+          ),
           categories: categories.length > 0 ? categories : undefined,
           espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
           relationships: relationships.length > 0 ? relationships : undefined,

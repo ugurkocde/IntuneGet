@@ -19,6 +19,20 @@ import type {
   ScriptRequirementRule,
 } from '@/types/intune';
 import type { WingetInstallerType, WingetScope } from '@/types/winget';
+import type { PackageAssignment } from '@/types/upload';
+
+export function buildCartItemRequirementRules(
+  displayName: string,
+  installerType: WingetInstallerType,
+  productCode: string | undefined,
+  assignments: PackageAssignment[] | undefined
+): RequirementRule[] | undefined {
+  if (!assignments?.some((assignment) => assignment.intent === 'updateOnly')) {
+    return undefined;
+  }
+
+  return generateRequirementRules(displayName, installerType, productCode);
+}
 
 /**
  * Generate requirement rules that check whether the app is already installed.
