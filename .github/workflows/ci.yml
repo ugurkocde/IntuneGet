@@ -58,6 +58,12 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Build packager
+        working-directory: packager
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
   lint:
     name: Lint
     runs-on: ubuntu-24.04

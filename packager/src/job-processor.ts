@@ -970,7 +970,7 @@ catch
   private getUninstallCompletionTimeoutMinutes(job: PackagingJob): number {
     const raw = this.getPsadtConfig(job)?.uninstallCompletionTimeoutMinutes;
     if (raw === undefined || raw === null) return 5;
-    if (!Number.isInteger(raw) || raw < 1 || raw > 30) {
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1 || raw > 30) {
       throw new Error('PSADT uninstallCompletionTimeoutMinutes must be an integer from 1 to 30');
     }
     return raw;
