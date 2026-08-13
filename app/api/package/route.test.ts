@@ -594,7 +594,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     const expectedAdapter = {
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-      reviewedUninstallArguments: ['--runimmediately'],
+      reviewedUninstallArguments: ['--runimmediately', '--deleteuserprofile=0'],
     };
     expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
       expectedAdapter
