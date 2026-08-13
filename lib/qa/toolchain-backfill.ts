@@ -10,6 +10,16 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '54515b6566ff4e7c9040fa24a8eba6b6347ef09e': [
+    // ZIP is the package transport, not the registered uninstall engine.
+    // This release carries the nested Inno type into both QA and customer
+    // packages so MPC-BE receives the fully unattended uninstall switches.
+    'MPC-BE.MPC-BE',
+    // Carry the two reviewed lifecycle retries through the atomic toolchain
+    // rollout; neither completed successfully on the preceding pin.
+    'Elgato.CameraHub',
+    'Microsoft.VSTOR',
+  ],
   '2eea7f106971cda783665a60eb4d0e25846dae46': [
     // MPC-BE's Inno QuietUninstallString uses only /SILENT and can wait behind
     // an invisible prompt in SYSTEM context. This release normalizes all Inno
