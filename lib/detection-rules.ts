@@ -364,8 +364,13 @@ export function generateInstallCommand(
       }
       return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
 
-    case 'portable':
-      return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
+    case 'portable': {
+      const portableFolder = installerName.replace(/\.[^/.]+$/, '');
+      if (/\.zip$/i.test(installerName)) {
+        return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${portableFolder}" -Force`;
+      }
+      return `Copy-Item -Path "${installerName}" -Destination "%ProgramFiles%\\${portableFolder}\\${installerName}" -Force`;
+    }
 
     default:
       return `"${installerName}" ${silentArgs}`.trim();

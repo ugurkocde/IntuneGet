@@ -24,11 +24,23 @@ describe('evaluatePackagingContract', () => {
     if (!result.valid) expect(result.code).toBe('required-argument-missing');
   });
 
-  it('rejects an archive without an explicit nested installer contract', () => {
+  it('accepts an archive without a nested installer contract as portable', () => {
+    expect(evaluatePackagingContract({
+      wingetId: 'Contoso.Archive',
+      installerType: 'zip',
+      silentArgs: '/S',
+    }).valid).toBe(true);
+  });
+
+  it.each([
+    { nestedInstallerType: 'nullsoft' },
+    { nestedInstallerFiles: ['setup.exe'] },
+  ])('rejects a half-declared archive contract: %o', (nestedContract) => {
     const result = evaluatePackagingContract({
       wingetId: 'Contoso.Archive',
       installerType: 'zip',
       silentArgs: '/S',
+      ...nestedContract,
     });
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe('archive-contract-incomplete');

@@ -410,7 +410,12 @@ export class JobProcessor {
    * Generate Invoke-AppDeployToolkit.ps1 script (PSADT v4)
    */
   private generateDeployScript(job: PackagingJob, installerFileName: string): string {
-    const silentSwitches = this.extractSilentSwitches(job.install_command, job.installer_type).replace(/'/g, "''");
+    const nestedInstaller = this.getNestedInstaller(job);
+    const silentSwitches = this.extractSilentSwitches(
+      job.install_command,
+      job.installer_type,
+      nestedInstaller.type ?? undefined
+    ).replace(/'/g, "''");
     const successExitCodes = this.getInstallerSuccessCodes(job);
     const psadtVersion = '4.1.8';
     const appVendor = job.publisher.replace(/'/g, "''");
@@ -806,7 +811,8 @@ catch
       return true;
     }
     const nested = this.getNestedInstaller(job);
-    return job.installer_type.toLowerCase() === 'zip' && nested.type?.toLowerCase() === 'portable';
+    return job.installer_type.toLowerCase() === 'zip' &&
+      (!nested.type || nested.type.toLowerCase() === 'portable');
   }
 
   private normalizeNestedInstallerPath(nestedPath: string): string {
@@ -1232,12 +1238,6 @@ ${steps}
     const installerType = job.installer_type;
     const ext = path.extname(fileName).toLowerCase();
 
-    // Zip archives carry a nested installer - never execute the .zip itself
-    // (a zip-declared installer that is actually an .exe or .msi still runs natively)
-    if (ext === '.zip' || (installerType === 'zip' && ext !== '.exe' && ext !== '.msi')) {
-      return this.getZipInstallCommand(job, fileName, silentSwitches);
-    }
-
     if (ext === '.msi' || installerType === 'msi' || installerType === 'wix') {
       const msiProperties = this.extractMsiProperties(silentSwitches);
       if (msiProperties) {
@@ -1255,6 +1255,9 @@ ${steps}
     }
 
     if (installerType === 'portable') {
+      if (ext === '.zip') {
+        return this.getPortableZipInstallCommand(job, fileName);
+      }
       const fileNameEscaped = fileName.replace(/'/g, "''");
       return `${this.getPortableInstallPathLine(job)}
     $sourcePath = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
@@ -1262,6 +1265,12 @@ ${steps}
     $targetPath = Join-Path $installPath '${fileNameEscaped}'
     Copy-Item -LiteralPath $sourcePath -Destination $targetPath -Force
     Write-ADTLogEntry -Message "Portable app installed to: $installPath" -Severity 'Success' -Source 'Install-ADTDeployment'`;
+    }
+
+    // Zip archives carry a nested installer or are installed as portable archives.
+    // A zip-declared installer that is actually an .exe or .msi still runs natively.
+    if (ext === '.zip' || (installerType === 'zip' && ext !== '.exe' && ext !== '.msi')) {
+      return this.getZipInstallCommand(job, fileName, silentSwitches);
     }
 
     if (installerType === 'inno') {
@@ -1340,12 +1349,12 @@ ${steps}
    * Get install command for zip installers (PSADT v4 cmdlets)
    * Extracts the archive to a unique temp directory and runs the nested
    * installer declared by package_config.nestedInstallerType/nestedInstallerPath
-   * Emits an install-time error when no nested installer is declared
+   * Treats archives without a nested installer contract as portable archives
    */
   private getZipInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string {
     const nested = this.getNestedInstaller(job);
     if (!nested.path) {
-      return 'throw "Zip package does not declare a nested installer; cannot install"';
+      return this.getPortableZipInstallCommand(job, fileName);
     }
 
     const normalizedNestedPath = this.normalizeNestedInstallerPath(nested.path);
@@ -1387,7 +1396,7 @@ ${steps}
   private getPortableZipInstallCommand(
     job: PackagingJob,
     fileName: string,
-    nestedPathEscaped: string
+    nestedPathEscaped?: string
   ): string {
     const fileNameEscaped = fileName.replace(/'/g, "''");
     return `${this.getPortableInstallPathLine(job)}
@@ -1421,14 +1430,13 @@ ${steps}
         finally {
             if ($archive) { $archive.Dispose() }
         }
-        $declaredNestedPath = [System.IO.Path]::GetFullPath((Join-Path $stageRoot '${nestedPathEscaped}'))
+${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPath((Join-Path $stageRoot '${nestedPathEscaped}'))
         if (-not $declaredNestedPath.StartsWith($stageRootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Nested installer path escapes the portable staging directory"
         }
         if (-not (Test-Path -LiteralPath $declaredNestedPath -PathType Leaf)) {
             throw "Nested installer not found in archive: ${nestedPathEscaped}"
-        }
-        $installParent = [System.IO.Path]::GetDirectoryName($installPath)
+        }\n` : ''}        $installParent = [System.IO.Path]::GetDirectoryName($installPath)
         if ($installParent) { $null = New-Item -Path $installParent -ItemType Directory -Force }
         $replacementStarted = $true
         if (Test-Path -LiteralPath $installPath) { Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction Stop }
@@ -1499,7 +1507,8 @@ ${steps}
       const fileNameEscaped = installerFileName.replace(/'/g, "''");
       const silentSwitches = this.extractSilentSwitches(
         job.install_command,
-        job.installer_type
+        job.installer_type,
+        nestedInstaller.type ?? undefined
       ).replace(/'/g, "''");
       const hiveLongName = job.install_scope === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE';
       const markerProviderPath = `Registry::${hiveLongName}\\${this.getRegistryMarkerPath(job)}\\${this.sanitizeWingetId(job.winget_id)}`;
@@ -1924,7 +1933,11 @@ ${capturedIdentityValues}
   /**
    * Extract silent switches from install command
    */
-  private extractSilentSwitches(installCommand: string, installerType: string): string {
+  private extractSilentSwitches(
+    installCommand: string,
+    installerType: string,
+    nestedInstallerType?: string
+  ): string {
     const defaultSwitches: Record<string, string> = {
       msi: '/qn /norestart',
       exe: '/S',
@@ -1933,20 +1946,32 @@ ${capturedIdentityValues}
       wix: '/qn /norestart',
       burn: '/q /norestart',
       msix: '',
+      portable: '',
+      zip: '',
     };
 
-    const cleaned = installCommand
+    const sourceType = installerType.toLowerCase();
+    const effectiveType = sourceType === 'zip' && nestedInstallerType
+      ? nestedInstallerType.toLowerCase()
+      : sourceType;
+
+    if (/\bExpand-Archive\b/i.test(installCommand)) {
+      return defaultSwitches[effectiveType] ?? '';
+    }
+
+    let cleaned = installCommand
       .replace(/^"[^"]+"\s*/, '')
       .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, '')
       .replace(/\/[ixp]\s+"[^"]+"\s*/gi, '')
       .replace(/\/[ixp]\s+\{[^}]+\}\s*/gi, '')
       .replace(/\/[ixp]\s+\S+\.(msi|msp)\s*/gi, '')
-      .trim();
+      .replace(/\/[ixp]\s+/gi, '');
+    cleaned = cleaned.trim();
     if (/^(?:\/\S+|-{1,2}\S+)/.test(cleaned) && cleaned !== '-DeploymentType') {
       return cleaned;
     }
 
-    return defaultSwitches[installerType] || '/S';
+    return defaultSwitches[effectiveType] ?? (sourceType === 'zip' ? '' : '/S');
   }
 
   private getInstallerSuccessCodes(job: PackagingJob): number[] {
