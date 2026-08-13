@@ -6,12 +6,15 @@ describe('QA toolchain targeted retries', () => {
   it.each([
     'Microsoft.OfficeDeploymentTool',
     'Microsoft.VisualStudio.BuildTools',
-    'Opera.Opera',
-  ])('retries %s once on the managed lifecycle release', (wingetId) => {
+  ])('keeps the managed lifecycle retry scoped to its release for %s', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2e68a941d3410e4eb7c6ed1e73fbc0eff290c807',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it.each([

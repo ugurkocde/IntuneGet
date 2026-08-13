@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '5f95d233998479791a49d1d784ea95137c098e73': [
+    // Opera's registered slash-form uninstall verb exits without removing the
+    // product. This release invokes the reviewed double-dash launcher command
+    // exactly and verifies that the machine installation directory disappears.
+    'Opera.Opera',
+  ],
   '2e68a941d3410e4eb7c6ed1e73fbc0eff290c807': [
     // These extractors have no single vendor ARP identity. The new managed
     // directory contract verifies their real payload and removes it through
