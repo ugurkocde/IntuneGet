@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
@@ -23,34 +23,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the service principal access token from the database
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+    let tenantId = user.tenantId;
 
-    const tenantResolution = await resolveTargetTenantId({
-      supabase,
-      userId: user.userId,
-      tokenTenantId: user.tenantId,
-      requestedTenantId: mspTenantId,
-    });
+    if (supabase) {
+      const tenantResolution = await resolveTargetTenantId({
+        supabase, userId: user.userId, tokenTenantId: user.tenantId,
+        requestedTenantId: mspTenantId,
+      });
+      if (tenantResolution.errorResponse) return tenantResolution.errorResponse;
+      tenantId = tenantResolution.tenantId;
 
-    if (tenantResolution.errorResponse) {
-      return tenantResolution.errorResponse;
-    }
-
-    const tenantId = tenantResolution.tenantId;
-
-    const { data: consentData, error: consentError } = await supabase
-      .from('tenant_consent')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .single();
-
-    if (consentError || !consentData) {
-      return NextResponse.json(
-        { error: 'Admin consent not found. Please complete the admin consent flow.' },
-        { status: 403 }
-      );
+      const { data: consentData, error: consentError } = await supabase
+        .from('tenant_consent').select('*').eq('tenant_id', tenantId)
+        .eq('is_active', true).single();
+      if (consentError || !consentData) {
+        return NextResponse.json(
+          { error: 'Admin consent not found. Please complete the admin consent flow.' },
+          { status: 403 }
+        );
+      }
     }
 
     // Get the service principal token to call Graph API

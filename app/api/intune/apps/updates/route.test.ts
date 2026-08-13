@@ -24,6 +24,7 @@ vi.mock('@/lib/supabase', () => ({
   // getCatalogSource() now branches on isSupabaseConfigured(); the route
   // imports it transitively, so the mock must provide it (Supabase mode).
   isSupabaseConfigured: () => true,
+  isSupabaseServerConfigured: () => true,
 }));
 
 vi.mock('@/lib/msp/tenant-resolution', () => ({

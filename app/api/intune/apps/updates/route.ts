@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseServerConfigured()) {
       return NextResponse.json(
         { error: 'Update checking requires Supabase and is not available on this self-hosted deployment' },
         { status: 503 }

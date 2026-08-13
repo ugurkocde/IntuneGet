@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 
@@ -22,8 +23,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+
+    if (!supabase) {
+      const scope = new URL(request.url).searchParams.get('scope');
+      if (scope === 'tenant') {
+        const jobs = await getDatabase().jobs.getByTenantId(user.tenantId);
+        const tenantDeployments = jobs
+          .filter((job) => job.status === 'deployed')
+          .map((job) => ({ wingetId: job.winget_id, deployedBy: job.user_email }));
+        return NextResponse.json({
+          tenantDeployments,
+          deployedWingetIds: tenantDeployments.map((item) => item.wingetId),
+          count: tenantDeployments.length,
+          scope: 'tenant',
+        });
+      }
+
+      const history = await getDatabase().uploadHistory.getByUserId(user.userId);
+      const deployedWingetIds = Array.from(new Set(history.map((row) => row.winget_id)));
+      return NextResponse.json({ deployedWingetIds, count: deployedWingetIds.length });
+    }
 
     const tenantResolution = await resolveTargetTenantId({
       supabase,

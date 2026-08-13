@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { sendTestEmail, isEmailConfigured } from '@/lib/email/service';
 import type {
@@ -29,6 +29,19 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({
+        preferences: {
+          user_id: user.userId,
+          email_enabled: false,
+          email_frequency: 'daily',
+          email_address: null,
+          notify_critical_only: false,
+        },
+        isEmailConfigured: false,
+      });
     }
 
     const supabase = createServerClient();
@@ -80,6 +93,13 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Notification preferences require hosted services' },
+        { status: 503 }
+      );
+    }
+
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(

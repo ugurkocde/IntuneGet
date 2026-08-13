@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const database = getDatabase();
 
     // Define the shape of jobs returned from the queries
     interface PackagingJobStats {
@@ -44,29 +44,8 @@ export async function GET(request: NextRequest) {
 
     // Fetch all jobs in a single query and aggregate in memory
     // This is more efficient than 4 separate count queries
-    const { data: jobs, error: jobsError } = await supabase
-      .from('packaging_jobs')
-      .select('status, completed_at')
-      .eq('user_id', user.userId);
-
-    // Fetch 5 most recent jobs for activity feed
-    const { data: recentJobs, error: recentJobsError } = await supabase
-      .from('packaging_jobs')
-      .select('id, winget_id, display_name, status, created_at, intune_app_url')
-      .eq('user_id', user.userId)
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (recentJobsError) {
-      // Failed to fetch recent jobs - continue with empty array
-    }
-
-    if (jobsError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch statistics' },
-        { status: 500 }
-      );
-    }
+    const jobs = await database.jobs.getByUserId(user.userId);
+    const recentJobs = jobs.slice(0, 5);
 
     const allJobs = (jobs || []) as PackagingJobStats[];
 

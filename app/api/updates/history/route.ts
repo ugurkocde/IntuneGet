@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { AutoUpdateHistoryWithPolicy } from '@/types/update-policies';
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseServerConfigured()) {
       return NextResponse.json({
         history: [],
         count: 0,

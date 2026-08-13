@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { markAllNotificationsAsRead } from '@/lib/notification-service';
+import { isSupabaseServerConfigured } from '@/lib/supabase';
 
 /**
  * POST /api/notifications/mark-all-read
@@ -19,6 +20,10 @@ export async function POST(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ success: true });
     }
 
     await markAllNotificationsAsRead(user.userId);

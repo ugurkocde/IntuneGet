@@ -28,6 +28,7 @@ vi.mock('@/lib/auth-utils', () => ({
 vi.mock('@/lib/supabase', () => ({
   createServerClient: createServerClientMock,
   isSupabaseConfigured: () => true,
+  isSupabaseServerConfigured: () => true,
 }));
 
 vi.mock('@/lib/auto-update/trigger', () => ({

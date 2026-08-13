@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseServerConfigured()) {
       const unavailableError =
         'Update deployment requires Supabase and is not available on this self-hosted deployment';
       return NextResponse.json(

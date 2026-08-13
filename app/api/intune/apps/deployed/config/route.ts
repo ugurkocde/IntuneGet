@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
+import { getDatabase } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 
@@ -23,8 +24,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
+
+    if (!supabase) {
+      const job = (await getDatabase().jobs.getByUserId(user.userId)).find(
+        (item) => item.winget_id === wingetId && item.status === 'deployed'
+      );
+      return NextResponse.json({
+        config: job?.package_config ?? null,
+        deployedAt: job?.completed_at ?? null,
+        intuneAppId: job?.intune_app_id ?? null,
+      });
+    }
 
     const tenantResolution = await resolveTargetTenantId({
       supabase,

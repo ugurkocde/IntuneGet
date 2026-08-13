@@ -107,15 +107,23 @@ export function Sidebar({ user, onSignOut }: SidebarProps) {
   const closeMobile = () => setMobileOpen(false);
 
   // NEXT_PUBLIC_DISABLE_SCCM=true hides the SCCM Migration nav item
-  const { sccm: sccmEnabled } = getClientFeatureFlags();
+  const { sccm: sccmEnabled, hostedServices } = getClientFeatureFlags();
   const managementItems = sccmEnabled
     ? managementNav
     : managementNav.filter((item) => item.href !== '/dashboard/sccm');
+  const visibleManagementItems = hostedServices
+    ? managementItems
+    : managementItems.filter((item) => item.href !== '/dashboard/updates');
 
   const navGroups: NavGroup[] = [
     { items: coreNav },
-    { label: 'Management', items: managementItems },
-    { label: 'Analytics', items: analyticsNav },
+    { label: 'Management', items: visibleManagementItems },
+    {
+      label: 'Analytics',
+      items: hostedServices
+        ? analyticsNav
+        : analyticsNav.filter((item) => item.href !== '/dashboard/app-requests'),
+    },
     ...(isMspUser
       ? [{ label: 'MSP', items: mspNav }]
       : [{ label: 'MSP', items: [{ name: 'MSP Dashboard', href: '/dashboard/msp', icon: Building2 }] }]),
