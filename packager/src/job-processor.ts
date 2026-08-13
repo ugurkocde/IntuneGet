@@ -10,6 +10,7 @@ import { PackagerConfig } from './config.js';
 import { PackagingJob, JobPoller } from './job-poller.js';
 import { IntuneUploader, IntuneAppResult, DuplicateAppError } from './intune-uploader.js';
 import { createLogger, Logger } from './logger.js';
+import { fetchWithProxy } from './fetch-with-proxy.js';
 
 interface PackagingResult {
   intunewinPath: string;
@@ -242,15 +243,14 @@ export class JobProcessor {
    * when the server refuses the request outright.
    */
   private async downloadFile(url: string, destPath: string): Promise<void> {
-    const fetch = (await import('node-fetch')).default;
-    let response = await fetch(url);
+    let response = await fetchWithProxy(url);
 
     if (response.status === 403 || response.status === 406) {
       this.logger.warn('Download refused, retrying with browser User-Agent', {
         url,
         status: response.status,
       });
-      response = await fetch(url, {
+      response = await fetchWithProxy(url, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
