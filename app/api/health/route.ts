@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getDatabase, getDatabaseMode } from "@/lib/db";
+import { isSupabaseServerConfigured } from "@/lib/supabase";
 
 interface HealthStatus {
   status: "healthy" | "degraded" | "unhealthy";
   mode: "hosted" | "self-hosted";
   databaseMode: "sqlite" | "supabase";
+  supabaseServerConfigured: boolean;
   timestamp: string;
   services: {
     database: boolean;
@@ -24,6 +26,7 @@ export async function GET() {
     status: "healthy",
     mode: process.env.VERCEL === "1" ? "hosted" : "self-hosted",
     databaseMode,
+    supabaseServerConfigured: isSupabaseServerConfigured(),
     timestamp: new Date().toISOString(),
     services: {
       database: false,
