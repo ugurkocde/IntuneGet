@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Check, Loader2, Clock, XCircle, CheckCircle2 } from 'lucide-react';
+import { Check, Loader2, Clock, XCircle, CheckCircle2, ExternalLink, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   PROGRESS_STAGES,
+  type ProgressStage,
   getCurrentStage,
   getCompletedStages,
 } from '@/lib/progress-stages';
@@ -17,7 +19,17 @@ interface ProgressStepperProps {
   startTime?: string | null;
   endTime?: string | null;
   errorStage?: string | null;
+  qaRequired?: boolean;
+  qaHref?: string;
 }
+
+const QA_STAGE: ProgressStage = {
+  id: 'qa',
+  label: 'Installation check',
+  description: 'Checking for a successful installation test for this app version and configuration',
+  minProgress: 0,
+  maxProgress: 0,
+};
 
 export function ProgressStepper({
   progress,
@@ -26,16 +38,23 @@ export function ProgressStepper({
   startTime,
   endTime,
   errorStage,
+  qaRequired = false,
+  qaHref,
 }: ProgressStepperProps) {
   const prefersReducedMotion = useReducedMotion();
-  const currentStage = getCurrentStage(progress, status, errorStage);
-  const completedStages = getCompletedStages(progress, status, errorStage);
+  const isQaCurrent = qaRequired && ['awaiting_qa', 'qa_failed'].includes(status);
+  const stages = qaRequired ? [QA_STAGE, ...PROGRESS_STAGES] : PROGRESS_STAGES;
+  const currentStage = isQaCurrent ? QA_STAGE : getCurrentStage(progress, status, errorStage);
+  const completedStages: string[] = [
+    ...(qaRequired && !isQaCurrent ? [QA_STAGE.id] : []),
+    ...getCompletedStages(progress, status, errorStage),
+  ];
   const { formattedTime } = useElapsedTime({
     startTime: startTime || null,
     endTime: endTime || null,
   });
 
-  const isJobFailed = status === 'failed';
+  const isJobFailed = status === 'failed' || status === 'qa_failed';
   const isJobCompleted = ['completed', 'deployed'].includes(status);
   const isActive = !isJobFailed && !isJobCompleted;
 
@@ -45,9 +64,10 @@ export function ProgressStepper({
       <div className="space-y-2">
         {/* Row 1: Circles and connector lines */}
         <div className="flex items-center">
-          {PROGRESS_STAGES.map((stage, index) => {
-            const isCompleted = completedStages.includes(stage.id as never);
+          {stages.map((stage, index) => {
+            const isCompleted = completedStages.includes(stage.id);
             const isCurrent = currentStage?.id === stage.id;
+            const isQaStage = stage.id === QA_STAGE.id;
             const isFailedStage = isJobFailed && isCurrent;
             const isPending = !isCompleted && !isCurrent;
 
@@ -68,7 +88,8 @@ export function ProgressStepper({
                     isFailedStage && 'bg-status-error/20 border-2 border-status-error',
                     isJobCompleted && 'bg-status-success/20 border-2 border-status-success',
                     !isJobFailed && !isJobCompleted && isCompleted && 'bg-status-success/20 border-2 border-status-success',
-                    !isJobFailed && !isJobCompleted && isCurrent && 'bg-accent-cyan/20 border-2 border-accent-cyan',
+                    !isJobFailed && !isJobCompleted && isCurrent && !isQaStage && 'bg-accent-cyan/20 border-2 border-accent-cyan',
+                    !isJobFailed && !isJobCompleted && isCurrent && isQaStage && 'bg-accent-violet/20 border-2 border-accent-violet',
                     isJobFailed && isCompleted && !isCurrent && 'bg-status-success/20 border-2 border-status-success',
                     isPending && !isJobCompleted && !isJobFailed && 'bg-bg-elevated border-2 border-overlay/10',
                     isPending && isJobFailed && 'bg-bg-elevated border-2 border-overlay/10',
@@ -80,14 +101,18 @@ export function ProgressStepper({
                   ) : isJobCompleted || isCompleted ? (
                     <Check className="w-[18px] h-[18px] text-status-success" />
                   ) : isCurrent ? (
-                    <Loader2 className="w-[18px] h-[18px] text-accent-cyan animate-spin" aria-label="Processing" />
+                    isQaStage ? (
+                      <ShieldCheck className="w-[18px] h-[18px] text-accent-violet animate-pulse" aria-label="Installation check in progress" />
+                    ) : (
+                      <Loader2 className="w-[18px] h-[18px] text-accent-cyan animate-spin" aria-label="Processing" />
+                    )
                   ) : (
                     <span className="w-2 h-2 rounded-full bg-text-muted" />
                   )}
                 </motion.div>
 
                 {/* Connector Line */}
-                {index < PROGRESS_STAGES.length - 1 && (
+                {index < stages.length - 1 && (
                   <div className="flex-1 mx-1.5 h-[3px] overflow-hidden rounded-full bg-overlay/[0.08]">
                     <motion.div
                       initial={{ width: 0 }}
@@ -113,10 +138,11 @@ export function ProgressStepper({
         </div>
 
         {/* Row 2: Labels grid */}
-        <div className="grid grid-cols-6">
-          {PROGRESS_STAGES.map((stage) => {
-            const isCompleted = completedStages.includes(stage.id as never);
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
+          {stages.map((stage) => {
+            const isCompleted = completedStages.includes(stage.id);
             const isCurrent = currentStage?.id === stage.id;
+            const isQaStage = stage.id === QA_STAGE.id;
             const isFailedStage = isJobFailed && isCurrent;
             const isPending = !isCompleted && !isCurrent;
 
@@ -128,7 +154,8 @@ export function ProgressStepper({
                   isFailedStage && 'text-status-error',
                   isJobFailed && isCompleted && !isCurrent && 'text-status-success',
                   (isJobCompleted || isCompleted) && !isJobFailed && 'text-status-success',
-                  isCurrent && !isJobFailed && !isJobCompleted && 'text-accent-cyan',
+                  isCurrent && !isJobFailed && !isJobCompleted && !isQaStage && 'text-accent-cyan',
+                  isCurrent && !isJobFailed && !isJobCompleted && isQaStage && 'text-accent-violet',
                   isPending && !isJobCompleted && 'text-text-muted'
                 )}
               >
@@ -141,9 +168,12 @@ export function ProgressStepper({
 
       {/* Status Message and Time */}
       <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center gap-2" aria-live="polite" aria-atomic="true">
+        <div className="flex min-w-0 items-center gap-2" aria-live="polite" aria-atomic="true">
           {isActive && !prefersReducedMotion && (
-            <span className="w-2 h-2 rounded-full bg-accent-cyan animate-pulse flex-shrink-0" />
+            <span className={cn(
+              'w-2 h-2 rounded-full animate-pulse flex-shrink-0',
+              isQaCurrent ? 'bg-accent-violet' : 'bg-accent-cyan'
+            )} />
           )}
           <span className={cn(
             isJobFailed
@@ -161,6 +191,15 @@ export function ProgressStepper({
                 ? (statusMessage || 'Failed')
                 : (statusMessage || currentStage?.description || 'Processing…')}
           </span>
+          {qaRequired && qaHref && (
+            <Link
+              href={qaHref}
+              className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-medium text-accent-violet hover:underline"
+            >
+              View installation test
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-2 text-text-muted">
           {isJobCompleted ? (
@@ -173,7 +212,7 @@ export function ProgressStepper({
       </div>
 
       {/* Progress Bar with inline percentage - hidden for failed jobs */}
-      {!isJobFailed && (
+      {!isJobFailed && status !== 'awaiting_qa' && (
         <div className="flex items-center gap-2">
           <div
             role="progressbar"

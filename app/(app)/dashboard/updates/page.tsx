@@ -222,11 +222,20 @@ export default function UpdatesPage() {
   const executeTriggerUpdate = useCallback(async (update: AvailableUpdate) => {
     setUpdatingIds((prev) => new Set(prev).add(update.id));
     try {
-      await triggerUpdate({
+      const response = await triggerUpdate({
         winget_id: update.winget_id,
         tenant_id: update.tenant_id,
       });
-      router.push('/dashboard/uploads');
+      const result = response.results.find((r) => r.winget_id === update.winget_id)
+        ?? response.results[0];
+      if (result?.success) {
+        router.push('/dashboard/uploads');
+      } else {
+        toast.error(result?.error || 'The update could not be triggered.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The update could not be triggered.';
+      toast.error(message);
     } finally {
       setUpdatingIds((prev) => {
         const next = new Set(prev);

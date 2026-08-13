@@ -37,6 +37,7 @@ export interface WingetInstaller {
   NestedInstallerFiles?: Array<{ RelativeFilePath: string; PortableCommandAlias?: string }>;
   Scope?: WingetScope;
   InstallerSwitches?: WingetInstallerSwitches;
+  InstallerSuccessCodes?: number[];
   ProductCode?: string;
   PackageFamilyName?: string;
   UpgradeBehavior?: 'install' | 'uninstallPrevious';
@@ -164,6 +165,7 @@ export interface NormalizedPackage {
 // Normalized installer for internal use
 export interface NormalizedInstaller {
   architecture: WingetArchitecture;
+  installerLocale?: string;
   url: string;
   sha256: string;
   type: WingetInstallerType;
@@ -171,9 +173,13 @@ export interface NormalizedInstaller {
   nestedInstallerPath?: string;
   scope?: WingetScope;
   silentArgs?: string;
+  installerSuccessCodes?: number[];
   productCode?: string;
   packageFamilyName?: string;
   packageDependencies?: Array<{ packageIdentifier: string; minimumVersion?: string }>;
+  windowsFeatures?: string[];
+  windowsLibraries?: string[];
+  externalDependencies?: string[];
 }
 
 // Microsoft Store manifest enrichment (fetched from public Store APIs)

@@ -18,6 +18,7 @@ import { getLocaleDisplay } from '@/lib/locale-utils';
 import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
+import type { QaCandidateStatusRow, QaResultRow, QaStatusRow } from '@/types/qa';
 import type {
   CatalogSource,
   CategoryCount,
@@ -49,6 +50,8 @@ function serviceOrAnonClient() {
 
   return createClient(url, key);
 }
+
+let warnedMissingQaServiceRole = false;
 
 export class SupabaseCatalogSource implements CatalogSource {
   // ---------------------------------------------------------------------------
@@ -300,7 +303,7 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const { data, error } = await supabase
       .from('version_history')
-      .select('installer_url, installer_sha256, installer_type, installer_scope, installers')
+      .select('installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers')
       .eq('winget_id', wingetId)
       .eq('version', version)
       .single();
@@ -320,7 +323,7 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const { data, error } = await supabase
       .from('version_history')
-      .select('installer_url, installer_sha256, installer_type, installer_scope, installers')
+      .select('installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers')
       .eq('winget_id', wingetId)
       .eq('version', version)
       .order('created_at', { ascending: false })
@@ -353,6 +356,112 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
 
     return data[0] as InstallationSnapshot;
+  }
+
+  async getQaStatuses(ids: string[]): Promise<QaStatusRow[]> {
+    if (ids.length === 0) return [];
+
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('qa_results')
+      .select(
+        'winget_id, outcome, tested_version, architecture, tested_at_utc, test_level, package_profile_sha256'
+      )
+      .in('winget_id', ids)
+      .eq('test_level', 'psadt-package');
+
+    if (error) {
+      console.error('Failed to read QA statuses:', error.message);
+      return [];
+    }
+
+    return (data || []) as QaStatusRow[];
+  }
+
+  async getQaResult(
+    wingetId: string,
+    packageProfileSha256?: string
+  ): Promise<QaResultRow | null> {
+    if (packageProfileSha256) {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('qa_package_results')
+        .select(
+          'package_profile_sha256, winget_id, display_name, publisher, tested_version, architecture, installer_sha256, outcome, tested_at_utc, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, effective_configuration, qa_schema_version, psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256, packager_commit, package_content_sha256'
+        )
+        .eq('winget_id', wingetId)
+        .eq('package_profile_sha256', packageProfileSha256.toUpperCase())
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Failed to read exact QA package result: ${error.message}`);
+      }
+      if (!data?.detection || !data.phase_results || !data.install_command || !data.uninstall_command) {
+        return null;
+      }
+
+      return {
+        ...data,
+        display_name: data.display_name || wingetId,
+        publisher: data.publisher || '',
+        test_level: 'psadt-package',
+      } as unknown as QaResultRow;
+    }
+
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+      .from('qa_results')
+      .select(
+        'winget_id, display_name, publisher, tested_version, architecture, outcome, tested_at_utc, installer_sha256, overall_duration_seconds, installer_type, install_command, uninstall_command, detection, phase_results, changes, relevant_event_count, environment, effective_configuration, qa_schema_version, synced_at, test_level, package_profile_sha256, psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256, packager_commit, package_content_sha256'
+      )
+      .eq('winget_id', wingetId)
+      .eq('test_level', 'psadt-package')
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to read QA result: ${error.message}`);
+    }
+
+    return (data as QaResultRow | null) || null;
+  }
+
+  async getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]> {
+    if (ids.length === 0) return [];
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      if (!warnedMissingQaServiceRole) {
+        console.warn(
+          'QA queued/running statuses are unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured.'
+        );
+        warnedMissingQaServiceRole = true;
+      }
+      return [];
+    }
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('qa_candidates')
+      .select(
+        'winget_id, version, architecture, installer_sha256, status, enqueued_at, started_at, test_level, package_profile_sha256'
+      )
+      .in('winget_id', ids)
+      .eq('test_level', 'psadt-package')
+      .in('status', ['queued', 'dispatched', 'running'])
+      .order('enqueued_at', { ascending: false });
+    if (error) {
+      console.error('Failed to read QA candidate statuses:', error.message);
+      return [];
+    }
+
+    const latest = new Map<string, QaCandidateStatusRow>();
+    for (const row of (data || []) as QaCandidateStatusRow[]) {
+      if (!latest.has(row.winget_id)) latest.set(row.winget_id, row);
+    }
+    return [...latest.values()];
   }
 
   // ---------------------------------------------------------------------------

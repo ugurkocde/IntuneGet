@@ -1,4 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/qa/live/route.ts": {
+      "regions": ["fra1"]
+    },
+    "app/api/qa/live/frame/route.ts": {
+      "regions": ["fra1"]
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/sync-packages",
@@ -7,6 +16,22 @@
     {
       "path": "/api/cron/check-updates",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/qa-enqueue",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/qa-dispatch",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/qa-resume",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/qa-live-cleanup",
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/send-notifications",

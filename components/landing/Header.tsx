@@ -32,6 +32,7 @@ const AuthedAvatar = dynamic(
 
 const primaryNavLinks = [
   { href: "/apps", label: "Apps" },
+  { href: "/qa", label: "Live Packaging", isLive: true },
   { href: "/#how-it-works", label: "How It Works" },
   { href: "/security", label: "Security" },
 ];
@@ -148,17 +149,30 @@ export function Header() {
 
           {/* Desktop navigation */}
           <nav className={cn(
-            "ml-6 hidden min-w-0 items-center whitespace-nowrap transition-all duration-500 lg:flex",
+            "ml-6 hidden min-w-0 items-center whitespace-nowrap transition-all duration-500 xl:flex",
             hasScrolled ? "gap-4" : "gap-5"
           )}>
             {primaryNavLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="group relative rounded-sm text-sm font-medium text-text-secondary transition-colors duration-200 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-4 focus-visible:ring-offset-bg-deepest"
+                className={cn(
+                  "group relative inline-flex items-center gap-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-4 focus-visible:ring-offset-bg-deepest",
+                  link.isLive
+                    ? "rounded-full border border-red-500/25 bg-red-500/[0.08] px-2.5 py-1 text-text-primary shadow-[0_0_16px_rgba(239,68,68,0.12)] hover:border-red-500/40 hover:bg-red-500/[0.12]"
+                    : "rounded-sm text-text-secondary hover:text-text-primary"
+                )}
               >
+                {link.isLive && (
+                  <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60 motion-reduce:animate-none" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]" />
+                  </span>
+                )}
                 <T>{link.label}</T>
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full" />
+                {!link.isLive && (
+                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full" />
+                )}
               </Link>
             ))}
             <DocsDropdown />
@@ -211,7 +225,7 @@ export function Header() {
           <button
             ref={menuButtonRef}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="relative z-10 flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-text-secondary transition-colors hover:text-text-primary lg:hidden"
+            className="relative z-10 flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-text-secondary transition-colors hover:text-text-primary xl:hidden"
             aria-label={isMenuOpen ? t("Close menu") : t("Open menu")}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
@@ -231,7 +245,7 @@ export function Header() {
         {isMenuOpen && (
           <motion.div
             className={cn(
-              "pointer-events-auto mx-auto mt-2 transition-[max-width] duration-500 lg:hidden",
+              "pointer-events-auto mx-auto mt-2 transition-[max-width] duration-500 xl:hidden",
               hasScrolled
                 ? "max-w-5xl px-0"
                 : "max-w-full px-0"
@@ -255,8 +269,19 @@ export function Header() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsMenuOpen(false)}
-                  className="py-2.5 text-base font-medium text-text-secondary transition-colors hover:text-accent-cyan"
+                  className={cn(
+                    "inline-flex items-center gap-2.5 text-base font-medium transition-all duration-200",
+                    link.isLive
+                      ? "w-fit rounded-full border border-red-500/25 bg-red-500/[0.08] px-3 py-2.5 text-text-primary shadow-[0_0_16px_rgba(239,68,68,0.12)] hover:border-red-500/40 hover:bg-red-500/[0.12]"
+                      : "py-2.5 text-text-secondary hover:text-accent-cyan"
+                  )}
                 >
+                  {link.isLive && (
+                    <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60 motion-reduce:animate-none" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]" />
+                    </span>
+                  )}
                   <T>{link.label}</T>
                 </Link>
               ))}

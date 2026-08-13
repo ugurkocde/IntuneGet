@@ -141,13 +141,18 @@ Optional catalog snapshot overrides (sensible defaults, normally unset):
 
 > **App catalog in SQLite mode**: when `DATABASE_MODE=sqlite` and Supabase is
 > not configured, the app catalog (browse, search, categories, update detection,
-> SCCM matching) is served from a **downloaded SQLite snapshot** instead of
+> SCCM matching, and compact application QA results) is served from a
+> **downloaded SQLite snapshot** instead of
 > Supabase. On first use the app downloads `catalog.sqlite.gz` from the public
 > `catalog-latest` GitHub release, verifies its sha256 against the published
 > manifest, opens it read-only, and re-checks daily. Requirements: the optional
 > `better-sqlite3` package installed (it is in the Docker image), a writable data
 > directory, and outbound HTTPS to `github.com`. For a fully offline install,
 > point `CATALOG_SNAPSHOT_FILE` at a snapshot you fetched yourself.
+> QA results are refreshed by the catalog publisher and can therefore lag the
+> canonical private QA JSON by up to one snapshot cycle. Older snapshots that
+> do not contain the optional `qa_results` table remain compatible: apps simply
+> appear as not QA tested until a newer snapshot is downloaded.
 >
 > Note: other Supabase-backed surfaces (dashboard history, notifications, MSP
 > features) still require Supabase; only the catalog runs Supabase-less.

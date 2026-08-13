@@ -4,8 +4,18 @@
  * Uses repository_dispatch to a private workflows repository
  */
 
+import { createHmac } from 'node:crypto';
+
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { enforceInstallerPreflight } from './installer-preflight';
+import { enforceQaGate } from './qa/gate';
+import {
+  normalizeQaWorkflowPackageInput,
+} from './qa/package-profile';
+import {
+  resolveWingetPackageDependencies,
+  type PackagedWingetDependency,
+} from './winget-dependencies';
 
 export interface WorkflowInputs {
   jobId: string;
@@ -23,6 +33,7 @@ export interface WorkflowInputs {
   nestedInstallerType?: string; // Nested installer type for zip installers
   nestedInstallerPath?: string; // Relative path to the nested installer inside the zip
   silentSwitches: string;
+  installerSuccessCodes?: number[];
   uninstallCommand: string;
   callbackUrl: string;
   psadtConfig?: string; // JSON-serialized PSADTConfig
@@ -34,12 +45,15 @@ export interface WorkflowInputs {
   relationships?: string; // JSON-serialized AppRelationship[]
   installScope?: 'machine' | 'user'; // Install scope for per-user vs per-machine
   forceCreate?: boolean; // Skip duplicate check and force create new app
+  qaOverride?: boolean; // Server-side QA acknowledgement; never forwarded to GitHub
   sourceIntuneAppId?: string; // Previous app ID for assignment carry-over
   carryOverAssignments?: boolean; // Copy assignments from previous app
   removeAssignmentsFromPreviousApp?: boolean; // Remove assignments from previous app after carry-over
   autoSupersede?: boolean; // Mark the new app as superseding the previous app
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
   sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
+  packageProfileSha256?: string; // Upstream QA identity; final dispatch recalculates from effective inputs
+  packageDependencies?: PackagedWingetDependency[]; // Server-resolved; caller values are never trusted
 }
 
 export interface GitHubActionsConfig {
@@ -102,7 +116,7 @@ export interface TriggerResult {
 export async function triggerPackagingWorkflow(
   inputs: WorkflowInputs,
   config?: GitHubActionsConfig,
-  options?: { skipRunCapture?: boolean }
+  options?: { skipRunCapture?: boolean; requireQaPass?: boolean }
 ): Promise<TriggerResult> {
   const cfg = config || getGitHubActionsConfig();
 
@@ -112,7 +126,6 @@ export async function triggerPackagingWorkflow(
     inputs.architecture ?? '',
     inputs.installerUrl,
   );
-
   // This is the final dispatch boundary shared by manual, MSP, update-policy,
   // and auto-update paths. Never create a packaging run for a known-bad tuple.
   await enforceInstallerPreflight({
@@ -123,6 +136,42 @@ export async function triggerPackagingWorkflow(
     installerSha256: inputs.installerSha256,
     installerType: inputs.installerType,
     installScope: inputs.installScope,
+    sourceType: inputs.sourceType,
+  });
+  const packageDependencies = inputs.sourceType === 'custom'
+    ? []
+    : await resolveWingetPackageDependencies({
+        wingetId: inputs.wingetId,
+        version: inputs.version,
+        architecture: inputs.architecture,
+        installerSha256: inputs.installerSha256,
+        installScope: inputs.installScope,
+      });
+  const normalizedPackageInput = inputs.sourceType === 'custom'
+    ? null
+    : normalizeQaWorkflowPackageInput({ ...inputs, packageDependencies });
+  const packageDependenciesJson = JSON.stringify(packageDependencies);
+  const dependencyBundleSignature = packageDependencies.length > 0
+    ? (() => {
+        const callbackSecret = process.env.CALLBACK_SECRET;
+        if (!callbackSecret) {
+          throw new Error('CALLBACK_SECRET is required to sign package dependencies.');
+        }
+        return createHmac('sha256', callbackSecret)
+          .update(packageDependenciesJson, 'utf8')
+          .digest('hex');
+      })()
+    : '';
+  const calculatedPackageProfileSha256 = normalizedPackageInput?.identity.packageProfileSha256;
+  const packageProfileSha256 = calculatedPackageProfileSha256;
+  await enforceQaGate({
+    wingetId: inputs.wingetId,
+    version: inputs.version,
+    architecture: inputs.architecture,
+    installerSha256: inputs.installerSha256,
+    packageProfileSha256,
+    requirePassed: options?.requireQaPass,
+    qaOverride: inputs.qaOverride,
     sourceType: inputs.sourceType,
   });
 
@@ -166,11 +215,15 @@ export async function triggerPackagingWorkflow(
           nestedInstallerType: inputs.nestedInstallerType || '',
           nestedInstallerPath: inputs.nestedInstallerPath || '',
           silentSwitches: inputs.silentSwitches,
+          successCodes: JSON.stringify(inputs.installerSuccessCodes || []),
+          packageDependencies: packageDependenciesJson,
+          dependencyBundleSignature,
           uninstallCommand: inputs.uninstallCommand,
         },
         config: {
-          psadtConfig: inputs.psadtConfig || '{}',
-          detectionRules: inputs.detectionRules || '[]',
+          psadtConfig: normalizedPackageInput?.psadtConfigJson || inputs.psadtConfig || '{}',
+          detectionRules:
+            normalizedPackageInput?.detectionRulesJson || inputs.detectionRules || '[]',
           requirementRules: inputs.requirementRules || '[]',
           assignments: inputs.assignments || '[]',
           categories: inputs.categories || '[]',

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   normalizeInstaller,
+  normalizeManifestInstallers,
   fetchLocaleManifest,
   getFullManifest,
   clearManifestCache,
@@ -123,7 +124,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS');
     });
 
     it('should append Custom after Silent when both are provided', () => {
@@ -236,7 +237,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
     });
 
     it('should use default args for Nullsoft (NSIS)', () => {
@@ -340,7 +341,7 @@ describe('normalizeInstaller', () => {
 
       const result = normalizeInstaller(installer);
 
-      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+      expect(result.silentArgs).toBe('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-');
     });
 
     it('should prefer declared Silent switches over nested-type defaults', () => {
@@ -524,6 +525,148 @@ describe('normalizeInstaller', () => {
       };
 
       expect(normalizeInstaller(installer).architecture).toBe('neutral');
+    });
+  });
+});
+
+describe('normalizeManifestInstallers', () => {
+  it('merges root and installer-specific switch fields like WinGet', () => {
+    const installers = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallerSwitches: {
+        Silent: '--vivaldi-silent',
+        SilentWithProgress: '--vivaldi-silent',
+      },
+      Installers: [{
+        Architecture: 'x64',
+        Scope: 'user',
+        InstallerUrl: 'https://downloads.vivaldi.com/stable/Vivaldi.exe',
+        InstallerSha256: 'abc123',
+        InstallerSwitches: { Custom: '--do-not-launch-chrome' },
+      }],
+    });
+
+    expect(installers[0].InstallerSwitches).toEqual({
+      Silent: '--vivaldi-silent',
+      SilentWithProgress: '--vivaldi-silent',
+      Custom: '--do-not-launch-chrome',
+    });
+    expect(normalizeInstaller(installers[0]).silentArgs).toBe(
+      '--vivaldi-silent --do-not-launch-chrome'
+    );
+  });
+
+  it('inherits root MSI and MSIX identity fields', () => {
+    const msiInstallers = normalizeManifestInstallers({
+      InstallerType: 'wix',
+      ProductCode: '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}',
+      Installers: [{
+        Architecture: 'x86',
+        InstallerUrl: 'https://example.com/exclaimer.msi',
+        InstallerSha256: 'abc123',
+      }],
+    });
+    const msixInstallers = normalizeManifestInstallers({
+      InstallerType: 'msix',
+      PackageFamilyName: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/terminal.msixbundle',
+        InstallerSha256: 'def456',
+      }],
+    });
+
+    expect(msiInstallers[0].ProductCode).toBe(
+      '{D1827F05-CDAB-444B-90E3-D52ACB111CBD}'
+    );
+    expect(msixInstallers[0].PackageFamilyName).toBe(
+      'Microsoft.WindowsTerminal_8wekyb3d8bbwe'
+    );
+  });
+
+  it('preserves manifest-declared installer success codes', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallerSuccessCodes: [1168, 1168, '3010'],
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/installer.exe',
+        InstallerSha256: 'abc123',
+      }],
+    });
+    expect(installer.InstallerSuccessCodes).toEqual([1168, 3010]);
+    expect(normalizeInstaller(installer).installerSuccessCodes).toEqual([1168, 3010]);
+  });
+
+  it('normalizes installer and root AppsAndFeatures product identities', () => {
+    const installerIdentity = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/reader.exe',
+        InstallerSha256: 'abc123',
+        AppsAndFeaturesEntries: [{
+          ProductCode: 'ac76ba86-1033-ff00-7760-bc15014ea700',
+        }],
+      }],
+    });
+    const inheritedIdentity = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      AppsAndFeaturesEntries: [{
+        ProductCode: '{97b6de30-6082-48d1-9bb4-9f43296531a4}',
+      }],
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/bundle.exe',
+        InstallerSha256: 'def456',
+      }],
+    });
+
+    expect(installerIdentity[0].ProductCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(normalizeInstaller(installerIdentity[0]).productCode).toBe(
+      '{AC76BA86-1033-FF00-7760-BC15014EA700}'
+    );
+    expect(inheritedIdentity[0].ProductCode).toBe(
+      '{97B6DE30-6082-48D1-9BB4-9F43296531A4}'
+    );
+  });
+
+  it('does not replace an explicit non-GUID installer identity with an inherited product code', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'inno',
+      ProductCode: '{11111111-1111-1111-1111-111111111111}',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/setup.exe',
+        InstallerSha256: 'abc123',
+        ProductCode: '{22222222-2222-2222-2222-222222222222}_is1',
+      }],
+    });
+
+    expect(installer.ProductCode).toBeUndefined();
+  });
+
+  it('inherits root nested installer semantics before normalization', () => {
+    const installers = normalizeManifestInstallers({
+      InstallerType: 'zip',
+      NestedInstallerType: 'inno',
+      Scope: 'machine',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/app.zip',
+        InstallerSha256: 'abc123',
+        NestedInstallerFiles: [{ RelativeFilePath: 'setup.exe' }],
+      }],
+    });
+
+    expect(installers[0].NestedInstallerType).toBe('inno');
+    expect(normalizeInstaller(installers[0])).toMatchObject({
+      type: 'zip',
+      nestedInstallerType: 'inno',
+      nestedInstallerPath: 'setup.exe',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     });
   });
 });

@@ -142,6 +142,47 @@ describe('generateDetectionRules', () => {
       expect(regRule.detectionValue).toBe('1.0.0');
     });
 
+    it('should use exact string detection for opaque WinGet versions', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/amp.exe',
+        sha256: 'abc123',
+        type: 'portable',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Amp CLI',
+        'Sourcegraph.Amp',
+        '0.0.1786233956-g40887a'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.detectionType).toBe('string');
+      expect(regRule.operator).toBe('equal');
+      expect(regRule.detectionValue).toBe('0.0.1786233956-g40887a');
+    });
+
+    it('should use exact string detection outside the four-part Windows version range', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.exe',
+        sha256: 'abc123',
+        type: 'exe',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Test App',
+        'Publisher.TestApp',
+        '1.2.3.4.5'
+      );
+
+      const regRule = rules[0] as RegistryDetectionRule;
+      expect(regRule.detectionType).toBe('string');
+      expect(regRule.operator).toBe('equal');
+    });
+
     it('should use HKCU for user-scoped installs', () => {
       const installer: NormalizedInstaller = {
         architecture: 'x64',
@@ -332,6 +373,46 @@ describe('generateDetectionRules', () => {
 
       expect(rules).toHaveLength(1);
       expect(rules[0].type).toBe('script');
+    });
+
+    it('should query the current user and fall back only when running as SYSTEM', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/terminal.msixbundle',
+        sha256: 'abc123',
+        type: 'msix',
+        scope: 'user',
+        packageFamilyName: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+      };
+
+      const rules = generateDetectionRules(installer, 'Windows Terminal');
+      const script = (rules[0] as ScriptDetectionRule).scriptContent;
+
+      expect(script).toContain('Get-AppxPackage -Name "Microsoft.WindowsTerminal"');
+      expect(script).toContain(
+        '[Security.Principal.WindowsIdentity]::GetCurrent().IsSystem'
+      );
+      expect(script).toContain(
+        'if (-not $package -and $runningAsSystem) { $package = Get-AppxPackage -Name "Microsoft.WindowsTerminal" -AllUsers }'
+      );
+      expect(script).not.toContain('Get-AppxProvisionedPackage');
+    });
+
+    it('should check installed and provisioned identities for a machine-scoped package', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/app.msix',
+        sha256: 'abc123',
+        type: 'msix',
+        scope: 'machine',
+        packageFamilyName: 'Contoso.App_abc123',
+      };
+
+      const rules = generateDetectionRules(installer, 'Contoso App');
+      const script = (rules[0] as ScriptDetectionRule).scriptContent;
+
+      expect(script).toContain('Get-AppxPackage -Name "Contoso.App" -AllUsers');
+      expect(script).toContain('Get-AppxProvisionedPackage -Online');
     });
   });
 
@@ -583,6 +664,88 @@ describe('generateInstallCommand', () => {
     expect(command).toContain('Expand-Archive');
     expect(command).toContain('-Force');
   });
+
+  it('should generate a nested installer command for non-portable zip packages', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'inno',
+      nestedInstallerPath: 'setup.exe',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+    };
+
+    expect(generateInstallCommand(installer)).toBe(
+      '"setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+    );
+  });
+
+  it('should use msiexec for a nested MSI package', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'msi',
+      nestedInstallerPath: 'payload\\setup.msi',
+      silentArgs: '/qn /norestart',
+    };
+
+    expect(generateInstallCommand(installer)).toBe(
+      'msiexec /i "payload\\setup.msi" /qn /norestart ALLUSERS=1'
+    );
+  });
+
+  it('should not launch a nested portable executable', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'portable',
+      nestedInstallerPath: 'app.exe',
+    };
+
+    expect(generateInstallCommand(installer)).toContain('Expand-Archive');
+  });
+
+  it('should reject a nested path without a nested installer type', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerPath: 'setup.exe',
+    };
+
+    expect(() => generateInstallCommand(installer)).toThrow(/no nested installer type/i);
+  });
+
+  it('should treat a whitespace-only nested path as an archive-only package', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerPath: '   ',
+    };
+
+    expect(generateInstallCommand(installer)).toContain('Expand-Archive');
+  });
+
+  it('should reject an unsafe nested installer path', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: '..\\setup.exe',
+    };
+
+    expect(() => generateInstallCommand(installer)).toThrow(/unsafe nested installer path/i);
+  });
 });
 
 describe('generateUninstallCommand', () => {
@@ -603,7 +766,7 @@ describe('generateUninstallCommand', () => {
     expect(command).toContain('/norestart');
   });
 
-  it('should generate placeholder MSI uninstall command without product code', () => {
+  it('should resolve MSI uninstall registration without a product code', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',
       url: 'https://example.com/installer.msi',
@@ -611,9 +774,23 @@ describe('generateUninstallCommand', () => {
       type: 'msi',
     };
 
-    const command = generateUninstallCommand(installer);
+    const command = generateUninstallCommand(installer, 'Codeless MSI App');
 
-    expect(command).toContain('{PRODUCT_CODE}');
+    expect(command).toBe('REGISTRY_UNINSTALL:Codeless MSI App');
+    expect(command).not.toContain('{PRODUCT_CODE}');
+  });
+
+  it('should fail safely when MSI uninstall identity cannot be determined', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/installer.msi',
+      sha256: 'abc123',
+      type: 'msi',
+    };
+
+    expect(generateUninstallCommand(installer)).toBe(
+      'MSI_UNINSTALL_IDENTITY_REQUIRED'
+    );
   });
 
   it('should generate MSIX uninstall marker with package family name', () => {
@@ -631,6 +808,19 @@ describe('generateUninstallCommand', () => {
     expect(command).toContain('Microsoft.VSCode');
   });
 
+  it('should not guess an MSIX package identity from its display name', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/installer.msix',
+      sha256: 'abc123',
+      type: 'msix',
+    };
+
+    expect(generateUninstallCommand(installer, 'Windows Terminal')).toBe(
+      'MSIX_UNINSTALL:{PACKAGE_NAME}'
+    );
+  });
+
   it('should generate registry uninstall command for EXE with display name', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',
@@ -643,6 +833,65 @@ describe('generateUninstallCommand', () => {
 
     expect(command).toContain('REGISTRY_UNINSTALL:');
     expect(command).toContain('Test Application');
+  });
+
+  it('should preserve a Burn bundle product code in the registry uninstall marker', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/python.exe',
+      sha256: 'abc123',
+      type: 'burn',
+      productCode: '{97b6de30-6082-48d1-9bb4-9f43296531a4}',
+    };
+
+    const command = generateUninstallCommand(installer, 'Python 3.14');
+
+    expect(command).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{97B6DE30-6082-48D1-9BB4-9F43296531A4}:Python 3.14'
+    );
+  });
+
+  it('should preserve an EXE wrapper product code in the registry uninstall marker', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/reader.exe',
+      sha256: 'abc123',
+      type: 'exe',
+      productCode: '{AC76BA86-1033-FF00-7760-BC15014EA700}',
+    };
+
+    const command = generateUninstallCommand(
+      installer,
+      'Adobe Acrobat Reader (64-bit)'
+    );
+
+    expect(command).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat Reader (64-bit)'
+    );
+  });
+
+  it('should canonicalize a braceless product code and reject malformed GUID shapes', () => {
+    const base: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.exe',
+      sha256: 'abc123',
+      type: 'exe',
+    };
+
+    expect(
+      generateUninstallCommand(
+        { ...base, productCode: 'ac76ba86-1033-ff00-7760-bc15014ea700' },
+        'Reader'
+      )
+    ).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Reader'
+    );
+    expect(
+      generateUninstallCommand(
+        { ...base, productCode: '{------------------------------------}' },
+        'Reader'
+      )
+    ).toBe('REGISTRY_UNINSTALL:Reader');
   });
 
   it('should delegate Inno uninstall to registry lookup when display name is provided', () => {
@@ -670,6 +919,18 @@ describe('generateUninstallCommand', () => {
     const command = generateUninstallCommand(installer);
 
     expect(command).toBe('uninstall.exe /S');
+  });
+
+  it('should not emit an exact product marker without a usable display name', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.exe',
+      sha256: 'abc123',
+      type: 'exe',
+      productCode: '{AC76BA86-1033-FF00-7760-BC15014EA700}',
+    };
+
+    expect(generateUninstallCommand(installer, '   ')).toBe('# Manual uninstall required');
   });
 });
 

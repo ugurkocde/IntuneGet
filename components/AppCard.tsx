@@ -9,6 +9,8 @@ import type { NormalizedPackage } from '@/types/winget';
 import { cleanPackageName } from '@/lib/locale-utils';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { QaBadge } from '@/components/qa/QaBadge';
+import type { QaStatus } from '@/types/qa';
 
 const installerTypeStyles: Record<string, string> = {
   msi: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
@@ -38,9 +40,10 @@ interface AppCardProps {
   isBulkSelectMode?: boolean;
   isBulkSelected?: boolean;
   onBulkToggle?: (pkg: NormalizedPackage) => void;
+  qaStatus?: QaStatus | null;
 }
 
-function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle }: AppCardProps) {
+function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus }: AppCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -157,6 +160,9 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
                 {getInstallerLabel(pkg.installerType)}
               </span>
             )}
+            {pkg.appSource !== 'store' && (
+              <QaBadge wingetId={pkg.id} catalogVersion={pkg.version} status={qaStatus} />
+            )}
             {pkg.popularityRank != null && pkg.popularityRank <= 100 && pkg.appSource !== 'store' && (
               <span className="text-xs font-medium text-accent-violet bg-accent-violet/10 px-2 py-0.5 rounded-full border border-accent-violet/20">
                 Top {pkg.popularityRank}
@@ -230,5 +236,9 @@ export const AppCard = memo(AppCardComponent, (prevProps, nextProps) => {
          prevProps.package.version === nextProps.package.version &&
          prevProps.isDeployed === nextProps.isDeployed &&
          prevProps.isBulkSelectMode === nextProps.isBulkSelectMode &&
-         prevProps.isBulkSelected === nextProps.isBulkSelected;
+         prevProps.isBulkSelected === nextProps.isBulkSelected &&
+         prevProps.qaStatus?.outcome === nextProps.qaStatus?.outcome &&
+         prevProps.qaStatus?.testedVersion === nextProps.qaStatus?.testedVersion &&
+         prevProps.qaStatus?.architecture === nextProps.qaStatus?.architecture &&
+         prevProps.qaStatus?.testedAtUtc === nextProps.qaStatus?.testedAtUtc;
 });

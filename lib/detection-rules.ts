@@ -103,7 +103,7 @@ export function generateDetectionRules(
  * The SOFTWARE\IntuneGet\Apps root is customizable per package via
  * psadtConfig.registryMarkerPath (issue #106)
  */
-function generateRegistryMarkerDetectionRules(
+export function generateRegistryMarkerDetectionRules(
   wingetId: string,
   version: string,
   scope?: WingetScope,
@@ -115,14 +115,25 @@ function generateRegistryMarkerDetectionRules(
   // Use HKCU for user scope, HKLM for machine scope (default)
   const hive = scope === 'user' ? 'HKEY_CURRENT_USER' : 'HKEY_LOCAL_MACHINE';
 
+  // Intune's strict registry `version` operation is only appropriate for
+  // System.Version-compatible values. WinGet also permits opaque versions
+  // such as `0.0.1786233956-g40887a`; treating those as versions makes an
+  // otherwise correctly installed marker fail detection. Use exact string
+  // comparison for opaque values because the marker is generated per release.
+  const versionParts = /^\d+(?:\.\d+){1,3}$/.test(version) ? version.split('.') : [];
+  const useVersionComparison =
+    versionParts.length >= 2 &&
+    versionParts.length <= 4 &&
+    versionParts.every((part) => Number(part) <= 2_147_483_647);
+
   return [
     {
       type: 'registry',
       keyPath: `${hive}\\${normalizeMarkerPath(markerPath)}\\${sanitizedId}`,
       valueName: 'Version',
       check32BitOn64System: false,
-      detectionType: 'version',
-      operator: 'greaterThanOrEqual',
+      detectionType: useVersionComparison ? 'version' : 'string',
+      operator: useVersionComparison ? 'greaterThanOrEqual' : 'equal',
       detectionValue: version,
     } as RegistryDetectionRule,
   ];
@@ -176,7 +187,10 @@ function generateMsixDetectionRules(
     return [
       {
         type: 'script',
-        scriptContent: generateMsixDetectionScript(installer.packageFamilyName),
+        scriptContent: generateMsixDetectionScript(
+          installer.packageFamilyName,
+          installer.scope
+        ),
         enforceSignatureCheck: false,
         runAs32Bit: false,
       } as ScriptDetectionRule,
@@ -252,16 +266,32 @@ function getBasePath(scope?: WingetScope, architecture?: string): string {
  * Generate MSIX detection script
  * MSIX apps are detected via Get-AppxPackage
  */
-function generateMsixDetectionScript(packageFamilyName: string): string {
+function generateMsixDetectionScript(
+  packageFamilyName: string,
+  scope?: WingetScope
+): string {
   // Extract the package name (before the underscore in family name)
   const packageName = packageFamilyName.split('_')[0];
+  const packageLookup =
+    scope === 'user'
+      ? [
+          `$package = Get-AppxPackage -Name "${packageName}"`,
+          '$runningAsSystem = [Security.Principal.WindowsIdentity]::GetCurrent().IsSystem',
+          `if (-not $package -and $runningAsSystem) { $package = Get-AppxPackage -Name "${packageName}" -AllUsers }`,
+        ].join('\n')
+      : `$package = Get-AppxPackage -Name "${packageName}" -AllUsers`;
 
   const lines = [
     '# MSIX Detection Script',
     `# Package Family Name: ${packageFamilyName}`,
     '',
     '$ErrorActionPreference = "SilentlyContinue"',
-    `$package = Get-AppxPackage -Name "*${packageName}*" -AllUsers`,
+    packageLookup,
+    ...(scope === 'user'
+      ? []
+      : [
+          `if (-not $package) { $package = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq "${packageName}" } }`,
+        ]),
     'if ($package) {',
     '    Write-Output "Installed"',
     '    exit 0',
@@ -280,7 +310,10 @@ export function generateInstallCommand(
   scope: WingetScope = 'machine'
 ): string {
   const installerName = resolveInstallerFileName(installer.url, installer.type);
-  const silentArgs = installer.silentArgs || getDefaultSilentArgs(installer.type);
+  const effectiveType = installer.type === 'zip' && installer.nestedInstallerType
+    ? installer.nestedInstallerType
+    : installer.type;
+  const silentArgs = installer.silentArgs || getDefaultSilentArgs(effectiveType);
 
   switch (installer.type) {
     case 'msi':
@@ -299,6 +332,38 @@ export function generateInstallCommand(
       return `"${installerName}" ${silentArgs}`.trim();
 
     case 'zip':
+      const declaredNestedPath = installer.nestedInstallerPath?.trim();
+      if (declaredNestedPath) {
+        const nestedPath = declaredNestedPath.replace(/\//g, '\\');
+        if (!installer.nestedInstallerType) {
+          throw new Error('Zip package declares a nested installer path but no nested installer type');
+        }
+        if (
+          /^[\\/]/.test(nestedPath) ||
+          /^[A-Za-z]:/.test(nestedPath) ||
+          nestedPath.split('\\').includes('..') ||
+          /[\x00-\x1f]/.test(nestedPath)
+        ) {
+          throw new Error(`Unsafe nested installer path: ${installer.nestedInstallerPath}`);
+        }
+
+        switch (installer.nestedInstallerType) {
+          case 'msi':
+          case 'wix': {
+            const nestedMsiScope = scope === 'user' ? 'ALLUSERS=""' : 'ALLUSERS=1';
+            return `msiexec /i "${nestedPath}" ${silentArgs} ${nestedMsiScope}`.trim();
+          }
+          case 'msix':
+          case 'appx':
+            return `Add-AppxPackage -Path "${nestedPath}"`;
+          case 'portable':
+            return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
+          default:
+            return `"${nestedPath}" ${silentArgs}`.trim();
+        }
+      }
+      return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
+
     case 'portable':
       return `Expand-Archive -Path "${installerName}" -DestinationPath "%ProgramFiles%\\${installerName.replace(/\.[^/.]+$/, '')}" -Force`;
 
@@ -327,7 +392,14 @@ export function generateUninstallCommand(
       if (installer.productCode) {
         return `msiexec /x "${installer.productCode}" /qn /norestart`;
       }
-      return 'msiexec /x {PRODUCT_CODE} /qn /norestart';
+      // Some manifests omit ProductCode even though Windows Installer creates
+      // an authoritative uninstall registration at install time. Resolve that
+      // registration after installation instead of emitting a literal GUID
+      // placeholder that msiexec will reject with exit code 1619.
+      if (displayName) {
+        return generateRegistryUninstallCommand(displayName);
+      }
+      return 'MSI_UNINSTALL_IDENTITY_REQUIRED';
 
     case 'msix':
     case 'appx':
@@ -335,10 +407,8 @@ export function generateUninstallCommand(
       if (installer.packageFamilyName) {
         return `MSIX_UNINSTALL:${installer.packageFamilyName.split('_')[0]}`;
       }
-      // Fallback using display name
-      if (displayName) {
-        return `MSIX_UNINSTALL:${displayName}`;
-      }
+      // A display name is not an AppX package identity. Keep the marker
+      // intentionally invalid so both packagers reject it before deployment.
       return 'MSIX_UNINSTALL:{PACKAGE_NAME}';
 
     case 'exe':
@@ -348,7 +418,10 @@ export function generateUninstallCommand(
       // Use registry-based uninstall lookup for EXE installers
       // This finds the actual UninstallString from the registry and executes it
       if (displayName) {
-        return generateRegistryUninstallCommand(displayName, installer.type);
+        return generateRegistryUninstallCommand(
+          displayName,
+          installer.productCode
+        );
       }
       // Fallback to generic commands (less reliable)
       if (installer.type === 'inno') {
@@ -358,7 +431,7 @@ export function generateUninstallCommand(
 
     default:
       if (displayName) {
-        return generateRegistryUninstallCommand(displayName, 'exe');
+        return generateRegistryUninstallCommand(displayName);
       }
       return '# Manual uninstall required';
   }
@@ -374,9 +447,25 @@ export function generateUninstallCommand(
  */
 function generateRegistryUninstallCommand(
   displayName: string,
-  _installerType: string
+  productCode?: string
 ): string {
-  return `REGISTRY_UNINSTALL:${displayName}`;
+  const normalizedDisplayName = displayName.trim();
+  if (!normalizedDisplayName) {
+    return '# Manual uninstall required';
+  }
+  // EXE-family installers can wrap MSI products or register bundles whose ARP
+  // name differs from the catalog display name. A manifest ProductCode or
+  // AppsAndFeatures ProductCode is the authoritative uninstall identity, so
+  // preserve it for every EXE-family installer instead of falling back to a
+  // human-readable name that may be normalized or localized differently.
+  const productCodeMatch = productCode?.trim().match(
+    /^\{?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\}?$/
+  );
+  if (productCodeMatch) {
+    const canonicalProductCode = `{${productCodeMatch[1].toUpperCase()}}`;
+    return `REGISTRY_UNINSTALL_PRODUCT:${canonicalProductCode}:${normalizedDisplayName}`;
+  }
+  return `REGISTRY_UNINSTALL:${normalizedDisplayName}`;
 }
 
 /**
@@ -388,7 +477,7 @@ function getDefaultSilentArgs(type: WingetInstallerType): string {
     msix: '',
     appx: '',
     exe: '/S',
-    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+    inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     nullsoft: '/S',
     wix: '/qn /norestart',
     burn: '/quiet /norestart',

@@ -25,6 +25,7 @@ export interface StagedPackage {
   intunewinSizeBytes?: number;
   installerUrl: string;
   installerSha256: string;
+  installerSuccessCodes?: number[];
 
   // Commands
   installCommand: string;
@@ -158,6 +159,9 @@ interface CartItemBase {
   // Redeploy flag - skip duplicate detection during deployment
   forceCreate?: boolean;
 
+  // Explicit acknowledgement of a failed QA result for this exact version.
+  qaOverride?: boolean;
+
   // Cart metadata
   addedAt: string;
 }
@@ -173,6 +177,7 @@ export interface Win32CartItem extends CartItemBase {
   nestedInstallerPath?: string;
   installerUrl: string;
   installerSha256: string;
+  installerSuccessCodes?: number[];
   installCommand: string;
   uninstallCommand: string;
   detectionRules: DetectionRule[];

@@ -3,14 +3,40 @@
  * per-package PSADT settings must survive app updates (issue follow-up to #96).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AutoUpdateTrigger } from '../trigger';
+import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
+import type { QaResultRow } from '@/types/qa';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+
+const {
+  getQaResultMock,
+  getAppForInstallerMock,
+  getVersionInstallerInfoMock,
+  ensureQaDemandMock,
+} = vi.hoisted(() => ({
+  getQaResultMock: vi.fn(),
+  getAppForInstallerMock: vi.fn(),
+  getVersionInstallerInfoMock: vi.fn(),
+  ensureQaDemandMock: vi.fn(),
+}));
+vi.mock('@/lib/catalog', () => ({
+  getCatalogSource: () => ({
+    getQaResult: getQaResultMock,
+    getAppForInstaller: getAppForInstallerMock,
+    getVersionInstallerInfo: getVersionInstallerInfoMock,
+  }),
+}));
+vi.mock('@/lib/qa/demand', () => ({
+  ensureQaDemand: ensureQaDemandMock,
+}));
 
 interface TableHandlers {
   maybeSingleResult?: { data: unknown; error: unknown };
+  maybeSingleSpy?: ReturnType<typeof vi.fn>;
   singleResult?: { data: unknown; error: unknown };
   updateSpy?: ReturnType<typeof vi.fn>;
   insertSpy?: ReturnType<typeof vi.fn>;
+  terminalError?: unknown;
 }
 
 function createSupabaseMock(tables: Record<string, TableHandlers>) {
@@ -19,10 +45,13 @@ function createSupabaseMock(tables: Record<string, TableHandlers>) {
       const handlers = tables[table] || {};
       const builder: Record<string, unknown> = {};
       const chain = () => builder;
-      for (const method of ['select', 'eq', 'not', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'not', 'contains', 'order', 'limit']) {
         builder[method] = vi.fn(chain);
       }
-      builder.maybeSingle = vi.fn(async () => handlers.maybeSingleResult || { data: null, error: null });
+      builder.error = handlers.terminalError || null;
+      builder.maybeSingle = vi.fn(async () => handlers.maybeSingleSpy
+        ? handlers.maybeSingleSpy()
+        : handlers.maybeSingleResult || { data: null, error: null });
       builder.single = vi.fn(async () => handlers.singleResult || { data: null, error: null });
       builder.update = vi.fn((payload: unknown) => {
         handlers.updateSpy?.(payload);
@@ -61,6 +90,30 @@ function makePolicy(deploymentConfig: Partial<DeploymentConfig>): AppUpdatePolic
   } as unknown as AppUpdatePolicy;
 }
 
+function zoomConfigForTrigger(): DeploymentConfig {
+  const legacyRule = {
+    type: 'file' as const,
+    path: '%ProgramFiles%',
+    fileOrFolderName: 'Zoom VDI Workplace',
+    detectionType: 'exists' as const,
+    check32BitOn64System: false,
+  };
+  return {
+    displayName: 'Zoom VDI Workplace',
+    publisher: 'Zoom',
+    architecture: 'x64',
+    installerType: 'msi',
+    installCommand: 'msiexec /i "ZoomInstallerVDI.msi" /qn',
+    uninstallCommand: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+    installScope: 'machine',
+    detectionRules: [legacyRule],
+    psadtConfig: {
+      ...DEFAULT_PSADT_CONFIG,
+      detectionRules: [legacyRule],
+    },
+  };
+}
+
 const UPDATE_INFO = {
   wingetId: 'Test.App',
   currentVersion: '1.0.0',
@@ -69,6 +122,9 @@ const UPDATE_INFO = {
   installerUrl: 'https://example.com/setup-2.0.0.zip',
   installerSha256: 'abc',
   installerType: 'zip',
+  installCommand: '"setup-2.0.0.exe" --current-version-silent',
+  silentSwitches: '--current-version-silent',
+  installScope: 'user' as const,
   nestedInstallerType: 'exe',
   nestedInstallerPath: 'setup-2.0.0.exe',
 };
@@ -82,6 +138,405 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 describe('AutoUpdateTrigger psadtConfig handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getQaResultMock.mockResolvedValue(null);
+    getAppForInstallerMock.mockReset();
+    getVersionInstallerInfoMock.mockReset();
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'waiting',
+      candidateId: 'candidate-1',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
+  });
+
+  it('builds the current version command from normalized WinGet switches', async () => {
+    getAppForInstallerMock.mockResolvedValue({
+      latest_version: '8.1.4087.62',
+      name: 'Vivaldi',
+    });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/Vivaldi.8.1.4087.62.x64.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installer_scope: 'user',
+      silent_args: '--vivaldi-silent --do-not-launch-chrome',
+      installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/Vivaldi.8.1.4087.62.x64.exe',
+        InstallerSha256: 'A'.repeat(64),
+        InstallerType: 'exe',
+        Scope: 'user',
+        InstallerSwitches: {
+          Custom: '--do-not-launch-chrome',
+        },
+      }],
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Vivaldi.Vivaldi', 'x64');
+
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) throw new Error('Expected installer resolution to succeed');
+    expect(result.info).toMatchObject({
+      installCommand: '"Vivaldi.8.1.4087.62.x64.exe" --vivaldi-silent --do-not-launch-chrome',
+      silentSwitches: '--vivaldi-silent --do-not-launch-chrome',
+      installScope: 'user',
+    });
+  });
+
+  it('selects the stored deployment scope when a release has user and machine variants', async () => {
+    getAppForInstallerMock.mockResolvedValue({
+      latest_version: '134.0.5954.46',
+      name: 'Opera Browser',
+    });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/opera.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installers: [
+        {
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/opera.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'exe',
+          Scope: 'user',
+          InstallerSwitches: { Silent: '/silent /allusers=0' },
+        },
+        {
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/opera.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'exe',
+          Scope: 'machine',
+          InstallerSwitches: { Silent: '/silent /allusers=1' },
+        },
+      ],
+    });
+
+    const machine = await getLatestInstallerInfo(
+      {} as never,
+      'Opera.Opera',
+      'x64',
+      'machine'
+    );
+    const user = await getLatestInstallerInfo(
+      {} as never,
+      'Opera.Opera',
+      'x64',
+      'user'
+    );
+
+    expect(machine).toMatchObject({ ok: true });
+    if (!machine.ok) throw new Error('Expected machine installer resolution to succeed');
+    expect(machine.info).toMatchObject({
+      installScope: 'machine',
+      silentSwitches: '/silent /allusers=1',
+    });
+    expect(user).toMatchObject({ ok: true });
+    if (!user.ok) throw new Error('Expected user installer resolution to succeed');
+    expect(user.info).toMatchObject({
+      installScope: 'user',
+      silentSwitches: '/silent /allusers=0',
+    });
+  });
+
+  it('reports when the app is not in the catalog', async () => {
+    getAppForInstallerMock.mockResolvedValue(null);
+
+    const result = await getLatestInstallerInfo({} as never, 'Missing.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'app_not_in_catalog' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Missing.App');
+  });
+
+  it('reports when the catalog has no latest version', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: null });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'version_record_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports when the latest version manifest has not been synced', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue(null);
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'version_record_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports missing per-architecture installer metadata', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/setup.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installers: [],
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App', 'x64');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'installer_metadata_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports when no installer matches architecture and scope', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/setup.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      installers: [{
+        Architecture: 'arm64',
+        Scope: 'user',
+        InstallerUrl: 'https://example.com/setup.exe',
+        InstallerSha256: 'A'.repeat(64),
+      }],
+    });
+
+    const result = await getLatestInstallerInfo(
+      {} as never,
+      'Test.App',
+      'x64',
+      'machine'
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'no_compatible_installer' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+    expect(result.failure.message).toContain('x64');
+    expect(result.failure.message).toContain('machine install scope');
+  });
+
+  it('reports a missing installer URL', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: null,
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'installer_url_missing' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('reports a missing or invalid installer hash', async () => {
+    getAppForInstallerMock.mockResolvedValue({ name: 'Test App', latest_version: '2.0.0' });
+    getVersionInstallerInfoMock.mockResolvedValue({
+      installer_url: 'https://example.com/setup.exe',
+      installer_sha256: 'not-a-sha256',
+      installer_type: 'exe',
+    });
+
+    const result = await getLatestInstallerInfo({} as never, 'Test.App');
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { reason: 'installer_hash_invalid' },
+    });
+    if (result.ok) throw new Error('Expected installer resolution to fail');
+    expect(result.failure.message).toContain('Test.App');
+  });
+
+  it('records a current QA failure as a safety skip before creating history or a job', async () => {
+    const failedPackageResult = {
+      winget_id: 'Test.App',
+      display_name: 'Test App',
+      publisher: 'Test',
+      tested_version: '2.0.0',
+      architecture: 'x64',
+      outcome: 'Failed',
+      installer_sha256: 'A'.repeat(64),
+      tested_at_utc: '2026-08-07T12:00:00Z',
+      overall_duration_seconds: 30,
+      installer_type: 'zip',
+      install_command: 'setup.exe /S',
+      uninstall_command: 'setup.exe /uninstall',
+      detection: { type: 'fileVersion', path: 'C:\\Test\\app.exe', minimumVersion: '2.0.0' },
+      phase_results: {
+        install: { exitCode: 0, durationSeconds: 1, timedOut: false },
+        detectionAfterInstall: { exitCode: 0, durationSeconds: 1, timedOut: false },
+        uninstall: { exitCode: 1605, durationSeconds: 1, timedOut: false },
+        detectionAfterUninstall: null,
+      },
+      changes: null,
+      relevant_event_count: 0,
+      environment: null,
+      effective_configuration: null,
+      qa_schema_version: 1,
+      synced_at: '2026-08-07T12:01:00Z',
+      test_level: 'psadt-package',
+      package_profile_sha256: 'B'.repeat(64),
+      psadt_version: '4.1.8',
+      psadt_template_sha256: 'C'.repeat(64),
+      psadt_config_sha256: 'D'.repeat(64),
+      detection_rules_sha256: 'E'.repeat(64),
+      packager_commit: 'f'.repeat(40),
+      package_content_sha256: 'F'.repeat(64),
+    } satisfies QaResultRow;
+    getQaResultMock.mockResolvedValue(failedPackageResult);
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'failed',
+      candidateId: null,
+      failureSummary: 'The isolated installation test failed.',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
+
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const policy = makePolicy({
+      displayName: 'Test App',
+      architecture: 'x64',
+    });
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    const createHistorySpy = vi.spyOn(trigger as never, 'createHistoryRecord' as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
+
+    expect(result).toMatchObject({
+      success: false,
+      skipped: true,
+      code: 'QA_FAILED_CURRENT_VERSION',
+    });
+    expect(result.skipReason).toBe('The isolated installation test failed.');
+    expect(createHistorySpy).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the same app adapter to auto-update QA and customer packaging', async () => {
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const storedConfig: DeploymentConfig = {
+      displayName: 'Elgato Stream Deck',
+      publisher: 'Elgato',
+      architecture: 'x64',
+      installerType: 'msi',
+      installCommand: 'msiexec /i setup.msi /qn',
+      uninstallCommand: 'msiexec /x {PRODUCT-CODE} /qn',
+      installScope: 'machine',
+      detectionRules: [],
+      psadtConfig: { ...DEFAULT_PSADT_CONFIG, processesToClose: [] },
+    };
+    const policy = makePolicy(storedConfig);
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never)
+      .mockResolvedValue({ id: 'history-elgato' } as never);
+    const createPackagingJobSpy = vi.spyOn(trigger as never, 'createPackagingJob' as never)
+      .mockResolvedValue({ id: 'job-elgato' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, {
+      ...UPDATE_INFO,
+      wingetId: 'elgato.streamdeck',
+      displayName: 'Elgato Stream Deck',
+      installerType: 'msi',
+      nestedInstallerType: undefined,
+      nestedInstallerPath: undefined,
+    }, { skipRateLimits: true });
+
+    expect(result).toMatchObject({ success: true, packagingJobId: 'job-elgato' });
+    const qaInput = ensureQaDemandMock.mock.calls[0][1] as {
+      psadtConfig: string;
+    };
+    expect(JSON.parse(qaInput.psadtConfig).processesToClose).toEqual([
+      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+    ]);
+    const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
+    expect(
+      (effectivePolicy.deployment_config as DeploymentConfig).psadtConfig?.processesToClose
+    ).toEqual([
+      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+    ]);
+    expect(storedConfig.psadtConfig?.processesToClose).toEqual([]);
+  });
+
+  it('uses a reviewed user scope for both auto-update QA and the packaging job', async () => {
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const storedConfig: DeploymentConfig = {
+      displayName: 'Zalo',
+      publisher: 'VNGCorp',
+      architecture: 'x86',
+      installerType: 'exe',
+      installCommand: 'ZaloSetup.exe /S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zalo',
+      installScope: 'machine',
+      detectionRules: [],
+      psadtConfig: DEFAULT_PSADT_CONFIG,
+    };
+    const policy = makePolicy(storedConfig);
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never)
+      .mockResolvedValue({ id: 'history-zalo' } as never);
+    const createPackagingJobSpy = vi.spyOn(trigger as never, 'createPackagingJob' as never)
+      .mockResolvedValue({ id: 'job-zalo' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, {
+      ...UPDATE_INFO,
+      wingetId: 'VNGCorp.Zalo',
+      displayName: 'Zalo',
+      installerType: 'exe',
+      installScope: 'machine',
+    }, { skipRateLimits: true });
+
+    expect(result).toMatchObject({ success: true, packagingJobId: 'job-zalo' });
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ installScope: 'user' })
+    );
+    const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
+    expect((effectivePolicy.deployment_config as DeploymentConfig).installScope).toBe('user');
+    const effectiveUpdate = createPackagingJobSpy.mock.calls[0][1] as { installScope?: string };
+    expect(effectiveUpdate.installScope).toBe('user');
+    expect(storedConfig.installScope).toBe('machine');
   });
 
   describe('ensurePsadtConfig', () => {
@@ -144,6 +599,153 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     });
   });
 
+  describe('ensureCurrentPackageDefaults', () => {
+    it('persists corrected legacy MSI defaults before QA and packaging', async () => {
+      const updateSpy = vi.fn();
+      const supabase = createSupabaseMock({
+        app_update_policies: { updateSpy },
+      });
+      const trigger = makeTrigger(supabase);
+      const legacyRule = {
+        type: 'file' as const,
+        path: '%ProgramFiles%',
+        fileOrFolderName: 'Zoom VDI Workplace',
+        detectionType: 'exists' as const,
+        check32BitOn64System: false,
+      };
+      const policy = makePolicy({
+        displayName: 'Zoom VDI Workplace',
+        publisher: 'Zoom',
+        architecture: 'x64',
+        installerType: 'msi',
+        installCommand: 'msiexec /i "ZoomInstallerVDI.msi" /qn',
+        uninstallCommand: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+        installScope: 'machine',
+        detectionRules: [legacyRule],
+        psadtConfig: {
+          ...DEFAULT_PSADT_CONFIG,
+          deployMode: 'Silent',
+          verifyInstall: true,
+          removeExistingInstall: true,
+          registryMarkerPath: 'SOFTWARE\\Contoso\\Apps',
+          installCommand: 'msiexec /i "setup.msi" /qn',
+          detectionRules: [legacyRule],
+        },
+      });
+
+      await (trigger as unknown as {
+        ensureCurrentPackageDefaults: (
+          p: AppUpdatePolicy,
+          u: Parameters<AutoUpdateTrigger['triggerAutoUpdate']>[1]
+        ) => Promise<void>;
+      }).ensureCurrentPackageDefaults(policy, {
+        ...UPDATE_INFO,
+        wingetId: 'Zoom.Zoom.VDI',
+        latestVersion: '7.0.27050',
+        displayName: 'Zoom VDI Workplace',
+        installerUrl: 'https://zoom.example/ZoomInstallerVDI.msi',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'msi',
+        installScope: 'machine',
+        nestedInstallerType: undefined,
+        nestedInstallerPath: undefined,
+      });
+
+      const config = policy.deployment_config as DeploymentConfig;
+      expect(config.uninstallCommand).toBe('REGISTRY_UNINSTALL:Zoom VDI Workplace');
+      expect(config.detectionRules[0]).toMatchObject({
+        type: 'registry',
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Apps\\Zoom_Zoom_VDI',
+        detectionValue: '7.0.27050',
+      });
+      expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
+        deployment_config: config,
+        updated_at: expect.any(String),
+      }));
+    });
+
+    it('persists the corrected profile before looking up QA demand', async () => {
+      const updateSpy = vi.fn();
+      const supabase = createSupabaseMock({
+        app_update_policies: { updateSpy },
+      });
+      const trigger = makeTrigger(supabase);
+      const legacyRule = {
+        type: 'file' as const,
+        path: '%ProgramFiles%',
+        fileOrFolderName: 'Zoom VDI Workplace',
+        detectionType: 'exists' as const,
+        check32BitOn64System: false,
+      };
+      const policy = makePolicy({
+        displayName: 'Zoom VDI Workplace',
+        publisher: 'Zoom',
+        architecture: 'x64',
+        installerType: 'msi',
+        installCommand: 'msiexec /i "ZoomInstallerVDI.msi" /qn',
+        uninstallCommand: 'msiexec /x {PRODUCT_CODE} /qn /norestart',
+        installScope: 'machine',
+        detectionRules: [legacyRule],
+        psadtConfig: {
+          ...DEFAULT_PSADT_CONFIG,
+          detectionRules: [legacyRule],
+        },
+      });
+      policy.original_upload_history_id = 'prior-upload';
+      policy.consecutive_failures = 0;
+      vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+      vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+
+      await trigger.triggerAutoUpdate(policy, {
+        ...UPDATE_INFO,
+        wingetId: 'Zoom.Zoom.VDI',
+        latestVersion: '7.0.27050',
+        displayName: 'Zoom VDI Workplace',
+        installerUrl: 'https://zoom.example/ZoomInstallerVDI.msi',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'msi',
+        installScope: 'machine',
+      }, { skipRateLimits: true });
+
+      expect(updateSpy).toHaveBeenCalled();
+      expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
+      expect(updateSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        ensureQaDemandMock.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('does not mutate the in-memory policy when persistence fails', async () => {
+      const supabase = createSupabaseMock({
+        app_update_policies: {
+          terminalError: { message: 'database unavailable' },
+        },
+      });
+      const trigger = makeTrigger(supabase);
+      const policy = makePolicy({
+        ...zoomConfigForTrigger(),
+      });
+      const originalConfig = policy.deployment_config;
+
+      await expect((trigger as unknown as {
+        ensureCurrentPackageDefaults: (
+          p: AppUpdatePolicy,
+          u: Parameters<AutoUpdateTrigger['triggerAutoUpdate']>[1]
+        ) => Promise<void>;
+      }).ensureCurrentPackageDefaults(policy, {
+        ...UPDATE_INFO,
+        wingetId: 'Zoom.Zoom.VDI',
+        latestVersion: '7.0.27050',
+        displayName: 'Zoom VDI Workplace',
+        installerUrl: 'https://zoom.example/ZoomInstallerVDI.msi',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'msi',
+        installScope: 'machine',
+      })).rejects.toThrow('Could not persist corrected package defaults');
+
+      expect(policy.deployment_config).toBe(originalConfig);
+    });
+  });
+
   describe('createPackagingJob', () => {
     it('stores psadtConfig and nested installer info on the new job package_config', async () => {
       const insertSpy = vi.fn();
@@ -179,8 +781,12 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       expect(result.id).toBe('job-2');
       expect(insertSpy).toHaveBeenCalledTimes(1);
       const jobData = insertSpy.mock.calls[0][0] as {
+        install_command: string;
+        install_scope: string;
         package_config: Record<string, unknown>;
       };
+      expect(jobData.install_command).toBe('"setup-2.0.0.exe" --current-version-silent');
+      expect(jobData.install_scope).toBe('user');
       expect(jobData.package_config.psadtConfig).toEqual(PSADT_CONFIG);
       expect(jobData.package_config.nestedInstallerType).toBe('exe');
       expect(jobData.package_config.nestedInstallerPath).toBe('setup-2.0.0.exe');

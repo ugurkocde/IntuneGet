@@ -238,7 +238,14 @@ describe('POST /api/updates/trigger', () => {
 
     const { supabase, policyUpdatePayloads } = createTriggerSupabaseMocks(policy);
     createServerClientMock.mockReturnValue(supabase);
-    getLatestInstallerInfoMock.mockResolvedValue(null);
+    const failureMessage = 'The catalog has not synced the installer manifest for Microsoft.Edge 2.0.0 yet. Try again after the next catalog sync.';
+    getLatestInstallerInfoMock.mockResolvedValue({
+      ok: false,
+      failure: {
+        reason: 'version_record_missing',
+        message: failureMessage,
+      },
+    });
 
     const request = new NextRequest('http://localhost:3000/api/updates/trigger', {
       method: 'POST',
@@ -258,6 +265,7 @@ describe('POST /api/updates/trigger', () => {
     expect(response.status).toBe(200);
     expect(body.success).toBe(false);
     expect(body.failed).toBe(1);
+    expect(body.results[0].error).toBe(failureMessage);
     expect(policyUpdatePayloads).toEqual([
       { policy_type: 'auto_update', is_enabled: true },
       { policy_type: 'notify', is_enabled: false },
@@ -285,7 +293,8 @@ describe('POST /api/updates/trigger', () => {
     const { supabase, policyUpdatePayloads } = createTriggerSupabaseMocks(policy);
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      currentVersion: '',
+      ok: true,
+      info: { currentVersion: '' },
     });
     triggerAutoUpdateMock.mockRejectedValue(new Error('trigger crashed'));
 
@@ -312,6 +321,60 @@ describe('POST /api/updates/trigger', () => {
       { policy_type: 'auto_update', is_enabled: true },
       { policy_type: 'notify', is_enabled: false },
     ]);
+  });
+
+  it('returns an explicit skipped result when auto-update is blocked by current QA', async () => {
+    const policy: AppUpdatePolicy = {
+      id: 'policy-1',
+      user_id: 'user-1',
+      tenant_id: 'tenant-1',
+      winget_id: 'Microsoft.Edge',
+      policy_type: 'auto_update',
+      pinned_version: null,
+      deployment_config: { architecture: 'x64' } as DeploymentConfig,
+      original_upload_history_id: null,
+      last_auto_update_at: null,
+      last_auto_update_version: null,
+      is_enabled: true,
+      consecutive_failures: 0,
+      created_at: '2026-02-01T00:00:00Z',
+      updated_at: '2026-02-01T00:00:00Z',
+    };
+
+    const { supabase } = createTriggerSupabaseMocks(policy);
+    createServerClientMock.mockReturnValue(supabase);
+    getLatestInstallerInfoMock.mockResolvedValue({
+      ok: true,
+      info: {
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+      },
+    });
+    triggerAutoUpdateMock.mockResolvedValue({
+      success: false,
+      skipped: true,
+      code: 'QA_FAILED_CURRENT_VERSION',
+      skipReason: 'QA failed; correct the uninstall command and rerun QA.',
+    });
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/updates/trigger', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winget_id: 'Microsoft.Edge', tenant_id: 'tenant-1' }),
+    }));
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      success: false,
+      failed: 1,
+      results: [{
+        success: false,
+        skipped: true,
+        code: 'QA_FAILED_CURRENT_VERSION',
+      }],
+    });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
   it('forwards stored relationships and auto-supersedence to the packaging workflow', async () => {
@@ -360,13 +423,16 @@ describe('POST /api/updates/trigger', () => {
     });
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      wingetId: 'Microsoft.Edge',
-      currentVersion: '',
-      latestVersion: '2.0.0',
-      displayName: 'Microsoft Edge',
-      installerUrl: 'https://example.com/edge.exe',
-      installerSha256: 'abc123',
-      installerType: 'exe',
+      ok: true,
+      info: {
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+        displayName: 'Microsoft Edge',
+        installerUrl: 'https://example.com/edge.exe',
+        installerSha256: 'abc123',
+        installerType: 'exe',
+      },
     });
     triggerAutoUpdateMock.mockResolvedValue({
       success: true,
@@ -442,13 +508,16 @@ describe('POST /api/updates/trigger', () => {
     });
     createServerClientMock.mockReturnValue(supabase);
     getLatestInstallerInfoMock.mockResolvedValue({
-      wingetId: 'Microsoft.Edge',
-      currentVersion: '',
-      latestVersion: '2.0.0',
-      displayName: 'Microsoft Edge',
-      installerUrl: 'https://example.com/edge.exe',
-      installerSha256: 'abc123',
-      installerType: 'exe',
+      ok: true,
+      info: {
+        wingetId: 'Microsoft.Edge',
+        currentVersion: '',
+        latestVersion: '2.0.0',
+        displayName: 'Microsoft Edge',
+        installerUrl: 'https://example.com/edge.exe',
+        installerSha256: 'abc123',
+        installerType: 'exe',
+      },
     });
     triggerAutoUpdateMock.mockResolvedValue({
       success: true,
@@ -524,13 +593,16 @@ describe('POST /api/updates/trigger', () => {
         originalUploadHistoryId: 'upload-1',
       });
       getLatestInstallerInfoMock.mockResolvedValue({
-        wingetId: 'Mozilla.Firefox',
-        currentVersion: '152.0.1',
-        latestVersion: '152.0.5',
-        displayName: 'Mozilla Firefox',
-        installerUrl: 'https://example.com/firefox.exe',
-        installerSha256: 'a'.repeat(64),
-        installerType: 'exe',
+        ok: true,
+        info: {
+          wingetId: 'Mozilla.Firefox',
+          currentVersion: '152.0.1',
+          latestVersion: '152.0.5',
+          displayName: 'Mozilla Firefox',
+          installerUrl: 'https://example.com/firefox.exe',
+          installerSha256: 'a'.repeat(64),
+          installerType: 'exe',
+        },
       });
     });
 

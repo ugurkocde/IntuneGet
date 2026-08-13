@@ -281,6 +281,7 @@ def save_app_info(app_id, app_name, installer_data, architecture):
         "Scope": installer_data.get('Scope'),
         "InstallModes": installer_data.get('InstallModes', []),
         "InstallerSwitches": installer_data.get('InstallerSwitches', {}),
+        "InstallerSuccessCodes": installer_data.get('InstallerSuccessCodes', []),
         "InstallerUrl": installer.get('InstallerUrl'),
         "InstallerSha256": installer.get('InstallerSha256'),
         "Architecture": architecture

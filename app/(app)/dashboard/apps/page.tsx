@@ -45,6 +45,7 @@ import {
 import { useDeployedPackages } from '@/hooks/use-deployed-packages';
 import { useDeployedConfig } from '@/hooks/use-deployed-config';
 import { useBulkAdd } from '@/hooks/use-bulk-add';
+import { useQaStatuses } from '@/hooks/use-qa';
 import { useCartStore } from '@/stores/cart-store';
 import type { NormalizedPackage } from '@/types/winget';
 import { getCategoryLabel } from '@/lib/category-utils';
@@ -271,6 +272,13 @@ export default function AppCatalogPage() {
   const selectedVersions = manifestData?.versions || [];
 
   const showSearchResults = hasSearched;
+  const qaPackageIds = useMemo(
+    () => (showSearchResults ? searchPackages : allPackages)
+      .filter((pkg) => pkg.appSource !== 'store')
+      .map((pkg) => pkg.id),
+    [showSearchResults, searchPackages, allPackages]
+  );
+  const { data: qaStatusesData } = useQaStatuses(qaPackageIds);
   const showCategoryResults = !hasSearched && selectedCategory !== null;
   const activeSortLabel = SORT_OPTIONS.find((option) => option.key === sortBy)?.label || 'Popular';
 
@@ -598,6 +606,7 @@ export default function AppCatalogPage() {
                 isBulkSelectMode={isBulkSelectMode}
                 isBulkSelected={selectedPackageIds.has(pkg.id)}
                 onBulkToggle={handleBulkToggle}
+                qaStatus={qaStatusesData?.statuses[pkg.id] ?? null}
               />
             </div>
           ))}
@@ -620,6 +629,7 @@ export default function AppCatalogPage() {
               isBulkSelectMode={isBulkSelectMode}
               isBulkSelected={selectedPackageIds.has(pkg.id)}
               onBulkToggle={handleBulkToggle}
+              qaStatus={qaStatusesData?.statuses[pkg.id] ?? null}
             />
           </div>
         ))}

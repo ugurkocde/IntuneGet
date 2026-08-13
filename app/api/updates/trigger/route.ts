@@ -32,6 +32,7 @@ import type {
 } from '@/types/update-policies';
 import type { Json } from '@/types/database';
 import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
+import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 
 // Batches of up to 10 apps run sequentially (DB lookups, job creation, and a
 // workflow dispatch each); the platform default duration times out mid-batch
@@ -263,18 +264,25 @@ export async function POST(request: NextRequest) {
         }
 
         // Get installer info
-        const installerInfo = await getLatestInstallerInfo(supabase, req.winget_id);
+        const deploymentConfig = policy.deployment_config as unknown as DeploymentConfig | null;
+        const installerResolution = await getLatestInstallerInfo(
+          supabase,
+          req.winget_id,
+          deploymentConfig?.architecture,
+          deploymentConfig?.installScope
+        );
 
-        if (!installerInfo) {
+        if (!installerResolution.ok) {
           response.failed++;
           response.results.push({
             winget_id: req.winget_id,
             tenant_id: req.tenant_id,
             success: false,
-            error: 'Could not get installer information for latest version',
+            error: installerResolution.failure.message,
           });
           continue;
         }
+        const installerInfo = installerResolution.info;
 
         installerInfo.currentVersion = updateResult.current_version;
 
@@ -338,7 +346,8 @@ export async function POST(request: NextRequest) {
               nestedInstallerPath: installerInfo.nestedInstallerPath,
               silentSwitches: extractSilentSwitches(
                 deploymentConfig.installCommand || '',
-                installerInfo.installerType || deploymentConfig.installerType || 'exe'
+                installerInfo.installerType || deploymentConfig.installerType || 'exe',
+                installerInfo.nestedInstallerType
               ),
               uninstallCommand: deploymentConfig.uninstallCommand || '',
               callbackUrl,
@@ -369,12 +378,55 @@ export async function POST(request: NextRequest) {
               removeAssignmentsFromPreviousApp: currentCarryOver,
               autoSupersede: supersedePrevious,
               supersedenceType: supersedePrevious ? 'update' : undefined,
+              packageProfileSha256: triggerResult.packageProfileSha256,
             };
 
             const isBatch = updateRequests.length > 1;
-            await triggerPackagingWorkflow(workflowInputs, undefined, {
-              skipRunCapture: isBatch,
-            });
+            try {
+              await triggerPackagingWorkflow(workflowInputs, undefined, {
+                skipRunCapture: isBatch,
+                requireQaPass: true,
+              });
+            } catch (error) {
+              if (!isQaGateError(error)) throw error;
+
+              // The status can change between the pre-job auto-update gate and
+              // the final dispatch gate. Make that race an explicit safety
+              // cancellation rather than leaving a queued/failed mystery job.
+              const message = describeQaGateError(error);
+              const completedAt = new Date().toISOString();
+              await supabase
+                .from('packaging_jobs')
+                .update({
+                  status: 'cancelled',
+                  status_message: 'Waiting for the installation test to finish',
+                  error_message: message,
+                  cancelled_at: completedAt,
+                  completed_at: completedAt,
+                })
+                .eq('id', triggerResult.packagingJobId);
+              if (triggerResult.historyId) {
+                await supabase
+                  .from('auto_update_history')
+                  .update({
+                    status: 'cancelled',
+                    error_message: message,
+                    completed_at: completedAt,
+                  })
+                  .eq('id', triggerResult.historyId);
+              }
+
+              response.failed++;
+              response.results.push({
+                winget_id: req.winget_id,
+                tenant_id: req.tenant_id,
+                success: false,
+                skipped: true,
+                code: error.code,
+                error: message,
+              });
+              continue;
+            }
           }
           // If local packager mode, the job stays in 'queued'/'packaging' for local pickup
 
@@ -391,6 +443,8 @@ export async function POST(request: NextRequest) {
             winget_id: req.winget_id,
             tenant_id: req.tenant_id,
             success: false,
+            skipped: triggerResult.skipped || undefined,
+            code: triggerResult.code,
             error: triggerResult.error || triggerResult.skipReason || 'Unknown error',
           });
         }
@@ -529,12 +583,18 @@ async function triggerWithoutSupabase(
       }
 
       const config = built.deploymentConfig;
-      const installerInfo = await getLatestInstallerInfo(null as never, req.winget_id);
+      const installerResolution = await getLatestInstallerInfo(
+        null as never,
+        req.winget_id,
+        config.architecture,
+        config.installScope
+      );
 
-      if (!installerInfo) {
-        fail('Could not get installer information for latest version');
+      if (!installerResolution.ok) {
+        fail(installerResolution.failure.message);
         continue;
       }
+      const installerInfo = installerResolution.info;
 
       // The detected result's intune_app_id can be stale if the app was
       // redeployed since the last check, so prefer the newest deployment.

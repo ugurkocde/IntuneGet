@@ -36,6 +36,19 @@ import {
   enforceInstallerPreflight,
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
+import { ensureQaDemand } from '@/lib/qa/demand';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
+import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import type { NormalizedInstaller } from '@/types/winget';
+import {
+  getPackageEligibilityBlocks,
+  PACKAGE_UNAVAILABLE_MESSAGE,
+} from '@/lib/package-eligibility';
 
 export const maxDuration = 300;
 
@@ -178,6 +191,51 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const catalogWin32Items = win32Items.filter(
+      (item) => item.sourceType !== 'custom' && typeof item.wingetId === 'string'
+    );
+    // The retirement blocklist lives in a Supabase-only table. A self-hosted
+    // SQLite install has no such list, so nothing is blocked rather than the
+    // deploy failing on a table that does not exist.
+    const eligibilityBlocks = isSupabaseConfigured()
+      ? await getPackageEligibilityBlocks(
+          createServerClient(),
+          catalogWin32Items.map((item) => item.wingetId)
+        )
+      : [];
+    if (eligibilityBlocks.length > 0) {
+      const block = eligibilityBlocks[0];
+      const blockedItem = catalogWin32Items.find(
+        (item) => item.wingetId === block.wingetId
+      );
+      return NextResponse.json({
+        error: 'App unavailable',
+        message: PACKAGE_UNAVAILABLE_MESSAGE,
+        code: 'PACKAGE_UNAVAILABLE',
+        package: {
+          wingetId: block.wingetId,
+          displayName: blockedItem?.displayName || block.wingetId,
+          version: blockedItem?.version,
+        },
+      }, { status: 409 });
+    }
+
+    // Apply reviewed behavior constraints before preflight, QA identity, job
+    // persistence, and Intune run-as selection so every packaging route uses
+    // the same effective scope. Custom packages remain fully user-controlled.
+    for (const item of win32Items) {
+      if (
+        item.sourceType !== 'custom' &&
+        typeof item.wingetId === 'string' &&
+        item.wingetId.trim()
+      ) {
+        item.installScope = resolveApplicationInstallScope(
+          item.wingetId,
+          item.installScope
+        );
+      }
+    }
+
     // Validate installer URLs for win32 items. Custom apps (issue #109)
     // accept arbitrary user-provided URLs, so reject anything that is not
     // a well-formed http(s) URL before queueing packaging jobs.
@@ -211,21 +269,71 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Re-resolve catalog metadata from the live trusted manifest after the
+    // requested scope has been finalized. This prevents a stale cart command
+    // from combining a machine deployment with a per-user installer (or the
+    // reverse). Explicit PSADT command overrides remain authoritative.
+    const trustedInstallersByItem = new Map<Win32CartItem, NormalizedInstaller[]>();
+    for (let i = 0; i < win32Items.length; i += 2) {
+      const batch = win32Items.slice(i, i + 2);
+      const reconciliationResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          if (
+            item.sourceType === 'custom' ||
+            typeof item.wingetId !== 'string' ||
+            !item.wingetId.trim()
+          ) return null;
+          const reconciled = await reconcileCatalogInstaller(item);
+          Object.assign(item, reconciled.item);
+          trustedInstallersByItem.set(item, reconciled.trustedInstallers);
+          return reconciled;
+        })
+      );
+
+      const failedIndex = reconciliationResults.findIndex(
+        (result) => result.status === 'rejected'
+      );
+      if (failedIndex !== -1) {
+        const failed = reconciliationResults[failedIndex] as PromiseRejectedResult;
+        const failedItem = batch[failedIndex];
+        const error = failed.reason;
+        if (error instanceof InstallerPreflightError) {
+          return NextResponse.json({
+            error: 'Installer validation blocked this deployment',
+            message: error.message,
+            code: error.code,
+            retryable: error.retryable,
+            package: {
+              wingetId: failedItem.wingetId,
+              displayName: failedItem.displayName || failedItem.wingetId,
+              version: failedItem.version,
+            },
+            expectedSha256: failedItem.installerSha256?.toUpperCase(),
+            actualSha256: error.actualSha256,
+          }, { status: error.retryable ? 503 : 409 });
+        }
+        throw error;
+      }
+    }
+
     // Enforce installer health before creating job rows. Work in pairs to
     // bound outbound bandwidth for a ten-app cart while keeping normal
     // batches responsive.
     for (let i = 0; i < win32Items.length; i += 2) {
       const preflightResults = await Promise.allSettled(
-        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight({
-          wingetId: item.wingetId,
-          version: item.version,
-          architecture: item.architecture,
-          installerUrl: item.installerUrl,
-          installerSha256: item.installerSha256,
-          installerType: item.installerType,
-          installScope: item.installScope,
-          sourceType: item.sourceType,
-        })),
+        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight(
+          {
+            wingetId: item.wingetId,
+            version: item.version,
+            architecture: item.architecture,
+            installerUrl: item.installerUrl,
+            installerSha256: item.installerSha256,
+            installerType: item.installerType,
+            installScope: item.installScope,
+            sourceType: item.sourceType,
+          },
+          trustedInstallersByItem.get(item),
+        )),
       );
 
       const failedIndex = preflightResults.findIndex((result) => result.status === 'rejected');
@@ -401,8 +509,59 @@ export async function POST(request: NextRequest) {
         // Phase 1: Create all win32 job records
         for (const item of win32Items) {
           try {
+            if (item.sourceType !== 'custom') {
+              const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
+              const detectionRules = normalizeCatalogDetectionRules({
+                detectionRules: item.detectionRules,
+                fallbackDetectionRules: requestedPsadtConfig.detectionRules,
+                wingetId: item.wingetId,
+                version: item.version,
+                installScope: item.installScope,
+                markerPath: requestedPsadtConfig.registryMarkerPath,
+              });
+              item.detectionRules = detectionRules;
+              item.psadtConfig = applyApplicationPackagingAdapter(
+                item.wingetId,
+                { ...requestedPsadtConfig, detectionRules }
+              );
+            }
             const jobId = crypto.randomUUID();
             const installerSha256 = item.installerSha256?.trim() || '';
+            // QA gating is a hosted-service feature: the candidate tables and
+            // the runners that fill them are Supabase-side. Without it the job
+            // simply carries no QA state, the same as a custom-source item.
+            const qaDemand = item.sourceType === 'custom' || !isSupabaseConfigured()
+              ? null
+              : await ensureQaDemand(createServerClient(), {
+                  wingetId: item.wingetId,
+                  displayName: item.displayName,
+                  publisher: item.publisher || 'Unknown Publisher',
+                  version: item.version,
+                  architecture: item.architecture,
+                  installerUrl: item.installerUrl,
+                  installerSha256,
+                  installerType: item.installerType,
+                  nestedInstallerType: item.nestedInstallerType,
+                  nestedInstallerPath: item.nestedInstallerPath,
+                  silentSwitches: extractSilentSwitches(
+                    item.installCommand,
+                    item.installerType,
+                    item.nestedInstallerType
+                  ),
+                  installerSuccessCodes: item.installerSuccessCodes,
+                  uninstallCommand: item.uninstallCommand,
+                  installScope: item.installScope,
+                  psadtConfig: JSON.stringify(item.psadtConfig),
+                  detectionRules: JSON.stringify(item.detectionRules || []),
+                  priority: 2000,
+                  demandSource: 'customer',
+                });
+            const initialStatus = qaDemand?.state === 'waiting'
+              ? 'awaiting_qa'
+              : qaDemand?.state === 'failed'
+                ? 'qa_failed'
+                : 'queued';
+            const now = new Date().toISOString();
 
             const jobRecord = await db.jobs.create({
               id: jobId,
@@ -422,8 +581,21 @@ export async function POST(request: NextRequest) {
               install_scope: item.installScope,
               detection_rules: item.detectionRules as unknown as import('@/types/database').Json,
               package_config: item as unknown as import('@/types/database').Json,
-              status: 'queued',
+              status: initialStatus,
+              status_message: qaDemand?.state === 'waiting'
+                ? 'Running an isolated installation test to make sure this app works before deployment'
+                : qaDemand?.state === 'failed'
+                  ? qaDemand.failureSummary
+                  : null,
               progress_percent: 0,
+              execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
+              presentation_profile_sha256: qaDemand?.identity.presentationProfileSha256 || null,
+              qa_candidate_id: qaDemand?.candidateId || null,
+              qa_requested_at: qaDemand ? now : null,
+              qa_completed_at: qaDemand?.state === 'passed' ? now : null,
+              error_code: qaDemand?.state === 'failed' ? 'QA_FAILED_EXECUTION_PROFILE' : null,
+              error_stage: qaDemand?.state === 'failed' ? 'validation' : null,
+              error_category: qaDemand?.state === 'failed' ? 'installer' : null,
             });
 
             if (!jobRecord) {
@@ -431,7 +603,23 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            // Local packager mode: leave job in queued state for pickup
+            if (qaDemand?.state === 'waiting' || qaDemand?.state === 'failed') {
+              jobs.push({
+                id: jobId,
+                user_id: userId,
+                tenant_id: tenantId,
+                winget_id: item.wingetId,
+                version: item.version,
+                display_name: item.displayName,
+                publisher: item.publisher,
+                status: initialStatus,
+                package_config: item,
+                created_at: jobRecord?.created_at || now,
+              });
+              continue;
+            }
+
+            // Local packager mode: leave passed/custom jobs queued for pickup.
             if (isLocalPackagerMode) {
               jobs.push({
                 id: jobId,
@@ -486,7 +674,12 @@ export async function POST(request: NextRequest) {
               installerType: item.installerType,
               nestedInstallerType: item.nestedInstallerType,
               nestedInstallerPath: item.nestedInstallerPath,
-              silentSwitches: extractSilentSwitches(item.installCommand, item.installerType),
+              silentSwitches: extractSilentSwitches(
+                item.installCommand,
+                item.installerType,
+                item.nestedInstallerType
+              ),
+              installerSuccessCodes: item.installerSuccessCodes,
               uninstallCommand: item.uninstallCommand,
               callbackUrl,
               psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
@@ -500,6 +693,7 @@ export async function POST(request: NextRequest) {
                 : undefined,
               installScope: item.installScope,
               forceCreate: item.forceCreate || forceCreate,
+              qaOverride: item.qaOverride,
               sourceType: item.sourceType,
             };
 

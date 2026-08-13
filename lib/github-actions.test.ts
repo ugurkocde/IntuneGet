@@ -4,9 +4,12 @@ import {
   type GitHubActionsConfig,
   type WorkflowInputs,
 } from './github-actions';
+import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 
-const { enforceInstallerPreflightMock } = vi.hoisted(() => ({
+const { enforceInstallerPreflightMock, enforceQaGateMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
+  enforceQaGateMock: vi.fn(),
+  resolveDependenciesMock: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('./installer-preflight', async (importOriginal) => {
@@ -14,6 +17,19 @@ vi.mock('./installer-preflight', async (importOriginal) => {
   return {
     ...original,
     enforceInstallerPreflight: enforceInstallerPreflightMock,
+  };
+});
+
+vi.mock('./qa/gate', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./qa/gate')>();
+  return { ...original, enforceQaGate: enforceQaGateMock };
+});
+
+vi.mock('./winget-dependencies', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./winget-dependencies')>();
+  return {
+    ...original,
+    resolveWingetPackageDependencies: resolveDependenciesMock,
   };
 });
 
@@ -42,6 +58,7 @@ function workflowInputs(overrides: Partial<WorkflowInputs> = {}): WorkflowInputs
     uninstallCommand: 'uninstall.exe /S',
     callbackUrl: 'https://example.test/api/package/callback',
     hashValidationMode: 'calculate',
+    sourceType: 'custom',
     ...overrides,
   };
 }
@@ -91,6 +108,137 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(payload.client_payload.installer.hashValidationMode).toBe('strict');
   });
 
+  it('dispatches only server-resolved dependency metadata and binds it to the QA profile', async () => {
+    const dependency = {
+      packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
+      version: '14.51.36210.0',
+      architecture: 'x64' as const,
+      installerUrl: 'https://aka.ms/vc14/vc_redist.x64.exe',
+      installerSha256: 'B'.repeat(64),
+      installerType: 'exe' as const,
+      silentArgs: '/install /quiet /norestart',
+      successCodes: [-2147023258, 0, 1638],
+      rebootCodes: [1641, 3010],
+      fileName: 'Microsoft.VCRedist.2015+.x64-vc_redist.x64.exe',
+      order: 1,
+      depth: 1,
+    };
+    resolveDependenciesMock.mockResolvedValueOnce([dependency]);
+    vi.stubEnv('CALLBACK_SECRET', 'dependency-signing-secret');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Oracle.VirtualBox',
+      version: '7.2.14',
+      installerSha256: 'A'.repeat(64),
+      hashValidationMode: 'strict',
+      sourceType: 'winget',
+      packageDependencies: [],
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.installer.packageDependencies)).toEqual([
+      dependency,
+    ]);
+    expect(payload.client_payload.installer.dependencyBundleSignature).toMatch(
+      /^[a-f0-9]{64}$/
+    );
+    expect(resolveDependenciesMock).toHaveBeenCalledWith(expect.objectContaining({
+      wingetId: 'Oracle.VirtualBox',
+      installerSha256: 'A'.repeat(64),
+    }));
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({
+      packageProfileSha256: expect.stringMatching(/^[A-F0-9]{64}$/),
+    }));
+  });
+
+  it('dispatches the same reconciled marker rules that are used for the QA gate', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const inputs = workflowInputs({
+      wingetId: 'Asana.Asana',
+      version: '2.8.0',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installScope: 'user',
+      detectionRules: JSON.stringify([
+        {
+          type: 'registry',
+          keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+          valueName: 'Version',
+          detectionType: 'version',
+          operator: 'greaterThanOrEqual',
+          detectionValue: '2.7.1',
+        },
+      ]),
+      psadtConfig: JSON.stringify({ brandingCompanyName: 'Contoso' }),
+    });
+
+    await triggerPackagingWorkflow(
+      inputs,
+      config,
+      { skipRunCapture: true }
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    const dispatchedRules = JSON.parse(payload.client_payload.config.detectionRules);
+    const dispatchedConfig = JSON.parse(payload.client_payload.config.psadtConfig);
+
+    expect(dispatchedRules[0]).toMatchObject({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Asana_Asana',
+      detectionValue: '2.8.0',
+    });
+    expect(dispatchedConfig).toMatchObject({
+      brandingCompanyName: 'Contoso',
+      detectionRules: dispatchedRules,
+    });
+    const dispatchedIdentity = buildQaPackageIdentityFromWorkflowInput({
+      ...inputs,
+      psadtConfig: payload.client_payload.config.psadtConfig,
+      detectionRules: payload.client_payload.config.detectionRules,
+    });
+    expect(enforceQaGateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        packageProfileSha256: dispatchedIdentity.packageProfileSha256,
+      })
+    );
+  });
+
+  it('does not reconcile custom-installer detection rules', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const detectionRules = JSON.stringify([
+      {
+        type: 'registry',
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Custom_Example_App',
+        valueName: 'Version',
+        detectionType: 'version',
+        operator: 'equal',
+        detectionValue: '1.0.0',
+      },
+    ]);
+    const psadtConfig = JSON.stringify({ detectionRules, brandingCompanyName: 'Custom' });
+
+    await triggerPackagingWorkflow(
+      workflowInputs({
+        sourceType: 'custom',
+        installScope: 'user',
+        detectionRules,
+        psadtConfig,
+      }),
+      config,
+      { skipRunCapture: true }
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.config.detectionRules).toBe(detectionRules);
+    expect(payload.client_payload.config.psadtConfig).toBe(psadtConfig);
+  });
+
   it('does not call GitHub when installer preflight blocks dispatch', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -107,5 +255,44 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     )).rejects.toThrow('quarantined');
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not call GitHub when the final QA gate blocks dispatch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    enforceQaGateMock.mockRejectedValueOnce(new Error('known failed QA result'));
+
+    await expect(triggerPackagingWorkflow(
+      workflowInputs({ wingetId: 'Example.App', sourceType: 'winget' }),
+      config,
+      { skipRunCapture: true },
+    )).rejects.toThrow('known failed QA result');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('binds a required QA pass to the dispatched installer SHA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const sha = 'A'.repeat(64);
+    await triggerPackagingWorkflow(
+      workflowInputs({ wingetId: 'Example.App', installerSha256: sha, sourceType: 'winget' }),
+      config,
+      { skipRunCapture: true, requireQaPass: true }
+    );
+    expect(enforceQaGateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ installerSha256: sha, requirePassed: true })
+    );
+  });
+
+  it('uses qaOverride only at the server gate and does not forward it to GitHub', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({ qaOverride: true }), config, { skipRunCapture: true });
+
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }));
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.stringify(payload)).not.toContain('qaOverride');
   });
 });

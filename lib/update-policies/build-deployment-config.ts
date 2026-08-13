@@ -10,6 +10,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import { getCatalogSource } from '@/lib/catalog';
+import { normalizeInstaller } from '@/lib/manifest-api';
+import { selectWingetInstaller } from '@/lib/qa/candidate';
 import {
   generateDetectionRules,
   generateInstallCommand,
@@ -18,7 +20,7 @@ import {
 import type { DeploymentConfig } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship, DetectionRule, RequirementRule } from '@/types/intune';
-import type { NormalizedInstaller } from '@/types/winget';
+import type { NormalizedInstaller, WingetInstaller } from '@/types/winget';
 
 export interface PackageConfigWithAssignments {
   assignments?: PackageAssignment[];
@@ -283,41 +285,37 @@ export async function buildDefaultDeploymentConfig(
     return null;
   }
 
-  // Resolve architecture-specific installer (prefer x64)
-  let installerUrl = versionInfo.installer_url;
-  let installerSha256 = versionInfo.installer_sha256 || '';
-  let installerType = versionInfo.installer_type || 'exe';
-  let architecture = 'x64';
+  // Resolve architecture and scope together. WinGet can publish separate x64
+  // user and machine entries whose URLs and hashes are identical but whose
+  // vendor switches differ.
+  const manifestInstallers = Array.isArray(versionInfo.installers)
+    ? versionInfo.installers as WingetInstaller[]
+    : [];
+  const selectedManifestInstaller = selectWingetInstaller(
+    manifestInstallers,
+    'x64'
+  ) as WingetInstaller | null;
+  const normalizedInstaller: NormalizedInstaller = selectedManifestInstaller
+    ? normalizeInstaller({
+        ...selectedManifestInstaller,
+        InstallerSwitches: {
+          ...(versionInfo.silent_args ? { Silent: versionInfo.silent_args } : {}),
+          ...(selectedManifestInstaller.InstallerSwitches || {}),
+        },
+      })
+    : {
+        architecture: 'x64',
+        url: versionInfo.installer_url,
+        sha256: versionInfo.installer_sha256 || '',
+        type: (versionInfo.installer_type || 'exe') as NormalizedInstaller['type'],
+        scope: versionInfo.installer_scope === 'user' ? 'user' : 'machine',
+        silentArgs: versionInfo.silent_args || undefined,
+      };
+  const architecture = normalizedInstaller.architecture;
+  const installerType = normalizedInstaller.type;
+  const installScope = normalizedInstaller.scope || 'machine';
 
-  if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    type InstallerEntry = { Architecture?: string; InstallerUrl?: string; InstallerSha256?: string; InstallerType?: string };
-    const installers = versionInfo.installers as InstallerEntry[];
-    const x64Installer = installers.find(
-      (i) => i.Architecture === 'x64'
-    );
-    if (x64Installer) {
-      installerUrl = x64Installer.InstallerUrl || installerUrl;
-      installerSha256 = x64Installer.InstallerSha256 || installerSha256;
-      installerType = x64Installer.InstallerType || installerType;
-    } else if (installers.length > 0) {
-      // Use first available installer's architecture
-      const first = installers[0];
-      if (first?.Architecture) {
-        architecture = first.Architecture.toLowerCase();
-      }
-    }
-  }
-
-  // Build a NormalizedInstaller for detection rule generation
-  const normalizedInstaller: NormalizedInstaller = {
-    architecture: architecture as NormalizedInstaller['architecture'],
-    url: installerUrl,
-    sha256: installerSha256,
-    type: installerType as NormalizedInstaller['type'],
-    scope: 'machine',
-  };
-
-  const installCommand = generateInstallCommand(normalizedInstaller, 'machine');
+  const installCommand = generateInstallCommand(normalizedInstaller, installScope);
   const uninstallCommand = generateUninstallCommand(normalizedInstaller, curatedApp.name);
   const detectionRules = generateDetectionRules(
     normalizedInstaller,
@@ -333,7 +331,7 @@ export async function buildDefaultDeploymentConfig(
     installerType,
     installCommand,
     uninstallCommand,
-    installScope: 'system',
+    installScope,
     detectionRules,
     assignments: [],
     categories: [],

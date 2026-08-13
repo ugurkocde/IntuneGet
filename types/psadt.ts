@@ -194,6 +194,43 @@ export interface PSADTConfig {
   installCommand?: string;
   uninstallCommand?: string;
 
+  // Internal, reviewed vendor arguments appended to the manifest-derived
+  // install command. Application adapters populate this field; it is not a
+  // customer-facing free-form command surface.
+  reviewedInstallArguments?: string[];
+
+  // Internal, reviewed vendor arguments appended to an exact registered
+  // uninstaller. Application adapters populate this field; it is intentionally
+  // not exposed as a customer-facing free-form command surface.
+  reviewedUninstallArguments?: string[];
+
+  // Internal guard for a reviewed vendor MSI custom-action helper that can
+  // remain alive indefinitely during removal. The packager only accepts this
+  // value from an application adapter and matches both the executable name and
+  // command line before ending the newly spawned helper after a grace period.
+  reviewedUninstallProcessGuard?: {
+    processName: string;
+    argumentsPattern: string;
+    graceSeconds: number;
+  };
+
+  // Internal completion window for vendor uninstallers that hand work to a
+  // child process. Application adapters may extend the five-minute default;
+  // the exact registry identity remains the authoritative completion signal.
+  uninstallCompletionTimeoutMinutes?: number;
+
+  // Internal lifecycle policy for shared Windows runtimes that must remain on
+  // the device when Intune relinquishes management. Application adapters are
+  // the only trusted source for this value; it is not customer-configurable.
+  preserveVendorInstallationOnUninstall?: boolean;
+
+  // Internal install-evidence contract for reviewed bundles that intentionally
+  // install several independently registered products. The generated package
+  // requires multiple matching ARP entries instead of weakening the ordinary
+  // single-product identity rule. Application adapters are the only source.
+  reviewedMultiProductInstallDisplayNamePrefixes?: string[];
+  reviewedMultiProductInstallMinimumCount?: number;
+
   // Additional commands run as extra PSADT steps after the main install /
   // uninstall (e.g. delete a desktop shortcut after installing). Each entry is a
   // full command line executed via cmd.exe /c, in order. Empty/absent = none.
@@ -272,6 +309,9 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   // Commands will be auto-generated based on installer type
   installCommand: undefined,
   uninstallCommand: undefined,
+  reviewedInstallArguments: [],
+  reviewedUninstallArguments: [],
+  reviewedUninstallProcessGuard: undefined,
 };
 
 /**

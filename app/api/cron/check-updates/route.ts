@@ -122,15 +122,21 @@ async function processAutoUpdates(
 
     try {
       // Get installer info for the new version
-      const installerInfo = await getLatestInstallerInfo(supabase, update.winget_id);
+      const installerResolution = await getLatestInstallerInfo(
+        supabase,
+        update.winget_id,
+        policy.deployment_config?.architecture,
+        policy.deployment_config?.installScope
+      );
 
-      if (!installerInfo) {
+      if (!installerResolution.ok) {
         result.errors.push(
-          `No installer info found for ${update.winget_id} v${update.latest_version}`
+          `${update.winget_id} v${update.latest_version}: ${installerResolution.failure.message}`
         );
         result.failed++;
         continue;
       }
+      const installerInfo = installerResolution.info;
 
       // Add current version to installer info.
       // Look up the most recent upload_history record to get the current

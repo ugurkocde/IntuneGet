@@ -298,7 +298,16 @@ export const supabaseDb: DatabaseAdapter = {
         package_config: job.package_config,
         app_source: job.app_source || 'win32',
         status: job.status || 'queued',
+        status_message: job.status_message,
         progress_percent: job.progress_percent || 0,
+        error_stage: job.error_stage,
+        error_category: job.error_category,
+        error_code: job.error_code,
+        execution_profile_sha256: job.execution_profile_sha256,
+        presentation_profile_sha256: job.presentation_profile_sha256,
+        qa_candidate_id: job.qa_candidate_id,
+        qa_requested_at: job.qa_requested_at,
+        qa_completed_at: job.qa_completed_at,
       };
 
       const { data, error } = await query

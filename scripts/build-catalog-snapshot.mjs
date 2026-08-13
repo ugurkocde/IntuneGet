@@ -31,6 +31,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, writeFile, stat, rm } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const SCHEMA_VERSION = 1;
 
@@ -47,6 +48,14 @@ const VERSION_COLUMNS = [
 const SCCM_COLUMNS = [
   'id', 'sccm_display_name_normalized', 'sccm_ci_id', 'sccm_product_code',
   'winget_package_id', 'winget_package_name', 'confidence', 'is_verified',
+];
+const QA_COLUMNS = [
+  'winget_id', 'display_name', 'publisher', 'tested_version', 'architecture',
+  'outcome', 'installer_sha256', 'tested_at_utc', 'overall_duration_seconds', 'installer_type',
+  'install_command', 'uninstall_command', 'detection', 'phase_results', 'changes',
+  'relevant_event_count', 'environment', 'effective_configuration', 'qa_schema_version', 'synced_at',
+  'test_level', 'package_profile_sha256', 'psadt_version', 'psadt_template_sha256',
+  'psadt_config_sha256', 'detection_rules_sha256', 'packager_commit', 'package_content_sha256',
 ];
 
 /** Fetch every row of a table in pages (Supabase caps a single request at 1000). */
@@ -72,7 +81,7 @@ const jsonOrNull = (v) => (v == null ? null : JSON.stringify(v));
  * Build the SQLite snapshot file at dbPath from in-memory rows. Pure and
  * deterministic given the inputs, so the self-test can exercise it offline.
  */
-export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings }) {
+export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings, qaResults = [] }) {
   const db = new Database(dbPath);
   try {
     db.pragma('journal_mode = DELETE');
@@ -106,6 +115,20 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings 
       );
       CREATE INDEX idx_sccm_name ON sccm_winget_mappings(sccm_display_name_normalized);
       CREATE INDEX idx_sccm_ci ON sccm_winget_mappings(sccm_ci_id);
+
+      CREATE TABLE qa_results (
+        winget_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, publisher TEXT NOT NULL,
+        tested_version TEXT NOT NULL, architecture TEXT NOT NULL, outcome TEXT NOT NULL,
+        installer_sha256 TEXT,
+        tested_at_utc TEXT NOT NULL, overall_duration_seconds REAL, installer_type TEXT,
+        install_command TEXT NOT NULL, uninstall_command TEXT NOT NULL,
+        detection TEXT NOT NULL, phase_results TEXT NOT NULL, changes TEXT,
+        relevant_event_count INTEGER, environment TEXT, effective_configuration TEXT,
+        qa_schema_version INTEGER NOT NULL,
+        synced_at TEXT NOT NULL, test_level TEXT NOT NULL, package_profile_sha256 TEXT,
+        psadt_version TEXT, psadt_template_sha256 TEXT, psadt_config_sha256 TEXT,
+        detection_rules_sha256 TEXT, packager_commit TEXT, package_content_sha256 TEXT
+      );
     `);
 
     const insCurated = db.prepare(`INSERT INTO curated_apps
@@ -126,8 +149,21 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings 
     const insSccm = db.prepare(`INSERT OR IGNORE INTO sccm_winget_mappings
       (id, sccm_display_name_normalized, sccm_ci_id, sccm_product_code, winget_package_id,
        winget_package_name, confidence, is_verified)
-      VALUES (@id,@sccm_display_name_normalized,@sccm_ci_id,@sccm_product_code,@winget_package_id,
+       VALUES (@id,@sccm_display_name_normalized,@sccm_ci_id,@sccm_product_code,@winget_package_id,
        @winget_package_name,@confidence,@is_verified)`);
+    const insQa = db.prepare(`INSERT OR REPLACE INTO qa_results
+      (winget_id, display_name, publisher, tested_version, architecture, outcome, installer_sha256,
+       tested_at_utc, overall_duration_seconds, installer_type, install_command,
+       uninstall_command, detection, phase_results, changes, relevant_event_count,
+       environment, effective_configuration, qa_schema_version, synced_at, test_level, package_profile_sha256,
+       psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256,
+       packager_commit, package_content_sha256)
+      VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,@installer_sha256,
+       @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
+       @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
+       @environment,@effective_configuration,@qa_schema_version,@synced_at,@test_level,@package_profile_sha256,
+       @psadt_version,@psadt_template_sha256,@psadt_config_sha256,@detection_rules_sha256,
+       @packager_commit,@package_content_sha256)`);
 
     const tx = db.transaction(() => {
       for (const a of curatedApps) {
@@ -164,6 +200,38 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings 
           confidence: m.confidence ?? null, is_verified: bool(m.is_verified),
         });
       }
+      for (const q of qaResults) {
+        insQa.run({
+          winget_id: q.winget_id,
+          display_name: q.display_name,
+          publisher: q.publisher,
+          tested_version: q.tested_version,
+          architecture: q.architecture,
+          outcome: q.outcome,
+          installer_sha256: q.installer_sha256 ?? null,
+          tested_at_utc: q.tested_at_utc,
+          overall_duration_seconds: q.overall_duration_seconds ?? null,
+          installer_type: q.installer_type ?? null,
+          install_command: q.install_command,
+          uninstall_command: q.uninstall_command,
+          detection: jsonOrNull(q.detection),
+          phase_results: jsonOrNull(q.phase_results),
+          changes: jsonOrNull(q.changes),
+          relevant_event_count: q.relevant_event_count ?? null,
+          environment: jsonOrNull(q.environment),
+          effective_configuration: jsonOrNull(q.effective_configuration),
+          qa_schema_version: q.qa_schema_version ?? 1,
+          synced_at: q.synced_at ?? new Date().toISOString(),
+          test_level: q.test_level ?? 'installer-preflight',
+          package_profile_sha256: q.package_profile_sha256 ?? null,
+          psadt_version: q.psadt_version ?? null,
+          psadt_template_sha256: q.psadt_template_sha256 ?? null,
+          psadt_config_sha256: q.psadt_config_sha256 ?? null,
+          detection_rules_sha256: q.detection_rules_sha256 ?? null,
+          packager_commit: q.packager_commit ?? null,
+          package_content_sha256: q.package_content_sha256 ?? null,
+        });
+      }
     });
     tx();
 
@@ -173,6 +241,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings 
       curated_apps: curatedApps.length,
       version_history: versionHistory.length,
       sccm_winget_mappings: sccmMappings.length,
+      qa_results: qaResults.length,
     };
   } finally {
     db.close();
@@ -196,17 +265,27 @@ async function exportFromSupabase(outDir) {
 
   const supabase = createClient(url, key);
   console.log('Reading catalog from Supabase...');
-  const [curatedApps, versionHistory, sccmMappings] = await Promise.all([
+  const [curatedApps, versionHistory, sccmMappings, qaResults] = await Promise.all([
     fetchAll(supabase, 'curated_apps', CURATED_COLUMNS),
     fetchAll(supabase, 'version_history', VERSION_COLUMNS),
     // Only GLOBAL mappings (no tenant data) reach a public snapshot.
     fetchAll(supabase, 'sccm_winget_mappings', SCCM_COLUMNS, (q) => q.is('tenant_id', null)),
+    fetchAll(supabase, 'qa_results', QA_COLUMNS, (query) =>
+      query.eq('test_level', 'psadt-package')
+    ).catch((error) => {
+      // qa_results is deliberately optional during rollout and in older
+      // deployments. Never take the core catalog snapshot dark because the
+      // compact QA mirror is not available yet.
+      console.warn(`QA results were omitted from this snapshot: ${error.message}`);
+      return [];
+    }),
   ]);
   console.log(`  curated_apps: ${curatedApps.length}`);
   console.log(`  version_history: ${versionHistory.length}`);
   console.log(`  sccm_winget_mappings (global): ${sccmMappings.length}`);
+  console.log(`  qa_results: ${qaResults.length}`);
 
-  return writeSnapshot(outDir, { curatedApps, versionHistory, sccmMappings });
+  return writeSnapshot(outDir, { curatedApps, versionHistory, sccmMappings, qaResults });
 }
 
 async function writeSnapshot(outDir, rows, generatedAt = new Date().toISOString()) {
@@ -251,8 +330,38 @@ async function selfTest() {
   const sccmMappings = [
     { id: 'm1', sccm_display_name_normalized: 'google chrome', sccm_ci_id: '123', sccm_product_code: null, winget_package_id: 'Google.Chrome', winget_package_name: 'Google Chrome', confidence: 1, is_verified: true },
   ];
+  const qaResults = [
+    {
+      winget_id: 'Google.Chrome', display_name: 'Google Chrome', publisher: 'Google LLC',
+      tested_version: '120.0', architecture: 'x64', outcome: 'Passed',
+      tested_at_utc: '2026-01-03T00:00:00Z', overall_duration_seconds: 12.5,
+      installer_type: 'msi', install_command: 'msiexec /i chrome.msi /qn',
+      uninstall_command: 'msiexec /x {PRODUCT} /qn',
+      detection: { type: 'fileVersion', path: 'C:\\Program Files\\Chrome\\chrome.exe', minimumVersion: '120.0' },
+      phase_results: {
+        install: { exitCode: 0, durationSeconds: 3, timedOut: false },
+        detectionAfterInstall: { exitCode: 0, durationSeconds: 1, timedOut: false },
+        uninstall: { exitCode: 0, durationSeconds: 2, timedOut: false },
+        detectionAfterUninstall: { exitCode: 1, durationSeconds: 1, timedOut: false },
+      },
+      changes: null, relevant_event_count: 0,
+      environment: { executionContext: 'LocalSystem' },
+      effective_configuration: {
+        deployMode: 'Silent',
+        vendorSilentArguments: '/qn',
+        restartBehavior: 'Suppress',
+        promptConfiguration: {
+          closePrompt: false, deferral: false, progressDialog: false,
+          customPromptCount: 0, restartPrompt: false, balloonTipCount: 0,
+        },
+        processCloseCount: 0,
+        uiEvidenceExpected: false,
+      },
+      qa_schema_version: 1, synced_at: '2026-01-03T00:01:00Z',
+    },
+  ];
 
-  const { dbPath, manifest } = await writeSnapshot(outDir, { curatedApps, versionHistory, sccmMappings });
+  const { dbPath, manifest } = await writeSnapshot(outDir, { curatedApps, versionHistory, sccmMappings, qaResults });
 
   const db = new Database(dbPath, { readonly: true });
   const assert = (cond, msg) => { if (!cond) throw new Error(`SELF-TEST FAIL: ${msg}`); };
@@ -278,6 +387,11 @@ async function selfTest() {
   assert(vh.installer_url === 'https://x/chrome.msi', 'installer_url present');
   assert(JSON.parse(vh.installers)[0].Architecture === 'x64', 'installers JSON round-trip');
 
+  const qa = db.prepare(`SELECT outcome, detection, effective_configuration FROM qa_results WHERE winget_id=?`).get('Google.Chrome');
+  assert(qa.outcome === 'Passed', 'QA result present');
+  assert(JSON.parse(qa.detection).minimumVersion === '120.0', 'QA detection JSON round-trip');
+  assert(JSON.parse(qa.effective_configuration).deployMode === 'Silent', 'QA effective configuration round-trip');
+
   // sccm mapping snake_case columns present
   const sccm = db.prepare(`SELECT winget_package_id FROM sccm_winget_mappings WHERE sccm_display_name_normalized=?`).get('google chrome');
   assert(sccm.winget_package_id === 'Google.Chrome', 'sccm mapping lookup');
@@ -293,7 +407,7 @@ async function selfTest() {
   console.log('SELF-TEST PASSED. manifest:', JSON.stringify(manifest.counts));
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
   const outDir = process.env.SNAPSHOT_OUT_DIR || './snapshot';
   const run = process.argv.includes('--self-test') ? selfTest() : exportFromSupabase(outDir).then(({ manifest }) => {

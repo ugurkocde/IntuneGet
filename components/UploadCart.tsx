@@ -13,6 +13,7 @@ import {
   Shield,
   Settings,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
@@ -37,6 +38,9 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { useQaStatuses } from '@/hooks/use-qa';
+import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
+import type { QaStatus } from '@/types/qa';
 
 interface PackagingJob {
   id: string;
@@ -73,6 +77,16 @@ interface PackageApiErrorResponse {
   };
 }
 
+function hasFailedQaForItem(item: CartItem, status: QaStatus | null | undefined): boolean {
+  return Boolean(
+    status &&
+      isWin32CartItem(item) &&
+      status.outcome === 'Failed' &&
+      status.testedVersion === item.version &&
+      status.architecture.toLowerCase() === item.architecture.toLowerCase()
+  );
+}
+
 export function UploadCart() {
   const router = useRouter();
   const items = useCartStore((state) => state.items);
@@ -86,6 +100,10 @@ export function UploadCart() {
   const [showLargeDeployConfirm, setShowLargeDeployConfirm] = useState(false);
   const [error, setError] = useState<DeploymentError | null>(null);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  const [qaDetailsTarget, setQaDetailsTarget] = useState<{ wingetId: string; version: string } | null>(null);
+  const { data: qaStatusesData } = useQaStatuses(
+    items.filter(isWin32CartItem).map((item) => item.wingetId)
+  );
   // winget id -> email of whoever already deployed it in this tenant, so we can
   // warn before a teammate's app is deployed a second time.
   const [tenantDeployedBy, setTenantDeployedBy] = useState<Map<string, string | null>>(new Map());
@@ -410,7 +428,42 @@ export function UploadCart() {
                             Redeploy
                           </span>
                         )}
+                        {item.qaOverride && (
+                          <span className="inline-flex items-center gap-1 rounded border border-status-warning/20 bg-status-warning/10 px-2 py-1 text-xs font-medium text-status-warning">
+                            <ShieldAlert className="h-3 w-3" />
+                            Test override
+                          </span>
+                        )}
                       </div>
+
+                      {hasFailedQaForItem(item, qaStatusesData?.statuses[item.wingetId]) && !item.qaOverride && (
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-status-error/20 bg-status-error/10 p-2.5">
+                          <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-error" />
+                          <div className="flex-1 text-xs">
+                            <p className="font-medium text-status-error">Installation test failed for this version</p>
+                            <p className="mt-0.5 text-text-secondary">
+                              Version {item.version} did not complete the install, detection, or uninstall checks. Review the result before deploying.
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setQaDetailsTarget({ wingetId: item.wingetId, version: item.version })}
+                                className="font-medium text-status-error underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-error"
+                              >
+                                View test details
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateItem(item.id, { qaOverride: true })}
+                                disabled={isDeploying}
+                                className="font-medium text-status-error underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-error disabled:opacity-50"
+                              >
+                                Deploy anyway
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Teammate-duplicate warning: this app was already
                           deployed to the tenant by someone. Deploying again
@@ -595,6 +648,16 @@ export function UploadCart() {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+      )}
+      {qaDetailsTarget && (
+        <QaDetailsDialog
+          wingetId={qaDetailsTarget.wingetId}
+          catalogVersion={qaDetailsTarget.version}
+          open={true}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setQaDetailsTarget(null);
+          }}
+        />
       )}
     </>
   );

@@ -85,6 +85,11 @@ function initializeSchema(db: Database.Database): void {
       error_code TEXT,
       error_details TEXT,
       warnings TEXT,
+      execution_profile_sha256 TEXT,
+      presentation_profile_sha256 TEXT,
+      qa_candidate_id TEXT,
+      qa_requested_at TEXT,
+      qa_completed_at TEXT,
       packager_id TEXT,
       packager_heartbeat_at TEXT,
       claimed_at TEXT,
@@ -111,6 +116,11 @@ function initializeSchema(db: Database.Database): void {
     error_details: 'TEXT',
     warnings: 'TEXT',
     archived_at: 'TEXT',
+    execution_profile_sha256: 'TEXT',
+    presentation_profile_sha256: 'TEXT',
+    qa_candidate_id: 'TEXT',
+    qa_requested_at: 'TEXT',
+    qa_completed_at: 'TEXT',
   };
   for (const [column, definition] of Object.entries(compatibleColumns)) {
     if (!existingColumns.has(column)) {
@@ -319,9 +329,13 @@ export const sqliteDb: DatabaseAdapter = {
           id, user_id, user_email, tenant_id, winget_id, version, display_name,
           publisher, architecture, installer_type, installer_url, installer_sha256,
           install_command, uninstall_command, install_scope, detection_rules,
-          package_config, app_source, status, progress_percent, created_at, updated_at
+          package_config, app_source, status, status_message, progress_percent,
+          error_stage, error_category, error_code, execution_profile_sha256,
+          presentation_profile_sha256, qa_candidate_id, qa_requested_at,
+          qa_completed_at, created_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `);
 
@@ -345,7 +359,16 @@ export const sqliteDb: DatabaseAdapter = {
         job.package_config ? JSON.stringify(job.package_config) : null,
         job.app_source || 'win32',
         job.status || 'queued',
+        job.status_message || null,
         job.progress_percent || 0,
+        job.error_stage || null,
+        job.error_category || null,
+        job.error_code || null,
+        job.execution_profile_sha256 || null,
+        job.presentation_profile_sha256 || null,
+        job.qa_candidate_id || null,
+        job.qa_requested_at || null,
+        job.qa_completed_at || null,
         now,
         now
       );

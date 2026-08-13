@@ -65,7 +65,7 @@ jobs:
         with:
           repository: ugurkocde/IntuneGet
           # Update only after reviewing the referenced scripts in this commit.
-          ref: 22ab5995b4347804ed0730e0da380bcffb63f895
+          ref: c533063a250c2c3f92adae9a55b4ddbc50d81a0c
           path: intuneget
           persist-credentials: false
 

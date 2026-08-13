@@ -275,8 +275,21 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
       ? versionManifest.installers
       : installers;
 
-  // Get selected installer (not relevant for store apps)
-  const selectedInstaller = effectiveInstallers.find((i) => i.architecture === selectedArch) || effectiveInstallers[0];
+  // Bind installer metadata to both architecture and scope. Some manifests
+  // publish separate user and machine entries with different vendor switches
+  // even when both entries download the same binary.
+  const architectureInstallers = effectiveInstallers.filter(
+    (installer) => installer.architecture === selectedArch
+  );
+  const selectedInstaller =
+    architectureInstallers.find((installer) => installer.scope === selectedScope) ||
+    architectureInstallers.find((installer) => !installer.scope) ||
+    architectureInstallers[0] ||
+    effectiveInstallers[0];
+  const scopeIsAvailable = (scope: WingetScope) =>
+    architectureInstallers.some(
+      (installer) => !installer.scope || installer.scope === scope
+    );
   const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
@@ -430,6 +443,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           installerType: selectedInstaller!.type,
           installerUrl: selectedInstaller!.url,
           installerSha256: selectedInstaller!.sha256,
+          installerSuccessCodes: selectedInstaller!.installerSuccessCodes,
           nestedInstallerType: selectedInstaller!.nestedInstallerType,
           nestedInstallerPath: selectedInstaller!.nestedInstallerPath,
           manifestDependencies: selectedInstaller!.packageDependencies,
@@ -856,13 +870,16 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   const manifestScope = selectedInstaller?.scope;
                   const isRecommended = manifestScope ? scope === manifestScope : scope === 'machine';
                   const label = scope === 'machine' ? 'Per-Machine' : 'Per-User';
+                  const isAvailable = scopeIsAvailable(scope);
 
                   return (
                     <button
                       key={scope}
                       onClick={() => setSelectedScope(scope)}
+                      disabled={!isAvailable}
                       className={cn(
                         'flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors',
+                        !isAvailable && 'cursor-not-allowed opacity-45',
                         selectedScope === scope
                           ? 'bg-accent-cyan border-accent-cyan text-white'
                           : 'bg-bg-elevated border-overlay/15 text-text-primary hover:border-overlay/20'

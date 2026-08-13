@@ -15,17 +15,34 @@ import {
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
+import {
+  normalizeInstallerSha256,
+  selectWingetInstaller,
+} from '@/lib/qa/candidate';
+import { ensureQaDemand, type QaDemandResult } from '@/lib/qa/demand';
+import { extractSilentSwitches } from '@/lib/msp/silent-switches';
+import { generateInstallCommand } from '@/lib/detection-rules';
+import { normalizeInstaller } from '@/lib/manifest-api';
+import { upgradeLegacyPackageDefaults } from '@/lib/update-policies/upgrade-legacy-package-defaults';
+import {
+  applyApplicationPackagingAdapter,
+  resolveApplicationInstallScope,
+} from '@/lib/packaging-adapters';
+import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 interface TriggerResult {
   success: boolean;
   packagingJobId?: string;
   historyId?: string;
+  packageProfileSha256?: string;
   error?: string;
   skipped?: boolean;
   skipReason?: string;
+  code?: 'QA_FAILED_CURRENT_VERSION' | 'QA_NOT_PASSED_CURRENT_VERSION';
 }
 
-interface UpdateInfo {
+export interface UpdateInfo {
   wingetId: string;
   currentVersion: string;
   latestVersion: string;
@@ -33,15 +50,49 @@ interface UpdateInfo {
   installerUrl: string;
   installerSha256: string;
   installerType: string;
+  installCommand?: string;
+  silentSwitches?: string;
+  installerSuccessCodes?: number[];
+  installScope?: WingetScope;
   nestedInstallerType?: string;
   nestedInstallerPath?: string;
   currentIntuneAppId?: string;
 }
 
+export type InstallerResolutionFailureReason =
+  | 'app_not_in_catalog'
+  | 'version_record_missing'
+  | 'installer_metadata_missing'
+  | 'no_compatible_installer'
+  | 'installer_url_missing'
+  | 'installer_hash_invalid';
+
+export interface InstallerResolutionFailure {
+  reason: InstallerResolutionFailureReason;
+  /** Human-readable, user-facing message with app/version/arch/scope context. */
+  message: string;
+}
+
+export type InstallerResolutionResult =
+  | { ok: true; info: UpdateInfo }
+  | { ok: false; failure: InstallerResolutionFailure };
+
 interface RateLimitCheck {
   allowed: boolean;
   reason?: string;
   retryAfterMinutes?: number;
+}
+
+function buildCurrentVersionInstallCommand(installer: NormalizedInstaller): string {
+  // The packager extracts arguments from this command and separately resolves
+  // the nested payload path. Keep a command-shaped value for archive packages
+  // so their nested installer's current silent switches are retained.
+  if (installer.type === 'zip') {
+    const nestedFileName = installer.nestedInstallerPath || 'installer.exe';
+    return `"${nestedFileName}" ${installer.silentArgs || ''}`.trim();
+  }
+
+  return generateInstallCommand(installer, installer.scope || 'machine');
 }
 
 export function normalizeAssignments(config: DeploymentConfig): PackageAssignment[] {
@@ -169,6 +220,78 @@ export class AutoUpdateTrigger {
       // created before psadtConfig was stored on deployment_config
       await this.ensurePsadtConfig(policy);
 
+      // Policies created by older IntuneGet releases can contain generated
+      // defaults that were never valid at runtime (for example an MSI
+      // {PRODUCT_CODE} token and a guessed installation folder). Upgrade only
+      // those exact legacy shapes before QA so the same corrected profile is
+      // later used by both GitHub Actions and the self-hosted packager.
+      await this.ensureCurrentPackageDefaults(policy, updateInfo);
+
+      const storedDeploymentConfig = policy.deployment_config as DeploymentConfig;
+      const effectiveInstallScope = resolveApplicationInstallScope(
+        updateInfo.wingetId,
+        storedDeploymentConfig.installScope || updateInfo.installScope
+      );
+      updateInfo = { ...updateInfo, installScope: effectiveInstallScope };
+      const deploymentConfig: DeploymentConfig = {
+        ...storedDeploymentConfig,
+        installScope: effectiveInstallScope,
+        psadtConfig: applyApplicationPackagingAdapter(
+          updateInfo.wingetId,
+          storedDeploymentConfig.psadtConfig || DEFAULT_PSADT_CONFIG
+        ),
+      };
+      // Keep the effective adapter in this update attempt so QA and the job
+      // receive the same config, without persisting derived adapter output into
+      // the customer's policy. A later adapter revision is therefore reapplied.
+      policy.deployment_config = deploymentConfig;
+      const sourceInstallerType =
+        updateInfo.installerType || deploymentConfig.installerType || 'exe';
+      const customInstallCommand = deploymentConfig.psadtConfig?.installCommand?.trim();
+      const effectiveInstallCommand =
+        customInstallCommand || updateInfo.installCommand || deploymentConfig.installCommand || '';
+      const qaDemand = await ensureQaDemand(this.supabase, {
+        wingetId: updateInfo.wingetId,
+        displayName: deploymentConfig.displayName || updateInfo.displayName,
+        publisher: deploymentConfig.publisher || 'Unknown Publisher',
+        version: updateInfo.latestVersion,
+        architecture: deploymentConfig.architecture || 'x64',
+        installerUrl: updateInfo.installerUrl,
+        installerSha256: updateInfo.installerSha256,
+        installerType: sourceInstallerType,
+        nestedInstallerType: updateInfo.nestedInstallerType,
+        nestedInstallerPath: updateInfo.nestedInstallerPath,
+        // An explicit PSADT override remains authoritative. Otherwise QA must
+        // exercise the current version's manifest-derived command, not the
+        // generated command saved with the previous deployment.
+        silentSwitches: updateInfo.silentSwitches && !customInstallCommand
+          ? updateInfo.silentSwitches
+          : extractSilentSwitches(
+              effectiveInstallCommand,
+              sourceInstallerType,
+              updateInfo.nestedInstallerType
+            ),
+        installerSuccessCodes: updateInfo.installerSuccessCodes,
+        uninstallCommand: deploymentConfig.uninstallCommand || '',
+        installScope: updateInfo.installScope ||
+          (deploymentConfig.installScope === 'user' ? 'user' : 'machine'),
+        psadtConfig: deploymentConfig.psadtConfig
+          ? JSON.stringify(deploymentConfig.psadtConfig)
+          : undefined,
+        detectionRules: JSON.stringify(deploymentConfig.detectionRules || []),
+        priority: 1500,
+        demandSource: 'auto_update',
+      });
+      if (qaDemand.state === 'failed') {
+        return {
+          success: false,
+          skipped: true,
+          skipReason: qaDemand.failureSummary,
+          code: 'QA_FAILED_CURRENT_VERSION',
+          packageProfileSha256: qaDemand.identity.executionProfileSha256,
+        };
+      }
+
       // Determine update type
       const updateType = classifyUpdateType(updateInfo.currentVersion, updateInfo.latestVersion);
 
@@ -179,13 +302,18 @@ export class AutoUpdateTrigger {
       const packagingJob = await this.createPackagingJob(
         policy,
         updateInfo,
-        historyRecord.id
+        historyRecord.id,
+        qaDemand
       );
 
       // Update history with job reference
       await this.updateHistoryRecord(historyRecord.id, {
         packaging_job_id: packagingJob.id,
-        status: 'packaging',
+        status: qaDemand.state === 'passed'
+          ? 'packaging'
+          : qaDemand.state === 'waiting'
+            ? 'pending'
+            : 'failed',
       });
 
       // Update policy tracking
@@ -195,6 +323,7 @@ export class AutoUpdateTrigger {
         success: true,
         packagingJobId: packagingJob.id,
         historyId: historyRecord.id,
+        packageProfileSha256: qaDemand.identity.executionProfileSha256,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -443,13 +572,46 @@ export class AutoUpdateTrigger {
     }
   }
 
+  private async ensureCurrentPackageDefaults(
+    policy: AppUpdatePolicy,
+    updateInfo: UpdateInfo
+  ): Promise<void> {
+    const current = policy.deployment_config as DeploymentConfig | null;
+    if (!current) return;
+
+    const upgraded = upgradeLegacyPackageDefaults(current, {
+      wingetId: updateInfo.wingetId,
+      version: updateInfo.latestVersion,
+      displayName: updateInfo.displayName,
+      installerUrl: updateInfo.installerUrl,
+      installerSha256: updateInfo.installerSha256,
+      installerType: updateInfo.installerType || current.installerType,
+      installScope: updateInfo.installScope ||
+        (current.installScope === 'user' ? 'user' : 'machine'),
+    });
+    if (!upgraded.changed) return;
+
+    const { error } = await this.supabase
+      .from('app_update_policies')
+      .update({
+        deployment_config: upgraded.config,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', policy.id);
+    if (error) {
+      throw new Error(`Could not persist corrected package defaults: ${error.message}`);
+    }
+    policy.deployment_config = upgraded.config;
+  }
+
   /**
    * Create a packaging job for the update
    */
   private async createPackagingJob(
     policy: AppUpdatePolicy,
     updateInfo: UpdateInfo,
-    historyId: string
+    historyId: string,
+    qaDemand?: QaDemandResult
   ): Promise<{ id: string }> {
     const config = policy.deployment_config as DeploymentConfig;
     const assignments = normalizeAssignments(config);
@@ -486,9 +648,12 @@ export class AutoUpdateTrigger {
       installer_type: updateInfo.installerType || config.installerType,
       installer_url: updateInfo.installerUrl,
       installer_sha256: updateInfo.installerSha256,
-      install_command: config.installCommand,
+      // Refresh vendor-controlled installer arguments for each version. A
+      // user-supplied psadtConfig.installCommand is kept in package_config and
+      // still takes precedence inside the packager.
+      install_command: updateInfo.installCommand || config.installCommand,
       uninstall_command: config.uninstallCommand,
-      install_scope: config.installScope,
+      install_scope: updateInfo.installScope || config.installScope,
       detection_rules: config.detectionRules,
       package_config: {
         assignments,
@@ -503,6 +668,7 @@ export class AutoUpdateTrigger {
         psadtConfig: config.psadtConfig,
         nestedInstallerType: updateInfo.nestedInstallerType,
         nestedInstallerPath: updateInfo.nestedInstallerPath,
+        installerSuccessCodes: updateInfo.installerSuccessCodes,
         forceCreate: config.forceCreateNewApp !== false,
         sourceIntuneAppId,
         autoSupersede,
@@ -517,8 +683,22 @@ export class AutoUpdateTrigger {
         notes: config.notes,
         autoUpdateHistoryId: historyId,
       },
-      status: 'queued',
+      status: !qaDemand || qaDemand.state === 'passed'
+        ? 'queued'
+        : qaDemand.state === 'waiting'
+          ? 'awaiting_qa'
+          : 'qa_failed',
+      status_message: !qaDemand || qaDemand.state === 'passed'
+        ? 'Installation test passed; preparing deployment'
+        : qaDemand.state === 'waiting'
+          ? 'Running an isolated installation test to make sure this app works before deployment'
+          : qaDemand.failureSummary || 'This app did not pass the isolated installation test',
       progress_percent: 0,
+      execution_profile_sha256: qaDemand?.identity.executionProfileSha256 || null,
+      presentation_profile_sha256: qaDemand?.identity.presentationProfileSha256 || null,
+      qa_candidate_id: qaDemand?.candidateId || null,
+      qa_requested_at: qaDemand ? new Date().toISOString() : null,
+      qa_completed_at: !qaDemand || qaDemand.state === 'waiting' ? null : new Date().toISOString(),
       is_auto_update: true,
       auto_update_policy_id: policy.id,
     };
@@ -679,64 +859,155 @@ export function createAutoUpdateTrigger(): AutoUpdateTrigger | null {
 export async function getLatestInstallerInfo(
   // Kept for call-site compatibility; the catalog source owns client creation.
   _supabase: SupabaseClient,
-  wingetId: string
-): Promise<UpdateInfo | null> {
+  wingetId: string,
+  architecture?: string,
+  installScope?: string
+): Promise<InstallerResolutionResult> {
   const catalog = getCatalogSource();
 
   // Get the curated app info
   const curatedApp = await catalog.getAppForInstaller(wingetId);
 
-  if (!curatedApp?.latest_version) {
-    return null;
+  if (!curatedApp) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'app_not_in_catalog',
+        message: `${wingetId} is not in the app catalog, so an update cannot be packaged for it.`,
+      },
+    };
   }
+
+  if (!curatedApp.latest_version) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'version_record_missing',
+        message: `The catalog has no latest version recorded for ${wingetId} yet. Try again after the next catalog sync.`,
+      },
+    };
+  }
+
+  const latestVersion = curatedApp.latest_version;
 
   // Get the version history for the latest version
   const versionInfo = await catalog.getVersionInstallerInfo(
     wingetId,
-    curatedApp.latest_version
+    latestVersion
   );
 
   if (!versionInfo) {
-    return null;
+    return {
+      ok: false,
+      failure: {
+        reason: 'version_record_missing',
+        message: `The catalog has not synced the installer manifest for ${wingetId} ${latestVersion} yet. Try again after the next catalog sync.`,
+      },
+    };
   }
 
-  // Extract installer details (prefer x64 architecture)
+  // Bind the selected installer to the deployment's requested architecture.
   let installerUrl = versionInfo.installer_url;
   let installerSha256 = versionInfo.installer_sha256;
   let installerType = versionInfo.installer_type;
   let nestedInstallerType: string | undefined;
   let nestedInstallerPath: string | undefined;
+  let selectedManifestInstaller: WingetInstaller | null = null;
+  const requestedScope = installScope === undefined
+    ? undefined
+    : resolveApplicationInstallScope(wingetId, installScope);
 
-  // If there are architecture-specific installers, prefer x64
-  // Note: The installers JSONB uses PascalCase from winget manifests
-  if (versionInfo.installers && Array.isArray(versionInfo.installers)) {
-    const x64Installer = versionInfo.installers.find(
-      (i: { Architecture?: string }) => i.Architecture === 'x64'
+  // The installers JSONB uses PascalCase from WinGet manifests.
+  if (Array.isArray(versionInfo.installers) && versionInfo.installers.length > 0) {
+    const selectedInstaller = selectWingetInstaller(
+      versionInfo.installers,
+      architecture,
+      requestedScope
     );
-    if (x64Installer) {
-      installerUrl = x64Installer.InstallerUrl || installerUrl;
-      installerSha256 = x64Installer.InstallerSha256 || installerSha256;
-      installerType = x64Installer.InstallerType || installerType;
-      nestedInstallerType = x64Installer.NestedInstallerType || undefined;
-      nestedInstallerPath = Array.isArray(x64Installer.NestedInstallerFiles)
-        ? x64Installer.NestedInstallerFiles[0]?.RelativeFilePath
-        : undefined;
+    if (!selectedInstaller) {
+      return {
+        ok: false,
+        failure: {
+          reason: 'no_compatible_installer',
+          message: `No installer for ${wingetId} ${latestVersion} matches architecture ${architecture || 'x64'}${requestedScope ? ` and ${requestedScope} install scope` : ''}.`,
+        },
+      };
     }
+    installerUrl = selectedInstaller.InstallerUrl || installerUrl;
+    installerSha256 = selectedInstaller.InstallerSha256 || installerSha256;
+    installerType = selectedInstaller.InstallerType || installerType;
+    nestedInstallerType = selectedInstaller.NestedInstallerType || undefined;
+    nestedInstallerPath = Array.isArray(selectedInstaller.NestedInstallerFiles)
+      ? selectedInstaller.NestedInstallerFiles[0]?.RelativeFilePath
+      : undefined;
+    selectedManifestInstaller = selectedInstaller as WingetInstaller;
+  } else if (architecture) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'installer_metadata_missing',
+        message: `The catalog entry for ${wingetId} ${latestVersion} is missing per-architecture installer metadata.`,
+      },
+    };
   }
 
   if (!installerUrl) {
-    return null;
+    return {
+      ok: false,
+      failure: {
+        reason: 'installer_url_missing',
+        message: `The installer manifest for ${wingetId} ${latestVersion} does not include a download URL.`,
+      },
+    };
   }
 
+  const normalizedSha256 = normalizeInstallerSha256(installerSha256);
+  if (!normalizedSha256) {
+    return {
+      ok: false,
+      failure: {
+        reason: 'installer_hash_invalid',
+        message: `The installer manifest for ${wingetId} ${latestVersion} has a missing or invalid SHA-256 hash, so the download cannot be verified.`,
+      },
+    };
+  }
+
+  const manifestInstaller = {
+    ...(selectedManifestInstaller || {}),
+    Architecture: (selectedManifestInstaller?.Architecture || architecture || 'x64'),
+    InstallerUrl: installerUrl,
+    InstallerSha256: normalizedSha256,
+    InstallerType: (installerType || 'exe'),
+    NestedInstallerType: selectedManifestInstaller?.NestedInstallerType || nestedInstallerType,
+    NestedInstallerFiles: selectedManifestInstaller?.NestedInstallerFiles ||
+      (nestedInstallerPath ? [{ RelativeFilePath: nestedInstallerPath }] : undefined),
+    Scope: selectedManifestInstaller?.Scope || versionInfo.installer_scope || undefined,
+    // Current snapshots keep the manifest-level Silent value in silent_args
+    // and installer-level overrides (for example Custom) in each installer.
+    // Merge them per field just like a freshly fetched WinGet manifest.
+    InstallerSwitches: {
+      ...(versionInfo.silent_args ? { Silent: versionInfo.silent_args } : {}),
+      ...(selectedManifestInstaller?.InstallerSwitches || {}),
+    },
+  } as WingetInstaller;
+  const normalizedInstaller = normalizeInstaller(manifestInstaller);
+
   return {
-    wingetId,
-    currentVersion: '', // Will be filled by caller
-    latestVersion: curatedApp.latest_version,
-    displayName: curatedApp.name,
-    installerUrl,
-    installerSha256: installerSha256 || '',
-    installerType: installerType || 'exe',
-    nestedInstallerType,
-    nestedInstallerPath,
+    ok: true,
+    info: {
+      wingetId,
+      currentVersion: '', // Will be filled by caller
+      latestVersion,
+      displayName: curatedApp.name,
+      installerUrl,
+      installerSha256: normalizedSha256,
+      installerType: installerType || 'exe',
+      installCommand: buildCurrentVersionInstallCommand(normalizedInstaller),
+      silentSwitches: normalizedInstaller.silentArgs,
+      installerSuccessCodes: normalizedInstaller.installerSuccessCodes,
+      installScope: normalizedInstaller.scope,
+      nestedInstallerType,
+      nestedInstallerPath,
+    },
   };
 }

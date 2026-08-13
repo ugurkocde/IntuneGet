@@ -624,13 +624,12 @@ async function main() {
   fs.writeFileSync('web-icon-results.json', JSON.stringify(results, null, 2));
 
   if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
+    // The cursor is persisted by a later workflow step, only after the fetched
+    // icons have been committed. Upserting it here would advance the cursor
+    // even when the commit fails, silently skipping these apps until the
+    // cursor wraps around.
     const nextCursor = apps.length > 0 ? apps[apps.length - 1].winget_id : null;
-    const { error: cursorError } = await supabase.from('curated_sync_status').upsert({
-      id: 'extract-icons-web-cursor',
-      metadata: { last_winget_id: nextCursor },
-      updated_at: new Date().toISOString(),
-    });
-    if (cursorError) throw new Error(`Failed to persist web icon cursor: ${cursorError.message}`);
+    fs.writeFileSync('web-icon-cursor.json', JSON.stringify({ last_winget_id: nextCursor }));
   }
 
   // Write counts for GitHub Actions output

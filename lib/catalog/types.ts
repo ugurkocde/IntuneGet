@@ -16,6 +16,7 @@ import type { LocaleVariant } from '@/types/winget';
 import type { SccmMatchResult } from '@/lib/matching/sccm-matcher';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
+import type { QaCandidateStatusRow, QaResultRow, QaStatusRow } from '@/types/qa';
 
 /**
  * Raw row returned by the search_curated_apps / get_popular_curated_apps RPCs.
@@ -113,6 +114,7 @@ export interface VersionInstallerInfo {
   installer_sha256: string | null;
   installer_type: string | null;
   installer_scope?: string | null;
+  silent_args?: string | null;
   installers: unknown;
 }
 
@@ -209,6 +211,15 @@ export interface CatalogSource {
     wingetId: string,
     version?: string
   ): Promise<InstallationSnapshot | null>;
+
+  /** Compact QA badge rows for a visible set of catalog apps. */
+  getQaStatuses(ids: string[]): Promise<QaStatusRow[]>;
+
+  /** Latest active queued/running candidate for each requested app. */
+  getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]>;
+
+  /** Exact package-profile QA result, or the latest catalog result when omitted. */
+  getQaResult(wingetId: string, packageProfileSha256?: string): Promise<QaResultRow | null>;
 
   // --- update detection ---
 

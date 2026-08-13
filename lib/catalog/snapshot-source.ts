@@ -20,6 +20,16 @@ import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
 import type {
+  QaCandidateStatusRow,
+  QaChanges,
+  QaDetectionRule,
+  QaEffectiveConfiguration,
+  QaEnvironment,
+  QaPhaseResults,
+  QaResultRow,
+  QaStatusRow,
+} from '@/types/qa';
+import type {
   CatalogSource,
   CategoryCount,
   CuratedAppRpcRow,
@@ -35,6 +45,34 @@ import type {
 } from './types';
 
 type DB = BetterSqlite3.Database;
+
+const qaTableAvailability = new WeakMap<object, boolean>();
+const REQUIRED_QA_COLUMNS = [
+  'test_level',
+  'package_profile_sha256',
+  'psadt_version',
+  'package_content_sha256',
+] as const;
+
+export function hasCompatibleQaResultsTable(db: DB): boolean {
+  const cached = qaTableAvailability.get(db);
+  if (cached !== undefined) return cached;
+
+  const columns = db.prepare('PRAGMA table_info(qa_results)').all() as Array<{ name: string }>;
+  const names = new Set(columns.map((column) => column.name));
+  const available = REQUIRED_QA_COLUMNS.every((column) => names.has(column));
+  qaTableAvailability.set(db, available);
+  return available;
+}
+
+function parseJson<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Run a snapshot query, degrading gracefully when the snapshot is unavailable.
@@ -433,7 +471,7 @@ export class SnapshotCatalogSource implements CatalogSource {
       (db) => {
         const row = db
           .prepare(
-            `SELECT installer_url, installer_sha256, installer_type, installer_scope, installers
+            `SELECT installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers
              FROM version_history
              WHERE winget_id = ? AND version = ?`
           )
@@ -443,6 +481,7 @@ export class SnapshotCatalogSource implements CatalogSource {
               installer_sha256: string | null;
               installer_type: string | null;
               installer_scope: string | null;
+              silent_args: string | null;
               installers: string | null;
             }
           | undefined;
@@ -453,6 +492,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           installer_sha256: row.installer_sha256,
           installer_type: row.installer_type,
           installer_scope: row.installer_scope,
+          silent_args: row.silent_args,
           installers: row.installers ? JSON.parse(row.installers) : null,
         };
       },
@@ -468,7 +508,7 @@ export class SnapshotCatalogSource implements CatalogSource {
       (db) => {
         const row = db
           .prepare(
-            `SELECT installer_url, installer_sha256, installer_type, installer_scope, installers
+            `SELECT installer_url, installer_sha256, installer_type, installer_scope, silent_args, installers
              FROM version_history
              WHERE winget_id = ? AND version = ?
              ORDER BY created_at DESC
@@ -480,6 +520,7 @@ export class SnapshotCatalogSource implements CatalogSource {
               installer_sha256: string | null;
               installer_type: string | null;
               installer_scope: string | null;
+              silent_args: string | null;
               installers: string | null;
             }
           | undefined;
@@ -490,6 +531,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           installer_sha256: row.installer_sha256,
           installer_type: row.installer_type,
           installer_scope: row.installer_scope,
+          silent_args: row.silent_args,
           installers: row.installers ? JSON.parse(row.installers) : null,
         };
       },
@@ -504,6 +546,69 @@ export class SnapshotCatalogSource implements CatalogSource {
     // installation_snapshots is operational data, not catalog data, so it is
     // not shipped in the snapshot. There is nothing to return in sqlite mode.
     return null;
+  }
+
+  async getQaStatuses(ids: string[]): Promise<QaStatusRow[]> {
+    return withDb(
+      (db) => {
+        if (ids.length === 0 || !hasCompatibleQaResultsTable(db)) return [];
+        const placeholders = ids.map(() => '?').join(', ');
+        return db
+          .prepare(
+            `SELECT winget_id, outcome, tested_version, architecture, tested_at_utc,
+                    test_level, package_profile_sha256
+             FROM qa_results
+             WHERE test_level = 'psadt-package' AND winget_id IN (${placeholders})`
+          )
+          .all(...ids) as QaStatusRow[];
+      },
+      () => []
+    );
+  }
+
+  async getQaResult(
+    wingetId: string,
+    packageProfileSha256?: string
+  ): Promise<QaResultRow | null> {
+    return withDb(
+      (db) => {
+        if (!hasCompatibleQaResultsTable(db)) return null;
+        const sql = packageProfileSha256
+          ? "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' AND package_profile_sha256 = ? LIMIT 1"
+          : "SELECT * FROM qa_results WHERE winget_id = ? AND test_level = 'psadt-package' LIMIT 1";
+        const row = db
+          .prepare(sql)
+          .get(...(packageProfileSha256 ? [wingetId, packageProfileSha256.toUpperCase()] : [wingetId])) as
+          | (Omit<QaResultRow, 'detection' | 'phase_results' | 'changes' | 'environment' | 'effective_configuration'> & {
+              detection: string;
+              phase_results: string;
+              changes: string | null;
+              environment: string | null;
+              effective_configuration: string | null;
+            })
+          | undefined;
+
+        if (!row) return null;
+        const detection = parseJson<QaDetectionRule>(row.detection);
+        const phaseResults = parseJson<QaPhaseResults>(row.phase_results);
+        if (!detection || !phaseResults) return null;
+
+        return {
+          ...row,
+          detection,
+          phase_results: phaseResults,
+          changes: parseJson<QaChanges>(row.changes),
+          environment: parseJson<QaEnvironment>(row.environment),
+          effective_configuration: parseJson<QaEffectiveConfiguration>(row.effective_configuration),
+        };
+      },
+      () => null
+    );
+  }
+
+  async getQaCandidateStatuses(_ids: string[]): Promise<QaCandidateStatusRow[]> {
+    // Candidate state is operational and intentionally absent from snapshots.
+    return [];
   }
 
   // ---------------------------------------------------------------------------
