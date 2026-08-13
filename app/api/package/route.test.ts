@@ -594,7 +594,12 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     const expectedAdapter = {
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
-      reviewedUninstallArguments: ['--runimmediately', '--deleteuserprofile=0'],
+      reviewedManagedInstallDirectory: '%ProgramFiles%\\Opera',
+      reviewedManagedUninstall: {
+        executablePath: '%ProgramFiles%\\Opera\\opera.exe',
+        arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+        completionTimeoutMinutes: 5,
+      },
     };
     expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
       expectedAdapter
