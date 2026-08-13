@@ -4,6 +4,7 @@ import {
   normalizeManifestInstallers,
   fetchLocaleManifest,
   getFullManifest,
+  getLiveInstallers,
   clearManifestCache,
 } from '../manifest-api';
 import type { WingetInstaller, NormalizedInstaller } from '@/types/winget';
@@ -903,6 +904,34 @@ function yamlResponse(body: string) {
 function notFound() {
   return { ok: false, status: 404, text: async () => '' };
 }
+
+describe('getLiveInstallers trust semantics', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('returns an empty list for an authoritative missing manifest', async () => {
+    mockFetch.mockResolvedValue(notFound());
+
+    await expect(getLiveInstallers('Foo.Missing', '1.0.0')).resolves.toEqual([]);
+  });
+
+  it('propagates GitHub throttling instead of treating it as a missing manifest', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 429, text: async () => '' });
+
+    await expect(getLiveInstallers('Foo.Throttled', '1.0.0')).rejects.toThrow(
+      'GitHub fetch error: 429'
+    );
+  });
+
+  it('propagates network failures instead of creating a compatibility block', async () => {
+    mockFetch.mockRejectedValue(new Error('network unavailable'));
+
+    await expect(getLiveInstallers('Foo.Offline', '1.0.0')).rejects.toThrow(
+      'network unavailable'
+    );
+  });
+});
 
 describe('fetchLocaleManifest locale resolution', () => {
   beforeEach(() => {

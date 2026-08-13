@@ -149,32 +149,41 @@ export async function fetchAvailableVersionsLive(wingetId: string): Promise<stri
   }
 }
 
-/**
- * Fetch installer manifest from GitHub
- */
-export async function fetchInstallerManifest(
+async function fetchInstallerManifestFromGitHub(
   wingetId: string,
   version: string
 ): Promise<Record<string, unknown> | null> {
   const { basePath } = getManifestPaths(wingetId);
   const url = `${GITHUB_RAW_BASE}/${basePath}/${version}/${wingetId}.installer.yaml`;
 
-  try {
-    const response = await fetch(url, {
-      headers: githubReadHeaders('text/plain'),
-      cache: 'no-store',
-    });
+  const response = await fetch(url, {
+    headers: githubReadHeaders('text/plain'),
+    cache: 'no-store',
+  });
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`Installer manifest not found: ${url}`);
-        return null;
-      }
-      throw new Error(`GitHub fetch error: ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 404) {
+      console.warn(`Installer manifest not found: ${url}`);
+      return null;
     }
+    throw new Error(`GitHub fetch error: ${response.status}`);
+  }
 
-    const yamlContent = await response.text();
-    return YAML.parse(yamlContent);
+  const yamlContent = await response.text();
+  return YAML.parse(yamlContent);
+}
+
+/**
+ * Fetch installer manifest from GitHub for best-effort catalog reads.
+ * Live trust decisions use the strict helper below so a transient upstream
+ * failure cannot be mistaken for an authoritative missing manifest.
+ */
+export async function fetchInstallerManifest(
+  wingetId: string,
+  version: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    return await fetchInstallerManifestFromGitHub(wingetId, version);
   } catch (error) {
     console.error(`Failed to fetch installer manifest for ${wingetId}@${version}:`, error);
     return null;
@@ -801,7 +810,7 @@ export async function getLiveInstallers(
   wingetId: string,
   version: string
 ): Promise<NormalizedInstaller[]> {
-  const installerManifest = await fetchInstallerManifest(wingetId, version);
+  const installerManifest = await fetchInstallerManifestFromGitHub(wingetId, version);
   if (!installerManifest) {
     return [];
   }
