@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '2dca138ee2fe27dc45166dba536511aa80d8937e': [
+    // EAUninstall.exe remains blocked while the EA client/background process
+    // family owns the installation. This release closes those reviewed
+    // processes before invoking the exact registered helper.
+    'ElectronicArts.EADesktop',
+  ],
   'e6a4ae2f4f9a3a672c6912ab8e309483f53003b7': [
     // EA Desktop registers a purpose-built EAUninstall.exe helper. This
     // release prefers that exact helper while retaining the packaged Burn

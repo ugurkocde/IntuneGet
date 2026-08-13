@@ -199,6 +199,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries EA Desktop once after adding its process-close lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ELECTRONICARTS.EADESKTOP', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'e6a4ae2f4f9a3a672c6912ab8e309483f53003b7',
+      { wingetId: 'ElectronicArts.EADesktop', status: 'failed' }
+    )).toBe(true);
+  });
+
   it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
