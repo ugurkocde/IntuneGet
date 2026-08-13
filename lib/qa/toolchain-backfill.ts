@@ -10,6 +10,16 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3fce249f5021c120a23ed0ab5dc726baaf060f3e': [
+    // Claude Code ships as a bare portable executable. Earlier releases
+    // generated an incomplete archive command for it; this release installs
+    // bare portable payloads through the reviewed copy lifecycle.
+    'Anthropic.ClaudeCode',
+    // Platform Tools is a plain zip with no nested installer contract. This
+    // release stages such archives as complete portable folders instead of
+    // failing with the nested installer requirement.
+    'Google.PlatformTools',
+  ],
   '9214e4b5b71508bfba9aa1a2d4de5c3c771d3fea': [
     // Viber's machine-declared MSI resolves LocalAppData into the SYSTEM
     // profile and its VerifyInstalledFiles action then fails with 1603. The
