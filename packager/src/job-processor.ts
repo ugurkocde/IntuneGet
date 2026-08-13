@@ -101,6 +101,9 @@ export class JobProcessor {
             unencryptedSize: result.unencryptedContentSize,
             encryptedSize: result.encryptedContentSize,
           },
+          // Intune's win32LobApp.fileName is the name of the package file we
+          // built, not the installer inside it.
+          path.basename(result.intunewinPath),
           async (percent, message) => {
             // Map upload progress (0-100) to overall progress (75-95)
             const overallPercent = 75 + Math.floor(percent * 0.2);
