@@ -7,6 +7,11 @@ interface ApplicationPackagingAdapter {
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedUninstallArguments?: readonly string[];
+  reviewedUninstallProcessGuard?: Readonly<{
+    processName: string;
+    argumentsPattern: string;
+    graceSeconds: number;
+  }>;
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
   reviewedMultiProductInstallDisplayNamePrefixes?: readonly string[];
@@ -113,13 +118,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   },
   {
     // Camera Hub starts its desktop process after MSI installation. The MSI
-    // Pre_Uninstall custom action launches that same executable with --quit
-    // and waits indefinitely when the original process remains open under the
-    // interactive user. Close it through PSADT before upgrades and removal.
+    // Pre_Uninstall custom action launches a new Camera Hub helper with
+    // --pre-uninstall --quit and can wait indefinitely even after the original
+    // desktop process is closed. Close the user process first, then allow the
+    // reviewed custom-action helper a short grace period before ending only
+    // that exact newly spawned command line.
     wingetId: 'Elgato.CameraHub',
     requiredProcessesToClose: [
       { name: 'Camera Hub', description: 'Elgato Camera Hub' },
     ],
+    reviewedUninstallProcessGuard: {
+      processName: 'Camera Hub.exe',
+      argumentsPattern: '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)',
+      graceSeconds: 20,
+    },
   },
   {
     // The VSTO redistributable registers a visible External Installer command
@@ -275,13 +287,15 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
-      !config.reviewedMultiProductInstallMinimumCount
+      !config.reviewedMultiProductInstallMinimumCount &&
+      !config.reviewedUninstallProcessGuard
     ) return config;
     return {
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
+      reviewedUninstallProcessGuard: undefined,
     };
   }
 
@@ -342,6 +356,9 @@ export function applyApplicationPackagingAdapter(
     processesToClose,
     reviewedInstallArguments,
     reviewedUninstallArguments,
+    reviewedUninstallProcessGuard: adapter.reviewedUninstallProcessGuard
+      ? { ...adapter.reviewedUninstallProcessGuard }
+      : undefined,
     ...(adapter.uninstallCompletionTimeoutMinutes
       ? { uninstallCompletionTimeoutMinutes: adapter.uninstallCompletionTimeoutMinutes }
       : {}),

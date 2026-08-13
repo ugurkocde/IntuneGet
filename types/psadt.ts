@@ -204,6 +204,16 @@ export interface PSADTConfig {
   // not exposed as a customer-facing free-form command surface.
   reviewedUninstallArguments?: string[];
 
+  // Internal guard for a reviewed vendor MSI custom-action helper that can
+  // remain alive indefinitely during removal. The packager only accepts this
+  // value from an application adapter and matches both the executable name and
+  // command line before ending the newly spawned helper after a grace period.
+  reviewedUninstallProcessGuard?: {
+    processName: string;
+    argumentsPattern: string;
+    graceSeconds: number;
+  };
+
   // Internal completion window for vendor uninstallers that hand work to a
   // child process. Application adapters may extend the five-minute default;
   // the exact registry identity remains the authoritative completion signal.
@@ -301,6 +311,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   uninstallCommand: undefined,
   reviewedInstallArguments: [],
   reviewedUninstallArguments: [],
+  reviewedUninstallProcessGuard: undefined,
 };
 
 /**

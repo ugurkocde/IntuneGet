@@ -685,6 +685,59 @@ describe('EXE product identity PSADT generation', () => {
     )).toThrow('single-line');
   });
 
+  it('guards only the reviewed newly spawned MSI uninstall helper', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        winget_id: 'Elgato.CameraHub',
+        installer_type: 'msi',
+        uninstall_command: 'REGISTRY_UNINSTALL:Elgato Camera Hub',
+        package_config: {
+          psadtConfig: {
+            reviewedUninstallProcessGuard: {
+              processName: 'Camera Hub.exe',
+              argumentsPattern: '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)',
+              graceSeconds: 20,
+            },
+          },
+        },
+      }),
+      'CameraHub.msi'
+    );
+
+    expect(uninstall).toContain("$reviewedGuardProcessName = 'Camera Hub.exe'");
+    expect(uninstall).toContain(
+      "$reviewedGuardArgumentsPattern = '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)'"
+    );
+    expect(uninstall).toContain('$reviewedGuardGraceSeconds = 20');
+    expect(uninstall).toContain('$_.CreationDate.ToUniversalTime() -ge $StartedAt');
+    expect(uninstall).toContain('$current.Name -ieq $ProcessName');
+    expect(uninstall).toContain('Stop-Process -Id $current.ProcessId -Force');
+    expect(uninstall).toContain(
+      "Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode"
+    );
+  });
+
+  it('rejects an unsafe reviewed MSI uninstall process guard', () => {
+    expect(() => generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'msi',
+        uninstall_command: 'REGISTRY_UNINSTALL:Example',
+        package_config: {
+          psadtConfig: {
+            reviewedUninstallProcessGuard: {
+              processName: '..\\helper.exe',
+              argumentsPattern: '--quit',
+              graceSeconds: 20,
+            },
+          },
+        },
+      }),
+      'example.msi'
+    )).toThrow('executable leaf name');
+  });
+
   it('extends registry-aware completion only for a reviewed vendor profile', () => {
     const uninstall = generator.getUninstallCommand.call(
       generator,

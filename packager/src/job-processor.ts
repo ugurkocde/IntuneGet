@@ -890,6 +890,72 @@ catch
   }
 
   /**
+   * Validate the adapter-only guard for an MSI custom-action helper that can
+   * otherwise wait indefinitely. Both the executable leaf name and command
+   * line must match before a newly spawned process is ended after its grace
+   * period. This is intentionally not a general customer command surface.
+   */
+  private getReviewedUninstallProcessGuard(job: PackagingJob): {
+    processName: string;
+    argumentsPattern: string;
+    graceSeconds: number;
+  } | null {
+    const raw = this.getPsadtConfig(job)?.reviewedUninstallProcessGuard;
+    if (raw === undefined || raw === null) return null;
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new Error('PSADT reviewedUninstallProcessGuard must be an object');
+    }
+
+    const record = raw as Record<string, unknown>;
+    const processName = typeof record.processName === 'string'
+      ? record.processName.trim()
+      : '';
+    const argumentsPattern = typeof record.argumentsPattern === 'string'
+      ? record.argumentsPattern.trim()
+      : '';
+    const graceSeconds = record.graceSeconds;
+    if (
+      !/^[A-Za-z0-9 _().-]+\.exe$/.test(processName) ||
+      processName.length > 128
+    ) {
+      throw new Error(
+        'PSADT reviewedUninstallProcessGuard.processName must be a bounded executable leaf name'
+      );
+    }
+    if (
+      !argumentsPattern ||
+      argumentsPattern.length > 256 ||
+      /[\x00-\x1f\x7f]/.test(argumentsPattern)
+    ) {
+      throw new Error(
+        'PSADT reviewedUninstallProcessGuard.argumentsPattern must be bounded and single-line'
+      );
+    }
+    try {
+      new RegExp(argumentsPattern);
+    } catch {
+      throw new Error(
+        'PSADT reviewedUninstallProcessGuard.argumentsPattern must be a valid regular expression'
+      );
+    }
+    if (
+      !Number.isInteger(graceSeconds) ||
+      (graceSeconds as number) < 5 ||
+      (graceSeconds as number) > 120
+    ) {
+      throw new Error(
+        'PSADT reviewedUninstallProcessGuard.graceSeconds must be an integer from 5 to 120'
+      );
+    }
+
+    return {
+      processName,
+      argumentsPattern,
+      graceSeconds: graceSeconds as number,
+    };
+  }
+
+  /**
    * Bound the registry-aware vendor completion window. Most uninstallers use
    * five minutes; reviewed adapters can extend it for asynchronous vendor
    * engines without turning it into an unbounded customer-controlled wait.
@@ -1442,6 +1508,53 @@ ${steps}
         .join(', ');
       const uninstallCompletionTimeoutMinutes =
         this.getUninstallCompletionTimeoutMinutes(job);
+      const reviewedUninstallProcessGuard =
+        this.getReviewedUninstallProcessGuard(job);
+      const capturedMsiUninstallBlock = reviewedUninstallProcessGuard
+        ? `$reviewedGuardProcessName = '${reviewedUninstallProcessGuard.processName.replace(/'/g, "''")}'
+        $reviewedGuardArgumentsPattern = '${reviewedUninstallProcessGuard.argumentsPattern.replace(/'/g, "''")}'
+        $reviewedGuardGraceSeconds = ${reviewedUninstallProcessGuard.graceSeconds}
+        $reviewedGuardStartedAt = [DateTime]::UtcNow.AddSeconds(-2)
+        $reviewedGuardJob = Start-Job -ScriptBlock {
+            param($ProcessName, $ArgumentsPattern, $StartedAt, $GraceSeconds)
+            $deadline = [DateTime]::UtcNow.AddMinutes(3)
+            do {
+                $candidate = Get-CimInstance -ClassName Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+                    $_.Name -ieq $ProcessName -and
+                    $null -ne $_.CreationDate -and
+                    $_.CreationDate.ToUniversalTime() -ge $StartedAt -and
+                    [regex]::IsMatch([string]$_.CommandLine, $ArgumentsPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                } | Select-Object -First 1
+                if ($null -ne $candidate) {
+                    Start-Sleep -Seconds $GraceSeconds
+                    $current = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $($candidate.ProcessId)" -ErrorAction SilentlyContinue
+                    if ($null -ne $current -and
+                        $current.Name -ieq $ProcessName -and
+                        [regex]::IsMatch([string]$current.CommandLine, $ArgumentsPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                        Stop-Process -Id $current.ProcessId -Force -ErrorAction Stop
+                        return "Ended the reviewed vendor uninstall helper after its grace period."
+                    }
+                    return
+                }
+                Start-Sleep -Seconds 1
+            } while ([DateTime]::UtcNow -lt $deadline)
+        } -ArgumentList $reviewedGuardProcessName, $reviewedGuardArgumentsPattern, $reviewedGuardStartedAt, $reviewedGuardGraceSeconds
+        try {
+            Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)
+        } finally {
+            if ($null -ne $reviewedGuardJob) {
+                if ($reviewedGuardJob.State -in @('NotStarted', 'Running')) {
+                    Stop-Job -Job $reviewedGuardJob -ErrorAction SilentlyContinue
+                }
+                foreach ($guardMessage in @(Receive-Job -Job $reviewedGuardJob -ErrorAction SilentlyContinue)) {
+                    if (-not [string]::IsNullOrWhiteSpace([string]$guardMessage)) {
+                        Write-ADTLogEntry -Message ([string]$guardMessage) -Source 'Uninstall-ADTDeployment'
+                    }
+                }
+                Remove-Job -Job $reviewedGuardJob -Force -ErrorAction SilentlyContinue
+            }
+        }`
+        : `Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)`;
       const reviewedUninstallArgumentsBlock = `$reviewedUninstallArguments = @(${reviewedUninstallArguments})
     foreach ($reviewedArgument in $reviewedUninstallArguments) {
         if (@($registeredUninstallArguments | Where-Object { [string]$_ -ieq $reviewedArgument }).Count -eq 0) {
@@ -1566,7 +1679,7 @@ ${steps}
         $null
     }
     if ($capturedMsiProductCode) {
-        Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode -SuccessExitCodes @(0, 1605, 1614) -RebootExitCodes @(1641, 3010)
+        ${capturedMsiUninstallBlock}
     } else {
         $hasQuietUninstall = -not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)
         $registeredUninstallProperty = if ($hasQuietUninstall) { 'QuietUninstallString' } else { 'UninstallString' }

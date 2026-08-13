@@ -58,13 +58,17 @@ describe('application packaging adapters', () => {
       { name: 'EABackgroundService', description: 'EA background service' },
     ]);
     expect(
-      applyApplicationPackagingAdapter(
-        'Elgato.CameraHub',
-        DEFAULT_PSADT_CONFIG
-      ).processesToClose
-    ).toEqual([
-      { name: 'Camera Hub', description: 'Elgato Camera Hub' },
-    ]);
+      applyApplicationPackagingAdapter('Elgato.CameraHub', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      processesToClose: [
+        { name: 'Camera Hub', description: 'Elgato Camera Hub' },
+      ],
+      reviewedUninstallProcessGuard: {
+        processName: 'Camera Hub.exe',
+        argumentsPattern: '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)',
+        graceSeconds: 20,
+      },
+    });
     expect(
       applyApplicationPackagingAdapter('Microsoft.VSTOR', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments

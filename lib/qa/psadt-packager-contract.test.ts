@@ -1030,6 +1030,16 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(packager).not.toContain('TotalSeconds -ge 15');
   });
 
+  it('keeps the reviewed MSI helper guard identical in both customer packagers', () => {
+    for (const source of [packager, hostedPackager]) {
+      expect(source).toContain('reviewedUninstallProcessGuard');
+      expect(source).toContain('Get-CimInstance -ClassName Win32_Process');
+      expect(source).toContain('CreationDate.ToUniversalTime()');
+      expect(source).toContain('Stop-Process -Id $current.ProcessId -Force');
+      expect(source).toContain('Ended the reviewed vendor uninstall helper after its grace period.');
+    }
+  });
+
   it('uses the same registry-aware completion rule for selected Burn uninstallers', () => {
     expect(packager).toContain(
       'Start-ADTProcess -FilePath $burnUninstaller -ArgumentList $registeredUninstallArguments'
