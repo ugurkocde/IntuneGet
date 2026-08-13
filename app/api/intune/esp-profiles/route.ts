@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { acquireGraphToken } from '@/lib/graph-token';
@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
+    if (!supabase) {
+      return NextResponse.json({ profiles: [], count: 0 });
+    }
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
     const tenantResolution = await resolveTargetTenantId({

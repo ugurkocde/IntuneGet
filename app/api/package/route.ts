@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import {
   isGitHubActionsConfigured,
@@ -89,13 +89,16 @@ export async function POST(request: NextRequest) {
 
     // Check for MSP tenant override header and enforce tenant access checks
     // (membership, managed tenant consent, and customer-only access mode)
+    const supabaseServerConfigured = isSupabaseServerConfigured();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
-    const { tenantId, errorResponse: tenantError } = await resolveTargetTenantId({
-      supabase: createServerClient(),
-      userId,
-      tokenTenantId,
-      requestedTenantId: mspTenantId,
-    });
+    const { tenantId, errorResponse: tenantError } = supabaseServerConfigured
+      ? await resolveTargetTenantId({
+          supabase: createServerClient(),
+          userId,
+          tokenTenantId,
+          requestedTenantId: mspTenantId,
+        })
+      : { tenantId: tokenTenantId, errorResponse: null };
 
     if (tenantError) {
       return tenantError;
@@ -188,10 +191,12 @@ export async function POST(request: NextRequest) {
     const catalogWin32Items = win32Items.filter(
       (item) => item.sourceType !== 'custom' && typeof item.wingetId === 'string'
     );
-    const eligibilityBlocks = await getPackageEligibilityBlocks(
-      createServerClient(),
-      catalogWin32Items.map((item) => item.wingetId)
-    );
+    const eligibilityBlocks = supabaseServerConfigured
+      ? await getPackageEligibilityBlocks(
+          createServerClient(),
+          catalogWin32Items.map((item) => item.wingetId)
+        )
+      : [];
     if (eligibilityBlocks.length > 0) {
       const block = eligibilityBlocks[0];
       const blockedItem = catalogWin32Items.find(
@@ -516,7 +521,7 @@ export async function POST(request: NextRequest) {
             }
             const jobId = crypto.randomUUID();
             const installerSha256 = item.installerSha256?.trim() || '';
-            const qaDemand = item.sourceType === 'custom'
+            const qaDemand = item.sourceType === 'custom' || !supabaseServerConfigured
               ? null
               : await ensureQaDemand(createServerClient(), {
                   wingetId: item.wingetId,
@@ -542,11 +547,14 @@ export async function POST(request: NextRequest) {
                   priority: 2000,
                   demandSource: 'customer',
                 });
-            const initialStatus = qaDemand?.state === 'waiting'
-              ? 'awaiting_qa'
-              : qaDemand?.state === 'failed'
-                ? 'qa_failed'
-                : 'queued';
+            // Self-hosted installs have no QA pipeline, so local jobs must remain pollable.
+            const initialStatus = isLocalPackagerMode && !supabaseServerConfigured
+              ? 'queued'
+              : qaDemand?.state === 'waiting'
+                ? 'awaiting_qa'
+                : qaDemand?.state === 'failed'
+                  ? 'qa_failed'
+                  : 'queued';
             const now = new Date().toISOString();
 
             const jobRecord = await db.jobs.create({
@@ -771,9 +779,12 @@ export async function POST(request: NextRequest) {
             ? `${storeDeployed} Store app(s) deployed successfully`
             : `${win32Queued} job(s) queued successfully`,
     });
-  } catch {
+  } catch (err) {
+    console.error('[Package] Failed to create packaging jobs:', err);
+    // Self-hosted operators read their own logs, so surface the real message there.
+    const detail = !isSupabaseServerConfigured() && err instanceof Error ? err.message : null;
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: detail ?? 'Internal server error' },
       { status: 500 }
     );
   }
@@ -916,9 +927,11 @@ export async function GET(request: NextRequest) {
     const healedJobs = await healStaleJobs(db, jobs);
 
     return NextResponse.json({ jobs: healedJobs });
-  } catch {
+  } catch (err) {
+    console.error('[Package] Failed to fetch jobs:', err);
+    const detail = !isSupabaseServerConfigured() && err instanceof Error ? err.message : null;
     return NextResponse.json(
-      { error: 'Failed to fetch jobs' },
+      { error: detail ?? 'Failed to fetch jobs' },
       { status: 500 }
     );
   }

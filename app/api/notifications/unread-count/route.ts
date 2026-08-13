@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 
 /**
@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
+    if (!supabase) {
+      return NextResponse.json({ count: 0 });
+    }
 
     const { count, error } = await supabase
       .from('user_notifications')
