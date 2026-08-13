@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { ManualAppMapping, CreateMappingRequest } from '@/types/unmanaged';
@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ mappings: [] });
     }
 
     const supabase = createServerClient();
@@ -81,6 +85,12 @@ export async function GET(request: NextRequest) {
  * POST - Create a new manual mapping
  */
 export async function POST(request: NextRequest) {
+  if (!isSupabaseServerConfigured()) {
+    return NextResponse.json(
+      { error: 'Manual mappings require hosted services' },
+      { status: 503 }
+    );
+  }
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
@@ -197,6 +207,12 @@ export async function POST(request: NextRequest) {
  * DELETE - Remove a manual mapping
  */
 export async function DELETE(request: NextRequest) {
+  if (!isSupabaseServerConfigured()) {
+    return NextResponse.json(
+      { error: 'Manual mappings require hosted services' },
+      { status: 503 }
+    );
+  }
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {

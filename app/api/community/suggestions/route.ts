@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
   suggestionSchema,
@@ -52,6 +52,14 @@ export async function GET(request: NextRequest) {
 
     const { status, sort, page, limit } = queryValidation.data;
     const offset = (page - 1) * limit;
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({
+        suggestions: [],
+        userVotes: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
+    }
 
     const supabase = createServerClient();
 
@@ -132,6 +140,13 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'App requests require hosted services' },
+        { status: 503 }
+      );
+    }
+
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(

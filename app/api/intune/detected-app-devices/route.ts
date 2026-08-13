@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import {
@@ -88,7 +88,7 @@ async function fetchDevicesForDetectedApp(
       if (response.status === 401) {
         invalidateServicePrincipalToken(tenantId);
       }
-      // Stale version id no longer present — treat as no devices.
+      // Stale version id no longer present; treat as no devices.
       if (response.status === 404) {
         await response.text().catch(() => {});
         return devices;
@@ -126,15 +126,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing appId parameter' }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
+    const tenantResolution = supabase ? await resolveTargetTenantId({
       supabase,
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
-    });
+    }) : { tenantId: user.tenantId, errorResponse: null };
 
     if (tenantResolution.errorResponse) {
       return tenantResolution.errorResponse;
@@ -143,12 +143,12 @@ export async function GET(request: NextRequest) {
     const tenantId = tenantResolution.tenantId;
 
     // Verify admin consent (mirrors the unmanaged-apps route)
-    const { data: consentData, error: consentError } = await supabase
+    const { data: consentData, error: consentError } = supabase ? await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
-      .single();
+      .single() : { data: true, error: null };
 
     if (consentError || !consentData) {
       return NextResponse.json(
@@ -160,12 +160,12 @@ export async function GET(request: NextRequest) {
     // Resolve the full set of detected-app (version) ids for this app from the
     // sync cache; fall back to the single id for rows written before this field
     // existed or evicted rows.
-    const { data: cacheRow } = await supabase
+    const { data: cacheRow } = supabase ? await supabase
       .from('discovered_apps_cache')
       .select('app_data, device_count')
       .eq('tenant_id', tenantId)
       .eq('discovered_app_id', appId)
-      .maybeSingle();
+      .maybeSingle() : { data: null };
 
     const appData = (cacheRow?.app_data ?? null) as unknown as { mergedAppIds?: string[] } | null;
     const allVersionIds =

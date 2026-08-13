@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
@@ -18,6 +18,10 @@ import type { Json } from '@/types/database';
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ policies: [], count: 0 });
+    }
+
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -70,6 +74,13 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Auto-update policies require hosted services' },
+        { status: 503 }
+      );
+    }
+
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(

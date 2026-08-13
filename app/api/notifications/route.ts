@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getUserNotifications } from '@/lib/notification-service';
+import { isSupabaseServerConfigured } from '@/lib/supabase';
 
 /**
  * GET /api/notifications
@@ -19,6 +20,10 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ notifications: [], unread_count: 0 });
     }
 
     const { searchParams } = new URL(request.url);

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { compareVersions } from '@/lib/version-compare';
 import type { AvailableUpdate } from '@/types/update-policies';
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     // apps are opt-in to avoid accidentally updating mismatched/customized apps.
     const includeUnmanaged = searchParams.get('include_unmanaged') === 'true';
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseServerConfigured()) {
       return NextResponse.json({
         updates: [],
         count: 0,
@@ -194,7 +194,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseServerConfigured()) {
       return NextResponse.json(
         {
           error:

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
 import {
@@ -35,15 +35,15 @@ export async function PATCH(
     }
 
     // Resolve tenant (MSP-aware)
-    const supabase = createServerClient();
+    const supabase = getServerClientOrNull();
     const mspTenantId = request.headers.get('X-MSP-Tenant-Id');
 
-    const tenantResolution = await resolveTargetTenantId({
+    const tenantResolution = supabase ? await resolveTargetTenantId({
       supabase,
       userId: user.userId,
       tokenTenantId: user.tenantId,
       requestedTenantId: mspTenantId,
-    });
+    }) : { tenantId: user.tenantId, errorResponse: null };
 
     if (tenantResolution.errorResponse) {
       return tenantResolution.errorResponse;
@@ -52,12 +52,12 @@ export async function PATCH(
     const tenantId = tenantResolution.tenantId;
 
     // Verify admin consent
-    const { data: consentData, error: consentError } = await supabase
+    const { data: consentData, error: consentError } = supabase ? await supabase
       .from('tenant_consent')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
-      .single();
+      .single() : { data: true, error: null };
 
     if (consentError || !consentData) {
       return NextResponse.json(
@@ -130,7 +130,7 @@ export async function PATCH(
     }
 
     // Persist updated assignments/categories in the most recent packaging_jobs row
-    if (wingetId) {
+    if (wingetId && supabase) {
       const { data: latestJob } = await supabase
         .from('packaging_jobs')
         .select('id, package_config')

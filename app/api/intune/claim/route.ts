@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import type { ClaimAppRequest, ClaimedApp } from '@/types/unmanaged';
@@ -57,6 +57,9 @@ async function ensureUserProfile(
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ error: 'App claims require hosted services' }, { status: 503 });
+    }
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -175,6 +178,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ claims: [] });
+    }
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -239,6 +245,9 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ error: 'App claims require hosted services' }, { status: 503 });
+    }
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(

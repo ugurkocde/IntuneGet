@@ -24,6 +24,7 @@ import { NotificationBell } from '@/components/notifications';
 import { Sidebar, DeploymentStatusIndicator } from '@/components/dashboard';
 import { CommandPalette } from '@/components/dashboard/CommandPalette';
 import { springPresets } from '@/lib/animations/variants';
+import { getClientFeatureFlags } from '@/lib/features';
 
 export default function DashboardLayout({
   children,
@@ -48,6 +49,7 @@ export default function DashboardLayout({
 
   const cartItemCount = useCartStore((state) => state.getItemCount());
   const toggleCart = useCartStore((state) => state.toggleCart);
+  const { hostedServices } = getClientFeatureFlags();
 
   const handleOpenCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
@@ -77,7 +79,7 @@ export default function DashboardLayout({
     }
 
     // Only act on a definitive errorType. errorType=null + !isOnboardingComplete
-    // is a transient state during MSAL hydration / verification — redirecting
+    // is a transient state during MSAL hydration / verification; redirecting
     // here would push known-good users to /onboarding on browser refresh.
     if (errorType === null) return;
 
@@ -170,7 +172,7 @@ export default function DashboardLayout({
             <div className="flex items-center gap-3">
               <TenantSwitcher />
               <DeploymentStatusIndicator />
-              <NotificationBell />
+              {hostedServices && <NotificationBell />}
               <Button
                 variant="ghost"
                 onClick={toggleCart}
