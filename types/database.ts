@@ -269,7 +269,10 @@ export interface Database {
           version: string;
           architecture: 'x64' | 'x86' | 'arm64';
           installer_sha256: string;
-          block_code: 'user_scope_machine_dependencies';
+          block_code:
+            | 'user_scope_machine_dependencies'
+            | 'trusted_installer_tuple_unavailable'
+            | 'unreviewed_dependency';
           detail: string;
           observed_at: string;
           updated_at: string;
