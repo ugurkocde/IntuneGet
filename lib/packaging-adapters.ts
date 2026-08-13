@@ -142,6 +142,22 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // Opera GX uses the same launcher contract as the standard Opera browser,
+    // but installs into its own machine-wide directory. Its registered slash
+    // command can exit without removing the browser, leaving the exact ARP
+    // identity behind. Invoke Opera's reviewed double-dash lifecycle directly
+    // and preserve the user profile during managed removal.
+    wingetId: 'Opera.OperaGX',
+    requiredProcessesToClose: [
+      { name: 'opera', description: 'Opera GX browser' },
+    ],
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles%\\Opera GX\\opera.exe',
+      arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // The Office Deployment Tool is a self-extracting payload, not an
     // installed application. It intentionally creates no ARP registration.
     // WinGet extracts it to this machine-wide directory, so verify that exact

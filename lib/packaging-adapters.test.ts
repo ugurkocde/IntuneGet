@@ -248,6 +248,22 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('uses the reviewed machine-wide Opera GX removal contract', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'opera.operagx',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'opera', description: 'Opera GX browser' },
+    ]);
+    expect(adapted.reviewedExactUninstall).toEqual({
+      executablePath: '%ProgramFiles%\\Opera GX\\opera.exe',
+      arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+      completionTimeoutMinutes: 5,
+    });
+  });
+
   it('closes the reviewed Adobe desktop processes before Creative Cloud removal', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Adobe.CreativeCloud',
