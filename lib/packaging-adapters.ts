@@ -100,7 +100,10 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredProcessesToClose: [
       { name: 'opera', description: 'Opera browser' },
     ],
-    reviewedUninstallArguments: ['--runimmediately'],
+    // State the profile-retention choice explicitly. Current Opera builds can
+    // otherwise hand the SYSTEM uninstall to setup.exe without resolving the
+    // profile prompt, leaving the product registration behind.
+    reviewedUninstallArguments: ['--runimmediately', '--deleteuserprofile=0'],
   },
   {
     // The Office Deployment Tool is a self-extracting payload, not an
