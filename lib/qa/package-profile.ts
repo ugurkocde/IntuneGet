@@ -6,6 +6,7 @@ import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
 import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
@@ -703,6 +704,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
   psadtConfig: PSADTConfig;
   detectionRulesJson: string;
   psadtConfigJson: string;
+  uninstallCommand: string;
   identity: QaPackageIdentity;
 } {
   assertPackagingContract({
@@ -735,6 +737,10 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     input.wingetId,
     normalizeQaPsadtConfig(rawConfig, detectionRules)
   );
+  const uninstallCommand = resolveApplicationUninstallCommand(
+    input.wingetId,
+    input.uninstallCommand
+  );
   const identity = buildQaPackageIdentity({
     profileKind: 'deployment-config',
     wingetId: input.wingetId,
@@ -746,7 +752,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     sourceInstallerType: input.installerType,
     silentArgs: input.silentSwitches,
     successCodes: input.installerSuccessCodes,
-    uninstallCommand: input.uninstallCommand,
+    uninstallCommand,
     installScope,
     nestedInstallerType: input.nestedInstallerType || '',
     nestedInstallerFiles: input.nestedInstallerPath ? [input.nestedInstallerPath] : [],
@@ -760,6 +766,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     psadtConfig,
     detectionRulesJson: JSON.stringify(detectionRules),
     psadtConfigJson: JSON.stringify(psadtConfig),
+    uninstallCommand,
     identity,
   };
 }

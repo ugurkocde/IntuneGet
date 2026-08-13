@@ -227,6 +227,25 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
+  it('uses the reviewed ARP identity for the Google Chrome EXE catalog variant', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Google.Chrome.EXE',
+        name: 'Google Chrome (EXE)',
+        publisher: 'Google',
+        version: '151.0.7922.76',
+      },
+      manifest: { InstallerType: 'exe' },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'exe',
+        InstallerSwitches: { Silent: '/silent /install' },
+      },
+    });
+
+    expect(config.uninstallCommand).toBe('REGISTRY_UNINSTALL:Google Chrome');
+  });
+
   it('prefers architecture-specific AppsAndFeatures identity over a root product code', () => {
     const config = buildQaCatalogTestConfig({
       app: {

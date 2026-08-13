@@ -110,4 +110,15 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.item.installCommand).toBe('custom-install.exe /tenant-approved');
     expect(reconciled.item.uninstallCommand).toBe('custom-uninstall.exe /tenant-approved');
   });
+
+  it('uses the reviewed vendor ARP identity for the Chrome EXE catalog package', async () => {
+    getLiveInstallersMock.mockResolvedValue([{ ...operaInstallers[1], silentArgs: '/S' }]);
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'Google.Chrome.EXE',
+      displayName: 'Google Chrome (EXE)',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Google Chrome (EXE)',
+    }));
+
+    expect(reconciled.item.uninstallCommand).toBe('REGISTRY_UNINSTALL:Google Chrome');
+  });
 });

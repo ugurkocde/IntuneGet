@@ -361,6 +361,32 @@ export function resolveApplicationInstallScope(
   return applicationPackagingAdapter(wingetId)?.requiredInstallScope || requested;
 }
 
+const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
+  generatedDisplayName: string;
+  registeredDisplayName: string;
+}>>> = {
+  // The EXE package's catalog name distinguishes it from Google.Chrome, but
+  // Google's machine installer registers the ordinary `Google Chrome` ARP
+  // identity. Keep that exact vendor identity for capture, verification, and
+  // Intune removal instead of weakening the generic one-product matcher.
+  'google.chrome.exe': {
+    generatedDisplayName: 'Google Chrome (EXE)',
+    registeredDisplayName: 'Google Chrome',
+  },
+};
+
+export function resolveApplicationUninstallCommand(
+  wingetId: string,
+  uninstallCommand: string
+): string {
+  const reviewed = REVIEWED_REGISTRY_UNINSTALL_IDENTITIES[wingetId.trim().toLowerCase()];
+  if (!reviewed) return uninstallCommand;
+  const expected = `REGISTRY_UNINSTALL:${reviewed.generatedDisplayName}`;
+  return uninstallCommand.trim() === expected
+    ? `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`
+    : uninstallCommand;
+}
+
 function normalizeProcessName(name: string): string {
   return name.trim().replace(/\.exe$/i, '');
 }

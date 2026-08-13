@@ -10,6 +10,7 @@ import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
 import { enforceInstallerPreflight, InstallerPreflightError } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
+import { resolveApplicationUninstallCommand } from './packaging-adapters';
 import {
   normalizeQaWorkflowPackageInput,
 } from './qa/package-profile';
@@ -126,6 +127,10 @@ export async function triggerPackagingWorkflow(
   let effectiveInputs = inputs;
   let trustedInstallers: NormalizedInstaller[] | undefined;
   if (inputs.sourceType !== 'custom') {
+    const resolvedUninstallCommand = resolveApplicationUninstallCommand(
+      inputs.wingetId,
+      inputs.uninstallCommand,
+    );
     try {
       const reconciled = await reconcileCatalogInstaller({
         id: inputs.jobId,
@@ -149,7 +154,7 @@ export async function triggerPackagingWorkflow(
         requirementRules: [],
         psadtConfig: {
           installCommand: inputs.silentSwitches,
-          uninstallCommand: inputs.uninstallCommand,
+          uninstallCommand: resolvedUninstallCommand,
         } as Win32CartItem['psadtConfig'],
       });
       effectiveInputs = {

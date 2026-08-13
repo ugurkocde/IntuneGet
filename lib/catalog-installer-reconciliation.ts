@@ -6,7 +6,10 @@ import {
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
 import { getLiveInstallers } from '@/lib/manifest-api';
-import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
+import {
+  resolveApplicationInstallScope,
+  resolveApplicationUninstallCommand,
+} from '@/lib/packaging-adapters';
 import { hashesEqual } from '@/lib/installer-download';
 import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller, WingetScope } from '@/types/winget';
@@ -137,8 +140,10 @@ export async function reconcileCatalogInstaller(
     installerSuccessCodes: installer.installerSuccessCodes,
     manifestDependencies: installer.packageDependencies,
     installCommand: customInstallCommand || generateInstallCommand(installer, installScope),
-    uninstallCommand: customUninstallCommand ||
+    uninstallCommand: customUninstallCommand || resolveApplicationUninstallCommand(
+      item.wingetId,
       generateUninstallCommand(installer, item.displayName),
+    ),
   };
 
   if (

@@ -3,9 +3,25 @@ import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationUninstallCommand,
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Google.Chrome.EXE',
+      'REGISTRY_UNINSTALL:Google Chrome (EXE)'
+    )).toBe('REGISTRY_UNINSTALL:Google Chrome');
+    expect(resolveApplicationUninstallCommand(
+      'Google.Chrome',
+      'REGISTRY_UNINSTALL:Google Chrome'
+    )).toBe('REGISTRY_UNINSTALL:Google Chrome');
+    expect(resolveApplicationUninstallCommand(
+      'Google.Chrome.EXE',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');

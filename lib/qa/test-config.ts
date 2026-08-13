@@ -5,6 +5,7 @@ import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
 import { normalizeQaPsadtConfig } from './package-profile';
 import type {
@@ -185,7 +186,10 @@ export function buildQaCatalogTestConfig({
     scope,
     nestedInstallerType: nestedInstallerType || '',
     nestedInstallerFiles: nestedFiles,
-    uninstallCommand: generateUninstallCommand(normalizedInstaller, app.name),
+    uninstallCommand: resolveApplicationUninstallCommand(
+      app.wingetId,
+      generateUninstallCommand(normalizedInstaller, app.name)
+    ),
     psadtConfig,
     detectionRules,
     ...(packageDependencies.length > 0 ? { packageDependencies } : {}),

@@ -277,6 +277,29 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds the reviewed Google Chrome EXE ARP identity to customer packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Google.Chrome.EXE',
+      displayName: 'Google Chrome (EXE)',
+      publisher: 'Google',
+      version: '151.0.7922.76',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/silent /install',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Google Chrome (EXE)',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+    };
+
+    expect(normalized.uninstallCommand).toBe('REGISTRY_UNINSTALL:Google Chrome');
+    expect(profile.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL:Google Chrome');
+  });
+
   it('binds shared-runtime retention to both the normalized config and QA identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.EdgeWebView2Runtime',
