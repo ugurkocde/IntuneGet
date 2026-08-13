@@ -10,6 +10,16 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '2e68a941d3410e4eb7c6ed1e73fbc0eff290c807': [
+    // These extractors have no single vendor ARP identity. The new managed
+    // directory contract verifies their real payload and removes it through
+    // either exact folder ownership or the documented vendor lifecycle.
+    'Microsoft.OfficeDeploymentTool',
+    'Microsoft.VisualStudio.BuildTools',
+    // Opera now receives an explicit profile-retention choice so its SYSTEM
+    // uninstaller cannot wait behind that unresolved prompt.
+    'Opera.Opera',
+  ],
   'cf24633576b6c5efcca5fbde8ffe7fb4f0f57272': [
     // Camera Hub's MSI launches a fresh --pre-uninstall --quit helper after
     // PSADT closes the desktop process. This release gives only that reviewed

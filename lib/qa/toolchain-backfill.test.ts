@@ -4,6 +4,17 @@ import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
   it.each([
+    'Microsoft.OfficeDeploymentTool',
+    'Microsoft.VisualStudio.BuildTools',
+    'Opera.Opera',
+  ])('retries %s once on the managed lifecycle release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+  });
+
+  it.each([
     'Microsoft.SQLServerManagementStudio.21',
     'Microsoft.SQLServerManagementStudio.22',
     'Microsoft.SQLServerManagementStudio.22.Preview',
@@ -64,7 +75,7 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Opera.Opera', status: 'failed' }
-    )).toBe(false);
+    )).toBe(true);
   });
 
   it('keeps WebView2 replay scoped to its shared-runtime lifecycle releases', () => {
@@ -98,7 +109,6 @@ describe('QA toolchain targeted retries', () => {
   });
 
   it.each([
-    'Microsoft.VisualStudio.BuildTools',
     'Microsoft.VisualStudio.Community',
     'Microsoft.VisualStudio.Enterprise',
     'Microsoft.VisualStudio.Professional',
@@ -223,9 +233,13 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Camera Hub once after guarding its MSI pre-uninstall helper', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      'cf24633576b6c5efcca5fbde8ffe7fb4f0f57272',
       { wingetId: 'elgato.camerahub', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'elgato.camerahub', status: 'failed' }
+    )).toBe(false);
   });
 
   it('retries VSTO once with its reviewed external-installer removal switches', () => {
