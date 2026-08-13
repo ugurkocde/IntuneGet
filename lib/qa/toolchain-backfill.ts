@@ -10,6 +10,11 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5': [
+    // Opera GX's registered slash command exits without removing the browser.
+    // This release uses the reviewed machine-wide double-dash lifecycle.
+    'Opera.OperaGX',
+  ],
   '4ca2932ca8ff26578cade36457f0fcc150513e4c': [
     // Dell's registered InstallShield helper ignored documented silent removal
     // switches. This release invokes the original hash-verified Dell Update

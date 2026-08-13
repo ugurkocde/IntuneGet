@@ -85,6 +85,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Opera GX on its reviewed machine-wide removal release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Opera.OperaGX', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4ca2932ca8ff26578cade36457f0fcc150513e4c',
+      { wingetId: 'Opera.OperaGX', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the Viber retry scoped to its user-scope release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '9214e4b5b71508bfba9aa1a2d4de5c3c771d3fea',
@@ -119,9 +130,13 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Dell Optimizer on the packaged Dell Update removal release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '4ca2932ca8ff26578cade36457f0fcc150513e4c',
       { wingetId: 'Dell.Optimizer', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Dell.Optimizer', status: 'failed' }
+    )).toBe(false);
   });
 
   it('keeps WebView2 replay scoped to its shared-runtime lifecycle releases', () => {
