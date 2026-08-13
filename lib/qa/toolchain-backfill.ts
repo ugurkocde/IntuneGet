@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'cf24633576b6c5efcca5fbde8ffe7fb4f0f57272': [
+    // Camera Hub's MSI launches a fresh --pre-uninstall --quit helper after
+    // PSADT closes the desktop process. This release gives only that reviewed
+    // command line a grace period before ending it so MSI removal can finish.
+    'Elgato.CameraHub',
+  ],
   '54515b6566ff4e7c9040fa24a8eba6b6347ef09e': [
     // ZIP is the package transport, not the registered uninstall engine.
     // This release carries the nested Inno type into both QA and customer

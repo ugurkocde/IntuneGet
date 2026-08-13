@@ -212,16 +212,16 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries MPC-BE once after strengthening Inno quiet uninstall arguments', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '54515b6566ff4e7c9040fa24a8eba6b6347ef09e',
       { wingetId: 'mpc-be.mpc-be', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      '2dca138ee2fe27dc45166dba536511aa80d8937e',
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'MPC-BE.MPC-BE', status: 'failed' }
     )).toBe(false);
   });
 
-  it('retries Camera Hub once after adding its process-close lifecycle', () => {
+  it('retries Camera Hub once after guarding its MSI pre-uninstall helper', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'elgato.camerahub', status: 'failed' }
@@ -230,9 +230,13 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries VSTO once with its reviewed external-installer removal switches', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '54515b6566ff4e7c9040fa24a8eba6b6347ef09e',
       { wingetId: 'microsoft.vstor', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.VSTOR', status: 'failed' }
+    )).toBe(false);
   });
 
   it.each(['Autodesk.DesktopApp'])('does not replay retired %s on the current pin', (wingetId) => {
