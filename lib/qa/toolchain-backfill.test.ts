@@ -87,12 +87,23 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Opera GX on its reviewed machine-wide removal release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5',
       { wingetId: 'Opera.OperaGX', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '4ca2932ca8ff26578cade36457f0fcc150513e4c',
       { wingetId: 'Opera.OperaGX', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries HP Image Assistant on its managed extracted-payload release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'HP.ImageAssistant', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5',
+      { wingetId: 'HP.ImageAssistant', status: 'failed' }
     )).toBe(false);
   });
 

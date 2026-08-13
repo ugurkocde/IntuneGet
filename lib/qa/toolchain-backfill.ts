@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '34189c6876f0fe4539b971ba1b9e962ff66cd259': [
+    // HP Image Assistant is a SoftPaq extractor with no ARP lifecycle. This
+    // release verifies and removes its exact managed SWSetup payload for both
+    // QA and customer packages.
+    'HP.ImageAssistant',
+  ],
   '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5': [
     // Opera GX's registered slash command exits without removing the browser.
     // This release uses the reviewed machine-wide double-dash lifecycle.
