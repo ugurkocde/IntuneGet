@@ -377,7 +377,7 @@ describe('GET /api/cron/qa-enqueue', () => {
       }),
     ]);
     expect(rpcCalls).toEqual([
-      { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 3 } },
+      { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 20 } },
     ]);
     expect(pollRunUpdates).toEqual([
       expect.objectContaining({

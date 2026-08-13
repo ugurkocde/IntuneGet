@@ -46,7 +46,11 @@ const MAX_RECORDED_ERRORS = 100;
 const MAX_ERROR_LENGTH = 1_000;
 const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
 const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
-const DEMAND_BACKFILL_BATCH_SIZE = 3;
+// Reconciliation is metadata-only until an immutable installer payload is
+// found without a prior pass. Keep VM execution serialized, but scan enough
+// deployed-app demand per poll to avoid spending hours reclassifying known
+// payloads three at a time.
+const DEMAND_BACKFILL_BATCH_SIZE = 20;
 const MAX_TARGETED_PACKAGE_IDS = 20;
 const TARGETED_QA_PRIORITY = 1_000;
 
