@@ -224,6 +224,12 @@ export interface PSADTConfig {
   // the only trusted source for this value; it is not customer-configurable.
   preserveVendorInstallationOnUninstall?: boolean;
 
+  // Internal lifecycle contract for reviewed self-extracting packages that do
+  // not register an application in Add/Remove Programs. The generated package
+  // verifies this exact directory after install and removes it on uninstall.
+  // Application adapters are the only trusted source for this value.
+  reviewedManagedInstallDirectory?: string;
+
   // Internal install-evidence contract for reviewed bundles that intentionally
   // install several independently registered products. The generated package
   // requires multiple matching ARP entries instead of weakening the ordinary

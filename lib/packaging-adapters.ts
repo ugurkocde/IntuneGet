@@ -14,6 +14,7 @@ interface ApplicationPackagingAdapter {
   }>;
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
+  reviewedManagedInstallDirectory?: string;
   reviewedMultiProductInstallDisplayNamePrefixes?: readonly string[];
   reviewedMultiProductInstallMinimumCount?: number;
 }
@@ -100,6 +101,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       { name: 'opera', description: 'Opera browser' },
     ],
     reviewedUninstallArguments: ['--runimmediately'],
+  },
+  {
+    // The Office Deployment Tool is a self-extracting payload, not an
+    // installed application. It intentionally creates no ARP registration.
+    // WinGet extracts it to this machine-wide directory, so verify that exact
+    // payload and remove it directly instead of capturing an unrelated ARP
+    // change made by Windows servicing during the extraction.
+    wingetId: 'Microsoft.OfficeDeploymentTool',
+    reviewedManagedInstallDirectory: '%ProgramW6432%\\OfficeDeploymentTool',
   },
   {
     // EA Desktop's registered EAUninstall.exe helper is unattended, but it
@@ -288,7 +298,8 @@ export function applyApplicationPackagingAdapter(
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
-      !config.reviewedUninstallProcessGuard
+      !config.reviewedUninstallProcessGuard &&
+      !config.reviewedManagedInstallDirectory
     ) return config;
     return {
       ...config,
@@ -296,6 +307,7 @@ export function applyApplicationPackagingAdapter(
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedUninstallProcessGuard: undefined,
+      reviewedManagedInstallDirectory: undefined,
     };
   }
 
@@ -364,6 +376,8 @@ export function applyApplicationPackagingAdapter(
       : {}),
     preserveVendorInstallationOnUninstall:
       adapter.preserveVendorInstallationOnUninstall || undefined,
+    reviewedManagedInstallDirectory:
+      adapter.reviewedManagedInstallDirectory || undefined,
     reviewedMultiProductInstallDisplayNamePrefixes,
     reviewedMultiProductInstallMinimumCount:
       adapter.reviewedMultiProductInstallMinimumCount,

@@ -444,6 +444,20 @@ $preserveVendorInstallationOnUninstall = Get-StrictPSADTBoolean `
     -Config $psadtConfig `
     -Name 'preserveVendorInstallationOnUninstall'
 
+$reviewedManagedInstallDirectory = ''
+if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
+    $null -ne $psadtConfig['reviewedManagedInstallDirectory']) {
+    if ($psadtConfig['reviewedManagedInstallDirectory'] -isnot [string]) {
+        throw 'PSADT reviewedManagedInstallDirectory must be a string.'
+    }
+    $reviewedManagedInstallDirectory = ([string]$psadtConfig['reviewedManagedInstallDirectory']).Trim()
+    if ($reviewedManagedInstallDirectory.Length -gt 260 -or
+        $reviewedManagedInstallDirectory -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+$' -or
+        @($reviewedManagedInstallDirectory -split '\\') -contains '..') {
+        throw 'PSADT reviewedManagedInstallDirectory must be a safe path below a Program Files environment variable.'
+    }
+}
+
 function ConvertTo-PSADTConfigValue {
     param(
         [AllowNull()][string]$Value,
@@ -691,6 +705,7 @@ $silentSwitchesEscaped = $effectiveSilentSwitches -replace "'", "''"
 $versionSingleQuoteEscaped = $Version -replace "'", "''"
 $uninstallCmd = [string]$UninstallCommand
 $uninstallCmdSingleQuoteEscaped = $uninstallCmd -replace "'", "''"
+$reviewedManagedInstallDirectoryEscaped = $reviewedManagedInstallDirectory -replace "'", "''"
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherSingleQuoteEscaped = $Publisher -replace "'", "''"
@@ -943,6 +958,14 @@ if ($fileExtension -eq '.msi') {
     } else {
         throw 'The MSI database did not expose a valid ProductCode; refusing ambiguous detection or removal.'
     }
+}
+
+$useManagedDirectoryLifecycle = -not [string]::IsNullOrWhiteSpace($reviewedManagedInstallDirectory)
+if ($useManagedDirectoryLifecycle) {
+    # A reviewed extractor lifecycle is deliberately not an ARP lifecycle.
+    # Never let unrelated background servicing become the captured identity.
+    $useRegistryUninstall = $false
+    Write-Host "Using reviewed managed-directory lifecycle: $reviewedManagedInstallDirectory"
 }
 
 if ($useRegistryUninstall) {
@@ -1953,6 +1976,21 @@ $lines += @(
     '    Close-ADTInstallationProgress'
 )
 
+if ($useManagedDirectoryLifecycle) {
+    $lines += @(
+        ''
+        "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')"
+        '    if (-not (Test-Path -LiteralPath $managedInstallDirectory -PathType Container)) {'
+        '        throw "The reviewed managed install directory was not created: $managedInstallDirectory"'
+        '    }'
+        '    $managedPayloadFile = Get-ChildItem -LiteralPath $managedInstallDirectory -File -Recurse -ErrorAction Stop | Select-Object -First 1'
+        '    if (-not $managedPayloadFile) {'
+        '        throw "The reviewed managed install directory contains no payload files: $managedInstallDirectory"'
+        '    }'
+        '    Write-ADTLogEntry -Message "Verified managed extracted payload at [$managedInstallDirectory]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+    )
+}
+
 # Optional post-install verification (opt-in via PSADT config)
 # Throwing here routes through the standard catch -> Close-ADTSession error exit,
 # and the detection marker write below is skipped because it never runs
@@ -2273,7 +2311,19 @@ if ($preUninstallPromptCalls) {
 # precedence because executing the vendor command could remove a prerequisite
 # used by Windows or unrelated applications. The ordinary marker cleanup below
 # still makes Intune's exact package detection transition to not installed.
-if ($preserveVendorInstallationOnUninstall) {
+if ($useManagedDirectoryLifecycle) {
+    Write-Host 'Using reviewed managed-directory removal'
+    $lines += @(
+        ''
+        "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')"
+        '    if (Test-Path -LiteralPath $managedInstallDirectory) {'
+        '        Remove-Item -LiteralPath $managedInstallDirectory -Recurse -Force -ErrorAction Stop'
+        '        Write-ADTLogEntry -Message "Removed managed extracted payload from [$managedInstallDirectory]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+        '    } else {'
+        '        Write-ADTLogEntry -Message "Managed extracted payload was already absent: $managedInstallDirectory" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+        '    }'
+    )
+} elseif ($preserveVendorInstallationOnUninstall) {
     Write-Host 'Preserving the shared vendor installation during package removal'
     $lines += @(
         ''

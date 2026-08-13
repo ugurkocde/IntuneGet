@@ -310,6 +310,50 @@ describe('PSADT vendor argument contract', () => {
     }
   );
 
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies and removes a reviewed self-extracted managed directory without ARP capture',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'Office Deployment Tool',
+        [],
+        { reviewedManagedInstallDirectory: '%ProgramW6432%\\OfficeDeploymentTool' },
+        [],
+        'Microsoft.OfficeDeploymentTool'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramW6432%\\OfficeDeploymentTool')"
+      );
+      expect(installFunction).toContain('Verified managed extracted payload');
+      expect(installFunction).not.toContain('Captured vendor uninstall entry');
+      expect(uninstallFunction).toContain('Remove-Item -LiteralPath $managedInstallDirectory');
+      expect(uninstallFunction).not.toContain('Waiting for vendor uninstall registration');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects an unsafe reviewed managed install directory',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'inno',
+          'Unsafe Extractor',
+          [],
+          { reviewedManagedInstallDirectory: '%ProgramFiles%\\..\\Windows' }
+        )
+      ).toThrow('must be a safe path below a Program Files environment variable');
+    }
+  );
+
   it('honors additional success exit codes declared by the WinGet manifest', () => {
     if (!canRunWindowsPowerShellPackager) return;
     const generated = generateRegistryUninstallPackage(

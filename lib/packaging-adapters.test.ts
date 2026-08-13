@@ -47,6 +47,12 @@ describe('application packaging adapters', () => {
     });
     expect(
       applyApplicationPackagingAdapter(
+        'Microsoft.OfficeDeploymentTool',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedManagedInstallDirectory
+    ).toBe('%ProgramW6432%\\OfficeDeploymentTool');
+    expect(
+      applyApplicationPackagingAdapter(
         'ElectronicArts.EADesktop',
         DEFAULT_PSADT_CONFIG
       ).processesToClose
@@ -131,11 +137,13 @@ describe('application packaging adapters', () => {
       preserveVendorInstallationOnUninstall: true,
       reviewedMultiProductInstallDisplayNamePrefixes: ['Anything'],
       reviewedMultiProductInstallMinimumCount: 2,
+      reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
     });
 
     expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
+    expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
   });
 
   it('preserves and deduplicates reviewed install arguments case-insensitively', () => {
