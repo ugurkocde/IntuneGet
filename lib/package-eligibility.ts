@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 
-export type PackageEligibilityBlockCode = 'vendor_retired';
+export type PackageEligibilityBlockCode = 'vendor_retired' | 'upstream_removed';
 
 export interface PackageEligibilityBlock {
   wingetId: string;
