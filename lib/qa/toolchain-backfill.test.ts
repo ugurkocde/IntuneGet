@@ -110,7 +110,14 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Dell Optimizer once on the unattended removal release', () => {
+  it('keeps the registered-command Dell retry scoped to its release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4ca55ff8ac8d4d5f6d07665adbe06a07f0110006',
+      { wingetId: 'Dell.Optimizer', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Dell Optimizer on the packaged Dell Update removal release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Dell.Optimizer', status: 'failed' }

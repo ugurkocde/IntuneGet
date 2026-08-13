@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '4ca2932ca8ff26578cade36457f0fcc150513e4c': [
+    // Dell's registered InstallShield helper ignored documented silent removal
+    // switches. This release invokes the original hash-verified Dell Update
+    // Package with /passthrough /silent /remove.
+    'Dell.Optimizer',
+  ],
   '4ca55ff8ac8d4d5f6d07665adbe06a07f0110006': [
     // Dell Optimizer's registered removal command is interactive and leaves
     // its exact ARP identity. This release applies Dell's documented
