@@ -28,8 +28,13 @@ describe('application packaging adapters', () => {
     ).toEqual(['/silent', 'forall']);
     expect(
       applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
-        .reviewedUninstallArguments
-    ).toEqual(['/silent', '/remove']);
+    ).toMatchObject({
+      reviewedExactUninstall: {
+        executablePath: '%PackageInstaller%',
+        arguments: ['/passthrough', '/silent', '/remove'],
+        completionTimeoutMinutes: 10,
+      },
+    });
     for (const wingetId of [
       'PostgreSQL.PostgreSQL.9.6',
       'PostgreSQL.PostgreSQL.13',

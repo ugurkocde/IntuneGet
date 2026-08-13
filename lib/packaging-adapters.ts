@@ -111,12 +111,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/silent', 'forall'],
   },
   {
-    // Dell Optimizer's registered removal command opens an interactive
-    // console and exits without removing the product. Dell's current 6.x
-    // deployment guide documents /silent /remove for an unattended EXE
-    // lifecycle, so apply those switches to the exact captured vendor entry.
+    // Dell Optimizer's registered InstallShield helper exits without removing
+    // the product even with Dell's documented switches. Invoke the original,
+    // hash-verified Dell Update Package instead; Dell documents the
+    // /passthrough /silent /remove lifecycle for this outer package.
     wingetId: 'Dell.Optimizer',
-    reviewedUninstallArguments: ['/silent', '/remove'],
+    reviewedExactUninstall: {
+      executablePath: '%PackageInstaller%',
+      arguments: ['/passthrough', '/silent', '/remove'],
+      completionTimeoutMinutes: 10,
+    },
   },
   {
     // Opera registers `opera.exe /uninstall`, but its current launcher expects

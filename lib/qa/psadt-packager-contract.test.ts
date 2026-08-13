@@ -349,6 +349,40 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses the hash-verified packaged installer for a reviewed vendor removal lifecycle',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Dell Optimizer',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath: '%PackageInstaller%',
+            arguments: ['/passthrough', '/silent', '/remove'],
+            completionTimeoutMinutes: 10,
+          },
+        },
+        [],
+        'Dell.Optimizer'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallFile = Join-Path $adtSession.DirFiles 'setup.exe'"
+      );
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallArguments = @('/passthrough', '/silent', '/remove')"
+      );
+      expect(uninstallFunction).toContain(
+        '$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 10 }'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'verifies and removes a reviewed self-extracted managed directory without ARP capture',
     () => {
       const generated = generateRegistryUninstallPackage(

@@ -522,10 +522,12 @@ if ($psadtConfig.Contains('reviewedExactUninstall') -and
         throw 'PSADT reviewedExactUninstall must be an object.'
     }
     $reviewedExactUninstallExecutable = ([string]$rawExactUninstall['executablePath']).Trim()
-    if ($reviewedExactUninstallExecutable.Length -gt 260 -or
-        $reviewedExactUninstallExecutable -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+\.exe$' -or
-        @($reviewedExactUninstallExecutable -split '\\') -contains '..') {
-        throw 'PSADT reviewedExactUninstall.executablePath must be a safe executable below a Program Files environment variable.'
+    $usesPackagedInstaller = $reviewedExactUninstallExecutable -eq '%PackageInstaller%'
+    if (-not $usesPackagedInstaller -and
+        ($reviewedExactUninstallExecutable.Length -gt 260 -or
+         $reviewedExactUninstallExecutable -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+\.exe$' -or
+         @($reviewedExactUninstallExecutable -split '\\') -contains '..')) {
+        throw 'PSADT reviewedExactUninstall.executablePath must be %PackageInstaller% or a safe executable below a Program Files environment variable.'
     }
     $rawExactUninstallArguments = $rawExactUninstall['arguments']
     if ($rawExactUninstallArguments -is [string] -or
@@ -2427,7 +2429,11 @@ $reviewedExactUninstallOverrideLines = @(
 if ($reviewedExactUninstallConfigured) {
     $reviewedExactUninstallOverrideLines += @(
         '    $useReviewedExactUninstall = $true'
-        "    `$registeredUninstallFile = [Environment]::ExpandEnvironmentVariables('$reviewedExactUninstallExecutableEscaped')"
+        $(if ($reviewedExactUninstallExecutable -eq '%PackageInstaller%') {
+            "    `$registeredUninstallFile = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
+        } else {
+            "    `$registeredUninstallFile = [Environment]::ExpandEnvironmentVariables('$reviewedExactUninstallExecutableEscaped')"
+        })
         "    [string[]]`$registeredUninstallArguments = @($reviewedExactUninstallArgumentsLiteral) | ForEach-Object { [Environment]::ExpandEnvironmentVariables(`$_) }"
         '    $hasQuietUninstall = $true'
         '    $isVivaldiUninstall = $false'
