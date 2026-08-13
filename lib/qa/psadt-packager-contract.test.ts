@@ -16,6 +16,11 @@ const packager = readFileSync(
   'utf8'
 );
 
+const hostedPackager = readFileSync(
+  resolve(process.cwd(), 'packager/src/job-processor.ts'),
+  'utf8'
+);
+
 const packagerPath = resolve(
   process.cwd(),
   '.github/scripts/Create-PSADTPackage.ps1'
@@ -975,6 +980,22 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(packager).toContain(
       '$registeredUninstallArguments += $additionalUninstallArguments'
     );
+  });
+
+  it('strengthens weak Inno quiet uninstall registrations in both customer packagers', () => {
+    for (const source of [packager, hostedPackager]) {
+      const normalizedSource = source.replaceAll("''", "'");
+      expect(normalizedSource).toContain(
+        "Where-Object { [string]$_ -notmatch '^(?i:/SILENT)$' }"
+      );
+      expect(normalizedSource).toContain("'/VERYSILENT'");
+      expect(normalizedSource).toContain("'/SUPPRESSMSGBOXES'");
+      expect(normalizedSource).toContain("'/NORESTART'");
+      expect(normalizedSource).toContain("'/SP-'");
+      expect(normalizedSource).toContain(
+        '$registeredUninstallArguments += $additionalUninstallArguments'
+      );
+    }
   });
 
   it('monitors exact registry removal for both quiet and fallback EXE uninstall commands', () => {

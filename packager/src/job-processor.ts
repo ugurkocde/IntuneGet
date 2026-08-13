@@ -1571,16 +1571,10 @@ ${steps}
         [string[]]$additionalUninstallArguments = @()
         $isVivaldiUninstall = $false
         $isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq 'Creative Cloud Uninstaller.exe'
+        $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
         if (-not $hasQuietUninstall) {
-            $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
             if ((Split-Path -Leaf $registeredUninstallFile) -ieq 'setup.exe' -and $registeredArgumentText -match '(?i)(^|\\s)--vivaldi(\\s|$)') {
                 $isVivaldiUninstall = $true
-            } elseif ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${installerType}' -eq 'inno') {
-                foreach ($argument in @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-')) {
-                    if ($registeredArgumentText -notmatch "(?i)(^|\\s)$([regex]::Escape($argument))(\\s|$)") {
-                        $additionalUninstallArguments += $argument
-                    }
-                }
             } elseif ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${installerType}' -eq 'nullsoft' -and $registeredArgumentText -notmatch '(?i)(^|\\s)/S(\\s|$)') {
                 $additionalUninstallArguments += '/S'
             }
@@ -1590,6 +1584,18 @@ ${steps}
                     if ($registeredArgumentText -notmatch "(?i)(^|\\s)$([regex]::Escape($argument))(\\s|$)") {
                         $additionalUninstallArguments += $argument
                     }
+                }
+            }
+        }
+        if (-not $isVivaldiUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${installerType}' -eq 'inno') {
+            # Inno's registered QuietUninstallString is not consistently fully unattended.
+            # Normalize weak /SILENT registrations to the vendor-documented, message-box-free
+            # switches so SYSTEM deployments cannot wait behind an invisible prompt.
+            $registeredUninstallArguments = @($registeredUninstallArguments | Where-Object { [string]$_ -notmatch '^(?i:/SILENT)$' })
+            $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
+            foreach ($argument in @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-')) {
+                if ($registeredArgumentText -notmatch "(?i)(^|\\s)$([regex]::Escape($argument))(\\s|$)") {
+                    $additionalUninstallArguments += $argument
                 }
             }
         }
@@ -1618,7 +1624,7 @@ ${steps}
             if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {
                 throw "The registered vendor uninstaller was not found: $registeredUninstallFile"
             }
-            if (-not $hasQuietUninstall -and -not $isVivaldiUninstall -and -not $isAdobeCreativeCloudUninstall) {
+            if (-not $isVivaldiUninstall -and -not $isAdobeCreativeCloudUninstall) {
                 $registeredUninstallArguments += $additionalUninstallArguments
             }
         }
