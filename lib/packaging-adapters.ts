@@ -86,6 +86,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Viber's MSI is declared machine-scope by WinGet, but its Directory
+    // table targets LocalAppData. Under LocalSystem that resolves to the
+    // system profile and the vendor's VerifyInstalledFiles action rolls the
+    // installation back with 1603. Run the same PSADT package in the signed-in
+    // user's context so both the application and its uninstall registration
+    // belong to the intended user instead of the disposable system profile.
+    wingetId: 'Rakuten.Viber',
+    requiredInstallScope: 'user',
+  },
+  {
     // Analog Devices documents this enterprise/server mode for silent SYSTEM
     // deployment. It prevents the MSI from extracting example data into the
     // LocalSystem AppData profile, which otherwise rolls back with exit 1603.
