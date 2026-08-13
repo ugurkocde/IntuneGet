@@ -96,19 +96,22 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/silent', 'forall'],
   },
   {
-    // Opera registers `opera.exe --uninstall`, which waits for confirmation
-    // unless --runimmediately is supplied. Opera removed support for its old
-    // silent switch, so use the vendor's current unattended-start argument
-    // without deleting user profiles. Close the browser first so both upgrades
-    // and removals can complete deterministically.
+    // Opera registers `opera.exe /uninstall`, but its current launcher expects
+    // the double-dash uninstall verb for a non-interactive removal. Appending
+    // unattended arguments to the registered slash command exits successfully
+    // without removing the application. Execute the reviewed launcher command
+    // exactly and verify that its machine installation directory disappears.
+    // Keep the browser profile and close the browser before upgrades/removals.
     wingetId: 'Opera.Opera',
     requiredProcessesToClose: [
       { name: 'opera', description: 'Opera browser' },
     ],
-    // State the profile-retention choice explicitly. Current Opera builds can
-    // otherwise hand the SYSTEM uninstall to setup.exe without resolving the
-    // profile prompt, leaving the product registration behind.
-    reviewedUninstallArguments: ['--runimmediately', '--deleteuserprofile=0'],
+    reviewedManagedInstallDirectory: '%ProgramFiles%\\Opera',
+    reviewedManagedUninstall: {
+      executablePath: '%ProgramFiles%\\Opera\\opera.exe',
+      arguments: ['--uninstall', '--runimmediately', '--deleteuserprofile=0'],
+      completionTimeoutMinutes: 5,
+    },
   },
   {
     // The Office Deployment Tool is a self-extracting payload, not an
