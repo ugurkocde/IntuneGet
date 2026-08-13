@@ -51,6 +51,10 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual([]);
     expect(
+      applyApplicationPackagingAdapter('Evernote.Evernote', DEFAULT_PSADT_CONFIG)
+        .processesToClose
+    ).toEqual([{ name: 'Evernote', description: 'Evernote' }]);
+    expect(
       applyApplicationPackagingAdapter('Opera.Opera', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],

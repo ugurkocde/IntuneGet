@@ -103,6 +103,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
+    // Evernote's machine-wide NSIS installer can launch the desktop client
+    // before the later removal cycle. Its registered uninstaller exits without
+    // removing the exact ARP entry while that client is still running, even
+    // with NSIS /S. Close every Evernote process through PSADT before install,
+    // upgrade, or uninstall so the vendor's silent lifecycle can complete.
+    wingetId: 'Evernote.Evernote',
+    requiredProcessesToClose: [
+      { name: 'Evernote', description: 'Evernote' },
+    ],
+  },
+  {
     wingetId: 'RARLab.WinRAR',
     reviewedUninstallArguments: ['/S'],
   },
