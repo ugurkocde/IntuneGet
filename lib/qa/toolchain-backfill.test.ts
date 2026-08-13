@@ -98,12 +98,25 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries HP Image Assistant on its managed extracted-payload release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '34189c6876f0fe4539b971ba1b9e962ff66cd259',
       { wingetId: 'HP.ImageAssistant', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '9f3105f568ec221fb672a53f1dbafdf01cd2e8b5',
       { wingetId: 'HP.ImageAssistant', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Evernote and the pending HP validation on the process-close release', () => {
+    for (const wingetId of ['Evernote.Evernote', 'HP.ImageAssistant']) {
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+    }
+    expect(shouldRetryTerminalToolchainCandidate(
+      '34189c6876f0fe4539b971ba1b9e962ff66cd259',
+      { wingetId: 'Evernote.Evernote', status: 'failed' }
     )).toBe(false);
   });
 

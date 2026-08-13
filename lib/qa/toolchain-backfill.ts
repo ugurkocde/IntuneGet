@@ -10,6 +10,14 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '1490844284f84f807e207fb9970bddc499bbe446': [
+    // Evernote's NSIS uninstaller cannot finish while its desktop process is
+    // active. This release closes it through the shared PSADT lifecycle.
+    'Evernote.Evernote',
+    // Preserve the targeted validation for the immediately preceding HP Image
+    // Assistant lifecycle fix until that failed payload records a passing run.
+    'HP.ImageAssistant',
+  ],
   '34189c6876f0fe4539b971ba1b9e962ff66cd259': [
     // HP Image Assistant is a SoftPaq extractor with no ARP lifecycle. This
     // release verifies and removes its exact managed SWSetup payload for both
