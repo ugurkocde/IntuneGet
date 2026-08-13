@@ -168,7 +168,7 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries VisualCppRedist once with reviewed multi-product evidence', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '670357c92fefa433036d8667dd5f382731d8326e',
       { wingetId: 'ABBODI1406.VCREDIST', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
@@ -179,12 +179,23 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries PostgreSQL 13 once with the family unattended lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '2c40f49e2cb0b5a1f7a1c27996f5aee72553a074',
       { wingetId: 'postgresql.postgresql.13', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '670357c92fefa433036d8667dd5f382731d8326e',
       { wingetId: 'PostgreSQL.PostgreSQL.13', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries EA Desktop once with the registered Burn helper lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'electronicarts.eadesktop', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2c40f49e2cb0b5a1f7a1c27996f5aee72553a074',
+      { wingetId: 'ElectronicArts.EADesktop', status: 'failed' }
     )).toBe(false);
   });
 
