@@ -10,6 +10,12 @@ export interface QaToolchainBackfillCandidate {
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '8235887e7126972b89c264e2053c1c4f7418ea74': [
+    // Opera removes its product registration while retaining a small assistant
+    // payload. This release verifies the exact ARP identity after running the
+    // reviewed launcher command instead of waiting for the directory to vanish.
+    'Opera.Opera',
+  ],
   '5f95d233998479791a49d1d784ea95137c098e73': [
     // Opera's registered slash-form uninstall verb exits without removing the
     // product. This release invokes the reviewed double-dash launcher command
