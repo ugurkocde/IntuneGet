@@ -295,6 +295,18 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // through PSADT before vendor removal.
     'Logitech.SetPoint',
   ],
+  '77ed8d66246e8c7098f427e32d8488bc73f8eb3d': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    // Timely publishes `Memory` as a stable NSIS ProductCode. This release
+    // binds that exact registry key so install verification and removal do not
+    // depend on ambiguous display-name matching.
+    'Timely.Memory',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
