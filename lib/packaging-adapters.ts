@@ -439,6 +439,7 @@ export function resolveApplicationInstallScope(
 const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   generatedDisplayName: string;
   registeredDisplayName: string;
+  registeredRegistryKey?: string;
 }>>> = {
   // The EXE package's catalog name distinguishes it from Google.Chrome, but
   // Google's machine installer registers the ordinary `Google Chrome` ARP
@@ -447,6 +448,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   'google.chrome.exe': {
     generatedDisplayName: 'Google Chrome (EXE)',
     registeredDisplayName: 'Google Chrome',
+  },
+  // K-Lite inserts the version between the family and edition in DisplayName
+  // (for example `K-Lite Codec Pack 19.9.0 Full`). Its Inno registry key is
+  // stable and edition-specific, so use that exact vendor identity instead of
+  // weakening the generic display-name matcher to a broad prefix search.
+  'codecguide.k-litecodecpack.full': {
+    generatedDisplayName: 'K-Lite Codec Pack Full',
+    registeredDisplayName: 'K-Lite Codec Pack Full',
+    registeredRegistryKey: 'KLiteCodecPack_is1',
   },
 };
 
@@ -457,9 +467,10 @@ export function resolveApplicationUninstallCommand(
   const reviewed = REVIEWED_REGISTRY_UNINSTALL_IDENTITIES[wingetId.trim().toLowerCase()];
   if (!reviewed) return uninstallCommand;
   const expected = `REGISTRY_UNINSTALL:${reviewed.generatedDisplayName}`;
-  return uninstallCommand.trim() === expected
-    ? `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`
-    : uninstallCommand;
+  if (uninstallCommand.trim() !== expected) return uninstallCommand;
+  return reviewed.registeredRegistryKey
+    ? `REGISTRY_UNINSTALL_KEY:${reviewed.registeredRegistryKey}:${reviewed.registeredDisplayName}`
+    : `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`;
 }
 
 function normalizeProcessName(name: string): string {

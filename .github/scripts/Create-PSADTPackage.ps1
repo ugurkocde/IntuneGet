@@ -1060,10 +1060,17 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortabl
     $useRegistryUninstall = $true
     $registryUninstallProductCode = $Matches[1]
     $registryUninstallDisplayName = $Matches[2]
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9._{}+-]{0,255}):(.+)$') {
+    # Reviewed non-MSI installers can expose a stable, edition-specific ARP
+    # key even when their display name embeds the version. Reuse the existing
+    # exact PSChildName lifecycle rather than broadening name matching.
+    $useRegistryUninstall = $true
+    $registryUninstallProductCode = $Matches[1]
+    $registryUninstallDisplayName = $Matches[2]
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
-} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:') {
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_(PRODUCT|KEY):') {
     throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'
 } elseif ($installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match '(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\})') {
     # Deployment profiles commonly carry the concrete msiexec uninstall command

@@ -471,6 +471,46 @@ describe('Burn bundle PSADT generation', () => {
 });
 
 describe('EXE product identity PSADT generation', () => {
+  it('uses a reviewed exact non-MSI registry key for install capture and removal', () => {
+    const job = packagingJob({
+      winget_id: 'CodecGuide.K-LiteCodecPack.Full',
+      display_name: 'K-Lite Codec Pack Full',
+      installer_type: 'inno',
+      uninstall_command:
+        'REGISTRY_UNINSTALL_KEY:KLiteCodecPack_is1:K-Lite Codec Pack Full',
+    });
+
+    const snapshot = generator.getRegistryInstallSnapshotBlock.call(
+      generator,
+      job,
+      'K-Lite Codec Pack Full'
+    );
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      job,
+      'K-Lite Codec Pack Full'
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'klcp_full.exe'
+    );
+
+    expect(snapshot).toContain(
+      "$configuredUninstallProductCode = 'KLiteCodecPack_is1'"
+    );
+    expect(verification).toContain(
+      '[string]$_.PSChildName -eq $configuredUninstallProductCode'
+    );
+    expect(uninstall).toContain(
+      "$configuredProductCode = 'KLiteCodecPack_is1'"
+    );
+    expect(uninstall).toContain(
+      '$_.PSChildName -eq $configuredProductCode'
+    );
+    expect(uninstall).toContain("'inno' -eq 'inno'");
+  });
+
   it('captures MSI identity when Winget leaves a PRODUCT_CODE placeholder', () => {
     const job = packagingJob({
       winget_id: 'Yealink.YealinkUSBConnect',

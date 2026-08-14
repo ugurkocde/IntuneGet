@@ -22,6 +22,19 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses K-Lite Full\'s exact stable Inno registry key', () => {
+    expect(resolveApplicationUninstallCommand(
+      'CodecGuide.K-LiteCodecPack.Full',
+      'REGISTRY_UNINSTALL:K-Lite Codec Pack Full'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:KLiteCodecPack_is1:K-Lite Codec Pack Full'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'CodecGuide.K-LiteCodecPack.Full',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');

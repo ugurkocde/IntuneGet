@@ -735,6 +735,18 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).not.toContain('$existingNameMatches');
   });
 
+  it('supports a reviewed exact non-MSI uninstall registry key', () => {
+    expect(packager).toContain(
+      '^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9._{}+-]{0,255}):(.+)$'
+    );
+    expect(packager).toContain(
+      "$uninstallCmd -match '^REGISTRY_UNINSTALL_(PRODUCT|KEY):'"
+    );
+    expect(packager).toContain(
+      '[string]$_.PSChildName -eq $configuredUninstallProductCode'
+    );
+  });
+
   it('selects one architecture-decorated ARP entry without accepting an ambiguous set', () => {
     expect(packager).toContain('$configuredUninstallComparableName = ((');
     expect(packager).toContain('$architectureAgnosticMatches = @($changedApplications');

@@ -1045,6 +1045,18 @@ ${steps}
     productCode: string;
     displayName: string;
   } | null {
+    const exactRegistryKeyMatch = job.uninstall_command?.match(
+      /^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9._{}+-]{0,255}):(.+)$/
+    );
+    if (exactRegistryKeyMatch) {
+      return {
+        // The runtime already compares this field to PSChildName. A reviewed
+        // non-MSI registry key is therefore as exact as an MSI product code.
+        productCode: exactRegistryKeyMatch[1],
+        displayName: exactRegistryKeyMatch[2].replace(/'/g, "''"),
+      };
+    }
+
     const exactProductMatch = job.uninstall_command?.match(
       /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$/
     );
@@ -1815,7 +1827,7 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
       return "Write-ADTLogEntry -Message 'No uninstall command specified' -Severity 'Warning' -Source 'Uninstall-ADTDeployment'";
     }
 
-    if (/^REGISTRY_UNINSTALL_PRODUCT:/.test(job.uninstall_command)) {
+    if (/^REGISTRY_UNINSTALL_(?:PRODUCT|KEY):/.test(job.uninstall_command)) {
       return 'throw "The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code."';
     }
 
