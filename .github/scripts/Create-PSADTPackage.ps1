@@ -2259,9 +2259,6 @@ if ($useRegistryUninstall) {
     }
 
     $lines += @(
-        '        if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1) {'
-        '            $selectedApplications = @($changedApplications[0])'
-        '        }'
         '        if ($selectedApplications.Count -eq 1) { break }'
         '        if ($multiProductInstallationVerified) { break }'
         '        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }'

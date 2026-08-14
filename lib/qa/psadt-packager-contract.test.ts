@@ -895,6 +895,15 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('never captures an unrelated background ARP change as the installed product', () => {
+    expect(packager).not.toContain(
+      'if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1)'
+    );
+    expect(packager).not.toContain(
+      '$selectedApplications = @($changedApplications[0])'
+    );
+  });
+
   it('prefers a registered Burn helper and keeps the packaged fallback for disposable caches', () => {
     expect(packager).toContain("if ($originalInstallerType -eq 'burn')");
     expect(packager).toContain(
