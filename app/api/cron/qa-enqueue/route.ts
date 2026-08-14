@@ -603,6 +603,12 @@ export async function GET(request: Request) {
             });
             if (resolution.status !== 'resolved') {
               summary.unavailable++;
+              structuredQaPollLog('info', 'qa_manifest_resolution_unavailable', {
+                runId,
+                wingetId: app.winget_id,
+                version: 'version' in resolution ? resolution.version : null,
+                reason: resolution.reason,
+              });
               return;
             }
 

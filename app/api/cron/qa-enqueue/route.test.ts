@@ -699,6 +699,46 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
   });
 
+  it('logs the reason when a WinGet manifest cannot be resolved', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Missing.Manifest'],
+      supportedApps: [
+        {
+          winget_id: 'Missing.Manifest',
+          name: 'Missing Manifest',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'unavailable',
+      reason: 'installer_manifest_missing',
+      version: '1.0.0',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    const entries = vi.mocked(console.log).mock.calls.map(([entry]) => JSON.parse(String(entry)));
+    expect(entries).toContainEqual(expect.objectContaining({
+      message: 'qa_manifest_resolution_unavailable',
+      wingetId: 'Missing.Manifest',
+      version: '1.0.0',
+      reason: 'installer_manifest_missing',
+    }));
+  });
+
   it('does not queue an app payload that already passed under another PSADT profile', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       demandBackfillApps: ['Covered.App'],
