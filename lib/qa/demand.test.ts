@@ -82,6 +82,23 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('fails closed before queueing an ARM64 payload on the x64 QA runner', async () => {
+    const client = { from: vi.fn() };
+    const result = await ensureQaDemand(client as never, {
+      ...demandInput(),
+      architecture: 'arm64',
+    });
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      candidateId: null,
+      failureSummary: 'This app is not currently available for deployment.',
+    });
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(getPackageEligibilityBlocksMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('persists dependency download metadata on a newly queued customer candidate', async () => {
     const dependency = {
       packageIdentifier: 'Microsoft.VCRedist.2015+.x64',

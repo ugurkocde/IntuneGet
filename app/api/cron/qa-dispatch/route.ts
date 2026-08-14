@@ -4,6 +4,7 @@ import { dispatchQaCandidate } from '@/lib/qa/dispatch';
 import { validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
 import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
+import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -129,6 +130,10 @@ export async function GET(request: Request) {
     for (const candidate of page) {
       if (!queueCursor(candidate)) {
         addInvalid('queue-metadata-invalid', candidate.id);
+        continue;
+      }
+      if (!isQaRunnerArchitectureSupported(candidate.architecture)) {
+        addInvalid('runner-architecture-unsupported', candidate.id);
         continue;
       }
       const validation = validateCurrentQaPackageProfile({

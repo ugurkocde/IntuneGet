@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { normalizeQaInstallerType, qaInstallerFileName } from '@/lib/qa/candidate';
+import {
+  isQaRunnerArchitectureSupported,
+  normalizeQaInstallerType,
+  qaInstallerFileName,
+} from '@/lib/qa/candidate';
 import {
   normalizeQaWorkflowPackageInput,
   type QaPackageIdentity,
@@ -16,6 +20,9 @@ import {
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
+
+const QA_ARCHITECTURE_UNAVAILABLE_MESSAGE =
+  'This app is not currently available for deployment.';
 
 export interface QaDemandInput extends QaWorkflowPackageInput {
   installerUrl: string;
@@ -48,6 +55,14 @@ export async function ensureQaDemand(
       },
     }),
   };
+  if (!isQaRunnerArchitectureSupported(input.architecture)) {
+    return {
+      identity: normalizeQaWorkflowPackageInput(baseResolvedInput).identity,
+      candidateId: null,
+      state: 'failed',
+      failureSummary: QA_ARCHITECTURE_UNAVAILABLE_MESSAGE,
+    };
+  }
   const eligibilityBlocks = await getPackageEligibilityBlocks(supabase, [input.wingetId]);
   if (eligibilityBlocks.length > 0) {
     return {

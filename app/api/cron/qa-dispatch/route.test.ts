@@ -271,6 +271,28 @@ describe('GET /api/cron/qa-dispatch', () => {
     expect(claimedIds).toEqual([deploymentConfig.id]);
   });
 
+  it('supersedes an ARM64 payload instead of sending it to the x64 VM', async () => {
+    const arm64 = candidate('deployment-config');
+    arm64.architecture = 'arm64';
+    const { client, supersededIds, supersedePayloads, claimedIds } =
+      createSupabaseStub([arm64]);
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(body).toMatchObject({ dispatched: false, superseded: 1 });
+    expect(supersededIds).toEqual([arm64.id]);
+    expect(supersedePayloads).toEqual([
+      expect.objectContaining({
+        failure_summary:
+          'Superseded before dispatch: runner-architecture-unsupported.',
+      }),
+    ]);
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
   it('supersedes a row whose canonical profile does not match its installer', async () => {
     const invalid = candidate('catalog-default');
     invalid.installer_sha256 = 'B'.repeat(64);

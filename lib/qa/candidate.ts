@@ -26,6 +26,12 @@ export interface QaInstallerSelection {
 }
 
 const SUPPORTED_ARCHITECTURES = new Set(['x64', 'x86', 'arm64']);
+const QA_RUNNER_ARCHITECTURES = new Set(['x64', 'x86']);
+
+/** The current Hyper-V golden image is x64 and can execute x64/x86 payloads only. */
+export function isQaRunnerArchitectureSupported(value?: string | null): boolean {
+  return QA_RUNNER_ARCHITECTURES.has(value?.trim().toLowerCase() || 'x64');
+}
 
 function preferredScopeInstaller(
   installers: WingetInstallerCandidate[],

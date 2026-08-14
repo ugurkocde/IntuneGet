@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isQaRunnerArchitectureSupported,
   normalizeInstallerSha256,
   normalizeQaArchitecture,
   normalizeQaInstallerType,
@@ -22,6 +23,12 @@ describe('QA candidate normalization', () => {
   it('does not silently substitute a different architecture', () => {
     expect(selectWingetInstaller(installers, 'arm64')).toBeNull();
     expect(normalizeQaArchitecture(undefined)).toBe('x64');
+  });
+
+  it('only sends architectures executable by the current x64 VM to QA', () => {
+    expect(isQaRunnerArchitectureSupported('x64')).toBe(true);
+    expect(isQaRunnerArchitectureSupported('x86')).toBe(true);
+    expect(isQaRunnerArchitectureSupported('arm64')).toBe(false);
   });
 
   it('uses x86 only as an explicit fallback supported by the x64 QA VM', () => {
