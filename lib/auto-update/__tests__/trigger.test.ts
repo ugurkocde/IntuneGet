@@ -180,8 +180,14 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     if (!result.ok) throw new Error('Expected installer resolution to succeed');
     expect(result.info).toMatchObject({
       installCommand: '"Vivaldi.8.1.4087.62.x64.exe" --vivaldi-silent --do-not-launch-chrome',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Vivaldi',
       silentSwitches: '--vivaldi-silent --do-not-launch-chrome',
       installScope: 'user',
+      detectionRules: [expect.objectContaining({
+        type: 'registry',
+        detectionValue: '8.1.4087.62',
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Vivaldi_Vivaldi',
+      })],
     });
   });
 
@@ -489,6 +495,77 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       { name: 'StreamDeck', description: 'Elgato Stream Deck' },
     ]);
     expect(storedConfig.psadtConfig?.processesToClose).toEqual([]);
+  });
+
+  it('replaces stale installer-family detection for QA and customer packaging', async () => {
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const staleMsixDetection = {
+      type: 'script' as const,
+      scriptContent: 'Get-AppxPackage -Name OldPackage',
+      enforceSignatureCheck: false,
+      runAs32Bit: false,
+    };
+    const currentExeDetection = {
+      type: 'registry' as const,
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Anthropic_Claude',
+      valueName: 'Version',
+      detectionType: 'version' as const,
+      detectionValue: '1.30096.1',
+      operator: 'greaterThanOrEqual' as const,
+      check32BitOn64System: false,
+    };
+    const storedConfig: DeploymentConfig = {
+      displayName: 'Claude',
+      publisher: 'Anthropic',
+      architecture: 'x64',
+      installerType: 'msix',
+      installCommand: 'Add-AppxPackage old.msix',
+      uninstallCommand: 'MSIX_UNINSTALL:Claude',
+      installScope: 'user',
+      detectionRules: [staleMsixDetection],
+      psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: [staleMsixDetection] },
+    };
+    const policy = makePolicy(storedConfig);
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never)
+      .mockResolvedValue({ id: 'history-claude' } as never);
+    const createPackagingJobSpy = vi.spyOn(trigger as never, 'createPackagingJob' as never)
+      .mockResolvedValue({ id: 'job-claude' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, {
+      ...UPDATE_INFO,
+      wingetId: 'Anthropic.Claude',
+      latestVersion: '1.30096.1',
+      installerType: 'exe',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Claude',
+      detectionRules: [currentExeDetection],
+      nestedInstallerType: undefined,
+      nestedInstallerPath: undefined,
+    }, { skipRateLimits: true });
+
+    expect(result).toMatchObject({ success: true, packagingJobId: 'job-claude' });
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        uninstallCommand: 'REGISTRY_UNINSTALL:Claude',
+        detectionRules: JSON.stringify([currentExeDetection]),
+      })
+    );
+    const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
+    expect((effectivePolicy.deployment_config as DeploymentConfig)).toMatchObject({
+      uninstallCommand: 'REGISTRY_UNINSTALL:Claude',
+      detectionRules: [currentExeDetection],
+    });
+    expect(storedConfig.uninstallCommand).toBe('MSIX_UNINSTALL:Claude');
+    expect(storedConfig.detectionRules).toEqual([staleMsixDetection]);
   });
 
   it('uses a reviewed user scope for both auto-update QA and the packaging job', async () => {

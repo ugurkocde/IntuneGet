@@ -21,7 +21,11 @@ import {
 } from '@/lib/qa/candidate';
 import { ensureQaDemand, type QaDemandResult } from '@/lib/qa/demand';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
-import { generateInstallCommand } from '@/lib/detection-rules';
+import {
+  generateDetectionRules,
+  generateInstallCommand,
+  generateUninstallCommand,
+} from '@/lib/detection-rules';
 import { normalizeInstaller } from '@/lib/manifest-api';
 import { upgradeLegacyPackageDefaults } from '@/lib/update-policies/upgrade-legacy-package-defaults';
 import {
@@ -29,7 +33,7 @@ import {
   resolveApplicationInstallScope,
 } from '@/lib/packaging-adapters';
 import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
-import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { DEFAULT_PSADT_CONFIG, type DetectionRule } from '@/types/psadt';
 
 interface TriggerResult {
   success: boolean;
@@ -51,6 +55,8 @@ export interface UpdateInfo {
   installerSha256: string;
   installerType: string;
   installCommand?: string;
+  uninstallCommand?: string;
+  detectionRules?: DetectionRule[];
   silentSwitches?: string;
   installerSuccessCodes?: number[];
   installScope?: WingetScope;
@@ -236,6 +242,10 @@ export class AutoUpdateTrigger {
       const deploymentConfig: DeploymentConfig = {
         ...storedDeploymentConfig,
         installScope: effectiveInstallScope,
+        uninstallCommand:
+          updateInfo.uninstallCommand || storedDeploymentConfig.uninstallCommand,
+        detectionRules:
+          updateInfo.detectionRules || storedDeploymentConfig.detectionRules,
         psadtConfig: applyApplicationPackagingAdapter(
           updateInfo.wingetId,
           storedDeploymentConfig.psadtConfig || DEFAULT_PSADT_CONFIG
@@ -272,13 +282,15 @@ export class AutoUpdateTrigger {
               updateInfo.nestedInstallerType
             ),
         installerSuccessCodes: updateInfo.installerSuccessCodes,
-        uninstallCommand: deploymentConfig.uninstallCommand || '',
+        uninstallCommand: updateInfo.uninstallCommand || deploymentConfig.uninstallCommand || '',
         installScope: updateInfo.installScope ||
           (deploymentConfig.installScope === 'user' ? 'user' : 'machine'),
         psadtConfig: deploymentConfig.psadtConfig
           ? JSON.stringify(deploymentConfig.psadtConfig)
           : undefined,
-        detectionRules: JSON.stringify(deploymentConfig.detectionRules || []),
+        detectionRules: JSON.stringify(
+          updateInfo.detectionRules || deploymentConfig.detectionRules || []
+        ),
         priority: 1500,
         demandSource: 'auto_update',
       });
@@ -1003,6 +1015,16 @@ export async function getLatestInstallerInfo(
       installerSha256: normalizedSha256,
       installerType: installerType || 'exe',
       installCommand: buildCurrentVersionInstallCommand(normalizedInstaller),
+      uninstallCommand: generateUninstallCommand(
+        normalizedInstaller,
+        curatedApp.name
+      ),
+      detectionRules: generateDetectionRules(
+        normalizedInstaller,
+        curatedApp.name,
+        wingetId,
+        latestVersion
+      ),
       silentSwitches: normalizedInstaller.silentArgs,
       installerSuccessCodes: normalizedInstaller.installerSuccessCodes,
       installScope: normalizedInstaller.scope,
