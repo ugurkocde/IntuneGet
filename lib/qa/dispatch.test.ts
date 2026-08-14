@@ -44,7 +44,11 @@ describe('dispatchQaCandidate', () => {
       installer_type: 'exe',
       test_level: 'psadt-package',
       package_profile_sha256: 'B'.repeat(64),
-      test_config: { mode: 'psadt-package' },
+      test_config: {
+        mode: 'psadt-package',
+        scope: 'user',
+        sourceInstallerType: 'wix',
+      },
     });
 
     const [url, request] = fetchMock.mock.calls[0];
@@ -70,8 +74,8 @@ describe('dispatchQaCandidate', () => {
       architecture: 'x64',
       installerUrl: 'https://example.test/setup.exe',
       installerSha256: 'A'.repeat(64),
-      installerType: 'exe',
-      installScope: 'machine',
+      installerType: 'wix',
+      installScope: 'user',
       sourceType: 'winget',
     });
   });
