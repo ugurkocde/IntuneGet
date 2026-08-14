@@ -102,6 +102,35 @@ describe('installer dispatch preflight', () => {
     }));
   });
 
+  it('treats WinGet installer aliases as the same executable contract', async () => {
+    const msiRequest = {
+      ...request,
+      installerUrl: 'https://example.test/releases/1.2.3/setup.msi',
+      installerType: 'msi',
+    };
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: msiRequest.installerUrl,
+      sha256: expectedSha256,
+      type: 'wix',
+      scope: 'machine',
+    }]);
+    hashRemoteInstallerMock.mockResolvedValueOnce({
+      sha256: expectedSha256,
+      bytes: 42,
+      finalUrl: msiRequest.installerUrl,
+    });
+
+    await expect(enforceInstallerPreflight(msiRequest)).resolves.toMatchObject({
+      status: 'healthy',
+      source: 'live',
+    });
+    expect(createInstallerHealthKey(msiRequest)).toBe(createInstallerHealthKey({
+      ...msiRequest,
+      installerType: 'wix',
+    }));
+  });
+
   it('quarantines a hash mismatch and blocks later dispatch without another download', async () => {
     hashRemoteInstallerMock.mockResolvedValueOnce({
       sha256: actualSha256,
@@ -124,7 +153,7 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
   });
 
-  it('caches manifest drift as a retryable TTL error instead of permanent quarantine', async () => {
+  it('caches manifest drift as a deterministic tuple error', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
       url: request.installerUrl,
@@ -136,7 +165,7 @@ describe('installer dispatch preflight', () => {
     await expect(enforceInstallerPreflight(request)).rejects.toBeInstanceOf(InstallerPreflightError);
     await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
       code: 'MANIFEST_CHANGED',
-      retryable: true,
+      retryable: false,
     });
     expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
   });

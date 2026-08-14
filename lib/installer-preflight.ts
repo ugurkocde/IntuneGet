@@ -6,6 +6,7 @@ import {
   hashesEqual,
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
+import { normalizeQaInstallerType } from '@/lib/qa/candidate';
 import type { NormalizedInstaller } from '@/types/winget';
 
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
@@ -102,12 +103,16 @@ export function createInstallerHealthKey(input: InstallerPreflightRequest): stri
       input.wingetId.trim().toLowerCase(),
       input.version.trim(),
       (input.architecture || 'x64').trim().toLowerCase(),
-      (input.installerType || '').trim().toLowerCase(),
+      normalizePreflightInstallerType(input.installerType),
       (input.installScope || '').trim().toLowerCase(),
       input.installerUrl.trim(),
       input.installerSha256.trim().toUpperCase(),
     ].join('\0'))
     .digest('hex');
+}
+
+function normalizePreflightInstallerType(type?: string): string {
+  return type?.trim() ? normalizeQaInstallerType(type) : '';
 }
 
 function assertTrustedInput(input: InstallerPreflightRequest): void {
@@ -130,7 +135,7 @@ function throwForRow(row: InstallerHealthRow): never {
   throw new InstallerPreflightError(
     row.reason_code || 'INSTALLER_QUARANTINED',
     row.reason_message || 'This installer tuple is quarantined and cannot be dispatched',
-    row.status === 'error',
+    row.status === 'error' && row.reason_code !== 'MANIFEST_CHANGED',
     row.actual_sha256 || undefined,
   );
 }
@@ -230,7 +235,7 @@ function installerExistsInManifest(
 ): boolean {
   const expectedHash = input.installerSha256.toUpperCase();
   const requestedArchitecture = (input.architecture || 'x64').toLowerCase();
-  const requestedType = input.installerType?.toLowerCase();
+  const requestedType = normalizePreflightInstallerType(input.installerType);
   const requestedScope = input.installScope?.toLowerCase();
   const requestedUrl = (input.manifestInstallerUrl || input.installerUrl).trim();
 
@@ -242,7 +247,8 @@ function installerExistsInManifest(
       installer.architecture.toLowerCase() !== requestedArchitecture &&
       installer.architecture.toLowerCase() !== 'neutral'
     ) return false;
-    if (requestedType && installer.type && installer.type.toLowerCase() !== requestedType) return false;
+    const manifestType = normalizePreflightInstallerType(installer.type);
+    if (requestedType && manifestType && manifestType !== requestedType) return false;
     if (requestedScope && installer.scope && installer.scope.toLowerCase() !== requestedScope) return false;
     return true;
   });
