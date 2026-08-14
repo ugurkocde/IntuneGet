@@ -30,6 +30,7 @@ import {
 import {
   prioritizeToolchainBackfill,
   shouldRetryTerminalToolchainCandidate,
+  terminalToolchainRetryTargets,
   type QaToolchainBackfillCandidate,
 } from '@/lib/qa/toolchain-backfill';
 import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
@@ -107,6 +108,22 @@ async function findToolchainBackfillIds(
 ): Promise<{ ids: string[]; pagesScanned: number }> {
   const decidedIds = new Set<string>();
   const supportedStaleCandidates: QaToolchainBackfillCandidate[] = [];
+  const retryTargets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
+  let pendingTerminalRetryIds = new Set<string>();
+  if (retryTargets.length > 0) {
+    const { data: deployedRetryTargets, error: deployedRetryTargetsError } = await supabase
+      .from('upload_history')
+      .select('winget_id')
+      .in('winget_id', retryTargets);
+    if (deployedRetryTargetsError) {
+      throw new Error(
+        `Could not read deployed QA toolchain retry targets: ${deployedRetryTargetsError.message}`
+      );
+    }
+    pendingTerminalRetryIds = new Set(
+      (deployedRetryTargets || []).map((row) => row.winget_id.trim().toLowerCase())
+    );
+  }
   let cursor: { enqueuedAt: string; id: string } | null = null;
   let pagesScanned = 0;
 
@@ -135,8 +152,10 @@ async function findToolchainBackfillIds(
     const pageStaleRows: QaCandidateProfileRow[] = [];
     for (const row of rows) {
       const config = object(row.test_config);
-      if (config.profileKind !== 'catalog-default' || decidedIds.has(row.winget_id)) continue;
-      decidedIds.add(row.winget_id);
+      const normalizedWingetId = row.winget_id.trim().toLowerCase();
+      if (config.profileKind !== 'catalog-default' || decidedIds.has(normalizedWingetId)) continue;
+      decidedIds.add(normalizedWingetId);
+      pendingTerminalRetryIds.delete(normalizedWingetId);
       const validation = validateCurrentQaPackageProfile({
         testConfig: row.test_config,
         candidatePackageProfileSha256: row.package_profile_sha256,
@@ -216,7 +235,10 @@ async function findToolchainBackfillIds(
       }
     }
 
-    if (supportedStaleCandidates.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE) {
+    if (
+      supportedStaleCandidates.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE &&
+      pendingTerminalRetryIds.size === 0
+    ) {
       return {
         ids: prioritizeToolchainBackfill(supportedStaleCandidates).slice(
           0,

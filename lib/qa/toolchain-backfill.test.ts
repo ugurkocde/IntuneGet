@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { QA_PSADT_TOOLCHAIN } from './package-profile';
-import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
+import {
+  shouldRetryTerminalToolchainCandidate,
+  terminalToolchainRetryTargets,
+} from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('exposes a defensive copy of current terminal retry targets', () => {
+    const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
+    expect(targets).toEqual(expect.arrayContaining(['PDFsam.PDFsam', 'Mega.MEGASync']));
+
+    targets.length = 0;
+
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
+      expect.arrayContaining(['PDFsam.PDFsam', 'Mega.MEGASync'])
+    );
+  });
+
   it('retries PDFsam once with its documented managed MSI command', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '404c9718a2c977722850bc9d70a02772a9bd1c7a',

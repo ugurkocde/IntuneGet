@@ -276,6 +276,10 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
   ],
 };
 
+export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
+  return [...(TOOLCHAIN_TERMINAL_RETRY_TARGETS[packagerCommit] || [])];
+}
+
 export function shouldRetryTerminalToolchainCandidate(
   packagerCommit: string,
   candidate: Pick<QaToolchainBackfillCandidate, 'wingetId' | 'status'>

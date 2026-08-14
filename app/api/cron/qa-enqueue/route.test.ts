@@ -1057,6 +1057,68 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(candidateInserts[0]).toMatchObject({ winget_id: 'Supported.App' });
   });
 
+  it('does not stop before an older deployed terminal retry target is scanned', async () => {
+    const firstPage = [
+      ...['Recent.One', 'Recent.Two', 'Recent.Three'].map((wingetId, index) =>
+        profileCandidate({
+          id: `recent-stale-${index}`,
+          wingetId,
+          packagerCommit: '1'.repeat(40),
+          enqueuedAt: '2026-08-08T10:00:00.000Z',
+        })
+      ),
+      ...Array.from({ length: 997 }, (_, index) =>
+        profileCandidate({
+          id: `irrelevant-${String(997 - index).padStart(4, '0')}`,
+          wingetId: `Irrelevant.App.${index}`,
+          packagerCommit: '1'.repeat(40),
+          enqueuedAt: '2026-08-08T10:00:00.000Z',
+          profileKind: 'deployment-config',
+        })
+      ),
+    ];
+    const supportedApps = [
+      ...['Recent.One', 'Recent.Two', 'Recent.Three'].map((winget_id) => ({
+        winget_id,
+        name: winget_id,
+        publisher: 'Contoso',
+      })),
+      { winget_id: 'PDFsam.PDFsam', name: 'PDFsam', publisher: 'Sober Lemur' },
+    ];
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps,
+      deployedApps: supportedApps.map((app) => app.winget_id),
+      candidatePages: [
+        firstPage,
+        [
+          profileCandidate({
+            id: 'pdfsam-terminal-failure',
+            wingetId: 'PDFsam.PDFsam',
+            packagerCommit: '1'.repeat(40),
+            enqueuedAt: '2026-08-08T09:59:59.000Z',
+            status: 'failed',
+          }),
+        ],
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 4,
+      queued: 4,
+      toolchainBackfillCount: 3,
+      toolchainBackfillPagesScanned: 2,
+    });
+    expect(candidateInserts).toContainEqual(
+      expect.objectContaining({ winget_id: 'PDFsam.PDFsam' })
+    );
+  });
+
   it('prioritizes failed stale profiles before ordinary toolchain backfill', async () => {
     expect(prioritizeToolchainBackfill([
       {
