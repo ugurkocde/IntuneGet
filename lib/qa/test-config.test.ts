@@ -432,4 +432,30 @@ describe('buildQaCatalogTestConfig', () => {
       }),
     ]);
   });
+
+  it('tests Youdao in user context when its NSIS manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Youdao.YoudaoTranslate',
+        name: '网易有道翻译',
+        publisher: 'Youdao',
+        version: '11.3.16.0',
+      },
+      manifest: {
+        InstallerType: 'exe',
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'exe',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Youdao_YoudaoTranslate',
+      }),
+    ]);
+  });
 });

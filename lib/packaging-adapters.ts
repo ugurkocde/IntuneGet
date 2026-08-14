@@ -79,6 +79,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Youdao's signed NSIS installer requests `asInvoker` and its WinGet
+    // manifest omits Scope. Treating that omission as machine scope launches
+    // the per-user bootstrapper under LocalSystem, where it exits immediately
+    // without creating an application or uninstall registration.
+    wingetId: 'Youdao.YoudaoTranslate',
+    requiredInstallScope: 'user',
+  },
+  {
     // xTool Studio's NSIS bootstrapper likewise installs below the invoking
     // account's LocalAppData even when the WinGet manifest is selected as a
     // machine package. LocalSystem therefore registers an uninstaller below
