@@ -274,6 +274,16 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // adds the vendor's /MULTIUSER switch for LocalSystem deployments.
     'Mega.MEGASync',
   ],
+  'f7c3ed00118ada623d70503009d1f72a164f1d95': [
+    // Preserve the still-unconsumed reviewed PDFsam and MEGAsync retries in
+    // this cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    // Link Controller's Inno uninstaller left its exact ARP key while the
+    // tray/background process family was still active. This release closes
+    // those reviewed processes through PSADT before vendor removal.
+    'Insta360.Link.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
