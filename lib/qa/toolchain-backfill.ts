@@ -284,6 +284,17 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // those reviewed processes through PSADT before vendor removal.
     'Insta360.Link.Controller',
   ],
+  '0565fb456b7faf84cca56f2c988c99591015fe93': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    // SetPoint's NSIS removal left its ARP identity while the notification-area
+    // client family was active. This release closes those reviewed processes
+    // through PSADT before vendor removal.
+    'Logitech.SetPoint',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
