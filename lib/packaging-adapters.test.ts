@@ -47,6 +47,16 @@ describe('application packaging adapters', () => {
       reviewedUninstallArguments: ['/S'],
     });
     expect(
+      applyApplicationPackagingAdapter('AnyDesk.AnyDesk', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      processesToClose: [{ name: 'AnyDesk', description: 'AnyDesk' }],
+      reviewedExactUninstall: {
+        executablePath: '%ProgramFiles(x86)%\\AnyDesk\\AnyDesk.exe',
+        arguments: ['--silent', '--remove'],
+        completionTimeoutMinutes: 5,
+      },
+    });
+    expect(
       applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['/silent', 'forall']);

@@ -131,6 +131,22 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // AnyDesk's ARP entry can invoke its interactive removal path, which exits
+    // without removing the product under Intune's non-interactive SYSTEM
+    // context. AnyDesk documents this exact CLI contract for automated silent
+    // removal. Close the desktop/service process family first, then keep the
+    // captured ARP identity as the authoritative completion signal.
+    wingetId: 'AnyDesk.AnyDesk',
+    requiredProcessesToClose: [
+      { name: 'AnyDesk', description: 'AnyDesk' },
+    ],
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles(x86)%\\AnyDesk\\AnyDesk.exe',
+      arguments: ['--silent', '--remove'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     wingetId: 'RARLab.WinRAR',
     reviewedUninstallArguments: ['/S'],
   },
