@@ -687,6 +687,55 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
+  it('repairs stale generated MSIX detection before both QA and customer MSI packaging', async () => {
+    const staleMsixRule = {
+      type: 'script',
+      scriptContent: [
+        '# MSIX Detection Script',
+        '# Package Family Name: Agilebits.1Password_amwd9z03whsfe',
+        'exit 0',
+      ].join('\n'),
+      enforceSignatureCheck: false,
+      runAs32Bit: false,
+    };
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'AgileBits.1Password',
+          displayName: '1Password',
+          version: '8.12.30.21',
+          installerType: 'msi',
+          detectionRules: [staleMsixRule],
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: [staleMsixRule] },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const expectedRule = expect.objectContaining({
+      type: 'registry',
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\AgileBits_1Password',
+      detectionValue: '8.12.30.21',
+    });
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].detectionRules)).toEqual([
+      expectedRule,
+    ]);
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].detectionRules)).toEqual([
+      expectedRule,
+    ]);
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      detectionRules: [expectedRule],
+      psadtConfig: { detectionRules: [expectedRule] },
+    });
+  });
+
   it('preserves configured PSADT rules when the top-level list is unusable', async () => {
     const fileRule = {
       type: 'file',

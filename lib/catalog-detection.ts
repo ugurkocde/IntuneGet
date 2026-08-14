@@ -19,6 +19,7 @@ export function normalizeCatalogDetectionRules({
   version,
   installScope,
   markerPath,
+  installerType,
 }: {
   detectionRules: readonly unknown[] | null | undefined;
   fallbackDetectionRules?: readonly unknown[] | null;
@@ -26,6 +27,7 @@ export function normalizeCatalogDetectionRules({
   version: string;
   installScope?: string;
   markerPath?: string | null;
+  installerType?: string | null;
 }): DetectionRule[] {
   if (typeof wingetId !== 'string' || !wingetId.trim()) {
     throw new Error('Catalog package detection requires a non-empty Winget ID');
@@ -39,10 +41,10 @@ export function normalizeCatalogDetectionRules({
   const scope: WingetScope = typeof installScope === 'string' && installScope.toLowerCase() === 'user'
     ? 'user'
     : 'machine';
-  const primaryRules = usableDetectionRules(detectionRules);
+  const primaryRules = compatibleDetectionRules(detectionRules, installerType);
   const usableRules = primaryRules.length > 0
     ? primaryRules
-    : usableDetectionRules(fallbackDetectionRules);
+    : compatibleDetectionRules(fallbackDetectionRules, installerType);
   const reconciled = reconcileManagedMarkerDetectionRules({
     detectionRules: usableRules,
     wingetId,
@@ -54,6 +56,39 @@ export function normalizeCatalogDetectionRules({
   return reconciled.length > 0
     ? reconciled
     : generateRegistryMarkerDetectionRules(wingetId, version, scope, markerPath || undefined);
+}
+
+/**
+ * Discard only rules whose machine-generated shape proves they belong to a
+ * different installer family. This repairs saved catalog entries after a
+ * vendor changes formats (for example MSIX to MSI) without replacing genuine
+ * customer-authored scripts merely because they use a different mechanism.
+ */
+function compatibleDetectionRules(
+  values: readonly unknown[] | null | undefined,
+  installerType?: string | null
+): DetectionRule[] {
+  const rules = usableDetectionRules(values);
+  const effectiveType = installerType?.trim().toLowerCase();
+  if (!effectiveType) return rules;
+
+  return rules.filter((rule) => {
+    if (rule.type === 'script' && isGeneratedMsixDetectionRule(rule)) {
+      return effectiveType === 'msix' || effectiveType === 'appx';
+    }
+    if (rule.type === 'msi' && (effectiveType === 'msix' || effectiveType === 'appx')) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function isGeneratedMsixDetectionRule(rule: DetectionRule): boolean {
+  if (rule.type !== 'script') return false;
+  const script = (rule as { scriptContent?: unknown }).scriptContent;
+  return typeof script === 'string' &&
+    /^\s*# MSIX Detection Script\s*$/im.test(script) &&
+    /^\s*# Package Family Name:\s*\S+/im.test(script);
 }
 
 function usableDetectionRules(values: readonly unknown[] | null | undefined): DetectionRule[] {

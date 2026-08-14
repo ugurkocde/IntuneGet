@@ -250,6 +250,42 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('repairs generated detection when a saved catalog profile changed from MSIX to MSI', () => {
+    const staleMsixRule = {
+      type: 'script',
+      scriptContent: [
+        '# MSIX Detection Script',
+        '# Package Family Name: Agilebits.1Password_amwd9z03whsfe',
+        'exit 0',
+      ].join('\n'),
+      enforceSignatureCheck: false,
+      runAs32Bit: false,
+    };
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'AgileBits.1Password',
+      displayName: '1Password',
+      publisher: 'AgileBits',
+      version: '8.12.30.21',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart',
+      uninstallCommand: 'msiexec /x "{598797D5-61EB-46AF-8F8B-0C2070B648A2}" /qn /norestart',
+      installScope: 'machine',
+      detectionRules: JSON.stringify([staleMsixRule]),
+      psadtConfig: JSON.stringify({ detectionRules: [staleMsixRule] }),
+    });
+
+    expect(normalized.detectionRules).toEqual([expect.objectContaining({
+      type: 'registry',
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\AgileBits_1Password',
+      detectionValue: '8.12.30.21',
+    })]);
+    expect(JSON.parse(normalized.psadtConfigJson).detectionRules).toEqual(
+      normalized.detectionRules
+    );
+  });
+
   it('normalizes reviewed per-user apps before hashing deployment QA identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'VNGCorp.Zalo',

@@ -52,6 +52,68 @@ describe('catalog detection normalization', () => {
     expect(result[0]).toBe(customRule);
   });
 
+  it('replaces a generated MSIX rule after the catalog installer changes to MSI', () => {
+    const staleMsixRule = {
+      type: 'script' as const,
+      scriptContent: [
+        '# MSIX Detection Script',
+        '# Package Family Name: Agilebits.1Password_amwd9z03whsfe',
+        'exit 0',
+      ].join('\n'),
+      enforceSignatureCheck: false,
+      runAs32Bit: false,
+    };
+
+    expect(normalizeCatalogDetectionRules({
+      detectionRules: [staleMsixRule],
+      fallbackDetectionRules: [staleMsixRule],
+      wingetId: 'AgileBits.1Password',
+      version: '8.12.30.21',
+      installScope: 'machine',
+      installerType: 'msi',
+    })).toEqual([expect.objectContaining({
+      type: 'registry',
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\AgileBits_1Password',
+      detectionValue: '8.12.30.21',
+    })]);
+  });
+
+  it('keeps a generated MSIX rule for an MSIX-family installer', () => {
+    const generatedRule = {
+      type: 'script' as const,
+      scriptContent: [
+        '# MSIX Detection Script',
+        '# Package Family Name: Example.App_123',
+        'exit 0',
+      ].join('\n'),
+      enforceSignatureCheck: false,
+      runAs32Bit: false,
+    };
+
+    expect(normalizeCatalogDetectionRules({
+      detectionRules: [generatedRule],
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      installerType: 'msix',
+    })).toEqual([generatedRule]);
+  });
+
+  it('does not discard a customer-authored script for an MSI installer', () => {
+    const customScript = {
+      type: 'script' as const,
+      scriptContent: 'if (Test-Path $env:ProgramFiles\\Example) { exit 0 }; exit 1',
+      enforceSignatureCheck: false,
+      runAs32Bit: false,
+    };
+
+    expect(normalizeCatalogDetectionRules({
+      detectionRules: [customScript],
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      installerType: 'msi',
+    })).toEqual([customScript]);
+  });
+
   it('drops malformed legacy entries and repairs the resulting empty rule list', () => {
     const result = normalizeCatalogDetectionRules({
       detectionRules: [null, {}, { type: 'registry', keyPath: '' }],

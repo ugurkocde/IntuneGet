@@ -733,6 +733,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     version: input.version,
     installScope,
     markerPath: preliminaryConfig.registryMarkerPath,
+    installerType: input.nestedInstallerType || input.installerType,
   });
   const psadtConfig = applyApplicationPackagingAdapter(
     input.wingetId,

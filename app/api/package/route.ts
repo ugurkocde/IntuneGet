@@ -512,6 +512,7 @@ export async function POST(request: NextRequest) {
                 version: item.version,
                 installScope: item.installScope,
                 markerPath: requestedPsadtConfig.registryMarkerPath,
+                installerType: item.nestedInstallerType || item.installerType,
               });
               item.detectionRules = detectionRules;
               item.psadtConfig = applyApplicationPackagingAdapter(
