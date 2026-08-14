@@ -431,6 +431,37 @@ describe('GET /api/cron/qa-dispatch', () => {
     expect(rollbackIds).toEqual([]);
   });
 
+  it('dispatches the next candidate after quarantining a deterministic bad tuple', async () => {
+    const quarantined = candidate('catalog-default');
+    quarantined.id = testUuid(40);
+    const valid = candidate('catalog-default');
+    valid.id = testUuid(41);
+    const { client, supersededIds, claimedIds } = createSupabaseStub([
+      quarantined,
+      valid,
+    ]);
+    createServerClientMock.mockReturnValue(client);
+    dispatchQaCandidateMock
+      .mockRejectedValueOnce(new InstallerPreflightError(
+        'MANIFEST_CHANGED',
+        'The exact tuple no longer exists in the trusted manifest.',
+        false,
+      ))
+      .mockResolvedValueOnce(undefined);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      dispatched: true,
+      candidateId: valid.id,
+      superseded: 1,
+    });
+    expect(supersededIds).toEqual([quarantined.id]);
+    expect(claimedIds).toEqual([quarantined.id, valid.id]);
+  });
+
   it('does not claim anything when superseding an invalid profile fails', async () => {
     const invalid = candidate('catalog-default');
     invalid.test_config.profileKind = 'legacy' as never;

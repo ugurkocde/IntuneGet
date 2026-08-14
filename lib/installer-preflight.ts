@@ -13,6 +13,7 @@ const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
 const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
+const PREFLIGHT_CACHE_SCHEMA_VERSION = '2';
 const LEASE_SECONDS = 240;
 const WAIT_FOR_CLAIM_MS = 240_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -100,6 +101,7 @@ function isHostedRuntime(): boolean {
 export function createInstallerHealthKey(input: InstallerPreflightRequest): string {
   return createHash('sha256')
     .update([
+      PREFLIGHT_CACHE_SCHEMA_VERSION,
       input.wingetId.trim().toLowerCase(),
       input.version.trim(),
       (input.architecture || 'x64').trim().toLowerCase(),

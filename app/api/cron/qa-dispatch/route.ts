@@ -94,6 +94,7 @@ export async function GET(request: Request) {
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
   let scanned = 0;
   let superseded = 0;
+  let lastInstallerQuarantine: { candidateId: string; code: string } | null = null;
   const supersededAt = new Date().toISOString();
 
   for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
@@ -243,7 +244,7 @@ export async function GET(request: Request) {
           const quarantinedAt = new Date().toISOString();
           const summary = `Installer source quarantined before QA: ${error.code}. ${error.message}`
             .slice(0, 1000);
-          const { error: quarantineError } = await supabase
+          const { data: quarantinedRows, error: quarantineError } = await supabase
             .from('qa_candidates')
             .update({
               status: 'superseded',
@@ -258,16 +259,15 @@ export async function GET(request: Request) {
             .eq('status', 'dispatched')
             .select('id');
           if (quarantineError) throw quarantineError;
-          return NextResponse.json({
-            success: true,
-            dispatched: false,
-            reason: 'installer_quarantined',
+          superseded += quarantinedRows?.length || 0;
+          lastInstallerQuarantine = {
             candidateId: claimed.id,
             code: error.code,
-            reconciled,
-            scanned,
-            superseded: superseded + 1,
-          });
+          };
+          // A deterministic bad tuple must not consume the entire dispatch
+          // tick. Continue scanning the already-validated queue page so one
+          // high-priority candidate cannot starve unrelated applications.
+          continue;
         }
         await supabase
           .from('qa_candidates')
@@ -293,7 +293,12 @@ export async function GET(request: Request) {
   return NextResponse.json({
     success: true,
     dispatched: false,
-    reason: scanned >= QUEUE_SCAN_PAGE_SIZE * MAX_QUEUE_SCAN_PAGES ? 'scan_limit' : 'queue_empty',
+    reason: lastInstallerQuarantine
+      ? 'installer_quarantined'
+      : scanned >= QUEUE_SCAN_PAGE_SIZE * MAX_QUEUE_SCAN_PAGES
+        ? 'scan_limit'
+        : 'queue_empty',
+    ...(lastInstallerQuarantine || {}),
     reconciled,
     scanned,
     superseded,
