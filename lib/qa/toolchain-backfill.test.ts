@@ -110,9 +110,13 @@ describe('QA toolchain targeted retries', () => {
   it('retries Evernote and the pending HP validation on the process-close release', () => {
     for (const wingetId of ['Evernote.Evernote', 'HP.ImageAssistant']) {
       expect(shouldRetryTerminalToolchainCandidate(
-        QA_PSADT_TOOLCHAIN.packagerCommit,
+        '1490844284f84f807e207fb9970bddc499bbe446',
         { wingetId, status: 'failed' }
       )).toBe(true);
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(false);
     }
     expect(shouldRetryTerminalToolchainCandidate(
       '34189c6876f0fe4539b971ba1b9e962ff66cd259',
