@@ -124,6 +124,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
+    // PDFsam documents this exact MSI command for managed Windows deployment.
+    // WinGet currently publishes /quiet with only SKIPTHANKSPAGE, which can
+    // leave the WiX install inactive under non-interactive LocalSystem. Keep
+    // the vendor's full property set in both customer and QA packages.
+    wingetId: 'PDFsam.PDFsam',
+    reviewedInstallArgumentsOverride:
+      '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes',
+  },
+  {
     // Bitvise uses its own unattended switch rather than the generic /S that
     // WinGet currently publishes. The vendor documents -unat together with
     // explicit EULA acceptance for scripted installation.

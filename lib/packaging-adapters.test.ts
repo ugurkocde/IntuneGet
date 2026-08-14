@@ -274,6 +274,18 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses PDFsam\'s documented managed MSI command', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'PDFsam.PDFsam',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe(
+      '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes'
+    );
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('replaces Bitvise generic switches with its documented unattended mode', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Bitvise.SSH.Client',
