@@ -35,7 +35,7 @@ const canRunWindowsPowerShellPackager =
   ]).status === 0;
 
 function generateRegistryUninstallPackage(
-  installerType: 'inno' | 'burn',
+  installerType: 'exe' | 'inno' | 'burn',
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
   psadtConfig: unknown = {},
@@ -539,6 +539,23 @@ describe('PSADT vendor argument contract', () => {
 
       expect(generated).toContain(
         "-ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- MY_SPECIAL_MODE=2'"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'uses a reviewed vendor-specific unattended argument override',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Bitvise SSH Client',
+        [],
+        { reviewedInstallArgumentsOverride: '-unat -acceptEula' }
+      );
+
+      expect(generated).toContain("-ArgumentList '-unat -acceptEula'");
+      expect(generated).not.toContain(
+        "-ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'"
       );
     }
   );

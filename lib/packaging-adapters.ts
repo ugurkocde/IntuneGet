@@ -6,6 +6,7 @@ interface ApplicationPackagingAdapter {
   requiredInstallScope?: WingetScope;
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
+  reviewedInstallArgumentsOverride?: string;
   reviewedUninstallArguments?: readonly string[];
   reviewedUninstallProcessGuard?: Readonly<{
     processName: string;
@@ -101,6 +102,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // LocalSystem AppData profile, which otherwise rolls back with exit 1603.
     wingetId: 'AnalogDevices.LTspice',
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
+  },
+  {
+    // Bitvise uses its own unattended switch rather than the generic /S that
+    // WinGet currently publishes. The vendor documents -unat together with
+    // explicit EULA acceptance for scripted installation.
+    wingetId: 'Bitvise.SSH.Client',
+    reviewedInstallArgumentsOverride: '-unat -acceptEula',
+    reviewedUninstallArguments: ['-unat'],
   },
   {
     // Evernote's machine-wide NSIS installer can launch the desktop client
@@ -419,6 +428,7 @@ export function applyApplicationPackagingAdapter(
     // These internal lifecycle fields are never accepted from customer config.
     if (
       !config.preserveVendorInstallationOnUninstall &&
+      !config.reviewedInstallArgumentsOverride &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedUninstallProcessGuard &&
@@ -429,6 +439,7 @@ export function applyApplicationPackagingAdapter(
     return {
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
+      reviewedInstallArgumentsOverride: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedUninstallProcessGuard: undefined,
@@ -471,6 +482,13 @@ export function applyApplicationPackagingAdapter(
     }
   }
 
+  const reviewedInstallArgumentsOverride = adapter.reviewedInstallArgumentsOverride
+    ? normalizeReviewedArgument(
+        adapter.reviewedInstallArgumentsOverride,
+        adapter.wingetId
+      )
+    : undefined;
+
   const reviewedUninstallArguments = (config.reviewedUninstallArguments || []).map(
     (argument) => normalizeReviewedArgument(argument, adapter.wingetId)
   );
@@ -494,6 +512,7 @@ export function applyApplicationPackagingAdapter(
     ...config,
     processesToClose,
     reviewedInstallArguments,
+    reviewedInstallArgumentsOverride,
     reviewedUninstallArguments,
     reviewedUninstallProcessGuard: adapter.reviewedUninstallProcessGuard
       ? { ...adapter.reviewedUninstallProcessGuard }

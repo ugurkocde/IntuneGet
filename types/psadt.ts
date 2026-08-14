@@ -199,6 +199,11 @@ export interface PSADTConfig {
   // customer-facing free-form command surface.
   reviewedInstallArguments?: string[];
 
+  // Internal, reviewed replacement for manifest-derived silent arguments when
+  // a vendor documents a proprietary unattended command line. Application
+  // adapters populate this field; customers cannot supply it directly.
+  reviewedInstallArgumentsOverride?: string;
+
   // Internal, reviewed vendor arguments appended to an exact registered
   // uninstaller. Application adapters populate this field; it is intentionally
   // not exposed as a customer-facing free-form command surface.
@@ -330,6 +335,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   installCommand: undefined,
   uninstallCommand: undefined,
   reviewedInstallArguments: [],
+  reviewedInstallArgumentsOverride: undefined,
   reviewedUninstallArguments: [],
   reviewedUninstallProcessGuard: undefined,
 };

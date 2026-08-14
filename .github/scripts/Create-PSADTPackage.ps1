@@ -230,6 +230,20 @@ if ($psadtConfig.Contains('reviewedInstallArguments') -and
     }
 }
 
+$reviewedInstallArgumentsOverride = ''
+if ($psadtConfig.Contains('reviewedInstallArgumentsOverride') -and
+    $null -ne $psadtConfig['reviewedInstallArgumentsOverride']) {
+    if ($psadtConfig['reviewedInstallArgumentsOverride'] -isnot [string]) {
+        throw 'PSADT reviewedInstallArgumentsOverride must be a string.'
+    }
+    $reviewedInstallArgumentsOverride = $psadtConfig['reviewedInstallArgumentsOverride'].Trim()
+    if ([string]::IsNullOrWhiteSpace($reviewedInstallArgumentsOverride) -or
+        $reviewedInstallArgumentsOverride.Length -gt 256 -or
+        [regex]::IsMatch($reviewedInstallArgumentsOverride, '[\x00-\x1F\x7F]')) {
+        throw 'PSADT reviewedInstallArgumentsOverride must be a non-empty, bounded, single-line string.'
+    }
+}
+
 $reviewedUninstallArguments = @()
 if ($psadtConfig.Contains('reviewedUninstallArguments') -and
     $null -ne $psadtConfig['reviewedUninstallArguments']) {
@@ -794,7 +808,11 @@ function Get-PSADTAssetFileName {
 # Reviewed application adapters may append bounded vendor properties to the
 # manifest-derived command. Do this before quote encoding so MSI properties are
 # passed identically by QA and customer packages.
-$effectiveSilentSwitches = $SilentSwitches.Trim()
+$effectiveSilentSwitches = if ($reviewedInstallArgumentsOverride) {
+    $reviewedInstallArgumentsOverride
+} else {
+    $SilentSwitches.Trim()
+}
 foreach ($reviewedInstallArgument in $reviewedInstallArguments) {
     $argumentPattern = '(?i)(^|\s)' + [regex]::Escape($reviewedInstallArgument) + '(\s|$)'
     if ($effectiveSilentSwitches -notmatch $argumentPattern) {

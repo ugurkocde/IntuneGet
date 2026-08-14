@@ -169,6 +169,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('replaces Bitvise generic switches with its documented unattended mode', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Bitvise.SSH.Client',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe('-unat -acceptEula');
+    expect(adapted.reviewedUninstallArguments).toEqual(['-unat']);
+  });
+
   it('retains the shared WebView2 runtime while removing IntuneGet ownership', () => {
     expect(
       applyApplicationPackagingAdapter(
