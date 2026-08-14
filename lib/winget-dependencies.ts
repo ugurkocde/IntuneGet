@@ -77,6 +77,7 @@ export class WingetDependencyCompatibilityError extends Error {
     | 'user_scope_machine_dependencies'
     | 'user_scope_elevation_required'
     | 'trusted_installer_tuple_unavailable'
+    | 'unsupported_dependency_shape'
     | 'unreviewed_dependency';
 
   constructor(
@@ -85,6 +86,7 @@ export class WingetDependencyCompatibilityError extends Error {
       | 'user_scope_machine_dependencies'
       | 'user_scope_elevation_required'
       | 'trusted_installer_tuple_unavailable'
+      | 'unsupported_dependency_shape'
       | 'unreviewed_dependency' = 'user_scope_machine_dependencies'
   ) {
     super(message);
@@ -181,8 +183,9 @@ function ensureSupportedDependencyShape(
     ...(installer.externalDependencies || []).map((value) => `external dependency ${value}`),
   ];
   if (unsupported.length > 0) {
-    throw new Error(
-      `${packageIdentifier} declares unsupported dependencies: ${unsupported.join(', ')}`
+    throw new WingetDependencyCompatibilityError(
+      `${packageIdentifier} declares unsupported dependencies: ${unsupported.join(', ')}`,
+      'unsupported_dependency_shape'
     );
   }
 }

@@ -329,7 +329,10 @@ describe('resolveWingetPackageDependencies', () => {
       version: '1.0.0',
       architecture: 'x64',
       installerSha256: ROOT_SHA,
-    }, io)).rejects.toThrow('declares unsupported dependencies');
+    }, io)).rejects.toMatchObject({
+      blockCode: 'unsupported_dependency_shape',
+      message: expect.stringContaining('declares unsupported dependencies'),
+    });
   });
 
   it('refuses machine-wide prerequisites in a user-scope package', async () => {

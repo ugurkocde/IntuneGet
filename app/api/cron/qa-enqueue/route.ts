@@ -611,7 +611,14 @@ export async function GET(request: Request) {
               recipe?.installer_type || 'exe'
             );
             if (!installerUrl.startsWith('https://') || !installerSha256) {
-              throw new Error('resolved installer is missing a valid HTTPS URL or SHA-256');
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_manifest_installer_unavailable', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                reason: 'missing_trusted_installer_metadata',
+              });
+              return;
             }
 
             const architecture = selectedForVm.architecture;

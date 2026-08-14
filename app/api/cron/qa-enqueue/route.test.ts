@@ -604,6 +604,101 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
   });
 
+  it('persists an unsupported dependency shape without degrading polling', async () => {
+    const { client, candidateInserts, compatibilityBlocks, pollRunUpdates } =
+      createSupabaseStub({
+        demandBackfillApps: ['Feature.App'],
+        supportedApps: [
+          {
+            winget_id: 'Feature.App',
+            name: 'Feature App',
+            publisher: 'Contoso',
+            latest_version: '1.0.0',
+          },
+        ],
+      });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    resolveDependenciesMock.mockRejectedValueOnce(
+      new WingetDependencyCompatibilityError(
+        'Feature.App declares unsupported dependencies: Windows feature NetFx3',
+        'unsupported_dependency_shape'
+      )
+    );
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(compatibilityBlocks).toEqual([
+      expect.objectContaining({
+        winget_id: 'Feature.App',
+        block_code: 'unsupported_dependency_shape',
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({
+      status: 'succeeded',
+      unavailable_count: 1,
+      error_count: 0,
+    });
+  });
+
+  it('treats missing trusted installer metadata as unavailable, not a poll failure', async () => {
+    const { client, candidateInserts, pollRunUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Broken.Manifest'],
+      supportedApps: [
+        {
+          winget_id: 'Broken.Manifest',
+          name: 'Broken Manifest',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      ...resolvedManifest(),
+      manifest: {
+        InstallerType: 'nullsoft',
+        Installers: [
+          {
+            Architecture: 'x64',
+            InstallerUrl: '',
+            InstallerSha256: '',
+            InstallerType: 'nullsoft',
+          },
+        ],
+      },
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      checked: 1,
+      queued: 0,
+      unavailable: 1,
+      errorCount: 0,
+    });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveDependenciesMock).not.toHaveBeenCalled();
+    expect(pollRunUpdates[0]).toMatchObject({
+      status: 'succeeded',
+      unavailable_count: 1,
+      error_count: 0,
+    });
+  });
+
   it('does not queue an app payload that already passed under another PSADT profile', async () => {
     const { client, candidateInserts } = createSupabaseStub({
       demandBackfillApps: ['Covered.App'],
