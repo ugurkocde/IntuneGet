@@ -59,6 +59,24 @@ describe('application packaging adapters', () => {
         completionTimeoutMinutes: 10,
       },
     });
+    expect(
+      applyApplicationPackagingAdapter(
+        'Dell.DisplayAndPeripheralManager',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      processesToClose: expect.arrayContaining([
+        { name: 'DPM', description: 'Dell Display and Peripheral Manager' },
+        { name: 'DPMService', description: 'Dell Display and Peripheral Manager' },
+        { name: 'Dell.CoreServices.Client', description: 'Dell Core Services' },
+      ]),
+      reviewedExactUninstall: {
+        executablePath:
+          '%ProgramFiles%\\Dell\\Dell Display and Peripheral Manager\\Installer\\setup.exe',
+        arguments: ['/uninst', '/Silent'],
+        completionTimeoutMinutes: 20,
+      },
+    });
     for (const wingetId of [
       'PostgreSQL.PostgreSQL.9.6',
       'PostgreSQL.PostgreSQL.13',

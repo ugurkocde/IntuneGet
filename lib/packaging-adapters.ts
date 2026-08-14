@@ -163,6 +163,36 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // DDPM registers its private setup helper with interactive removal
+    // arguments. Replaying that ARP command from Intune leaves the exact
+    // product registration, services, and drivers installed. Stop the reviewed
+    // DDPM process family, then invoke the installed helper's unattended
+    // uninstall contract exactly. Customer packaging remains QA-gated, so a
+    // new version cannot inherit this lifecycle until isolated removal passes.
+    wingetId: 'Dell.DisplayAndPeripheralManager',
+    requiredProcessesToClose: [
+      { name: 'DDPM.Subagent', description: 'Dell Display and Peripheral Manager' },
+      { name: 'DDPM.Subagent.User', description: 'Dell Display and Peripheral Manager' },
+      { name: 'Dell.CoreServices.Client', description: 'Dell Core Services' },
+      { name: 'Dell.TechHub.Analytics.SubAgent', description: 'Dell TechHub' },
+      { name: 'Dell.TechHub.DataManager.SubAgent', description: 'Dell TechHub' },
+      { name: 'Dell.TechHub', description: 'Dell TechHub' },
+      { name: 'Dell.TechHub.Instrumentation.SubAgent', description: 'Dell TechHub' },
+      { name: 'Dell.TechHub.Instrumentation.UserProcess', description: 'Dell TechHub' },
+      { name: 'Dell.UCA.Manager', description: 'Dell Update' },
+      { name: 'Dell.Update.SubAgent', description: 'Dell Update' },
+      { name: 'DPM', description: 'Dell Display and Peripheral Manager' },
+      { name: 'DPMCrashHandler', description: 'Dell Display and Peripheral Manager' },
+      { name: 'DPMService', description: 'Dell Display and Peripheral Manager' },
+    ],
+    reviewedExactUninstall: {
+      executablePath:
+        '%ProgramFiles%\\Dell\\Dell Display and Peripheral Manager\\Installer\\setup.exe',
+      arguments: ['/uninst', '/Silent'],
+      completionTimeoutMinutes: 20,
+    },
+  },
+  {
     // Opera registers `opera.exe /uninstall`, but its current launcher expects
     // the double-dash uninstall verb for a non-interactive removal. Appending
     // unattended arguments to the registered slash command exits successfully
