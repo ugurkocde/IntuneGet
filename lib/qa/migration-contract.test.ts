@@ -283,6 +283,25 @@ describe('unsupported managed uninstall migration contract', () => {
   });
 });
 
+describe('CapCut managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260814142700_block_capcut_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks CapCut consistently across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'ByteDance.CapCut'");
+    expect(sql).toContain('https://github.com/microsoft/winget-pkgs/pull/413669');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
