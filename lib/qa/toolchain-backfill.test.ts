@@ -8,6 +8,10 @@ describe('QA toolchain targeted retries', () => {
       '404c9718a2c977722850bc9d70a02772a9bd1c7a',
       { wingetId: 'pdfsam.pdfsam', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'pdfsam.pdfsam', status: 'failed' }
+    )).toBe(true);
   });
 
   it('retries MEGAsync once with its reviewed all-users command', () => {

@@ -267,6 +267,9 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'PDFsam.PDFsam',
   ],
   'd67ec022c5edcd89b8d84edb958b4f1c494da5b5': [
+    // PDFsam's reviewed MSI command remains present in this cumulative
+    // packager release, so preserve its still-unconsumed bounded retry.
+    'PDFsam.PDFsam',
     // MEGAsync defaults silent NSIS installs to CurrentUser. This release
     // adds the vendor's /MULTIUSER switch for LocalSystem deployments.
     'Mega.MEGASync',
