@@ -540,6 +540,17 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Maestro Årsoppgjør 2025',
     registeredRegistryKey: '{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}',
   },
+  // Timely publishes the stable NSIS uninstall registry key as ProductCode
+  // `Memory`. It is not an MSI GUID, so the generic manifest conversion treats
+  // it as a display name and misses the vendor entry when background servicing
+  // changes unrelated ARP records at the same time. Bind the published key so
+  // install verification, the Intune marker, and removal all use one exact
+  // user-scoped identity.
+  'timely.memory': {
+    generatedDisplayName: 'Memory',
+    registeredDisplayName: 'Memory',
+    registeredRegistryKey: 'Memory',
+  },
 };
 
 export function resolveApplicationUninstallCommand(
