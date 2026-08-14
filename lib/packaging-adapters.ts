@@ -250,6 +250,22 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%SystemDrive%\\SWSetup\\HPImageAssistant',
   },
   {
+    // Google Updater is a shared system updater, not a conventional ARP app.
+    // Its enterprise installer can update an existing registration without
+    // creating a new uninstall entry, so ARP delta capture is not a reliable
+    // lifecycle identity. Verify Google's machine-wide payload and invoke the
+    // documented versioned updater command during managed removal.
+    wingetId: 'Google.GoogleUpdater',
+    reviewedManagedInstallDirectory:
+      '%ProgramFiles(x86)%\\Google\\GoogleUpdater',
+    reviewedManagedUninstall: {
+      executablePath:
+        '%ProgramFiles(x86)%\\Google\\GoogleUpdater\\<VERSION>\\updater.exe',
+      arguments: ['--uninstall', '--system'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // Visual Studio 2026 instances are owned by the Visual Studio Installer,
     // which intentionally creates several component registrations rather than
     // one ARP entry named after the bootstrapper. Use Microsoft's documented

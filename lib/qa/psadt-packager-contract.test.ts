@@ -41,7 +41,8 @@ function generateRegistryUninstallPackage(
   psadtConfig: unknown = {},
   packageDependencies: Array<Record<string, unknown>> = [],
   wingetId = 'IntuneGet.ContractTest',
-  uninstallDisplayName = displayName
+  uninstallDisplayName = displayName,
+  version = '1.0.0'
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -83,7 +84,7 @@ function generateRegistryUninstallPackage(
         INPUT_CALLBACK_URL: 'https://example.invalid/callback',
         INPUT_DISPLAY_NAME: displayName,
         INPUT_PUBLISHER: 'IntuneGet',
-        INPUT_VERSION: '1.0.0',
+        INPUT_VERSION: version,
         INPUT_WINGET_ID: wingetId,
         INPUT_INSTALLER_TYPE: installerType,
         INPUT_INSTALL_SCOPE: 'machine',
@@ -507,6 +508,67 @@ describe('PSADT vendor argument contract', () => {
       expect(uninstallFunction).not.toContain(
         'Remove-Item -LiteralPath $managedInstallDirectory'
       );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'resolves one validated package-version segment in a reviewed managed uninstaller',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Google Updater',
+        [],
+        {
+          reviewedManagedInstallDirectory:
+            '%ProgramFiles(x86)%\\Google\\GoogleUpdater',
+          reviewedManagedUninstall: {
+            executablePath:
+              '%ProgramFiles(x86)%\\Google\\GoogleUpdater\\<VERSION>\\updater.exe',
+            arguments: ['--uninstall', '--system'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Google.GoogleUpdater'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Google\\GoogleUpdater\\1.0.0\\updater.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$managedUninstallArguments = @('--uninstall', '--system')"
+      );
+      expect(uninstallFunction).not.toContain('<VERSION>');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects an unsafe package version used in a reviewed managed uninstaller path',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe Version App',
+          [],
+          {
+            reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
+            reviewedManagedUninstall: {
+              executablePath:
+                '%ProgramFiles%\\Example\\<VERSION>\\uninstall.exe',
+              arguments: ['/quiet'],
+              completionTimeoutMinutes: 5,
+            },
+          },
+          [],
+          'IntuneGet.UnsafeVersion',
+          'Unsafe Version App',
+          '..\\Windows'
+        )
+      ).toThrow('invalid version placeholder or package version');
     }
   );
 

@@ -134,6 +134,18 @@ describe('application packaging adapters', () => {
         .reviewedManagedInstallDirectory
     ).toBe('%SystemDrive%\\SWSetup\\HPImageAssistant');
     expect(
+      applyApplicationPackagingAdapter('Google.GoogleUpdater', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles(x86)%\\Google\\GoogleUpdater',
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Google\\GoogleUpdater\\<VERSION>\\updater.exe',
+        arguments: ['--uninstall', '--system'],
+        completionTimeoutMinutes: 5,
+      },
+    });
+    expect(
       applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.BuildTools',
         DEFAULT_PSADT_CONFIG

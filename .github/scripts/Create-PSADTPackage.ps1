@@ -487,6 +487,13 @@ if ($psadtConfig.Contains('reviewedManagedUninstall') -and
         throw 'PSADT reviewedManagedUninstall requires reviewedManagedInstallDirectory.'
     }
     $reviewedManagedUninstallExecutable = ([string]$rawManagedUninstall['executablePath']).Trim()
+    if ($reviewedManagedUninstallExecutable.Contains('<VERSION>')) {
+        if ([regex]::Matches($reviewedManagedUninstallExecutable, '<VERSION>').Count -ne 1 -or
+            $Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._+-]{0,127}$') {
+            throw 'PSADT reviewedManagedUninstall.executablePath contains an invalid version placeholder or package version.'
+        }
+        $reviewedManagedUninstallExecutable = $reviewedManagedUninstallExecutable.Replace('<VERSION>', $Version)
+    }
     if ($reviewedManagedUninstallExecutable.Length -gt 260 -or
         $reviewedManagedUninstallExecutable -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+\.exe$' -or
         @($reviewedManagedUninstallExecutable -split '\\') -contains '..') {

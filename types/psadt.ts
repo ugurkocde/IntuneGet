@@ -235,6 +235,9 @@ export interface PSADTConfig {
   // Application adapters are the only trusted source for this value.
   reviewedManagedInstallDirectory?: string;
   reviewedManagedUninstall?: {
+    // A reviewed adapter may use one literal <VERSION> path segment. The
+    // packager replaces it with the validated package version before emitting
+    // the PSADT script; customer-controlled configuration cannot supply it.
     executablePath: string;
     arguments: string[];
     completionTimeoutMinutes: number;
