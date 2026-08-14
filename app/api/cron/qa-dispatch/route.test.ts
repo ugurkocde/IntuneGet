@@ -91,6 +91,9 @@ function createSupabaseStub(
   const claimedIds: string[] = [];
   const claimAttemptIds: string[] = [];
   const rollbackIds: string[] = [];
+  const rollbackPayloads: Array<Record<string, unknown>> = [];
+  const terminalErrorIds: string[] = [];
+  const terminalErrorPayloads: Array<Record<string, unknown>> = [];
   const orFilters: string[] = [];
   const supersedePayloads: Array<Record<string, unknown>> = [];
   const queuePages = [queued, ...additionalPages];
@@ -164,9 +167,20 @@ function createSupabaseStub(
           }
 
           if (values.status === 'queued') {
+            rollbackPayloads.push(values);
             const builder = query({ data: null, error: null }) as Record<string, unknown>;
             builder.eq = vi.fn((column: string, value: string) => {
               if (column === 'id') rollbackIds.push(value);
+              return builder;
+            });
+            return builder;
+          }
+
+          if (values.status === 'error') {
+            terminalErrorPayloads.push(values);
+            const builder = query({ data: null, error: null }) as Record<string, unknown>;
+            builder.eq = vi.fn((column: string, value: string) => {
+              if (column === 'id') terminalErrorIds.push(value);
               return builder;
             });
             return builder;
@@ -184,6 +198,9 @@ function createSupabaseStub(
     claimedIds,
     claimAttemptIds,
     rollbackIds,
+    rollbackPayloads,
+    terminalErrorIds,
+    terminalErrorPayloads,
     orFilters,
   };
 }
@@ -402,6 +419,71 @@ describe('GET /api/cron/qa-dispatch', () => {
     await expect(GET(cronRequest())).rejects.toThrow('GitHub unavailable');
 
     expect(rollbackIds).toEqual([row.id]);
+  });
+
+  it('defers a retryable installer preflight and dispatches the next candidate', async () => {
+    const unavailable = candidate('catalog-default');
+    unavailable.id = testUuid(50);
+    const valid = candidate('catalog-default');
+    valid.id = testUuid(51);
+    const { client, claimedIds, rollbackIds, rollbackPayloads } = createSupabaseStub([
+      unavailable,
+      valid,
+    ]);
+    createServerClientMock.mockReturnValue(client);
+    dispatchQaCandidateMock
+      .mockRejectedValueOnce(new InstallerPreflightError(
+        'PREFLIGHT_UNAVAILABLE',
+        'Installer download returned HTTP 403',
+        true,
+      ))
+      .mockResolvedValueOnce(undefined);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ dispatched: true, candidateId: valid.id });
+    expect(claimedIds).toEqual([unavailable.id, valid.id]);
+    expect(rollbackIds).toEqual([unavailable.id]);
+    expect(rollbackPayloads).toContainEqual(expect.objectContaining({
+      status: 'queued',
+      attempts: 1,
+      enqueued_at: expect.any(String),
+    }));
+  });
+
+  it('terminates an exhausted installer preflight retry and continues dispatching', async () => {
+    const unavailable = candidate('catalog-default');
+    unavailable.id = testUuid(52);
+    unavailable.attempts = 1;
+    const valid = candidate('catalog-default');
+    valid.id = testUuid(53);
+    const { client, claimedIds, terminalErrorIds, terminalErrorPayloads } = createSupabaseStub([
+      unavailable,
+      valid,
+    ]);
+    createServerClientMock.mockReturnValue(client);
+    dispatchQaCandidateMock
+      .mockRejectedValueOnce(new InstallerPreflightError(
+        'PREFLIGHT_UNAVAILABLE',
+        'Installer download returned HTTP 403',
+        true,
+      ))
+      .mockResolvedValueOnce(undefined);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ dispatched: true, candidateId: valid.id });
+    expect(claimedIds).toEqual([unavailable.id, valid.id]);
+    expect(terminalErrorIds).toEqual([unavailable.id]);
+    expect(terminalErrorPayloads).toContainEqual(expect.objectContaining({
+      status: 'error',
+      attempts: 2,
+      finished_at: expect.any(String),
+    }));
   });
 
   it('supersedes an installer quarantined by the shared customer preflight', async () => {

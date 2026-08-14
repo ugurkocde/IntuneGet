@@ -95,6 +95,12 @@ export async function GET(request: Request) {
   let scanned = 0;
   let superseded = 0;
   let lastInstallerQuarantine: { candidateId: string; code: string } | null = null;
+  let lastInstallerUnavailable: {
+    candidateId: string;
+    code: string;
+    attempts: number;
+    exhausted: boolean;
+  } | null = null;
   const supersededAt = new Date().toISOString();
 
   for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
@@ -269,6 +275,53 @@ export async function GET(request: Request) {
           // high-priority candidate cannot starve unrelated applications.
           continue;
         }
+        if (error instanceof InstallerPreflightError && error.retryable) {
+          const deferredAt = new Date().toISOString();
+          const attempts = Number.isInteger(claimed.attempts)
+            ? claimed.attempts
+            : candidate.attempts + 1;
+          const exhausted = attempts >= MAX_ATTEMPTS;
+          const { error: deferError } = await supabase
+            .from('qa_candidates')
+            .update(exhausted
+              ? {
+                  status: 'error',
+                  attempts,
+                  finished_at: deferredAt,
+                  phase: null,
+                  phase_started_at: null,
+                  phase_updated_at: null,
+                  failure_summary:
+                    `The installer source remained unavailable after ${attempts} verification attempts. The app was not tested.`,
+                  updated_at: deferredAt,
+                }
+              : {
+                  status: 'queued',
+                  attempts,
+                  enqueued_at: deferredAt,
+                  dispatched_at: null,
+                  phase: null,
+                  phase_started_at: null,
+                  phase_updated_at: null,
+                  failure_summary:
+                    'The installer source is temporarily unavailable; retry scheduled behind other queued apps.',
+                  updated_at: deferredAt,
+                })
+            .eq('id', claimed.id)
+            .eq('status', 'dispatched');
+          if (deferError) throw deferError;
+          lastInstallerUnavailable = {
+            candidateId: claimed.id,
+            code: error.code,
+            attempts,
+            exhausted,
+          };
+          console.warn('QA installer preflight deferred', lastInstallerUnavailable);
+          // A transient publisher/CDN response must not block unrelated apps.
+          // Move the candidate behind the current queue (or terminate after the
+          // bounded retry limit) and continue within this dispatch tick.
+          continue;
+        }
         await supabase
           .from('qa_candidates')
           .update({
@@ -295,10 +348,13 @@ export async function GET(request: Request) {
     dispatched: false,
     reason: lastInstallerQuarantine
       ? 'installer_quarantined'
+      : lastInstallerUnavailable
+        ? 'installer_unavailable'
       : scanned >= QUEUE_SCAN_PAGE_SIZE * MAX_QUEUE_SCAN_PAGES
         ? 'scan_limit'
         : 'queue_empty',
     ...(lastInstallerQuarantine || {}),
+    ...(lastInstallerUnavailable || {}),
     reconciled,
     scanned,
     superseded,
