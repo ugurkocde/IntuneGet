@@ -43,20 +43,32 @@ const POSTGRESQL_PACKAGING_ADAPTER: ApplicationPackagingAdapter = {
   ],
 };
 
-const VISUAL_STUDIO_WINGET_IDS = [
-  'Microsoft.VisualStudio.BuildTools',
-  'Microsoft.VisualStudio.Community',
-  'Microsoft.VisualStudio.Enterprise',
-  'Microsoft.VisualStudio.Professional',
-  'Microsoft.VisualStudio.2019.BuildTools',
-  'Microsoft.VisualStudio.2019.Community',
-  'Microsoft.VisualStudio.2019.Enterprise',
-  'Microsoft.VisualStudio.2019.Professional',
-  'Microsoft.VisualStudio.2022.BuildTools',
-  'Microsoft.VisualStudio.2022.Community',
-  'Microsoft.VisualStudio.2022.Enterprise',
-  'Microsoft.VisualStudio.2022.Professional',
-] as const;
+const VISUAL_STUDIO_MANAGED_INSTALL_PATHS = {
+  'Microsoft.VisualStudio.BuildTools':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+  'Microsoft.VisualStudio.Community':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\Community',
+  'Microsoft.VisualStudio.Enterprise':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\Enterprise',
+  'Microsoft.VisualStudio.Professional':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\Professional',
+  'Microsoft.VisualStudio.2019.BuildTools':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\BuildTools',
+  'Microsoft.VisualStudio.2019.Community':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Community',
+  'Microsoft.VisualStudio.2019.Enterprise':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Enterprise',
+  'Microsoft.VisualStudio.2019.Professional':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Professional',
+  'Microsoft.VisualStudio.2022.BuildTools':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools',
+  'Microsoft.VisualStudio.2022.Community':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Community',
+  'Microsoft.VisualStudio.2022.Enterprise':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Enterprise',
+  'Microsoft.VisualStudio.2022.Professional':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Professional',
+} as const;
 
 const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
   'Microsoft.SQLServerManagementStudio.21',
@@ -266,28 +278,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
-    // Visual Studio 2026 instances are owned by the Visual Studio Installer,
-    // which intentionally creates several component registrations rather than
-    // one ARP entry named after the bootstrapper. Use Microsoft's documented
-    // instance path and setup.exe lifecycle instead of guessing among those
-    // registrations.
-    wingetId: 'Microsoft.VisualStudio.BuildTools',
-    reviewedManagedInstallDirectory:
-      '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
-    reviewedManagedUninstall: {
-      executablePath:
-        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
-      arguments: [
-        'uninstall',
-        '--installPath',
-        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
-        '--quiet',
-        '--norestart',
-      ],
-      completionTimeoutMinutes: 15,
-    },
-  },
-  {
     // EA Desktop's registered EAUninstall.exe helper is unattended, but it
     // leaves the product registration intact while the client or its
     // background service still owns the installation. Close the reviewed EA
@@ -351,15 +341,28 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
     reviewedMultiProductInstallMinimumCount: 10,
   },
-  ...VISUAL_STUDIO_WINGET_IDS.map((wingetId) => ({
-    wingetId,
-    reviewedUninstallArguments: ['--quiet', '--norestart'],
-    // Visual Studio's registered setup.exe command returns before its child
-    // installer engine has removed the exact product registration. Microsoft
-    // documents --wait for the bootstrapper only, not setup.exe, so retain
-    // registry-aware completion polling for this longer vendor lifecycle.
-    uninstallCompletionTimeoutMinutes: 15,
-  })),
+  ...Object.entries(VISUAL_STUDIO_MANAGED_INSTALL_PATHS).map(
+    ([wingetId, installPath]) => ({
+      // Visual Studio Installer instances create several component records,
+      // not one reliable ARP delta named after the bootstrapper. Verify the
+      // exact edition directory and use Microsoft's setup.exe instance
+      // lifecycle for every supported Visual Studio generation and edition.
+      wingetId,
+      reviewedManagedInstallDirectory: installPath,
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          installPath,
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    })
+  ),
   ...SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS.map((wingetId) => ({
     wingetId,
     // SSMS 21+ is serviced by the Visual Studio Installer. Its setup.exe
