@@ -273,6 +273,7 @@ export interface Database {
             | 'user_scope_machine_dependencies'
             | 'user_scope_elevation_required'
             | 'trusted_installer_tuple_unavailable'
+            | 'unsupported_dependency_shape'
             | 'unreviewed_dependency';
           detail: string;
           observed_at: string;

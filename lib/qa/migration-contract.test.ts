@@ -361,3 +361,18 @@ describe('QA package compatibility block expansion contract', () => {
     expect(sql).toContain("'unreviewed_dependency'");
   });
 });
+
+describe('unsupported dependency shape compatibility block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260814121500_block_unsupported_dependency_shapes.sql'
+    ),
+    'utf8'
+  );
+
+  it('keeps unsupported dependency shapes out of QA and customer packages', () => {
+    expect(sql).toContain('alter table public.qa_package_blocks');
+    expect(sql).toContain("'unsupported_dependency_shape'");
+  });
+});
