@@ -286,6 +286,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('selects MEGAsync all-users mode for LocalSystem deployment', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Mega.MEGASync',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe('/S /MULTIUSER');
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('replaces Bitvise generic switches with its documented unattended mode', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Bitvise.SSH.Client',

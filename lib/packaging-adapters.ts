@@ -133,6 +133,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes',
   },
   {
+    // MEGA's installer source makes silent installs current-user by default.
+    // Its reviewed /MULTIUSER option selects the AllUsers path required for
+    // non-interactive LocalSystem deployment and machine-wide detection.
+    wingetId: 'Mega.MEGASync',
+    reviewedInstallArgumentsOverride: '/S /MULTIUSER',
+  },
+  {
     // Bitvise uses its own unattended switch rather than the generic /S that
     // WinGet currently publishes. The vendor documents -unat together with
     // explicit EULA acceptance for scripted installation.
