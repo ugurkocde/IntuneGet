@@ -127,6 +127,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // CapCut registers a signed custom uninst.exe with no arguments. The bare
+    // command opens a confirmation window and cannot complete from Intune's
+    // non-interactive execution context. Close the desktop client first and
+    // exercise the vendor uninstaller's unattended switch in isolated QA
+    // before this package can qualify for customer deployment.
+    wingetId: 'ByteDance.CapCut',
+    requiredProcessesToClose: [
+      { name: 'CapCut', description: 'CapCut' },
+    ],
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     wingetId: 'SoftwareOK.Q-Dir',
     reviewedUninstallArguments: ['/silent', 'forall'],
   },

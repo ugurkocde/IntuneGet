@@ -39,6 +39,12 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['/S']);
     expect(
+      applyApplicationPackagingAdapter('ByteDance.CapCut', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      processesToClose: [{ name: 'CapCut', description: 'CapCut' }],
+      reviewedUninstallArguments: ['/S'],
+    });
+    expect(
       applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['/silent', 'forall']);
