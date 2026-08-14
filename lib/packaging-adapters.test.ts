@@ -35,6 +35,19 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Maestro 2025\'s reviewed embedded-MSI product key', () => {
+    expect(resolveApplicationUninstallCommand(
+      'MaestroSoft.MaestroAarsoppgjoer.2025',
+      'REGISTRY_UNINSTALL:Maestro Årsoppgjør 2025'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}:Maestro Årsoppgjør 2025'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'MaestroSoft.MaestroAarsoppgjoer.2025',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');

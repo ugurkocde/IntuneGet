@@ -462,6 +462,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'K-Lite Codec Pack Full',
     registeredRegistryKey: 'KLiteCodecPack_is1',
   },
+  // Maestro's signed EXE wraps an MSI whose authoritative ProductCode is not
+  // published in the WinGet manifest. The wrapper updates that existing ARP
+  // key rather than adding a new display-name entry. Bind the reviewed key so
+  // both customer packages and QA verify and remove the exact MSI product.
+  'maestrosoft.maestroaarsoppgjoer.2025': {
+    generatedDisplayName: 'Maestro Årsoppgjør 2025',
+    registeredDisplayName: 'Maestro Årsoppgjør 2025',
+    registeredRegistryKey: '{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}',
+  },
 };
 
 export function resolveApplicationUninstallCommand(
