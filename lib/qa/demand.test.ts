@@ -231,6 +231,55 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     ]);
   });
 
+  it('does not reactivate an installer source quarantined by dispatch preflight', async () => {
+    const input = demandInput();
+    const quarantineSummary =
+      'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.';
+    let candidateCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') {
+          return { select: vi.fn(() => query({ data: null, error: null })) };
+        }
+        if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
+        candidateCall++;
+        if (candidateCall === 1) return query({ data: null, error: null });
+        if (candidateCall === 2) {
+          return {
+            insert: vi.fn(() => query({
+              data: null,
+              error: { message: 'duplicate', code: '23505' },
+            })),
+          };
+        }
+        if (candidateCall === 3) return query({ data: null, error: null });
+        if (candidateCall === 4) {
+          return {
+            select: vi.fn(() => query({
+              data: {
+                id: 'candidate-quarantined',
+                status: 'superseded',
+                priority: 500,
+                failure_summary: quarantineSummary,
+              },
+              error: null,
+            })),
+          };
+        }
+        throw new Error('Quarantined candidate must not be updated');
+      }),
+    };
+
+    const result = await ensureQaDemand(client as never, input);
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      candidateId: 'candidate-quarantined',
+      failureSummary: quarantineSummary,
+    });
+    expect(candidateCall).toBe(4);
+  });
+
   it('joins the active payload test when a concurrent insert wins the race', async () => {
     const input = demandInput();
     let candidateCall = 0;

@@ -20,6 +20,7 @@ import {
   getPackageEligibilityBlocks,
   PACKAGE_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
+import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
@@ -291,6 +292,19 @@ export async function ensureQaDemand(
       candidateId: existing.id,
       state: 'failed',
       failureSummary: existing.failure_summary || 'This app did not pass the isolated installation test.',
+    };
+  }
+
+  if (
+    existing.status === 'superseded' &&
+    !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary)
+  ) {
+    return {
+      identity,
+      candidateId: existing.id,
+      state: 'failed',
+      failureSummary:
+        existing.failure_summary || 'This installer is no longer available for deployment.',
     };
   }
 
