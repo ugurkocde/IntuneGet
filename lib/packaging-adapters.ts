@@ -163,6 +163,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // REAPER registers an interactive uninstall command without a separate
+    // QuietUninstallString. Its vendor installer and uninstaller both accept
+    // the manifest's case-sensitive /S switch; without it, a SYSTEM removal
+    // waits behind the hidden uninstall wizard and leaves the ARP identity.
+    wingetId: 'Cockos.REAPER',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     wingetId: 'SoftwareOK.Q-Dir',
     reviewedUninstallArguments: ['/silent', 'forall'],
   },
