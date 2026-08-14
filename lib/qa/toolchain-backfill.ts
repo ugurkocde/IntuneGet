@@ -261,6 +261,11 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Adobe.CreativeCloud',
     'Elgato.StreamDeck',
   ],
+  '404c9718a2c977722850bc9d70a02772a9bd1c7a': [
+    // PDFsam's WinGet /quiet command stalled under LocalSystem. This release
+    // replaces it with the vendor-documented managed MSI property set.
+    'PDFsam.PDFsam',
+  ],
 };
 
 export function shouldRetryTerminalToolchainCandidate(

@@ -3,6 +3,13 @@ import { QA_PSADT_TOOLCHAIN } from './package-profile';
 import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries PDFsam once with its documented managed MSI command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'pdfsam.pdfsam', status: 'failed' }
+    )).toBe(true);
+  });
+
   it.each([
     'Microsoft.OfficeDeploymentTool',
     'Microsoft.VisualStudio.BuildTools',
