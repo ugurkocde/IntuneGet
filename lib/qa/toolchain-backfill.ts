@@ -266,6 +266,11 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // replaces it with the vendor-documented managed MSI property set.
     'PDFsam.PDFsam',
   ],
+  'd67ec022c5edcd89b8d84edb958b4f1c494da5b5': [
+    // MEGAsync defaults silent NSIS installs to CurrentUser. This release
+    // adds the vendor's /MULTIUSER switch for LocalSystem deployments.
+    'Mega.MEGASync',
+  ],
 };
 
 export function shouldRetryTerminalToolchainCandidate(

@@ -5,8 +5,15 @@ import { shouldRetryTerminalToolchainCandidate } from './toolchain-backfill';
 describe('QA toolchain targeted retries', () => {
   it('retries PDFsam once with its documented managed MSI command', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '404c9718a2c977722850bc9d70a02772a9bd1c7a',
       { wingetId: 'pdfsam.pdfsam', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries MEGAsync once with its reviewed all-users command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'mega.megasync', status: 'failed' }
     )).toBe(true);
   });
 
