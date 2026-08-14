@@ -593,6 +593,7 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
   const defaultNestedType = manifest.NestedInstallerType as string;
   const defaultNestedFiles = manifest.NestedInstallerFiles as WingetInstaller['NestedInstallerFiles'];
   const defaultScope = manifest.Scope as string;
+  const defaultElevationRequirement = manifest.ElevationRequirement as string;
   const defaultSwitches = manifest.InstallerSwitches;
   const defaultPlatform = manifest.Platform as string[];
   const defaultMinOS = manifest.MinimumOSVersion as string;
@@ -626,6 +627,9 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
                           defaultNestedFiles,
     Scope: (installer.Scope as WingetInstaller['Scope']) ||
            (defaultScope as WingetInstaller['Scope']),
+    ElevationRequirement:
+      (installer.ElevationRequirement as WingetInstaller['ElevationRequirement']) ||
+      (defaultElevationRequirement as WingetInstaller['ElevationRequirement']),
     // WinGet inherits installer switches per field. An installer-level Custom
     // value must not discard a root-level Silent value (Vivaldi is one example).
     InstallerSwitches: mergeInstallerSwitches(defaultSwitches, installer.InstallerSwitches),
@@ -768,6 +772,7 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
     nestedInstallerType: installer.NestedInstallerType,
     nestedInstallerPath: installer.NestedInstallerFiles?.[0]?.RelativeFilePath,
     scope: installer.Scope,
+    elevationRequirement: installer.ElevationRequirement,
     silentArgs,
     ...(normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes)
       ? { installerSuccessCodes: normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes) }

@@ -324,3 +324,21 @@ describe('QA candidate operator recovery migration contract', () => {
     expect(sql).toContain('to anon');
   });
 });
+
+describe('QA package compatibility block expansion contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260814085000_expand_qa_package_compatibility_blocks.sql'
+    ),
+    'utf8'
+  );
+
+  it('keeps every reviewed preflight incompatibility version-specific', () => {
+    expect(sql).toContain('alter table public.qa_package_blocks');
+    expect(sql).toContain("'user_scope_machine_dependencies'");
+    expect(sql).toContain("'user_scope_elevation_required'");
+    expect(sql).toContain("'trusted_installer_tuple_unavailable'");
+    expect(sql).toContain("'unreviewed_dependency'");
+  });
+});

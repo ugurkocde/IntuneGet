@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
 
 const { resolveWingetPackageDependenciesMock, getPackageEligibilityBlocksMock } = vi.hoisted(() => ({
   resolveWingetPackageDependenciesMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
 }));
 
-vi.mock('@/lib/winget-dependencies', () => ({
-  resolveWingetPackageDependencies: resolveWingetPackageDependenciesMock,
-}));
+vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/winget-dependencies')>();
+  return {
+    ...original,
+    resolveWingetPackageDependencies: resolveWingetPackageDependenciesMock,
+  };
+});
 
 vi.mock('@/lib/package-eligibility', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/package-eligibility')>();
@@ -386,5 +391,41 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       'Unreviewed package dependency'
     );
     expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('persists a reviewed compatibility block and returns a generic customer message', async () => {
+    const upsert = vi.fn(async () => ({ data: null, error: null }));
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_blocks') return { upsert };
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    };
+    resolveWingetPackageDependenciesMock.mockRejectedValue(
+      new WingetDependencyCompatibilityError(
+        'Example.App requires elevation in user scope.',
+        'user_scope_elevation_required'
+      )
+    );
+
+    const result = await ensureQaDemand(client as never, {
+      ...demandInput(),
+      installScope: 'user',
+    });
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      candidateId: null,
+      failureSummary: 'This app is not currently available for deployment.',
+    });
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      winget_id: 'Example.App',
+      version: '1.2.3',
+      architecture: 'x64',
+      installer_sha256: 'A'.repeat(64),
+      block_code: 'user_scope_elevation_required',
+    }), {
+      onConflict: 'winget_id,version,architecture,installer_sha256',
+    });
   });
 });

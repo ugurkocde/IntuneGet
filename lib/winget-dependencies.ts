@@ -75,6 +75,7 @@ const REVIEWED_DEPENDENCY_POLICIES: readonly ReviewedDependencyPolicy[] = [
 export class WingetDependencyCompatibilityError extends Error {
   readonly blockCode:
     | 'user_scope_machine_dependencies'
+    | 'user_scope_elevation_required'
     | 'trusted_installer_tuple_unavailable'
     | 'unreviewed_dependency';
 
@@ -82,6 +83,7 @@ export class WingetDependencyCompatibilityError extends Error {
     message: string,
     blockCode:
       | 'user_scope_machine_dependencies'
+      | 'user_scope_elevation_required'
       | 'trusted_installer_tuple_unavailable'
       | 'unreviewed_dependency' = 'user_scope_machine_dependencies'
   ) {
@@ -269,6 +271,16 @@ export async function resolveWingetPackageDependencies(
     );
   }
   ensureSupportedDependencyShape(input.wingetId, rootInstaller);
+  const rootScope = (input.installScope || rootInstaller.scope || '').trim().toLowerCase();
+  if (
+    rootScope === 'user' &&
+    rootInstaller.elevationRequirement === 'elevationRequired'
+  ) {
+    throw new WingetDependencyCompatibilityError(
+      `${input.wingetId} declares a user-scope installer that requires elevation and cannot run under the supported Intune user-install contract.`,
+      'user_scope_elevation_required'
+    );
+  }
   const rootDependencies = rootPackageDependencies(
     input.wingetId,
     rootInstaller.packageDependencies

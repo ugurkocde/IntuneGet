@@ -351,6 +351,27 @@ describe('resolveWingetPackageDependencies', () => {
     }, io)).rejects.toThrow('cannot be installed safely in user scope');
   });
 
+  it('refuses a user-scope installer that explicitly requires elevation', async () => {
+    const io = fixtureIo(
+      { 'Example.App@1.0.0': [installer({
+        scope: 'user',
+        elevationRequirement: 'elevationRequired',
+      })] },
+      {}
+    );
+
+    await expect(resolveWingetPackageDependencies({
+      wingetId: 'Example.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: ROOT_SHA,
+      installScope: 'user',
+    }, io)).rejects.toMatchObject({
+      blockCode: 'user_scope_elevation_required',
+      message: expect.stringContaining('requires elevation'),
+    });
+  });
+
   it('requires the exact trusted root installer hash', async () => {
     const io = fixtureIo(
       { 'Example.App@1.0.0': [installer()] },

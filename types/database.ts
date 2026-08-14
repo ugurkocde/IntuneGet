@@ -271,6 +271,7 @@ export interface Database {
           installer_sha256: string;
           block_code:
             | 'user_scope_machine_dependencies'
+            | 'user_scope_elevation_required'
             | 'trusted_installer_tuple_unavailable'
             | 'unreviewed_dependency';
           detail: string;

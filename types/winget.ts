@@ -36,6 +36,7 @@ export interface WingetInstaller {
   NestedInstallerType?: WingetInstallerType;
   NestedInstallerFiles?: Array<{ RelativeFilePath: string; PortableCommandAlias?: string }>;
   Scope?: WingetScope;
+  ElevationRequirement?: WingetElevationRequirement;
   InstallerSwitches?: WingetInstallerSwitches;
   InstallerSuccessCodes?: number[];
   ProductCode?: string;
@@ -110,6 +111,12 @@ export type WingetInstallerType =
 // Installation scope
 export type WingetScope = 'user' | 'machine';
 
+// Installer privilege behavior declared by WinGet manifests.
+export type WingetElevationRequirement =
+  | 'elevationRequired'
+  | 'elevationProhibited'
+  | 'elevatesSelf';
+
 // API response wrapper for search
 export interface WingetSearchResponse {
   Packages: WingetSearchResult[];
@@ -172,6 +179,7 @@ export interface NormalizedInstaller {
   nestedInstallerType?: WingetInstallerType;
   nestedInstallerPath?: string;
   scope?: WingetScope;
+  elevationRequirement?: WingetElevationRequirement;
   silentArgs?: string;
   installerSuccessCodes?: number[];
   productCode?: string;
