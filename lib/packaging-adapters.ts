@@ -465,12 +465,28 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Google Chrome',
   },
   // K-Lite inserts the version between the family and edition in DisplayName
-  // (for example `K-Lite Codec Pack 19.9.0 Full`). Its Inno registry key is
-  // stable and edition-specific, so use that exact vendor identity instead of
-  // weakening the generic display-name matcher to a broad prefix search.
+  // (for example `K-Lite Codec Pack 19.9.0 Standard`). All four mutually
+  // exclusive editions use the same stable Inno registry key, so use that
+  // exact vendor identity instead of weakening the generic display-name
+  // matcher to a broad prefix search that also captures unrelated servicing.
+  'codecguide.k-litecodecpack.basic': {
+    generatedDisplayName: 'K-Lite Codec Pack Basic',
+    registeredDisplayName: 'K-Lite Codec Pack Basic',
+    registeredRegistryKey: 'KLiteCodecPack_is1',
+  },
+  'codecguide.k-litecodecpack.standard': {
+    generatedDisplayName: 'K-Lite Codec Pack Standard',
+    registeredDisplayName: 'K-Lite Codec Pack Standard',
+    registeredRegistryKey: 'KLiteCodecPack_is1',
+  },
   'codecguide.k-litecodecpack.full': {
     generatedDisplayName: 'K-Lite Codec Pack Full',
     registeredDisplayName: 'K-Lite Codec Pack Full',
+    registeredRegistryKey: 'KLiteCodecPack_is1',
+  },
+  'codecguide.k-litecodecpack.mega': {
+    generatedDisplayName: 'K-Lite Codec Pack Mega',
+    registeredDisplayName: 'K-Lite Codec Pack Mega',
     registeredRegistryKey: 'KLiteCodecPack_is1',
   },
   // Maestro's signed EXE wraps an MSI whose authoritative ProductCode is not

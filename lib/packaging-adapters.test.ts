@@ -22,15 +22,17 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
-  it('uses K-Lite Full\'s exact stable Inno registry key', () => {
+  it('uses the exact stable Inno registry key for every K-Lite edition', () => {
+    for (const edition of ['Basic', 'Standard', 'Full', 'Mega']) {
+      expect(resolveApplicationUninstallCommand(
+        `CodecGuide.K-LiteCodecPack.${edition}`,
+        `REGISTRY_UNINSTALL:K-Lite Codec Pack ${edition}`
+      )).toBe(
+        `REGISTRY_UNINSTALL_KEY:KLiteCodecPack_is1:K-Lite Codec Pack ${edition}`
+      );
+    }
     expect(resolveApplicationUninstallCommand(
-      'CodecGuide.K-LiteCodecPack.Full',
-      'REGISTRY_UNINSTALL:K-Lite Codec Pack Full'
-    )).toBe(
-      'REGISTRY_UNINSTALL_KEY:KLiteCodecPack_is1:K-Lite Codec Pack Full'
-    );
-    expect(resolveApplicationUninstallCommand(
-      'CodecGuide.K-LiteCodecPack.Full',
+      'CodecGuide.K-LiteCodecPack.Standard',
       'vendor-uninstall.exe --custom'
     )).toBe('vendor-uninstall.exe --custom');
   });
