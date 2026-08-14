@@ -29,6 +29,7 @@ vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
 });
 
 import { GET } from './route';
+import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
 import { prioritizeToolchainBackfill } from '@/lib/qa/toolchain-backfill';
 import {
   buildQaPackageIdentity,
@@ -333,6 +334,18 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-enqueue', () => {
+  it('keeps an exact quarantined installer tuple dormant until its identity changes', () => {
+    expect(shouldReactivateSupersededCandidate(
+      'superseded',
+      'Installer source quarantined before QA: HASH_MISMATCH. Publisher bytes changed.',
+    )).toBe(false);
+    expect(shouldReactivateSupersededCandidate(
+      'superseded',
+      'Superseded before dispatch: wrong-toolchain.',
+    )).toBe(true);
+    expect(shouldReactivateSupersededCandidate('queued', null)).toBe(false);
+  });
+
   it('does not poll or mutate the queue while maintenance is paused', async () => {
     const { client, pollRunInserts, candidateInserts } = createSupabaseStub({ paused: true });
     createServerClientMock.mockReturnValue(client);

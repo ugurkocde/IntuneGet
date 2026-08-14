@@ -38,6 +38,7 @@ import {
   createWingetManifestClient,
   resolveWingetManifest,
 } from '@/lib/winget-sync-resolution.mjs';
+import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
 
 const BATCH_SIZE = 3;
 const POLL_STATE_ID = 'microsoft/winget-pkgs';
@@ -748,7 +749,7 @@ export async function GET(request: Request) {
               summary.alreadyKnown++;
               const { data: existing, error: existingError } = await supabase!
                 .from('qa_candidates')
-                .select('id, status')
+                .select('id, status, failure_summary')
                 .eq('winget_id', app.winget_id)
                 .eq('version', resolution.version)
                 .eq('architecture', architecture)
@@ -758,7 +759,10 @@ export async function GET(request: Request) {
               if (existingError) {
                 throw new Error(`Could not read the existing QA candidate: ${existingError.message}`);
               }
-              if (existing?.status === 'superseded') {
+              if (existing && shouldReactivateSupersededCandidate(
+                existing.status,
+                existing.failure_summary,
+              )) {
                 const { error: reactivateError } = await supabase!
                   .from('qa_candidates')
                   .update({
