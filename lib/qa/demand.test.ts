@@ -81,7 +81,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(result).toMatchObject({
       state: 'failed',
       candidateId: null,
-      failureSummary: 'This app is no longer available for deployment.',
+      failureSummary: 'This app is not available for automated deployment.',
     });
     expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalled();

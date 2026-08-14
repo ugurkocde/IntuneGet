@@ -291,7 +291,10 @@ export interface Database {
       package_eligibility_blocks: {
         Row: {
           winget_id: string;
-          block_code: 'vendor_retired' | 'upstream_removed';
+          block_code:
+            | 'vendor_retired'
+            | 'upstream_removed'
+            | 'unsupported_managed_uninstall';
           detail: string;
           source_url: string;
           blocked_at: string;

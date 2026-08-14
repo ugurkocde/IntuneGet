@@ -1,7 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
 
-export type PackageEligibilityBlockCode = 'vendor_retired' | 'upstream_removed';
+export type PackageEligibilityBlockCode =
+  | 'vendor_retired'
+  | 'upstream_removed'
+  | 'unsupported_managed_uninstall';
 
 export interface PackageEligibilityBlock {
   wingetId: string;
@@ -9,7 +12,7 @@ export interface PackageEligibilityBlock {
 }
 
 export const PACKAGE_UNAVAILABLE_MESSAGE =
-  'This app is no longer available for deployment.';
+  'This app is not available for automated deployment.';
 
 export async function getPackageEligibilityBlocks(
   supabase: SupabaseClient<Database>,

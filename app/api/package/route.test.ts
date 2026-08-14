@@ -418,7 +418,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(409);
     expect(body).toMatchObject({
       error: 'App unavailable',
-      message: 'This app is no longer available for deployment.',
+      message: 'This app is not available for automated deployment.',
       code: 'PACKAGE_UNAVAILABLE',
       package: { wingetId: 'Autodesk.DesktopApp' },
     });
