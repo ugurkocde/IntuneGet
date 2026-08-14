@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dispatchQaCandidate } from './dispatch';
 
+const { enforceInstallerPreflightMock } = vi.hoisted(() => ({
+  enforceInstallerPreflightMock: vi.fn(),
+}));
+
 vi.mock('@/lib/github-actions', () => ({
   getGitHubActionsConfig: () => ({
     token: 'secret-token',
@@ -10,10 +14,22 @@ vi.mock('@/lib/github-actions', () => ({
   }),
 }));
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock('@/lib/installer-preflight', () => ({
+  enforceInstallerPreflight: enforceInstallerPreflightMock,
+}));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  enforceInstallerPreflightMock.mockReset();
+});
 
 describe('dispatchQaCandidate', () => {
   it('dispatches only exact public candidate metadata', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
     await dispatchQaCandidate({
@@ -48,9 +64,24 @@ describe('dispatchQaCandidate', () => {
       packageProfileSha256: 'B'.repeat(64),
     });
     expect(JSON.stringify(body)).not.toContain('secret-token');
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith({
+      wingetId: 'Example.App',
+      version: '2.0.0',
+      architecture: 'x64',
+      installerUrl: 'https://example.test/setup.exe',
+      installerSha256: 'A'.repeat(64),
+      installerType: 'exe',
+      installScope: 'machine',
+      sourceType: 'winget',
+    });
   });
 
   it('surfaces a rejected GitHub dispatch', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('denied', { status: 403 })));
     await expect(
       dispatchQaCandidate({

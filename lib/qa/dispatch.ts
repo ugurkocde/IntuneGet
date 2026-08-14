@@ -1,4 +1,5 @@
 import { getGitHubActionsConfig } from '@/lib/github-actions';
+import { enforceInstallerPreflight } from '@/lib/installer-preflight';
 import type { Json } from '@/types/database';
 
 export interface QaDispatchCandidate {
@@ -17,6 +18,26 @@ export interface QaDispatchCandidate {
 }
 
 export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promise<void> {
+  const testConfig = candidate.test_config && typeof candidate.test_config === 'object' && !Array.isArray(candidate.test_config)
+    ? candidate.test_config as Record<string, Json | undefined>
+    : {};
+  const installScope = testConfig.scope === 'user' ? 'user' : 'machine';
+
+  // Keep the QA dispatch boundary aligned with customer packaging. A vendor
+  // can replace the bytes behind a mutable URL after WinGet publishes its
+  // manifest. Verify the exact URL/hash tuple before consuming the runner so
+  // QA never tests bytes that a customer upload would reject.
+  await enforceInstallerPreflight({
+    wingetId: candidate.winget_id,
+    version: candidate.version,
+    architecture: candidate.architecture,
+    installerUrl: candidate.installer_url,
+    installerSha256: candidate.installer_sha256,
+    installerType: candidate.installer_type,
+    installScope,
+    sourceType: 'winget',
+  });
+
   const config = getGitHubActionsConfig();
   const url = `https://api.github.com/repos/${config.owner}/${config.workflowsRepo}/actions/workflows/intune-qa.yml/dispatches`;
   const response = await fetch(url, {

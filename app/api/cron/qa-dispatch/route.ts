@@ -4,6 +4,7 @@ import { dispatchQaCandidate } from '@/lib/qa/dispatch';
 import { validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
 import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
@@ -238,6 +239,36 @@ export async function GET(request: Request) {
         });
       } catch (error) {
         console.error(`QA dispatch failed for candidate ${claimed.id}:`, error);
+        if (error instanceof InstallerPreflightError && !error.retryable) {
+          const quarantinedAt = new Date().toISOString();
+          const summary = `Installer source quarantined before QA: ${error.code}. ${error.message}`
+            .slice(0, 1000);
+          const { error: quarantineError } = await supabase
+            .from('qa_candidates')
+            .update({
+              status: 'superseded',
+              finished_at: quarantinedAt,
+              phase: 'preparing_package',
+              phase_started_at: claimed.dispatched_at || quarantinedAt,
+              phase_updated_at: quarantinedAt,
+              failure_summary: summary,
+              updated_at: quarantinedAt,
+            })
+            .in('id', [claimed.id])
+            .eq('status', 'dispatched')
+            .select('id');
+          if (quarantineError) throw quarantineError;
+          return NextResponse.json({
+            success: true,
+            dispatched: false,
+            reason: 'installer_quarantined',
+            candidateId: claimed.id,
+            code: error.code,
+            reconciled,
+            scanned,
+            superseded: superseded + 1,
+          });
+        }
         await supabase
           .from('qa_candidates')
           .update({

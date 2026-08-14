@@ -9,6 +9,7 @@ vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock })
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
 
 import { GET } from './route';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { buildQaPackageIdentity } from '@/lib/qa/package-profile';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
@@ -401,6 +402,33 @@ describe('GET /api/cron/qa-dispatch', () => {
     await expect(GET(cronRequest())).rejects.toThrow('GitHub unavailable');
 
     expect(rollbackIds).toEqual([row.id]);
+  });
+
+  it('supersedes an installer quarantined by the shared customer preflight', async () => {
+    const row = candidate('catalog-default');
+    const { client, supersededIds, rollbackIds } = createSupabaseStub([row]);
+    createServerClientMock.mockReturnValue(client);
+    dispatchQaCandidateMock.mockRejectedValueOnce(new InstallerPreflightError(
+      'HASH_MISMATCH',
+      'The publisher currently serves different bytes for this version.',
+      false,
+      'B'.repeat(64),
+    ));
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      dispatched: false,
+      reason: 'installer_quarantined',
+      candidateId: row.id,
+      code: 'HASH_MISMATCH',
+      superseded: 1,
+    });
+    expect(supersededIds).toEqual([row.id]);
+    expect(rollbackIds).toEqual([]);
   });
 
   it('does not claim anything when superseding an invalid profile fails', async () => {
