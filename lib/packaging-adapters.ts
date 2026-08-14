@@ -159,6 +159,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Link Controller remains active in the notification area after its UI is
+    // closed, and its optional camera helper can hold the Inno installation
+    // directory open. The silent uninstaller then exits without removing the
+    // exact ARP registration. Close only Insta360's reviewed process family
+    // through PSADT before invoking the captured vendor uninstaller.
+    wingetId: 'Insta360.Link.Controller',
+    requiredProcessesToClose: [
+      { name: 'Insta360 Link Controller', description: 'Insta360 Link Controller' },
+      { name: 'VirtualCameraService', description: 'Insta360 Virtual Camera' },
+      { name: 'Insta360LinkDriver', description: 'Insta360 Link driver' },
+    ],
+  },
+  {
     // AnyDesk's ARP entry can invoke its interactive removal path, which exits
     // without removing the product under Intune's non-interactive SYSTEM
     // context. AnyDesk documents this exact CLI contract for automated silent

@@ -133,6 +133,14 @@ describe('application packaging adapters', () => {
         .processesToClose
     ).toEqual([{ name: 'Evernote', description: 'Evernote' }]);
     expect(
+      applyApplicationPackagingAdapter('Insta360.Link.Controller', DEFAULT_PSADT_CONFIG)
+        .processesToClose
+    ).toEqual([
+      { name: 'Insta360 Link Controller', description: 'Insta360 Link Controller' },
+      { name: 'VirtualCameraService', description: 'Insta360 Virtual Camera' },
+      { name: 'Insta360LinkDriver', description: 'Insta360 Link driver' },
+    ]);
+    expect(
       applyApplicationPackagingAdapter('Opera.Opera', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
