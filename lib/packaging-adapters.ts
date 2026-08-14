@@ -172,6 +172,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Logitech's own removal guidance requires the SetPoint notification-area
+    // client to be exited first. Under non-interactive LocalSystem the generic
+    // NSIS /S uninstaller otherwise removes part of the product but leaves the
+    // SetPoint 6.90 ARP identity and payload behind. Close the reviewed SetPoint
+    // client family through PSADT before invoking the captured vendor removal.
+    wingetId: 'Logitech.SetPoint',
+    requiredProcessesToClose: [
+      { name: 'SetPoint', description: 'Logitech SetPoint' },
+      { name: 'SetPointII', description: 'Logitech SetPoint' },
+      { name: 'KHALMNPR', description: 'Logitech SetPoint device service' },
+    ],
+  },
+  {
     // AnyDesk's ARP entry can invoke its interactive removal path, which exits
     // without removing the product under Intune's non-interactive SYSTEM
     // context. AnyDesk documents this exact CLI contract for automated silent

@@ -141,6 +141,14 @@ describe('application packaging adapters', () => {
       { name: 'Insta360LinkDriver', description: 'Insta360 Link driver' },
     ]);
     expect(
+      applyApplicationPackagingAdapter('Logitech.SetPoint', DEFAULT_PSADT_CONFIG)
+        .processesToClose
+    ).toEqual([
+      { name: 'SetPoint', description: 'Logitech SetPoint' },
+      { name: 'SetPointII', description: 'Logitech SetPoint' },
+      { name: 'KHALMNPR', description: 'Logitech SetPoint device service' },
+    ]);
+    expect(
       applyApplicationPackagingAdapter('Opera.Opera', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       processesToClose: [{ name: 'opera', description: 'Opera browser' }],
