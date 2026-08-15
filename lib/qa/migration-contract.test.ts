@@ -348,6 +348,25 @@ describe('Firezone managed uninstall block migration contract', () => {
   });
 });
 
+describe('AOMEI managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260815054000_block_aomei_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks AOMEI consistently across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'AOMEI.PartitionAssistant'");
+    expect(sql).toContain('https://www.diskpart.com/help/install-and-uninstall.html');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
