@@ -393,6 +393,18 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses the documented InstallShield forwarding form for Sonos', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Sonos.Controller',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe(
+      '/s /v"/qn /norestart REBOOT=ReallySuppress"'
+    );
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('selects MEGAsync all-users mode for LocalSystem deployment', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Mega.MEGASync',

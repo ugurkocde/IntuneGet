@@ -136,6 +136,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes',
   },
   {
+    // Sonos ships a Basic MSI inside an InstallShield setup launcher. The
+    // current WinGet switches pass /quiet and /norestart as separate /V
+    // arguments, which the 90.0 launcher rejected with MSI 1619 under
+    // LocalSystem. Revenera documents a single quoted /v payload for reliably
+    // forwarding multiple MSI options through setup.exe. Use that exact form
+    // for both QA and customer Intune packages.
+    wingetId: 'Sonos.Controller',
+    reviewedInstallArgumentsOverride:
+      '/s /v"/qn /norestart REBOOT=ReallySuppress"',
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.
