@@ -1624,6 +1624,51 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'bypasses empty registered EXE paths when an exact MSI product code is available',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'MSI Empty Path Contract',
+        [],
+        {},
+        [],
+        'IntuneGet.MsiEmptyPathContract',
+        'MSI Empty Path Contract',
+        '1.0.0',
+        'REGISTRY_UNINSTALL_PRODUCT:{8D48EC0B-C512-43E6-BA0E-3876353DF7C2}:MSI Empty Path Contract'
+      );
+      const uninstallStart = generated.indexOf('function Uninstall-ADTDeployment');
+      const uninstallEnd = generated.indexOf('function Repair-ADTDeployment', uninstallStart);
+      const uninstall = generated.slice(uninstallStart, uninstallEnd);
+      const exactMsiBranch = uninstall.indexOf('if ($capturedMsiProductCode) {');
+      const registeredExeParsing = uninstall.indexOf(
+        '$registeredUninstallProperty = if ($hasQuietUninstall)'
+      );
+
+      expect(exactMsiBranch).toBeGreaterThan(-1);
+      expect(registeredExeParsing).toBeGreaterThan(exactMsiBranch);
+      expect(uninstall.slice(exactMsiBranch, registeredExeParsing)).toContain(
+        "Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode"
+      );
+      expect(uninstall.slice(exactMsiBranch, registeredExeParsing)).not.toContain(
+        'Split-Path'
+      );
+
+      const hostedMsiBranch = hostedPackager.indexOf('if ($capturedMsiProductCode) {');
+      const hostedExeParsing = hostedPackager.indexOf(
+        "$registeredUninstallProperty = if ($hasQuietUninstall) { 'QuietUninstallString' } else { 'UninstallString' }",
+        hostedMsiBranch
+      );
+      expect(hostedMsiBranch).toBeGreaterThan(-1);
+      expect(hostedExeParsing).toBeGreaterThan(hostedMsiBranch);
+      expect(hostedPackager.slice(hostedMsiBranch, hostedExeParsing)).not.toContain(
+        'Split-Path'
+      );
+    },
+    30_000
+  );
+
   it('keeps non-MSI fallback visible, non-WindowsInstaller, and fail-closed', () => {
     expect(packager).toContain(
       "$allowContainsFallback = '$registeredInstallerTypeLower' -notin @('msi', 'wix')"
