@@ -893,8 +893,9 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(generated).toContain(
-        '$embeddedMsiExtractArguments = \'/S /x /b"\' + $embeddedMsiExtractDir + \'" /v"/qb"\''
+        '$embeddedMsiExtractArguments = \'/S /x /b"\' + $embeddedMsiExtractDir + \'" /v"/qn"\''
       );
+      expect(generated).not.toContain('/v"/qb"');
       expect(generated).toContain(
         "if ($embeddedMsiFiles.Count -ne 1 -or $embeddedMsiFiles[0].Name -ine 'Sonos.msi')"
       );
