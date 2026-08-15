@@ -451,6 +451,28 @@ describe('Yandex Browser managed uninstall block migration contract', () => {
   });
 });
 
+describe('Lark EXE managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260815235000_block_lark_exe_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the interactive Lark EXE while preserving the enterprise MSI route', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'ByteDance.Lark'");
+    expect(sql).toContain('ByteDance.Lark.MSI');
+    expect(sql).toContain(
+      'https://www.larksuite.com/hc/en-US/articles/360048487868-deploy-lark-by-using-microsoft-installer'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
