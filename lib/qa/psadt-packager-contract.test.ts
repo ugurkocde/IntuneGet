@@ -43,7 +43,8 @@ function generateRegistryUninstallPackage(
   wingetId = 'IntuneGet.ContractTest',
   uninstallDisplayName = displayName,
   version = '1.0.0',
-  uninstallCommand = `REGISTRY_UNINSTALL:${uninstallDisplayName}`
+  uninstallCommand = `REGISTRY_UNINSTALL:${uninstallDisplayName}`,
+  silentSwitches = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -89,7 +90,7 @@ function generateRegistryUninstallPackage(
         INPUT_WINGET_ID: wingetId,
         INPUT_INSTALLER_TYPE: installerType,
         INPUT_INSTALL_SCOPE: 'machine',
-        INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+        INPUT_SILENT_SWITCHES: silentSwitches,
         INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
         INPUT_PACKAGE_DEPENDENCIES: JSON.stringify(packageDependencies),
         INPUT_UNINSTALL_COMMAND: uninstallCommand,
@@ -164,6 +165,38 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'runs install4j uninstallers unattended when the registry exposes only UninstallString',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Snapform Viewer',
+        [],
+        {},
+        [],
+        'Ringler.SnapformViewer',
+        'Snapform Viewer',
+        '1.8.7',
+        'REGISTRY_UNINSTALL_KEY:2841-5017-1617-4151:Snapform Viewer',
+        '-q -Dinstall4j.suppressUnattendedReboot=true'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallLeaf -ieq 'uninstaller.exe' -and $registeredUninstallParentLeaf -ieq '.install4j'"
+      );
+      expect(uninstallFunction).toContain(
+        "foreach ($argument in @('-q', '-Dinstall4j.suppressUnattendedReboot=true'))"
+      );
+      expect(uninstallFunction).toContain(
+        '$additionalUninstallArguments += $argument'
+      );
+    }
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'retains reviewed shared runtimes and removes only the IntuneGet marker',
     () => {
