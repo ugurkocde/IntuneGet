@@ -109,6 +109,22 @@ describe('application packaging adapters', () => {
       processesToClose: [{ name: 'Dropbox', description: 'Dropbox' }],
     });
     expect(
+      applyApplicationPackagingAdapter(
+        'AOMEI.PartitionAssistant',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedUninstallArguments: [
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        '/SP-',
+      ],
+      processesToClose: [
+        { name: 'PartAssist', description: 'AOMEI Partition Assistant' },
+      ],
+    });
+    expect(
       applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedExactUninstall: {
