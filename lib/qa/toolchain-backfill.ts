@@ -602,6 +602,26 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // /qb path stalled under LocalSystem before the MSI could be installed.
     'Sonos.Controller',
   ],
+  '81ad189d7e51026bd15681264f774f498429f526': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    // Retry Sonos through the documented InstallShield administrative-image
+    // path. The previous /x command entered uninstall mode on the current
+    // launcher and returned Windows Installer error 1605.
+    'Sonos.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

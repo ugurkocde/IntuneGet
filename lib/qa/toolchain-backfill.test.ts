@@ -35,13 +35,22 @@ describe('QA toolchain targeted retries', () => {
     );
   });
 
-  it('does not repeat the consumed .NET Framework retry in the Sonos release', () => {
+  it('does not repeat the consumed .NET Framework retry in the Sonos releases', () => {
     expect(terminalToolchainRetryTargets(
       '5569c16d136f464cbc014f40c70645414c601751'
     )).toContain('Microsoft.DotNet.Framework.Runtime');
     expect(terminalToolchainRetryTargets(
       QA_PSADT_TOOLCHAIN.packagerCommit
     )).not.toContain('Microsoft.DotNet.Framework.Runtime');
+  });
+
+  it('carries Sonos into the administrative-image retry after failed extraction', () => {
+    expect(terminalToolchainRetryTargets(
+      'e6dfe920d82e0b62c5d5e420fb603f61acdb5a42'
+    )).toContain('Sonos.Controller');
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Sonos.Controller');
   });
 
   it('retries PDFsam once with its documented managed MSI command', () => {
