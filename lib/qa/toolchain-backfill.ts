@@ -486,6 +486,24 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // arguments. The shared packager now applies its documented unattended mode.
     'Ringler.SnapformViewer',
   ],
+  'cc143c874f2e84f06097cb199ad9998344040ded': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    // These MSI packages registered an authoritative ProductCode while their
+    // parsed executable uninstall path was empty. The shared packager now
+    // reaches the MSI branch before attempting any EXE path normalization.
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

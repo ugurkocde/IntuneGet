@@ -13,6 +13,8 @@ describe('QA toolchain targeted retries', () => {
       'Mega.MEGASync',
       'AOMEI.PartitionAssistant',
       'Ringler.SnapformViewer',
+      'Cisco.Jabber',
+      'IPEVO.Visualizer',
     ]));
 
     targets.length = 0;
@@ -23,6 +25,8 @@ describe('QA toolchain targeted retries', () => {
         'Mega.MEGASync',
         'AOMEI.PartitionAssistant',
         'Ringler.SnapformViewer',
+        'Cisco.Jabber',
+        'IPEVO.Visualizer',
       ])
     );
   });
@@ -446,6 +450,16 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'ringler.snapformviewer', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it.each([
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+  ])('retries %s after bypassing empty EXE path parsing for exact MSI removal', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
     )).toBe(true);
   });
 
