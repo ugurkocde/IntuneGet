@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7c63f08735a32d428068d9e7fd467830096250a1',
+  packagerCommit: 'e6dfe920d82e0b62c5d5e420fb603f61acdb5a42',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -85,6 +85,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // adapter path. Preserve its passing result and every unrelated pass while
   // the Sonos-specific embedded-MSI lifecycle rolls out.
   '5569c16d136f464cbc014f40c70645414c601751',
+  // The headless-extraction correction changes only the reviewed Sonos
+  // adapter. Preserve Power Automate Desktop and all unrelated passing runs.
+  '7c63f08735a32d428068d9e7fd467830096250a1',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

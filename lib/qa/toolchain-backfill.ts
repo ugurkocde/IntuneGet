@@ -583,6 +583,25 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // its exact product identity, and installs it through PSADT.
     'Sonos.Controller',
   ],
+  'e6dfe920d82e0b62c5d5e420fb603f61acdb5a42': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    // Retry Sonos with fully headless embedded-MSI extraction. The previous
+    // /qb path stalled under LocalSystem before the MSI could be installed.
+    'Sonos.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
