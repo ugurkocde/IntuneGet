@@ -407,6 +407,13 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Horizon Client after suppressing Burn uninstall restarts', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'OMNISSA.HORIZONCLIENT', status: 'failed' }
+    )).toBe(true);
+  });
+
   it('still rebuilds a non-terminal stale candidate', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

@@ -405,6 +405,22 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // custom message boxes, restarts, and the startup prompt under SYSTEM.
     'AOMEI.PartitionAssistant',
   ],
+  '02f93d590887282aca0037412c8786785ddc6486': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    // Horizon Client's registered Burn helper omitted restart suppression and
+    // shut down the device during removal. The shared packager now guarantees
+    // the complete unattended Burn lifecycle for QA and customer packages.
+    'Omnissa.HorizonClient',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
