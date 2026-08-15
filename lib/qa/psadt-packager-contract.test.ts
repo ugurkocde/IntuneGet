@@ -872,6 +872,71 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'extracts and validates a reviewed InstallShield MSI instead of installing the launcher',
+    () => {
+      const productCode = '{6FB7DAEC-5DAD-491E-9951-4684423F291C}';
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Sonos',
+        [],
+        {
+          reviewedInstallShieldMsiExtraction: {
+            expectedMsiFileName: 'Sonos.msi',
+          },
+        },
+        [],
+        'Sonos.Controller',
+        'Sonos',
+        '90.0.77070',
+        `REGISTRY_UNINSTALL_PRODUCT:${productCode}:Sonos`,
+        '/S /V/quiet /V/norestart'
+      );
+
+      expect(generated).toContain(
+        '$embeddedMsiExtractArguments = \'/S /x /b"\' + $embeddedMsiExtractDir + \'" /v"/qb"\''
+      );
+      expect(generated).toContain(
+        "if ($embeddedMsiFiles.Count -ne 1 -or $embeddedMsiFiles[0].Name -ine 'Sonos.msi')"
+      );
+      expect(generated).toContain(
+        `$expectedEmbeddedMsiProductCode = '${productCode}'`
+      );
+      expect(generated).toContain(
+        "Start-ADTMsiProcess -Action 'Install' -FilePath $embeddedMsiPath -AdditionalArgumentList 'REBOOT=ReallySuppress'"
+      );
+      expect(generated).toContain(
+        'Remove-Item -LiteralPath $embeddedMsiExtractDir -Recurse -Force'
+      );
+      expect(generated).not.toContain(
+        "-ArgumentList '/S /V/quiet /V/norestart' -WindowStyle Hidden"
+      );
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects unsafe or ambiguous reviewed InstallShield MSI extraction contracts',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage('exe', 'Unsafe Embedded MSI App', [], {
+          reviewedInstallShieldMsiExtraction: {
+            expectedMsiFileName: '..\\payload.msi',
+          },
+        })
+      ).toThrow('expectedMsiFileName must be a safe literal MSI filename');
+
+      expect(() =>
+        generateRegistryUninstallPackage('exe', 'Ambiguous Embedded MSI App', [], {
+          reviewedInstallShieldMsiExtraction: {
+            expectedMsiFileName: 'payload.msi',
+          },
+        })
+      ).toThrow('requires an exact manifest MSI product code');
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects an unbounded reviewed install argument surface',
     () => {
       expect(() => generateRegistryUninstallPackage(

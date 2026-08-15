@@ -393,15 +393,17 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
-  it('uses the documented InstallShield forwarding form for Sonos', () => {
+  it('uses the reviewed embedded-MSI lifecycle for Sonos', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Sonos.Controller',
-      DEFAULT_PSADT_CONFIG
+      { ...DEFAULT_PSADT_CONFIG, installCommand: 'customer override' }
     );
 
-    expect(adapted.reviewedInstallArgumentsOverride).toBe(
-      '/s /v"/qn /norestart REBOOT=ReallySuppress"'
-    );
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+    expect(adapted.reviewedInstallShieldMsiExtraction).toEqual({
+      expectedMsiFileName: 'Sonos.msi',
+    });
+    expect(adapted.installCommand).toBeUndefined();
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
@@ -474,6 +476,9 @@ describe('application packaging adapters', () => {
         valueName: 'Release',
         minimumDword: 1,
       },
+      reviewedInstallShieldMsiExtraction: {
+        expectedMsiFileName: 'customer-controlled.msi',
+      },
       reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
       reviewedManagedInstallEvidenceFile: '%ProgramFiles%\\Example\\app.exe',
       reviewedManagedInstallCompletionProcess:
@@ -495,6 +500,7 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
     expect(adapted.reviewedRegistryInstallEvidence).toBeUndefined();
+    expect(adapted.reviewedInstallShieldMsiExtraction).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
     expect(adapted.reviewedManagedInstallEvidenceFile).toBeUndefined();
     expect(adapted.reviewedManagedInstallCompletionProcess).toBeUndefined();

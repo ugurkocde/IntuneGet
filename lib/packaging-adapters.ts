@@ -7,6 +7,9 @@ interface ApplicationPackagingAdapter {
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedInstallArgumentsOverride?: string;
+  reviewedInstallShieldMsiExtraction?: Readonly<{
+    expectedMsiFileName: string;
+  }>;
   reviewedUninstallArguments?: readonly string[];
   reviewedUninstallProcessGuard?: Readonly<{
     processName: string;
@@ -141,15 +144,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes',
   },
   {
-    // Sonos ships a Basic MSI inside an InstallShield setup launcher. The
-    // current WinGet switches pass /quiet and /norestart as separate /V
-    // arguments, which the 90.0 launcher rejected with MSI 1619 under
-    // LocalSystem. Revenera documents a single quoted /v payload for reliably
-    // forwarding multiple MSI options through setup.exe. Use that exact form
-    // for both QA and customer Intune packages.
+    // Sonos' compressed InstallShield launcher does not reliably install in a
+    // non-interactive LocalSystem session. Extract its embedded MSI in the
+    // target context, validate the MSI against the manifest-owned product
+    // identity, and install that MSI through PSADT for both QA and customers.
     wingetId: 'Sonos.Controller',
-    reviewedInstallArgumentsOverride:
-      '/s /v"/qn /norestart REBOOT=ReallySuppress"',
+    reviewedInstallShieldMsiExtraction: {
+      expectedMsiFileName: 'Sonos.msi',
+    },
   },
   {
     // MEGA's installer source makes silent installs current-user by default.
@@ -736,6 +738,7 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedInstallArgumentsOverride &&
+      !config.reviewedInstallShieldMsiExtraction &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedRegistryInstallEvidence &&
@@ -751,6 +754,7 @@ export function applyApplicationPackagingAdapter(
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedInstallArgumentsOverride: undefined,
+      reviewedInstallShieldMsiExtraction: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedRegistryInstallEvidence: undefined,
@@ -828,6 +832,12 @@ export function applyApplicationPackagingAdapter(
     processesToClose,
     reviewedInstallArguments,
     reviewedInstallArgumentsOverride,
+    installCommand: adapter.reviewedInstallShieldMsiExtraction
+      ? undefined
+      : config.installCommand,
+    reviewedInstallShieldMsiExtraction: adapter.reviewedInstallShieldMsiExtraction
+      ? { ...adapter.reviewedInstallShieldMsiExtraction }
+      : undefined,
     reviewedUninstallArguments,
     reviewedUninstallProcessGuard: adapter.reviewedUninstallProcessGuard
       ? { ...adapter.reviewedUninstallProcessGuard }

@@ -244,6 +244,35 @@ if ($psadtConfig.Contains('reviewedInstallArgumentsOverride') -and
     }
 }
 
+$reviewedInstallShieldMsiExtractionConfigured = $false
+$reviewedInstallShieldMsiExpectedFileName = ''
+if ($psadtConfig.Contains('reviewedInstallShieldMsiExtraction') -and
+    $null -ne $psadtConfig['reviewedInstallShieldMsiExtraction']) {
+    $rawInstallShieldMsiExtraction = $psadtConfig['reviewedInstallShieldMsiExtraction']
+    if ($rawInstallShieldMsiExtraction -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedInstallShieldMsiExtraction must be a JSON object.'
+    }
+    foreach ($installShieldExtractionKey in $rawInstallShieldMsiExtraction.Keys) {
+        if ([string]$installShieldExtractionKey -notin @('expectedMsiFileName')) {
+            throw "PSADT reviewedInstallShieldMsiExtraction contains an unsupported property: $installShieldExtractionKey"
+        }
+    }
+    if (-not $rawInstallShieldMsiExtraction.Contains('expectedMsiFileName') -or
+        $rawInstallShieldMsiExtraction['expectedMsiFileName'] -isnot [string]) {
+        throw 'PSADT reviewedInstallShieldMsiExtraction must include expectedMsiFileName as a string.'
+    }
+    $reviewedInstallShieldMsiExpectedFileName =
+        ([string]$rawInstallShieldMsiExtraction['expectedMsiFileName']).Trim()
+    if ([string]::IsNullOrWhiteSpace($reviewedInstallShieldMsiExpectedFileName) -or
+        $reviewedInstallShieldMsiExpectedFileName.Length -gt 128 -or
+        [System.IO.Path]::GetFileName($reviewedInstallShieldMsiExpectedFileName) -ne $reviewedInstallShieldMsiExpectedFileName -or
+        $reviewedInstallShieldMsiExpectedFileName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._()-]*\.msi$' -or
+        $reviewedInstallShieldMsiExpectedFileName.Contains('..')) {
+        throw 'PSADT reviewedInstallShieldMsiExtraction expectedMsiFileName must be a safe literal MSI filename.'
+    }
+    $reviewedInstallShieldMsiExtractionConfigured = $true
+}
+
 $reviewedUninstallArguments = @()
 if ($psadtConfig.Contains('reviewedUninstallArguments') -and
     $null -ne $psadtConfig['reviewedUninstallArguments']) {
@@ -966,6 +995,7 @@ $reviewedExactUninstallArgumentsLiteral = @(
 ) -join ', '
 $reviewedRegistryInstallEvidenceProviderPathEscaped = $reviewedRegistryInstallEvidenceProviderPath -replace "'", "''"
 $reviewedRegistryInstallEvidenceValueNameEscaped = $reviewedRegistryInstallEvidenceValueName -replace "'", "''"
+$reviewedInstallShieldMsiExpectedFileNameEscaped = $reviewedInstallShieldMsiExpectedFileName -replace "'", "''"
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherSingleQuoteEscaped = $Publisher -replace "'", "''"
@@ -1243,6 +1273,20 @@ if ($reviewedRegistryInstallEvidenceConfigured) {
         throw 'PSADT reviewedRegistryInstallEvidence requires a machine-scope registry uninstall package.'
     }
     Write-Host "Using reviewed registry installation evidence: $reviewedRegistryInstallEvidenceKeyPath"
+}
+
+if ($reviewedInstallShieldMsiExtractionConfigured) {
+    if ($IsUserScope -or $installerTypeLower -ne 'exe' -or $fileExtension -ne '.exe') {
+        throw 'PSADT reviewedInstallShieldMsiExtraction requires a machine-scope EXE package.'
+    }
+    if (-not $useRegistryUninstall -or
+        $registryUninstallProductCode -notmatch '^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$') {
+        throw 'PSADT reviewedInstallShieldMsiExtraction requires an exact manifest MSI product code.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
+        throw 'PSADT reviewedInstallShieldMsiExtraction cannot be combined with a custom install command.'
+    }
+    Write-Host "Using reviewed InstallShield embedded-MSI lifecycle: $reviewedInstallShieldMsiExpectedFileName"
 }
 
 if ($useRegistryUninstall) {
@@ -1972,8 +2016,56 @@ if ($removeExistingInstall) {
     )
 }
 
-# Generate install command - custom override takes precedence over installer type synthesis
-if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
+# Generate install command. Reviewed extraction adapters take precedence over
+# generic launcher synthesis; application adapters remove customer overrides.
+if ($reviewedInstallShieldMsiExtractionConfigured) {
+    $lines += @(
+        '    # Extract the reviewed embedded MSI in the target context; never run the vendor launcher as the installer.'
+        '    $embeddedMsiExtractDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_EmbeddedMsi_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
+        '    $null = New-Item -Path $embeddedMsiExtractDir -ItemType Directory -Force'
+        '    try {'
+        '        $embeddedMsiExtractArguments = ''/S /x /b"'' + $embeddedMsiExtractDir + ''" /v"/qb"'''
+        '        Write-ADTLogEntry -Message "Extracting reviewed embedded MSI to a bounded temporary directory." -Severity ''Info'' -Source ''Install-ADTDeployment'''
+        '        Start-ADTProcess -FilePath $installerPath -ArgumentList $embeddedMsiExtractArguments -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 5) -TimeoutAction Stop'
+        '        $embeddedMsiFiles = @(Get-ChildItem -LiteralPath $embeddedMsiExtractDir -Filter ''*.msi'' -File -Recurse -ErrorAction Stop)'
+        "        if (`$embeddedMsiFiles.Count -ne 1 -or `$embeddedMsiFiles[0].Name -ine '$reviewedInstallShieldMsiExpectedFileNameEscaped') {"
+        "            throw 'Reviewed InstallShield extraction did not produce exactly one $reviewedInstallShieldMsiExpectedFileNameEscaped file.'"
+        '        }'
+        '        $embeddedMsiPath = $embeddedMsiFiles[0].FullName'
+        "        `$expectedEmbeddedMsiProductCode = '$registryUninstallProductCode'"
+        '        $embeddedMsiInstaller = $null'
+        '        $embeddedMsiDatabase = $null'
+        '        $embeddedMsiView = $null'
+        '        $embeddedMsiRecord = $null'
+        '        try {'
+        '            $embeddedMsiInstaller = New-Object -ComObject WindowsInstaller.Installer'
+        '            $embeddedMsiDatabase = $embeddedMsiInstaller.GetType().InvokeMember(''OpenDatabase'', [System.Reflection.BindingFlags]::InvokeMethod, $null, $embeddedMsiInstaller, @($embeddedMsiPath, 0))'
+        '            $embeddedMsiView = $embeddedMsiDatabase.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = ''ProductCode''")'
+        '            [void]$embeddedMsiView.Execute()'
+        '            $embeddedMsiRecord = $embeddedMsiView.Fetch()'
+        '            $embeddedMsiProductCode = if ($embeddedMsiRecord) { [string]$embeddedMsiRecord.StringData(1) } else { $null }'
+        '        }'
+        '        finally {'
+        '            if ($embeddedMsiView) { try { [void]$embeddedMsiView.Close() } catch { } }'
+        '            foreach ($embeddedMsiComObject in @($embeddedMsiRecord, $embeddedMsiView, $embeddedMsiDatabase, $embeddedMsiInstaller)) {'
+        '                if ($embeddedMsiComObject -and [System.Runtime.InteropServices.Marshal]::IsComObject($embeddedMsiComObject)) {'
+        '                    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($embeddedMsiComObject)'
+        '                }'
+        '            }'
+        '        }'
+        '        if (-not [string]::Equals($embeddedMsiProductCode, $expectedEmbeddedMsiProductCode, [System.StringComparison]::OrdinalIgnoreCase)) {'
+        '            throw "Extracted MSI product code [$embeddedMsiProductCode] does not match the manifest identity [$expectedEmbeddedMsiProductCode]."'
+        '        }'
+        '        Write-ADTLogEntry -Message "Validated the reviewed embedded MSI product identity; installing through PSADT." -Severity ''Info'' -Source ''Install-ADTDeployment'''
+        '        Start-ADTMsiProcess -Action ''Install'' -FilePath $embeddedMsiPath -AdditionalArgumentList ''REBOOT=ReallySuppress'''
+        '    }'
+        '    finally {'
+        '        if (Test-Path -LiteralPath $embeddedMsiExtractDir) {'
+        '            Remove-Item -LiteralPath $embeddedMsiExtractDir -Recurse -Force -ErrorAction SilentlyContinue'
+        '        }'
+        '    }'
+    )
+} elseif (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
     Write-Host "Using custom install command override from PSADT config"
     $lines += @(
         '    # Custom install command override (user-specified)'
