@@ -360,7 +360,12 @@ describe('PSADT vendor argument contract', () => {
           reviewedExactUninstall: {
             executablePath:
               '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
-            arguments: ['/SILENT'],
+            arguments: [
+              '/SILENT',
+              '/SUPPRESSMSGBOXES',
+              '/NORESTART',
+              '/SP-',
+            ],
             completionTimeoutMinutes: 5,
           },
         },
@@ -376,13 +381,13 @@ describe('PSADT vendor argument contract', () => {
         "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe')"
       );
       expect(uninstallFunction).toContain(
-        "$registeredUninstallArguments = @('/SILENT')"
+        "$registeredUninstallArguments = @('/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-')"
       );
       expect(uninstallFunction).toContain(
         "if (-not $useReviewedExactUninstall -and -not $isVivaldiUninstall"
       );
       expect(uninstallFunction).not.toContain(
-        "$registeredUninstallArguments = @('/SILENT', '/VERYSILENT'"
+        "$registeredUninstallArguments = @('/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/VERYSILENT'"
       );
     }
   );

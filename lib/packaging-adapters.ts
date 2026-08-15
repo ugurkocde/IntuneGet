@@ -163,10 +163,10 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
-    // AOMEI registers /SILENT as its quiet uninstall contract. Replacing it
-    // with generic Inno switches or NSIS-style /S leaves the product
-    // registration behind. Close the reviewed desktop process through PSADT
-    // and preserve the installed vendor command for QA and customer packages.
+    // AOMEI registers /SILENT as its quiet uninstall contract, but its custom
+    // prompts still require Inno message-box and restart suppression under
+    // SYSTEM. Preserve /SILENT and add the companion unattended switches; the
+    // generic normalization path must not replace the registered quiet mode.
     wingetId: 'AOMEI.PartitionAssistant',
     requiredProcessesToClose: [
       { name: 'PartAssist', description: 'AOMEI Partition Assistant' },
@@ -174,7 +174,7 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedExactUninstall: {
       executablePath:
         '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
-      arguments: ['/SILENT'],
+      arguments: ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'],
       completionTimeoutMinutes: 5,
     },
   },

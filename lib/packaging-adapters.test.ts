@@ -117,7 +117,7 @@ describe('application packaging adapters', () => {
       reviewedExactUninstall: {
         executablePath:
           '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
-        arguments: ['/SILENT'],
+        arguments: ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'],
         completionTimeoutMinutes: 5,
       },
       processesToClose: [
