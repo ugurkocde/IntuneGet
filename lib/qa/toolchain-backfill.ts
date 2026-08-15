@@ -455,6 +455,22 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // confirmation UI. This release appends --force-uninstall for one retry.
     'Ecosia.EcosiaBrowser',
   ],
+  'af4dfb94c9109ca598abc16a4b8cad57f6790066': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Omnissa.HorizonClient',
+    // IntelliJ publishes a stable, versioned non-MSI ProductCode. Preserve it
+    // as the exact ARP registry key for QA and customer package lifecycle.
+    'JetBrains.IntelliJIDEA.Ultimate',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

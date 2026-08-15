@@ -13,7 +13,7 @@ describe('QA toolchain targeted retries', () => {
       'Mega.MEGASync',
       'AOMEI.PartitionAssistant',
       'Omnissa.HorizonClient',
-      'Ecosia.EcosiaBrowser',
+      'JetBrains.IntelliJIDEA.Ultimate',
     ]));
 
     targets.length = 0;
@@ -24,7 +24,7 @@ describe('QA toolchain targeted retries', () => {
         'Mega.MEGASync',
         'AOMEI.PartitionAssistant',
         'Omnissa.HorizonClient',
-        'Ecosia.EcosiaBrowser',
+        'JetBrains.IntelliJIDEA.Ultimate',
       ])
     );
   });
@@ -420,8 +420,19 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Ecosia once with Chromium silent removal', () => {
     expect(shouldRetryTerminalToolchainCandidate(
+      '94c8f81e38ac180048f86dbf2df7f987fa448676',
+      { wingetId: 'ECOSIA.ECOSIABROWSER', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'ECOSIA.ECOSIABROWSER', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries IntelliJ Ultimate with its exact named ARP key', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'jetbrains.intellijidea.ultimate', status: 'failed' }
     )).toBe(true);
   });
 
