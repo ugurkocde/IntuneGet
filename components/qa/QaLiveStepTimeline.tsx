@@ -9,6 +9,7 @@ import {
   RotateCcw,
   SearchCheck,
   Send,
+  ShieldCheck,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,6 +27,13 @@ interface TimelineStep {
 }
 
 const STEPS: TimelineStep[] = [
+  {
+    phase: 'scanning_installer',
+    label: 'Security scan',
+    description: 'Check the verified installer hash against the VirusTotal database.',
+    tasks: ['Query 70+ security vendors by SHA-256', 'Record the reputation verdict'],
+    Icon: ShieldCheck,
+  },
   {
     phase: 'preparing_package',
     label: 'Prepare the package',

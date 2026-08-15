@@ -4,12 +4,12 @@ import { createServerClient } from '@/lib/supabase';
 import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
 import { getQaPipelineControl, type QaPipelineControl } from '@/lib/qa/pipeline-control';
 import type { Json } from '@/types/database';
-import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome } from '@/types/qa';
+import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome, QaVirusTotalStatus } from '@/types/qa';
 
 const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
 export const QA_LIVE_RECENT_RESULT_COLUMNS =
-  'winget_id, package_profile_sha256, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds';
+  'winget_id, package_profile_sha256, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds, virustotal_status';
 
 interface CandidateRow {
   id: string;
@@ -56,6 +56,7 @@ interface ResultRow {
   outcome: string;
   tested_at_utc: string;
   overall_duration_seconds?: number | null;
+  virustotal_status?: string | null;
 }
 
 interface AppRow {
@@ -80,6 +81,7 @@ export interface QaLiveSnapshotInput {
 
 const VALID_PHASES = new Set<QaLivePhase>([
   'queued',
+  'scanning_installer',
   'preparing_package',
   'restoring_vm',
   'installing',
@@ -92,6 +94,12 @@ const LIVE_ACTIVITY_TARGET = /^(?:%(?:PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMDA
 
 function architecture(value: string): QaArchitecture {
   return value === 'x86' || value === 'arm64' ? value : 'x64';
+}
+
+function virusTotalStatus(value: string | null | undefined): QaVirusTotalStatus | null {
+  return value === 'clean' || value === 'flagged' || value === 'not_found' || value === 'error' || value === 'skipped'
+    ? value
+    : null;
 }
 
 function latestRecentResultPerRelease(results: ResultRow[]): ResultRow[] {
@@ -377,6 +385,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       outcome: result.outcome === 'Passed' ? 'Passed' : ('Failed' as QaOutcome),
       testedAtUtc: result.tested_at_utc,
       durationSeconds: result.overall_duration_seconds ?? null,
+      virusTotalStatus: virusTotalStatus(result.virustotal_status),
     })),
   };
 }

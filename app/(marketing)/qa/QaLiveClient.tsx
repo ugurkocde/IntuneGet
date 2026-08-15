@@ -11,7 +11,9 @@ import {
   Monitor,
   Radio,
   Server,
+  ShieldAlert,
   ShieldCheck,
+  ShieldQuestion,
   XCircle,
 } from 'lucide-react';
 import { AppIcon } from '@/components/AppIcon';
@@ -29,7 +31,7 @@ import {
   getQaPhasePresentation,
 } from '@/lib/qa/presentation';
 import { cn } from '@/lib/utils';
-import type { QaLivePhase, QaLiveResponse } from '@/types/qa';
+import type { QaLivePhase, QaLiveResponse, QaVirusTotalStatus } from '@/types/qa';
 
 function healthTone(state: string): StatusTone {
   if (state === 'healthy' || state === 'testing') return 'success';
@@ -47,6 +49,7 @@ function schedulerIssueLabel(issue: QaLiveResponse['scheduler']['issue']): strin
 
 function QaPhaseLabel({ phase }: { phase: QaLivePhase }) {
   if (phase === 'queued') return <T>Queued</T>;
+  if (phase === 'scanning_installer') return <T>Checking installer reputation</T>;
   if (phase === 'preparing_package') return <T>Preparing package</T>;
   if (phase === 'restoring_vm') return <T>Restoring golden VM</T>;
   if (phase === 'installing') return <T>Installing</T>;
@@ -72,6 +75,34 @@ function QaResultStatus({ outcome }: { outcome: 'Passed' | 'Failed' }) {
       <T>{outcome}</T>
     </span>
   );
+}
+
+function QaVirusTotalCell({ status }: { status: QaVirusTotalStatus | null }) {
+  if (status === 'clean') {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-status-success">
+        <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <T>Clean</T>
+      </span>
+    );
+  }
+  if (status === 'flagged') {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-status-error">
+        <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <T>Flagged</T>
+      </span>
+    );
+  }
+  if (status === 'not_found') {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
+        <ShieldQuestion className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <T>Not analyzed</T>
+      </span>
+    );
+  }
+  return <span className="text-xs text-text-muted" aria-hidden="true">—</span>;
 }
 
 function resultEdgeClass(outcome: 'Passed' | 'Failed'): string {
@@ -515,7 +546,12 @@ function DashboardContent() {
                         {formatRelativeTime(item.testedAtUtc, data.serverTime) ?? <T>Test time unavailable</T>}
                       </span>
                     </span>
-                    <QaResultStatus outcome={item.outcome} />
+                    <span className="flex flex-col items-end gap-1">
+                      <QaResultStatus outcome={item.outcome} />
+                      {item.virusTotalStatus === 'clean' || item.virusTotalStatus === 'flagged' ? (
+                        <QaVirusTotalCell status={item.virusTotalStatus} />
+                      ) : null}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -526,6 +562,7 @@ function DashboardContent() {
                     <tr>
                       <th className="px-6 py-3 font-medium"><T>Application</T></th>
                       <th className="px-3 py-3 font-medium"><T>Result</T></th>
+                      <th className="px-3 py-3 font-medium"><T>VirusTotal</T></th>
                       <th className="px-3 py-3 font-medium"><T>Duration</T></th>
                       <th className="px-6 py-3 font-medium"><T>Tested</T></th>
                     </tr>
@@ -560,6 +597,9 @@ function DashboardContent() {
                         </td>
                         <td className="px-3 py-3">
                           <QaResultStatus outcome={item.outcome} />
+                        </td>
+                        <td className="px-3 py-3">
+                          <QaVirusTotalCell status={item.virusTotalStatus} />
                         </td>
                         <td className="px-3 py-3 font-mono text-xs text-text-secondary">{formatQaDuration(item.durationSeconds)}</td>
                         <td className="whitespace-nowrap px-6 py-3 text-xs text-text-muted">

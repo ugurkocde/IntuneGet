@@ -56,6 +56,8 @@ const QA_COLUMNS = [
   'relevant_event_count', 'environment', 'effective_configuration', 'qa_schema_version', 'synced_at',
   'test_level', 'package_profile_sha256', 'psadt_version', 'psadt_template_sha256',
   'psadt_config_sha256', 'detection_rules_sha256', 'packager_commit', 'package_content_sha256',
+  'virustotal_status', 'virustotal_malicious', 'virustotal_suspicious',
+  'virustotal_total_engines', 'virustotal_scanned_at_utc',
 ];
 
 /** Fetch every row of a table in pages (Supabase caps a single request at 1000). */
@@ -127,7 +129,9 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
         qa_schema_version INTEGER NOT NULL,
         synced_at TEXT NOT NULL, test_level TEXT NOT NULL, package_profile_sha256 TEXT,
         psadt_version TEXT, psadt_template_sha256 TEXT, psadt_config_sha256 TEXT,
-        detection_rules_sha256 TEXT, packager_commit TEXT, package_content_sha256 TEXT
+        detection_rules_sha256 TEXT, packager_commit TEXT, package_content_sha256 TEXT,
+        virustotal_status TEXT, virustotal_malicious INTEGER, virustotal_suspicious INTEGER,
+        virustotal_total_engines INTEGER, virustotal_scanned_at_utc TEXT
       );
     `);
 
@@ -157,13 +161,15 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
        uninstall_command, detection, phase_results, changes, relevant_event_count,
        environment, effective_configuration, qa_schema_version, synced_at, test_level, package_profile_sha256,
        psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256,
-       packager_commit, package_content_sha256)
+       packager_commit, package_content_sha256, virustotal_status, virustotal_malicious,
+       virustotal_suspicious, virustotal_total_engines, virustotal_scanned_at_utc)
       VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,@installer_sha256,
        @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
        @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
        @environment,@effective_configuration,@qa_schema_version,@synced_at,@test_level,@package_profile_sha256,
        @psadt_version,@psadt_template_sha256,@psadt_config_sha256,@detection_rules_sha256,
-       @packager_commit,@package_content_sha256)`);
+       @packager_commit,@package_content_sha256,@virustotal_status,@virustotal_malicious,
+       @virustotal_suspicious,@virustotal_total_engines,@virustotal_scanned_at_utc)`);
 
     const tx = db.transaction(() => {
       for (const a of curatedApps) {
@@ -230,6 +236,11 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           detection_rules_sha256: q.detection_rules_sha256 ?? null,
           packager_commit: q.packager_commit ?? null,
           package_content_sha256: q.package_content_sha256 ?? null,
+          virustotal_status: q.virustotal_status ?? null,
+          virustotal_malicious: q.virustotal_malicious ?? null,
+          virustotal_suspicious: q.virustotal_suspicious ?? null,
+          virustotal_total_engines: q.virustotal_total_engines ?? null,
+          virustotal_scanned_at_utc: q.virustotal_scanned_at_utc ?? null,
         });
       }
     });

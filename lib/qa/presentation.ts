@@ -1,6 +1,7 @@
 import type { QaLivePhase } from '@/types/qa';
 
 const QA_PHASES: Array<{ id: QaLivePhase; label: string }> = [
+  { id: 'scanning_installer', label: 'Checking installer reputation' },
   { id: 'preparing_package', label: 'Preparing package' },
   { id: 'restoring_vm', label: 'Restoring golden VM' },
   { id: 'installing', label: 'Installing' },

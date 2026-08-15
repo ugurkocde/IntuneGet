@@ -55,6 +55,11 @@ export interface Database {
           github_run_id: string | null;
           github_run_attempt: number | null;
           qa_schema_version: number;
+          virustotal_status: string | null;
+          virustotal_malicious: number | null;
+          virustotal_suspicious: number | null;
+          virustotal_total_engines: number | null;
+          virustotal_scanned_at_utc: string | null;
           synced_at: string;
         };
         Insert: {
@@ -88,6 +93,11 @@ export interface Database {
           github_run_id?: string | null;
           github_run_attempt?: number | null;
           qa_schema_version?: number;
+          virustotal_status?: string | null;
+          virustotal_malicious?: number | null;
+          virustotal_suspicious?: number | null;
+          virustotal_total_engines?: number | null;
+          virustotal_scanned_at_utc?: string | null;
           synced_at?: string;
         };
         Update: {
@@ -121,6 +131,11 @@ export interface Database {
           github_run_id?: string | null;
           github_run_attempt?: number | null;
           qa_schema_version?: number;
+          virustotal_status?: string | null;
+          virustotal_malicious?: number | null;
+          virustotal_suspicious?: number | null;
+          virustotal_total_engines?: number | null;
+          virustotal_scanned_at_utc?: string | null;
           synced_at?: string;
         };
         Relationships: GenericRelationship[];
@@ -255,6 +270,11 @@ export interface Database {
           package_content_sha256: string;
           github_run_id: string | null;
           github_run_url: string | null;
+          virustotal_status: string | null;
+          virustotal_malicious: number | null;
+          virustotal_suspicious: number | null;
+          virustotal_total_engines: number | null;
+          virustotal_scanned_at_utc: string | null;
           synced_at: string;
         };
         Insert: Omit<Database['public']['Tables']['qa_package_results']['Row'], 'synced_at'> & {

@@ -10,9 +10,18 @@ describe('QA presentation helpers', () => {
   it('maps an active phase to a compact step presentation', () => {
     expect(getQaPhasePresentation('installing')).toEqual({
       label: 'Installing',
-      step: 3,
-      totalSteps: 7,
-      progressPercent: 43,
+      step: 4,
+      totalSteps: 8,
+      progressPercent: 50,
+    });
+  });
+
+  it('presents the VirusTotal reputation lookup as the first execution step', () => {
+    expect(getQaPhasePresentation('scanning_installer')).toEqual({
+      label: 'Checking installer reputation',
+      step: 1,
+      totalSteps: 8,
+      progressPercent: 13,
     });
   });
 
@@ -20,7 +29,7 @@ describe('QA presentation helpers', () => {
     expect(getQaPhasePresentation('queued')).toEqual({
       label: 'Queued',
       step: 0,
-      totalSteps: 7,
+      totalSteps: 8,
       progressPercent: 0,
     });
   });

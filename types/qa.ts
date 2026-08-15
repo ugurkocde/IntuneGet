@@ -108,6 +108,7 @@ export interface QaLiveLog {
 
 export type QaLivePhase =
   | 'queued'
+  | 'scanning_installer'
   | 'preparing_package'
   | 'restoring_vm'
   | 'installing'
@@ -176,10 +177,22 @@ export interface QaLiveResponse {
     outcome: QaOutcome;
     testedAtUtc: string;
     durationSeconds: number | null;
+    virusTotalStatus: QaVirusTotalStatus | null;
   }>;
 }
 
 export type QaTestLevel = 'installer-preflight' | 'psadt-package';
+
+export type QaVirusTotalStatus = 'clean' | 'flagged' | 'not_found' | 'error' | 'skipped';
+
+/** Informational hash-only VirusTotal verdict; it never gates the QA outcome. */
+export interface QaVirusTotalSummary {
+  status: QaVirusTotalStatus;
+  malicious: number | null;
+  suspicious: number | null;
+  totalEngines: number | null;
+  scannedAtUtc: string | null;
+}
 
 /** Minimal database row used for card/list status badges. */
 export interface QaStatusRow {
@@ -227,6 +240,12 @@ export interface QaResultRow extends QaStatusRow {
   detection_rules_sha256: string | null;
   packager_commit: string | null;
   package_content_sha256: string | null;
+  /** Optional: absent from rows read out of pre-VirusTotal catalog snapshots. */
+  virustotal_status?: QaVirusTotalStatus | null;
+  virustotal_malicious?: number | null;
+  virustotal_suspicious?: number | null;
+  virustotal_total_engines?: number | null;
+  virustotal_scanned_at_utc?: string | null;
 }
 
 export interface QaStatus {
@@ -285,6 +304,7 @@ export interface QaDetailsResponse {
   relevantEventCount: number | null;
   environment: QaEnvironment | null;
   effectiveConfiguration: QaEffectiveConfiguration | null;
+  virusTotal: QaVirusTotalSummary | null;
   classification: QaClassification | null;
   package?: {
     testLevel: QaTestLevel;

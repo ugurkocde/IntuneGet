@@ -64,6 +64,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       relevantEventCount: row.relevant_event_count,
       environment: row.environment,
       effectiveConfiguration: row.effective_configuration,
+      virusTotal: row.virustotal_status
+        ? {
+            status: row.virustotal_status,
+            malicious: row.virustotal_malicious ?? null,
+            suspicious: row.virustotal_suspicious ?? null,
+            totalEngines: row.virustotal_total_engines ?? null,
+            scannedAtUtc: row.virustotal_scanned_at_utc ?? null,
+          }
+        : null,
       package: {
         testLevel: row.test_level,
         profileSha256: row.package_profile_sha256,
