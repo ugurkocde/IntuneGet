@@ -1133,6 +1133,10 @@ ${steps}
     $configuredUninstallPublisherAgnosticName = if ($configuredUninstallPublisherName) {
         ($configuredUninstallComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\s+|[._-]+)'), '').Trim()
     } else { $configuredUninstallComparableName }
+    $configuredUninstallVersion = [string]$adtSession.AppVersion
+    $configuredUninstallVersionedName = if (-not [string]::IsNullOrWhiteSpace($configuredUninstallVersion)) {
+        "$configuredUninstallComparableName $configuredUninstallVersion"
+    } else { $null }
     # Some language-specific WinGet manifests carry a default-locale ARP name even though
     # the selected installer registers its requested locale (for example en-US versus de).
     # Limit locale-agnostic comparison to locale-suffixed package IDs, the observed install
@@ -1175,6 +1179,18 @@ ${steps}
                 $candidatePublisherAgnosticName -eq $configuredUninstallPublisherAgnosticName
             })
             if ($publisherAgnosticMatches.Count -eq 1) { $selectedApplications = $publisherAgnosticMatches }
+        }
+        if ($selectedApplications.Count -eq 0 -and $configuredUninstallVersionedName) {
+            # Some MSI packages append their exact package version to the ARP display name.
+            # Accept only one observed delta whose normalized name and DisplayVersion both
+            # equal the requested package identity; a different version remains rejected.
+            $versionSuffixedMatches = @($changedApplications | Where-Object {
+                $candidateDisplayName = [string]$_.DisplayName
+                $candidateComparableName = (($candidateDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+                $candidateComparableName -eq $configuredUninstallVersionedName -and
+                    [string]$_.DisplayVersion -eq $configuredUninstallVersion
+            })
+            if ($versionSuffixedMatches.Count -eq 1) { $selectedApplications = $versionSuffixedMatches }
         }
         if ($selectedApplications.Count -eq 0 -and $candidateLocaleSuffixPattern) {
             $localeAgnosticMatches = @($changedApplications | Where-Object {
@@ -1586,6 +1602,8 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
       const selectionBlock = `$configuredProductCode = '${registryIdentity.productCode}'
     $configuredDisplayName = '${registryIdentity.displayName}'
     $markerProviderPath = '${markerProviderPath}'
+    $configuredVersion = [string]$adtSession.AppVersion
+    $configuredVersionedDisplayName = if (-not [string]::IsNullOrWhiteSpace($configuredVersion)) { "$configuredDisplayName $configuredVersion" } else { $null }
     $capturedUninstallKey = (Get-ItemProperty -LiteralPath $markerProviderPath -ErrorAction SilentlyContinue).UninstallRegistryKey
     $installedApps = if ($capturedUninstallKey) {
         @(Get-ADTApplication -FilterScript { $_.PSChildName -eq $capturedUninstallKey })
@@ -1597,6 +1615,12 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
 
     if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey) {
         $installedApps = @(Get-ADTApplication -Name $configuredDisplayName -NameMatch 'Exact')
+    }
+    if ($installedApps.Count -eq 0 -and -not $capturedUninstallKey -and -not $configuredProductCode -and $configuredVersionedDisplayName) {
+        $versionedMatches = @(Get-ADTApplication -Name $configuredVersionedDisplayName -NameMatch 'Exact' | Where-Object {
+            [string]$_.DisplayVersion -eq $configuredVersion
+        })
+        if ($versionedMatches.Count -eq 1) { $installedApps = $versionedMatches }
     }
     if ($installedApps.Count -ne 1) {
         throw "Could not find one exact vendor uninstall entry. Found $($installedApps.Count); refusing broad removal."

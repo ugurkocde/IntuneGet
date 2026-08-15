@@ -576,6 +576,37 @@ describe('EXE product identity PSADT generation', () => {
     );
   });
 
+  it('matches and removes one registry identity with the exact package-version suffix', () => {
+    const job = packagingJob({
+      winget_id: 'IPEVO.VisualizerLTSE',
+      display_name: 'Visualizer LTSE',
+      version: '1.2.73.0',
+      installer_type: 'exe',
+      uninstall_command: 'REGISTRY_UNINSTALL:Visualizer LTSE',
+    });
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      job,
+      'Visualizer LTSE'
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'visualizer.exe'
+    );
+
+    expect(verification).toContain('$configuredUninstallVersionedName = if (');
+    expect(verification).toContain('$versionSuffixedMatches = @($changedApplications');
+    expect(verification).toContain(
+      '[string]$_.DisplayVersion -eq $configuredUninstallVersion'
+    );
+    expect(uninstall).toContain('$configuredVersionedDisplayName = if (');
+    expect(uninstall).toContain(
+      "Get-ADTApplication -Name $configuredVersionedDisplayName -NameMatch 'Exact'"
+    );
+    expect(uninstall).toContain('[string]$_.DisplayVersion -eq $configuredVersion');
+  });
+
   it('matches one localized registry identity without accepting helper entries', () => {
     const job = packagingJob({
       winget_id: 'Mozilla.Firefox.de',

@@ -1011,6 +1011,87 @@ describe('PSADT registry uninstall identity contract', () => {
     );
   });
 
+  it('matches only one observed ARP entry with the exact requested version suffix', () => {
+    expect(packager).toContain('$configuredUninstallVersionedName = if (');
+    expect(packager).toContain('$versionSuffixedMatches = @($changedApplications');
+    expect(packager).toContain(
+      '$candidateComparableName -eq $configuredUninstallVersionedName -and'
+    );
+    expect(packager).toContain(
+      '[string]$_.DisplayVersion -eq $configuredUninstallVersion'
+    );
+    expect(packager).toContain(
+      'if ($versionSuffixedMatches.Count -eq 1) { $selectedApplications = $versionSuffixedMatches }'
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'accepts the exact Visualizer LTSE version suffix and rejects other versions or ambiguity',
+    () => {
+      const result = spawnSync(
+        'pwsh',
+        [
+          '-NoProfile',
+          '-Command',
+          `$configuredName = 'Visualizer LTSE'
+$configuredVersion = '1.2.73.0'
+$configuredVersionedName = "$configuredName $configuredVersion"
+function Select-VersionSuffixed([object[]]$Applications) {
+  return @($Applications | Where-Object {
+    ([string]$_.DisplayName).Trim() -eq $configuredVersionedName -and
+      [string]$_.DisplayVersion -eq $configuredVersion
+  })
+}
+$oneMatch = Select-VersionSuffixed @(
+  [pscustomobject]@{ DisplayName = 'Visualizer LTSE 1.2.73.0'; DisplayVersion = '1.2.73.0' },
+  [pscustomobject]@{ DisplayName = 'Visualizer LTSE Helper'; DisplayVersion = '1.2.73.0' },
+  [pscustomobject]@{ DisplayName = 'Visualizer LTSE 1.2.72.0'; DisplayVersion = '1.2.72.0' }
+)
+$wrongVersion = Select-VersionSuffixed @(
+  [pscustomobject]@{ DisplayName = 'Visualizer LTSE 1.2.73.0'; DisplayVersion = '1.2.72.0' }
+)
+$ambiguous = Select-VersionSuffixed @(
+  [pscustomobject]@{ DisplayName = 'Visualizer LTSE 1.2.73.0'; DisplayVersion = '1.2.73.0' },
+  [pscustomobject]@{ DisplayName = 'Visualizer LTSE 1.2.73.0'; DisplayVersion = '1.2.73.0' }
+)
+[pscustomobject]@{ OneMatch = @($oneMatch).Count; WrongVersion = @($wrongVersion).Count; Ambiguous = @($ambiguous).Count } | ConvertTo-Json -Compress`,
+        ],
+        { encoding: 'utf8' }
+      );
+
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual({
+        OneMatch: 1,
+        WrongVersion: 0,
+        Ambiguous: 2,
+      });
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits version-suffixed capture and uninstall fallback for Visualizer LTSE',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'zip',
+        'Visualizer LTSE',
+        [],
+        {},
+        [],
+        'IPEVO.VisualizerLTSE',
+        'Visualizer LTSE',
+        '1.2.73.0'
+      );
+
+      expect(generated).toContain('$configuredUninstallVersionedName = if (');
+      expect(generated).toContain('$versionSuffixedMatches = @($changedApplications');
+      expect(generated).toContain('$configuredVersionedAppName = if (');
+      expect(generated).toContain(
+        "Get-ADTApplication -Name $configuredVersionedAppName -NameMatch 'Exact'"
+      );
+    },
+    30_000
+  );
+
   it('limits locale-aware ARP matching to one observed localized product entry', () => {
     expect(packager).toContain('$configuredUninstallLocaleHint');
     expect(packager).toContain('$configuredUninstallLocaleAgnosticName');
