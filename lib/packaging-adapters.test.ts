@@ -98,6 +98,10 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['/silent', 'forall']);
     expect(
+      applyApplicationPackagingAdapter('Google.GoogleDrive', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['--silent', '--force_stop']);
+    expect(
       applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedExactUninstall: {

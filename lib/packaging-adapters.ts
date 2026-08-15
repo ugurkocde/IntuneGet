@@ -140,6 +140,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArgumentsOverride: '/S /MULTIUSER',
   },
   {
+    // Google documents that Drive for desktop must be removed through its
+    // versioned registered uninstaller with both --silent and --force_stop.
+    // The latter is required whenever Drive is running; without it the helper
+    // exits asynchronously while the exact ARP product remains installed.
+    // Append the documented arguments to the captured version-specific path
+    // so QA and customer Intune packages share the same safe lifecycle.
+    wingetId: 'Google.GoogleDrive',
+    reviewedUninstallArguments: ['--silent', '--force_stop'],
+  },
+  {
     // Bitvise uses its own unattended switch rather than the generic /S that
     // WinGet currently publishes. The vendor documents -unat together with
     // explicit EULA acceptance for scripted installation.
