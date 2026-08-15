@@ -68,6 +68,14 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope(' youdao.youdaotranslate ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Makeblock.xToolStudio', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' makeblock.xtoolstudio ', undefined)).toBe('user');
+    expect(resolveApplicationInstallScope(
+      'UltimateGadgetLaboratories.UHKAgent',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope(
+      ' ultimategadgetlaboratories.uhkagent ',
+      undefined
+    )).toBe('user');
     expect(resolveApplicationInstallScope('Rakuten.Viber', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' rakuten.viber ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');

@@ -118,6 +118,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // UHK Agent is built with Electron Builder's assisted NSIS profile
+    // (oneClick: false) without perMachine. Electron Builder defaults that
+    // profile to per-user installation. WinGet currently omits Scope, so the
+    // generic machine default installs below LocalSystem's LocalAppData and
+    // registers an unusable systemprofile uninstaller. Keep QA and customer
+    // Intune packages in the intended signed-in user context instead.
+    wingetId: 'UltimateGadgetLaboratories.UHKAgent',
+    requiredInstallScope: 'user',
+  },
+  {
     // Viber's MSI is declared machine-scope by WinGet, but its Directory
     // table targets LocalAppData. Under LocalSystem that resolves to the
     // system profile and the vendor's VerifyInstalledFiles action rolls the
