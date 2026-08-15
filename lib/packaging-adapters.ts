@@ -16,6 +16,9 @@ interface ApplicationPackagingAdapter {
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
   reviewedManagedInstallDirectory?: string;
+  reviewedManagedInstallEvidenceFile?: string;
+  reviewedManagedInstallCompletionProcess?: string;
+  reviewedManagedInstallCompletionTimeoutMinutes?: number;
   reviewedManagedUninstall?: Readonly<{
     executablePath: string;
     arguments: readonly string[];
@@ -351,6 +354,63 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%SystemDrive%\\SWSetup\\HPImageAssistant',
   },
   {
+    // Navisworks Freedom 2026 is installed by Autodesk ODIS. The bootstrapper
+    // changes multiple Autodesk registrations, so a generic ARP capture cannot
+    // identify the product safely. Autodesk documents the ODIS manifest-based
+    // uninstall workflow, and this product GUID is also the exact GUID in the
+    // vendor installer URL published by WinGet.
+    wingetId: 'Autodesk.NavisworksFreedom.2026',
+    reviewedManagedInstallDirectory:
+      '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026',
+    reviewedManagedInstallEvidenceFile:
+      '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026\\Roamer.exe',
+    reviewedManagedInstallCompletionProcess:
+      '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 15,
+    reviewedManagedUninstall: {
+      executablePath: '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+      arguments: [
+        '-i',
+        'uninstall',
+        '--silent',
+        '--trigger_point',
+        'system',
+        '-m',
+        '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\bundleManifest.xml',
+        '-x',
+        '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\SetupRes\\manifest.xsd',
+      ],
+      completionTimeoutMinutes: 15,
+    },
+  },
+  {
+    // Navisworks Freedom 2027 uses the same documented ODIS lifecycle with a
+    // release-specific manifest GUID from Autodesk's WinGet installer URL.
+    wingetId: 'Autodesk.NavisworksFreedom.2027',
+    reviewedManagedInstallDirectory:
+      '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2027',
+    reviewedManagedInstallEvidenceFile:
+      '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2027\\Roamer.exe',
+    reviewedManagedInstallCompletionProcess:
+      '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 15,
+    reviewedManagedUninstall: {
+      executablePath: '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+      arguments: [
+        '-i',
+        'uninstall',
+        '--silent',
+        '--trigger_point',
+        'system',
+        '-m',
+        '%ProgramData%\\Autodesk\\ODIS\\metadata\\{52AC45A2-3099-370C-8394-8B347967768B}\\bundleManifest.xml',
+        '-x',
+        '%ProgramData%\\Autodesk\\ODIS\\metadata\\{52AC45A2-3099-370C-8394-8B347967768B}\\SetupRes\\manifest.xsd',
+      ],
+      completionTimeoutMinutes: 15,
+    },
+  },
+  {
     // Google Updater is a shared system updater, not a conventional ARP app.
     // Its enterprise installer can update an existing registration without
     // creating a new uninstall entry, so ARP delta capture is not a reliable
@@ -642,6 +702,9 @@ export function applyApplicationPackagingAdapter(
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedUninstallProcessGuard &&
       !config.reviewedManagedInstallDirectory &&
+      !config.reviewedManagedInstallEvidenceFile &&
+      !config.reviewedManagedInstallCompletionProcess &&
+      !config.reviewedManagedInstallCompletionTimeoutMinutes &&
       !config.reviewedManagedUninstall &&
       !config.reviewedExactUninstall
     ) return config;
@@ -653,6 +716,9 @@ export function applyApplicationPackagingAdapter(
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedUninstallProcessGuard: undefined,
       reviewedManagedInstallDirectory: undefined,
+      reviewedManagedInstallEvidenceFile: undefined,
+      reviewedManagedInstallCompletionProcess: undefined,
+      reviewedManagedInstallCompletionTimeoutMinutes: undefined,
       reviewedManagedUninstall: undefined,
       reviewedExactUninstall: undefined,
     };
@@ -733,6 +799,12 @@ export function applyApplicationPackagingAdapter(
       adapter.preserveVendorInstallationOnUninstall || undefined,
     reviewedManagedInstallDirectory:
       adapter.reviewedManagedInstallDirectory || undefined,
+    reviewedManagedInstallEvidenceFile:
+      adapter.reviewedManagedInstallEvidenceFile || undefined,
+    reviewedManagedInstallCompletionProcess:
+      adapter.reviewedManagedInstallCompletionProcess || undefined,
+    reviewedManagedInstallCompletionTimeoutMinutes:
+      adapter.reviewedManagedInstallCompletionTimeoutMinutes,
     reviewedManagedUninstall: adapter.reviewedManagedUninstall
       ? {
           executablePath: adapter.reviewedManagedUninstall.executablePath,

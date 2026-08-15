@@ -473,6 +473,57 @@ if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
     }
 }
 
+$reviewedManagedInstallEvidenceFile = ''
+$reviewedManagedInstallCompletionProcess = ''
+$reviewedManagedInstallCompletionTimeoutMinutes = 0
+$hasManagedInstallCompletionContract =
+    ($psadtConfig.Contains('reviewedManagedInstallEvidenceFile') -and
+     $null -ne $psadtConfig['reviewedManagedInstallEvidenceFile']) -or
+    ($psadtConfig.Contains('reviewedManagedInstallCompletionProcess') -and
+     $null -ne $psadtConfig['reviewedManagedInstallCompletionProcess']) -or
+    ($psadtConfig.Contains('reviewedManagedInstallCompletionTimeoutMinutes') -and
+     $null -ne $psadtConfig['reviewedManagedInstallCompletionTimeoutMinutes'])
+if ($hasManagedInstallCompletionContract) {
+    if ([string]::IsNullOrWhiteSpace($reviewedManagedInstallDirectory)) {
+        throw 'PSADT reviewed managed install completion requires reviewedManagedInstallDirectory.'
+    }
+    if ($psadtConfig['reviewedManagedInstallEvidenceFile'] -isnot [string]) {
+        throw 'PSADT reviewedManagedInstallEvidenceFile must be a string.'
+    }
+    $reviewedManagedInstallEvidenceFile = ([string]$psadtConfig['reviewedManagedInstallEvidenceFile']).Trim()
+    if ($reviewedManagedInstallEvidenceFile.Length -gt 260 -or
+        $reviewedManagedInstallEvidenceFile -notmatch '^(?:%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\|%SystemDrive%\\SWSetup\\)[^*?"<>|\x00-\x1f]+$' -or
+        @($reviewedManagedInstallEvidenceFile -split '\\') -contains '..' -or
+        -not $reviewedManagedInstallEvidenceFile.StartsWith(
+            $reviewedManagedInstallDirectory.TrimEnd('\') + '\',
+            [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+        throw 'PSADT reviewedManagedInstallEvidenceFile must be a safe file below reviewedManagedInstallDirectory.'
+    }
+    if ($psadtConfig.Contains('reviewedManagedInstallCompletionProcess') -and
+        $null -ne $psadtConfig['reviewedManagedInstallCompletionProcess']) {
+        if ($psadtConfig['reviewedManagedInstallCompletionProcess'] -isnot [string]) {
+            throw 'PSADT reviewedManagedInstallCompletionProcess must be a string.'
+        }
+        $reviewedManagedInstallCompletionProcess = ([string]$psadtConfig['reviewedManagedInstallCompletionProcess']).Trim()
+        if ($reviewedManagedInstallCompletionProcess.Length -gt 260 -or
+            $reviewedManagedInstallCompletionProcess -notmatch '^%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\[^*?"<>|\x00-\x1f]+\.exe$' -or
+            @($reviewedManagedInstallCompletionProcess -split '\\') -contains '..') {
+            throw 'PSADT reviewedManagedInstallCompletionProcess must be a safe executable below a Program Files environment variable.'
+        }
+    }
+    $rawManagedInstallCompletionTimeoutMinutes = $psadtConfig['reviewedManagedInstallCompletionTimeoutMinutes']
+    if (($rawManagedInstallCompletionTimeoutMinutes -isnot [byte] -and
+         $rawManagedInstallCompletionTimeoutMinutes -isnot [int16] -and
+         $rawManagedInstallCompletionTimeoutMinutes -isnot [int32] -and
+         $rawManagedInstallCompletionTimeoutMinutes -isnot [int64]) -or
+        [int]$rawManagedInstallCompletionTimeoutMinutes -lt 1 -or
+        [int]$rawManagedInstallCompletionTimeoutMinutes -gt 60) {
+        throw 'PSADT reviewedManagedInstallCompletionTimeoutMinutes must be an integer from 1 to 60.'
+    }
+    $reviewedManagedInstallCompletionTimeoutMinutes = [int]$rawManagedInstallCompletionTimeoutMinutes
+}
+
 $reviewedManagedUninstallConfigured = $false
 $reviewedManagedUninstallExecutable = ''
 $reviewedManagedUninstallArguments = @()
@@ -835,6 +886,8 @@ $versionSingleQuoteEscaped = $Version -replace "'", "''"
 $uninstallCmd = [string]$UninstallCommand
 $uninstallCmdSingleQuoteEscaped = $uninstallCmd -replace "'", "''"
 $reviewedManagedInstallDirectoryEscaped = $reviewedManagedInstallDirectory -replace "'", "''"
+$reviewedManagedInstallEvidenceFileEscaped = $reviewedManagedInstallEvidenceFile -replace "'", "''"
+$reviewedManagedInstallCompletionProcessEscaped = $reviewedManagedInstallCompletionProcess -replace "'", "''"
 $reviewedManagedUninstallExecutableEscaped = $reviewedManagedUninstallExecutable -replace "'", "''"
 $reviewedManagedUninstallArgumentsLiteral = @(
     $reviewedManagedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
@@ -2121,18 +2174,46 @@ $lines += @(
 )
 
 if ($useManagedDirectoryLifecycle) {
-    $lines += @(
-        ''
-        "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')"
-        '    if (-not (Test-Path -LiteralPath $managedInstallDirectory -PathType Container)) {'
-        '        throw "The reviewed managed install directory was not created: $managedInstallDirectory"'
-        '    }'
-        '    $managedPayloadFile = Get-ChildItem -LiteralPath $managedInstallDirectory -File -Recurse -ErrorAction Stop | Select-Object -First 1'
-        '    if (-not $managedPayloadFile) {'
-        '        throw "The reviewed managed install directory contains no payload files: $managedInstallDirectory"'
-        '    }'
-        '    Write-ADTLogEntry -Message "Verified managed extracted payload at [$managedInstallDirectory]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
-    )
+    $lines += @('', "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')")
+    if ($hasManagedInstallCompletionContract) {
+        $lines += @(
+            "    `$managedInstallEvidenceFile = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallEvidenceFileEscaped')"
+            "    `$managedInstallCompletionProcess = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallCompletionProcessEscaped')"
+            "    `$managedInstallDeadline = [DateTime]::UtcNow.AddMinutes($reviewedManagedInstallCompletionTimeoutMinutes)"
+            '    $managedInstallReadyObservations = 0'
+            '    do {'
+            '        $managedInstallEvidenceReady = Test-Path -LiteralPath $managedInstallEvidenceFile -PathType Leaf'
+            '        $managedInstallProcessActive = $false'
+            '        if (-not [string]::IsNullOrWhiteSpace($managedInstallCompletionProcess)) {'
+            '            $managedInstallProcessActive = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {'
+            '                [string]::Equals([string]$_.ExecutablePath, $managedInstallCompletionProcess, [System.StringComparison]::OrdinalIgnoreCase)'
+            '            }).Count -gt 0'
+            '        }'
+            '        if ($managedInstallEvidenceReady -and -not $managedInstallProcessActive) {'
+            '            $managedInstallReadyObservations++'
+            '        } else {'
+            '            $managedInstallReadyObservations = 0'
+            '        }'
+            '        if ($managedInstallReadyObservations -ge 2) { break }'
+            '        Start-Sleep -Seconds 5'
+            '    } while ([DateTime]::UtcNow -lt $managedInstallDeadline)'
+            '    if ($managedInstallReadyObservations -lt 2) {'
+            '        throw "The reviewed managed installation did not reach stable completion before the deadline: $managedInstallEvidenceFile"'
+            '    }'
+            '    Write-ADTLogEntry -Message "Verified stable managed installation evidence at [$managedInstallEvidenceFile]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+        )
+    } else {
+        $lines += @(
+            '    if (-not (Test-Path -LiteralPath $managedInstallDirectory -PathType Container)) {'
+            '        throw "The reviewed managed install directory was not created: $managedInstallDirectory"'
+            '    }'
+            '    $managedPayloadFile = Get-ChildItem -LiteralPath $managedInstallDirectory -File -Recurse -ErrorAction Stop | Select-Object -First 1'
+            '    if (-not $managedPayloadFile) {'
+            '        throw "The reviewed managed install directory contains no payload files: $managedInstallDirectory"'
+            '    }'
+            '    Write-ADTLogEntry -Message "Verified managed extracted payload at [$managedInstallDirectory]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+        )
+    }
 }
 
 # Optional post-install verification (opt-in via PSADT config)

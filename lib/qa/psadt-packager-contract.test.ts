@@ -555,6 +555,81 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses the exact Autodesk ODIS manifest lifecycle for Navisworks Freedom',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Autodesk Create Installer',
+        [],
+        {
+          reviewedManagedInstallDirectory:
+            '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026',
+          reviewedManagedInstallEvidenceFile:
+            '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026\\Roamer.exe',
+          reviewedManagedInstallCompletionProcess:
+            '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+          reviewedManagedInstallCompletionTimeoutMinutes: 15,
+          reviewedManagedUninstall: {
+            executablePath:
+              '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+            arguments: [
+              '-i',
+              'uninstall',
+              '--silent',
+              '--trigger_point',
+              'system',
+              '-m',
+              '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\bundleManifest.xml',
+              '-x',
+              '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\SetupRes\\manifest.xsd',
+            ],
+            completionTimeoutMinutes: 15,
+          },
+        },
+        [],
+        'Autodesk.NavisworksFreedom.2026'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026')"
+      );
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026\\Roamer.exe')"
+      );
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe')"
+      );
+      expect(installFunction).toContain(
+        '$managedInstallReadyObservations -ge 2'
+      );
+      expect(installFunction).toContain(
+        '$managedInstallDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+      );
+      expect(installFunction).not.toContain('Captured vendor uninstall entry');
+      expect(uninstallFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$managedUninstallArguments = @('-i', 'uninstall', '--silent', '--trigger_point', 'system', '-m', '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\bundleManifest.xml', '-x', '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\SetupRes\\manifest.xsd')"
+      );
+      expect(uninstallFunction).toContain(
+        '$managedUninstallDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+      );
+      expect(uninstallFunction).not.toContain(
+        'Remove-Item -LiteralPath $managedInstallDirectory'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'resolves one validated package-version segment in a reviewed managed uninstaller',
     () => {
       const generated = generateRegistryUninstallPackage(

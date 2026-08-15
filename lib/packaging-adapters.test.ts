@@ -207,6 +207,55 @@ describe('application packaging adapters', () => {
         .reviewedManagedInstallDirectory
     ).toBe('%SystemDrive%\\SWSetup\\HPImageAssistant');
     expect(
+      applyApplicationPackagingAdapter(
+        'Autodesk.NavisworksFreedom.2026',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2026\\Roamer.exe',
+      reviewedManagedInstallCompletionProcess:
+        '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 15,
+      reviewedManagedUninstall: {
+        executablePath: '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+        arguments: [
+          '-i',
+          'uninstall',
+          '--silent',
+          '--trigger_point',
+          'system',
+          '-m',
+          '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\bundleManifest.xml',
+          '-x',
+          '%ProgramData%\\Autodesk\\ODIS\\metadata\\{BE06C262-73A9-3C2F-8982-C105E1EE9A34}\\SetupRes\\manifest.xsd',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    });
+    expect(
+      applyApplicationPackagingAdapter(
+        'autodesk.navisworksfreedom.2027',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2027',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramW6432%\\Autodesk\\Navisworks Freedom 2027\\Roamer.exe',
+      reviewedManagedInstallCompletionProcess:
+        '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 15,
+      reviewedManagedUninstall: {
+        arguments: expect.arrayContaining([
+          '%ProgramData%\\Autodesk\\ODIS\\metadata\\{52AC45A2-3099-370C-8394-8B347967768B}\\bundleManifest.xml',
+        ]),
+        completionTimeoutMinutes: 15,
+      },
+    });
+    expect(
       applyApplicationPackagingAdapter('Google.GoogleUpdater', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedManagedInstallDirectory:
@@ -389,6 +438,10 @@ describe('application packaging adapters', () => {
       reviewedMultiProductInstallDisplayNamePrefixes: ['Anything'],
       reviewedMultiProductInstallMinimumCount: 2,
       reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
+      reviewedManagedInstallEvidenceFile: '%ProgramFiles%\\Example\\app.exe',
+      reviewedManagedInstallCompletionProcess:
+        '%ProgramFiles%\\Example\\installer.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 5,
       reviewedManagedUninstall: {
         executablePath: '%ProgramFiles%\\Example\\uninstall.exe',
         arguments: ['/quiet'],
@@ -405,6 +458,9 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
+    expect(adapted.reviewedManagedInstallEvidenceFile).toBeUndefined();
+    expect(adapted.reviewedManagedInstallCompletionProcess).toBeUndefined();
+    expect(adapted.reviewedManagedInstallCompletionTimeoutMinutes).toBeUndefined();
     expect(adapted.reviewedManagedUninstall).toBeUndefined();
     expect(adapted.reviewedExactUninstall).toBeUndefined();
   });

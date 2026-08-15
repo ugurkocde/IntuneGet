@@ -234,6 +234,9 @@ export interface PSADTConfig {
   // verifies this exact directory after install and removes it on uninstall.
   // Application adapters are the only trusted source for this value.
   reviewedManagedInstallDirectory?: string;
+  reviewedManagedInstallEvidenceFile?: string;
+  reviewedManagedInstallCompletionProcess?: string;
+  reviewedManagedInstallCompletionTimeoutMinutes?: number;
   reviewedManagedUninstall?: {
     // A reviewed adapter may use one literal <VERSION> path segment. The
     // packager replaces it with the validated package version before emitting
