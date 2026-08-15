@@ -1044,6 +1044,18 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })'
     );
     expect(packager).toContain(
+      "foreach ($requiredBurnArgument in @(''/uninstall'', ''/quiet'', ''/norestart''))"
+    );
+    expect(packager).toContain(
+      "$normalizedRequiredBurnArgument = $requiredBurnArgument -replace ''^[/-]+'', ''''"
+    );
+    expect(packager).toContain(
+      "$registeredUninstallArguments += $requiredBurnArgument"
+    );
+    expect(packager).not.toContain(
+      "if ($registeredUninstallArguments.Count -eq 0) {"
+    );
+    expect(packager).toContain(
       "`$bundledUninstaller = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
     );
     expect(packager).toContain(
