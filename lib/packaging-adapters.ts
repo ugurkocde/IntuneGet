@@ -7,7 +7,7 @@ interface ApplicationPackagingAdapter {
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedInstallArgumentsOverride?: string;
-  reviewedInstallShieldMsiExtraction?: Readonly<{
+  reviewedInstallShieldAdministrativeImage?: Readonly<{
     expectedMsiFileName: string;
   }>;
   reviewedUninstallArguments?: readonly string[];
@@ -145,11 +145,12 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   },
   {
     // Sonos' compressed InstallShield launcher does not reliably install in a
-    // non-interactive LocalSystem session. Extract its embedded MSI in the
-    // target context, validate the MSI against the manifest-owned product
-    // identity, and install that MSI through PSADT for both QA and customers.
+    // non-interactive LocalSystem session. Create the vendor-supported
+    // administrative image in the target context, validate its MSI against the
+    // manifest-owned product identity, and install that MSI through PSADT for
+    // both QA and customers.
     wingetId: 'Sonos.Controller',
-    reviewedInstallShieldMsiExtraction: {
+    reviewedInstallShieldAdministrativeImage: {
       expectedMsiFileName: 'Sonos.msi',
     },
   },
@@ -738,7 +739,7 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedInstallArgumentsOverride &&
-      !config.reviewedInstallShieldMsiExtraction &&
+      !config.reviewedInstallShieldAdministrativeImage &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedRegistryInstallEvidence &&
@@ -754,7 +755,7 @@ export function applyApplicationPackagingAdapter(
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedInstallArgumentsOverride: undefined,
-      reviewedInstallShieldMsiExtraction: undefined,
+      reviewedInstallShieldAdministrativeImage: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedRegistryInstallEvidence: undefined,
@@ -832,11 +833,12 @@ export function applyApplicationPackagingAdapter(
     processesToClose,
     reviewedInstallArguments,
     reviewedInstallArgumentsOverride,
-    installCommand: adapter.reviewedInstallShieldMsiExtraction
+    installCommand: adapter.reviewedInstallShieldAdministrativeImage
       ? undefined
       : config.installCommand,
-    reviewedInstallShieldMsiExtraction: adapter.reviewedInstallShieldMsiExtraction
-      ? { ...adapter.reviewedInstallShieldMsiExtraction }
+    reviewedInstallShieldAdministrativeImage:
+      adapter.reviewedInstallShieldAdministrativeImage
+      ? { ...adapter.reviewedInstallShieldAdministrativeImage }
       : undefined,
     reviewedUninstallArguments,
     reviewedUninstallProcessGuard: adapter.reviewedUninstallProcessGuard

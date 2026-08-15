@@ -204,11 +204,12 @@ export interface PSADTConfig {
   // adapters populate this field; customers cannot supply it directly.
   reviewedInstallArgumentsOverride?: string;
 
-  // Internal extraction contract for a reviewed InstallShield launcher whose
-  // embedded MSI is the only reliable LocalSystem deployment path. The
-  // generated package validates the exact MSI filename and its manifest-owned
-  // product code before installation. Customers cannot supply this directly.
-  reviewedInstallShieldMsiExtraction?: {
+  // Internal administrative-image contract for a reviewed InstallShield
+  // launcher whose embedded MSI is the only reliable LocalSystem deployment
+  // path. The generated package validates the exact MSI filename and its
+  // manifest-owned product code before installation. Customers cannot supply
+  // this directly.
+  reviewedInstallShieldAdministrativeImage?: {
     expectedMsiFileName: string;
   };
 
@@ -359,7 +360,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   uninstallCommand: undefined,
   reviewedInstallArguments: [],
   reviewedInstallArgumentsOverride: undefined,
-  reviewedInstallShieldMsiExtraction: undefined,
+  reviewedInstallShieldAdministrativeImage: undefined,
   reviewedUninstallArguments: [],
   reviewedUninstallProcessGuard: undefined,
 };

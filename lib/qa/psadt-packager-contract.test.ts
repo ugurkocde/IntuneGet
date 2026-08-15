@@ -872,7 +872,7 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'extracts and validates a reviewed InstallShield MSI instead of installing the launcher',
+    'creates and validates a reviewed InstallShield administrative image instead of installing the launcher',
     () => {
       const productCode = '{6FB7DAEC-5DAD-491E-9951-4684423F291C}';
       const generated = generateRegistryUninstallPackage(
@@ -880,7 +880,7 @@ describe('PSADT vendor argument contract', () => {
         'Sonos',
         [],
         {
-          reviewedInstallShieldMsiExtraction: {
+          reviewedInstallShieldAdministrativeImage: {
             expectedMsiFileName: 'Sonos.msi',
           },
         },
@@ -893,9 +893,9 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(generated).toContain(
-        '$embeddedMsiExtractArguments = \'/S /x /b"\' + $embeddedMsiExtractDir + \'" /v"/qn"\''
+        '$embeddedMsiAdminArguments = \'/a"\' + $embeddedMsiAdminDir + \'" /s /v"/qn TARGETDIR=\' + $embeddedMsiAdminDir + \' REBOOT=ReallySuppress"\''
       );
-      expect(generated).not.toContain('/v"/qb"');
+      expect(generated).not.toContain(' /x ');
       expect(generated).toContain(
         "if ($embeddedMsiFiles.Count -ne 1 -or $embeddedMsiFiles[0].Name -ine 'Sonos.msi')"
       );
@@ -906,7 +906,7 @@ describe('PSADT vendor argument contract', () => {
         "Start-ADTMsiProcess -Action 'Install' -FilePath $embeddedMsiPath -AdditionalArgumentList 'REBOOT=ReallySuppress'"
       );
       expect(generated).toContain(
-        'Remove-Item -LiteralPath $embeddedMsiExtractDir -Recurse -Force'
+        'Remove-Item -LiteralPath $embeddedMsiAdminDir -Recurse -Force'
       );
       expect(generated).not.toContain(
         "-ArgumentList '/S /V/quiet /V/norestart' -WindowStyle Hidden"
@@ -916,11 +916,11 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'rejects unsafe or ambiguous reviewed InstallShield MSI extraction contracts',
+    'rejects unsafe or ambiguous reviewed InstallShield administrative-image contracts',
     () => {
       expect(() =>
         generateRegistryUninstallPackage('exe', 'Unsafe Embedded MSI App', [], {
-          reviewedInstallShieldMsiExtraction: {
+          reviewedInstallShieldAdministrativeImage: {
             expectedMsiFileName: '..\\payload.msi',
           },
         })
@@ -928,7 +928,7 @@ describe('PSADT vendor argument contract', () => {
 
       expect(() =>
         generateRegistryUninstallPackage('exe', 'Ambiguous Embedded MSI App', [], {
-          reviewedInstallShieldMsiExtraction: {
+          reviewedInstallShieldAdministrativeImage: {
             expectedMsiFileName: 'payload.msi',
           },
         })
