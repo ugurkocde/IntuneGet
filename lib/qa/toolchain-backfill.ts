@@ -334,6 +334,20 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // closes the reviewed process through the shared PSADT lifecycle.
     'Dropbox.Dropbox',
   ],
+  '20e762d9c48a90881d9901c93d3f84f2d9474654': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    // The previous Dropbox retry proved that closing the client alone is not
+    // enough. This release installs without launching Dropbox and appends /S
+    // to its captured machine uninstaller for a fully unattended lifecycle.
+    'Dropbox.Dropbox',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
