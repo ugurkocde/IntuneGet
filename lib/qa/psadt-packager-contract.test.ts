@@ -42,7 +42,8 @@ function generateRegistryUninstallPackage(
   packageDependencies: Array<Record<string, unknown>> = [],
   wingetId = 'IntuneGet.ContractTest',
   uninstallDisplayName = displayName,
-  version = '1.0.0'
+  version = '1.0.0',
+  uninstallCommand = `REGISTRY_UNINSTALL:${uninstallDisplayName}`
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -91,7 +92,7 @@ function generateRegistryUninstallPackage(
         INPUT_SILENT_SWITCHES: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
         INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
         INPUT_PACKAGE_DEPENDENCIES: JSON.stringify(packageDependencies),
-        INPUT_UNINSTALL_COMMAND: `REGISTRY_UNINSTALL:${uninstallDisplayName}`,
+        INPUT_UNINSTALL_COMMAND: uninstallCommand,
         INSTALLER_PATH: installerPath,
         INSTALLER_FILENAME: 'setup.exe',
         ...(packageDependencies.length > 0
@@ -917,7 +918,7 @@ describe('PSADT registry uninstall identity contract', () => {
 
   it('supports a reviewed exact non-MSI uninstall registry key', () => {
     expect(packager).toContain(
-      '^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9._{}+-]{0,255}):(.+)$'
+      '^REGISTRY_UNINSTALL_KEY:((?:[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}|'
     );
     expect(packager).toContain(
       "$uninstallCmd -match '^REGISTRY_UNINSTALL_(PRODUCT|KEY):'"
@@ -926,6 +927,31 @@ describe('PSADT registry uninstall identity contract', () => {
       '[string]$_.PSChildName -eq $configuredUninstallProductCode'
     );
   });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits a valid exact lifecycle for a named non-MSI ARP key',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'IntelliJ IDEA Ultimate Edition',
+        [],
+        {},
+        [],
+        'JetBrains.IntelliJIDEA.Ultimate',
+        'IntelliJ IDEA Ultimate Edition',
+        '2025.2.5',
+        'REGISTRY_UNINSTALL_KEY:IntelliJ IDEA 2025.2.5:IntelliJ IDEA Ultimate Edition'
+      );
+
+      expect(generated).toContain(
+        "$configuredUninstallProductCode = 'IntelliJ IDEA 2025.2.5'"
+      );
+      expect(generated).toContain(
+        'No captured entry; searching for manifest registry key: $configuredProductCode'
+      );
+    },
+    30_000
+  );
 
   it('selects one architecture-decorated ARP entry without accepting an ambiguous set', () => {
     expect(packager).toContain('$configuredUninstallComparableName = ((');

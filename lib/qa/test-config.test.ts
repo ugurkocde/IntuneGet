@@ -283,7 +283,7 @@ describe('buildQaCatalogTestConfig', () => {
         Architecture: 'x64',
         InstallerType: 'exe',
         AppsAndFeaturesEntries: [
-          { ProductCode: 'not-a-guid' },
+          { ProductCode: 'not\\a:guid' },
           { ProductCode: '{33333333-3333-3333-3333-333333333333}' },
         ],
       },
@@ -311,8 +311,39 @@ describe('buildQaCatalogTestConfig', () => {
       },
     });
 
-    expect(config.productCode).toBe('');
-    expect(config.uninstallCommand).toBe('REGISTRY_UNINSTALL:Contoso Inno App');
+    expect(config.productCode).toBe(
+      '{22222222-2222-2222-2222-222222222222}_is1'
+    );
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{22222222-2222-2222-2222-222222222222}_is1:Contoso Inno App'
+    );
+  });
+
+  it('uses a root non-MSI ProductCode as the exact ARP lifecycle identity', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'JetBrains.IntelliJIDEA.Ultimate',
+        name: 'IntelliJ IDEA Ultimate Edition',
+        publisher: 'JetBrains',
+        version: '2025.2.5',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        ProductCode: 'IntelliJ IDEA 2025.2.5',
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/idea.exe',
+        InstallerSha256: 'A'.repeat(64),
+        InstallerType: 'nullsoft',
+        Scope: 'machine',
+      },
+    });
+
+    expect(config.productCode).toBe('IntelliJ IDEA 2025.2.5');
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:IntelliJ IDEA 2025.2.5:IntelliJ IDEA Ultimate Edition'
+    );
   });
 
   it('inherits a root package family name for user-scoped MSIX handling', () => {

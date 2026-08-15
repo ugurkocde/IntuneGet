@@ -51,12 +51,30 @@ function record(value: unknown): ManifestRecord {
     : {};
 }
 
-function appsAndFeaturesProductCode(installer: ManifestRecord): string {
+function registryProductCode(value: unknown, allowNonGuid: boolean): string {
+  const candidate = text(value);
+  const canonicalGuid = msiProductCode(candidate);
+  if (canonicalGuid) return canonicalGuid;
+  if (!allowNonGuid) return '';
+  const isSafeNamedKey = /^[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}$/.test(candidate);
+  const isSafeInnoKey = /^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}_[A-Za-z0-9._+-]{1,32}$/.test(candidate);
+  return isSafeNamedKey || isSafeInnoKey
+    ? candidate
+    : '';
+}
+
+function appsAndFeaturesProductCode(
+  installer: ManifestRecord,
+  allowNonGuid: boolean
+): string {
   const entries = Array.isArray(installer.AppsAndFeaturesEntries)
     ? installer.AppsAndFeaturesEntries
     : [];
   for (const entry of entries) {
-    const productCode = msiProductCode(record(entry).ProductCode);
+    const productCode = registryProductCode(
+      record(entry).ProductCode,
+      allowNonGuid
+    );
     if (productCode) return productCode;
   }
   return '';
@@ -124,12 +142,13 @@ export function buildQaCatalogTestConfig({
     : undefined;
   const rawScope = text(installer.Scope) || text(manifest.Scope);
   const scope: WingetScope = resolveApplicationInstallScope(app.wingetId, rawScope);
+  const allowNonGuidProductCode = !['msi', 'wix'].includes(sourceInstallerType);
   const explicitInstallerProductCode = text(installer.ProductCode);
   const productCode = explicitInstallerProductCode
-    ? msiProductCode(explicitInstallerProductCode)
-    : appsAndFeaturesProductCode(installer) ||
-      msiProductCode(manifest.ProductCode) ||
-      appsAndFeaturesProductCode(manifest);
+    ? registryProductCode(explicitInstallerProductCode, allowNonGuidProductCode)
+    : appsAndFeaturesProductCode(installer, allowNonGuidProductCode) ||
+      registryProductCode(manifest.ProductCode, allowNonGuidProductCode) ||
+      appsAndFeaturesProductCode(manifest, allowNonGuidProductCode);
   const packageFamilyName =
     text(installer.PackageFamilyName) || text(manifest.PackageFamilyName);
   const inheritedInstaller: WingetInstaller = {

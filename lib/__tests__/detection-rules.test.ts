@@ -920,6 +920,42 @@ describe('generateUninstallCommand', () => {
     ).toBe('REGISTRY_UNINSTALL:Reader');
   });
 
+  it('should preserve a safe non-MSI ARP registry key as exact uninstall identity', () => {
+    const base: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.exe',
+      sha256: 'abc123',
+      type: 'nullsoft',
+    };
+
+    expect(
+      generateUninstallCommand(
+        { ...base, productCode: 'IntelliJ IDEA 2025.2.5' },
+        'IntelliJ IDEA Ultimate Edition'
+      )
+    ).toBe(
+      'REGISTRY_UNINSTALL_KEY:IntelliJ IDEA 2025.2.5:IntelliJ IDEA Ultimate Edition'
+    );
+    expect(
+      generateUninstallCommand(
+        {
+          ...base,
+          type: 'inno',
+          productCode: '{22222222-2222-2222-2222-222222222222}_is1',
+        },
+        'Inno App'
+      )
+    ).toBe(
+      'REGISTRY_UNINSTALL_KEY:{22222222-2222-2222-2222-222222222222}_is1:Inno App'
+    );
+    expect(
+      generateUninstallCommand(
+        { ...base, productCode: 'Unsafe\\Key:Value' },
+        'Unsafe App'
+      )
+    ).toBe('REGISTRY_UNINSTALL:Unsafe App');
+  });
+
   it('should delegate Inno uninstall to registry lookup when display name is provided', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',

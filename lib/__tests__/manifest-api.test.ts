@@ -634,7 +634,7 @@ describe('normalizeManifestInstallers', () => {
     );
   });
 
-  it('does not replace an explicit non-GUID installer identity with an inherited product code', () => {
+  it('preserves an explicit non-GUID installer identity instead of replacing it', () => {
     const [installer] = normalizeManifestInstallers({
       InstallerType: 'inno',
       ProductCode: '{11111111-1111-1111-1111-111111111111}',
@@ -646,7 +646,29 @@ describe('normalizeManifestInstallers', () => {
       }],
     });
 
-    expect(installer.ProductCode).toBeUndefined();
+    expect(installer.ProductCode).toBe(
+      '{22222222-2222-2222-2222-222222222222}_is1'
+    );
+    expect(normalizeInstaller(installer).productCode).toBe(
+      '{22222222-2222-2222-2222-222222222222}_is1'
+    );
+  });
+
+  it('preserves a named non-MSI ARP key inherited from the manifest root', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'nullsoft',
+      ProductCode: 'IntelliJ IDEA 2025.2.5',
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/idea.exe',
+        InstallerSha256: 'abc123',
+      }],
+    });
+
+    expect(installer.ProductCode).toBe('IntelliJ IDEA 2025.2.5');
+    expect(normalizeInstaller(installer).productCode).toBe(
+      'IntelliJ IDEA 2025.2.5'
+    );
   });
 
   it('inherits root nested installer semantics before normalization', () => {

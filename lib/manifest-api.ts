@@ -18,20 +18,43 @@ import { getCatalogSource } from '@/lib/catalog';
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests';
 const GITHUB_API_BASE = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests';
 
-function normalizeProductCode(value: unknown): string | undefined {
+function normalizeProductCode(
+  value: unknown,
+  installerType?: unknown
+): string | undefined {
   if (typeof value !== 'string') return undefined;
-  const match = value.trim().match(
+  const candidate = value.trim();
+  const match = candidate.match(
     /^\{?([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})\}?$/
   );
-  return match ? `{${match[1].toUpperCase()}}` : undefined;
+  if (match) return `{${match[1].toUpperCase()}}`;
+
+  // WinGet's ProductCode is the ARP registry key, not necessarily an MSI GUID.
+  // NSIS/Inno/EXE packages commonly publish stable values such as
+  // "IntelliJ IDEA 2025.2.5" or "{GUID}_is1". Preserve a conservative registry
+  // key subset for non-MSI installers so packaging can use exact identity
+  // matching instead of a marketing display-name heuristic.
+  const normalizedType = typeof installerType === 'string'
+    ? installerType.toLowerCase()
+    : '';
+  if (normalizedType === 'msi' || normalizedType === 'wix') return undefined;
+  const isSafeNamedKey = /^[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}$/.test(candidate);
+  const isSafeInnoKey = /^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}_[A-Za-z0-9._+-]{1,32}$/.test(candidate);
+  return isSafeNamedKey || isSafeInnoKey
+    ? candidate
+    : undefined;
 }
 
-function appsAndFeaturesProductCode(value: unknown): string | undefined {
+function appsAndFeaturesProductCode(
+  value: unknown,
+  installerType?: unknown
+): string | undefined {
   if (!Array.isArray(value)) return undefined;
   for (const entry of value) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
     const productCode = normalizeProductCode(
-      (entry as Record<string, unknown>).ProductCode
+      (entry as Record<string, unknown>).ProductCode,
+      installerType
     );
     if (productCode) return productCode;
   }
@@ -455,8 +478,11 @@ function coerceInstallersArray(
     ),
     InstallerSuccessCodes: normalizeInstallerSuccessCodes(inst.InstallerSuccessCodes),
     ProductCode: explicitProductCode
-      ? normalizeProductCode(explicitProductCode)
-      : appsAndFeaturesProductCode(inst.AppsAndFeaturesEntries),
+      ? normalizeProductCode(explicitProductCode, inst.InstallerType || defaultType)
+      : appsAndFeaturesProductCode(
+          inst.AppsAndFeaturesEntries,
+          inst.InstallerType || defaultType
+        ),
     PackageFamilyName: inst.PackageFamilyName as string,
     UpgradeBehavior: inst.UpgradeBehavior as WingetInstaller['UpgradeBehavior'],
     Dependencies: inst.Dependencies as WingetInstaller['Dependencies'],
@@ -600,8 +626,8 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
   const defaultUpgrade = manifest.UpgradeBehavior as string;
   const defaultDependencies = manifest.Dependencies as WingetInstaller['Dependencies'];
   const defaultProductCode =
-    normalizeProductCode(manifest.ProductCode) ||
-    appsAndFeaturesProductCode(manifest.AppsAndFeaturesEntries);
+    normalizeProductCode(manifest.ProductCode, defaultType) ||
+    appsAndFeaturesProductCode(manifest.AppsAndFeaturesEntries, defaultType);
   const defaultPackageFamilyName = manifest.PackageFamilyName as string;
   const defaultSuccessCodes = normalizeInstallerSuccessCodes(manifest.InstallerSuccessCodes);
 
@@ -609,9 +635,13 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     const explicitInstallerProductCode = typeof installer.ProductCode === 'string'
       ? installer.ProductCode.trim()
       : '';
+    const effectiveInstallerType = (installer.InstallerType as string) || defaultType;
     const installerProductCode = explicitInstallerProductCode
-      ? normalizeProductCode(explicitInstallerProductCode)
-      : appsAndFeaturesProductCode(installer.AppsAndFeaturesEntries) || defaultProductCode;
+      ? normalizeProductCode(explicitInstallerProductCode, effectiveInstallerType)
+      : appsAndFeaturesProductCode(
+          installer.AppsAndFeaturesEntries,
+          effectiveInstallerType
+        ) || defaultProductCode;
 
     return ({
     Architecture: (installer.Architecture as WingetInstaller['Architecture']) || 'x64',
@@ -777,7 +807,7 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
     ...(normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes)
       ? { installerSuccessCodes: normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes) }
       : {}),
-    productCode: normalizeProductCode(installer.ProductCode),
+    productCode: normalizeProductCode(installer.ProductCode, installer.InstallerType),
     packageFamilyName: installer.PackageFamilyName,
     packageDependencies: packageDependencies.length > 0 ? packageDependencies : undefined,
     windowsFeatures: installer.Dependencies?.WindowsFeatures,

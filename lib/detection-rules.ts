@@ -470,6 +470,19 @@ function generateRegistryUninstallCommand(
     const canonicalProductCode = `{${productCodeMatch[1].toUpperCase()}}`;
     return `REGISTRY_UNINSTALL_PRODUCT:${canonicalProductCode}:${normalizedDisplayName}`;
   }
+  const exactRegistryKey = productCode?.trim();
+  const isSafeNamedKey = exactRegistryKey
+    ? /^[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}$/.test(exactRegistryKey)
+    : false;
+  const isSafeInnoKey = exactRegistryKey
+    ? /^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}_[A-Za-z0-9._+-]{1,32}$/.test(exactRegistryKey)
+    : false;
+  if (
+    exactRegistryKey &&
+    (isSafeNamedKey || isSafeInnoKey)
+  ) {
+    return `REGISTRY_UNINSTALL_KEY:${exactRegistryKey}:${normalizedDisplayName}`;
+  }
   return `REGISTRY_UNINSTALL:${normalizedDisplayName}`;
 }
 
