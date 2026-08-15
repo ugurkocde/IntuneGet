@@ -348,6 +348,21 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // to its captured machine uninstaller for a fully unattended lifecycle.
     'Dropbox.Dropbox',
   ],
+  '719d7fd6db57ce5cbcecad528d53ae9c9088616f': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    // Partition Assistant can keep its Inno uninstaller interactive while
+    // its desktop process is active. This release closes PartAssist through
+    // PSADT and supplies the complete unattended Inno removal contract.
+    'AOMEI.PartitionAssistant',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

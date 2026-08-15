@@ -8,12 +8,20 @@ import {
 describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
-    expect(targets).toEqual(expect.arrayContaining(['PDFsam.PDFsam', 'Mega.MEGASync']));
+    expect(targets).toEqual(expect.arrayContaining([
+      'PDFsam.PDFsam',
+      'Mega.MEGASync',
+      'AOMEI.PartitionAssistant',
+    ]));
 
     targets.length = 0;
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
-      expect.arrayContaining(['PDFsam.PDFsam', 'Mega.MEGASync'])
+      expect.arrayContaining([
+        'PDFsam.PDFsam',
+        'Mega.MEGASync',
+        'AOMEI.PartitionAssistant',
+      ])
     );
   });
 
