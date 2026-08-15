@@ -421,6 +421,24 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // the complete unattended Burn lifecycle for QA and customer packages.
     'Omnissa.HorizonClient',
   ],
+  'ca77e52dc65a404eb81679c5188378bf4d69a692': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Omnissa.HorizonClient',
+    // Autodesk ODIS keeps working after its bootstrap process exits. These
+    // releases wait for the exact managed executable and ODIS completion,
+    // then use Autodesk's manifest-driven unattended uninstall lifecycle.
+    'Autodesk.NavisworksFreedom.2026',
+    'Autodesk.NavisworksFreedom.2027',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

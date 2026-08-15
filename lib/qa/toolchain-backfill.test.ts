@@ -12,6 +12,9 @@ describe('QA toolchain targeted retries', () => {
       'PDFsam.PDFsam',
       'Mega.MEGASync',
       'AOMEI.PartitionAssistant',
+      'Omnissa.HorizonClient',
+      'Autodesk.NavisworksFreedom.2026',
+      'Autodesk.NavisworksFreedom.2027',
     ]));
 
     targets.length = 0;
@@ -21,6 +24,9 @@ describe('QA toolchain targeted retries', () => {
         'PDFsam.PDFsam',
         'Mega.MEGASync',
         'AOMEI.PartitionAssistant',
+        'Omnissa.HorizonClient',
+        'Autodesk.NavisworksFreedom.2026',
+        'Autodesk.NavisworksFreedom.2027',
       ])
     );
   });
@@ -411,6 +417,16 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'OMNISSA.HORIZONCLIENT', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it.each([
+    'Autodesk.NavisworksFreedom.2026',
+    'Autodesk.NavisworksFreedom.2027',
+  ])('retries %s with its reviewed ODIS lifecycle', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
     )).toBe(true);
   });
 
