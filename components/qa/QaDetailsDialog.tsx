@@ -5,18 +5,18 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  ExternalLink,
   FileClock,
   Gauge,
   Loader2,
   PackageCheck,
   RefreshCw,
   Settings2,
-  ShieldAlert,
   ShieldCheck,
-  ShieldQuestion,
   TerminalSquare,
   XCircle,
 } from 'lucide-react';
+import { VirusTotalIcon } from '@/components/qa/VirusTotalIcon';
 import { T, Var } from 'gt-next';
 import { AppIcon } from '@/components/AppIcon';
 import {
@@ -204,12 +204,17 @@ function LifecycleCard({ name, result }: { name: string; result: QaPhaseResult |
   );
 }
 
-function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
+function VirusTotalBanner({
+  virusTotal,
+  installerSha256,
+}: {
+  virusTotal: QaVirusTotalSummary;
+  installerSha256: string | null;
+}) {
   const clean = virusTotal.status === 'clean';
   const flagged = virusTotal.status === 'flagged';
   const suspicious = virusTotal.status === 'suspicious';
   const totalEngines = virusTotal.totalEngines ?? 0;
-  const Icon = clean ? ShieldCheck : flagged || suspicious ? ShieldAlert : ShieldQuestion;
   const neutral = !clean && !flagged && !suspicious;
 
   return (
@@ -223,8 +228,7 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
         neutral && 'border-overlay/10 bg-bg-elevated/40'
       )}
     >
-      <Icon
-        aria-hidden="true"
+      <VirusTotalIcon
         className={cn(
           'pointer-events-none absolute -right-5 -top-5 h-32 w-32 opacity-[0.07]',
           clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-muted'
@@ -233,14 +237,14 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
       <div className="relative flex items-start gap-4">
         <span
           className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-4',
-            clean && 'bg-status-success/15 text-status-success ring-status-success/10',
-            flagged && 'bg-status-error/15 text-status-error ring-status-error/10',
-            suspicious && 'bg-status-warning/15 text-status-warning ring-status-warning/10',
-            neutral && 'bg-overlay/10 text-text-muted ring-overlay/5'
+            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#394EFF] ring-4',
+            clean && 'ring-status-success/15',
+            flagged && 'ring-status-error/15',
+            suspicious && 'ring-status-warning/15',
+            neutral && 'ring-overlay/10'
           )}
         >
-          <Icon className="h-6 w-6" aria-hidden="true" />
+          <VirusTotalIcon className="h-6 w-6" />
         </span>
         <div className="min-w-0 flex-1">
           <p
@@ -286,6 +290,17 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
             )}
           </p>
           <p className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+            {installerSha256 ? (
+              <a
+                href={`https://www.virustotal.com/gui/file/${installerSha256.toLowerCase()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-medium text-accent-cyan transition-colors hover:text-accent-cyan-bright"
+              >
+                <T>Open on VirusTotal</T>
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            ) : null}
             <span><T>Hash-only lookup — the installer is never uploaded</T></span>
             {virusTotal.scannedAtUtc ? (
               <span><T>Last analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></span>
@@ -422,7 +437,9 @@ export function QaDetailsDialog({
                 </div>
               </section>
 
-              {data.virusTotal ? <VirusTotalBanner virusTotal={data.virusTotal} /> : null}
+              {data.virusTotal ? (
+                <VirusTotalBanner virusTotal={data.virusTotal} installerSha256={data.installerSha256} />
+              ) : null}
 
               {data.testedVersion !== catalogVersion ? (
                 <div className="flex gap-3 rounded-2xl border border-status-warning/20 bg-status-warning/10 p-4 text-sm leading-6 text-status-warning">

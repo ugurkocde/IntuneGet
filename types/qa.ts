@@ -304,6 +304,8 @@ export interface QaDetailsResponse {
   relevantEventCount: number | null;
   environment: QaEnvironment | null;
   effectiveConfiguration: QaEffectiveConfiguration | null;
+  /** Public winget installer hash; used to deep-link the VirusTotal report. */
+  installerSha256: string | null;
   virusTotal: QaVirusTotalSummary | null;
   classification: QaClassification | null;
   package?: {

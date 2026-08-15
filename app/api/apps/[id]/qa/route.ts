@@ -64,6 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       relevantEventCount: row.relevant_event_count,
       environment: row.environment,
       effectiveConfiguration: row.effective_configuration,
+      installerSha256: row.installer_sha256,
       virusTotal: row.virustotal_status
         ? {
             status: row.virustotal_status,
