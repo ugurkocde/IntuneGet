@@ -12,8 +12,7 @@ describe('QA toolchain targeted retries', () => {
       'PDFsam.PDFsam',
       'Mega.MEGASync',
       'AOMEI.PartitionAssistant',
-      'Omnissa.HorizonClient',
-      'JetBrains.IntelliJIDEA.Ultimate',
+      'Ringler.SnapformViewer',
     ]));
 
     targets.length = 0;
@@ -23,8 +22,7 @@ describe('QA toolchain targeted retries', () => {
         'PDFsam.PDFsam',
         'Mega.MEGASync',
         'AOMEI.PartitionAssistant',
-        'Omnissa.HorizonClient',
-        'JetBrains.IntelliJIDEA.Ultimate',
+        'Ringler.SnapformViewer',
       ])
     );
   });
@@ -413,9 +411,13 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries Horizon Client after suppressing Burn uninstall restarts', () => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      'af4dfb94c9109ca598abc16a4b8cad57f6790066',
       { wingetId: 'OMNISSA.HORIZONCLIENT', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'OMNISSA.HORIZONCLIENT', status: 'failed' }
+    )).toBe(false);
   });
 
   it('retries Ecosia once with Chromium silent removal', () => {
@@ -431,8 +433,19 @@ describe('QA toolchain targeted retries', () => {
 
   it('retries IntelliJ Ultimate with its exact named ARP key', () => {
     expect(shouldRetryTerminalToolchainCandidate(
+      'af4dfb94c9109ca598abc16a4b8cad57f6790066',
+      { wingetId: 'jetbrains.intellijidea.ultimate', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'jetbrains.intellijidea.ultimate', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Snapform Viewer with install4j unattended removal', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ringler.snapformviewer', status: 'failed' }
     )).toBe(true);
   });
 

@@ -471,6 +471,21 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // as the exact ARP registry key for QA and customer package lifecycle.
     'JetBrains.IntelliJIDEA.Ultimate',
   ],
+  '22b8e738d51a612f68b01c83b705d2dabc3bbcff': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    // install4j registers its canonical .install4j uninstaller without quiet
+    // arguments. The shared packager now applies its documented unattended mode.
+    'Ringler.SnapformViewer',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
