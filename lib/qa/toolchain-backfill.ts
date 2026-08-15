@@ -391,6 +391,20 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // command guard after both generic Inno switches and /S proved no-ops.
     'AOMEI.PartitionAssistant',
   ],
+  '461c2757292d3b7bcde33682d3f7b33e566b1fea': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    // AOMEI's exact vendor command now preserves /SILENT while suppressing
+    // custom message boxes, restarts, and the startup prompt under SYSTEM.
+    'AOMEI.PartitionAssistant',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
