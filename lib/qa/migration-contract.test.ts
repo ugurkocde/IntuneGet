@@ -409,6 +409,27 @@ describe('Roblox managed uninstall block migration contract', () => {
   });
 });
 
+describe('Sonos Controller managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260815191000_block_sonos_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported Sonos launcher across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Sonos.Controller'");
+    expect(sql).toContain(
+      'https://ideas.patchmypc.com/ideas/PATCHMYPC-I-1498'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
