@@ -110,6 +110,10 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['--silent', '--force_stop']);
     expect(
+      applyApplicationPackagingAdapter('Apryse.XodoPDFReader', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['-q']);
+    expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['--force-uninstall']);

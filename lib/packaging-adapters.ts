@@ -154,6 +154,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes',
   },
   {
+    // Apryse documents -q as the unattended Windows uninstall switch for the
+    // install4j-based Xodo/PDF Studio family. The registered Xodo PDF Reader
+    // command omits it, which leaves the confirmation flow waiting in a
+    // non-interactive Intune session. Append the vendor's quiet contract to
+    // the exact captured product-specific uninstaller for QA and customers.
+    wingetId: 'Apryse.XodoPDFReader',
+    reviewedUninstallArguments: ['-q'],
+  },
+  {
     // Sonos' compressed InstallShield launcher does not reliably install in a
     // non-interactive LocalSystem session. Create the vendor-supported
     // administrative image in the target context, validate its MSI against the
