@@ -163,10 +163,10 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
-    // AOMEI's uninstaller uses its own /S unattended contract. Generic Inno
-    // switches leave the product registration behind even though the process
-    // returns. Close the reviewed desktop process through PSADT and execute
-    // the installed vendor uninstaller directly for QA and customer packages.
+    // AOMEI registers /SILENT as its quiet uninstall contract. Replacing it
+    // with generic Inno switches or NSIS-style /S leaves the product
+    // registration behind. Close the reviewed desktop process through PSADT
+    // and preserve the installed vendor command for QA and customer packages.
     wingetId: 'AOMEI.PartitionAssistant',
     requiredProcessesToClose: [
       { name: 'PartAssist', description: 'AOMEI Partition Assistant' },
@@ -174,7 +174,7 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedExactUninstall: {
       executablePath:
         '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
-      arguments: ['/S'],
+      arguments: ['/SILENT'],
       completionTimeoutMinutes: 5,
     },
   },
