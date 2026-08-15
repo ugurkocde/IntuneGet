@@ -150,6 +150,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['--silent', '--force_stop'],
   },
   {
+    // Dropbox's support guidance requires every Dropbox desktop process to be
+    // quit before retrying a failed Windows uninstall. The enterprise offline
+    // installer can leave Dropbox running after installation, and its captured
+    // machine uninstaller otherwise returns asynchronously while the exact ARP
+    // registration remains. Close the reviewed desktop process through PSADT
+    // before both upgrade and Intune removal.
+    wingetId: 'Dropbox.Dropbox',
+    requiredProcessesToClose: [
+      { name: 'Dropbox', description: 'Dropbox' },
+    ],
+  },
+  {
     // Bitvise uses its own unattended switch rather than the generic /S that
     // WinGet currently publishes. The vendor documents -unat together with
     // explicit EULA acceptance for scripted installation.
