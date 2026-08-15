@@ -542,6 +542,27 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // restart-suppression properties instead of returning MSI error 1619.
     'Sonos.Controller',
   ],
+  '5569c16d136f464cbc014f40c70645414c601751': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    // .NET Framework has no single dependable ARP identity. This release
+    // verifies Microsoft's documented Full\Release DWORD and retains the
+    // shared Windows runtime when IntuneGet relinquishes its marker.
+    'Microsoft.DotNet.Framework.Runtime',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

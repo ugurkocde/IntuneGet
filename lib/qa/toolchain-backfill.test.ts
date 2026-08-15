@@ -17,6 +17,7 @@ describe('QA toolchain targeted retries', () => {
       'IPEVO.Visualizer',
       'IPEVO.VisualizerLTSE',
       'Sonos.Controller',
+      'Microsoft.DotNet.Framework.Runtime',
     ]));
 
     targets.length = 0;
@@ -31,6 +32,7 @@ describe('QA toolchain targeted retries', () => {
         'IPEVO.Visualizer',
         'IPEVO.VisualizerLTSE',
         'Sonos.Controller',
+        'Microsoft.DotNet.Framework.Runtime',
       ])
     );
   });
@@ -478,6 +480,13 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'sonos.controller', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries .NET Framework with its reviewed Microsoft registry evidence', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'microsoft.dotnet.framework.runtime', status: 'failed' }
     )).toBe(true);
   });
 
