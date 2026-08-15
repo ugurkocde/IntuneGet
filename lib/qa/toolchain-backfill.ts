@@ -504,6 +504,24 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Cisco.Jabber',
     'IPEVO.Visualizer',
   ],
+  '25682a8899466dbfe72403556e854d7335e1ae8f': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    // This MSI app appends the exact package version to its ARP display name.
+    // The shared packager now captures that one observed, version-agreeing identity.
+    'IPEVO.VisualizerLTSE',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

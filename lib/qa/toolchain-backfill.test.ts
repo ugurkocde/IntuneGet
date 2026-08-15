@@ -15,6 +15,7 @@ describe('QA toolchain targeted retries', () => {
       'Ringler.SnapformViewer',
       'Cisco.Jabber',
       'IPEVO.Visualizer',
+      'IPEVO.VisualizerLTSE',
     ]));
 
     targets.length = 0;
@@ -27,6 +28,7 @@ describe('QA toolchain targeted retries', () => {
         'Ringler.SnapformViewer',
         'Cisco.Jabber',
         'IPEVO.Visualizer',
+        'IPEVO.VisualizerLTSE',
       ])
     );
   });
@@ -460,6 +462,13 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Visualizer LTSE with exact version-suffixed ARP identity matching', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ipevo.visualizerltse', status: 'failed' }
     )).toBe(true);
   });
 
