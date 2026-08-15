@@ -150,13 +150,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['--silent', '--force_stop'],
   },
   {
-    // Dropbox's support guidance requires every Dropbox desktop process to be
-    // quit before retrying a failed Windows uninstall. The enterprise offline
-    // installer can leave Dropbox running after installation, and its captured
-    // machine uninstaller otherwise returns asynchronously while the exact ARP
-    // registration remains. Close the reviewed desktop process through PSADT
-    // before both upgrade and Intune removal.
+    // Dropbox documents /NOLAUNCH for unattended enterprise installs that must
+    // not start the client. Its Windows support guidance also requires Dropbox
+    // processes to be closed before removal. The registered machine uninstaller
+    // needs NSIS /S in addition to its captured /InstallType:MACHINE argument;
+    // otherwise it returns while the exact ARP registration remains installed.
     wingetId: 'Dropbox.Dropbox',
+    reviewedInstallArgumentsOverride: '/NOLAUNCH',
+    reviewedUninstallArguments: ['/S'],
     requiredProcessesToClose: [
       { name: 'Dropbox', description: 'Dropbox' },
     ],

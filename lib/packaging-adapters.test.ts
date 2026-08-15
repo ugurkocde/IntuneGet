@@ -103,8 +103,11 @@ describe('application packaging adapters', () => {
     ).toEqual(['--silent', '--force_stop']);
     expect(
       applyApplicationPackagingAdapter('Dropbox.Dropbox', DEFAULT_PSADT_CONFIG)
-        .processesToClose
-    ).toEqual([{ name: 'Dropbox', description: 'Dropbox' }]);
+    ).toMatchObject({
+      reviewedInstallArgumentsOverride: '/NOLAUNCH',
+      reviewedUninstallArguments: ['/S'],
+      processesToClose: [{ name: 'Dropbox', description: 'Dropbox' }],
+    });
     expect(
       applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
