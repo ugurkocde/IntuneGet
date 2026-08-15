@@ -163,20 +163,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
-    // AOMEI's Inno uninstaller can remain interactive, or return before the
-    // product is removed, while Partition Assistant is still running. Close
-    // the reviewed desktop process through PSADT and enforce Inno's complete
-    // unattended removal contract for both QA and customer Intune packages.
+    // AOMEI's uninstaller uses its own /S unattended contract. Generic Inno
+    // switches leave the product registration behind even though the process
+    // returns. Close the reviewed desktop process through PSADT and execute
+    // the installed vendor uninstaller directly for QA and customer packages.
     wingetId: 'AOMEI.PartitionAssistant',
     requiredProcessesToClose: [
       { name: 'PartAssist', description: 'AOMEI Partition Assistant' },
     ],
-    reviewedUninstallArguments: [
-      '/VERYSILENT',
-      '/SUPPRESSMSGBOXES',
-      '/NORESTART',
-      '/SP-',
-    ],
+    reviewedExactUninstall: {
+      executablePath:
+        '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
+      arguments: ['/S'],
+      completionTimeoutMinutes: 5,
+    },
   },
   {
     // Bitvise uses its own unattended switch rather than the generic /S that

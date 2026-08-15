@@ -350,6 +350,44 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps an exact vendor uninstall contract authoritative for Inno packages',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'AOMEI Partition Assistant',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath:
+              '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
+            arguments: ['/S'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'AOMEI.PartitionAssistant'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallArguments = @('/S')"
+      );
+      expect(uninstallFunction).toContain(
+        "if (-not $useReviewedExactUninstall -and -not $isVivaldiUninstall"
+      );
+      expect(uninstallFunction).not.toContain(
+        "$registeredUninstallArguments = @('/S', '/VERYSILENT'"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'uses the hash-verified packaged installer for a reviewed vendor removal lifecycle',
     () => {
       const generated = generateRegistryUninstallPackage(

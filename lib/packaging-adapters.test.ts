@@ -114,12 +114,12 @@ describe('application packaging adapters', () => {
         DEFAULT_PSADT_CONFIG
       )
     ).toMatchObject({
-      reviewedUninstallArguments: [
-        '/VERYSILENT',
-        '/SUPPRESSMSGBOXES',
-        '/NORESTART',
-        '/SP-',
-      ],
+      reviewedExactUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\AOMEI Partition Assistant\\unins000.exe',
+        arguments: ['/S'],
+        completionTimeoutMinutes: 5,
+      },
       processesToClose: [
         { name: 'PartAssist', description: 'AOMEI Partition Assistant' },
       ],

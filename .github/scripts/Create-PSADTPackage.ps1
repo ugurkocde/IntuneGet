@@ -2698,7 +2698,7 @@ if ($useManagedDirectoryLifecycle) {
             '            }'
             '        }'
             '    }'
-            '    if (-not $isVivaldiUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine ''msiexec.exe'' -and $registeredInstallerType -eq ''inno'') {'
+            '    if (-not $useReviewedExactUninstall -and -not $isVivaldiUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine ''msiexec.exe'' -and $registeredInstallerType -eq ''inno'') {'
             '        # Inno''s registered QuietUninstallString is not consistently fully unattended.'
             '        # Normalize weak /SILENT registrations to the vendor-documented, message-box-free'
             '        # switches so SYSTEM deployments cannot wait behind an invisible prompt.'
