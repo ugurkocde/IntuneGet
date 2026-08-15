@@ -363,6 +363,20 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // PSADT and supplies the complete unattended Inno removal contract.
     'AOMEI.PartitionAssistant',
   ],
+  '6db4e201f11e49bceb4d2729a2bc77fb0e675e89': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    // AOMEI uses /S rather than generic Inno switches. The exact reviewed
+    // vendor command is now authoritative in QA and customer packages.
+    'AOMEI.PartitionAssistant',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
