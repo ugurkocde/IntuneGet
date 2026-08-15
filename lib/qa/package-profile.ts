@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '5569c16d136f464cbc014f40c70645414c601751',
+  packagerCommit: '7c63f08735a32d428068d9e7fd467830096250a1',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -81,6 +81,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   'af4dfb94c9109ca598abc16a4b8cad57f6790066',
   '22b8e738d51a612f68b01c83b705d2dabc3bbcff',
   'cc143c874f2e84f06097cb199ad9998344040ded',
+  // The .NET Framework registry-evidence release changed only its reviewed
+  // adapter path. Preserve its passing result and every unrelated pass while
+  // the Sonos-specific embedded-MSI lifecycle rolls out.
+  '5569c16d136f464cbc014f40c70645414c601751',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

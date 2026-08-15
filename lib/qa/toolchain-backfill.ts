@@ -563,6 +563,26 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // shared Windows runtime when IntuneGet relinquishes its marker.
     'Microsoft.DotNet.Framework.Runtime',
   ],
+  '7c63f08735a32d428068d9e7fd467830096250a1': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    // Sonos' native launcher cannot install silently as LocalSystem. This
+    // release extracts its embedded MSI inside the target context, validates
+    // its exact product identity, and installs it through PSADT.
+    'Sonos.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

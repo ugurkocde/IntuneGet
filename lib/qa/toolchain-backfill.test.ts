@@ -17,7 +17,6 @@ describe('QA toolchain targeted retries', () => {
       'IPEVO.Visualizer',
       'IPEVO.VisualizerLTSE',
       'Sonos.Controller',
-      'Microsoft.DotNet.Framework.Runtime',
     ]));
 
     targets.length = 0;
@@ -32,9 +31,17 @@ describe('QA toolchain targeted retries', () => {
         'IPEVO.Visualizer',
         'IPEVO.VisualizerLTSE',
         'Sonos.Controller',
-        'Microsoft.DotNet.Framework.Runtime',
       ])
     );
+  });
+
+  it('does not repeat the consumed .NET Framework retry in the Sonos release', () => {
+    expect(terminalToolchainRetryTargets(
+      '5569c16d136f464cbc014f40c70645414c601751'
+    )).toContain('Microsoft.DotNet.Framework.Runtime');
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).not.toContain('Microsoft.DotNet.Framework.Runtime');
   });
 
   it('retries PDFsam once with its documented managed MSI command', () => {
@@ -476,18 +483,22 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
-  it('retries Sonos with its reviewed InstallShield silent argument payload', () => {
+  it('retries Sonos with its reviewed embedded-MSI lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'sonos.controller', status: 'failed' }
     )).toBe(true);
   });
 
-  it('retries .NET Framework with its reviewed Microsoft registry evidence', () => {
+  it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '5569c16d136f464cbc014f40c70645414c601751',
+      { wingetId: 'microsoft.dotnet.framework.runtime', status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'microsoft.dotnet.framework.runtime', status: 'failed' }
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it.each([
