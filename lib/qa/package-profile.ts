@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'ca77e52dc65a404eb81679c5188378bf4d69a692',
+  packagerCommit: '94c8f81e38ac180048f86dbf2df7f987fa448676',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -77,6 +77,7 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   '0c2765c26b69619df8f581190f4e67d97d79b589',
   '461c2757292d3b7bcde33682d3f7b33e566b1fea',
   '02f93d590887282aca0037412c8786785ddc6486',
+  'ca77e52dc65a404eb81679c5188378bf4d69a692',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -532,7 +533,7 @@ export function validateCompatiblePassedCatalogQaProfile(
   }
   const typedPsadtConfig = psadtConfig as unknown as PSADTConfig;
   const adapted = applyApplicationPackagingAdapter(wingetId, typedPsadtConfig);
-  if (adapted !== typedPsadtConfig) {
+  if (canonicalQaJson(adapted) !== canonicalQaJson(typedPsadtConfig)) {
     return { valid: false, reason: 'compatible-application-adapter-changed' };
   }
 

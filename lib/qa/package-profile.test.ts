@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
 import {
   buildQaPackageIdentity,
   buildQaPackageIdentityFromWorkflowInput,
@@ -652,6 +653,24 @@ describe('current catalog QA package validation', () => {
     expect(
       validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
     ).toEqual({ valid: false, reason: 'compatible-application-adapter-changed' });
+  });
+
+  it('reuses an adapted pass when a later release leaves its behavior unchanged', () => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({
+        ...input,
+        wingetId: 'Google.GoogleDrive',
+        psadtConfig: applyApplicationPackagingAdapter(
+          'Google.GoogleDrive',
+          DEFAULT_PSADT_CONFIG
+        ),
+      }),
+      'ca77e52dc65a404eb81679c5188378bf4d69a692'
+    );
+
+    expect(
+      validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
+    ).toMatchObject({ valid: true });
   });
 
   it('normalizes case and whitespace on both sides of candidate bindings', () => {

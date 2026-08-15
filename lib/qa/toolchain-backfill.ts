@@ -439,6 +439,22 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Autodesk.NavisworksFreedom.2026',
     'Autodesk.NavisworksFreedom.2027',
   ],
+  '94c8f81e38ac180048f86dbf2df7f987fa448676': [
+    // Preserve unresolved, customer-deployed lifecycle retries through the
+    // cumulative rollout. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Omnissa.HorizonClient',
+    // Ecosia's captured Chromium command omitted the switch that suppresses
+    // confirmation UI. This release appends --force-uninstall for one retry.
+    'Ecosia.EcosiaBrowser',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

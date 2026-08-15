@@ -1134,6 +1134,43 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(candidateInserts[0]).toMatchObject({ winget_id: 'Supported.App' });
   });
 
+  it('does not rebuild a stale queued duplicate when its exact profile already passed', async () => {
+    const staleCandidate = profileCandidate({
+      id: 'covered-queued-duplicate',
+      wingetId: 'Covered.App',
+      packagerCommit: 'ca77e52dc65a404eb81679c5188378bf4d69a692',
+      enqueuedAt: '2026-08-15T07:20:00.000Z',
+      status: 'queued',
+    });
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [
+        { winget_id: 'Covered.App', name: 'Covered', publisher: 'Contoso' },
+      ],
+      deployedApps: ['Covered.App'],
+      candidatePages: [[staleCandidate]],
+      packageResults: [
+        {
+          winget_id: 'Covered.App',
+          tested_version: staleCandidate.version,
+          architecture: staleCandidate.architecture,
+          installer_sha256: staleCandidate.installer_sha256,
+          outcome: 'Passed',
+          tested_at_utc: '2026-08-15T07:10:00.000Z',
+          package_profile_sha256: staleCandidate.package_profile_sha256,
+        },
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ queued: 0, toolchainBackfillCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
   it('does not stop before an older deployed terminal retry target is scanned', async () => {
     const firstPage = [
       ...['Recent.One', 'Recent.Two', 'Recent.Three'].map((wingetId, index) =>

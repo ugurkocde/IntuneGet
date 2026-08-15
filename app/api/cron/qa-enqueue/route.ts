@@ -88,6 +88,32 @@ interface QaCandidateProfileRow {
   priority: number;
 }
 
+interface QaPackagePassRow {
+  winget_id: string;
+  tested_version: string;
+  architecture: string;
+  installer_sha256: string | null;
+  outcome: string;
+  package_profile_sha256: string | null;
+}
+
+function packagePassKey(value: {
+  winget_id: string;
+  tested_version?: string;
+  version?: string;
+  architecture: string;
+  installer_sha256: string | null;
+  package_profile_sha256: string | null;
+}): string {
+  return [
+    value.winget_id.trim().toLowerCase(),
+    (value.tested_version || value.version || '').trim().toLowerCase(),
+    value.architecture.trim().toLowerCase(),
+    (value.installer_sha256 || '').trim().toUpperCase(),
+    (value.package_profile_sha256 || '').trim().toUpperCase(),
+  ].join('|');
+}
+
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -153,7 +179,7 @@ async function findToolchainBackfillIds(
     const rows = (data || []) as QaCandidateProfileRow[];
     pagesScanned++;
 
-    const pageStaleRows: QaCandidateProfileRow[] = [];
+    let pageStaleRows: QaCandidateProfileRow[] = [];
     for (const row of rows) {
       const config = object(row.test_config);
       const normalizedWingetId = row.winget_id.trim().toLowerCase();
@@ -193,6 +219,37 @@ async function findToolchainBackfillIds(
       ) {
         pageStaleRows.push(row);
       }
+    }
+
+    if (pageStaleRows.length > 0) {
+      // A queued or superseded duplicate can be newer than a genuine pass and
+      // would otherwise hide that reusable evidence during a toolchain rollout.
+      // Match the immutable payload and old execution profile, then run the
+      // normal release-aware compatibility check before scheduling any rebuild.
+      const { data: priorPasses, error: priorPassesError } = await supabase
+        .from('qa_package_results')
+        .select(
+          'winget_id, tested_version, architecture, installer_sha256, outcome, package_profile_sha256'
+        )
+        .in('winget_id', pageStaleRows.map((row) => row.winget_id))
+        .eq('outcome', 'Passed');
+      if (priorPassesError) {
+        throw new Error(`Could not read prior QA toolchain passes: ${priorPassesError.message}`);
+      }
+      const passedProfiles = new Set(
+        ((priorPasses || []) as QaPackagePassRow[]).map(packagePassKey)
+      );
+      pageStaleRows = pageStaleRows.filter((row) => {
+        if (!passedProfiles.has(packagePassKey(row))) return true;
+        return !validateCompatiblePassedCatalogQaProfile({
+          testConfig: row.test_config,
+          candidatePackageProfileSha256: row.package_profile_sha256,
+          candidateWingetId: row.winget_id,
+          candidateVersion: row.version,
+          candidateArchitecture: row.architecture,
+          candidateInstallerSha256: row.installer_sha256,
+        }).valid;
+      });
     }
 
     if (pageStaleRows.length > 0) {

@@ -13,8 +13,7 @@ describe('QA toolchain targeted retries', () => {
       'Mega.MEGASync',
       'AOMEI.PartitionAssistant',
       'Omnissa.HorizonClient',
-      'Autodesk.NavisworksFreedom.2026',
-      'Autodesk.NavisworksFreedom.2027',
+      'Ecosia.EcosiaBrowser',
     ]));
 
     targets.length = 0;
@@ -25,8 +24,7 @@ describe('QA toolchain targeted retries', () => {
         'Mega.MEGASync',
         'AOMEI.PartitionAssistant',
         'Omnissa.HorizonClient',
-        'Autodesk.NavisworksFreedom.2026',
-        'Autodesk.NavisworksFreedom.2027',
+        'Ecosia.EcosiaBrowser',
       ])
     );
   });
@@ -420,14 +418,25 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('retries Ecosia once with Chromium silent removal', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ECOSIA.ECOSIABROWSER', status: 'failed' }
+    )).toBe(true);
+  });
+
   it.each([
     'Autodesk.NavisworksFreedom.2026',
     'Autodesk.NavisworksFreedom.2027',
   ])('retries %s with its reviewed ODIS lifecycle', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      'ca77e52dc65a404eb81679c5188378bf4d69a692',
       { wingetId, status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
   });
 
   it('still rebuilds a non-terminal stale candidate', () => {
