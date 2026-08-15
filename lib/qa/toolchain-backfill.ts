@@ -320,6 +320,20 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // the exact ARP product is removed under non-interactive LocalSystem.
     'Google.GoogleDrive',
   ],
+  '00fa68c7a24afe9db434cef87baa42455ed81fbb': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    // Dropbox's enterprise offline installer leaves the desktop process
+    // running, which blocks its captured machine uninstaller. This release
+    // closes the reviewed process through the shared PSADT lifecycle.
+    'Dropbox.Dropbox',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
