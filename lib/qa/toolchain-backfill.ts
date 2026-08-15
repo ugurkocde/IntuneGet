@@ -307,6 +307,19 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // depend on ambiguous display-name matching.
     'Timely.Memory',
   ],
+  'c14531559086f83364ce69178369bf9462bcd872': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    // Google Drive launches its versioned uninstaller asynchronously. This
+    // release appends Google's documented --silent --force_stop contract so
+    // the exact ARP product is removed under non-interactive LocalSystem.
+    'Google.GoogleDrive',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
