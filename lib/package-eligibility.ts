@@ -4,6 +4,7 @@ import type { Database } from '@/types/database';
 export type PackageEligibilityBlockCode =
   | 'vendor_retired'
   | 'upstream_removed'
+  | 'unsupported_managed_install'
   | 'unsupported_managed_uninstall';
 
 export interface PackageEligibilityBlock {

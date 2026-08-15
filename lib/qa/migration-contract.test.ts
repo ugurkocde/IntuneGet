@@ -367,6 +367,27 @@ describe('AOMEI managed uninstall block migration contract', () => {
   });
 });
 
+describe('NVIDIA GeForce NOW managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260815063000_block_nvidia_geforce_now_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unreliable bootstrapper across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Nvidia.GeForceNow'");
+    expect(sql).toContain(
+      'https://github.com/microsoft/winget-pkgs/issues/56299'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
