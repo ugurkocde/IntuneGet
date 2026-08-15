@@ -97,7 +97,12 @@ function architecture(value: string): QaArchitecture {
 }
 
 function virusTotalStatus(value: string | null | undefined): QaVirusTotalStatus | null {
-  return value === 'clean' || value === 'flagged' || value === 'not_found' || value === 'error' || value === 'skipped'
+  return value === 'clean' ||
+    value === 'suspicious' ||
+    value === 'flagged' ||
+    value === 'not_found' ||
+    value === 'error' ||
+    value === 'skipped'
     ? value
     : null;
 }

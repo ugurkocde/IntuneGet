@@ -94,6 +94,14 @@ function QaVirusTotalCell({ status }: { status: QaVirusTotalStatus | null }) {
       </span>
     );
   }
+  if (status === 'suspicious') {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-status-warning">
+        <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <T>Suspicious</T>
+      </span>
+    );
+  }
   if (status === 'not_found') {
     return (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
@@ -548,7 +556,9 @@ function DashboardContent() {
                     </span>
                     <span className="flex flex-col items-end gap-1">
                       <QaResultStatus outcome={item.outcome} />
-                      {item.virusTotalStatus === 'clean' || item.virusTotalStatus === 'flagged' ? (
+                      {item.virusTotalStatus === 'clean' ||
+                      item.virusTotalStatus === 'flagged' ||
+                      item.virusTotalStatus === 'suspicious' ? (
                         <QaVirusTotalCell status={item.virusTotalStatus} />
                       ) : null}
                     </span>

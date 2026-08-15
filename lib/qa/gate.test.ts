@@ -18,6 +18,7 @@ vi.mock('@/lib/supabase', () => ({
         packageEqMock(...args);
         return builder;
       });
+      builder.gte = vi.fn(() => builder);
       builder.order = vi.fn(() => builder);
       builder.limit = vi.fn(() => builder);
       builder.maybeSingle = getPackageResultMock;
@@ -26,7 +27,7 @@ vi.mock('@/lib/supabase', () => ({
   }),
 }));
 
-import { enforceQaGate, QaGateError, QaGateNotPassedError } from './gate';
+import { enforceQaGate, QaGateError, QaGateNotPassedError, QaSecurityGateError } from './gate';
 
 const installerSha256 = 'A'.repeat(64);
 const packageProfileSha256 = 'B'.repeat(64);
@@ -132,6 +133,66 @@ describe('enforceQaGate', () => {
         requirePassed: true,
       })
     ).rejects.toBeInstanceOf(QaGateNotPassedError);
+  });
+
+  it('blocks packaging when VirusTotal reported a malicious verdict for the exact installer', async () => {
+    getPackageResultMock.mockResolvedValueOnce({
+      data: { virustotal_malicious: 1, virustotal_total_engines: 72 },
+      error: null,
+    });
+    await expect(
+      enforceQaGate({
+        wingetId: 'OpenJS.NodeJS',
+        version: '26.7.0',
+        architecture: 'x64',
+        installerSha256,
+        packageProfileSha256,
+        requirePassed: true,
+      })
+    ).rejects.toBeInstanceOf(QaSecurityGateError);
+  });
+
+  it('does not allow a manual QA override to bypass the security gate', async () => {
+    getPackageResultMock.mockResolvedValueOnce({
+      data: { virustotal_malicious: 4, virustotal_total_engines: 70 },
+      error: null,
+    });
+    await expect(
+      enforceQaGate({
+        wingetId: 'OpenJS.NodeJS',
+        version: '26.7.0',
+        architecture: 'x64',
+        installerSha256,
+        qaOverride: true,
+      })
+    ).rejects.toBeInstanceOf(QaSecurityGateError);
+  });
+
+  it('blocks a flagged current version even when its installation test passed', async () => {
+    getQaResultMock.mockResolvedValue({
+      ...failedRow,
+      outcome: 'Passed',
+      virustotal_status: 'flagged',
+      virustotal_malicious: 2,
+      virustotal_total_engines: 72,
+    });
+    await expect(
+      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64' })
+    ).rejects.toBeInstanceOf(QaSecurityGateError);
+  });
+
+  it('does not block on suspicious-only or missing VirusTotal verdicts', async () => {
+    getQaResultMock.mockResolvedValue({
+      ...failedRow,
+      outcome: 'Passed',
+      virustotal_status: 'suspicious',
+      virustotal_malicious: 0,
+      virustotal_suspicious: 3,
+      virustotal_total_engines: 72,
+    });
+    await expect(
+      enforceQaGate({ wingetId: 'OpenJS.NodeJS', version: '26.7.0', architecture: 'x64' })
+    ).resolves.toBeUndefined();
   });
 
   it('does not allow a manual override to bypass strict automatic QA', async () => {

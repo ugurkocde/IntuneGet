@@ -207,9 +207,10 @@ function LifecycleCard({ name, result }: { name: string; result: QaPhaseResult |
 function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
   const clean = virusTotal.status === 'clean';
   const flagged = virusTotal.status === 'flagged';
-  const flaggedCount = (virusTotal.malicious ?? 0) + (virusTotal.suspicious ?? 0);
+  const suspicious = virusTotal.status === 'suspicious';
   const totalEngines = virusTotal.totalEngines ?? 0;
-  const Icon = clean ? ShieldCheck : flagged ? ShieldAlert : ShieldQuestion;
+  const Icon = clean ? ShieldCheck : flagged || suspicious ? ShieldAlert : ShieldQuestion;
+  const neutral = !clean && !flagged && !suspicious;
 
   return (
     <section
@@ -218,14 +219,15 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
         'relative overflow-hidden rounded-2xl border p-5 sm:p-6',
         clean && 'border-status-success/25 bg-gradient-to-br from-status-success/15 via-status-success/5 to-transparent',
         flagged && 'border-status-error/25 bg-gradient-to-br from-status-error/15 via-status-error/5 to-transparent',
-        !clean && !flagged && 'border-overlay/10 bg-bg-elevated/40'
+        suspicious && 'border-status-warning/25 bg-gradient-to-br from-status-warning/15 via-status-warning/5 to-transparent',
+        neutral && 'border-overlay/10 bg-bg-elevated/40'
       )}
     >
       <Icon
         aria-hidden="true"
         className={cn(
           'pointer-events-none absolute -right-5 -top-5 h-32 w-32 opacity-[0.07]',
-          clean ? 'text-status-success' : flagged ? 'text-status-error' : 'text-text-muted'
+          clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-muted'
         )}
       />
       <div className="relative flex items-start gap-4">
@@ -234,7 +236,8 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
             'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-4',
             clean && 'bg-status-success/15 text-status-success ring-status-success/10',
             flagged && 'bg-status-error/15 text-status-error ring-status-error/10',
-            !clean && !flagged && 'bg-overlay/10 text-text-muted ring-overlay/5'
+            suspicious && 'bg-status-warning/15 text-status-warning ring-status-warning/10',
+            neutral && 'bg-overlay/10 text-text-muted ring-overlay/5'
           )}
         >
           <Icon className="h-6 w-6" aria-hidden="true" />
@@ -243,7 +246,7 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
           <p
             className={cn(
               'text-xs font-medium uppercase tracking-[0.16em]',
-              clean ? 'text-status-success' : flagged ? 'text-status-error' : 'text-text-muted'
+              clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-muted'
             )}
           >
             <T>VirusTotal security check</T>
@@ -252,13 +255,15 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
             id="qa-virustotal-heading"
             className={cn(
               'mt-1 text-lg font-semibold sm:text-xl',
-              clean ? 'text-status-success' : flagged ? 'text-status-error' : 'text-text-primary'
+              clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-primary'
             )}
           >
             {clean ? (
               <T>No threats found</T>
             ) : flagged ? (
-              <T><Var>{flaggedCount}</Var> of <Var>{totalEngines}</Var> security vendors flagged this installer</T>
+              <T><Var>{virusTotal.malicious ?? 0}</Var> of <Var>{totalEngines}</Var> security vendors flagged this installer as malicious</T>
+            ) : suspicious ? (
+              <T><Var>{virusTotal.suspicious ?? 0}</Var> of <Var>{totalEngines}</Var> security vendors rated this installer suspicious</T>
             ) : virusTotal.status === 'not_found' ? (
               <T>No verdict available yet</T>
             ) : (
@@ -269,7 +274,9 @@ function VirusTotalBanner({ virusTotal }: { virusTotal: QaVirusTotalSummary }) {
             {clean ? (
               <T><Var>{virusTotal.malicious ?? 0}</Var> of <Var>{totalEngines}</Var> security vendors flagged this installer when its verified hash was checked against the VirusTotal database.</T>
             ) : flagged ? (
-              <T><Var>{virusTotal.malicious ?? 0}</Var> vendors rated it malicious and <Var>{virusTotal.suspicious ?? 0}</Var> suspicious. A small number of detections is often a false positive for installers — review the flagged engines on VirusTotal before drawing conclusions.</T>
+              <T>Packaging of this version is blocked until the finding is reviewed. <Var>{virusTotal.malicious ?? 0}</Var> vendors rated it malicious and <Var>{virusTotal.suspicious ?? 0}</Var> suspicious; earlier versions with a clean verdict remain available.</T>
+            ) : suspicious ? (
+              <T>No vendor rated it malicious, so this version is not blocked. Suspicious verdicts are heuristic and often false positives — review the engines on VirusTotal if in doubt.</T>
             ) : virusTotal.status === 'not_found' ? (
               <T>This installer version is not in the VirusTotal database yet, so no reputation verdict is available.</T>
             ) : virusTotal.status === 'skipped' ? (

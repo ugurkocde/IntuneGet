@@ -183,7 +183,7 @@ export interface QaLiveResponse {
 
 export type QaTestLevel = 'installer-preflight' | 'psadt-package';
 
-export type QaVirusTotalStatus = 'clean' | 'flagged' | 'not_found' | 'error' | 'skipped';
+export type QaVirusTotalStatus = 'clean' | 'suspicious' | 'flagged' | 'not_found' | 'error' | 'skipped';
 
 /** Informational hash-only VirusTotal verdict; it never gates the QA outcome. */
 export interface QaVirusTotalSummary {
