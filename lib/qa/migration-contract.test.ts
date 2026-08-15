@@ -7,6 +7,7 @@ const migrationPaths = [
   'supabase/migrations/20260807205000_qa_candidate_terminal_evidence.sql',
   'supabase/migrations/20260808193500_qa_candidate_catalog_promotion.sql',
   'supabase/migrations/20260808194800_harden_qa_catalog_promotion_order.sql',
+  'supabase/migrations/20260815004500_preserve_deployment_config_qa_retries.sql',
 ];
 
 describe.each(migrationPaths)('QA candidate migration contract: %s', (migrationPath) => {
@@ -50,6 +51,30 @@ describe('QA candidate catalog promotion migration contract', () => {
     expect(sql).toContain('Retry superseded because the catalog version changed after enqueue.');
     expect(sql).toContain('Catalog promotion skipped because a newer release candidate exists.');
     expect(sql).toContain('Catalog promotion skipped because the catalog version changed after enqueue.');
+  });
+});
+
+describe('QA exact deployment-config retry migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260815004500_preserve_deployment_config_qa_retries.sql'
+    ),
+    'utf8'
+  );
+
+  it('limits catalog-drift supersession to catalog-default candidates', () => {
+    const retryGuard = sql.slice(
+      sql.indexOf("if normalized_outcome = 'retry'"),
+      sql.indexOf("if normalized_outcome = 'passed'")
+    );
+    expect(retryGuard).toContain("candidate.test_config->>'profileKind' = 'catalog-default'");
+    expect(retryGuard).not.toContain("candidate.test_config->>'profileKind' = 'deployment-config'");
+  });
+
+  it('continues to restrict catalog promotion to catalog-default candidates', () => {
+    expect(sql).toContain("candidate.test_config->>'profileKind' = 'catalog-default'");
+    expect(sql).toContain('insert into public.version_history');
   });
 });
 
