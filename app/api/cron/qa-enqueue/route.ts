@@ -33,7 +33,11 @@ import {
   terminalToolchainRetryTargets,
   type QaToolchainBackfillCandidate,
 } from '@/lib/qa/toolchain-backfill';
-import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
+import {
+  getQaPipelineControl,
+  isQaPackagerReleaseReady,
+  recordQaSchedulerHeartbeat,
+} from '@/lib/qa/pipeline-control';
 import { detectWingetChanges } from '@/lib/qa/winget-changes';
 import {
   createWingetManifestClient,
@@ -360,6 +364,11 @@ export async function GET(request: Request) {
 
   try {
     supabase = createServerClient();
+    await recordQaSchedulerHeartbeat(
+      supabase,
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      startedAt
+    );
     const control = await getQaPipelineControl(supabase);
     if (control.paused) {
       return NextResponse.json({
@@ -368,6 +377,13 @@ export async function GET(request: Request) {
         reason: 'maintenance_paused',
         maintenanceReason: control.reason,
         pausedAt: control.updatedAt,
+      });
+    }
+    if (!isQaPackagerReleaseReady(control, QA_PSADT_TOOLCHAIN.packagerCommit)) {
+      return NextResponse.json({
+        success: true,
+        paused: true,
+        reason: 'packager_release_pending',
       });
     }
     const { data: pollRun, error: pollRunError } = await supabase

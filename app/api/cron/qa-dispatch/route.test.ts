@@ -82,6 +82,7 @@ function createSupabaseStub(
   additionalPages: Array<Array<ReturnType<typeof candidate>>> = [],
   options: {
     paused?: boolean;
+    requiredPackagerCommit?: string | null;
     claimNullIds?: string[];
     claimErrorById?: Record<string, { message: string; code?: string }>;
     supersedeError?: { message: string; code?: string };
@@ -107,6 +108,9 @@ function createSupabaseStub(
           data: {
             paused: options.paused === true,
             reason: options.paused ? 'Golden VM maintenance' : null,
+            required_packager_commit: options.requiredPackagerCommit ?? null,
+            scheduler_packager_commit: null,
+            scheduler_seen_at: null,
             updated_at: '2026-08-11T12:00:00.000Z',
           },
           error: null,
@@ -236,6 +240,25 @@ describe('GET /api/cron/qa-dispatch', () => {
       dispatched: false,
       reason: 'maintenance_paused',
       maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reconcile or dispatch when production serves the wrong packager release', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds } = createSupabaseStub([row], [], {
+      requiredPackagerCommit: 'F'.repeat(40),
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      success: true,
+      dispatched: false,
+      reason: 'packager_release_pending',
     });
     expect(claimedIds).toEqual([]);
     expect(dispatchQaCandidateMock).not.toHaveBeenCalled();

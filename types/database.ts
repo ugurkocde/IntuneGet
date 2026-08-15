@@ -318,6 +318,9 @@ export interface Database {
           id: string;
           paused: boolean;
           reason: string | null;
+          required_packager_commit: string | null;
+          scheduler_packager_commit: string | null;
+          scheduler_seen_at: string | null;
           updated_at: string;
           updated_by: string | null;
         };
@@ -325,6 +328,9 @@ export interface Database {
           id: string;
           paused?: boolean;
           reason?: string | null;
+          required_packager_commit?: string | null;
+          scheduler_packager_commit?: string | null;
+          scheduler_seen_at?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };

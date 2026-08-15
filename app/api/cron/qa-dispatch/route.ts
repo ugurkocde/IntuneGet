@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
-import { validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
-import { getQaPipelineControl } from '@/lib/qa/pipeline-control';
+import { QA_PSADT_TOOLCHAIN, validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
+import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
@@ -54,6 +54,13 @@ export async function GET(request: Request) {
       reason: 'maintenance_paused',
       maintenanceReason: control.reason,
       pausedAt: control.updatedAt,
+    });
+  }
+  if (!isQaPackagerReleaseReady(control, QA_PSADT_TOOLCHAIN.packagerCommit)) {
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'packager_release_pending',
     });
   }
   const now = new Date();

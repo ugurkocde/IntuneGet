@@ -72,6 +72,7 @@ function query(result: QueryResult) {
 
 function createSupabaseStub(options: {
   paused?: boolean;
+  requiredPackagerCommit?: string | null;
   coverage?: number;
   coverageError?: string;
   supportedApps?: Array<Record<string, unknown>>;
@@ -88,6 +89,7 @@ function createSupabaseStub(options: {
   const cursorUpdates: Array<Record<string, unknown>> = [];
   const candidateInserts: Array<Record<string, unknown>> = [];
   const compatibilityBlocks: Array<Record<string, unknown>> = [];
+  const pipelineControlUpdates: Array<Record<string, unknown>> = [];
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   let candidatePageIndex = 0;
 
@@ -104,14 +106,22 @@ function createSupabaseStub(options: {
     }),
     from: vi.fn((table: string) => {
       if (table === 'qa_pipeline_control') {
-        return query({
+        const builder = query({
           data: {
             paused: options.paused === true,
             reason: options.paused ? 'Golden VM maintenance' : null,
+            required_packager_commit: options.requiredPackagerCommit ?? null,
+            scheduler_packager_commit: null,
+            scheduler_seen_at: null,
             updated_at: '2026-08-11T12:00:00.000Z',
           },
           error: null,
         });
+        builder.update = vi.fn((values: Record<string, unknown>) => {
+          pipelineControlUpdates.push(values);
+          return query({ data: null, error: null });
+        });
+        return builder;
       }
       if (table === 'qa_poll_runs') {
         return {
@@ -208,6 +218,7 @@ function createSupabaseStub(options: {
     cursorUpdates,
     candidateInserts,
     compatibilityBlocks,
+    pipelineControlUpdates,
     rpcCalls,
   };
 }
@@ -347,7 +358,8 @@ describe('GET /api/cron/qa-enqueue', () => {
   });
 
   it('does not poll or mutate the queue while maintenance is paused', async () => {
-    const { client, pollRunInserts, candidateInserts } = createSupabaseStub({ paused: true });
+    const { client, pollRunInserts, candidateInserts, pipelineControlUpdates } =
+      createSupabaseStub({ paused: true });
     createServerClientMock.mockReturnValue(client);
 
     const response = await GET(cronRequest());
@@ -359,6 +371,31 @@ describe('GET /api/cron/qa-enqueue', () => {
       paused: true,
       reason: 'maintenance_paused',
       maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(pollRunInserts).toHaveLength(0);
+    expect(candidateInserts).toHaveLength(0);
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+    expect(pipelineControlUpdates).toEqual([
+      expect.objectContaining({
+        scheduler_packager_commit: QA_PSADT_TOOLCHAIN.packagerCommit,
+        scheduler_seen_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it('does not poll or mutate the queue when production serves the wrong packager release', async () => {
+    const { client, pollRunInserts, candidateInserts } = createSupabaseStub({
+      requiredPackagerCommit: 'F'.repeat(40),
+    });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      success: true,
+      paused: true,
+      reason: 'packager_release_pending',
     });
     expect(pollRunInserts).toHaveLength(0);
     expect(candidateInserts).toHaveLength(0);

@@ -402,6 +402,9 @@ describe('buildQaLiveResponse', () => {
         paused: true,
         reason:
           'Testing is temporarily paused for maintenance · Coordinating protected QA and customer packager pins for commit 1b130924ecc68909d6bb15f8cdf295944255a2f9.',
+        requiredPackagerCommit: null,
+        schedulerPackagerCommit: null,
+        schedulerSeenAt: null,
         updatedAt: '2026-08-11T12:04:00.000Z',
       },
     });
