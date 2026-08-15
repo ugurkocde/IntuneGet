@@ -420,6 +420,70 @@ if ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
     $reviewedMultiProductInstallMinimumCount = [int]$rawMultiProductMinimumCount
 }
 
+$reviewedRegistryInstallEvidenceConfigured = $false
+$reviewedRegistryInstallEvidenceKeyPath = ''
+$reviewedRegistryInstallEvidenceProviderPath = ''
+$reviewedRegistryInstallEvidenceValueName = ''
+$reviewedRegistryInstallEvidenceMinimumDword = [uint64]0
+if ($psadtConfig.Contains('reviewedRegistryInstallEvidence') -and
+    $null -ne $psadtConfig['reviewedRegistryInstallEvidence']) {
+    $rawRegistryEvidence = $psadtConfig['reviewedRegistryInstallEvidence']
+    if ($rawRegistryEvidence -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedRegistryInstallEvidence must be a JSON object.'
+    }
+
+    $allowedRegistryEvidenceKeys = @('keyPath', 'valueName', 'minimumDword')
+    foreach ($registryEvidenceKey in @($rawRegistryEvidence.Keys)) {
+        if ([string]$registryEvidenceKey -notin $allowedRegistryEvidenceKeys) {
+            throw "PSADT reviewedRegistryInstallEvidence contains an unsupported property: $registryEvidenceKey"
+        }
+    }
+    foreach ($requiredRegistryEvidenceKey in $allowedRegistryEvidenceKeys) {
+        if (-not $rawRegistryEvidence.Contains($requiredRegistryEvidenceKey)) {
+            throw "PSADT reviewedRegistryInstallEvidence must include $requiredRegistryEvidenceKey."
+        }
+    }
+    if ($rawRegistryEvidence['keyPath'] -isnot [string] -or
+        $rawRegistryEvidence['valueName'] -isnot [string]) {
+        throw 'PSADT reviewedRegistryInstallEvidence keyPath and valueName must be strings.'
+    }
+
+    $reviewedRegistryInstallEvidenceKeyPath = ([string]$rawRegistryEvidence['keyPath']).Trim()
+    if ($reviewedRegistryInstallEvidenceKeyPath.Length -gt 260 -or
+        $reviewedRegistryInstallEvidenceKeyPath -notmatch '^HKLM:\\SOFTWARE\\[^\\/*?"<>|\x00-\x1F\x7F]+(?:\\[^\\/*?"<>|\x00-\x1F\x7F]+)*$' -or
+        @($reviewedRegistryInstallEvidenceKeyPath -split '\\') -contains '..') {
+        throw 'PSADT reviewedRegistryInstallEvidence keyPath must be a safe literal path below HKLM:\SOFTWARE.'
+    }
+    $reviewedRegistryInstallEvidenceValueName = ([string]$rawRegistryEvidence['valueName']).Trim()
+    if ([string]::IsNullOrWhiteSpace($reviewedRegistryInstallEvidenceValueName) -or
+        $reviewedRegistryInstallEvidenceValueName.Length -gt 128 -or
+        [regex]::IsMatch($reviewedRegistryInstallEvidenceValueName, '[\\/*?"<>|\x00-\x1F\x7F]')) {
+        throw 'PSADT reviewedRegistryInstallEvidence valueName must be a safe bounded literal name.'
+    }
+
+    $rawRegistryMinimumDword = $rawRegistryEvidence['minimumDword']
+    if (($rawRegistryMinimumDword -isnot [byte] -and
+         $rawRegistryMinimumDword -isnot [uint16] -and
+         $rawRegistryMinimumDword -isnot [int16] -and
+         $rawRegistryMinimumDword -isnot [uint32] -and
+         $rawRegistryMinimumDword -isnot [int32] -and
+         $rawRegistryMinimumDword -isnot [uint64] -and
+         $rawRegistryMinimumDword -isnot [int64]) -or
+        [int64]$rawRegistryMinimumDword -lt 1 -or
+        [uint64]$rawRegistryMinimumDword -gt [uint32]::MaxValue) {
+        throw 'PSADT reviewedRegistryInstallEvidence minimumDword must be an integer from 1 to 4294967295.'
+    }
+    $reviewedRegistryInstallEvidenceMinimumDword = [uint64]$rawRegistryMinimumDword
+    $reviewedRegistryInstallEvidenceProviderPath =
+        'Registry::HKEY_LOCAL_MACHINE\' + $reviewedRegistryInstallEvidenceKeyPath.Substring('HKLM:\'.Length)
+    $reviewedRegistryInstallEvidenceConfigured = $true
+}
+
+if ($reviewedRegistryInstallEvidenceConfigured -and
+    $reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
+    throw 'PSADT reviewed registry and multi-product install evidence cannot be combined.'
+}
+
 $uninstallCompletionTimeoutMinutes = 5
 if ($psadtConfig.Contains('uninstallCompletionTimeoutMinutes') -and
     $null -ne $psadtConfig['uninstallCompletionTimeoutMinutes']) {
@@ -458,6 +522,10 @@ function Get-StrictPSADTBoolean {
 $preserveVendorInstallationOnUninstall = Get-StrictPSADTBoolean `
     -Config $psadtConfig `
     -Name 'preserveVendorInstallationOnUninstall'
+if ($reviewedRegistryInstallEvidenceConfigured -and
+    -not $preserveVendorInstallationOnUninstall) {
+    throw 'PSADT reviewedRegistryInstallEvidence requires preserveVendorInstallationOnUninstall.'
+}
 
 $reviewedManagedInstallDirectory = ''
 if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
@@ -896,6 +964,8 @@ $reviewedExactUninstallExecutableEscaped = $reviewedExactUninstallExecutable -re
 $reviewedExactUninstallArgumentsLiteral = @(
     $reviewedExactUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
 ) -join ', '
+$reviewedRegistryInstallEvidenceProviderPathEscaped = $reviewedRegistryInstallEvidenceProviderPath -replace "'", "''"
+$reviewedRegistryInstallEvidenceValueNameEscaped = $reviewedRegistryInstallEvidenceValueName -replace "'", "''"
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherSingleQuoteEscaped = $Publisher -replace "'", "''"
@@ -1166,6 +1236,13 @@ if ($useManagedDirectoryLifecycle) {
     # Never let unrelated background servicing become the captured identity.
     $useRegistryUninstall = $false
     Write-Host "Using reviewed managed-directory lifecycle: $reviewedManagedInstallDirectory"
+}
+
+if ($reviewedRegistryInstallEvidenceConfigured) {
+    if (-not $useRegistryUninstall -or $IsUserScope) {
+        throw 'PSADT reviewedRegistryInstallEvidence requires a machine-scope registry uninstall package.'
+    }
+    Write-Host "Using reviewed registry installation evidence: $reviewedRegistryInstallEvidenceKeyPath"
 }
 
 if ($useRegistryUninstall) {
@@ -1844,7 +1921,25 @@ $lines += @(
 )
 $lines += $dependencyInstallLines
 
-if ($useRegistryUninstall) {
+if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
+    $lines += @(
+        '    # Verify the adapter-reviewed Windows runtime signal instead of guessing an ARP identity.'
+        '    $capturedUninstallKey = $null'
+        '    $capturedUninstallName = $null'
+        '    $reviewedRegistryInstallationVerified = $false'
+        '    function Test-IntuneGetReviewedRegistryInstallEvidence {'
+        '        try {'
+        "            `$evidenceKey = Get-Item -LiteralPath '$reviewedRegistryInstallEvidenceProviderPathEscaped' -ErrorAction Stop"
+        "            if (`$evidenceKey.GetValueKind('$reviewedRegistryInstallEvidenceValueNameEscaped') -ne [Microsoft.Win32.RegistryValueKind]::DWord) { return `$false }"
+        "            `$evidenceValue = `$evidenceKey.GetValue('$reviewedRegistryInstallEvidenceValueNameEscaped', `$null)"
+        "            return `$null -ne `$evidenceValue -and [uint64]`$evidenceValue -ge [uint64]$reviewedRegistryInstallEvidenceMinimumDword"
+        '        } catch {'
+        '            return $false'
+        '        }'
+        '    }'
+        ''
+    )
+} elseif ($useRegistryUninstall) {
     $lines += @(
         '    # Snapshot uninstall entries so the exact vendor entry created or updated by this installer can be reused later.'
         '    $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
@@ -2219,7 +2314,23 @@ if ($useManagedDirectoryLifecycle) {
 # Optional post-install verification (opt-in via PSADT config)
 # Throwing here routes through the standard catch -> Close-ADTSession error exit,
 # and the detection marker write below is skipped because it never runs
-if ($useRegistryUninstall) {
+if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
+    $lines += @(
+        '    # Wait briefly for the documented Windows runtime registry signal to become visible.'
+        '    foreach ($verificationAttempt in 1..30) {'
+        '        if (Test-IntuneGetReviewedRegistryInstallEvidence) {'
+        '            $reviewedRegistryInstallationVerified = $true'
+        '            break'
+        '        }'
+        '        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }'
+        '    }'
+        '    if (-not $reviewedRegistryInstallationVerified) {'
+        "        throw 'Reviewed registry install verification failed: expected a DWORD value of at least $reviewedRegistryInstallEvidenceMinimumDword.'"
+        '    }'
+        "    Write-ADTLogEntry -Message 'Verified reviewed Windows runtime registry evidence.' -Severity 'Success' -Source 'Install-ADTDeployment'"
+        ''
+    )
+} elseif ($useRegistryUninstall) {
     $lines += @(
         '    # Capture the registry uninstall entry created or version-updated by this installer.'
         '    # Manifest identity is a preference; the observed ARP delta is authoritative when metadata is stale.'
@@ -2408,7 +2519,16 @@ if ($useRegistryUninstall) {
 if ($verifyInstall) {
     Write-Host "Post-install verification enabled"
     if ($useRegistryUninstall) {
-        if ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
+        if ($reviewedRegistryInstallEvidenceConfigured) {
+            $lines += @(
+                ''
+                '    ## Recheck the exact adapter-reviewed Windows runtime evidence.'
+                '    if (-not (Test-IntuneGetReviewedRegistryInstallEvidence)) {'
+                '        throw "Post-install verification failed: the reviewed Windows runtime registry evidence was not found."'
+                '    }'
+                "    Write-ADTLogEntry -Message 'Post-install verification passed for reviewed Windows runtime registry evidence' -Source 'Install-ADTDeployment'"
+            )
+        } elseif ($reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
             $lines += @(
                 ''
                 '    ## Verify the reviewed multi-product bundle evidence established above.'

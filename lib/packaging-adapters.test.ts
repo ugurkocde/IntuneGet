@@ -447,12 +447,33 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('uses Microsoft registry evidence for the shared .NET Framework runtime', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'Microsoft.DotNet.Framework.Runtime',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+      reviewedRegistryInstallEvidence: {
+        keyPath: 'HKLM:\\SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full',
+        valueName: 'Release',
+        minimumDword: 533320,
+      },
+    });
+  });
+
   it('does not accept shared-runtime retention from customer-controlled config', () => {
     const adapted = applyApplicationPackagingAdapter('Example.App', {
       ...DEFAULT_PSADT_CONFIG,
       preserveVendorInstallationOnUninstall: true,
       reviewedMultiProductInstallDisplayNamePrefixes: ['Anything'],
       reviewedMultiProductInstallMinimumCount: 2,
+      reviewedRegistryInstallEvidence: {
+        keyPath: 'HKLM:\\SOFTWARE\\Example',
+        valueName: 'Release',
+        minimumDword: 1,
+      },
       reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
       reviewedManagedInstallEvidenceFile: '%ProgramFiles%\\Example\\app.exe',
       reviewedManagedInstallCompletionProcess:
@@ -473,6 +494,7 @@ describe('application packaging adapters', () => {
     expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
+    expect(adapted.reviewedRegistryInstallEvidence).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
     expect(adapted.reviewedManagedInstallEvidenceFile).toBeUndefined();
     expect(adapted.reviewedManagedInstallCompletionProcess).toBeUndefined();

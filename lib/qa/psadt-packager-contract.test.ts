@@ -298,6 +298,103 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies .NET Framework with the reviewed Microsoft registry signal',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Microsoft .NET Framework Runtime 4.8.1',
+        [],
+        {
+          verifyInstall: true,
+          preserveVendorInstallationOnUninstall: true,
+          reviewedRegistryInstallEvidence: {
+            keyPath:
+              'HKLM:\\SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full',
+            valueName: 'Release',
+            minimumDword: 533320,
+          },
+        },
+        [],
+        'Microsoft.DotNet.Framework.Runtime'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "Get-Item -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full'"
+      );
+      expect(installFunction).toContain(
+        "GetValueKind('Release') -ne [Microsoft.Win32.RegistryValueKind]::DWord"
+      );
+      expect(installFunction).toContain(
+        '[uint64]$evidenceValue -ge [uint64]533320'
+      );
+      expect(installFunction).toContain(
+        'Post-install verification passed for reviewed Windows runtime registry evidence'
+      );
+      expect(installFunction).not.toContain('$preInstallApplications');
+      expect(installFunction).not.toContain(
+        'Could not select one vendor uninstall entry'
+      );
+      expect(uninstallFunction).toContain(
+        'Retaining the shared vendor installation and removing only the IntuneGet management marker.'
+      );
+      expect(uninstallFunction).not.toContain(
+        'Could not find one unambiguous vendor uninstall'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects unsafe reviewed registry install evidence',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe Registry Evidence',
+          [],
+          {
+            preserveVendorInstallationOnUninstall: true,
+            reviewedRegistryInstallEvidence: {
+              keyPath: 'HKLM:\\SOFTWARE\\..\\Secrets',
+              valueName: 'Release',
+              minimumDword: 1,
+            },
+          }
+        )
+      ).toThrow('keyPath must be a safe literal path below HKLM:\\SOFTWARE');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'requires shared-runtime retention for reviewed registry evidence',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe Registry Lifecycle',
+          [],
+          {
+            reviewedRegistryInstallEvidence: {
+              keyPath: 'HKLM:\\SOFTWARE\\Microsoft\\Example',
+              valueName: 'Release',
+              minimumDword: 1,
+            },
+          }
+        )
+      ).toThrow(
+        'reviewedRegistryInstallEvidence requires preserveVendorInstallationOnUninstall'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects malformed reviewed multi-product evidence',
     () => {
       expect(() =>

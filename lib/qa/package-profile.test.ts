@@ -427,6 +427,43 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.preserveVendorInstallationOnUninstall).toBe(true);
   });
 
+  it('binds reviewed .NET Framework registry evidence to the QA identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.DotNet.Framework.Runtime',
+      displayName: 'Microsoft .NET Framework Runtime 4.8.1',
+      publisher: 'Microsoft',
+      version: '4.8.1',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/passive /AcceptEULA /norestart',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL:Microsoft .NET Framework Runtime 4.8.1',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedEvidence = {
+      keyPath: 'HKLM:\\SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full',
+      valueName: 'Release',
+      minimumDword: 533320,
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        preserveVendorInstallationOnUninstall?: boolean;
+        reviewedRegistryInstallEvidence?: typeof expectedEvidence;
+      };
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+      reviewedRegistryInstallEvidence: expectedEvidence,
+    });
+    expect(profile.psadtConfig.reviewedRegistryInstallEvidence).toEqual(
+      expectedEvidence
+    );
+  });
+
   it('preserves PSADT detection rules when the top-level workflow list is unusable', () => {
     const fileRule = {
       type: 'file' as const,

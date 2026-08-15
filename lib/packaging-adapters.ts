@@ -31,6 +31,11 @@ interface ApplicationPackagingAdapter {
   }>;
   reviewedMultiProductInstallDisplayNamePrefixes?: readonly string[];
   reviewedMultiProductInstallMinimumCount?: number;
+  reviewedRegistryInstallEvidence?: Readonly<{
+    keyPath: string;
+    valueName: string;
+    minimumDword: number;
+  }>;
 }
 
 const POSTGRESQL_PACKAGING_ADAPTER: ApplicationPackagingAdapter = {
@@ -497,6 +502,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     preserveVendorInstallationOnUninstall: true,
   },
   {
+    // .NET Framework 4.8.1 is a shared Windows runtime and does not expose one
+    // dependable ARP identity. Microsoft documents the Full\Release DWORD as
+    // the authoritative version signal; 533320 is the minimum for 4.8.1.
+    // Keep the runtime during Intune removal and remove only our marker.
+    wingetId: 'Microsoft.DotNet.Framework.Runtime',
+    preserveVendorInstallationOnUninstall: true,
+    reviewedRegistryInstallEvidence: {
+      keyPath: 'HKLM:\\SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full',
+      valueName: 'Release',
+      minimumDword: 533320,
+    },
+  },
+  {
     // VisualCppRedist AIO is intentionally a bundle of independently registered
     // Visual C++ runtimes. Version 104+ creates several unified ARP entries, so
     // no single vendor identity represents the package. These runtimes are also
@@ -720,6 +738,7 @@ export function applyApplicationPackagingAdapter(
       !config.reviewedInstallArgumentsOverride &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
+      !config.reviewedRegistryInstallEvidence &&
       !config.reviewedUninstallProcessGuard &&
       !config.reviewedManagedInstallDirectory &&
       !config.reviewedManagedInstallEvidenceFile &&
@@ -734,6 +753,7 @@ export function applyApplicationPackagingAdapter(
       reviewedInstallArgumentsOverride: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
+      reviewedRegistryInstallEvidence: undefined,
       reviewedUninstallProcessGuard: undefined,
       reviewedManagedInstallDirectory: undefined,
       reviewedManagedInstallEvidenceFile: undefined,
@@ -844,5 +864,8 @@ export function applyApplicationPackagingAdapter(
     reviewedMultiProductInstallDisplayNamePrefixes,
     reviewedMultiProductInstallMinimumCount:
       adapter.reviewedMultiProductInstallMinimumCount,
+    reviewedRegistryInstallEvidence: adapter.reviewedRegistryInstallEvidence
+      ? { ...adapter.reviewedRegistryInstallEvidence }
+      : undefined,
   };
 }

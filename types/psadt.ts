@@ -262,6 +262,15 @@ export interface PSADTConfig {
   reviewedMultiProductInstallDisplayNamePrefixes?: string[];
   reviewedMultiProductInstallMinimumCount?: number;
 
+  // Internal install-evidence contract for reviewed Windows runtimes whose
+  // authoritative presence signal is a fixed registry value rather than one
+  // Add/Remove Programs entry. Application adapters are the only source.
+  reviewedRegistryInstallEvidence?: {
+    keyPath: string;
+    valueName: string;
+    minimumDword: number;
+  };
+
   // Additional commands run as extra PSADT steps after the main install /
   // uninstall (e.g. delete a desktop shortcut after installing). Each entry is a
   // full command line executed via cmd.exe /c, in order. Empty/absent = none.
