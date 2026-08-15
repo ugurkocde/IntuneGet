@@ -153,6 +153,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['--silent', '--force_stop'],
   },
   {
+    // Ecosia Browser uses Chromium's setup.exe lifecycle. Its captured ARP
+    // command contains --uninstall but omits --force-uninstall, so setup opens
+    // the confirmation UI and cannot complete in a non-interactive Intune
+    // session. Chromium defines --force-uninstall as the silent removal switch;
+    // append it to the exact captured per-user command for QA and customers.
+    wingetId: 'Ecosia.EcosiaBrowser',
+    reviewedUninstallArguments: ['--force-uninstall'],
+  },
+  {
     // Dropbox documents /NOLAUNCH for unattended enterprise installs that must
     // not start the client. Its Windows support guidance also requires Dropbox
     // processes to be closed before removal. The registered machine uninstaller

@@ -102,6 +102,10 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['--silent', '--force_stop']);
     expect(
+      applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['--force-uninstall']);
+    expect(
       applyApplicationPackagingAdapter('Dropbox.Dropbox', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedInstallArgumentsOverride: '/NOLAUNCH',
