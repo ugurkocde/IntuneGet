@@ -43,7 +43,10 @@ interface TriggerResult {
   error?: string;
   skipped?: boolean;
   skipReason?: string;
-  code?: 'QA_FAILED_CURRENT_VERSION' | 'QA_NOT_PASSED_CURRENT_VERSION';
+  code?:
+    | 'QA_FAILED_CURRENT_VERSION'
+    | 'QA_NOT_PASSED_CURRENT_VERSION'
+    | 'QA_SECURITY_FLAGGED_CURRENT_VERSION';
 }
 
 export interface UpdateInfo {
