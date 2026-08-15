@@ -16,6 +16,7 @@ describe('QA toolchain targeted retries', () => {
       'Cisco.Jabber',
       'IPEVO.Visualizer',
       'IPEVO.VisualizerLTSE',
+      'Sonos.Controller',
     ]));
 
     targets.length = 0;
@@ -29,6 +30,7 @@ describe('QA toolchain targeted retries', () => {
         'Cisco.Jabber',
         'IPEVO.Visualizer',
         'IPEVO.VisualizerLTSE',
+        'Sonos.Controller',
       ])
     );
   });
@@ -469,6 +471,13 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'ipevo.visualizerltse', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries Sonos with its reviewed InstallShield silent argument payload', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'sonos.controller', status: 'failed' }
     )).toBe(true);
   });
 

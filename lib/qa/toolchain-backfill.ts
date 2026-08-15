@@ -522,6 +522,26 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // The shared packager now captures that one observed, version-agreeing identity.
     'IPEVO.VisualizerLTSE',
   ],
+  'cfc6f269e1a818dd4a61b95121268f6991f78642': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    // Sonos uses an InstallShield Basic MSI bootstrapper. The shared packager
+    // now sends one quoted /v payload so the embedded MSI receives /qn and the
+    // restart-suppression properties instead of returning MSI error 1619.
+    'Sonos.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
