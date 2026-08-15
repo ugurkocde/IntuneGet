@@ -388,6 +388,27 @@ describe('NVIDIA GeForce NOW managed install block migration contract', () => {
   });
 });
 
+describe('Roblox managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260815151000_block_roblox_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unreliable lifecycle across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Roblox.Roblox'");
+    expect(sql).toContain(
+      'https://github.com/microsoft/winget-pkgs/pull/391567'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
