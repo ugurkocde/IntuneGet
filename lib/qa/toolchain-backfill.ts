@@ -377,6 +377,20 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // vendor command is now authoritative in QA and customer packages.
     'AOMEI.PartitionAssistant',
   ],
+  '0c2765c26b69619df8f581190f4e67d97d79b589': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative packager release.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    // Preserve AOMEI's registered /SILENT argument under the exact reviewed
+    // command guard after both generic Inno switches and /S proved no-ops.
+    'AOMEI.PartitionAssistant',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
