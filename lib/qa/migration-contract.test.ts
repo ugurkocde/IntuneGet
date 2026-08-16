@@ -473,6 +473,25 @@ describe('Lark EXE managed uninstall block migration contract', () => {
   });
 });
 
+describe('DWG FastView managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260816135000_block_dwgfastview_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unreliable vendor uninstaller across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Gstarsoft.DWGFastView'");
+    expect(sql).toContain('Gstarsoft.DWGFastView.installer.yaml');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(

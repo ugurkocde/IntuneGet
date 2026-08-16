@@ -306,16 +306,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/silent', 'forall'],
   },
   {
-    // DWG FastView registers setup.exe without a separate quiet uninstall
-    // command. Version 9.10's current WinGet manifest uses /s for unattended
-    // setup, while a /silent /uninstall trial left the exact
-    // DWGFastView_en_ww registration installed under SYSTEM. Pair the current
-    // silent switch with setup.exe's established /uninstall lifecycle on this
-    // exact package so QA and customer Intune packages exercise the same path.
-    wingetId: 'Gstarsoft.DWGFastView',
-    reviewedUninstallArguments: ['/s', '/uninstall'],
-  },
-  {
     // Dell Optimizer's registered InstallShield helper exits without removing
     // the product even with Dell's documented switches. Invoke the original,
     // hash-verified Dell Update Package instead; Dell documents the
