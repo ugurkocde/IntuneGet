@@ -130,13 +130,8 @@ describe('application packaging adapters', () => {
     ).toEqual(['-q', '-Dinstall4j.suppressUnattendedReboot=true']);
     expect(
       applyApplicationPackagingAdapter('MSYS2.MSYS2', DEFAULT_PSADT_CONFIG)
-    ).toMatchObject({
-      reviewedExactUninstall: {
-        executablePath: 'C:\\msys64\\uninstall.exe',
-        arguments: ['pr', '--confirm-command'],
-        completionTimeoutMinutes: 5,
-      },
-    });
+        .reviewedUninstallArguments
+    ).toEqual(['pr', '--confirm-command']);
     expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments

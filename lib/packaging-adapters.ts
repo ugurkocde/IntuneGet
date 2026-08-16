@@ -183,13 +183,11 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // profile and documents its Qt Installer Framework removal command. The
     // catalog name (`MSYS2 Installer`) differs from the registered product
     // (`MSYS2 <version>`), so capture that reviewed identity and use the
-    // vendor's exact headless uninstaller for QA and customer packages.
+    // vendor's headless arguments with the registry-discovered uninstaller for
+    // QA and customer packages. Keeping path discovery registry-owned avoids
+    // weakening the reviewed exact-path allowlist for root-level executables.
     wingetId: 'MSYS2.MSYS2',
-    reviewedExactUninstall: {
-      executablePath: 'C:\\msys64\\uninstall.exe',
-      arguments: ['pr', '--confirm-command'],
-      completionTimeoutMinutes: 5,
-    },
+    reviewedUninstallArguments: ['pr', '--confirm-command'],
   },
   {
     // Sonos' compressed InstallShield launcher does not reliably install in a
