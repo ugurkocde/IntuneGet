@@ -44,7 +44,8 @@ function generateRegistryUninstallPackage(
   uninstallDisplayName = displayName,
   version = '1.0.0',
   uninstallCommand = `REGISTRY_UNINSTALL:${uninstallDisplayName}`,
-  silentSwitches = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+  silentSwitches = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+  installScope: 'machine' | 'user' = 'machine'
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -89,7 +90,7 @@ function generateRegistryUninstallPackage(
         INPUT_VERSION: version,
         INPUT_WINGET_ID: wingetId,
         INPUT_INSTALLER_TYPE: installerType,
-        INPUT_INSTALL_SCOPE: 'machine',
+        INPUT_INSTALL_SCOPE: installScope,
         INPUT_SILENT_SWITCHES: silentSwitches,
         INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
         INPUT_PACKAGE_DEPENDENCIES: JSON.stringify(packageDependencies),
@@ -653,6 +654,55 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies and removes the reviewed Tor Browser user Desktop payload',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Tor Browser',
+        [],
+        { reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser' },
+        [],
+        'TorProject.TorBrowser',
+        'Tor Browser',
+        '15.0.19',
+        'REGISTRY_UNINSTALL:Tor Browser',
+        '/S',
+        'user'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%USERPROFILE%\\Desktop\\Tor Browser')"
+      );
+      expect(installFunction).toContain('Verified managed extracted payload');
+      expect(installFunction).not.toContain('Captured vendor uninstall entry');
+      expect(uninstallFunction).toContain('Remove-Item -LiteralPath $managedInstallDirectory');
+      expect(uninstallFunction).not.toContain('Waiting for vendor uninstall registration');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects a reviewed user Desktop directory for a machine-scope package',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe User Extractor',
+          [],
+          { reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Unsafe' }
+        )
+      ).toThrow('reviewed user Desktop path');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects an unsafe reviewed managed install directory',
     () => {
       expect(() =>
@@ -662,7 +712,7 @@ describe('PSADT vendor argument contract', () => {
           [],
           { reviewedManagedInstallDirectory: '%ProgramFiles%\\..\\Windows' }
         )
-      ).toThrow('must be a safe path below Program Files');
+      ).toThrow('must be a safe machine path');
       expect(() =>
         generateRegistryUninstallPackage(
           'exe',
@@ -670,7 +720,7 @@ describe('PSADT vendor argument contract', () => {
           [],
           { reviewedManagedInstallDirectory: '%SystemDrive%\\Windows' }
         )
-      ).toThrow('must be a safe path below Program Files');
+      ).toThrow('must be a safe machine path');
     }
   );
 

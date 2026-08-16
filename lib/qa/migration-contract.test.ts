@@ -513,6 +513,25 @@ describe('DWG FastView managed uninstall block migration contract', () => {
   });
 });
 
+describe('Malwarebytes consumer managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260816193746_block_malwarebytes_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the interactive consumer removal flow across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Malwarebytes.Malwarebytes'");
+    expect(sql).toContain('31589300070683-Uninstall-Malwarebytes-for-Windows-and-Mac');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(

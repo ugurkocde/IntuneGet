@@ -142,6 +142,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Tor Browser's official Windows package is a user-scope NSIS extractor,
+    // not an ARP-registered application. Tor documents that the default
+    // installation is the user's Desktop\Tor Browser folder and that removal
+    // consists of deleting that folder. Model that exact extracted-directory
+    // lifecycle instead of waiting for an uninstall registry entry that the
+    // vendor intentionally does not create.
+    wingetId: 'TorProject.TorBrowser',
+    requiredInstallScope: 'user',
+    reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser',
+  },
+  {
     // Analog Devices documents this enterprise/server mode for silent SYSTEM
     // deployment. It prevents the MSI from extracting example data into the
     // LocalSystem AppData profile, which otherwise rolls back with exit 1603.

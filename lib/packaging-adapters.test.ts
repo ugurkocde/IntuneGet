@@ -89,8 +89,18 @@ describe('application packaging adapters', () => {
     )).toBe('user');
     expect(resolveApplicationInstallScope('Rakuten.Viber', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' rakuten.viber ', undefined)).toBe('user');
+    expect(resolveApplicationInstallScope('TorProject.TorBrowser', 'machine')).toBe('user');
+    expect(resolveApplicationInstallScope(' torproject.torbrowser ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
+  });
+
+  it('models Tor Browser as the vendor-documented extracted user folder', () => {
+    expect(
+      applyApplicationPackagingAdapter('TorProject.TorBrowser', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser',
+    });
   });
 
   it('adds reviewed silent removal arguments for failing vendor lifecycles', () => {

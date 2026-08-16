@@ -563,10 +563,15 @@ if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
         throw 'PSADT reviewedManagedInstallDirectory must be a string.'
     }
     $reviewedManagedInstallDirectory = ([string]$psadtConfig['reviewedManagedInstallDirectory']).Trim()
+    $isReviewedMachineManagedDirectory =
+        $reviewedManagedInstallDirectory -match '^(?:%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\|%SystemDrive%\\SWSetup\\)[^*?"<>|\x00-\x1f]+$'
+    $isReviewedUserDesktopManagedDirectory =
+        $IsUserScope -and
+        $reviewedManagedInstallDirectory -match '^%USERPROFILE%\\Desktop\\[^*?"<>|\x00-\x1f]+$'
     if ($reviewedManagedInstallDirectory.Length -gt 260 -or
-        $reviewedManagedInstallDirectory -notmatch '^(?:%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\|%SystemDrive%\\SWSetup\\)[^*?"<>|\x00-\x1f]+$' -or
+        -not ($isReviewedMachineManagedDirectory -or $isReviewedUserDesktopManagedDirectory) -or
         @($reviewedManagedInstallDirectory -split '\\') -contains '..') {
-        throw 'PSADT reviewedManagedInstallDirectory must be a safe path below Program Files or the reviewed SystemDrive SWSetup root.'
+        throw 'PSADT reviewedManagedInstallDirectory must be a safe machine path or a reviewed user Desktop path for a user-scope package.'
     }
 }
 

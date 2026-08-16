@@ -402,6 +402,39 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig).toMatchObject(expectedConfig);
   });
 
+  it('binds the Tor Browser extracted-folder lifecycle to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'TorProject.TorBrowser',
+      displayName: 'Tor Browser',
+      publisher: 'Tor Project',
+      version: '15.0.19',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Tor Browser',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = {
+      reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser',
+    };
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.installer.installScope).toBe('user');
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\TorProject_TorBrowser',
+      }),
+    ]);
+  });
+
   it('binds the Visual Studio 2022 Build Tools x86 instance root to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.VisualStudio.2022.BuildTools',
