@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f70f65692afddaf7b249cdacdcbacb356822f4f0',
+  packagerCommit: '4d9a1c9cae5383b6bf44f7501e4bb0dc157c7e3f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -95,6 +95,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // The intervening changes repair reviewed failure paths while the exact
   // current profile remains mandatory for newly dispatched candidates.
   '81ad189d7e51026bd15681264f774f498429f526',
+  // DWG FastView's reviewed silent-removal adapter changes only that vendor's
+  // failed lifecycle. Preserve all compatible passes from the preceding
+  // protected release while newly dispatched profiles use the exact pin.
+  'f70f65692afddaf7b249cdacdcbacb356822f4f0',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -641,6 +641,27 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'IPEVO.VisualizerLTSE',
     'Sonos.Controller',
   ],
+  '4d9a1c9cae5383b6bf44f7501e4bb0dc157c7e3f': [
+    // Preserve every still-unconsumed reviewed lifecycle retry across the
+    // atomic pin change. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    // The registered DWG FastView setup command is interactive unless the
+    // vendor's reviewed /silent /uninstall contract is appended. Retry the
+    // exact failed version once through the shared QA/customer adapter.
+    'Gstarsoft.DWGFastView',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
