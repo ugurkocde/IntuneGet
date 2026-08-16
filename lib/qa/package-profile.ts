@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '0b562aa574144a19a6b4c5e6c3d3d7a4c241961f',
+  packagerCommit: 'a48022baddf7b3f312541ef2e127220f508104a8',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -117,6 +117,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // MSYS2's reviewed identity and official CLI removal affect only its failed
   // lifecycle. Preserve compatible passes from the prior protected release.
   '11933b94c72275551a565bed7364ebb8616e4414',
+  // The MSYS2 correction preserves the reviewed path allowlist and changes
+  // only its previously failing removal path. Preserve all compatible passes.
+  '0b562aa574144a19a6b4c5e6c3d3d7a4c241961f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
