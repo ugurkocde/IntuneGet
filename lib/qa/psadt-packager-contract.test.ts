@@ -683,14 +683,14 @@ describe('PSADT vendor argument contract', () => {
         [],
         {
           reviewedManagedInstallDirectory:
-            '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+            '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
           reviewedManagedUninstall: {
             executablePath:
               '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
             arguments: [
               'uninstall',
               '--installPath',
-              '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+              '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
               '--quiet',
               '--norestart',
             ],
@@ -709,7 +709,7 @@ describe('PSADT vendor argument contract', () => {
         "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe')"
       );
       expect(uninstallFunction).toContain(
-        "$managedUninstallArguments = @('uninstall', '--installPath', '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools', '--quiet', '--norestart')"
+        "$managedUninstallArguments = @('uninstall', '--installPath', '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools', '--quiet', '--norestart')"
       );
       expect(uninstallFunction).toContain(
         '$managedUninstallDeadline = [DateTime]::UtcNow.AddMinutes(15)'

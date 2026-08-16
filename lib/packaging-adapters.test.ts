@@ -290,14 +290,14 @@ describe('application packaging adapters', () => {
       )
     ).toMatchObject({
       reviewedManagedInstallDirectory:
-        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+        '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
       reviewedManagedUninstall: {
         executablePath:
           '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
         arguments: [
           'uninstall',
           '--installPath',
-          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+          '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
           '--quiet',
           '--norestart',
         ],
@@ -339,14 +339,14 @@ describe('application packaging adapters', () => {
       )
     ).toMatchObject({
       reviewedManagedInstallDirectory:
-        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Professional',
+        '%ProgramFiles%\\Microsoft Visual Studio\\2022\\Professional',
       reviewedManagedUninstall: {
         executablePath:
           '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
         arguments: [
           'uninstall',
           '--installPath',
-          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Professional',
+          '%ProgramFiles%\\Microsoft Visual Studio\\2022\\Professional',
           '--quiet',
           '--norestart',
         ],

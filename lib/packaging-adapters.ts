@@ -55,14 +55,17 @@ const POSTGRESQL_PACKAGING_ADAPTER: ApplicationPackagingAdapter = {
 };
 
 const VISUAL_STUDIO_MANAGED_INSTALL_PATHS = {
+  // Visual Studio 2022 and newer are 64-bit products whose documented default
+  // instance root is Program Files. The Visual Studio Installer itself remains
+  // a 32-bit shared component below Program Files (x86).
   'Microsoft.VisualStudio.BuildTools':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\BuildTools',
+    '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
   'Microsoft.VisualStudio.Community':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\Community',
+    '%ProgramFiles%\\Microsoft Visual Studio\\18\\Community',
   'Microsoft.VisualStudio.Enterprise':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\Enterprise',
+    '%ProgramFiles%\\Microsoft Visual Studio\\18\\Enterprise',
   'Microsoft.VisualStudio.Professional':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\18\\Professional',
+    '%ProgramFiles%\\Microsoft Visual Studio\\18\\Professional',
   'Microsoft.VisualStudio.2019.BuildTools':
     '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\BuildTools',
   'Microsoft.VisualStudio.2019.Community':
@@ -72,13 +75,13 @@ const VISUAL_STUDIO_MANAGED_INSTALL_PATHS = {
   'Microsoft.VisualStudio.2019.Professional':
     '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Professional',
   'Microsoft.VisualStudio.2022.BuildTools':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools',
+    '%ProgramFiles%\\Microsoft Visual Studio\\2022\\BuildTools',
   'Microsoft.VisualStudio.2022.Community':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Community',
+    '%ProgramFiles%\\Microsoft Visual Studio\\2022\\Community',
   'Microsoft.VisualStudio.2022.Enterprise':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Enterprise',
+    '%ProgramFiles%\\Microsoft Visual Studio\\2022\\Enterprise',
   'Microsoft.VisualStudio.2022.Professional':
-    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\Professional',
+    '%ProgramFiles%\\Microsoft Visual Studio\\2022\\Professional',
 } as const;
 
 const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
