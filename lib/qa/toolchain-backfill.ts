@@ -682,6 +682,24 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // the current /s /uninstall shared QA/customer packaging adapter.
     'Gstarsoft.DWGFastView',
   ],
+  '7870c214b74ac666b16573ac42cbc9e65a3848e2': [
+    // Carry the still-unconsumed bounded lifecycle retries through the atomic
+    // pin rollout. DWG FastView is intentionally absent because the shared
+    // eligibility gate now blocks its unsupported managed uninstall.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
