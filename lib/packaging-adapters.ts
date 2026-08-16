@@ -605,17 +605,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
-    // Wisenet WAVE starts its desktop client after a silent installation. The
-    // vendor documents that Windows client executable as `Wisenet WAVE.exe`,
-    // and its Burn uninstaller returns 1603 while the client remains in use.
-    // Close the client before managed lifecycle actions so unattended removal
-    // can delete the exact application registration under LocalSystem.
-    wingetId: 'Hanwha.WisenetWAVEClient',
-    requiredProcessesToClose: [
-      { name: 'Wisenet WAVE', description: 'Wisenet WAVE Client' },
-    ],
-  },
-  {
     wingetId: 'Greenshot.Greenshot',
     requiredProcessesToClose: [
       { name: 'Greenshot', description: 'Greenshot' },

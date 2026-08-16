@@ -639,18 +639,6 @@ describe('application packaging adapters', () => {
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
 
-  it('closes the Wisenet WAVE desktop client before its Burn removal lifecycle', () => {
-    const adapted = applyApplicationPackagingAdapter(
-      'Hanwha.WisenetWAVEClient',
-      DEFAULT_PSADT_CONFIG
-    );
-
-    expect(adapted.processesToClose).toEqual([
-      { name: 'Wisenet WAVE', description: 'Wisenet WAVE Client' },
-    ]);
-    expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
-  });
-
   it('closes Greenshot before install and removal lifecycle actions', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Greenshot.Greenshot',
