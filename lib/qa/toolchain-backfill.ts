@@ -662,6 +662,26 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // exact failed version once through the shared QA/customer adapter.
     'Gstarsoft.DWGFastView',
   ],
+  '02caa5a067569ad1d1e017fc6f52f3ee4e152120': [
+    // Carry every unconsumed bounded lifecycle retry through the atomic pin
+    // rollout. Compatible passes are removed before candidates are created.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    // Give the exact failed DWG FastView version one final bounded retry with
+    // the current /s /uninstall shared QA/customer packaging adapter.
+    'Gstarsoft.DWGFastView',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
