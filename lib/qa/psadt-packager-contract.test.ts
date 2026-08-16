@@ -166,7 +166,7 @@ describe('PSADT Inno packaging contract', () => {
 
 describe('PSADT vendor argument contract', () => {
   it.runIf(canRunWindowsPowerShellPackager)(
-    'runs install4j uninstallers unattended when the registry exposes only UninstallString',
+    'runs root-level install4j uninstallers unattended when the manifest identifies the framework',
     () => {
       const generated = generateRegistryUninstallPackage(
         'exe',
@@ -186,13 +186,48 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(uninstallFunction).toContain(
-        "$registeredUninstallLeaf -ieq 'uninstaller.exe' -and $registeredUninstallParentLeaf -ieq '.install4j'"
+        "$installerUsesInstall4j = '-q -Dinstall4j.suppressUnattendedReboot=true' -match '(?i)(^|\\s)-Dinstall4j\\.'"
+      );
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallLeaf -in @('uninstaller.exe', 'uninstall.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "($registeredUninstallParentLeaf -ieq '.install4j' -or $installerUsesInstall4j)"
       );
       expect(uninstallFunction).toContain(
         "foreach ($argument in @('-q', '-Dinstall4j.suppressUnattendedReboot=true'))"
       );
       expect(uninstallFunction).toContain(
         '$additionalUninstallArguments += $argument'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'retains the canonical .install4j uninstaller signature without manifest framework switches',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Example install4j application',
+        [],
+        {},
+        [],
+        'Example.Install4j',
+        'Example install4j application',
+        '1.0.0',
+        'REGISTRY_UNINSTALL_KEY:example-install4j:Example install4j application',
+        '/S'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$installerUsesInstall4j = '/S' -match '(?i)(^|\\s)-Dinstall4j\\.'"
+      );
+      expect(uninstallFunction).toContain(
+        "($registeredUninstallParentLeaf -ieq '.install4j' -or $installerUsesInstall4j)"
       );
     }
   );
