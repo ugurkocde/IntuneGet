@@ -114,6 +114,10 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['-q']);
     expect(
+      applyApplicationPackagingAdapter('karakun.OpenWebStart', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['-q', '-Dinstall4j.suppressUnattendedReboot=true']);
+    expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['--force-uninstall']);

@@ -167,6 +167,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-q'],
   },
   {
+    // OpenWebStart documents its Windows payload as an install4j application
+    // with a root-level uninstall.exe. The registered command is interactive,
+    // and the generic framework detector cannot infer install4j from WinGet's
+    // bare `-q` install switch. Append install4j's unattended removal contract
+    // to the exact captured product uninstaller for both QA and customers.
+    wingetId: 'karakun.OpenWebStart',
+    reviewedUninstallArguments: [
+      '-q',
+      '-Dinstall4j.suppressUnattendedReboot=true',
+    ],
+  },
+  {
     // Sonos' compressed InstallShield launcher does not reliably install in a
     // non-interactive LocalSystem session. Create the vendor-supported
     // administrative image in the target context, validate its MSI against the
