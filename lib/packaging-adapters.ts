@@ -169,6 +169,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/qb /norestart CHECK_FOR_UPDATES=false DONATE_NOTIFICATION=false SKIPTHANKSPAGE=Yes',
   },
   {
+    // PTC's bootstrapper forwards MSI properties only when they immediately
+    // follow /v. The community manifest's separated `/v /quiet /norestart`
+    // command can install the payload but return an error before IntuneGet can
+    // verify it and write detection evidence. PTC documents ADDLOCAL="ALL"
+    // with /qn for a complete unattended Creo View Express installation.
+    wingetId: 'PTC.CreoView.Express',
+    reviewedInstallArgumentsOverride: '/vADDLOCAL="ALL" /qn /norestart',
+  },
+  {
     // Apryse documents -q as the unattended Windows uninstall switch for the
     // install4j-based Xodo/PDF Studio family. The registered Xodo PDF Reader
     // command omits it, which leaves the confirmation flow waiting in a

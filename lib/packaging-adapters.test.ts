@@ -455,6 +455,18 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses PTC Creo View Express documented MSI-forwarding syntax', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'PTC.CreoView.Express',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe(
+      '/vADDLOCAL="ALL" /qn /norestart'
+    );
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('uses the reviewed InstallShield administrative-image lifecycle for Sonos', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Sonos.Controller',
