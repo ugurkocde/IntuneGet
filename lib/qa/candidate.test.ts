@@ -116,7 +116,8 @@ describe('QA candidate normalization', () => {
     expect(normalizeQaInstallerType('inno', 'exe')).toBe('exe');
     expect(normalizeQaInstallerType('nullsoft', 'exe')).toBe('exe');
     expect(normalizeQaInstallerType('wix', 'exe')).toBe('msi');
-    expect(normalizeQaInstallerType('portable', 'exe')).toBe('exe');
+    expect(normalizeQaInstallerType('portable', 'exe')).toBe('portable');
+    expect(normalizeQaInstallerType(null, 'portable')).toBe('portable');
   });
 
   it('gives extensionless executable URLs a runnable filename', () => {

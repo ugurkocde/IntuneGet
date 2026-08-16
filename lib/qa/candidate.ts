@@ -142,16 +142,17 @@ export function normalizeInstallerSha256(value?: string | null): string {
 export function normalizeQaInstallerType(
   wingetType?: string | null,
   recipeType: string = 'exe'
-): 'exe' | 'msi' | 'msix' | 'appx' | 'zip' {
+): 'exe' | 'msi' | 'msix' | 'appx' | 'zip' | 'portable' {
   const normalized = wingetType?.trim().toLowerCase();
   if (normalized === 'wix' || normalized === 'msi') return 'msi';
   if (['inno', 'nullsoft', 'burn', 'exe'].includes(normalized || '')) return 'exe';
   if (normalized === 'msix') return 'msix';
   if (normalized === 'appx') return 'appx';
   if (normalized === 'zip') return 'zip';
+  if (normalized === 'portable') return 'portable';
   const fallback = recipeType.trim().toLowerCase();
-  return ['exe', 'msi', 'msix', 'appx', 'zip'].includes(fallback)
-    ? (fallback as 'exe' | 'msi' | 'msix' | 'appx' | 'zip')
+  return ['exe', 'msi', 'msix', 'appx', 'zip', 'portable'].includes(fallback)
+    ? (fallback as 'exe' | 'msi' | 'msix' | 'appx' | 'zip' | 'portable')
     : 'exe';
 }
 
