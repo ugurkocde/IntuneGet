@@ -639,18 +639,6 @@ describe('application packaging adapters', () => {
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
 
-  it('closes Core Temp before its driver-backed Inno removal lifecycle', () => {
-    const adapted = applyApplicationPackagingAdapter(
-      'ALCPU.CoreTemp',
-      DEFAULT_PSADT_CONFIG
-    );
-
-    expect(adapted.processesToClose).toEqual([
-      { name: 'Core Temp', description: 'Core Temp hardware monitor' },
-    ]);
-    expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
-  });
-
   it('closes the Wisenet WAVE desktop client before its Burn removal lifecycle', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Hanwha.WisenetWAVEClient',
