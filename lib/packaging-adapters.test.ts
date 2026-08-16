@@ -42,12 +42,21 @@ describe('application packaging adapters', () => {
       'MaestroSoft.MaestroAarsoppgjoer.2025',
       'REGISTRY_UNINSTALL:Maestro Årsoppgjør 2025'
     )).toBe(
-      'REGISTRY_UNINSTALL_KEY:{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}:Maestro Årsoppgjør 2025'
+      'REGISTRY_UNINSTALL_PRODUCT:{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}:Maestro Årsoppgjør 2025'
     );
     expect(resolveApplicationUninstallCommand(
       'MaestroSoft.MaestroAarsoppgjoer.2025',
       'vendor-uninstall.exe --custom'
     )).toBe('vendor-uninstall.exe --custom');
+  });
+
+  it('uses PTC Creo View Express published MSI identity across prerequisite installs', () => {
+    expect(resolveApplicationUninstallCommand(
+      'PTC.CreoView.Express',
+      'REGISTRY_UNINSTALL:PTC Creo View Express'
+    )).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{6DE7DB1D-27F7-46A8-AE3A-D8C2BB62870B}:PTC Creo View Express'
+    );
   });
 
   it('uses Timely Memory\'s published stable NSIS registry key', () => {

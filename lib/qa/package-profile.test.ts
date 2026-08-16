@@ -353,13 +353,42 @@ describe('PSADT QA package identity', () => {
       psadtConfig: JSON.stringify({ detectionRules: [] }),
     });
     const expected =
-      'REGISTRY_UNINSTALL_KEY:{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}:Maestro Årsoppgjør 2025';
+      'REGISTRY_UNINSTALL_PRODUCT:{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}:Maestro Årsoppgjør 2025';
     const profile = normalized.identity.profile as {
       installer: { uninstallCommand: string };
     };
 
     expect(normalized.uninstallCommand).toBe(expected);
     expect(profile.installer.uninstallCommand).toBe(expected);
+  });
+
+  it('binds PTC Creo View Express to its published MSI identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'PTC.CreoView.Express',
+      displayName: 'PTC Creo View Express',
+      publisher: 'PTC',
+      version: '20.0.0.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'zip',
+      silentSwitches: '/v /quiet /norestart',
+      uninstallCommand: 'REGISTRY_UNINSTALL:PTC Creo View Express',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expected =
+      'REGISTRY_UNINSTALL_PRODUCT:{6DE7DB1D-27F7-46A8-AE3A-D8C2BB62870B}:PTC Creo View Express';
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(normalized.uninstallCommand).toBe(expected);
+    expect(profile.installer.uninstallCommand).toBe(expected);
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
+      '/vADDLOCAL="ALL" /qn /norestart'
+    );
   });
 
   it('binds the Visual Studio 2019 instance lifecycle to customer and QA packaging', () => {

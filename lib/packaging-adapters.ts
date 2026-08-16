@@ -746,6 +746,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Maestro Årsoppgjør 2025',
     registeredRegistryKey: '{20C36C0E-AF6D-4C46-AA1C-39080889BE9F}',
   },
+  // Creo View Express installs several prerequisite products, and its ARP
+  // display name carries the embedded product release rather than WinGet's
+  // package version. WinGet publishes the main MSI ProductCode, so bind that
+  // immutable identity instead of selecting from multiple changed entries.
+  'ptc.creoview.express': {
+    generatedDisplayName: 'PTC Creo View Express',
+    registeredDisplayName: 'PTC Creo View Express',
+    registeredRegistryKey: '{6DE7DB1D-27F7-46A8-AE3A-D8C2BB62870B}',
+  },
   // Timely publishes the stable NSIS uninstall registry key as ProductCode
   // `Memory`. It is not an MSI GUID, so the generic manifest conversion treats
   // it as a display name and misses the vendor entry when background servicing
@@ -771,9 +780,14 @@ export function resolveApplicationUninstallCommand(
   if (!reviewed) return uninstallCommand;
   const expected = `REGISTRY_UNINSTALL:${reviewed.generatedDisplayName}`;
   if (uninstallCommand.trim() !== expected) return uninstallCommand;
-  return reviewed.registeredRegistryKey
-    ? `REGISTRY_UNINSTALL_KEY:${reviewed.registeredRegistryKey}:${reviewed.registeredDisplayName}`
-    : `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`;
+  if (!reviewed.registeredRegistryKey) {
+    return `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`;
+  }
+  const reviewedKey = reviewed.registeredRegistryKey;
+  const isMsiProductCode = /^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$/.test(
+    reviewedKey
+  );
+  return `${isMsiProductCode ? 'REGISTRY_UNINSTALL_PRODUCT' : 'REGISTRY_UNINSTALL_KEY'}:${reviewedKey}:${reviewed.registeredDisplayName}`;
 }
 
 function normalizeProcessName(name: string): string {
