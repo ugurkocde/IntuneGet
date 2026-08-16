@@ -61,6 +61,17 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses MSYS2\'s registered product family instead of its catalog title', () => {
+    expect(resolveApplicationUninstallCommand(
+      'MSYS2.MSYS2',
+      'REGISTRY_UNINSTALL:MSYS2 Installer'
+    )).toBe('REGISTRY_UNINSTALL:MSYS2');
+    expect(resolveApplicationUninstallCommand(
+      'msys2.msys2',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
@@ -117,6 +128,15 @@ describe('application packaging adapters', () => {
       applyApplicationPackagingAdapter('karakun.OpenWebStart', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['-q', '-Dinstall4j.suppressUnattendedReboot=true']);
+    expect(
+      applyApplicationPackagingAdapter('MSYS2.MSYS2', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedExactUninstall: {
+        executablePath: 'C:\\msys64\\uninstall.exe',
+        arguments: ['pr', '--confirm-command'],
+        completionTimeoutMinutes: 5,
+      },
+    });
     expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments

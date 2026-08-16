@@ -179,6 +179,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // The official MSYS2 installer always targets C:\msys64 for this WinGet
+    // profile and documents its Qt Installer Framework removal command. The
+    // catalog name (`MSYS2 Installer`) differs from the registered product
+    // (`MSYS2 <version>`), so capture that reviewed identity and use the
+    // vendor's exact headless uninstaller for QA and customer packages.
+    wingetId: 'MSYS2.MSYS2',
+    reviewedExactUninstall: {
+      executablePath: 'C:\\msys64\\uninstall.exe',
+      arguments: ['pr', '--confirm-command'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // Sonos' compressed InstallShield launcher does not reliably install in a
     // non-interactive LocalSystem session. Create the vendor-supported
     // administrative image in the target context, validate its MSI against the
@@ -725,6 +738,10 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'Memory',
     registeredDisplayName: 'Memory',
     registeredRegistryKey: 'Memory',
+  },
+  'msys2.msys2': {
+    generatedDisplayName: 'MSYS2 Installer',
+    registeredDisplayName: 'MSYS2',
   },
 };
 
