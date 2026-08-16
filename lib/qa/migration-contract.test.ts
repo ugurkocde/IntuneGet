@@ -430,6 +430,27 @@ describe('Sonos Controller managed install block migration contract', () => {
   });
 });
 
+describe('Nmap managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260816183000_block_nmap_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported Nmap installer across catalog, customer packaging, and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Insecure.Nmap'");
+    expect(sql).toContain(
+      'https://github.com/microsoft/winget-pkgs/issues/341747'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('Yandex Browser managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(
