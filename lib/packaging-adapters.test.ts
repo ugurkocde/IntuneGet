@@ -110,7 +110,7 @@ describe('application packaging adapters', () => {
         'Gstarsoft.DWGFastView',
         DEFAULT_PSADT_CONFIG
       ).reviewedUninstallArguments
-    ).toEqual(['/silent', '/uninstall']);
+    ).toEqual(['/s', '/uninstall']);
     expect(
       applyApplicationPackagingAdapter('Google.GoogleDrive', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
