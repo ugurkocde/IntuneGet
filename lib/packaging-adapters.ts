@@ -605,6 +605,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Core Temp loads a low-level monitoring driver, and lifecycle QA found its
+    // registered Inno removal still present after the unattended deadline.
+    // Close the well-known desktop process before invoking the uninstaller to
+    // remove the application-in-use blocker under LocalSystem.
+    wingetId: 'ALCPU.CoreTemp',
+    requiredProcessesToClose: [
+      { name: 'Core Temp', description: 'Core Temp hardware monitor' },
+    ],
+  },
+  {
     wingetId: 'Greenshot.Greenshot',
     requiredProcessesToClose: [
       { name: 'Greenshot', description: 'Greenshot' },
