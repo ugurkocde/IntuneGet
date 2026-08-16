@@ -782,6 +782,35 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // documented unattended removal arguments.
     'karakun.OpenWebStart',
   ],
+  '0b562aa574144a19a6b4c5e6c3d3d7a4c241961f': [
+    // Carry still-unconsumed bounded retries across the atomic pin rollout.
+    // Compatible passes are filtered before candidates are created.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    // Retry the exact failed MSYS2 release once with its reviewed registration
+    // identity and official Qt Installer Framework removal command.
+    'MSYS2.MSYS2',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

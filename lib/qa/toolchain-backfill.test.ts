@@ -18,6 +18,7 @@ describe('QA toolchain targeted retries', () => {
       'IPEVO.VisualizerLTSE',
       'Sonos.Controller',
       'karakun.OpenWebStart',
+      'MSYS2.MSYS2',
     ]));
 
     targets.length = 0;
@@ -33,6 +34,7 @@ describe('QA toolchain targeted retries', () => {
         'IPEVO.VisualizerLTSE',
         'Sonos.Controller',
         'karakun.OpenWebStart',
+        'MSYS2.MSYS2',
       ])
     );
   });
@@ -305,6 +307,13 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'karakun.openwebstart', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries MSYS2 once with its reviewed product identity and uninstaller', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'msys2.msys2', status: 'failed' }
     )).toBe(true);
   });
 

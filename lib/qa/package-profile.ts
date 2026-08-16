@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '11933b94c72275551a565bed7364ebb8616e4414',
+  packagerCommit: '0b562aa574144a19a6b4c5e6c3d3d7a4c241961f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -114,6 +114,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // OpenWebStart's install4j uninstall adapter changes only that app's failed
   // lifecycle. Preserve compatible passes from the prior protected release.
   '82958ac0c0b39e06af14a87b70319251604910f7',
+  // MSYS2's reviewed identity and official CLI removal affect only its failed
+  // lifecycle. Preserve compatible passes from the prior protected release.
+  '11933b94c72275551a565bed7364ebb8616e4414',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
