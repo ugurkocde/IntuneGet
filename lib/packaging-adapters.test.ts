@@ -334,6 +334,27 @@ describe('application packaging adapters', () => {
     ).toEqual(['/uninstall', '/quiet', '/norestart']);
     expect(
       applyApplicationPackagingAdapter(
+        'Microsoft.VisualStudio.2022.BuildTools',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools',
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools',
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    });
+    expect(
+      applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2022.Professional',
         DEFAULT_PSADT_CONFIG
       )

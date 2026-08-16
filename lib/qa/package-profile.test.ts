@@ -402,6 +402,46 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig).toMatchObject(expectedConfig);
   });
 
+  it('binds the Visual Studio 2022 Build Tools x86 instance root to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.VisualStudio.2022.BuildTools',
+      displayName: 'Visual Studio BuildTools 2022',
+      publisher: 'Microsoft',
+      version: '17.14.37',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--quiet --wait --campaign "winget"',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Visual Studio BuildTools 2022',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedPath =
+      '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools';
+    const expectedConfig = {
+      reviewedManagedInstallDirectory: expectedPath,
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          expectedPath,
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+  });
+
   it('binds shared-runtime retention to both the normalized config and QA identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.EdgeWebView2Runtime',
