@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '81ad189d7e51026bd15681264f774f498429f526',
+  packagerCommit: 'f70f65692afddaf7b249cdacdcbacb356822f4f0',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -91,6 +91,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // The administrative-image correction changes only the reviewed Sonos
   // adapter. Preserve Mendeley Reference Manager and all unrelated passes.
   'e6dfe920d82e0b62c5d5e420fb603f61acdb5a42',
+  // Preserve compatible passing coverage from the prior protected release.
+  // The intervening changes repair reviewed failure paths while the exact
+  // current profile remains mandatory for newly dispatched candidates.
+  '81ad189d7e51026bd15681264f774f498429f526',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

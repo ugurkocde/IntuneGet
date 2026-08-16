@@ -622,6 +622,25 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // launcher and returned Windows Installer error 1605.
     'Sonos.Controller',
   ],
+  'f70f65692afddaf7b249cdacdcbacb356822f4f0': [
+    // Preserve every still-unconsumed reviewed lifecycle retry in this
+    // cumulative release. Compatible passes are filtered before enqueue.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    // Retry Snapform with root-level install4j uninstall.exe recognition and
+    // the framework's documented unattended removal arguments.
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
