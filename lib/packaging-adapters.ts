@@ -306,6 +306,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/silent', 'forall'],
   },
   {
+    // DWG FastView registers setup.exe without a separate quiet uninstall
+    // command. The vendor setup lifecycle requires both /silent and
+    // /uninstall; replaying the bare ARP command opens the removal UI and
+    // leaves the exact DWGFastView_en_ww registration installed under SYSTEM.
+    // Append the reviewed contract to the captured installation-specific path
+    // so QA and customer Intune packages share the same unattended removal.
+    wingetId: 'Gstarsoft.DWGFastView',
+    reviewedUninstallArguments: ['/silent', '/uninstall'],
+  },
+  {
     // Dell Optimizer's registered InstallShield helper exits without removing
     // the product even with Dell's documented switches. Invoke the original,
     // hash-verified Dell Update Package instead; Dell documents the

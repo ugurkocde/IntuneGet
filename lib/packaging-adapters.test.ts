@@ -106,6 +106,12 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['/silent', 'forall']);
     expect(
+      applyApplicationPackagingAdapter(
+        'Gstarsoft.DWGFastView',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['/silent', '/uninstall']);
+    expect(
       applyApplicationPackagingAdapter('Google.GoogleDrive', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['--silent', '--force_stop']);
