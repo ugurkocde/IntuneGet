@@ -700,6 +700,33 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'IPEVO.VisualizerLTSE',
     'Sonos.Controller',
   ],
+  '1467e138d1e6f5f0cee3d8cda6f981c4d44f6b8f': [
+    // Carry every still-unconsumed bounded retry across the atomic pin
+    // rollout. Compatible passes are filtered before candidates are created.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    // Visual Studio 2022 and newer install 64-bit instances below Program
+    // Files. Retry terminal outcomes through the corrected shared adapter.
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

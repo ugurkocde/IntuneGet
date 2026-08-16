@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7870c214b74ac666b16573ac42cbc9e65a3848e2',
+  packagerCommit: '1467e138d1e6f5f0cee3d8cda6f981c4d44f6b8f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -105,6 +105,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Removing the ineffective DWG FastView adapter affects only an app now
   // blocked at the shared eligibility gate. Preserve every compatible pass.
   '02caa5a067569ad1d1e017fc6f52f3ee4e152120',
+  // Visual Studio's managed-directory correction affects only 64-bit 2022+
+  // instances. Preserve unrelated compatible passes from this release.
+  '7870c214b74ac666b16573ac42cbc9e65a3848e2',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

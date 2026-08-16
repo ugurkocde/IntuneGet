@@ -71,10 +71,8 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
-  it.each([
-    'Microsoft.OfficeDeploymentTool',
-    'Microsoft.VisualStudio.BuildTools',
-  ])('keeps the managed lifecycle retry scoped to its release for %s', (wingetId) => {
+  it('keeps the Office Deployment Tool managed lifecycle retry scoped to its release', () => {
+    const wingetId = 'Microsoft.OfficeDeploymentTool';
     expect(shouldRetryTerminalToolchainCandidate(
       '2e68a941d3410e4eb7c6ed1e73fbc0eff290c807',
       { wingetId, status: 'failed' }
@@ -266,17 +264,10 @@ describe('QA toolchain targeted retries', () => {
   });
 
   it.each([
-    'Microsoft.VisualStudio.Community',
-    'Microsoft.VisualStudio.Enterprise',
-    'Microsoft.VisualStudio.Professional',
     'Microsoft.VisualStudio.2019.BuildTools',
     'Microsoft.VisualStudio.2019.Community',
     'Microsoft.VisualStudio.2019.Enterprise',
     'Microsoft.VisualStudio.2019.Professional',
-    'Microsoft.VisualStudio.2022.BuildTools',
-    'Microsoft.VisualStudio.2022.Community',
-    'Microsoft.VisualStudio.2022.Enterprise',
-    'Microsoft.VisualStudio.2022.Professional',
     'Mozilla.Firefox.de',
   ])(
     'keeps the terminal %s retry scoped to its historical toolchain release',
@@ -291,6 +282,22 @@ describe('QA toolchain targeted retries', () => {
       )).toBe(false);
     }
   );
+
+  it.each([
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+  ])('retries terminal %s through the corrected 64-bit instance root', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+  });
 
   it('keeps the VirtualBox retry scoped to its historical toolchain release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
