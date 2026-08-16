@@ -292,7 +292,7 @@ describe('QA toolchain targeted retries', () => {
     'Microsoft.VisualStudio.2022.Community',
     'Microsoft.VisualStudio.2022.Enterprise',
     'Microsoft.VisualStudio.2022.Professional',
-  ])('retries terminal %s through the corrected 64-bit instance root', (wingetId) => {
+  ])('retries terminal %s through the current reviewed instance root', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }

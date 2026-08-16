@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '1467e138d1e6f5f0cee3d8cda6f981c4d44f6b8f',
+  packagerCommit: '82958ac0c0b39e06af14a87b70319251604910f7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -108,6 +108,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Visual Studio's managed-directory correction affects only 64-bit 2022+
   // instances. Preserve unrelated compatible passes from this release.
   '7870c214b74ac666b16573ac42cbc9e65a3848e2',
+  // Build Tools 2022 remains below Program Files (x86), while the full 2022
+  // IDE editions remain below Program Files. Preserve compatible passes.
+  '1467e138d1e6f5f0cee3d8cda6f981c4d44f6b8f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
