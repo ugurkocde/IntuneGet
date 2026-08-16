@@ -34,6 +34,24 @@ function normalized(value?: string | null): string {
   return value?.trim().toLowerCase() || '';
 }
 
+function preferEnterpriseMachineInstaller(
+  installers: NormalizedInstaller[],
+  installScope: WingetScope,
+): NormalizedInstaller[] {
+  if (installScope !== 'machine') return installers;
+
+  const enterpriseInstallers = installers.filter((installer) => {
+    const effectiveType = normalized(
+      installer.type === 'zip' && installer.nestedInstallerType
+        ? installer.nestedInstallerType
+        : installer.type,
+    );
+    return effectiveType === 'msi' || effectiveType === 'wix';
+  });
+
+  return enterpriseInstallers.length > 0 ? enterpriseInstallers : installers;
+}
+
 function selectPreferredIdentity(
   installers: NormalizedInstaller[],
   input: TrustedCatalogInstallerRequest,
@@ -83,13 +101,19 @@ export function selectTrustedCatalogInstaller(
     (installer) => normalized(installer.scope) === input.installScope
   );
   if (exactScope.length > 0) {
-    return selectPreferredIdentity(exactScope, input);
+    return selectPreferredIdentity(
+      preferEnterpriseMachineInstaller(exactScope, input.installScope),
+      input,
+    );
   }
 
   const unspecifiedScope = architectureCandidates.filter(
     (installer) => !installer.scope?.trim()
   );
-  return selectPreferredIdentity(unspecifiedScope, input);
+  return selectPreferredIdentity(
+    preferEnterpriseMachineInstaller(unspecifiedScope, input.installScope),
+    input,
+  );
 }
 
 export async function reconcileCatalogInstaller(

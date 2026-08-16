@@ -37,23 +37,52 @@ function preferredScopeInstaller(
   installers: WingetInstallerCandidate[],
   requestedScope?: 'machine' | 'user'
 ): WingetInstallerCandidate | null {
+  const preferEnterpriseMachineInstaller = (
+    candidates: WingetInstallerCandidate[],
+    machineScope: boolean,
+  ): WingetInstallerCandidate | null => {
+    if (!machineScope) return candidates[0] || null;
+
+    const enterpriseInstaller = candidates.find((installer) => {
+      const sourceType = installer.InstallerType?.trim().toLowerCase();
+      const effectiveType = sourceType === 'zip'
+        ? installer.NestedInstallerType?.trim().toLowerCase()
+        : sourceType;
+      return effectiveType === 'msi' || effectiveType === 'wix';
+    });
+    return enterpriseInstaller || candidates[0] || null;
+  };
+
   if (requestedScope) {
-    return (
-      installers.find(
-        (installer) => installer.Scope?.trim().toLowerCase() === requestedScope
-      ) ||
-      installers.find((installer) => !installer.Scope?.trim()) ||
-      null
+    const exactScope = installers.filter(
+      (installer) => installer.Scope?.trim().toLowerCase() === requestedScope
+    );
+    if (exactScope.length > 0) {
+      return preferEnterpriseMachineInstaller(exactScope, requestedScope === 'machine');
+    }
+
+    const unspecifiedScope = installers.filter((installer) => !installer.Scope?.trim());
+    return preferEnterpriseMachineInstaller(
+      unspecifiedScope,
+      requestedScope === 'machine',
     );
   }
 
-  return (
-    installers.find((installer) => installer.Scope?.trim().toLowerCase() === 'machine') ||
-    installers.find((installer) => !installer.Scope?.trim()) ||
-    installers.find((installer) => installer.Scope?.trim().toLowerCase() === 'user') ||
-    installers[0] ||
-    null
+  const machineScope = installers.filter(
+    (installer) => installer.Scope?.trim().toLowerCase() === 'machine'
   );
+  if (machineScope.length > 0) {
+    return preferEnterpriseMachineInstaller(machineScope, true);
+  }
+
+  const unspecifiedScope = installers.filter((installer) => !installer.Scope?.trim());
+  if (unspecifiedScope.length > 0) {
+    return preferEnterpriseMachineInstaller(unspecifiedScope, true);
+  }
+
+  return installers.find(
+    (installer) => installer.Scope?.trim().toLowerCase() === 'user'
+  ) || installers[0] || null;
 }
 
 export function normalizeQaArchitecture(value?: string | null): 'x64' | 'x86' | 'arm64' {

@@ -90,6 +90,41 @@ describe('catalog installer reconciliation', () => {
     })).toBeNull();
   });
 
+  it('prefers an enterprise MSI over a per-user bootstrapper for machine packaging', () => {
+    const ringCentralInstallers: NormalizedInstaller[] = [
+      {
+        architecture: 'x64',
+        url: 'https://example.test/ringcentral-user.exe',
+        sha256: 'A'.repeat(64),
+        type: 'nullsoft',
+        scope: 'machine',
+        silentArgs: '/S',
+      },
+      {
+        architecture: 'x64',
+        url: 'https://example.test/ringcentral-admin.msi',
+        sha256: 'B'.repeat(64),
+        type: 'wix',
+        scope: 'machine',
+        silentArgs: '/qn /norestart',
+        productCode: '{1DE15838-06D0-4C9D-B513-F86B806149D5}',
+      },
+    ];
+
+    const selected = selectTrustedCatalogInstaller(ringCentralInstallers, {
+      wingetId: 'RingCentral.RingCentralTeamsDesktopPlugin',
+      version: '26.2.20-build.233',
+      architecture: 'x64',
+      installScope: 'machine',
+      installerUrl: ringCentralInstallers[0].url,
+      installerSha256: ringCentralInstallers[0].sha256,
+    });
+
+    expect(selected?.type).toBe('wix');
+    expect(selected?.url).toBe('https://example.test/ringcentral-admin.msi');
+    expect(selected?.productCode).toBe('{1DE15838-06D0-4C9D-B513-F86B806149D5}');
+  });
+
   it('rebuilds a stale cart command from the trusted machine manifest entry', async () => {
     const reconciled = await reconcileCatalogInstaller(operaItem());
 

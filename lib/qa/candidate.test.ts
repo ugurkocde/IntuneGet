@@ -55,6 +55,29 @@ describe('QA candidate normalization', () => {
     expect(selectWingetInstaller(scopedInstallers, 'x64')?.InstallerUrl).toContain('all-users');
   });
 
+  it('prefers an admin MSI over a bootstrapper for machine-scope QA', () => {
+    const ringCentralInstallers = [
+      {
+        Architecture: 'x64',
+        Scope: 'machine',
+        InstallerType: 'nullsoft',
+        InstallerUrl: 'https://example.test/ringcentral-user.exe',
+      },
+      {
+        Architecture: 'x64',
+        Scope: 'machine',
+        InstallerType: 'wix',
+        InstallerUrl: 'https://example.test/ringcentral-admin.msi',
+        ProductCode: '{1DE15838-06D0-4C9D-B513-F86B806149D5}',
+      },
+    ];
+
+    expect(selectQaVmInstaller(ringCentralInstallers)?.installer.InstallerType).toBe('wix');
+    expect(selectWingetInstaller(ringCentralInstallers, 'x64')?.InstallerType).toBe('wix');
+    expect(selectWingetInstaller(ringCentralInstallers, 'x64', 'machine')?.InstallerType)
+      .toBe('wix');
+  });
+
   it('falls back to user scope when no machine or unspecified-scope installer exists', () => {
     const userInstaller = {
       Architecture: 'x64',
