@@ -75,6 +75,13 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('retries PTC Creo View Express with the corrected MSI-forwarding command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ptc.creoview.express', status: 'failed' }
+    )).toBe(true);
+  });
+
   it('keeps the Office Deployment Tool managed lifecycle retry scoped to its release', () => {
     const wingetId = 'Microsoft.OfficeDeploymentTool';
     expect(shouldRetryTerminalToolchainCandidate(
