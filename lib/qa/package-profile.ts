@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '82958ac0c0b39e06af14a87b70319251604910f7',
+  packagerCommit: '11933b94c72275551a565bed7364ebb8616e4414',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -111,6 +111,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Build Tools 2022 remains below Program Files (x86), while the full 2022
   // IDE editions remain below Program Files. Preserve compatible passes.
   '1467e138d1e6f5f0cee3d8cda6f981c4d44f6b8f',
+  // OpenWebStart's install4j uninstall adapter changes only that app's failed
+  // lifecycle. Preserve compatible passes from the prior protected release.
+  '82958ac0c0b39e06af14a87b70319251604910f7',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
