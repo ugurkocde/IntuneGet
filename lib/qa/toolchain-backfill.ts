@@ -840,6 +840,36 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // and the reviewed Qt Installer Framework removal arguments.
     'MSYS2.MSYS2',
   ],
+  '91abb42cf1096de692500203fc7373ef6a25a3dd': [
+    // Carry still-unconsumed bounded retries across the atomic pin rollout.
+    // Compatible passes are filtered before candidates are created.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    // Retry only the failed Tor lifecycle with its reviewed exact extracted
+    // user-folder verification and removal behavior.
+    'TorProject.TorBrowser',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

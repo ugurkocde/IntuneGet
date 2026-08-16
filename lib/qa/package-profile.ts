@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'a48022baddf7b3f312541ef2e127220f508104a8',
+  packagerCommit: '91abb42cf1096de692500203fc7373ef6a25a3dd',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -120,6 +120,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // The MSYS2 correction preserves the reviewed path allowlist and changes
   // only its previously failing removal path. Preserve all compatible passes.
   '0b562aa574144a19a6b4c5e6c3d3d7a4c241961f',
+  // Tor Browser's managed-directory adapter affects only its previously
+  // failing no-ARP lifecycle. Malwarebytes is blocked at the shared
+  // eligibility gate. Preserve every compatible pass from this release.
+  'a48022baddf7b3f312541ef2e127220f508104a8',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
