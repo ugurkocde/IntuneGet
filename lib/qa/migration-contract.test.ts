@@ -552,6 +552,26 @@ describe('Insta360 Link Controller managed uninstall block migration contract', 
   });
 });
 
+describe('Logitech SetPoint managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260817133612_block_setpoint_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the interactive legacy removal flow across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Logitech.SetPoint'");
+    expect(sql).toContain('360023237354-Unable-to-customize-my-mouse-or-keyboard-in-SetPoint');
+    expect(sql).toContain('exact sp6');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
