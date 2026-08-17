@@ -532,6 +532,26 @@ describe('Malwarebytes consumer managed uninstall block migration contract', () 
   });
 });
 
+describe('Insta360 Link Controller managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260817131620_block_insta360_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unreliable vendor removal flow across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Insta360.Link.Controller'");
+    expect(sql).toContain('controller-client-error/crash');
+    expect(sql).toContain('{C05A30CA-A10A-4553-9524-5B377F959166}_is1');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
