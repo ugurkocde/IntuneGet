@@ -476,6 +476,11 @@ function coerceInstallersArray(
       defaultSilentArgs ? { Silent: defaultSilentArgs } : undefined,
       inst.InstallerSwitches
     ),
+    InstallLocationRequired: inst.InstallLocationRequired === true,
+    DefaultInstallLocation:
+      typeof inst.DefaultInstallLocation === 'string'
+        ? inst.DefaultInstallLocation.trim() || undefined
+        : defaultInstallLocation(inst.InstallationMetadata),
     InstallerSuccessCodes: normalizeInstallerSuccessCodes(inst.InstallerSuccessCodes),
     ProductCode: explicitProductCode
       ? normalizeProductCode(explicitProductCode, inst.InstallerType || defaultType)
@@ -611,6 +616,14 @@ function mergeInstallerSwitches(
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
+function defaultInstallLocation(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const candidate = (value as Record<string, unknown>).DefaultInstallLocation;
+  if (typeof candidate !== 'string') return undefined;
+  const normalized = candidate.trim();
+  return normalized || undefined;
+}
+
 export function normalizeManifestInstallers(manifest: Record<string, unknown>): WingetInstaller[] {
   const rawInstallers = (manifest.Installers as Array<Record<string, unknown>>) || [];
 
@@ -630,6 +643,8 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     appsAndFeaturesProductCode(manifest.AppsAndFeaturesEntries, defaultType);
   const defaultPackageFamilyName = manifest.PackageFamilyName as string;
   const defaultSuccessCodes = normalizeInstallerSuccessCodes(manifest.InstallerSuccessCodes);
+  const defaultInstallLocationRequired = manifest.InstallLocationRequired === true;
+  const inheritedDefaultInstallLocation = defaultInstallLocation(manifest.InstallationMetadata);
 
   return rawInstallers.map((installer) => {
     const explicitInstallerProductCode = typeof installer.ProductCode === 'string'
@@ -663,6 +678,12 @@ export function normalizeManifestInstallers(manifest: Record<string, unknown>): 
     // WinGet inherits installer switches per field. An installer-level Custom
     // value must not discard a root-level Silent value (Vivaldi is one example).
     InstallerSwitches: mergeInstallerSwitches(defaultSwitches, installer.InstallerSwitches),
+    InstallLocationRequired:
+      typeof installer.InstallLocationRequired === 'boolean'
+        ? installer.InstallLocationRequired
+        : defaultInstallLocationRequired,
+    DefaultInstallLocation:
+      defaultInstallLocation(installer.InstallationMetadata) || inheritedDefaultInstallLocation,
     InstallerSuccessCodes:
       normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes) || defaultSuccessCodes,
     // A non-empty installer-level ProductCode is authoritative. If it is an
@@ -759,6 +780,20 @@ function appendCustomSwitch(silentArgs: string, custom: string | undefined): str
   return silentArgs ? `${silentArgs} ${newTokens.join(' ')}` : newTokens.join(' ');
 }
 
+function appendRequiredInstallLocation(
+  silentArgs: string,
+  installer: WingetInstaller
+): string {
+  if (!installer.InstallLocationRequired) return silentArgs;
+
+  const switchTemplate = installer.InstallerSwitches?.InstallLocation?.trim();
+  const installLocation = installer.DefaultInstallLocation?.trim();
+  if (!switchTemplate || !installLocation) return silentArgs;
+
+  const locationSwitch = switchTemplate.replace(/<INSTALLPATH>/gi, installLocation);
+  return silentArgs ? `${silentArgs} ${locationSwitch}` : locationSwitch;
+}
+
 /**
  * Normalize installer to standard format
  */
@@ -781,6 +816,7 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
   }
 
   silentArgs = appendCustomSwitch(silentArgs, installer.InstallerSwitches?.Custom);
+  silentArgs = appendRequiredInstallLocation(silentArgs, installer);
 
   // Map manifest package dependencies (PascalCase) to the normalized shape
   const rawDependencies = installer.Dependencies?.PackageDependencies;
@@ -804,6 +840,12 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
     scope: installer.Scope,
     elevationRequirement: installer.ElevationRequirement,
     silentArgs,
+    ...(installer.InstallLocationRequired !== undefined
+      ? { installLocationRequired: installer.InstallLocationRequired }
+      : {}),
+    ...(installer.DefaultInstallLocation
+      ? { defaultInstallLocation: installer.DefaultInstallLocation }
+      : {}),
     ...(normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes)
       ? { installerSuccessCodes: normalizeInstallerSuccessCodes(installer.InstallerSuccessCodes) }
       : {}),

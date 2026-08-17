@@ -163,6 +163,16 @@ export function buildQaCatalogTestConfig({
     })),
     Scope: scope,
     InstallerSwitches: normalizeInstallerSwitches(effectiveSwitches),
+    InstallLocationRequired:
+      typeof installer.InstallLocationRequired === 'boolean'
+        ? installer.InstallLocationRequired
+        : manifest.InstallLocationRequired === true,
+    DefaultInstallLocation:
+      text(installer.DefaultInstallLocation) ||
+      text(record(installer.InstallationMetadata).DefaultInstallLocation) ||
+      text(manifest.DefaultInstallLocation) ||
+      text(record(manifest.InstallationMetadata).DefaultInstallLocation) ||
+      undefined,
     InstallerSuccessCodes: normalizeSuccessCodes(
       installer.InstallerSuccessCodes ?? manifest.InstallerSuccessCodes
     ),

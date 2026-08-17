@@ -68,6 +68,53 @@ describe('normalizeInstaller', () => {
     expect(result.silentArgs).toBe('/S /passive');
   });
 
+  it('substitutes a required default install location into the vendor switch', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x86',
+      InstallerUrl: 'https://example.com/bootstrapper.exe',
+      InstallerSha256: 'abc123',
+      InstallerType: 'exe',
+      InstallLocationRequired: true,
+      DefaultInstallLocation: '%PROGRAMFILES(X86)%\\Contoso',
+      InstallerSwitches: {
+        Custom: '--lang=enUS',
+        InstallLocation: '--installpath="<INSTALLPATH>"',
+      },
+    };
+
+    const result = normalizeInstaller(installer);
+
+    expect(result.silentArgs).toBe(
+      '/S --lang=enUS --installpath="%PROGRAMFILES(X86)%\\Contoso"'
+    );
+    expect(result.installLocationRequired).toBe(true);
+    expect(result.defaultInstallLocation).toBe('%PROGRAMFILES(X86)%\\Contoso');
+  });
+
+  it('inherits required install-location metadata from the manifest root', () => {
+    const [installer] = normalizeManifestInstallers({
+      InstallerType: 'exe',
+      InstallLocationRequired: true,
+      InstallerSwitches: {
+        InstallLocation: '--installpath="<INSTALLPATH>"',
+      },
+      InstallationMetadata: {
+        DefaultInstallLocation: '%PROGRAMFILES%\\Contoso',
+      },
+      Installers: [{
+        Architecture: 'x64',
+        InstallerUrl: 'https://example.com/bootstrapper.exe',
+        InstallerSha256: 'abc123',
+      }],
+    });
+
+    expect(installer.InstallLocationRequired).toBe(true);
+    expect(installer.DefaultInstallLocation).toBe('%PROGRAMFILES%\\Contoso');
+    expect(normalizeInstaller(installer).silentArgs).toBe(
+      '/S --installpath="%PROGRAMFILES%\\Contoso"'
+    );
+  });
+
   it('should include scope when provided', () => {
     const installer: WingetInstaller = {
       Architecture: 'x64',

@@ -38,6 +38,8 @@ export interface WingetInstaller {
   Scope?: WingetScope;
   ElevationRequirement?: WingetElevationRequirement;
   InstallerSwitches?: WingetInstallerSwitches;
+  InstallLocationRequired?: boolean;
+  DefaultInstallLocation?: string;
   InstallerSuccessCodes?: number[];
   ProductCode?: string;
   PackageFamilyName?: string;
@@ -181,6 +183,8 @@ export interface NormalizedInstaller {
   scope?: WingetScope;
   elevationRequirement?: WingetElevationRequirement;
   silentArgs?: string;
+  installLocationRequired?: boolean;
+  defaultInstallLocation?: string;
   installerSuccessCodes?: number[];
   productCode?: string;
   packageFamilyName?: string;

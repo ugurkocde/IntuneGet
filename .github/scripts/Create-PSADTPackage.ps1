@@ -2080,7 +2080,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
         "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $customInstallCommandEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
     )
 } else {
-    $installerArgumentList = "'$silentSwitchesEscaped'"
+    $effectiveInstallerArgumentsEscaped = $silentSwitchesEscaped
     if ($installerTypeLower -eq 'inno') {
         $innoSwitches = $effectiveSilentSwitches.Trim()
         if ($innoSwitches -notmatch '(?i)(^|\s)/SP-(\s|$)') { $innoSwitches = "$innoSwitches /SP-".Trim() }
@@ -2090,15 +2090,28 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
         # User-provided switches remain byte-for-byte authoritative apart from the
         # idempotent /SP- safety switch and PowerShell single-quote encoding.
         $innoSwitchesEscaped = $innoSwitches -replace "'", "''"
-        $installerArgumentList = "'$innoSwitchesEscaped'"
+        $effectiveInstallerArgumentsEscaped = $innoSwitchesEscaped
+    }
+    $installerArgumentList = "'$effectiveInstallerArgumentsEscaped'"
+    if ($effectiveInstallerArgumentsEscaped -match '%[A-Za-z][A-Za-z0-9()_]*%') {
+        $lines += "    `$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('$effectiveInstallerArgumentsEscaped')"
+        $installerArgumentList = '$effectiveInstallerArguments'
     }
     switch ($installerTypeLower) {
         { $_ -in 'msi', 'wix' } {
             $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
             if ($msiProperties) {
-                $lines += @(
-                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList '$msiProperties'"
-                )
+                $msiPropertiesEscaped = $msiProperties -replace "'", "''"
+                if ($msiPropertiesEscaped -match '%[A-Za-z][A-Za-z0-9()_]*%') {
+                    $lines += @(
+                        "    `$effectiveMsiProperties = [Environment]::ExpandEnvironmentVariables('$msiPropertiesEscaped')"
+                        "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList `$effectiveMsiProperties"
+                    )
+                } else {
+                    $lines += @(
+                        "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList '$msiPropertiesEscaped'"
+                    )
+                }
             } else {
                 $lines += @(
                     "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped'"

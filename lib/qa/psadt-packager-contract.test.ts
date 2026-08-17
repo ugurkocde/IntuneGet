@@ -149,7 +149,14 @@ describe('PSADT Inno packaging contract', () => {
 
     expect(innoBlock).not.toContain('/LOG=');
     expect(innoBlock).not.toContain('IntuneGet-Inno-Install.log');
-    expect(innoBlock).toContain("$installerArgumentList = \"'$innoSwitchesEscaped'\"");
+    expect(innoBlock).toContain('$effectiveInstallerArgumentsEscaped = $innoSwitchesEscaped');
+  });
+
+  it('expands target-machine environment variables in vendor install arguments', () => {
+    expect(packager).toContain(
+      "`$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('$effectiveInstallerArgumentsEscaped')"
+    );
+    expect(packager).toContain("$effectiveInstallerArgumentsEscaped -match '%[A-Za-z][A-Za-z0-9()_]*%'");
   });
 
   it('keeps the startup-prompt suppression idempotent without format-string expansion', () => {
@@ -166,6 +173,35 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'expands required WinGet install locations on the target machine',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Battle.net Setup',
+        [],
+        {},
+        [],
+        'Blizzard.BattleNet',
+        'Battle.net',
+        '1.19.3.3219',
+        'REGISTRY_UNINSTALL_KEY:Battle.net:Battle.net',
+        '/S --lang=enUS --installpath="%PROGRAMFILES(X86)%\\Battle.net"'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('/S --lang=enUS --installpath=\"%PROGRAMFILES(X86)%\\Battle.net\"')"
+      );
+      expect(installFunction).toContain(
+        'Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\setup.exe" -ArgumentList $effectiveInstallerArguments'
+      );
+    }
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'runs root-level install4j uninstallers unattended when the manifest identifies the framework',
     () => {

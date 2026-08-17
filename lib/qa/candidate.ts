@@ -17,6 +17,8 @@ export interface WingetInstallerCandidate {
     Upgrade?: string;
     Custom?: string;
   };
+  InstallLocationRequired?: boolean;
+  DefaultInstallLocation?: string;
   AppsAndFeaturesEntries?: Array<{ ProductCode?: string }>;
 }
 

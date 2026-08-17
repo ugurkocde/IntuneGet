@@ -124,6 +124,38 @@ describe('buildQaCatalogTestConfig', () => {
     expect(config.silentArgs).toBe('/ROOT /CURRENTUSER');
   });
 
+  it('includes a required WinGet install location in the shared QA package arguments', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Blizzard.BattleNet',
+        name: 'Battle.net Setup',
+        publisher: 'Blizzard',
+        version: '1.19.3.3219',
+      },
+      manifest: {
+        InstallerType: 'exe',
+        Scope: 'machine',
+        InstallLocationRequired: true,
+        InstallerSwitches: {
+          Custom: '--lang=enUS',
+          InstallLocation: '--installpath="<INSTALLPATH>"',
+        },
+        InstallationMetadata: {
+          DefaultInstallLocation: '%PROGRAMFILES(X86)%\\Battle.net',
+        },
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'exe',
+        ProductCode: 'Battle.net',
+      },
+    });
+
+    expect(config.silentArgs).toBe(
+      '/S --lang=enUS --installpath="%PROGRAMFILES(X86)%\\Battle.net"'
+    );
+  });
+
   it('preserves Vivaldi-style root silent and installer custom switches', () => {
     const config = buildQaCatalogTestConfig({
       app: {
