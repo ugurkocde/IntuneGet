@@ -572,6 +572,26 @@ describe('Logitech SetPoint managed uninstall block migration contract', () => {
   });
 });
 
+describe('Battle.net managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260817145500_block_battlenet_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the interactive vendor removal flow across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Blizzard.BattleNet'");
+    expect(sql).toContain('us.support.blizzard.com/en/article/30304');
+    expect(sql).toContain('exact Battle.net registration');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('QA package result duration migration contract', () => {
   const sql = readFileSync(
     resolve(
