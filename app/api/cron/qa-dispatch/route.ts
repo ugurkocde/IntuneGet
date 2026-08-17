@@ -409,4 +409,8 @@ export async function POST(request: Request) {
   return NextResponse.json({ success: true, candidateId: data.id });
 }
 
-export const maxDuration = 60;
+// Installer preflight downloads and hashes the exact vendor payload before
+// dispatching a runner job. Large installers need the same bounded function
+// window as the customer packaging route; otherwise the function can be
+// terminated after claiming a candidate but before GitHub receives a run.
+export const maxDuration = 300;

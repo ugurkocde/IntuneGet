@@ -29,6 +29,15 @@ describe('resolveInstallerFileName', () => {
     expect(fileName).toBe('Postman Setup.exe');
   });
 
+  it('does not mistake a dotted numeric version for a file extension', () => {
+    const fileName = resolveInstallerFileName(
+      'https://memory.timelyapp.com/download/windows/26.7.174',
+      'exe'
+    );
+
+    expect(fileName).toBe('26.7.174.exe');
+  });
+
   it('uses type-specific fallback when URL has no leaf', () => {
     const fileName = resolveInstallerFileName(
       'https://example.com/downloads/',

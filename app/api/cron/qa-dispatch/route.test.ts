@@ -8,7 +8,7 @@ const { createServerClientMock, dispatchQaCandidateMock } = vi.hoisted(() => ({
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
 
-import { GET } from './route';
+import { GET, maxDuration } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { buildQaPackageIdentity } from '@/lib/qa/package-profile';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
@@ -219,6 +219,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = 'test-cron-secret';
   dispatchQaCandidateMock.mockResolvedValue(undefined);
+});
+
+it('allows large installer preflight the same bounded window as customer packaging', () => {
+  expect(maxDuration).toBe(300);
 });
 
 afterEach(() => {

@@ -1528,6 +1528,18 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('launches a registered vendor uninstaller outside the application directory', () => {
+    expect(packager).toContain(
+      '$registeredUninstallWorkingDirectory = $adtSession.DirSupportFiles'
+    );
+    expect(packager).toContain(
+      '$registeredUninstallWorkingDirectory = $adtSession.DirFiles'
+    );
+    expect(packager).not.toContain(
+      '$registeredUninstallWorkingDirectory = Split-Path -Parent $registeredUninstallFile'
+    );
+  });
+
   it('never captures an unrelated background ARP change as the installed product', () => {
     expect(packager).not.toContain(
       'if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1)'
