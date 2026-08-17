@@ -963,6 +963,43 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // payload with the inherited WinGet install-location contract.
     'Blizzard.BattleNet',
   ],
+  '6af0cfac18f3c4653a69a01f41bc1170c1237807': [
+    // Carry still-unconsumed bounded retries across the atomic pin rollout.
+    // Compatible passes are filtered before candidates are created.
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    // These registered vendor uninstallers are retried from a safe PSADT
+    // working directory outside their own application trees.
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    // The installer executes from a version-shaped extensionless URL. Retry
+    // once with the corrected executable filename in QA and customer packages.
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    // DATEV did not reach GitHub because the old 60-second Vercel function
+    // window ended during exact installer preflight.
+    'DATEV.SicherheitspaketCompact',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

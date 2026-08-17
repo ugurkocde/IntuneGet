@@ -19,6 +19,11 @@ describe('QA toolchain targeted retries', () => {
       'Sonos.Controller',
       'karakun.OpenWebStart',
       'MSYS2.MSYS2',
+      'Insta360.Link.Controller',
+      'Logitech.SetPoint',
+      'Timely.Memory',
+      'Blizzard.BattleNet',
+      'DATEV.SicherheitspaketCompact',
     ]));
 
     targets.length = 0;
@@ -35,6 +40,11 @@ describe('QA toolchain targeted retries', () => {
         'Sonos.Controller',
         'karakun.OpenWebStart',
         'MSYS2.MSYS2',
+        'Insta360.Link.Controller',
+        'Logitech.SetPoint',
+        'Timely.Memory',
+        'Blizzard.BattleNet',
+        'DATEV.SicherheitspaketCompact',
       ])
     );
   });
