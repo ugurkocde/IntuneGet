@@ -716,6 +716,23 @@ describe('current catalog QA package validation', () => {
     ).toEqual({ valid: false, reason: 'compatible-zero-day-deferral-changed' });
   });
 
+  it('retests a prior profile that needs target-machine install-location expansion', () => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({
+        ...input,
+        silentArgs: '/S --installpath="%PROGRAMFILES(X86)%\\Contoso"',
+      }),
+      'fbb4aa2eed6cc545ec343373dd8947d04463a4a1'
+    );
+
+    expect(
+      validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
+    ).toEqual({
+      valid: false,
+      reason: 'compatible-install-location-expansion-changed',
+    });
+  });
+
   it('reuses the same deployment execution profile across an unrelated packager release', () => {
     const currentIdentity = buildQaPackageIdentity({
       ...input,

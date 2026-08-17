@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'fbb4aa2eed6cc545ec343373dd8947d04463a4a1',
+  packagerCommit: '71ee706fe545cdcd8667545eb65e8ba62d82208c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -124,6 +124,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // failing no-ARP lifecycle. Malwarebytes is blocked at the shared
   // eligibility gate. Preserve every compatible pass from this release.
   'a48022baddf7b3f312541ef2e127220f508104a8',
+  // Required WinGet install-location handling changes only profiles whose
+  // arguments contain a target-machine environment token. Preserve every
+  // unrelated compatible pass from the prior protected release.
+  'fbb4aa2eed6cc545ec343373dd8947d04463a4a1',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -316,6 +320,8 @@ function passingProfileCompatibilityReason(
 
   const psadtConfig = record(profile.psadtConfig);
   if (!psadtConfig) return 'compatible-profile-invalid';
+  const installer = record(profile.installer);
+  if (!installer) return 'compatible-profile-invalid';
   const configuredProcesses = Array.isArray(psadtConfig.processesToClose)
     ? psadtConfig.processesToClose
     : [];
@@ -339,6 +345,16 @@ function passingProfileCompatibilityReason(
       psadtConfig.deferDays === 0
     ) {
       return 'compatible-zero-day-deferral-changed';
+    }
+
+    // 71ee706 expands WinGet install-location environment variables inside
+    // the target VM. A prior pass without such a token cannot exercise this
+    // branch and remains compatible.
+    if (
+      release === '71ee706fe545cdcd8667545eb65e8ba62d82208c' &&
+      /%[A-Za-z][A-Za-z0-9()_]*%/.test(textValue(installer.silentArgs))
+    ) {
+      return 'compatible-install-location-expansion-changed';
     }
   }
 
