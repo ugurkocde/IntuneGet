@@ -963,6 +963,42 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // payload with the inherited WinGet install-location contract.
     'Blizzard.BattleNet',
   ],
+  'f426e369f2134ca5bb896170c9f7fd7e526c5916': [
+    // Autodesk Licensing Service does not expose a product ARP identity. This
+    // release verifies its dedicated service payload and uses Autodesk's
+    // documented unattended uninstaller.
+    'Autodesk.LicensingService',
+    // Carry still-unconsumed bounded retries across the atomic pin rollout.
+    // Compatible passes are filtered before candidates are created.
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
   '12831539c9dc30678c6f16367faab76820502d2a': [
     // CutePDF's registered unInstcpw helper requires its vendor-specific
     // /uninstall /s contract rather than the nested installer's Inno switches.

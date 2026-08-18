@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '12831539c9dc30678c6f16367faab76820502d2a',
+  packagerCommit: 'f426e369f2134ca5bb896170c9f7fd7e526c5916',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -135,6 +135,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // CutePDF's vendor-specific removal correction affects only its previously
   // failing unInstcpw helper. Preserve every unrelated compatible pass.
   '6af0cfac18f3c4653a69a01f41bc1170c1237807',
+  // Autodesk Licensing Service uses its dedicated payload and documented
+  // uninstaller instead of an ambiguous ARP delta. Preserve every unrelated
+  // compatible pass from the preceding protected release.
+  '12831539c9dc30678c6f16367faab76820502d2a',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

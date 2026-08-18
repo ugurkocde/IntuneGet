@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Autodesk Licensing Service only on its dedicated lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'autodesk.licensingservice', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '12831539c9dc30678c6f16367faab76820502d2a',
+      { wingetId: 'Autodesk.LicensingService', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries CutePDF once with its vendor-specific silent removal adapter', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
@@ -35,6 +46,7 @@ describe('QA toolchain targeted retries', () => {
       'Timely.Memory',
       'Blizzard.BattleNet',
       'DATEV.SicherheitspaketCompact',
+      'Autodesk.LicensingService',
     ]));
 
     targets.length = 0;
@@ -56,6 +68,7 @@ describe('QA toolchain targeted retries', () => {
         'Timely.Memory',
         'Blizzard.BattleNet',
         'DATEV.SicherheitspaketCompact',
+        'Autodesk.LicensingService',
       ])
     );
   });
