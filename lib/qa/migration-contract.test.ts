@@ -493,6 +493,25 @@ describe('Bria managed uninstall block migration contract', () => {
   });
 });
 
+describe('3CX Phone System managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260818171800_block_3cx_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported 3CX removal lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'3CX.PhoneSystem'");
+    expect(sql).toContain('https://www.3cx.com/docs/upgrading-pbx/');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('Yandex Browser managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(
