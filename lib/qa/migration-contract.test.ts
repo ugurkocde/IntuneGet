@@ -512,6 +512,27 @@ describe('3CX Phone System managed uninstall block migration contract', () => {
   });
 });
 
+describe('PotPlayer managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260818183000_block_potplayer_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported PotPlayer LocalSystem install across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Daum.PotPlayer'");
+    expect(sql).toContain(
+      'https://learn.microsoft.com/en-us/answers/questions/991238/sccm-deployed-apps-failed-with-errors'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('Yandex Browser managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(

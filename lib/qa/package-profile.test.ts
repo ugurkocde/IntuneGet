@@ -391,30 +391,6 @@ describe('PSADT QA package identity', () => {
     );
   });
 
-  it('binds PotPlayer managed installs to the reviewed all-users command', () => {
-    const normalized = normalizeQaWorkflowPackageInput({
-      wingetId: 'Daum.PotPlayer',
-      displayName: 'PotPlayer',
-      publisher: 'Daum',
-      version: '26.07.01.0',
-      architecture: 'x64',
-      installerSha256: 'b'.repeat(64),
-      installerType: 'exe',
-      silentSwitches: '/S',
-      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:PotPlayer64:PotPlayer',
-      installScope: 'machine',
-      detectionRules: '[]',
-      psadtConfig: JSON.stringify({ detectionRules: [] }),
-    });
-    const profile = normalized.identity.profile as {
-      psadtConfig: { reviewedInstallArgumentsOverride?: string };
-    };
-
-    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
-      '/S /allusers'
-    );
-  });
-
   it('binds the Visual Studio 2019 instance lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.VisualStudio.2019.BuildTools',
