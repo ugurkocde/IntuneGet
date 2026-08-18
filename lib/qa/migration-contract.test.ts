@@ -472,6 +472,27 @@ describe('ExpressVPN managed install block migration contract', () => {
   });
 });
 
+describe('Bria managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260818165200_block_bria_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported Bria removal lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Bria.Bria'");
+    expect(sql).toContain(
+      'https://support.counterpath.com/hc/how-to-fully-uninstall-bria'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('Yandex Browser managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(
