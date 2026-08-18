@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
+  packagerCommit: 'ca46c0860496e13b91842f7106f45505441dc44d',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -142,6 +142,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Bria's process-close adapter affects only its previously failing MSI
   // removal path. Preserve every unrelated compatible passing result.
   'f426e369f2134ca5bb896170c9f7fd7e526c5916',
+  // PotPlayer's all-users NSIS adapter affects only its previously failing
+  // non-interactive install path. Bria and 3CX are blocked at the shared
+  // eligibility gate, so preserve every unrelated compatible passing result.
+  '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

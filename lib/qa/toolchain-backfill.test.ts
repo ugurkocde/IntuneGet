@@ -6,14 +6,25 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries Bria only after the reviewed process-close lifecycle release', () => {
+  it('does not carry blocked Bria into the PotPlayer release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'bria.bria', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
+      { wingetId: 'Bria.Bria', status: 'failed' }
+    )).toBe(true);
+  });
+
+  it('retries PotPlayer only on its reviewed all-users release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'daum.potplayer', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      'f426e369f2134ca5bb896170c9f7fd7e526c5916',
-      { wingetId: 'Bria.Bria', status: 'failed' }
+      '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
+      { wingetId: 'Daum.PotPlayer', status: 'failed' }
     )).toBe(false);
   });
 
@@ -58,7 +69,7 @@ describe('QA toolchain targeted retries', () => {
       'Blizzard.BattleNet',
       'DATEV.SicherheitspaketCompact',
       'Autodesk.LicensingService',
-      'Bria.Bria',
+      'Daum.PotPlayer',
     ]));
 
     targets.length = 0;
@@ -81,7 +92,7 @@ describe('QA toolchain targeted retries', () => {
         'Blizzard.BattleNet',
         'DATEV.SicherheitspaketCompact',
         'Autodesk.LicensingService',
-        'Bria.Bria',
+        'Daum.PotPlayer',
       ])
     );
   });
