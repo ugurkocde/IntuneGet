@@ -766,6 +766,31 @@ describe('EXE product identity PSADT generation', () => {
     expect(uninstall).not.toContain("'zip' -eq 'inno'");
   });
 
+  it('uses the vendor-specific CutePDF silent uninstaller instead of Inno switches', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'zip',
+        install_command: 'CuteWriter.zip /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+        uninstall_command: 'REGISTRY_UNINSTALL:CutePDF Writer',
+        package_config: {
+          nestedInstallerType: 'inno',
+          nestedInstallerPath: 'CuteWriter.exe',
+          psadtConfig: {},
+        },
+      }),
+      'CuteWriter.zip'
+    );
+
+    expect(uninstall).toContain("$registeredUninstallRegistryKey -ieq 'CutePDF Writer Installation'");
+    expect(uninstall).toContain("$registeredUninstallLeaf -in @('unInstcpw.exe', 'unInstcpw64.exe')");
+    expect(uninstall).toContain("$registeredUninstallArguments = @('/uninstall', '/s')");
+    expect(uninstall).toContain(
+      "if (-not $isCutePdfWriterUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe'"
+    );
+    expect(uninstall).toContain('-not $isCutePdfWriterUninstall');
+  });
+
   it('appends only bounded reviewed arguments to the exact registered vendor uninstaller', () => {
     const uninstall = generator.getUninstallCommand.call(
       generator,

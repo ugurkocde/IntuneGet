@@ -1733,15 +1733,27 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
         [string[]]$additionalUninstallArguments = @()
         $isVivaldiUninstall = $false
+        $isCutePdfWriterUninstall = $false
         $isAdobeCreativeCloudUninstall = (Split-Path -Leaf $registeredUninstallFile) -ieq 'Creative Cloud Uninstaller.exe'
         $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
         if (-not $hasQuietUninstall) {
-            if ((Split-Path -Leaf $registeredUninstallFile) -ieq 'setup.exe' -and $registeredArgumentText -match '(?i)(^|\\s)--vivaldi(\\s|$)') {
+            $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile
+            $isCutePdfWriterUninstall = (
+                $registeredUninstallRegistryKey -ieq 'CutePDF Writer Installation' -and
+                $registeredUninstallLeaf -in @('unInstcpw.exe', 'unInstcpw64.exe') -and
+                $registeredArgumentText -match '(?i)(^|\\s)/uninstall(\\s|$)'
+            )
+            if ($isCutePdfWriterUninstall) {
+                # CutePDF's installer is Inno-based, but its registered uninstaller is vendor-specific.
+                $registeredUninstallArguments = @('/uninstall', '/s')
+                $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
+                Write-ADTLogEntry -Message "Using the verified CutePDF Writer silent uninstall command." -Source 'Uninstall-ADTDeployment'
+            } elseif ($registeredUninstallLeaf -ieq 'setup.exe' -and $registeredArgumentText -match '(?i)(^|\\s)--vivaldi(\\s|$)') {
                 $isVivaldiUninstall = $true
-            } elseif ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${registeredInstallerType}' -eq 'nullsoft' -and $registeredArgumentText -notmatch '(?i)(^|\\s)/S(\\s|$)') {
+            } elseif ($registeredUninstallLeaf -ine 'msiexec.exe' -and '${registeredInstallerType}' -eq 'nullsoft' -and $registeredArgumentText -notmatch '(?i)(^|\\s)/S(\\s|$)') {
                 $additionalUninstallArguments += '/S'
             }
-            if ((Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and $registeredArgumentText -match '(?i)(^|\\s)(/uninstall|-uninstall|--uninstall|/x)(\\s|$|\\{)') {
+            if (-not $isCutePdfWriterUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and $registeredArgumentText -match '(?i)(^|\\s)(/uninstall|-uninstall|--uninstall|/x)(\\s|$|\\{)') {
                 $safeManifestUninstallArguments = @('${silentSwitches}' -split '\\s+' | Where-Object { $_ -match '^(?i:/q[nbrfu]?|/quiet|/silent|/verysilent|/norestart|/s|--quiet|--silent)$' })
                 foreach ($argument in $safeManifestUninstallArguments) {
                     if ($registeredArgumentText -notmatch "(?i)(^|\\s)$([regex]::Escape($argument))(\\s|$)") {
@@ -1750,7 +1762,7 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
                 }
             }
         }
-        if (-not $isVivaldiUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${registeredInstallerType}' -eq 'inno') {
+        if (-not $isVivaldiUninstall -and -not $isCutePdfWriterUninstall -and (Split-Path -Leaf $registeredUninstallFile) -ine 'msiexec.exe' -and '${registeredInstallerType}' -eq 'inno') {
             # Inno's registered QuietUninstallString is not consistently fully unattended.
             # Normalize weak /SILENT registrations to the vendor-documented, message-box-free
             # switches so SYSTEM deployments cannot wait behind an invisible prompt.
