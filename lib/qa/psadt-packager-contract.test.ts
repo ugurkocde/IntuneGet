@@ -1229,7 +1229,17 @@ describe('PSADT offline dependency contract', () => {
 
       expect(generated).toContain('Expand-Archive -LiteralPath $dependencyPath');
       expect(generated).toContain(
-        'Add-AppxProvisionedPackage -Online -PackagePath $dependencyNestedPath -SkipLicense'
+        'Add-AppxProvisionedPackage -Online -PackagePath $packagePath -SkipLicense'
+      );
+      expect(generated).toContain('} -ArgumentList $dependencyNestedPath');
+      expect(generated).toContain(
+        'Wait-Job -Job $dependencyProvisioningJob -Timeout 30'
+      );
+      expect(generated).toContain(
+        'Bundled APPX dependency [Microsoft.VCLibs.Desktop.14] provisioning is still in progress.'
+      );
+      expect(generated).toContain(
+        'Receive-Job -Job $dependencyProvisioningJob -ErrorAction Stop'
       );
       expect(generated).toContain(
         "Where-Object { $_.DisplayName -eq 'Microsoft.VCLibs.140.00.UWPDesktop' }"
@@ -2160,7 +2170,11 @@ describe('PSADT MSIX scope contract', () => {
   });
 
   it('reserves online provisioning and all-user removal for machine scope', () => {
-    expect(packager).toContain('Add-AppxProvisionedPackage -Online -PackagePath $msixPath');
+    expect(packager).toContain('Add-AppxProvisionedPackage -Online -PackagePath $packagePath');
+    expect(packager).toContain('} -ArgumentList $msixPath');
+    expect(packager).toContain('Wait-Job -Job $provisioningJob -Timeout 30');
+    expect(packager).toContain('MSIX/APPX provisioning is still in progress');
+    expect(packager).toContain('Receive-Job -Job $provisioningJob -ErrorAction Stop');
     expect(packager).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers');
     expect(packager).toContain('if ($IsUserScope)');
   });

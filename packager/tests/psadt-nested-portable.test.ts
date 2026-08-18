@@ -1002,6 +1002,9 @@ describe('self-hosted MSIX PSADT generation', () => {
     );
 
     expect(install).toContain('Add-AppxProvisionedPackage -Online');
+    expect(install).toContain("Wait-Job -Job $provisioningJob -Timeout 30");
+    expect(install).toContain('MSIX/APPX provisioning is still in progress');
+    expect(install).toContain('Receive-Job -Job $provisioningJob -ErrorAction Stop');
     expect(uninstall).toContain('Get-AppxProvisionedPackage -Online');
     expect(uninstall).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers');
   });

@@ -1368,7 +1368,29 @@ ${steps}
         catch { $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion }
     }
     if ($shouldInstallPackage) {
-        Add-AppxProvisionedPackage -Online -PackagePath $msixPath -SkipLicense -ErrorAction Stop
+        $provisioningJob = Start-Job -ScriptBlock {
+            param([string]$packagePath)
+            $ErrorActionPreference = 'Stop'
+            Add-AppxProvisionedPackage -Online -PackagePath $packagePath -SkipLicense -ErrorAction Stop | Out-Null
+        } -ArgumentList $msixPath
+        try {
+            while ($provisioningJob.State -eq 'Running') {
+                $null = Wait-Job -Job $provisioningJob -Timeout 30
+                if ($provisioningJob.State -eq 'Running') {
+                    Write-ADTLogEntry -Message "Machine-scoped MSIX/APPX provisioning is still in progress for [$packageName]." -Severity 'Info' -Source 'Install-ADTDeployment'
+                }
+            }
+            if ($provisioningJob.State -ne 'Completed') {
+                $provisioningFailure = $provisioningJob.ChildJobs | Select-Object -First 1 -ExpandProperty JobStateInfo | Select-Object -ExpandProperty Reason
+                if ($provisioningFailure) { throw $provisioningFailure }
+                throw "Machine-scoped MSIX/APPX provisioning failed with job state [$($provisioningJob.State)]."
+            }
+            Receive-Job -Job $provisioningJob -ErrorAction Stop | Out-Null
+        }
+        finally {
+            if ($provisioningJob.State -eq 'Running') { Stop-Job -Job $provisioningJob -ErrorAction SilentlyContinue }
+            Remove-Job -Job $provisioningJob -Force -ErrorAction SilentlyContinue
+        }
     } else {
         Write-ADTLogEntry -Message "Provisioned MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]." -Severity 'Success' -Source 'Install-ADTDeployment'
     }`;
