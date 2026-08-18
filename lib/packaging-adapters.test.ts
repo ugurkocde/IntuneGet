@@ -486,6 +486,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses PotPlayer\'s reviewed all-users NSIS command', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Daum.PotPlayer',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe('/S /allusers');
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('uses PTC Creo View Express documented MSI-forwarding syntax', () => {
     const adapted = applyApplicationPackagingAdapter(
       'PTC.CreoView.Express',

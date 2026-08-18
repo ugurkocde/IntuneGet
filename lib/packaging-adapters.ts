@@ -228,6 +228,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArgumentsOverride: '/S /MULTIUSER',
   },
   {
+    // PotPlayer's NSIS package exposes a vendor-specific /allusers mode for
+    // managed deployment. Plain /S starts but does not complete reliably in a
+    // non-interactive LocalSystem session, leaving no application or ARP
+    // identity. Keep the all-users contract identical in QA and customer
+    // PSADT packages instead of relying on the generic NSIS default.
+    wingetId: 'Daum.PotPlayer',
+    reviewedInstallArgumentsOverride: '/S /allusers',
+  },
+  {
     // Google documents that Drive for desktop must be removed through its
     // versioned registered uninstaller with both --silent and --force_stop.
     // The latter is required whenever Drive is running; without it the helper
