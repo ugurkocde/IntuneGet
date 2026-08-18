@@ -70,6 +70,7 @@ describe('QA toolchain targeted retries', () => {
       'DATEV.SicherheitspaketCompact',
       'Autodesk.LicensingService',
       'Daum.PotPlayer',
+      'Acronis.CyberProtectHomeOffice',
     ]));
 
     targets.length = 0;
@@ -93,6 +94,7 @@ describe('QA toolchain targeted retries', () => {
         'DATEV.SicherheitspaketCompact',
         'Autodesk.LicensingService',
         'Daum.PotPlayer',
+        'Acronis.CyberProtectHomeOffice',
       ])
     );
   });
