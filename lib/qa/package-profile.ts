@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '6af0cfac18f3c4653a69a01f41bc1170c1237807',
+  packagerCommit: '12831539c9dc30678c6f16367faab76820502d2a',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -132,6 +132,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // that did not already pass. Filename normalization and dispatch budgeting
   // happen before execution, so preserve every compatible passing payload.
   '71ee706fe545cdcd8667545eb65e8ba62d82208c',
+  // CutePDF's vendor-specific removal correction affects only its previously
+  // failing unInstcpw helper. Preserve every unrelated compatible pass.
+  '6af0cfac18f3c4653a69a01f41bc1170c1237807',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

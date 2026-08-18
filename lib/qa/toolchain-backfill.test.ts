@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries CutePDF once with its vendor-specific silent removal adapter', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'acrosoftware.cutepdfwriter', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '6af0cfac18f3c4653a69a01f41bc1170c1237807',
+      { wingetId: 'AcroSoftware.CutePDFWriter', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
