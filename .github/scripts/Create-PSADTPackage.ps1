@@ -2802,6 +2802,14 @@ if ($reviewedExactUninstallConfigured) {
 if ($useManagedDirectoryLifecycle) {
     Write-Host 'Using reviewed managed-directory removal'
     $lines += @('', "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')")
+    if ($hasManagedInstallCompletionContract) {
+        $lines += @(
+            "    `$managedInstallEvidenceFile = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallEvidenceFileEscaped')"
+            '    $managedUninstallCompletionTarget = $managedInstallEvidenceFile'
+        )
+    } else {
+        $lines += '    $managedUninstallCompletionTarget = $managedInstallDirectory'
+    }
     if ($reviewedManagedUninstallConfigured) {
         $lines += @(
             "    `$managedUninstallExecutable = [Environment]::ExpandEnvironmentVariables('$reviewedManagedUninstallExecutableEscaped')"
@@ -2813,13 +2821,13 @@ if ($useManagedDirectoryLifecycle) {
             '        Write-ADTLogEntry -Message "Starting reviewed managed uninstaller [$managedUninstallExecutable]." -Source ''Uninstall-ADTDeployment'''
             '        $null = Start-ADTProcess -FilePath $managedUninstallExecutable -ArgumentList $managedUninstallArguments -WindowStyle Hidden -NoWait -PassThru'
             "        `$managedUninstallDeadline = [DateTime]::UtcNow.AddMinutes($reviewedManagedUninstallTimeoutMinutes)"
-            '        while ((Test-Path -LiteralPath $managedInstallDirectory) -and [DateTime]::UtcNow -lt $managedUninstallDeadline) {'
+            '        while ((Test-Path -LiteralPath $managedUninstallCompletionTarget) -and [DateTime]::UtcNow -lt $managedUninstallDeadline) {'
             '            Start-Sleep -Seconds 5'
             '        }'
-            '        if (Test-Path -LiteralPath $managedInstallDirectory) {'
-            '            throw "The reviewed managed uninstaller did not remove [$managedInstallDirectory] before the completion deadline."'
+            '        if (Test-Path -LiteralPath $managedUninstallCompletionTarget) {'
+            '            throw "The reviewed managed uninstaller did not remove [$managedUninstallCompletionTarget] before the completion deadline."'
             '        }'
-            '        Write-ADTLogEntry -Message "Reviewed managed uninstall completed for [$managedInstallDirectory]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+            '        Write-ADTLogEntry -Message "Reviewed managed uninstall completed for [$managedUninstallCompletionTarget]." -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
             '    } else {'
             '        Write-ADTLogEntry -Message "Managed installation was already absent: $managedInstallDirectory" -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
             '    }'

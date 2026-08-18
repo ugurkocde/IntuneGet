@@ -448,6 +448,24 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%SystemDrive%\\SWSetup\\HPImageAssistant',
   },
   {
+    // Autodesk documents Desktop Licensing Service as a shared component that
+    // does not appear in Programs and Features. Verify its dedicated payload
+    // instead of trying to select one of the unrelated Autodesk ARP changes,
+    // and use the vendor's documented unattended uninstaller during removal.
+    wingetId: 'Autodesk.LicensingService',
+    reviewedManagedInstallDirectory:
+      '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing',
+    reviewedManagedInstallEvidenceFile:
+      '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 5,
+    reviewedManagedUninstall: {
+      executablePath:
+        '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe',
+      arguments: ['--mode', 'unattended'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // Navisworks Freedom 2026 is installed by Autodesk ODIS. The bootstrapper
     // changes multiple Autodesk registrations, so a generic ARP capture cannot
     // identify the product safely. Autodesk documents the ODIS manifest-based

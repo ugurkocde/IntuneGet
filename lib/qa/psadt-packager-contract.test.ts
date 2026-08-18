@@ -807,6 +807,56 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses Autodesk Licensing Service dedicated evidence and unattended removal',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Autodesk Licensing Service',
+        [],
+        {
+          reviewedManagedInstallDirectory:
+            '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing',
+          reviewedManagedInstallEvidenceFile:
+            '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe',
+          reviewedManagedInstallCompletionTimeoutMinutes: 5,
+          reviewedManagedUninstall: {
+            executablePath:
+              '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe',
+            arguments: ['--mode', 'unattended'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Autodesk.LicensingService'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$managedUninstallArguments = @('--mode', 'unattended')"
+      );
+      expect(uninstallFunction).toContain(
+        '$managedUninstallCompletionTarget = $managedInstallEvidenceFile'
+      );
+      expect(uninstallFunction).toContain(
+        'while ((Test-Path -LiteralPath $managedUninstallCompletionTarget)'
+      );
+      expect(uninstallFunction).not.toContain(
+        'while ((Test-Path -LiteralPath $managedInstallDirectory)'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'uses the exact Autodesk ODIS manifest lifecycle for Navisworks Freedom',
     () => {
       const generated = generateRegistryUninstallPackage(

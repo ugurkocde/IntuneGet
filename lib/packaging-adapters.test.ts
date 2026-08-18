@@ -262,6 +262,24 @@ describe('application packaging adapters', () => {
     ).toBe('%SystemDrive%\\SWSetup\\HPImageAssistant');
     expect(
       applyApplicationPackagingAdapter(
+        'Autodesk.LicensingService',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 5,
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Common Files\\Autodesk Shared\\AdskLicensing\\uninstall.exe',
+        arguments: ['--mode', 'unattended'],
+        completionTimeoutMinutes: 5,
+      },
+    });
+    expect(
+      applyApplicationPackagingAdapter(
         'Autodesk.NavisworksFreedom.2026',
         DEFAULT_PSADT_CONFIG
       )
