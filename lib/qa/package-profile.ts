@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '77735e28d450c6b1c4f14a9a667bc5336eeeb3ea',
+  packagerCommit: '7a8401469e353172b652259e731aa505cf8067bd',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -146,6 +146,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // non-interactive install path. Bria and 3CX are blocked at the shared
   // eligibility gate, so preserve every unrelated compatible passing result.
   '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
+  // Appx provisioning heartbeats affect only machine-scoped packages whose
+  // servicing operation remained silent long enough to hit the QA stall
+  // detector. Preserve every previously passing package from this release.
+  '77735e28d450c6b1c4f14a9a667bc5336eeeb3ea',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

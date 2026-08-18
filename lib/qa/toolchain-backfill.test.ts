@@ -50,6 +50,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Ubuntu on the Appx provisioning heartbeat release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'canonical.ubuntu.2404', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '77735e28d450c6b1c4f14a9a667bc5336eeeb3ea',
+      { wingetId: 'Canonical.Ubuntu.2404', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
