@@ -1107,6 +1107,43 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
+  '9205d51e3c693afe7fdd385572f181c4739d91c5': [
+    // Retry the exact Acronis payload once with the bounded top-level EXE
+    // wrapper selector shared by QA and customer PSADT packages. Carry the
+    // still-unconsumed prior repair targets through the atomic pin rollout;
+    // compatible passes and eligibility-blocked apps are filtered upstream.
+    'Acronis.CyberProtectHomeOffice',
+    'Daum.PotPlayer',
+    'Autodesk.LicensingService',
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
   '12831539c9dc30678c6f16367faab76820502d2a': [
     // CutePDF's registered unInstcpw helper requires its vendor-specific
     // /uninstall /s contract rather than the nested installer's Inno switches.
