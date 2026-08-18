@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f426e369f2134ca5bb896170c9f7fd7e526c5916',
+  packagerCommit: '16a626f329d93d1e499c1db30a243d9dc18a2aa6',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -139,6 +139,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // uninstaller instead of an ambiguous ARP delta. Preserve every unrelated
   // compatible pass from the preceding protected release.
   '12831539c9dc30678c6f16367faab76820502d2a',
+  // Bria's process-close adapter affects only its previously failing MSI
+  // removal path. Preserve every unrelated compatible passing result.
+  'f426e369f2134ca5bb896170c9f7fd7e526c5916',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

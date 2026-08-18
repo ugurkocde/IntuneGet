@@ -999,6 +999,42 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
+  '16a626f329d93d1e499c1db30a243d9dc18a2aa6': [
+    // Bria keeps its desktop client running in the notification area. This
+    // release closes that reviewed process before invoking the MSI lifecycle.
+    'Bria.Bria',
+    // Carry still-unconsumed bounded retries across the atomic pin rollout.
+    // Compatible passes are filtered before candidates are created.
+    'Autodesk.LicensingService',
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
   '12831539c9dc30678c6f16367faab76820502d2a': [
     // CutePDF's registered unInstcpw helper requires its vendor-specific
     // /uninstall /s contract rather than the nested installer's Inno switches.

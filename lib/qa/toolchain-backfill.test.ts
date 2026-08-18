@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Bria only after the reviewed process-close lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'bria.bria', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f426e369f2134ca5bb896170c9f7fd7e526c5916',
+      { wingetId: 'Bria.Bria', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries Autodesk Licensing Service only on its dedicated lifecycle release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
@@ -47,6 +58,7 @@ describe('QA toolchain targeted retries', () => {
       'Blizzard.BattleNet',
       'DATEV.SicherheitspaketCompact',
       'Autodesk.LicensingService',
+      'Bria.Bria',
     ]));
 
     targets.length = 0;
@@ -69,6 +81,7 @@ describe('QA toolchain targeted retries', () => {
         'Blizzard.BattleNet',
         'DATEV.SicherheitspaketCompact',
         'Autodesk.LicensingService',
+        'Bria.Bria',
       ])
     );
   });
