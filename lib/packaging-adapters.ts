@@ -295,6 +295,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Bria keeps its desktop client running in the notification area when its
+    // window is closed. The MSI uninstall can then return 1603 and leave the
+    // exact product registration installed. CounterPath's removal guidance
+    // requires Bria to be exited first, so close only the reviewed Bria client
+    // through PSADT before install, upgrade, or uninstall.
+    wingetId: 'Bria.Bria',
+    requiredProcessesToClose: [
+      { name: 'Bria', description: 'Bria' },
+    ],
+  },
+  {
     // Link Controller remains active in the notification area after its UI is
     // closed, and its optional camera helper can hold the Inno installation
     // directory open. The silent uninstaller then exits without removing the

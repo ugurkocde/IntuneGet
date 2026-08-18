@@ -225,6 +225,10 @@ describe('application packaging adapters', () => {
         .processesToClose
     ).toEqual([{ name: 'Evernote', description: 'Evernote' }]);
     expect(
+      applyApplicationPackagingAdapter('Bria.Bria', DEFAULT_PSADT_CONFIG)
+        .processesToClose
+    ).toEqual([{ name: 'Bria', description: 'Bria' }]);
+    expect(
       applyApplicationPackagingAdapter('Insta360.Link.Controller', DEFAULT_PSADT_CONFIG)
         .processesToClose
     ).toEqual([
