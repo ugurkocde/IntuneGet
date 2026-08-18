@@ -451,6 +451,27 @@ describe('Nmap managed install block migration contract', () => {
   });
 });
 
+describe('ExpressVPN managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260818162500_block_expressvpn_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the undocumented ExpressVPN 14 installer across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'ExpressVPN.ExpressVPN'");
+    expect(sql).toContain(
+      'https://github.com/microsoft/winget-pkgs/pull/390529'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('Yandex Browser managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(
