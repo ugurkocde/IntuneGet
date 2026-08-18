@@ -493,6 +493,27 @@ describe('Bria managed uninstall block migration contract', () => {
   });
 });
 
+describe('Acronis managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260818213904_block_acronis_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported Acronis removal lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Acronis.CyberProtectHomeOffice'");
+    expect(sql).toContain(
+      'https://dl.acronis.com/u/pdf/ATI2026_userguidewindows_en-US.pdf'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('3CX Phone System managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(

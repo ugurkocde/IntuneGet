@@ -112,19 +112,12 @@ describe('application packaging adapters', () => {
     });
   });
 
-  it('allows Acronis child-process removal to finish against the exact registration', () => {
+  it('does not extend the blocked Acronis managed-uninstall lifecycle', () => {
     expect(
       applyApplicationPackagingAdapter(
         'Acronis.CyberProtectHomeOffice',
         DEFAULT_PSADT_CONFIG
-      )
-    ).toMatchObject({
-      uninstallCompletionTimeoutMinutes: 10,
-    });
-
-    expect(
-      applyApplicationPackagingAdapter('Example.App', DEFAULT_PSADT_CONFIG)
-        .uninstallCompletionTimeoutMinutes
+      ).uninstallCompletionTimeoutMinutes
     ).toBeUndefined();
   });
 

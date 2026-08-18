@@ -178,15 +178,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArgumentsOverride: '/vADDLOCAL="ALL" /qn /norestart',
   },
   {
-    // Acronis' signed removal process returns before its child process removes
-    // the exact captured product registration. A five-minute generic wait can
-    // therefore report an uninstall failure even though the same QA lifecycle
-    // subsequently verifies the application as absent. Keep polling the exact
-    // registration longer for both QA and customer Intune removals.
-    wingetId: 'Acronis.CyberProtectHomeOffice',
-    uninstallCompletionTimeoutMinutes: 10,
-  },
-  {
     // Apryse documents -q as the unattended Windows uninstall switch for the
     // install4j-based Xodo/PDF Studio family. The registered Xodo PDF Reader
     // command omits it, which leaves the confirmation flow waiting in a

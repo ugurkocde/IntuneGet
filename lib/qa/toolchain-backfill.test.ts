@@ -70,8 +70,8 @@ describe('QA toolchain targeted retries', () => {
       'DATEV.SicherheitspaketCompact',
       'Autodesk.LicensingService',
       'Daum.PotPlayer',
-      'Acronis.CyberProtectHomeOffice',
     ]));
+    expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
 
     targets.length = 0;
 
@@ -94,9 +94,11 @@ describe('QA toolchain targeted retries', () => {
         'DATEV.SicherheitspaketCompact',
         'Autodesk.LicensingService',
         'Daum.PotPlayer',
-        'Acronis.CyberProtectHomeOffice',
       ])
     );
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+    ).not.toContain('Acronis.CyberProtectHomeOffice');
   });
 
   it('does not repeat the consumed .NET Framework retry in the Sonos releases', () => {

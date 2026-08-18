@@ -1108,11 +1108,9 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'DATEV.SicherheitspaketCompact',
   ],
   '9205d51e3c693afe7fdd385572f181c4739d91c5': [
-    // Retry the exact Acronis payload once with the bounded top-level EXE
-    // wrapper selector shared by QA and customer PSADT packages. Carry the
-    // still-unconsumed prior repair targets through the atomic pin rollout;
-    // compatible passes and eligibility-blocked apps are filtered upstream.
-    'Acronis.CyberProtectHomeOffice',
+    // Carry the still-unconsumed prior repair targets through the atomic pin
+    // rollout; compatible passes and eligibility-blocked apps are filtered
+    // upstream.
     'Daum.PotPlayer',
     'Autodesk.LicensingService',
     'AcroSoftware.CutePDFWriter',
@@ -1145,11 +1143,8 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'DATEV.SicherheitspaketCompact',
   ],
   '78dfd1a4113805acbd03fe52ddfe6bc06d90544d': [
-    // Acronis removes its exact captured product registration asynchronously.
-    // Retry it once with the reviewed ten-minute completion window shared by
-    // QA and customer PSADT packages. Carry still-unconsumed bounded targets;
-    // compatible passes and eligibility-blocked apps are filtered upstream.
-    'Acronis.CyberProtectHomeOffice',
+    // Carry still-unconsumed bounded targets; compatible passes and
+    // eligibility-blocked apps are filtered upstream.
     'Daum.PotPlayer',
     'Autodesk.LicensingService',
     'AcroSoftware.CutePDFWriter',
