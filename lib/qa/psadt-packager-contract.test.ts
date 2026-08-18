@@ -1640,29 +1640,38 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   });
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'narrows an ambiguous Burn display-name match to the single bundle entry',
+    'narrows an ambiguous executable-wrapper display-name match to the single top-level entry',
     () => {
-      const generated = generateRegistryUninstallPackage('burn', 'PreForm');
+      for (const installerType of ['burn', 'exe']) {
+        const generated = generateRegistryUninstallPackage(installerType, 'Wrapped App');
 
-      expect(generated).toContain('if ($selectedApplications.Count -gt 1)');
-      expect(generated).toContain(
-        '$bundleCandidates = @($selectedApplications | Where-Object {'
-      );
-      expect(generated).toContain('$isVisibleApplication -and -not $_.WindowsInstaller');
-      expect(generated.indexOf('if ($selectedApplications.Count -gt 1)')).toBeLessThan(
-        generated.indexOf('if ($selectedApplications.Count -eq 1) { break }')
-      );
+        expect(generated).toContain('if ($selectedApplications.Count -gt 1)');
+        expect(generated).toContain(
+          '$bundleCandidates = @($selectedApplications | Where-Object {'
+        );
+        expect(generated).toContain('$isVisibleApplication -and -not $_.WindowsInstaller');
+        expect(generated.indexOf('if ($selectedApplications.Count -gt 1)')).toBeLessThan(
+          generated.indexOf('if ($selectedApplications.Count -eq 1) { break }')
+        );
+        expect(generated).toContain(
+          '$topLevelWrapperMatches = @($installedApps | Where-Object {'
+        );
+        expect(generated).toContain(
+          'if ($topLevelWrapperMatches.Count -eq 1) { $installedApps = $topLevelWrapperMatches }'
+        );
+      }
     }
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'does not emit Burn-only duplicate-entry narrowing for non-Burn packages',
+    'does not emit executable-wrapper duplicate-entry narrowing for native installer packages',
     () => {
       const generated = generateRegistryUninstallPackage('inno', 'Example App');
 
       expect(generated).not.toContain(
-        'A Burn bundle and its chained MSI can intentionally share the same ARP display name.'
+        'A top-level executable wrapper and its chained MSI can intentionally share the same ARP display name.'
       );
+      expect(generated).not.toContain('$topLevelWrapperMatches');
     }
   );
 
@@ -1679,7 +1688,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       );
       expect(burnGenerated).toContain('$isVisibleApplication -and -not $_.WindowsInstaller');
       expect(burnGenerated).toContain(
-        'A Burn bundle and its chained MSI can intentionally share the same ARP display name.'
+        'A top-level executable wrapper and its chained MSI can intentionally share the same ARP display name.'
       );
     }
   );

@@ -2535,12 +2535,12 @@ if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
     # This is a packager-time decision. Do not emit $originalInstallerType into the
     # generated deployment script: that variable exists only in this generator and
     # StrictMode would turn the fallback check into a post-install 60001 failure.
-    if ($originalInstallerType -eq 'burn') {
+    if ($originalInstallerType -in @('burn', 'exe')) {
         $lines += @(
             '        if ($selectedApplications.Count -gt 1) {'
-            '            # A Burn bundle and its chained MSI can intentionally share the same ARP display name.'
-            '            # Prefer the single non-MSI entry from the already identity-matched set; never widen'
-            '            # an ambiguous match to an unrelated uninstall entry.'
+            '            # A top-level executable wrapper and its chained MSI can intentionally share the same ARP display name.'
+            '            # Prefer the single visible non-MSI entry from the already identity-matched set; never widen'
+            '            # an ambiguous match to an unrelated uninstall entry or guess between multiple wrappers.'
             '            $bundleCandidates = @($selectedApplications | Where-Object {'
             '                $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
             '                $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
@@ -2908,6 +2908,22 @@ if ($useManagedDirectoryLifecycle) {
         '            $installedApps = $containsMatches'
         '        }'
         '    }'
+    )
+    if ($originalInstallerType -in @('burn', 'exe')) {
+        $lines += @(
+            '    if ($installedApps.Count -gt 1) {'
+            '        # Recover a missing marker only when one exact, visible top-level wrapper is distinguishable'
+            '        # from chained MSI registrations with the same display name. Multiple wrappers remain fail-closed.'
+            '        $topLevelWrapperMatches = @($installedApps | Where-Object {'
+            '            $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
+            '            $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
+            '            $isVisibleApplication -and -not $_.WindowsInstaller'
+            '        })'
+            '        if ($topLevelWrapperMatches.Count -eq 1) { $installedApps = $topLevelWrapperMatches }'
+            '    }'
+        )
+    }
+    $lines += @(
         '    if ($installedApps.Count -ne 1) {'
         '        throw "Could not find one unambiguous vendor uninstall registry entry for [$appName]. Found $($installedApps.Count); refusing broad removal."'
         '    }'
