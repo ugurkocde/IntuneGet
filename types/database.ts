@@ -333,6 +333,20 @@ export interface Database {
         >;
         Relationships: GenericRelationship[];
       };
+      qa_demand_backfill_selections: {
+        Row: {
+          winget_id: string;
+          last_selected_at: string;
+        };
+        Insert: {
+          winget_id: string;
+          last_selected_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['qa_demand_backfill_selections']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
       qa_pipeline_control: {
         Row: {
           id: string;
@@ -2377,6 +2391,12 @@ export interface Database {
         Returns: Array<{
           winget_id: string;
         }>;
+      };
+      record_qa_demand_backfill_selection: {
+        Args: {
+          p_winget_ids: string[];
+        };
+        Returns: void;
       };
       increment_usage: {
         Args: {

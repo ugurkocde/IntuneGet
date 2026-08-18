@@ -96,6 +96,9 @@ function createSupabaseStub(options: {
   const client = {
     rpc: vi.fn((name: string, args: Record<string, unknown>) => {
       rpcCalls.push({ name, args });
+      if (name === 'record_qa_demand_backfill_selection') {
+        return Promise.resolve({ data: null, error: null });
+      }
       if (name !== 'qa_missing_demand_backfill_ids') {
         throw new Error(`Unexpected RPC: ${name}`);
       }
@@ -479,7 +482,7 @@ describe('GET /api/cron/qa-enqueue', () => {
   });
 
   it('queues a demanded app missing latest-version catalog QA without a WinGet change', async () => {
-    const { client, candidateInserts, pollRunUpdates } = createSupabaseStub({
+    const { client, candidateInserts, pollRunUpdates, rpcCalls } = createSupabaseStub({
       demandBackfillApps: ['Missing.App'],
       supportedApps: [
         {
@@ -505,6 +508,10 @@ describe('GET /api/cron/qa-enqueue', () => {
       demandBackfillCount: 1,
     });
     expect(candidateInserts).toHaveLength(1);
+    expect(rpcCalls).toContainEqual({
+      name: 'record_qa_demand_backfill_selection',
+      args: { p_winget_ids: ['Missing.App'] },
+    });
     expect(candidateInserts[0]).toMatchObject({
       winget_id: 'Missing.App',
       version: '1.0.0',

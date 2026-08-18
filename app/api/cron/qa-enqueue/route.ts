@@ -520,6 +520,17 @@ export async function GET(request: Request) {
     ]);
     toolchainBackfillPagesScanned = backfill.pagesScanned;
     demandBackfillRequestedCount = demandBackfillIds.length;
+    if (demandBackfillIds.length > 0) {
+      const { error: demandSelectionError } = await supabase.rpc(
+        'record_qa_demand_backfill_selection',
+        { p_winget_ids: demandBackfillIds }
+      );
+      if (demandSelectionError) {
+        throw new Error(
+          `Could not advance demanded-app QA reconciliation: ${demandSelectionError.message}`
+        );
+      }
+    }
     const changedIds = new Set(changes.changedPackageIds);
     const backfillIds = new Set(backfill.ids);
     const demandBackfillIdSet = new Set(demandBackfillIds);
