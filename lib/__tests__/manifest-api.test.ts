@@ -30,7 +30,7 @@ describe('normalizeInstaller', () => {
       sha256: 'abc123def456',
       type: 'exe',
       scope: undefined,
-      silentArgs: '/S',
+      silentArgs: '',
       productCode: undefined,
       packageFamilyName: undefined,
     });
@@ -85,7 +85,7 @@ describe('normalizeInstaller', () => {
     const result = normalizeInstaller(installer);
 
     expect(result.silentArgs).toBe(
-      '/S --lang=enUS --installpath="%PROGRAMFILES(X86)%\\Contoso"'
+      '--lang=enUS --installpath="%PROGRAMFILES(X86)%\\Contoso"'
     );
     expect(result.installLocationRequired).toBe(true);
     expect(result.defaultInstallLocation).toBe('%PROGRAMFILES(X86)%\\Contoso');
@@ -111,7 +111,7 @@ describe('normalizeInstaller', () => {
     expect(installer.InstallLocationRequired).toBe(true);
     expect(installer.DefaultInstallLocation).toBe('%PROGRAMFILES%\\Contoso');
     expect(normalizeInstaller(installer).silentArgs).toBe(
-      '/S --installpath="%PROGRAMFILES%\\Contoso"'
+      '--installpath="%PROGRAMFILES%\\Contoso"'
     );
   });
 
@@ -373,8 +373,8 @@ describe('normalizeInstaller', () => {
       expect(result.type).toBe('zip');
       expect(result.nestedInstallerType).toBe('exe');
       expect(result.nestedInstallerPath).toBe('paint.net.5.1.12.install.x64.exe');
-      // Default silent switch comes from the NESTED type, not zip
-      expect(result.silentArgs).toBe('/S');
+      // A nested plain EXE still requires declared vendor switches.
+      expect(result.silentArgs).toBe('');
     });
 
     it('should pick the nested-type default switch for zip with nested inno', () => {
@@ -422,7 +422,7 @@ describe('normalizeInstaller', () => {
 
       expect(result.nestedInstallerType).toBeUndefined();
       expect(result.nestedInstallerPath).toBeUndefined();
-      expect(result.silentArgs).toBe('/S');
+      expect(result.silentArgs).toBe('');
     });
 
     it('should yield undefined nestedInstallerPath for zip without NestedInstallerFiles', () => {

@@ -10,6 +10,7 @@ import {
   resolveApplicationInstallScope,
   resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
+import { evaluatePackagingContract } from '@/lib/packaging-contract';
 import { hashesEqual } from '@/lib/installer-download';
 import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller, WingetScope } from '@/types/winget';
@@ -153,6 +154,21 @@ export async function reconcileCatalogInstaller(
 
   const customInstallCommand = item.psadtConfig?.installCommand?.trim();
   const customUninstallCommand = item.psadtConfig?.uninstallCommand?.trim();
+  const packagingContract = evaluatePackagingContract({
+    wingetId: item.wingetId,
+    installerType: installer.type,
+    silentArgs: customInstallCommand || installer.silentArgs || '',
+    nestedInstallerType: installer.nestedInstallerType,
+    nestedInstallerFiles: installer.nestedInstallerPath
+      ? [installer.nestedInstallerPath]
+      : undefined,
+  });
+  if (!packagingContract.valid) {
+    throw new InstallerPreflightError(
+      'SILENT_INSTALL_UNAVAILABLE',
+      packagingContract.message,
+    );
+  }
   const refreshedItem: Win32CartItem = {
     ...item,
     installScope,
@@ -199,6 +215,9 @@ async function healCatalogInstaller(
     InstallerUrl: value.url,
     InstallerSha256: value.sha256,
     InstallerType: value.type,
+    InstallerSwitches: value.silentArgs
+      ? { Silent: value.silentArgs }
+      : undefined,
     NestedInstallerType: value.nestedInstallerType,
     Scope: value.scope,
     InstallerSuccessCodes: value.installerSuccessCodes,

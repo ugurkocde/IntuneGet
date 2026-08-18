@@ -45,6 +45,7 @@ import {
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import { evaluatePackagingContract } from '@/lib/packaging-contract';
 import type { NormalizedInstaller } from '@/types/winget';
 import {
   getPackageEligibilityBlocks,
@@ -260,6 +261,26 @@ export async function POST(request: NextRequest) {
           },
           { status: 400 }
         );
+      }
+      if (item.sourceType === 'custom') {
+        const packagingContract = evaluatePackagingContract({
+          wingetId: item.wingetId,
+          installerType: item.installerType,
+          silentArgs: extractSilentSwitches(
+            item.installCommand,
+            item.installerType,
+            item.nestedInstallerType
+          ),
+          nestedInstallerType: item.nestedInstallerType,
+          nestedInstallerFiles: item.nestedInstallerPath ? [item.nestedInstallerPath] : [],
+        });
+        if (!packagingContract.valid) {
+          return NextResponse.json({
+            error: 'Installer validation blocked this deployment',
+            message: packagingContract.message,
+            code: 'SILENT_INSTALL_UNAVAILABLE',
+          }, { status: 400 });
+        }
       }
     }
 

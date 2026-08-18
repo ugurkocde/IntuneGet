@@ -720,6 +720,22 @@ function applicationPackagingAdapter(
   return undefined;
 }
 
+/**
+ * Return whether a reviewed application adapter supplies the install-side
+ * contract that an opaque EXE manifest does not. Uninstall-only and
+ * verification-only adapters deliberately do not qualify.
+ */
+export function hasReviewedApplicationInstallContract(wingetId: string): boolean {
+  const adapter = applicationPackagingAdapter(wingetId);
+  return Boolean(
+    adapter && (
+      adapter.reviewedInstallArguments?.some((argument) => argument.trim()) ||
+      adapter.reviewedInstallArgumentsOverride?.trim() ||
+      adapter.reviewedInstallShieldAdministrativeImage
+    )
+  );
+}
+
 export function resolveApplicationInstallScope(
   wingetId: string,
   requestedScope?: string | null

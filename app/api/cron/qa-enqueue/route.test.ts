@@ -823,6 +823,44 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(candidateInserts[0].package_profile_sha256).not.toBe('B'.repeat(64));
   });
 
+  it('supersedes a plain EXE with no declared silent install contract before dispatch', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Canon.GPCL6_V4_PrinterDriver_V21.00'],
+      supportedApps: [{
+        winget_id: 'Canon.GPCL6_V4_PrinterDriver_V21.00',
+        name: 'Canon PCL6 Driver',
+        publisher: 'Canon',
+        latest_version: '2.72',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'resolved',
+      version: '2.72',
+      manifest: {
+        InstallerType: 'exe',
+        Installers: [{
+          Architecture: 'x64',
+          InstallerUrl: 'https://example.com/canon-driver.exe',
+          InstallerSha256: 'A'.repeat(64),
+          InstallerType: 'exe',
+        }],
+      },
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, alreadyKnown: 1 });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: 'Canon.GPCL6_V4_PrinterDriver_V21.00',
+      status: 'superseded',
+      failure_summary: expect.stringContaining('explicit silent installer switches'),
+    });
+  });
+
   it('records a changed supported app failure and advances the completed comparison cursor', async () => {
     detectWingetChangesMock.mockResolvedValue({
       baseSha: 'a'.repeat(40),

@@ -105,6 +105,9 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
     if (iconUrl.trim() && !isValidIconUrl(iconUrl.trim())) {
       nextErrors.iconUrl = 'Must be a valid https:// URL';
     }
+    if (installerType === 'exe' && !silentSwitches.trim()) {
+      nextErrors.silentSwitches = 'Enter the vendor-documented silent switches';
+    }
     return nextErrors;
   };
 
@@ -364,22 +367,39 @@ export function CustomAppModal({ onClose }: CustomAppModalProps) {
 
             {/* Optional fields */}
             <div className="border-t border-overlay/10 pt-6 space-y-6">
-              <h3 className="text-sm font-semibold text-text-primary">Optional</h3>
+              <h3 className="text-sm font-semibold text-text-primary">Installer options</h3>
 
               {/* Silent Switches */}
               <div>
-                <label htmlFor="custom-app-silent-switches" className="block text-sm font-medium text-text-muted mb-2">Silent switches</label>
+                <label htmlFor="custom-app-silent-switches" className="block text-sm font-medium text-text-muted mb-2">
+                  Silent switches{installerType === 'exe' ? ' *' : ''}
+                </label>
                 <Input
                   id="custom-app-silent-switches"
                   type="text"
                   value={silentSwitches}
-                  onChange={(e) => setSilentSwitches(e.target.value)}
-                  placeholder={CUSTOM_SILENT_SWITCH_DEFAULTS[installerType]}
-                  className={cn(inputClassName, 'font-mono')}
+                  onChange={(e) => {
+                    setSilentSwitches(e.target.value);
+                    clearError('silentSwitches');
+                  }}
+                  placeholder={installerType === 'exe'
+                    ? 'Vendor-documented silent switches'
+                    : CUSTOM_SILENT_SWITCH_DEFAULTS[installerType]}
+                  aria-invalid={Boolean(errors.silentSwitches)}
+                  className={cn(
+                    inputClassName,
+                    'font-mono',
+                    errors.silentSwitches && 'border-red-500 focus:ring-red-500/20'
+                  )}
                 />
                 <p className="text-xs text-text-muted mt-1">
-                  Pre-filled with the default for the selected installer type.
+                  {installerType === 'exe'
+                    ? 'Required because plain EXE installers do not share one safe silent command.'
+                    : 'Pre-filled with the default for the selected installer type.'}
                 </p>
+                {errors.silentSwitches && (
+                  <p className="text-xs text-red-500 mt-1">{errors.silentSwitches}</p>
+                )}
               </div>
 
               {/* Uninstall Command */}

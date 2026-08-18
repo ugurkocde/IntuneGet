@@ -742,7 +742,9 @@ function getDefaultSilentSwitch(installerType: WingetInstallerType): string {
     msi: '/qn /norestart',
     msix: '',
     appx: '',
-    exe: '/S',
+    // A generic EXE format says nothing about the vendor's unattended
+    // contract. WinGet manifests must declare switches explicitly.
+    exe: '',
     inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     nullsoft: '/S',
     wix: '/qn /norestart',

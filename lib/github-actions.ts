@@ -11,6 +11,7 @@ import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
 import { enforceInstallerPreflight, InstallerPreflightError } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
 import { resolveApplicationUninstallCommand } from './packaging-adapters';
+import { assertPackagingContract } from './packaging-contract';
 import {
   normalizeQaWorkflowPackageInput,
 } from './qa/package-profile';
@@ -198,6 +199,16 @@ export async function triggerPackagingWorkflow(
     sourceType: effectiveInputs.sourceType,
   }, trustedInstallers);
   inputs = effectiveInputs;
+  // Final dispatch boundary: custom callers bypass catalog reconciliation, so
+  // they must still prove an unattended install contract before GitHub sees
+  // the installer URL or any tenant-scoped packaging request.
+  assertPackagingContract({
+    wingetId: inputs.wingetId,
+    installerType: inputs.installerType,
+    silentArgs: inputs.silentSwitches,
+    nestedInstallerType: inputs.nestedInstallerType,
+    nestedInstallerFiles: inputs.nestedInstallerPath ? [inputs.nestedInstallerPath] : [],
+  });
   const packageDependencies = inputs.sourceType === 'custom'
     ? []
     : await resolveWingetPackageDependencies({

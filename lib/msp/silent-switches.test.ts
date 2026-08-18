@@ -33,6 +33,10 @@ describe('extractSilentSwitches', () => {
     )).toBe('/configure https://aka.ms/fhlwingetconfig');
   });
 
+  it('does not guess a universal switch for a plain EXE command', () => {
+    expect(extractSilentSwitches('"setup.exe"', 'exe')).toBe('');
+  });
+
   it('keeps MSI properties after removing the install action target', () => {
     expect(extractSilentSwitches(
       'msiexec.exe /i "agent.msi" /qn REBOOT=ReallySuppress ALLUSERS=1',

@@ -12,6 +12,7 @@ import {
   reconcileCatalogInstaller,
   selectTrustedCatalogInstaller,
 } from '@/lib/catalog-installer-reconciliation';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller } from '@/types/winget';
 
@@ -144,6 +145,35 @@ describe('catalog installer reconciliation', () => {
 
     expect(reconciled.item.installCommand).toBe('custom-install.exe /tenant-approved');
     expect(reconciled.item.uninstallCommand).toBe('custom-uninstall.exe /tenant-approved');
+  });
+
+  it('blocks an opaque EXE before a customer package can be created', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      ...operaInstallers[1],
+      silentArgs: '',
+    }]);
+
+    await expect(reconcileCatalogInstaller(operaItem({
+      wingetId: 'Contoso.OpaqueSetup',
+    }))).rejects.toMatchObject({
+      code: 'SILENT_INSTALL_UNAVAILABLE',
+      retryable: false,
+    } satisfies Partial<InstallerPreflightError>);
+  });
+
+  it('allows an explicit PSADT command for an otherwise opaque EXE', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      ...operaInstallers[1],
+      silentArgs: '',
+    }]);
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'Contoso.OpaqueSetup',
+      psadtConfig: {
+        installCommand: 'setup.exe --quiet --norestart',
+      } as Win32CartItem['psadtConfig'],
+    }));
+
+    expect(reconciled.item.installCommand).toBe('setup.exe --quiet --norestart');
   });
 
   it('uses the reviewed vendor ARP identity for the Chrome EXE catalog package', async () => {

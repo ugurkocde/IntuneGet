@@ -14,7 +14,7 @@ export function extractSilentSwitches(
   // Common silent switches by installer type
   const defaultSwitches: Record<string, string> = {
     msi: '/qn /norestart',
-    exe: '/S',
+    exe: '',
     inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     nullsoft: '/S',
     wix: '/qn /norestart',
@@ -58,5 +58,5 @@ export function extractSilentSwitches(
     return cleaned;
   }
 
-  return defaultSwitches[effectiveType] ?? (sourceType === 'zip' ? '' : '/S');
+  return defaultSwitches[effectiveType] ?? '';
 }

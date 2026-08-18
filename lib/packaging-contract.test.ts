@@ -2,6 +2,46 @@ import { describe, expect, it } from 'vitest';
 import { evaluatePackagingContract } from './packaging-contract';
 
 describe('evaluatePackagingContract', () => {
+  it('rejects a plain EXE when no unattended command is declared', () => {
+    const result = evaluatePackagingContract({
+      wingetId: 'Contoso.OpaqueSetup',
+      installerType: 'exe',
+      silentArgs: '',
+    });
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.code).toBe('silent-install-contract-missing');
+  });
+
+  it('accepts a plain EXE with explicit vendor silent arguments', () => {
+    expect(evaluatePackagingContract({
+      wingetId: 'Contoso.DocumentedSetup',
+      installerType: 'exe',
+      silentArgs: '--quiet --norestart',
+    }).valid).toBe(true);
+  });
+
+  it('accepts an EXE whose reviewed adapter supplies the install contract', () => {
+    expect(evaluatePackagingContract({
+      wingetId: 'Bitvise.SSH.Client',
+      installerType: 'exe',
+      silentArgs: '',
+    }).valid).toBe(true);
+  });
+
+  it('rejects a nested plain EXE without silent arguments', () => {
+    const result = evaluatePackagingContract({
+      wingetId: 'Contoso.OpaqueArchive',
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerFiles: ['setup.exe'],
+      silentArgs: '',
+    });
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.code).toBe('silent-install-contract-missing');
+  });
+
   it('recognizes complete Office Deployment Tool configuration arguments', () => {
     expect(evaluatePackagingContract({
       wingetId: 'Microsoft.Office',

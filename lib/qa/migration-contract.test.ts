@@ -767,3 +767,22 @@ describe('unsupported dependency shape compatibility block contract', () => {
     expect(sql).toContain("'unsupported_dependency_shape'");
   });
 });
+
+describe('Canon printer driver managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260818194500_block_canon_printer_driver_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the undocumented plain EXE lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Canon.GPCL6_V4_PrinterDriver_V21.00'");
+    expect(sql).toContain('d7f86d1703d858d6f7fe0308016a2134f05cc03e');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});

@@ -138,6 +138,18 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('does not dispatch a custom plain EXE without silent switches', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(triggerPackagingWorkflow(workflowInputs({
+      silentSwitches: '',
+    }), config, { skipRunCapture: true })).rejects.toMatchObject({
+      code: 'silent-install-contract-missing',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('defaults to strict mode when no mode override is supplied', async () => {
     enforceInstallerPreflightMock.mockResolvedValueOnce({
       cacheKey: 'healthy-key',

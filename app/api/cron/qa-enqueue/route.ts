@@ -825,7 +825,7 @@ export async function GET(request: Request) {
             const previousMatches = Boolean(previous);
             const now = new Date().toISOString();
             const initialStatus = !packagingContract.valid
-              ? 'failed'
+              ? 'superseded'
               : previousMatches
                 ? 'passed'
                 : 'queued';

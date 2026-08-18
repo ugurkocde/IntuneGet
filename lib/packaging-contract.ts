@@ -1,3 +1,5 @@
+import { hasReviewedApplicationInstallContract } from '@/lib/packaging-adapters';
+
 export type InstallerContractFamily =
   | 'msi'
   | 'msix'
@@ -17,6 +19,7 @@ export type PackagingContractResult =
       family: InstallerContractFamily;
       code:
         | 'unsupported-installer-type'
+        | 'silent-install-contract-missing'
         | 'archive-contract-incomplete'
         | 'required-argument-missing'
         | 'unsafe-argument-syntax';
@@ -100,8 +103,23 @@ export function evaluatePackagingContract(
     };
   }
 
+  const nestedType = input.nestedInstallerType?.trim().toLowerCase() || '';
+  const executesPlainExe = type === 'exe' || (type === 'zip' && nestedType === 'exe');
+  if (
+    executesPlainExe &&
+    !args &&
+    !hasReviewedApplicationInstallContract(input.wingetId)
+  ) {
+    return {
+      valid: false,
+      family,
+      code: 'silent-install-contract-missing',
+      message:
+        'A plain EXE package requires explicit silent installer switches or a reviewed application adapter.',
+    };
+  }
+
   if (family === 'archive') {
-    const nestedType = input.nestedInstallerType?.trim().toLowerCase() || '';
     const nestedFiles = (input.nestedInstallerFiles || []).filter((value) => value.trim());
     if (Boolean(nestedType) !== (nestedFiles.length > 0)) {
       return {

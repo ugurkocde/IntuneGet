@@ -636,6 +636,7 @@ describe('generateInstallCommand', () => {
     const command = generateInstallCommand(installer);
 
     expect(command).toContain('"windows_64.exe"');
+    expect(command).not.toContain('/S');
   });
 
   it('should append .msi for extensionless MSI URLs', () => {

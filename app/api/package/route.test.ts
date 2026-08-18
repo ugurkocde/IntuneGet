@@ -889,6 +889,31 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
+  it('rejects a custom plain EXE without silent switches before creating a job', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          sourceType: 'custom',
+          installerSha256: '',
+          installCommand: 'setup.exe',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toMatchObject({ code: 'SILENT_INSTALL_UNAVAILABLE' });
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('treats a whitespace-only custom-app SHA256 as missing', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

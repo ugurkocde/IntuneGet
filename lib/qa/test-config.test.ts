@@ -152,7 +152,7 @@ describe('buildQaCatalogTestConfig', () => {
     });
 
     expect(config.silentArgs).toBe(
-      '/S --lang=enUS --installpath="%PROGRAMFILES(X86)%\\Battle.net"'
+      '--lang=enUS --installpath="%PROGRAMFILES(X86)%\\Battle.net"'
     );
   });
 

@@ -494,7 +494,8 @@ function getDefaultSilentArgs(type: WingetInstallerType): string {
     msi: '/qn /norestart',
     msix: '',
     appx: '',
-    exe: '/S',
+    // Do not invent a vendor contract for an opaque EXE.
+    exe: '',
     inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
     nullsoft: '/S',
     wix: '/qn /norestart',

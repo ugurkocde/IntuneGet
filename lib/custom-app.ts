@@ -33,7 +33,9 @@ export type CustomInstallerType = Extract<
 // Mirrors getDefaultSilentSwitch in lib/manifest-api.ts (not exported there),
 // limited to the installer types supported for custom apps.
 export const CUSTOM_SILENT_SWITCH_DEFAULTS: Record<CustomInstallerType, string> = {
-  exe: '/S',
+  // A direct EXE has no trustworthy universal unattended switch. Require the
+  // administrator to enter the vendor-documented command instead.
+  exe: '',
   msi: '/qn /norestart',
   inno: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
   nullsoft: '/S',
@@ -121,6 +123,9 @@ export function buildCustomAppCartItem(input: CustomAppInput): CustomAppCartItem
   }
   if (iconUrl && !isValidIconUrl(iconUrl)) {
     throw new Error('Icon URL must be a valid https URL');
+  }
+  if (input.installerType === 'exe' && !input.silentSwitches?.trim()) {
+    throw new Error('Silent switches are required for a custom EXE installer');
   }
 
   const wingetId = buildCustomWingetId(publisher, displayName);
