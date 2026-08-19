@@ -458,6 +458,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // DesktopOK registers its own executable with the interactive
+    // -?uninstall argument. Reuse the vendor's documented /silent mode ahead
+    // of that exact removal verb so SYSTEM deployments do not exit without
+    // deleting the captured DesktopOK registration.
+    wingetId: 'SoftwareOK.DesktopOK',
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles%\\DesktopOK\\DesktopOK_x64.exe',
+      arguments: ['/silent', '-?uninstall'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     wingetId: 'SoftwareOK.Q-Dir',
     reviewedUninstallArguments: ['/silent', 'forall'],
   },

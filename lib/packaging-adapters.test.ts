@@ -207,6 +207,16 @@ describe('application packaging adapters', () => {
       },
     });
     expect(
+      applyApplicationPackagingAdapter(
+        'SoftwareOK.DesktopOK',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedExactUninstall
+    ).toEqual({
+      executablePath: '%ProgramFiles%\\DesktopOK\\DesktopOK_x64.exe',
+      arguments: ['/silent', '-?uninstall'],
+      completionTimeoutMinutes: 5,
+    });
+    expect(
       applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['/silent', 'forall']);
