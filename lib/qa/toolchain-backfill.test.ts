@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Microsoft.FSLogix',
       'AvaCC.AvaDesktop',
       'Microsoft.RMSClient',
       'SoftwareOK.DesktopOK',
@@ -93,6 +94,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Microsoft.FSLogix',
         'Microsoft.RMSClient',
         'SoftwareOK.DesktopOK',
         'Movavi.MovaviPhotoFocus',
@@ -119,6 +121,17 @@ describe('QA toolchain targeted retries', () => {
     expect(
       terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
     ).not.toContain('Acronis.CyberProtectHomeOffice');
+  });
+
+  it('retries FSLogix only after activating its reviewed bundle identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'microsoft.fslogix', status: 'error' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f79b14647328d39bca04dada822a07f70573aa49',
+      { wingetId: 'Microsoft.FSLogix', status: 'error' }
+    )).toBe(false);
   });
 
   it.each([

@@ -13,7 +13,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f79b14647328d39bca04dada822a07f70573aa49',
+  packagerCommit: '31faef7cae75613243bc36c9bb0af38c88761437',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -201,6 +201,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // DesktopOK and Ava Desktop now use their actual vendor installation scopes.
   // Every unrelated passing execution profile remains compatible.
   '4bc4126f8991da9facd520d0bc213a7dd3ebbf5c',
+  // FSLogix's exact registered display identity changes only its previously
+  // failing bundle lifecycle. Preserve every unrelated compatible pass.
+  'f79b14647328d39bca04dada822a07f70573aa49',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
