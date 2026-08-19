@@ -132,6 +132,17 @@ export async function triggerPackagingWorkflow(
       inputs.wingetId,
       inputs.uninstallCommand,
     );
+    const generatedDisplayUninstallCommand = resolveApplicationUninstallCommand(
+      inputs.wingetId,
+      `REGISTRY_UNINSTALL:${inputs.displayName}`,
+    );
+    // A display-name registry marker is the catalog fallback, not a customer
+    // override. Let live manifest reconciliation replace it with a stronger
+    // ProductCode or exact ARP key when the trusted installer now provides one.
+    const customerUninstallOverride = resolvedUninstallCommand.trim() &&
+      resolvedUninstallCommand.trim() !== generatedDisplayUninstallCommand
+      ? resolvedUninstallCommand
+      : undefined;
     try {
       const reconciled = await reconcileCatalogInstaller({
         id: inputs.jobId,
@@ -155,7 +166,7 @@ export async function triggerPackagingWorkflow(
         requirementRules: [],
         psadtConfig: {
           installCommand: inputs.silentSwitches,
-          uninstallCommand: resolvedUninstallCommand,
+          uninstallCommand: customerUninstallOverride,
         } as Win32CartItem['psadtConfig'],
       });
       effectiveInputs = {

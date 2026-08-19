@@ -122,6 +122,39 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     }));
   });
 
+  it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'FinancialID.BankID',
+      displayName: 'BankID säkerhetsprogram',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      uninstallCommand: 'REGISTRY_UNINSTALL:BankID säkerhetsprogram',
+    }), config, { skipRunCapture: true });
+
+    const reconciledItem = reconcileCatalogInstallerMock.mock.calls[0][0];
+    expect(reconciledItem.psadtConfig.uninstallCommand).toBeUndefined();
+  });
+
+  it('preserves a customer-provided uninstall override during reconciliation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Example.App',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      uninstallCommand: 'vendor-remover.exe /tenant-approved',
+    }), config, { skipRunCapture: true });
+
+    const reconciledItem = reconcileCatalogInstallerMock.mock.calls[0][0];
+    expect(reconciledItem.psadtConfig.uninstallCommand).toBe(
+      'vendor-remover.exe /tenant-approved'
+    );
+  });
+
   it('dispatches calculate mode for a custom installer without a trusted hash', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

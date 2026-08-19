@@ -135,6 +135,36 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.trustedInstallers).toBe(operaInstallers);
   });
 
+  it('rebuilds customer archive packages with the nested MSI product identity', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x86',
+      url: 'https://example.test/bankid.zip',
+      sha256,
+      type: 'zip',
+      nestedInstallerType: 'msi',
+      nestedInstallerPath: 'BankID.msi',
+      scope: 'machine',
+      silentArgs: '/qn /norestart ALLUSERS=1',
+      productCode: '{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}',
+    } satisfies NormalizedInstaller]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'FinancialID.BankID',
+      displayName: 'BankID säkerhetsprogram',
+      version: '7.17.101.2526',
+      architecture: 'x86',
+      installerType: 'zip',
+      installerUrl: 'https://example.test/bankid.zip',
+      installCommand: '',
+      uninstallCommand: 'REGISTRY_UNINSTALL:BankID säkerhetsprogram',
+    }));
+
+    expect(reconciled.item.nestedInstallerType).toBe('msi');
+    expect(reconciled.item.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}:BankID säkerhetsprogram'
+    );
+  });
+
   it('selects Logitech Presentation user bytes for reviewed LocalSystem execution', async () => {
     getLiveInstallersMock.mockResolvedValue([{
       architecture: 'x86',

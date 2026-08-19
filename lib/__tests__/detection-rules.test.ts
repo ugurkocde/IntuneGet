@@ -897,6 +897,24 @@ describe('generateUninstallCommand', () => {
     );
   });
 
+  it('should preserve a nested MSI product code for archive packages', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x86',
+      url: 'https://example.com/bankid.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'msi',
+      nestedInstallerPath: 'BankID.msi',
+      productCode: '{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}',
+    };
+
+    expect(
+      generateUninstallCommand(installer, 'BankID säkerhetsprogram')
+    ).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}:BankID säkerhetsprogram'
+    );
+  });
+
   it('should canonicalize a braceless product code and reject malformed GUID shapes', () => {
     const base: NormalizedInstaller = {
       architecture: 'x64',

@@ -416,6 +416,21 @@ export function generateUninstallCommand(
       // intentionally invalid so both packagers reject it before deployment.
       return 'MSIX_UNINSTALL:{PACKAGE_NAME}';
 
+    case 'zip':
+      // Archive packages execute their nested installer, so a nested MSI/WiX
+      // ProductCode is the authoritative installed-product identity. Preserve
+      // it for post-install capture and removal instead of falling back to a
+      // localized display name that may not match the registered MSI title.
+      if (displayName) {
+        const nestedMsiProductCode = ['msi', 'wix'].includes(
+          installer.nestedInstallerType || ''
+        )
+          ? installer.productCode
+          : undefined;
+        return generateRegistryUninstallCommand(displayName, nestedMsiProductCode);
+      }
+      return '# Manual uninstall required';
+
     case 'exe':
     case 'inno':
     case 'nullsoft':

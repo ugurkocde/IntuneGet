@@ -88,6 +88,38 @@ describe('buildQaCatalogTestConfig', () => {
     });
   });
 
+  it('keeps a nested MSI ProductCode in the canonical QA uninstall identity', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'FinancialID.BankID',
+        name: 'BankID säkerhetsprogram',
+        publisher: 'FinancialID',
+        version: '7.17.101.2526',
+      },
+      manifest: {
+        InstallerType: 'zip',
+        NestedInstallerType: 'msi',
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'zip',
+        NestedInstallerType: 'msi',
+        NestedInstallerFiles: [{ RelativeFilePath: 'BankID.msi' }],
+        ProductCode: '{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}',
+        Scope: 'machine',
+      },
+    });
+
+    expect(config).toMatchObject({
+      sourceInstallerType: 'zip',
+      nestedInstallerType: 'msi',
+      nestedInstallerFiles: ['BankID.msi'],
+      productCode: '{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}:BankID säkerhetsprogram',
+    });
+  });
+
   it('appends inherited custom switches to the derived silent default', () => {
     const config = buildQaCatalogTestConfig({
       app: {
