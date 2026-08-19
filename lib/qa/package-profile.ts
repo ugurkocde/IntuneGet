@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7a8401469e353172b652259e731aa505cf8067bd',
+  packagerCommit: 'c69410a6d1ab34e403b7ebb25519074acbe8952c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -150,6 +150,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // servicing operation remained silent long enough to hit the QA stall
   // detector. Preserve every previously passing package from this release.
   '77735e28d450c6b1c4f14a9a667bc5336eeeb3ea',
+  // Logitech Presentation's reviewed scope correction affects only that
+  // package's previously failing UAC path. Preserve every compatible pass
+  // from the Appx provisioning heartbeat release.
+  '7a8401469e353172b652259e731aa505cf8067bd',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

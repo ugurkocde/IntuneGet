@@ -611,6 +611,13 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('retries Logitech Presentation after replacing its UAC-blocked user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'logitech.presentation', status: 'failed' }
+    )).toBe(true);
+  });
+
   it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '5569c16d136f464cbc014f40c70645414c601751',
