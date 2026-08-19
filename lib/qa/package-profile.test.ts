@@ -343,6 +343,47 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds the reviewed Logitech G HUB lifecycle to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Logitech.GHUB',
+      displayName: 'Logitech G HUB',
+      publisher: 'Logitech',
+      version: '2026.4.919028',
+      architecture: 'x64',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Logitech G HUB',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        processesToClose: Array<{ name: string }>;
+        reviewedInstallCompletionTimeoutMinutes?: number;
+        reviewedExactUninstall?: {
+          executablePath: string;
+          arguments: string[];
+          completionTimeoutMinutes: number;
+        };
+      };
+    };
+
+    expect(profile.psadtConfig.processesToClose.map(({ name }) => name)).toEqual([
+      'lghub',
+      'lghub_agent',
+      'lghub_updater',
+      'lghub_software_manager',
+    ]);
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(profile.psadtConfig.reviewedExactUninstall).toEqual({
+      executablePath: '%ProgramFiles%\\LGHUB\\lghub_updater.exe',
+      arguments: ['--uninstall', '--full'],
+      completionTimeoutMinutes: 10,
+    });
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',

@@ -624,6 +624,7 @@ describe('application packaging adapters', () => {
       reviewedInstallShieldAdministrativeImage: {
         expectedMsiFileName: 'customer-controlled.msi',
       },
+      reviewedInstallCompletionTimeoutMinutes: 30,
       reviewedManagedInstallDirectory: '%ProgramFiles%\\Example',
       reviewedManagedInstallEvidenceFile: '%ProgramFiles%\\Example\\app.exe',
       reviewedManagedInstallCompletionProcess:
@@ -646,6 +647,7 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
     expect(adapted.reviewedRegistryInstallEvidence).toBeUndefined();
     expect(adapted.reviewedInstallShieldAdministrativeImage).toBeUndefined();
+    expect(adapted.reviewedInstallCompletionTimeoutMinutes).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();
     expect(adapted.reviewedManagedInstallEvidenceFile).toBeUndefined();
     expect(adapted.reviewedManagedInstallCompletionProcess).toBeUndefined();
@@ -686,6 +688,29 @@ describe('application packaging adapters', () => {
     });
 
     expect(adapted.reviewedUninstallArguments).toEqual(['/s', '--custom']);
+  });
+
+  it('binds the reviewed Logitech G HUB install and removal lifecycle', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'logitech.ghub',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.processesToClose).toEqual([
+      { name: 'lghub', description: 'Logitech G HUB' },
+      { name: 'lghub_agent', description: 'Logitech G HUB Agent' },
+      { name: 'lghub_updater', description: 'Logitech G HUB Updater' },
+      {
+        name: 'lghub_software_manager',
+        description: 'Logitech G HUB Software Manager',
+      },
+    ]);
+    expect(adapted.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(adapted.reviewedExactUninstall).toEqual({
+      executablePath: '%ProgramFiles%\\LGHUB\\lghub_updater.exe',
+      arguments: ['--uninstall', '--full'],
+      completionTimeoutMinutes: 10,
+    });
   });
 
   it('preserves customer Opera process settings while enforcing the exact reviewed removal contract', () => {

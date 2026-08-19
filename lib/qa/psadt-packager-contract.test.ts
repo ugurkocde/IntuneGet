@@ -1841,6 +1841,55 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps the reviewed Logitech G HUB bootstrapper observable and removes it silently',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Logitech G HUB',
+        [],
+        {
+          processesToClose: [
+            { name: 'lghub', description: 'Logitech G HUB' },
+            { name: 'lghub_agent', description: 'Logitech G HUB Agent' },
+            { name: 'lghub_updater', description: 'Logitech G HUB Updater' },
+            {
+              name: 'lghub_software_manager',
+              description: 'Logitech G HUB Software Manager',
+            },
+          ],
+          reviewedInstallCompletionTimeoutMinutes: 15,
+          reviewedExactUninstall: {
+            executablePath: '%ProgramFiles%\\LGHUB\\lghub_updater.exe',
+            arguments: ['--uninstall', '--full'],
+            completionTimeoutMinutes: 10,
+          },
+        },
+        [],
+        'Logitech.GHUB',
+        'Logitech G HUB',
+        '2026.4.919028',
+        'REGISTRY_UNINSTALL:Logitech G HUB',
+        '--silent'
+      );
+
+      expect(generated).toContain(
+        'Start-ADTProcess -FilePath $installerPath -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
+      );
+      expect(generated).toContain(
+        'Write-ADTLogEntry -Message "The reviewed vendor installer is still working."'
+      );
+      expect(generated).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\LGHUB\\lghub_updater.exe')"
+      );
+      expect(generated).toContain(
+        "$registeredUninstallArguments = @('--uninstall', '--full')"
+      );
+      expect(generated).toContain('$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 10 }');
+      expect(generated).toContain("@{ Name = 'lghub'; Description = 'Logitech G HUB' }");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'emits one valid force-countdown parameter set and never combines it with Silent',
     () => {
       const generated = generateRegistryUninstallPackage(

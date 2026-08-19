@@ -244,6 +244,21 @@ if ($psadtConfig.Contains('reviewedInstallArgumentsOverride') -and
     }
 }
 
+$reviewedInstallCompletionTimeoutMinutes = 0
+if ($psadtConfig.Contains('reviewedInstallCompletionTimeoutMinutes') -and
+    $null -ne $psadtConfig['reviewedInstallCompletionTimeoutMinutes']) {
+    $rawReviewedInstallCompletionTimeoutMinutes = $psadtConfig['reviewedInstallCompletionTimeoutMinutes']
+    if ($rawReviewedInstallCompletionTimeoutMinutes -isnot [int] -and
+        $rawReviewedInstallCompletionTimeoutMinutes -isnot [long]) {
+        throw 'PSADT reviewedInstallCompletionTimeoutMinutes must be an integer from 1 to 60.'
+    }
+    $reviewedInstallCompletionTimeoutMinutes = [int]$rawReviewedInstallCompletionTimeoutMinutes
+    if ($reviewedInstallCompletionTimeoutMinutes -lt 1 -or
+        $reviewedInstallCompletionTimeoutMinutes -gt 60) {
+        throw 'PSADT reviewedInstallCompletionTimeoutMinutes must be an integer from 1 to 60.'
+    }
+}
+
 $reviewedInstallShieldAdministrativeImageConfigured = $false
 $reviewedInstallShieldMsiExpectedFileName = ''
 if ($psadtConfig.Contains('reviewedInstallShieldAdministrativeImage') -and
@@ -2409,9 +2424,35 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     '    }'
                 )
             } else {
-                $lines += @(
-                    "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
-                )
+                if ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
+                    $lines += @(
+                        "    `$installerPath = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
+                        "    `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
+                        '    $installHandle = Start-ADTProcess -FilePath $installerPath -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
+                        '    $nextInstallProgressLog = [DateTime]::UtcNow'
+                        '    while (-not $installHandle.Task.IsCompleted) {'
+                        '        if ([DateTime]::UtcNow -ge $installDeadline) {'
+                        "            throw 'The reviewed vendor installer did not complete within $reviewedInstallCompletionTimeoutMinutes minutes.'"
+                        '        }'
+                        '        if ([DateTime]::UtcNow -ge $nextInstallProgressLog) {'
+                        '            Write-ADTLogEntry -Message "The reviewed vendor installer is still working." -Source ''Install-ADTDeployment'''
+                        '            $nextInstallProgressLog = [DateTime]::UtcNow.AddSeconds(15)'
+                        '        }'
+                        '        Start-Sleep -Seconds 5'
+                        '    }'
+                        '    $installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+                        '    if ($installProcessExitCode -in @(1641, 3010)) {'
+                        '        $script:InstallRebootExitCode = 3010'
+                        '        Write-ADTLogEntry -Message "The reviewed vendor installer requested a reboot with exit code [$installProcessExitCode]." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+                        '    } elseif ($installProcessExitCode -ne 0) {'
+                        '        throw "The reviewed vendor installer exited with code [$installProcessExitCode]."'
+                        '    }'
+                    )
+                } else {
+                    $lines += @(
+                        "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                    )
+                }
             }
         }
     }

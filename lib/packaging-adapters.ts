@@ -8,6 +8,7 @@ interface ApplicationPackagingAdapter {
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedInstallArgumentsOverride?: string;
+  reviewedInstallCompletionTimeoutMinutes?: number;
   reviewedInstallShieldAdministrativeImage?: Readonly<{
     expectedMsiFileName: string;
   }>;
@@ -343,6 +344,29 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'user',
     reviewedInstallArgumentsOverride:
       '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="%ProgramFiles%\\nvm"',
+  },
+  {
+    // G HUB's evergreen bootstrapper can spend several minutes installing
+    // child packages after its silent launcher starts. Keep PSADT alive and
+    // observable for that reviewed window instead of treating the quiet
+    // bootstrapper as stalled. Logitech's registered software-manager command
+    // is interactive and does not remove the product under LocalSystem; close
+    // the documented G HUB process family and invoke the installed updater's
+    // full unattended removal contract while retaining the exact ARP identity
+    // as the authoritative completion signal.
+    wingetId: 'Logitech.GHUB',
+    requiredProcessesToClose: [
+      { name: 'lghub', description: 'Logitech G HUB' },
+      { name: 'lghub_agent', description: 'Logitech G HUB Agent' },
+      { name: 'lghub_updater', description: 'Logitech G HUB Updater' },
+      { name: 'lghub_software_manager', description: 'Logitech G HUB Software Manager' },
+    ],
+    reviewedInstallCompletionTimeoutMinutes: 15,
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles%\\LGHUB\\lghub_updater.exe',
+      arguments: ['--uninstall', '--full'],
+      completionTimeoutMinutes: 10,
+    },
   },
   {
     // Logitech's own removal guidance requires the SetPoint notification-area
@@ -757,6 +781,7 @@ export function hasReviewedApplicationInstallContract(wingetId: string): boolean
     adapter && (
       adapter.reviewedInstallArguments?.some((argument) => argument.trim()) ||
       adapter.reviewedInstallArgumentsOverride?.trim() ||
+      adapter.reviewedInstallCompletionTimeoutMinutes ||
       adapter.reviewedInstallShieldAdministrativeImage
     )
   );
@@ -908,6 +933,7 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedInstallArgumentsOverride &&
+      !config.reviewedInstallCompletionTimeoutMinutes &&
       !config.reviewedInstallShieldAdministrativeImage &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
@@ -924,6 +950,7 @@ export function applyApplicationPackagingAdapter(
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedInstallArgumentsOverride: undefined,
+      reviewedInstallCompletionTimeoutMinutes: undefined,
       reviewedInstallShieldAdministrativeImage: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
@@ -1002,6 +1029,8 @@ export function applyApplicationPackagingAdapter(
     processesToClose,
     reviewedInstallArguments,
     reviewedInstallArgumentsOverride,
+    reviewedInstallCompletionTimeoutMinutes:
+      adapter.reviewedInstallCompletionTimeoutMinutes,
     installCommand: adapter.reviewedInstallShieldAdministrativeImage
       ? undefined
       : config.installCommand,

@@ -204,6 +204,12 @@ export interface PSADTConfig {
   // adapters populate this field; customers cannot supply it directly.
   reviewedInstallArgumentsOverride?: string;
 
+  // Internal completion window for a reviewed silent bootstrapper that keeps
+  // working without producing console output. The generated PSADT package
+  // emits bounded progress heartbeats while it waits, so QA and Intune use the
+  // same observable install lifecycle. Customers cannot supply this directly.
+  reviewedInstallCompletionTimeoutMinutes?: number;
+
   // Internal administrative-image contract for a reviewed InstallShield
   // launcher whose embedded MSI is the only reliable LocalSystem deployment
   // path. The generated package validates the exact MSI filename and its
@@ -360,6 +366,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   uninstallCommand: undefined,
   reviewedInstallArguments: [],
   reviewedInstallArgumentsOverride: undefined,
+  reviewedInstallCompletionTimeoutMinutes: undefined,
   reviewedInstallShieldAdministrativeImage: undefined,
   reviewedUninstallArguments: [],
   reviewedUninstallProcessGuard: undefined,
