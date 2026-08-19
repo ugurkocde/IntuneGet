@@ -165,6 +165,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser',
   },
   {
+    // darktable's official CPack/NSIS installer writes its ARP registration
+    // only after the complete application tree has been extracted. The signed
+    // 5.6.0 package can therefore remain quiet longer than the generic QA
+    // inactivity window even though /S is the correct vendor contract. Keep
+    // the same installer and ARP lifecycle, but use the shared bounded wait so
+    // both QA and customer Intune packages remain observable and fail closed.
+    wingetId: 'darktable.darktable',
+    reviewedInstallCompletionTimeoutMinutes: 10,
+  },
+  {
     // Analog Devices documents this enterprise/server mode for silent SYSTEM
     // deployment. It prevents the MSI from extracting example data into the
     // LocalSystem AppData profile, which otherwise rolls back with exit 1603.

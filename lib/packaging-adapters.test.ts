@@ -143,6 +143,14 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('keeps the darktable NSIS extraction observable within a bounded wait', () => {
+    expect(
+      applyApplicationPackagingAdapter('darktable.darktable', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 10,
+    });
+  });
+
   it('does not extend the blocked Acronis managed-uninstall lifecycle', () => {
     expect(
       applyApplicationPackagingAdapter(

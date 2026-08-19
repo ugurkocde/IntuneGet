@@ -384,6 +384,33 @@ describe('PSADT QA package identity', () => {
     });
   });
 
+  it('binds the bounded darktable installer wait to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'darktable.darktable',
+      displayName: 'darktable',
+      publisher: 'darktable',
+      version: '5.6.0',
+      architecture: 'x64',
+      installerSha256: 'e'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:darktable:darktable',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { silentArgs: string; uninstallCommand: string };
+      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+    };
+
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(10);
+    expect(profile.installer.silentArgs).toBe('/S');
+    expect(profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:darktable:darktable'
+    );
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',
