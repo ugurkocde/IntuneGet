@@ -625,6 +625,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('retries Autodesk Access with the exact ODIS quiet uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'autodesk.autodeskaccess', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '81f443163ffb9f437be3901b44b6da74032032c4',
+      { wingetId: 'Autodesk.AutodeskAccess', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '5569c16d136f464cbc014f40c70645414c601751',

@@ -1287,6 +1287,47 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
+  '837c54ac684d6a3d36a0ad5f14f258f8add540cf': [
+    // Autodesk Access registers the exact ODIS manifest removal command but
+    // omits Autodesk's documented -q switch. Retry through the shared PSADT
+    // packager now that the exact AdODIS signature is made unattended.
+    'Autodesk.AutodeskAccess',
+    // Carry still-unconsumed bounded targets across the atomic pin rollout.
+    // Compatible passes and ineligible apps are filtered before enqueue.
+    'CoreyButler.NVMforWindows',
+    'Logitech.Presentation',
+    'Canonical.Ubuntu.2404',
+    'Daum.PotPlayer',
+    'Autodesk.LicensingService',
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
   '81f443163ffb9f437be3901b44b6da74032032c4': [
     // NVM's official Inno setup requires administrative privileges despite
     // WinGet publishing it as user-scope. Retry it with the reviewed trusted-
