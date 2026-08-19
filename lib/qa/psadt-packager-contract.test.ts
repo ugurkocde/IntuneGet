@@ -1769,6 +1769,25 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('adds the vendor-documented quiet switch to exact Autodesk ODIS uninstall commands', () => {
+    expect(packager).toContain(
+      "$autodeskOdisInstaller = [Environment]::ExpandEnvironmentVariables(''%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe'')"
+    );
+    expect(packager).toContain(
+      "$registeredArgumentText -match ''(?i)(^|\\s)-i\\s+uninstall(\\s|$)''"
+    );
+    expect(packager).toContain(
+      "$registeredArgumentText -match ''(?i)(^|\\s)--trigger_point\\s+system(\\s|$)''"
+    );
+    expect(packager).toContain(
+      "$registeredArgumentText -notmatch ''(?i)(^|\\s)(-q|--silent)(\\s|$)''"
+    );
+    expect(packager).toContain("$additionalUninstallArguments += ''-q''");
+    expect(packager).toContain(
+      'Using the verified Autodesk ODIS silent uninstall switch.'
+    );
+  });
+
   it('uses the PSADT v4.1 process lifecycle for install and uninstall', () => {
     expect(packager).toContain('AppProcessesToClose = $processesArrayStr');
     expect(packager).toContain(
