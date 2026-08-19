@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
+  packagerCommit: '6788c71df2ec0844f829b5abe0f5b154ca3abdb4',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -166,6 +166,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // previously fell back to display-name registration matching. Preserve all
   // compatible passes from the exact-version ARP capture release.
   '82de31f37d7977906153135fde2eb12cf30909c7',
+  // The Visual Studio 2017 lifecycle correction affects only that previously
+  // failing generation. Preserve every compatible pass from the nested MSI
+  // ProductCode release.
+  '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

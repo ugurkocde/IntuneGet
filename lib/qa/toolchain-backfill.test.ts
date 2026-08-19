@@ -680,6 +680,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Visual Studio 2017 only after activating its instance lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'microsoft.visualstudio.2017.enterprise', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
+      { wingetId: 'Microsoft.VisualStudio.2017.Enterprise', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '5569c16d136f464cbc014f40c70645414c601751',

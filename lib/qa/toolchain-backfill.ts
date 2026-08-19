@@ -1287,7 +1287,11 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
-  '63172f3739807b25bbd54b970dc6f56d1cfc2c9d': [
+  '6788c71df2ec0844f829b5abe0f5b154ca3abdb4': [
+    // Visual Studio 2017 was omitted from the shared instance-aware adapter
+    // and fell back to an ARP command that left the product registered. Retry
+    // Enterprise through Microsoft's exact Visual Studio Installer lifecycle.
+    'Microsoft.VisualStudio.2017.Enterprise',
     // BankID is a ZIP with a nested MSI whose exact ProductCode was present
     // in trusted manifest metadata but previously dropped from the canonical
     // uninstall identity. Retry it through the shared QA/customer generator.
