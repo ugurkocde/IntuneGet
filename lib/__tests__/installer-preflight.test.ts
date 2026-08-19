@@ -97,12 +97,51 @@ describe('installer dispatch preflight', () => {
 
   it('keeps user and machine health identities separate', () => {
     expect(createInstallerHealthKey(request)).toBe(
-      '327be777601869688f3f80fe55d2b1f7fe1da11fd7a7352d7c1f0328dfb589bb'
+      '3b7e40af357d2af41613cc5526ad84c5fbaa2d2ce127b6c88b66e014fce7f9bd'
     );
     expect(createInstallerHealthKey(request)).not.toBe(createInstallerHealthKey({
       ...request,
       installScope: 'user',
     }));
+  });
+
+  it('accepts Logitech Presentation user manifest bytes for reviewed SYSTEM execution', async () => {
+    const logitechRequest = {
+      ...request,
+      wingetId: 'Logitech.Presentation',
+      architecture: 'x86',
+      installerUrl: 'https://example.test/logitech-presentation.exe',
+      installerType: 'nullsoft',
+    };
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x86',
+      url: logitechRequest.installerUrl,
+      sha256: expectedSha256,
+      type: 'nullsoft',
+      scope: 'user',
+    }]);
+
+    await expect(enforceInstallerPreflight(logitechRequest)).resolves.toMatchObject({
+      status: 'healthy',
+      source: 'live',
+    });
+    expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still rejects an opposite manifest scope without a reviewed adapter', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: request.installerUrl,
+      sha256: expectedSha256,
+      type: 'exe',
+      scope: 'user',
+    }]);
+
+    await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
+      code: 'MANIFEST_CHANGED',
+      retryable: false,
+    });
+    expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
   });
 
   it('treats WinGet installer aliases as the same executable contract', async () => {

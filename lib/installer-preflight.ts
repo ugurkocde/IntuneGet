@@ -7,13 +7,14 @@ import {
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
 import { normalizeQaInstallerType } from '@/lib/qa/candidate';
+import { resolveApplicationInstallerSelectionScope } from '@/lib/packaging-adapters';
 import type { NormalizedInstaller } from '@/types/winget';
 
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
 const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
-const PREFLIGHT_CACHE_SCHEMA_VERSION = '2';
+const PREFLIGHT_CACHE_SCHEMA_VERSION = '3';
 const LEASE_SECONDS = 240;
 const WAIT_FOR_CLAIM_MS = 240_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -99,6 +100,10 @@ function isHostedRuntime(): boolean {
 }
 
 export function createInstallerHealthKey(input: InstallerPreflightRequest): string {
+  const executionScope = normalizedRequestedScope(input.installScope);
+  const manifestScope = executionScope
+    ? resolveApplicationInstallerSelectionScope(input.wingetId, executionScope)
+    : undefined;
   return createHash('sha256')
     .update([
       PREFLIGHT_CACHE_SCHEMA_VERSION,
@@ -106,11 +111,19 @@ export function createInstallerHealthKey(input: InstallerPreflightRequest): stri
       input.version.trim(),
       (input.architecture || 'x64').trim().toLowerCase(),
       normalizePreflightInstallerType(input.installerType),
-      (input.installScope || '').trim().toLowerCase(),
+      executionScope || '',
+      manifestScope || '',
       input.installerUrl.trim(),
       input.installerSha256.trim().toUpperCase(),
     ].join('\0'))
     .digest('hex');
+}
+
+function normalizedRequestedScope(
+  scope?: InstallerPreflightRequest['installScope']
+): 'machine' | 'user' | undefined {
+  const normalized = scope?.trim().toLowerCase();
+  return normalized === 'machine' || normalized === 'user' ? normalized : undefined;
 }
 
 function normalizePreflightInstallerType(type?: string): string {
@@ -238,7 +251,10 @@ function installerExistsInManifest(
   const expectedHash = input.installerSha256.toUpperCase();
   const requestedArchitecture = (input.architecture || 'x64').toLowerCase();
   const requestedType = normalizePreflightInstallerType(input.installerType);
-  const requestedScope = input.installScope?.toLowerCase();
+  const executionScope = normalizedRequestedScope(input.installScope);
+  const requestedScope = executionScope
+    ? resolveApplicationInstallerSelectionScope(input.wingetId, executionScope)
+    : undefined;
   const requestedUrl = (input.manifestInstallerUrl || input.installerUrl).trim();
 
   return installers.some((installer) => {
