@@ -6,6 +6,7 @@ import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationInstallerSuccessCodes,
   resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
 import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
@@ -885,7 +886,10 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     installerSha256: input.installerSha256,
     sourceInstallerType: input.installerType,
     silentArgs: input.silentSwitches,
-    successCodes: input.installerSuccessCodes,
+    successCodes: resolveApplicationInstallerSuccessCodes(
+      input.wingetId,
+      input.installerSuccessCodes
+    ),
     uninstallCommand,
     installScope,
     nestedInstallerType: input.nestedInstallerType || '',

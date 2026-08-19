@@ -5,6 +5,7 @@ interface ApplicationPackagingAdapter {
   wingetId: string;
   requiredInstallScope?: WingetScope;
   reviewedInstallerSelectionScope?: WingetScope;
+  reviewedInstallerSuccessCodes?: readonly number[];
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedInstallArgumentsOverride?: string;
@@ -697,6 +698,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     uninstallCompletionTimeoutMinutes: 10,
   },
   {
+    // Movavi Photo Focus 1.1.0's signed NSIS installer returns the Windows
+    // ERROR_CANCELLED code (1223) after it has successfully created the exact
+    // product ARP registration. The shared packager still requires that
+    // post-install registry identity before it writes detection evidence, so
+    // a genuine cancellation without an installed product continues to fail.
+    wingetId: 'Movavi.MovaviPhotoFocus',
+    reviewedInstallerSuccessCodes: [1223],
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the
@@ -825,6 +835,31 @@ function applicationPackagingAdapter(
     return POSTGRESQL_PACKAGING_ADAPTER;
   }
   return undefined;
+}
+
+function normalizeInstallerSuccessCodes(
+  successCodes: readonly number[] | undefined
+): number[] {
+  return Array.from(new Set((successCodes || [])
+    .map(Number)
+    .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)))
+    .sort((left, right) => left - right);
+}
+
+/**
+ * Add reviewed vendor exit codes at the final shared packaging boundary.
+ * These codes never replace post-install evidence: the generated PSADT package
+ * must still capture the application's exact installation identity.
+ */
+export function resolveApplicationInstallerSuccessCodes(
+  wingetId: string,
+  successCodes: readonly number[] | undefined
+): number[] {
+  const adapter = applicationPackagingAdapter(wingetId);
+  return normalizeInstallerSuccessCodes([
+    ...(successCodes || []),
+    ...(adapter?.reviewedInstallerSuccessCodes || []),
+  ]);
 }
 
 /**

@@ -10,7 +10,10 @@ import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
 import { enforceInstallerPreflight, InstallerPreflightError } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
-import { resolveApplicationUninstallCommand } from './packaging-adapters';
+import {
+  resolveApplicationInstallerSuccessCodes,
+  resolveApplicationUninstallCommand,
+} from './packaging-adapters';
 import { assertPackagingContract } from './packaging-contract';
 import {
   normalizeQaWorkflowPackageInput,
@@ -209,7 +212,15 @@ export async function triggerPackagingWorkflow(
     installScope: effectiveInputs.installScope,
     sourceType: effectiveInputs.sourceType,
   }, trustedInstallers);
-  inputs = effectiveInputs;
+  inputs = effectiveInputs.sourceType === 'custom'
+    ? effectiveInputs
+    : {
+        ...effectiveInputs,
+        installerSuccessCodes: resolveApplicationInstallerSuccessCodes(
+          effectiveInputs.wingetId,
+          effectiveInputs.installerSuccessCodes
+        ),
+      };
   // Final dispatch boundary: custom callers bypass catalog reconciliation, so
   // they must still prove an unattended install contract before GitHub sees
   // the installer URL or any tenant-scoped packaging request.

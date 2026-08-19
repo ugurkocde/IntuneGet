@@ -5,6 +5,7 @@ import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationInstallerSuccessCodes,
   resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
 import { normalizeQaPsadtConfig } from './package-profile';
@@ -210,7 +211,10 @@ export function buildQaCatalogTestConfig({
     publisher: app.publisher,
     sourceInstallerType,
     silentArgs: normalizedInstaller.silentArgs || '',
-    successCodes: normalizedInstaller.installerSuccessCodes || [],
+    successCodes: resolveApplicationInstallerSuccessCodes(
+      app.wingetId,
+      normalizedInstaller.installerSuccessCodes
+    ),
     productCode,
     scope,
     nestedInstallerType: nestedInstallerType || '',

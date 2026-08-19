@@ -3,11 +3,27 @@ import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationInstallerSuccessCodes,
   resolveApplicationInstallerSelectionScope,
   resolveApplicationUninstallCommand,
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('adds Movavi Photo Focus vendor success code without weakening other apps', () => {
+    expect(resolveApplicationInstallerSuccessCodes(
+      'Movavi.MovaviPhotoFocus',
+      undefined
+    )).toEqual([1223]);
+    expect(resolveApplicationInstallerSuccessCodes(
+      ' movavi.movaviphotofocus ',
+      [3010, 1223]
+    )).toEqual([1223, 3010]);
+    expect(resolveApplicationInstallerSuccessCodes(
+      'Example.App',
+      [3010]
+    )).toEqual([3010]);
+  });
+
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
     expect(resolveApplicationUninstallCommand(
       'Google.Chrome.EXE',

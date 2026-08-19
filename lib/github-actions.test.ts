@@ -122,6 +122,28 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     }));
   });
 
+  it('dispatches reviewed Movavi success codes through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Movavi.MovaviPhotoFocus',
+      displayName: 'Movavi Photo Focus',
+      publisher: 'Movavi',
+      version: '1.1.0',
+      architecture: 'x86',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Movavi Photo Focus',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.installer.successCodes)).toEqual([1223]);
+  });
+
   it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

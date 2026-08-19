@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { buildQaCatalogTestConfig } from './test-config';
 
 describe('buildQaCatalogTestConfig', () => {
+  it('adds the reviewed Movavi success code to catalog QA packaging', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Movavi.MovaviPhotoFocus',
+        name: 'Movavi Photo Focus',
+        publisher: 'Movavi',
+        version: '1.1.0',
+      },
+      manifest: { InstallerType: 'nullsoft' },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'nullsoft',
+        ProductCode: 'Movavi Photo Focus',
+      },
+    });
+
+    expect(config.successCodes).toEqual([1223]);
+  });
+
   it('prefers installer-specific silent switches and product metadata', () => {
     const config = buildQaCatalogTestConfig({
       app: {

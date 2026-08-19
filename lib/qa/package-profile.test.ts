@@ -136,6 +136,26 @@ describe('PSADT QA package identity', () => {
     expect(buildQaPackageIdentity({ ...input, successCodes: [] })).toEqual(baseline);
   });
 
+  it('binds the reviewed Movavi success code to deployment QA identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Movavi.MovaviPhotoFocus',
+      displayName: 'Movavi Photo Focus',
+      publisher: 'Movavi',
+      version: '1.1.0',
+      architecture: 'x86',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Movavi Photo Focus',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { successCodes?: number[] };
+    };
+
+    expect(profile.installer.successCodes).toEqual([1223]);
+  });
+
   it('binds offline dependency installers to the execution profile only when present', () => {
     const baseline = buildQaPackageIdentity(input);
     const dependency = {
