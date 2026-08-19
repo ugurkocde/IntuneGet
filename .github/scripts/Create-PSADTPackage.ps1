@@ -571,13 +571,33 @@ if ($reviewedRegistryInstallEvidenceConfigured -and
     throw 'PSADT reviewedRegistryInstallEvidence requires preserveVendorInstallationOnUninstall.'
 }
 
+function Expand-ReviewedVersionPlaceholder {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value,
+        [Parameter(Mandatory = $true)]
+        [string]$FieldName
+    )
+
+    if (-not $Value.Contains('<VERSION>')) {
+        return $Value
+    }
+    if ([regex]::Matches($Value, '<VERSION>').Count -ne 1 -or
+        $Version -notmatch '^[0-9A-Za-z][0-9A-Za-z._+-]{0,127}$') {
+        throw "PSADT $FieldName contains an invalid version placeholder or package version."
+    }
+    return $Value.Replace('<VERSION>', $Version)
+}
+
 $reviewedManagedInstallDirectory = ''
 if ($psadtConfig.Contains('reviewedManagedInstallDirectory') -and
     $null -ne $psadtConfig['reviewedManagedInstallDirectory']) {
     if ($psadtConfig['reviewedManagedInstallDirectory'] -isnot [string]) {
         throw 'PSADT reviewedManagedInstallDirectory must be a string.'
     }
-    $reviewedManagedInstallDirectory = ([string]$psadtConfig['reviewedManagedInstallDirectory']).Trim()
+    $reviewedManagedInstallDirectory = Expand-ReviewedVersionPlaceholder `
+        -Value ([string]$psadtConfig['reviewedManagedInstallDirectory']).Trim() `
+        -FieldName 'reviewedManagedInstallDirectory'
     $isReviewedMachineManagedDirectory =
         $reviewedManagedInstallDirectory -match '^(?:%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\|%SystemDrive%\\SWSetup\\)[^*?"<>|\x00-\x1f]+$'
     $isReviewedUserDesktopManagedDirectory =
@@ -607,7 +627,9 @@ if ($hasManagedInstallCompletionContract) {
     if ($psadtConfig['reviewedManagedInstallEvidenceFile'] -isnot [string]) {
         throw 'PSADT reviewedManagedInstallEvidenceFile must be a string.'
     }
-    $reviewedManagedInstallEvidenceFile = ([string]$psadtConfig['reviewedManagedInstallEvidenceFile']).Trim()
+    $reviewedManagedInstallEvidenceFile = Expand-ReviewedVersionPlaceholder `
+        -Value ([string]$psadtConfig['reviewedManagedInstallEvidenceFile']).Trim() `
+        -FieldName 'reviewedManagedInstallEvidenceFile'
     if ($reviewedManagedInstallEvidenceFile.Length -gt 260 -or
         $reviewedManagedInstallEvidenceFile -notmatch '^(?:%(?:ProgramW6432|ProgramFiles|ProgramFiles\(x86\))%\\|%SystemDrive%\\SWSetup\\)[^*?"<>|\x00-\x1f]+$' -or
         @($reviewedManagedInstallEvidenceFile -split '\\') -contains '..' -or

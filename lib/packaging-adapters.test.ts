@@ -533,6 +533,22 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('uses ZeeDrive\'s documented no-ARP Intune lifecycle', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'Thinkscape.ZeeDrive',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallArguments: ['COMMAND=Install'],
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles%\\Thinkscape Zee Drive\\<VERSION>',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramFiles%\\Thinkscape Zee Drive\\<VERSION>\\ZeeDrive.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 5,
+    });
+  });
+
   it('adds the vendor-supported LTspice enterprise install mode', () => {
     const adapted = applyApplicationPackagingAdapter(
       'AnalogDevices.LTspice',

@@ -690,6 +690,47 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'expands a reviewed versioned managed-directory lifecycle before validation',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Zee Drive',
+        [],
+        {
+          reviewedManagedInstallDirectory:
+            '%ProgramFiles%\\Thinkscape Zee Drive\\<VERSION>',
+          reviewedManagedInstallEvidenceFile:
+            '%ProgramFiles%\\Thinkscape Zee Drive\\<VERSION>\\ZeeDrive.exe',
+          reviewedManagedInstallCompletionTimeoutMinutes: 5,
+        },
+        [],
+        'Thinkscape.ZeeDrive',
+        'Zee Drive',
+        '68.15.0.0'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\Thinkscape Zee Drive\\68.15.0.0')"
+      );
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\Thinkscape Zee Drive\\68.15.0.0\\ZeeDrive.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        'Remove-Item -LiteralPath $managedInstallDirectory'
+      );
+      expect(generated).not.toContain('<VERSION>');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'verifies and removes the reviewed Tor Browser user Desktop payload',
     () => {
       const generated = generateRegistryUninstallPackage(

@@ -177,6 +177,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallCompletionTimeoutMinutes: 15,
   },
   {
+    // ZeeDrive's official MSI is a command wrapper that deliberately does not
+    // register in Add/Remove Programs. Thinkscape documents COMMAND=Install,
+    // versioned Program Files detection, and direct directory removal for its
+    // Intune lifecycle. Keep that exact no-ARP contract shared by QA and
+    // customer packages instead of attempting to capture dependency ARP noise.
+    wingetId: 'Thinkscape.ZeeDrive',
+    reviewedInstallArguments: ['COMMAND=Install'],
+    reviewedManagedInstallDirectory:
+      '%ProgramFiles%\\Thinkscape Zee Drive\\<VERSION>',
+    reviewedManagedInstallEvidenceFile:
+      '%ProgramFiles%\\Thinkscape Zee Drive\\<VERSION>\\ZeeDrive.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 5,
+  },
+  {
     // Analog Devices documents this enterprise/server mode for silent SYSTEM
     // deployment. It prevents the MSI from extracting example data into the
     // LocalSystem AppData profile, which otherwise rolls back with exit 1603.
