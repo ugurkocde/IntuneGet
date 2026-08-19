@@ -1730,6 +1730,58 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
+  'b42fb5d02883b199e057c466a2cd9a7b86d994d9': [
+    // RMS Client's Burn child can remove its exact registration shortly after
+    // the parent exits. Retry with the reviewed bounded completion window.
+    'Microsoft.RMSClient',
+    // Movavi installs and registers successfully before its signed NSIS
+    // launcher returns 1223. Retry with the evidence-guarded success code.
+    'Movavi.MovaviPhotoFocus',
+    // Carry still-unconsumed bounded targets across the atomic pin rollout.
+    // Compatible passes and ineligible apps are filtered before enqueue.
+    'RedHat.Podman-Desktop',
+    'Docker.DockerDesktopEdge',
+    'Thinkscape.ZeeDrive',
+    'Microsoft.VisualStudio.2017.Enterprise',
+    'FinancialID.BankID',
+    'Apache.OpenOffice',
+    'ArduinoSA.IDE.stable',
+    'Logitech.GHUB',
+    'Autodesk.AutodeskAccess',
+    'CoreyButler.NVMforWindows',
+    'Logitech.Presentation',
+    'Canonical.Ubuntu.2404',
+    'Daum.PotPlayer',
+    'Autodesk.LicensingService',
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {

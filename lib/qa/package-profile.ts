@@ -13,7 +13,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '4918638adf111a664f2589ce79d8aefe79c33936',
+  packagerCommit: 'b42fb5d02883b199e057c466a2cd9a7b86d994d9',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -188,6 +188,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Podman Desktop's all-users NSIS selection affects only that package's
   // failed LocalSystem lifecycle. Preserve every unrelated compatible pass.
   'ab045cb1da3611f91329943fade2263491bb211d',
+  // RMS Client's bounded uninstall wait and Movavi's evidence-guarded vendor
+  // exit code affect only their previously failing lifecycle paths. Preserve
+  // every unrelated compatible pass from the Podman release.
+  '4918638adf111a664f2589ce79d8aefe79c33936',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

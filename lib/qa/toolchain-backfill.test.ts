@@ -64,6 +64,8 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Microsoft.RMSClient',
+      'Movavi.MovaviPhotoFocus',
       'RedHat.Podman-Desktop',
       'PDFsam.PDFsam',
       'Mega.MEGASync',
@@ -89,6 +91,8 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Microsoft.RMSClient',
+        'Movavi.MovaviPhotoFocus',
         'RedHat.Podman-Desktop',
         'PDFsam.PDFsam',
         'Mega.MEGASync',
@@ -112,6 +116,20 @@ describe('QA toolchain targeted retries', () => {
     expect(
       terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
     ).not.toContain('Acronis.CyberProtectHomeOffice');
+  });
+
+  it.each([
+    'Microsoft.RMSClient',
+    'Movavi.MovaviPhotoFocus',
+  ])('retries %s only on the combined lifecycle release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '4918638adf111a664f2589ce79d8aefe79c33936',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
   });
 
   it('does not repeat the consumed .NET Framework retry in the Sonos releases', () => {
