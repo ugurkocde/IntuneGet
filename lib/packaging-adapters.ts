@@ -266,6 +266,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArgumentsOverride: '/S /MULTIUSER',
   },
   {
+    // Podman Desktop uses Electron Builder's assisted NSIS installer without
+    // a per-machine default. A bare /S therefore selects the invoking account,
+    // which installs below LocalSystem's profile and leaves an unusable vendor
+    // uninstall path. Electron Builder's /allusers contract selects the
+    // machine-wide Program Files/HKLM lifecycle required by Intune. Preserve
+    // that scope on removal as well for both QA and customer packages.
+    wingetId: 'RedHat.Podman-Desktop',
+    reviewedInstallArgumentsOverride: '/S /allusers',
+    reviewedUninstallArguments: ['/allusers', '/S'],
+  },
+  {
     // Google documents that Drive for desktop must be removed through its
     // versioned registered uninstaller with both --silent and --force_stop.
     // The latter is required whenever Drive is running; without it the helper
