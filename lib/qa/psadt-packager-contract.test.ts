@@ -35,7 +35,7 @@ const canRunWindowsPowerShellPackager =
   ]).status === 0;
 
 function generateRegistryUninstallPackage(
-  installerType: 'exe' | 'inno' | 'burn',
+  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft',
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
   psadtConfig: unknown = {},
@@ -1430,6 +1430,95 @@ $ambiguous = Select-VersionSuffixed @(
         Ambiguous: 2,
       });
     }
+  );
+
+  it('selects only one visible strict-name-prefix ARP entry with the exact requested version', () => {
+    expect(packager).toContain('$versionAlignedPrefixMatches = @($changedApplications');
+    expect(packager).toContain(
+      "$candidateComparableName.StartsWith($configuredUninstallComparableName + '' '', [System.StringComparison]::OrdinalIgnoreCase)"
+    );
+    expect(packager).toContain(
+      'if ($versionAlignedPrefixMatches.Count -eq 1) { $selectedApplications = $versionAlignedPrefixMatches }'
+    );
+    expect(packager.indexOf('$versionAlignedPrefixMatches')).toBeLessThan(
+      packager.indexOf('$bundleCandidates')
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'accepts the OpenOffice marketing-name suffix without accepting helpers, hidden entries, version drift, or ambiguity',
+    () => {
+      const result = spawnSync(
+        'pwsh',
+        [
+          '-NoProfile',
+          '-Command',
+          `$configuredName = 'OpenOffice'
+$configuredVersion = '4.116.9816'
+function Select-VersionAlignedPrefix([object[]]$Applications) {
+  return @($Applications | Where-Object {
+    $systemComponentProperty = $_.PSObject.Properties['SystemComponent']
+    $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value
+    $candidateName = ([string]$_.DisplayName).Trim()
+    $hasConfiguredNameBoundary = (
+      $candidateName.StartsWith($configuredName + ' ', [System.StringComparison]::OrdinalIgnoreCase) -or
+      $candidateName.StartsWith($configuredName + '(', [System.StringComparison]::OrdinalIgnoreCase)
+    )
+    $isVisibleApplication -and $hasConfiguredNameBoundary -and
+      [string]$_.DisplayVersion -eq $configuredVersion
+  })
+}
+$oneMatch = Select-VersionAlignedPrefix @(
+  [pscustomobject]@{ DisplayName = 'OpenOffice 4.1.16'; DisplayVersion = '4.116.9816'; SystemComponent = 0 },
+  [pscustomobject]@{ DisplayName = 'OpenOfficeConnector'; DisplayVersion = '4.116.9816'; SystemComponent = 0 },
+  [pscustomobject]@{ DisplayName = 'Microsoft Visual C++ Runtime'; DisplayVersion = '4.116.9816'; SystemComponent = 0 },
+  [pscustomobject]@{ DisplayName = 'OpenOffice Helper'; DisplayVersion = '4.116.9816'; SystemComponent = 1 },
+  [pscustomobject]@{ DisplayName = 'OpenOffice 4.1.15'; DisplayVersion = '4.115.9815'; SystemComponent = 0 }
+)
+$wrongVersion = Select-VersionAlignedPrefix @(
+  [pscustomobject]@{ DisplayName = 'OpenOffice 4.1.16'; DisplayVersion = '4.115.9815'; SystemComponent = 0 }
+)
+$ambiguous = Select-VersionAlignedPrefix @(
+  [pscustomobject]@{ DisplayName = 'OpenOffice 4.1.16'; DisplayVersion = '4.116.9816'; SystemComponent = 0 },
+  [pscustomobject]@{ DisplayName = 'OpenOffice (x86)'; DisplayVersion = '4.116.9816'; SystemComponent = 0 }
+)
+[pscustomobject]@{ OneMatch = @($oneMatch).Count; WrongVersion = @($wrongVersion).Count; Ambiguous = @($ambiguous).Count } | ConvertTo-Json -Compress`,
+        ],
+        { encoding: 'utf8' }
+      );
+
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual({
+        OneMatch: 1,
+        WrongVersion: 0,
+        Ambiguous: 2,
+      });
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits the version-aligned prefix capture for the OpenOffice Nullsoft-to-MSI lifecycle',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        'Apache OpenOffice',
+        [],
+        {},
+        [],
+        'Apache.OpenOffice',
+        'OpenOffice',
+        '4.116.9816',
+        'REGISTRY_UNINSTALL:OpenOffice',
+        '/S /GUILEVEL=qn /PARAM1="/norestart"'
+      );
+
+      expect(generated).toContain("$configuredUninstallDisplayName = 'OpenOffice'");
+      expect(generated).toContain('$versionAlignedPrefixMatches = @($changedApplications');
+      expect(generated).toContain(
+        'if ($versionAlignedPrefixMatches.Count -eq 1) { $selectedApplications = $versionAlignedPrefixMatches }'
+      );
+    },
+    30_000
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
