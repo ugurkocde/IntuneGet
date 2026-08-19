@@ -147,7 +147,7 @@ describe('application packaging adapters', () => {
     expect(
       applyApplicationPackagingAdapter('darktable.darktable', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
-      reviewedInstallCompletionTimeoutMinutes: 10,
+      reviewedInstallCompletionTimeoutMinutes: 15,
     });
   });
 

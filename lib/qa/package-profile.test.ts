@@ -404,7 +404,7 @@ describe('PSADT QA package identity', () => {
       psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
     };
 
-    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(10);
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
     expect(profile.installer.silentArgs).toBe('/S');
     expect(profile.installer.uninstallCommand).toBe(
       'REGISTRY_UNINSTALL_KEY:darktable:darktable'

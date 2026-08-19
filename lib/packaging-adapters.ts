@@ -168,11 +168,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // darktable's official CPack/NSIS installer writes its ARP registration
     // only after the complete application tree has been extracted. The signed
     // 5.6.0 package can therefore remain quiet longer than the generic QA
-    // inactivity window even though /S is the correct vendor contract. Keep
-    // the same installer and ARP lifecycle, but use the shared bounded wait so
-    // both QA and customer Intune packages remain observable and fail closed.
+    // inactivity window even though /S is the correct vendor contract. A
+    // clean 8 GB VM extracted 3,071 files without reaching ARP registration
+    // inside ten minutes, so use the reviewed long-installer ceiling. Keep the
+    // same installer and ARP lifecycle, while the shared wait makes both QA
+    // and customer Intune packages observable and fail closed.
     wingetId: 'darktable.darktable',
-    reviewedInstallCompletionTimeoutMinutes: 10,
+    reviewedInstallCompletionTimeoutMinutes: 15,
   },
   {
     // Analog Devices documents this enterprise/server mode for silent SYSTEM
