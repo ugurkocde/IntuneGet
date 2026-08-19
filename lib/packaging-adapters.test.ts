@@ -453,6 +453,12 @@ describe('application packaging adapters', () => {
     ).toEqual(['/uninstall', '/quiet', '/norestart']);
     expect(
       applyApplicationPackagingAdapter(
+        'Microsoft.RMSClient',
+        DEFAULT_PSADT_CONFIG
+      ).uninstallCompletionTimeoutMinutes
+    ).toBe(10);
+    expect(
+      applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2022.BuildTools',
         DEFAULT_PSADT_CONFIG
       )

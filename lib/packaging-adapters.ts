@@ -687,6 +687,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/uninstall', '/quiet', '/norestart'],
   },
   {
+    // The RMS client uses a Burn bootstrapper whose uninstall parent exits
+    // before the bundle registration is removed. The default five-minute
+    // registry-aware completion window can expire even though the vendor child
+    // process finishes successfully shortly afterward. Keep the exact
+    // registration check authoritative, but allow this reviewed lifecycle the
+    // bounded time it needs in both QA and customer deployments.
+    wingetId: 'Microsoft.RMSClient',
+    uninstallCompletionTimeoutMinutes: 10,
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the
