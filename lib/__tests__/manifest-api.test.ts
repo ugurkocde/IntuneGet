@@ -129,6 +129,49 @@ describe('normalizeInstaller', () => {
     expect(result.scope).toBe('user');
   });
 
+  it('enforces declared machine scope for a dual-purpose MSI package', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x64',
+      InstallerUrl: 'https://example.com/dual-purpose.msi',
+      InstallerSha256: 'abc123',
+      InstallerType: 'wix',
+      Scope: 'machine',
+    };
+
+    expect(normalizeInstaller(installer).silentArgs).toBe(
+      '/qn /norestart ALLUSERS=1'
+    );
+  });
+
+  it('does not override a manifest-owned MSI ALLUSERS contract', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x64',
+      InstallerUrl: 'https://example.com/dual-purpose.msi',
+      InstallerSha256: 'abc123',
+      InstallerType: 'msi',
+      Scope: 'machine',
+      InstallerSwitches: {
+        Custom: 'ALLUSERS=2 MSIINSTALLPERUSER=""',
+      },
+    };
+
+    expect(normalizeInstaller(installer).silentArgs).toBe(
+      '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=""'
+    );
+  });
+
+  it('keeps user-scope MSI arguments unchanged', () => {
+    const installer: WingetInstaller = {
+      Architecture: 'x64',
+      InstallerUrl: 'https://example.com/per-user.msi',
+      InstallerSha256: 'abc123',
+      InstallerType: 'msi',
+      Scope: 'user',
+    };
+
+    expect(normalizeInstaller(installer).silentArgs).toBe('/qn /norestart');
+  });
+
   it('should include productCode for MSI installers', () => {
     const installer: WingetInstaller = {
       Architecture: 'x64',

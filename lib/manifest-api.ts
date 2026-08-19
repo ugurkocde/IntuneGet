@@ -797,6 +797,33 @@ function appendRequiredInstallLocation(
 }
 
 /**
+ * Preserve WinGet's declared machine scope when an MSI/WiX package is
+ * authored as a dual-purpose installer. Such packages commonly default to
+ * ALLUSERS=2 plus MSIINSTALLPERUSER=1, which selects a per-user installation
+ * unless the command line explicitly requests the machine context.
+ *
+ * Do not replace a manifest-owned ALLUSERS value. A publisher may use a
+ * reviewed dual-purpose command (for example ALLUSERS=2 together with an
+ * empty MSIINSTALLPERUSER value), and the manifest remains authoritative in
+ * that case.
+ */
+function appendMachineScopeMsiProperty(
+  silentArgs: string,
+  installer: WingetInstaller,
+  effectiveType: WingetInstallerType
+): string {
+  if (
+    installer.Scope !== 'machine' ||
+    !['msi', 'wix'].includes(effectiveType) ||
+    /(?:^|\s)ALLUSERS\s*=/i.test(silentArgs)
+  ) {
+    return silentArgs;
+  }
+
+  return silentArgs ? `${silentArgs} ALLUSERS=1` : 'ALLUSERS=1';
+}
+
+/**
  * Normalize installer to standard format
  */
 export function normalizeInstaller(installer: WingetInstaller): NormalizedInstaller {
@@ -818,6 +845,7 @@ export function normalizeInstaller(installer: WingetInstaller): NormalizedInstal
   }
 
   silentArgs = appendCustomSwitch(silentArgs, installer.InstallerSwitches?.Custom);
+  silentArgs = appendMachineScopeMsiProperty(silentArgs, installer, effectiveType);
   silentArgs = appendRequiredInstallLocation(silentArgs, installer);
 
   // Map manifest package dependencies (PascalCase) to the normalized shape

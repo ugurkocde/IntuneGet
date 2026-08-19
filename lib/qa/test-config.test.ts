@@ -156,6 +156,32 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
+  it('preserves the WinGet machine scope for Arduino-style dual-purpose MSI packages', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'ArduinoSA.IDE.stable',
+        name: 'Arduino IDE',
+        publisher: 'ArduinoSA',
+        version: '2.3.10',
+      },
+      manifest: { InstallerType: 'wix' },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'wix',
+        Scope: 'machine',
+        ProductCode: '{2512FA64-8592-4C98-8430-9262623F95F0}',
+      },
+    });
+
+    expect(config).toMatchObject({
+      scope: 'machine',
+      silentArgs: '/qn /norestart ALLUSERS=1',
+      productCode: '{2512FA64-8592-4C98-8430-9262623F95F0}',
+      uninstallCommand:
+        'msiexec /x "{2512FA64-8592-4C98-8430-9262623F95F0}" /qn /norestart',
+    });
+  });
+
   it('preserves Vivaldi-style root silent and installer custom switches', () => {
     const config = buildQaCatalogTestConfig({
       app: {
