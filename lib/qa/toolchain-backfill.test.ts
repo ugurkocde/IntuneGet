@@ -65,6 +65,7 @@ describe('QA toolchain targeted retries', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
       'Microsoft.RMSClient',
+      'SoftwareOK.DesktopOK',
       'Movavi.MovaviPhotoFocus',
       'RedHat.Podman-Desktop',
       'PDFsam.PDFsam',
@@ -92,6 +93,7 @@ describe('QA toolchain targeted retries', () => {
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
         'Microsoft.RMSClient',
+        'SoftwareOK.DesktopOK',
         'Movavi.MovaviPhotoFocus',
         'RedHat.Podman-Desktop',
         'PDFsam.PDFsam',
@@ -129,6 +131,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '4918638adf111a664f2589ce79d8aefe79c33936',
       { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries DesktopOK only after activating its exact silent removal command', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'softwareok.desktopok', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0a3741207b9fbab73f108b0b6f214ab9d2ffedfa',
+      { wingetId: 'SoftwareOK.DesktopOK', status: 'failed' }
     )).toBe(false);
   });
 

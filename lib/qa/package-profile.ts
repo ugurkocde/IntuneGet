@@ -13,7 +13,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b42fb5d02883b199e057c466a2cd9a7b86d994d9',
+  packagerCommit: '4bc4126f8991da9facd520d0bc213a7dd3ebbf5c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -192,6 +192,12 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // exit code affect only their previously failing lifecycle paths. Preserve
   // every unrelated compatible pass from the Podman release.
   '4918638adf111a664f2589ce79d8aefe79c33936',
+  // RMS Client's reviewed timeout and Movavi's guarded success code affect
+  // only those two previously failing profiles. Preserve every unrelated pass.
+  'b42fb5d02883b199e057c466a2cd9a7b86d994d9',
+  // Burn-labeled packages now prefer an exact captured MSI identity. Existing
+  // passes whose profile did not exercise that failure path remain compatible.
+  '0a3741207b9fbab73f108b0b6f214ab9d2ffedfa',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
