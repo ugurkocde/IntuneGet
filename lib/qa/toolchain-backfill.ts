@@ -1287,6 +1287,49 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
+  '7b2938c853d9a799ac76957bd122c5c7eb5406f5': [
+    // G HUB's evergreen bootstrapper can remain active without console output,
+    // and its registered bare software-manager command does not remove the
+    // product under LocalSystem. Retry the exact failed customer-requested
+    // package with the observable install and full silent removal adapter.
+    'Logitech.GHUB',
+    // Carry still-unconsumed bounded targets across the atomic pin rollout.
+    // Compatible passes and ineligible apps are filtered before enqueue.
+    'Autodesk.AutodeskAccess',
+    'CoreyButler.NVMforWindows',
+    'Logitech.Presentation',
+    'Canonical.Ubuntu.2404',
+    'Daum.PotPlayer',
+    'Autodesk.LicensingService',
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
   '837c54ac684d6a3d36a0ad5f14f258f8add540cf': [
     // Autodesk Access registers the exact ODIS manifest removal command but
     // omits Autodesk's documented -q switch. Retry through the shared PSADT
