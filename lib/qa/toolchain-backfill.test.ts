@@ -162,6 +162,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('retries ZeeDrive with its reviewed no-ARP managed lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'thinkscape.zeedrive', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '20546b8280874ba955b8d14182ad69bde8eacb58',
+      { wingetId: 'Thinkscape.ZeeDrive', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the Office Deployment Tool managed lifecycle retry scoped to its release', () => {
     const wingetId = 'Microsoft.OfficeDeploymentTool';
     expect(shouldRetryTerminalToolchainCandidate(
