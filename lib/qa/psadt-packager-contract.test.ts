@@ -1762,6 +1762,15 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   it('prefers a registered Burn helper and keeps the packaged fallback for disposable caches', () => {
     expect(packager).toContain("if ($originalInstallerType -eq 'burn')");
     expect(packager).toContain(
+      '$capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)'
+    );
+    expect(packager).toContain(
+      'The Burn-labeled package registered Windows Installer product [$capturedMsiProductCode]; executing its exact MSI uninstall.'
+    );
+    expect(packager).toContain(
+      "Start-ADTMsiProcess -Action ''Uninstall'' -ProductCode $capturedMsiProductCode"
+    );
+    expect(packager).toContain(
       '[string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })'
     );
     expect(packager).toContain(
@@ -2202,7 +2211,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       'Waiting for Burn uninstall registration [$registeredUninstallRegistryKey] to be removed.'
     );
     expect(packager).toContain(
-      'The Burn uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline.'
+      'The captured Burn/MSI uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline.'
     );
     expect(packager).toContain(
       'The Burn uninstaller requested a reboot with exit code [$uninstallProcessExitCode].'
