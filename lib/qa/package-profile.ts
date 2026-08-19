@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '4537454fe9f0f942d59a7b748505b2318cf13a6c',
+  packagerCommit: '7c74dc4412c3e6834da9935cc74ab8371a7ed71f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -154,6 +154,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // package's previously failing UAC path. Preserve every compatible pass
   // from the Appx provisioning heartbeat release.
   '7a8401469e353172b652259e731aa505cf8067bd',
+  // Machine-scope normalization changes only MSI/WiX profiles that did not
+  // already declare an ALLUSERS contract. The canonical silent arguments
+  // invalidate those affected profiles while preserving unrelated passes.
+  '4537454fe9f0f942d59a7b748505b2318cf13a6c',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

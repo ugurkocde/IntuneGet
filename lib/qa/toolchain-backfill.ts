@@ -1287,7 +1287,11 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
-  '4537454fe9f0f942d59a7b748505b2318cf13a6c': [
+  '7c74dc4412c3e6834da9935cc74ab8371a7ed71f': [
+    // Arduino IDE's dual-purpose MSI defaults to per-user installation even
+    // though WinGet declares this installer machine-scope. Retry it now that
+    // the shared normalizer explicitly carries that scope into MSI arguments.
+    'ArduinoSA.IDE.stable',
     // G HUB's evergreen bootstrapper can remain active without console output,
     // and its registered bare software-manager command does not remove the
     // product under LocalSystem. Retry the exact failed customer-requested
