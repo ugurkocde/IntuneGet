@@ -476,6 +476,27 @@ describe('application packaging adapters', () => {
     });
     expect(
       applyApplicationPackagingAdapter(
+        'Microsoft.VisualStudio.2017.Enterprise',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\Enterprise',
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\Enterprise',
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    });
+    expect(
+      applyApplicationPackagingAdapter(
         'Microsoft.VisualStudio.2019.BuildTools',
         DEFAULT_PSADT_CONFIG
       )

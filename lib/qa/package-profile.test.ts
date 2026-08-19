@@ -494,6 +494,46 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds the Visual Studio 2017 instance lifecycle to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.VisualStudio.2017.Enterprise',
+      displayName: 'Visual Studio Enterprise 2017',
+      publisher: 'Microsoft',
+      version: '15.9.70',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--quiet --wait',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Visual Studio Enterprise 2017',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedPath =
+      '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\Enterprise';
+    const expectedConfig = {
+      reviewedManagedInstallDirectory: expectedPath,
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          expectedPath,
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+  });
+
   it('binds the Visual Studio 2019 instance lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.VisualStudio.2019.BuildTools',

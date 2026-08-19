@@ -69,6 +69,16 @@ const VISUAL_STUDIO_MANAGED_INSTALL_PATHS = {
     '%ProgramFiles%\\Microsoft Visual Studio\\18\\Enterprise',
   'Microsoft.VisualStudio.Professional':
     '%ProgramFiles%\\Microsoft Visual Studio\\18\\Professional',
+  // Visual Studio 2017 and 2019 are 32-bit products and use the versioned
+  // Program Files (x86) instance root on 64-bit Windows.
+  'Microsoft.VisualStudio.2017.BuildTools':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\BuildTools',
+  'Microsoft.VisualStudio.2017.Community':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\Community',
+  'Microsoft.VisualStudio.2017.Enterprise':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\Enterprise',
+  'Microsoft.VisualStudio.2017.Professional':
+    '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2017\\Professional',
   'Microsoft.VisualStudio.2019.BuildTools':
     '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\BuildTools',
   'Microsoft.VisualStudio.2019.Community':
