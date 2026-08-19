@@ -332,6 +332,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArgumentsOverride: '/S /U:0 /A:0',
   },
   {
+    // WinGet publishes NVM for Windows as a user-scope Inno package whose own
+    // setup source requires administrative privileges and writes machine-wide
+    // environment values. A standard Intune user cannot satisfy the vendor's
+    // self-elevation prompt. Keep selecting the trusted user-scoped bytes, but
+    // execute the managed package as LocalSystem and place the payload in a
+    // deterministic machine directory instead of the SYSTEM profile.
+    wingetId: 'CoreyButler.NVMforWindows',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+    reviewedInstallArgumentsOverride:
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="%ProgramFiles%\\nvm"',
+  },
+  {
     // Logitech's own removal guidance requires the SetPoint notification-area
     // client to be exited first. Under non-interactive LocalSystem the generic
     // NSIS /S uninstaller otherwise removes part of the product but leaves the

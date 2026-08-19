@@ -164,6 +164,36 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.item.installCommand).toBe('"logitech-presentation.exe" /S');
   });
 
+  it('selects NVM user bytes for reviewed LocalSystem execution', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x86',
+      url: 'https://example.test/nvm-setup.exe',
+      sha256,
+      type: 'inno',
+      scope: 'user',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      productCode: '40078385-F676-4C61-9A9C-F9028599D6D3_is1',
+    } satisfies NormalizedInstaller]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'CoreyButler.NVMforWindows',
+      displayName: 'NVM for Windows',
+      version: '1.2.2',
+      architecture: 'x86',
+      installScope: 'user',
+      installerUrl: 'https://example.test/nvm-setup.exe',
+      installCommand: '"nvm-setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:40078385-F676-4C61-9A9C-F9028599D6D3_is1:NVM for Windows',
+    }));
+
+    expect(reconciled.item.installScope).toBe('machine');
+    expect(reconciled.item.installerUrl).toBe('https://example.test/nvm-setup.exe');
+    expect(reconciled.item.installCommand).toBe(
+      '"nvm-setup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+    );
+  });
+
   it('preserves explicit PSADT command overrides', async () => {
     const reconciled = await reconcileCatalogInstaller(operaItem({
       psadtConfig: {

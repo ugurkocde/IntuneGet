@@ -119,6 +119,22 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('runs NVM for Windows elevated from a deterministic machine directory', () => {
+    expect(resolveApplicationInstallScope('CoreyButler.NVMforWindows', 'user')).toBe(
+      'machine'
+    );
+    expect(resolveApplicationInstallerSelectionScope(
+      'CoreyButler.NVMforWindows',
+      'machine'
+    )).toBe('user');
+    expect(
+      applyApplicationPackagingAdapter('CoreyButler.NVMforWindows', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedInstallArgumentsOverride:
+        '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="%ProgramFiles%\\nvm"',
+    });
+  });
+
   it('models Tor Browser as the vendor-documented extracted user folder', () => {
     expect(
       applyApplicationPackagingAdapter('TorProject.TorBrowser', DEFAULT_PSADT_CONFIG)

@@ -343,6 +343,39 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'CoreyButler.NVMforWindows',
+      displayName: 'NVM for Windows',
+      publisher: 'CoreyButler',
+      version: '1.2.2',
+      architecture: 'x86',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:40078385-F676-4C61-9A9C-F9028599D6D3_is1:NVM for Windows',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="%ProgramFiles%\\nvm"'
+    );
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\CoreyButler_NVMforWindows',
+      }),
+    ]);
+  });
+
   it('binds the reviewed Google Chrome EXE ARP identity to customer packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Google.Chrome.EXE',

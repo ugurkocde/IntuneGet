@@ -1043,6 +1043,26 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'expands environment variables in a reviewed Inno install directory override',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'inno',
+        'NVM for Windows',
+        [],
+        {
+          reviewedInstallArgumentsOverride:
+            '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="%ProgramFiles%\\nvm"',
+        }
+      );
+
+      expect(generated).toContain(
+        "$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=\"%ProgramFiles%\\nvm\"')"
+      );
+      expect(generated).toContain('-ArgumentList $effectiveInstallerArguments');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'creates and validates a reviewed InstallShield administrative image instead of installing the launcher',
     () => {
       const productCode = '{6FB7DAEC-5DAD-491E-9951-4684423F291C}';

@@ -128,6 +128,29 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts NVM user manifest bytes for reviewed SYSTEM execution', async () => {
+    const nvmRequest = {
+      ...request,
+      wingetId: 'CoreyButler.NVMforWindows',
+      architecture: 'x86',
+      installerUrl: 'https://example.test/nvm-setup.exe',
+      installerType: 'inno',
+    };
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x86',
+      url: nvmRequest.installerUrl,
+      sha256: expectedSha256,
+      type: 'inno',
+      scope: 'user',
+    }]);
+
+    await expect(enforceInstallerPreflight(nvmRequest)).resolves.toMatchObject({
+      status: 'healthy',
+      source: 'live',
+    });
+    expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
   it('still rejects an opposite manifest scope without a reviewed adapter', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
