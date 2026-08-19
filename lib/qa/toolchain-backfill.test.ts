@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'AvaCC.AvaDesktop',
       'Microsoft.RMSClient',
       'SoftwareOK.DesktopOK',
       'Movavi.MovaviPhotoFocus',

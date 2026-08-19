@@ -13,7 +13,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '4bc4126f8991da9facd520d0bc213a7dd3ebbf5c',
+  packagerCommit: 'f79b14647328d39bca04dada822a07f70573aa49',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -198,6 +198,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Burn-labeled packages now prefer an exact captured MSI identity. Existing
   // passes whose profile did not exercise that failure path remain compatible.
   '0a3741207b9fbab73f108b0b6f214ab9d2ffedfa',
+  // DesktopOK and Ava Desktop now use their actual vendor installation scopes.
+  // Every unrelated passing execution profile remains compatible.
+  '4bc4126f8991da9facd520d0bc213a7dd3ebbf5c',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
