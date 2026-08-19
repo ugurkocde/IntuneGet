@@ -1873,8 +1873,9 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       );
 
       expect(generated).toContain(
-        'Start-ADTProcess -FilePath $installerPath -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
+        "Start-ADTProcess -FilePath $installerPath -ArgumentList '--silent' -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
       );
+      expect(generated).not.toContain('-ArgumentList $installerArgumentList');
       expect(generated).toContain(
         'Write-ADTLogEntry -Message "The reviewed vendor installer is still working."'
       );

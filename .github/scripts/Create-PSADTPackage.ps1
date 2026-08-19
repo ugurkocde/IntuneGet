@@ -2428,7 +2428,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     $lines += @(
                         "    `$installerPath = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
                         "    `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
-                        '    $installHandle = Start-ADTProcess -FilePath $installerPath -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
+                        "    `$installHandle = Start-ADTProcess -FilePath `$installerPath -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
                         '    $nextInstallProgressLog = [DateTime]::UtcNow'
                         '    while (-not $installHandle.Task.IsCompleted) {'
                         '        if ([DateTime]::UtcNow -ge $installDeadline) {'
