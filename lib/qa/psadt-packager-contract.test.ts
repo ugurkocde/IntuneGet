@@ -1760,7 +1760,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   });
 
   it('prefers a registered Burn helper and keeps the packaged fallback for disposable caches', () => {
-    expect(packager).toContain("if ($originalInstallerType -eq 'burn')");
+    expect(packager).toContain("if ($registeredInstallerTypeLower -eq 'burn')");
     expect(packager).toContain(
       '$capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)'
     );
@@ -1831,6 +1831,27 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       }
     }
   );
+
+  it('uses the effective registered engine for archived executable-wrapper disambiguation', () => {
+    expect(packager).toContain(
+      "if ($registeredInstallerTypeLower -in @('burn', 'exe'))"
+    );
+    expect(packager).toContain(
+      "if ($registeredInstallerTypeLower -eq 'burn')"
+    );
+    expect(packager).not.toContain(
+      "if ($originalInstallerType -in @('burn', 'exe'))"
+    );
+    expect(hostedPackager).toContain(
+      "if ($selectedApplications.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe'))"
+    );
+    expect(hostedPackager).toContain(
+      "if ($installedApps.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe'))"
+    );
+    expect(hostedPackager).toContain(
+      "if (registeredInstallerType === 'burn')"
+    );
+  });
 
   it.runIf(canRunWindowsPowerShellPackager)(
     'does not emit executable-wrapper duplicate-entry narrowing for native installer packages',

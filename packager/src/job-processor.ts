@@ -1124,6 +1124,11 @@ ${steps}
     const identity = this.getRegistryUninstallIdentity(job);
     if (identity) {
       const escapedPublisher = job.publisher.replace(/'/g, "''");
+      const installerType = job.installer_type.toLowerCase();
+      const nestedInstaller = this.getNestedInstaller(job);
+      const registeredInstallerType = installerType === 'zip' && nestedInstaller.type
+        ? nestedInstaller.type.toLowerCase()
+        : installerType;
       return `
     ## Capture and verify the exact uninstall identity observed for this installation.
     $selectedApplications = @()
@@ -1207,9 +1212,9 @@ ${steps}
             })
             if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }
         }
-        if ($selectedApplications.Count -gt 1 -and '${job.installer_type.toLowerCase()}' -eq 'burn') {
-            # A Burn bundle and its chained MSI can intentionally share the same ARP display name.
-            # Narrow only the already identity-matched set to its single non-MSI bundle entry.
+        if ($selectedApplications.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe')) {
+            # A top-level executable wrapper and its chained MSI can intentionally share the same ARP display name.
+            # Narrow only the already identity-matched set to its single visible non-MSI wrapper entry.
             $bundleCandidates = @($selectedApplications | Where-Object {
                 $systemComponentProperty = $_.PSObject.Properties['SystemComponent']
                 $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value
@@ -1217,7 +1222,7 @@ ${steps}
             })
             if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }
         }
-        if ($selectedApplications.Count -eq 0 -and '${job.installer_type.toLowerCase()}' -eq 'burn') {
+        if ($selectedApplications.Count -eq 0 -and '${registeredInstallerType}' -in @('burn', 'exe')) {
             $bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })
             if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }
         }
@@ -1644,13 +1649,23 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         })
         if ($versionedMatches.Count -eq 1) { $installedApps = $versionedMatches }
     }
+    if ($installedApps.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe')) {
+        # Recover a missing marker only when one exact, visible top-level wrapper is distinguishable
+        # from chained MSI registrations with the same display name. Multiple wrappers remain fail-closed.
+        $topLevelWrapperMatches = @($installedApps | Where-Object {
+            $systemComponentProperty = $_.PSObject.Properties['SystemComponent']
+            $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value
+            $isVisibleApplication -and -not $_.WindowsInstaller
+        })
+        if ($topLevelWrapperMatches.Count -eq 1) { $installedApps = $topLevelWrapperMatches }
+    }
     if ($installedApps.Count -ne 1) {
         throw "Could not find one exact vendor uninstall entry. Found $($installedApps.Count); refusing broad removal."
     }
     $registeredApplication = $installedApps[0]
     $registeredUninstallRegistryKey = [string]$registeredApplication.PSChildName`;
 
-      if (installerType === 'burn') {
+      if (registeredInstallerType === 'burn') {
         return `${selectionBlock}
     $registeredUninstallProperty = if (-not [string]::IsNullOrWhiteSpace($registeredApplication.QuietUninstallStringFilePath)) {
         'QuietUninstallString'

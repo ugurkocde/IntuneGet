@@ -2661,7 +2661,7 @@ if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
     # This is a packager-time decision. Do not emit $originalInstallerType into the
     # generated deployment script: that variable exists only in this generator and
     # StrictMode would turn the fallback check into a post-install 60001 failure.
-    if ($originalInstallerType -in @('burn', 'exe')) {
+    if ($registeredInstallerTypeLower -in @('burn', 'exe')) {
         $lines += @(
             '        if ($selectedApplications.Count -gt 1) {'
             '            # A top-level executable wrapper and its chained MSI can intentionally share the same ARP display name.'
@@ -3035,7 +3035,7 @@ if ($useManagedDirectoryLifecycle) {
         '        }'
         '    }'
     )
-    if ($originalInstallerType -in @('burn', 'exe')) {
+    if ($registeredInstallerTypeLower -in @('burn', 'exe')) {
         $lines += @(
             '    if ($installedApps.Count -gt 1) {'
             '        # Recover a missing marker only when one exact, visible top-level wrapper is distinguishable'
@@ -3055,7 +3055,7 @@ if ($useManagedDirectoryLifecycle) {
         '    }'
         '    Write-ADTLogEntry -Message "Found exact vendor registry entry [$($installedApps[0].DisplayName)], uninstalling..." -Source ''Uninstall-ADTDeployment'''
     )
-    if ($originalInstallerType -eq 'burn') {
+    if ($registeredInstallerTypeLower -eq 'burn') {
         $lines += @(
             '    # Prefer an exact registered vendor removal helper while it exists. Retain the hash-verified'
             '    # packaged bundle as a durable fallback for disposable per-account Package Cache entries.'

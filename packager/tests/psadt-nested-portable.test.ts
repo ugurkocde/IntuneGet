@@ -440,7 +440,7 @@ describe('Burn bundle PSADT generation', () => {
     );
 
     expect(verification).toContain(
-      "if ($selectedApplications.Count -gt 1 -and 'burn' -eq 'burn')"
+      "if ($selectedApplications.Count -gt 1 -and 'burn' -in @('burn', 'exe'))"
     );
     expect(verification).toContain(
       '$bundleCandidates = @($selectedApplications | Where-Object {'
@@ -451,7 +451,37 @@ describe('Burn bundle PSADT generation', () => {
     );
   });
 
-  it('keeps Burn-only duplicate-entry narrowing disabled for non-Burn packages', () => {
+  it('uses nested EXE behavior for archived wrapper packages', () => {
+    const job = packagingJob({
+      installer_type: 'zip',
+      uninstall_command: 'REGISTRY_UNINSTALL:Microsoft FSLogix Apps',
+      package_config: {
+        nestedInstallerType: 'exe',
+        nestedInstallerPath: 'x64/Release/FSLogixAppsSetup.exe',
+        psadtConfig: {},
+      },
+    });
+
+    const verification = generator.getPostInstallVerificationBlock.call(
+      generator,
+      job,
+      'FSLogix'
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'FSLogix.zip'
+    );
+
+    expect(verification).toContain(
+      "$selectedApplications.Count -gt 1 -and 'exe' -in @('burn', 'exe')"
+    );
+    expect(uninstall).toContain(
+      "$installedApps.Count -gt 1 -and 'exe' -in @('burn', 'exe')"
+    );
+  });
+
+  it('keeps executable-wrapper duplicate-entry narrowing disabled for native framework packages', () => {
     const job = packagingJob({
       installer_type: 'inno',
       uninstall_command: 'REGISTRY_UNINSTALL:Example App',
@@ -463,9 +493,11 @@ describe('Burn bundle PSADT generation', () => {
       'Example App'
     );
 
-    expect(verification).toContain("$selectedApplications.Count -gt 1 -and 'inno' -eq 'burn'");
+    expect(verification).toContain(
+      "$selectedApplications.Count -gt 1 -and 'inno' -in @('burn', 'exe')"
+    );
     expect(verification).not.toContain(
-      "$selectedApplications.Count -gt 1 -and 'inno' -eq 'inno'"
+      "$selectedApplications.Count -gt 1 -and 'inno' -in @('inno')"
     );
   });
 });
