@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'RedHat.Podman-Desktop',
       'PDFsam.PDFsam',
       'Mega.MEGASync',
       'AOMEI.PartitionAssistant',
@@ -88,6 +89,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'RedHat.Podman-Desktop',
         'PDFsam.PDFsam',
         'Mega.MEGASync',
         'AOMEI.PartitionAssistant',

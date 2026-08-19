@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'ab045cb1da3611f91329943fade2263491bb211d',
+  packagerCommit: '4918638adf111a664f2589ce79d8aefe79c33936',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -184,6 +184,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Docker Desktop Edge's registered-name correction affects only that
   // package's failed lifecycle. Preserve every unrelated compatible pass.
   'b6254d8fdf1dd50ccc95fbb3e137a5ef5717cce5',
+  // Podman Desktop's all-users NSIS selection affects only that package's
+  // failed LocalSystem lifecycle. Preserve every unrelated compatible pass.
+  'ab045cb1da3611f91329943fade2263491bb211d',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
