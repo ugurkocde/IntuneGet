@@ -50,6 +50,17 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses FSLogix\'s registered bundle display identity', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Microsoft.FSLogix',
+      'REGISTRY_UNINSTALL:FSLogix'
+    )).toBe('REGISTRY_UNINSTALL:Microsoft FSLogix Apps');
+    expect(resolveApplicationUninstallCommand(
+      'microsoft.fslogix',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses the exact stable Inno registry key for every K-Lite edition', () => {
     for (const edition of ['Basic', 'Standard', 'Full', 'Mega']) {
       expect(resolveApplicationUninstallCommand(

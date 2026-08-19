@@ -945,6 +945,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'Docker Desktop Edge',
     registeredDisplayName: 'Docker Desktop',
   },
+  // FSLogix is distributed as a ZIP containing Microsoft's Burn-style EXE.
+  // WinGet publishes `Microsoft FSLogix Apps` in ProductCode, but the bundle
+  // creates a generated GUID ARP key with that value as its DisplayName. Bind
+  // the reviewed display identity so prerequisite ARP changes cannot prevent
+  // install capture and the same exact vendor entry drives customer removal.
+  'microsoft.fslogix': {
+    generatedDisplayName: 'FSLogix',
+    registeredDisplayName: 'Microsoft FSLogix Apps',
+  },
   // K-Lite inserts the version between the family and edition in DisplayName
   // (for example `K-Lite Codec Pack 19.9.0 Standard`). All four mutually
   // exclusive editions use the same stable Inno registry key, so use that

@@ -65,6 +65,33 @@ describe('buildQaCatalogTestConfig', () => {
     });
   });
 
+  it('reconciles FSLogix WinGet metadata to its registered bundle display name', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Microsoft.FSLogix',
+        name: 'FSLogix',
+        publisher: 'Microsoft',
+        version: '3.26.126.19110',
+      },
+      manifest: {
+        InstallerType: 'zip',
+        NestedInstallerType: 'exe',
+        ProductCode: 'Microsoft FSLogix Apps',
+        InstallerSwitches: { Silent: '/install /quiet /norestart' },
+      },
+      installer: {
+        Architecture: 'neutral',
+        InstallerType: 'zip',
+        NestedInstallerType: 'exe',
+        ProductCode: 'Microsoft FSLogix Apps',
+      },
+    });
+
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:Microsoft FSLogix Apps'
+    );
+  });
+
   it.each([
     ['inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
     ['nullsoft', '/S'],
