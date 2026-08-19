@@ -858,6 +858,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'Google Chrome (EXE)',
     registeredDisplayName: 'Google Chrome',
   },
+  // The legacy Edge-channel package is still named `Docker Desktop Edge` in
+  // the catalog, but Docker registers the installed product as the ordinary
+  // `Docker Desktop` ARP entry. Use that exact vendor identity so install
+  // capture, Intune detection, and unattended removal all address the same
+  // product without broadening the generic registry matcher.
+  'docker.dockerdesktopedge': {
+    generatedDisplayName: 'Docker Desktop Edge',
+    registeredDisplayName: 'Docker Desktop',
+  },
   // K-Lite inserts the version between the family and edition in DisplayName
   // (for example `K-Lite Codec Pack 19.9.0 Standard`). All four mutually
   // exclusive editions use the same stable Inno registry key, so use that

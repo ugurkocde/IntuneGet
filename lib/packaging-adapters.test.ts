@@ -23,6 +23,17 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Docker Desktop Edge\'s actual registered product identity', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Docker.DockerDesktopEdge',
+      'REGISTRY_UNINSTALL:Docker Desktop Edge'
+    )).toBe('REGISTRY_UNINSTALL:Docker Desktop');
+    expect(resolveApplicationUninstallCommand(
+      'docker.dockerdesktopedge',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses the exact stable Inno registry key for every K-Lite edition', () => {
     for (const edition of ['Basic', 'Standard', 'Full', 'Mega']) {
       expect(resolveApplicationUninstallCommand(
