@@ -112,6 +112,14 @@ const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
   {
+    // Ava Desktop's NSIS bootstrapper installs below the invoking account's
+    // LocalAppData even though its WinGet manifest omits Scope. Running it as
+    // LocalSystem records a systemprofile uninstaller that is absent by the
+    // removal cycle. Keep the package in the intended signed-in user context.
+    wingetId: 'AvaCC.AvaDesktop',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.

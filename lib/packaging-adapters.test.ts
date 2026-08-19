@@ -110,6 +110,12 @@ describe('application packaging adapters', () => {
   });
 
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
+    expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
+      'user'
+    );
+    expect(resolveApplicationInstallScope(' avacc.avadesktop ', undefined)).toBe(
+      'user'
+    );
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Youdao.YoudaoTranslate', 'machine')).toBe('user');
