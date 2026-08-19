@@ -1287,7 +1287,11 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
-  '7c74dc4412c3e6834da9935cc74ab8371a7ed71f': [
+  '82de31f37d7977906153135fde2eb12cf30909c7': [
+    // OpenOffice's Nullsoft bootstrapper installs an MSI whose ARP display
+    // name appends a marketing version. Retry it with the exact requested
+    // DisplayVersion and strict configured-name-prefix identity contract.
+    'Apache.OpenOffice',
     // Arduino IDE's dual-purpose MSI defaults to per-user installation even
     // though WinGet declares this installer machine-scope. Retry it now that
     // the shared normalizer explicitly carries that scope into MSI arguments.

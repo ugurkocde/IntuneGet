@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7c74dc4412c3e6834da9935cc74ab8371a7ed71f',
+  packagerCommit: '82de31f37d7977906153135fde2eb12cf30909c7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -158,6 +158,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // already declare an ALLUSERS contract. The canonical silent arguments
   // invalidate those affected profiles while preserving unrelated passes.
   '4537454fe9f0f942d59a7b748505b2318cf13a6c',
+  // Exact-version, strict-name-prefix ARP capture changes only packages whose
+  // observed product name did not already match a stronger identity. Preserve
+  // every compatible pass from the machine-scope MSI release.
+  '7c74dc4412c3e6834da9935cc74ab8371a7ed71f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
