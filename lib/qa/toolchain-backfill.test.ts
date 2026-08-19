@@ -123,10 +123,14 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('Acronis.CyberProtectHomeOffice');
   });
 
-  it('retries FSLogix only after activating its reviewed bundle identity', () => {
+  it('carries FSLogix from its reviewed identity release into nested-EXE disambiguation', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'microsoft.fslogix', status: 'error' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '31faef7cae75613243bc36c9bb0af38c88761437',
+      { wingetId: 'Microsoft.FSLogix', status: 'error' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       'f79b14647328d39bca04dada822a07f70573aa49',

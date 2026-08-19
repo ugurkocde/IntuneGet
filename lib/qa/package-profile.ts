@@ -13,7 +13,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '31faef7cae75613243bc36c9bb0af38c88761437',
+  packagerCommit: 'bd61ef8e81dac8b16289a4a572022d4d1702b333',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -204,6 +204,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // FSLogix's exact registered display identity changes only its previously
   // failing bundle lifecycle. Preserve every unrelated compatible pass.
   'f79b14647328d39bca04dada822a07f70573aa49',
+  // Nested executable archives now use their effective installer engine for
+  // safe wrapper identity selection. Preserve every unrelated compatible pass.
+  '31faef7cae75613243bc36c9bb0af38c88761437',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
