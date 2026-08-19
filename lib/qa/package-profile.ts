@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '82de31f37d7977906153135fde2eb12cf30909c7',
+  packagerCommit: '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -162,6 +162,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // observed product name did not already match a stronger identity. Preserve
   // every compatible pass from the machine-scope MSI release.
   '7c74dc4412c3e6834da9935cc74ab8371a7ed71f',
+  // Nested MSI ProductCode preservation changes only archive profiles that
+  // previously fell back to display-name registration matching. Preserve all
+  // compatible passes from the exact-version ARP capture release.
+  '82de31f37d7977906153135fde2eb12cf30909c7',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

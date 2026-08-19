@@ -1287,7 +1287,11 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
   ],
-  '82de31f37d7977906153135fde2eb12cf30909c7': [
+  '63172f3739807b25bbd54b970dc6f56d1cfc2c9d': [
+    // BankID is a ZIP with a nested MSI whose exact ProductCode was present
+    // in trusted manifest metadata but previously dropped from the canonical
+    // uninstall identity. Retry it through the shared QA/customer generator.
+    'FinancialID.BankID',
     // OpenOffice's Nullsoft bootstrapper installs an MSI whose ARP display
     // name appends a marketing version. Retry it with the exact requested
     // DisplayVersion and strict configured-name-prefix identity contract.

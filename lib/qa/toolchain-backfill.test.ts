@@ -669,6 +669,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries BankID only after preserving the nested MSI product identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'financialid.bankid', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '82de31f37d7977906153135fde2eb12cf30909c7',
+      { wingetId: 'FinancialID.BankID', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '5569c16d136f464cbc014f40c70645414c601751',
