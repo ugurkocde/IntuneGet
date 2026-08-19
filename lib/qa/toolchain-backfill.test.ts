@@ -691,6 +691,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries darktable only after activating its bounded installer wait', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'darktable.darktable', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '6788c71df2ec0844f829b5abe0f5b154ca3abdb4',
+      { wingetId: 'darktable.darktable', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the consumed .NET Framework retry scoped to its registry-evidence release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '5569c16d136f464cbc014f40c70645414c601751',

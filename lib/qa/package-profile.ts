@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '6788c71df2ec0844f829b5abe0f5b154ca3abdb4',
+  packagerCommit: '7391c73a8eacb01becfc76682bfbb37b1d60b17f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -170,6 +170,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // failing generation. Preserve every compatible pass from the nested MSI
   // ProductCode release.
   '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
+  // darktable's bounded installer wait affects only its previously interrupted
+  // NSIS lifecycle. Preserve every unrelated compatible pass from the Visual
+  // Studio 2017 lifecycle release.
+  '6788c71df2ec0844f829b5abe0f5b154ca3abdb4',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
