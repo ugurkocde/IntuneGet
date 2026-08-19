@@ -1547,10 +1547,6 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'DATEV.SicherheitspaketCompact',
   ],
   '20546b8280874ba955b8d14182ad69bde8eacb58': [
-    // The protected 8 GB retry extracted 3,071 files but still had no ARP
-    // identity at ten minutes. Give darktable one final run through the
-    // existing reviewed 15-minute ceiling; another timeout is terminal.
-    'darktable.darktable',
     // Carry still-unconsumed bounded targets across the atomic pin rollout.
     // Compatible passes and ineligible apps are filtered before enqueue.
     'Microsoft.VisualStudio.2017.Enterprise',

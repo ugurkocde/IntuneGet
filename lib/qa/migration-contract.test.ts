@@ -807,3 +807,24 @@ describe('Canon printer driver managed install block migration contract', () => 
     expect(sql).toContain("status in ('queued', 'failed')");
   });
 });
+
+describe('darktable managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260819113500_block_darktable_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the non-terminating LocalSystem lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'darktable.darktable'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32246509168'
+    );
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
