@@ -173,6 +173,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Docker Desktop Edge only with the registered-identity release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'docker.dockerdesktopedge', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b6254d8fdf1dd50ccc95fbb3e137a5ef5717cce5',
+      { wingetId: 'Docker.DockerDesktopEdge', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('keeps the Office Deployment Tool managed lifecycle retry scoped to its release', () => {
     const wingetId = 'Microsoft.OfficeDeploymentTool';
     expect(shouldRetryTerminalToolchainCandidate(

@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b6254d8fdf1dd50ccc95fbb3e137a5ef5717cce5',
+  packagerCommit: 'ab045cb1da3611f91329943fade2263491bb211d',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -181,6 +181,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // ZeeDrive's documented no-ARP lifecycle affects only that package. Keep
   // every unrelated compatible pass from the preceding protected release.
   '20546b8280874ba955b8d14182ad69bde8eacb58',
+  // Docker Desktop Edge's registered-name correction affects only that
+  // package's failed lifecycle. Preserve every unrelated compatible pass.
+  'b6254d8fdf1dd50ccc95fbb3e137a5ef5717cce5',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
