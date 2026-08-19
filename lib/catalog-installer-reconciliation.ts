@@ -8,6 +8,7 @@ import {
 import { getLiveInstallers } from '@/lib/manifest-api';
 import {
   resolveApplicationInstallScope,
+  resolveApplicationInstallerSelectionScope,
   resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
 import { evaluatePackagingContract } from '@/lib/packaging-contract';
@@ -121,6 +122,10 @@ export async function reconcileCatalogInstaller(
   item: Win32CartItem,
 ): Promise<ReconciledCatalogInstaller> {
   const installScope = resolveApplicationInstallScope(item.wingetId, item.installScope);
+  const installerSelectionScope = resolveApplicationInstallerSelectionScope(
+    item.wingetId,
+    installScope,
+  );
   const trustedInstallers = await getLiveInstallers(item.wingetId, item.version);
   if (trustedInstallers.length === 0) {
     throw new InstallerPreflightError(
@@ -134,7 +139,7 @@ export async function reconcileCatalogInstaller(
     wingetId: item.wingetId,
     version: item.version,
     architecture: item.architecture,
-    installScope,
+    installScope: installerSelectionScope,
     installerUrl: item.installerUrl,
     installerSha256: item.installerSha256,
     localeCode: item.localeCode,
@@ -142,7 +147,7 @@ export async function reconcileCatalogInstaller(
   if (!installer) {
     throw new InstallerPreflightError(
       'INSTALL_SCOPE_UNAVAILABLE',
-      `WinGet does not publish a ${item.architecture || 'x64'} ${installScope}-scope installer for ${item.wingetId} ${item.version}`,
+      `WinGet does not publish a ${item.architecture || 'x64'} ${installerSelectionScope}-scope installer for ${item.wingetId} ${item.version}`,
     );
   }
   if (!installer.url?.trim() || !/^[A-Fa-f0-9]{64}$/.test(installer.sha256?.trim() || '')) {

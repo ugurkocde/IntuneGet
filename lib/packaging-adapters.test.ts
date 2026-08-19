@@ -3,6 +3,7 @@ import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
+  resolveApplicationInstallerSelectionScope,
   resolveApplicationUninstallCommand,
 } from './packaging-adapters';
 
@@ -102,6 +103,20 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope(' torproject.torbrowser ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
+  });
+
+  it('runs Logitech Presentation elevated without weakening catalog scope matching', () => {
+    expect(resolveApplicationInstallScope('Logitech.Presentation', 'user')).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope(
+      'Logitech.Presentation',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope('Example.App', 'machine')).toBe('machine');
+    expect(
+      applyApplicationPackagingAdapter('Logitech.Presentation', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedInstallArgumentsOverride: '/S /U:0 /A:0',
+    });
   });
 
   it('models Tor Browser as the vendor-documented extracted user folder', () => {

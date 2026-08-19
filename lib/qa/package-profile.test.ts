@@ -314,6 +314,35 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds Logitech Presentation remote deployment to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Logitech.Presentation',
+      displayName: 'Logitech Presentation',
+      publisher: 'Logitech',
+      version: '2.10.34',
+      architecture: 'x86',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:LogiPresentation:Logitech Presentation',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe('/S /U:0 /A:0');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Logitech_Presentation',
+      }),
+    ]);
+  });
+
   it('binds the reviewed Google Chrome EXE ARP identity to customer packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Google.Chrome.EXE',

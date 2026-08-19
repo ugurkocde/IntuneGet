@@ -135,6 +135,35 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.trustedInstallers).toBe(operaInstallers);
   });
 
+  it('selects Logitech Presentation user bytes for reviewed LocalSystem execution', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x86',
+      url: 'https://example.test/logitech-presentation.exe',
+      sha256,
+      type: 'nullsoft',
+      scope: 'user',
+      silentArgs: '/S',
+      productCode: 'LogiPresentation',
+    } satisfies NormalizedInstaller]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'Logitech.Presentation',
+      displayName: 'Logitech Presentation',
+      version: '2.10.34',
+      architecture: 'x86',
+      installScope: 'user',
+      installerUrl: 'https://example.test/logitech-presentation.exe',
+      installCommand: '"logitech-presentation.exe" /S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:LogiPresentation:Logitech Presentation',
+    }));
+
+    expect(reconciled.item.installScope).toBe('machine');
+    expect(reconciled.item.installerUrl).toBe(
+      'https://example.test/logitech-presentation.exe'
+    );
+    expect(reconciled.item.installCommand).toBe('"logitech-presentation.exe" /S');
+  });
+
   it('preserves explicit PSADT command overrides', async () => {
     const reconciled = await reconcileCatalogInstaller(operaItem({
       psadtConfig: {

@@ -4,6 +4,7 @@ import type { WingetScope } from '@/types/winget';
 interface ApplicationPackagingAdapter {
   wingetId: string;
   requiredInstallScope?: WingetScope;
+  reviewedInstallerSelectionScope?: WingetScope;
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedInstallArgumentsOverride?: string;
@@ -317,6 +318,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       { name: 'VirtualCameraService', description: 'Insta360 Virtual Camera' },
       { name: 'Insta360LinkDriver', description: 'Insta360 Link driver' },
     ],
+  },
+  {
+    // Logitech publishes Presentation as a user-scope NSIS package, but the
+    // signed bootstrapper requests elevation even when /S is supplied. A
+    // standard Intune user therefore receives an unserviceable UAC credential
+    // prompt. Logitech documents the same binary for remote deployment with
+    // /S plus the update and analytics controls below. Select the published
+    // user-scoped binary while executing the managed package as LocalSystem.
+    wingetId: 'Logitech.Presentation',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+    reviewedInstallArgumentsOverride: '/S /U:0 /A:0',
   },
   {
     // Logitech's own removal guidance requires the SetPoint notification-area
@@ -742,6 +755,20 @@ export function resolveApplicationInstallScope(
 ): WingetScope {
   const requested = requestedScope?.trim().toLowerCase() === 'user' ? 'user' : 'machine';
   return applicationPackagingAdapter(wingetId)?.requiredInstallScope || requested;
+}
+
+/**
+ * Return the manifest scope used to select the trusted installer bytes. This
+ * normally matches the managed execution scope. A reviewed adapter may select
+ * a vendor-published user entry while still requiring LocalSystem execution;
+ * that exception is app-specific and cannot be supplied by customer input.
+ */
+export function resolveApplicationInstallerSelectionScope(
+  wingetId: string,
+  executionScope: WingetScope
+): WingetScope {
+  return applicationPackagingAdapter(wingetId)?.reviewedInstallerSelectionScope ||
+    executionScope;
 }
 
 const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
