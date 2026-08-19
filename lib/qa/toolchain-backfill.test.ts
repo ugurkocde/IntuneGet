@@ -642,7 +642,7 @@ describe('QA toolchain targeted retries', () => {
       { wingetId: 'logitech.ghub', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      '837c54ac684d6a3d36a0ad5f14f258f8add540cf',
+      '7b2938c853d9a799ac76957bd122c5c7eb5406f5',
       { wingetId: 'Logitech.GHUB', status: 'failed' }
     )).toBe(false);
   });
