@@ -216,6 +216,9 @@ describe('application packaging adapters', () => {
       arguments: ['/silent', '-?uninstall'],
       completionTimeoutMinutes: 5,
     });
+    expect(resolveApplicationInstallScope('SoftwareOK.DesktopOK', 'user')).toBe(
+      'machine'
+    );
     expect(
       applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
