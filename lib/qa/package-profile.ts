@@ -12,7 +12,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7391c73a8eacb01becfc76682bfbb37b1d60b17f',
+  packagerCommit: '20546b8280874ba955b8d14182ad69bde8eacb58',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -174,6 +174,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // NSIS lifecycle. Preserve every unrelated compatible pass from the Visual
   // Studio 2017 lifecycle release.
   '6788c71df2ec0844f829b5abe0f5b154ca3abdb4',
+  // The extended darktable ceiling changes only that release's still-running
+  // NSIS extraction. Preserve every compatible pass from the first bounded
+  // heartbeat release.
+  '7391c73a8eacb01becfc76682bfbb37b1d60b17f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

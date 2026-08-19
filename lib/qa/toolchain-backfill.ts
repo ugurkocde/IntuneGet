@@ -1546,6 +1546,53 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     // window ended during exact installer preflight.
     'DATEV.SicherheitspaketCompact',
   ],
+  '20546b8280874ba955b8d14182ad69bde8eacb58': [
+    // The protected 8 GB retry extracted 3,071 files but still had no ARP
+    // identity at ten minutes. Give darktable one final run through the
+    // existing reviewed 15-minute ceiling; another timeout is terminal.
+    'darktable.darktable',
+    // Carry still-unconsumed bounded targets across the atomic pin rollout.
+    // Compatible passes and ineligible apps are filtered before enqueue.
+    'Microsoft.VisualStudio.2017.Enterprise',
+    'FinancialID.BankID',
+    'Apache.OpenOffice',
+    'ArduinoSA.IDE.stable',
+    'Logitech.GHUB',
+    'Autodesk.AutodeskAccess',
+    'CoreyButler.NVMforWindows',
+    'Logitech.Presentation',
+    'Canonical.Ubuntu.2404',
+    'Daum.PotPlayer',
+    'Autodesk.LicensingService',
+    'AcroSoftware.CutePDFWriter',
+    'PDFsam.PDFsam',
+    'Mega.MEGASync',
+    'Insta360.Link.Controller',
+    'Logitech.SetPoint',
+    'Timely.Memory',
+    'Google.GoogleDrive',
+    'Dropbox.Dropbox',
+    'AOMEI.PartitionAssistant',
+    'Ringler.SnapformViewer',
+    'Cisco.Jabber',
+    'IPEVO.Visualizer',
+    'IPEVO.VisualizerLTSE',
+    'Sonos.Controller',
+    'Microsoft.VisualStudio.BuildTools',
+    'Microsoft.VisualStudio.Community',
+    'Microsoft.VisualStudio.Enterprise',
+    'Microsoft.VisualStudio.Professional',
+    'Microsoft.VisualStudio.2022.BuildTools',
+    'Microsoft.VisualStudio.2022.Community',
+    'Microsoft.VisualStudio.2022.Enterprise',
+    'Microsoft.VisualStudio.2022.Professional',
+    'karakun.OpenWebStart',
+    'MSYS2.MSYS2',
+    'TorProject.TorBrowser',
+    'PTC.CreoView.Express',
+    'Blizzard.BattleNet',
+    'DATEV.SicherheitspaketCompact',
+  ],
 };
 
 export function terminalToolchainRetryTargets(packagerCommit: string): string[] {
