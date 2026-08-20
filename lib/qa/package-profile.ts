@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '9aaebb8f2af8bf3144fb5358b8b34e99195c088e',
+  packagerCommit: 'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -211,6 +211,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Saved custom marker profiles now restore their exact detection root. A
   // profile that already passed did not exercise the repaired mismatch.
   'bd61ef8e81dac8b16289a4a572022d4d1702b333',
+  // Speek's reviewed managed-directory adapter affects only its previously
+  // failing no-ARP lifecycle. Preserve every unrelated compatible pass.
+  '9aaebb8f2af8bf3144fb5358b8b34e99195c088e',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

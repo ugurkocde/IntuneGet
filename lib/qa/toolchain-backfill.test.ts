@@ -64,6 +64,8 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Speek.Speek',
+      '8x8.Work',
       'Microsoft.FSLogix',
       'AvaCC.AvaDesktop',
       'Microsoft.RMSClient',
@@ -94,6 +96,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Speek.Speek',
         '8x8.Work',
         'Microsoft.FSLogix',
         'Microsoft.RMSClient',
@@ -147,6 +150,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'bd61ef8e81dac8b16289a4a572022d4d1702b333',
       { wingetId: '8x8.Work', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Speek only after activating its reviewed non-ARP lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'speek.speek', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '9aaebb8f2af8bf3144fb5358b8b34e99195c088e',
+      { wingetId: 'Speek.Speek', status: 'failed' }
     )).toBe(false);
   });
 
