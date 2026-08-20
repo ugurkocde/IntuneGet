@@ -43,6 +43,7 @@ import {
   resolveApplicationInstallScope,
 } from '@/lib/packaging-adapters';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
+import { inferSavedCustomMarkerPath } from '@/lib/registry-marker';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import { evaluatePackagingContract } from '@/lib/packaging-contract';
@@ -526,7 +527,7 @@ export async function POST(request: NextRequest) {
           try {
             if (item.sourceType !== 'custom') {
               const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
-              const detectionRules = normalizeCatalogDetectionRules({
+              let detectionRules = normalizeCatalogDetectionRules({
                 detectionRules: item.detectionRules,
                 fallbackDetectionRules: requestedPsadtConfig.detectionRules,
                 wingetId: item.wingetId,
@@ -535,10 +536,31 @@ export async function POST(request: NextRequest) {
                 markerPath: requestedPsadtConfig.registryMarkerPath,
                 installerType: item.nestedInstallerType || item.installerType,
               });
+              const inferredMarkerPath = requestedPsadtConfig.registryMarkerPath
+                ? null
+                : inferSavedCustomMarkerPath({
+                    detectionRules,
+                    wingetId: item.wingetId,
+                    version: item.version,
+                    installScope: item.installScope,
+                  });
+              const effectivePsadtConfig = inferredMarkerPath
+                ? { ...requestedPsadtConfig, registryMarkerPath: inferredMarkerPath }
+                : requestedPsadtConfig;
+              if (inferredMarkerPath) {
+                detectionRules = normalizeCatalogDetectionRules({
+                  detectionRules,
+                  wingetId: item.wingetId,
+                  version: item.version,
+                  installScope: item.installScope,
+                  markerPath: inferredMarkerPath,
+                  installerType: item.nestedInstallerType || item.installerType,
+                });
+              }
               item.detectionRules = detectionRules;
               item.psadtConfig = applyApplicationPackagingAdapter(
                 item.wingetId,
-                { ...requestedPsadtConfig, detectionRules }
+                { ...effectivePsadtConfig, detectionRules }
               );
             }
             const jobId = crypto.randomUUID();

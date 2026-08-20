@@ -1,10 +1,58 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_REGISTRY_MARKER_PATH,
+  inferSavedCustomMarkerPath,
   normalizeMarkerPath,
   reconcileManagedMarkerDetectionRules,
   rewriteMarkerKeyPath,
 } from '../registry-marker';
+
+describe('inferSavedCustomMarkerPath', () => {
+  const saved8x8Rule = {
+    type: 'registry' as const,
+    keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\HBX\\InstalledApps\\8x8_Work',
+    valueName: 'Version',
+    check32BitOn64System: false,
+    detectionType: 'version' as const,
+    operator: 'greaterThanOrEqual' as const,
+    detectionValue: '8.36.2',
+  };
+
+  it('recovers the exact custom root from a saved managed marker rule', () => {
+    expect(inferSavedCustomMarkerPath({
+      detectionRules: [saved8x8Rule],
+      wingetId: '8x8.Work',
+      version: '8.36.2',
+      installScope: 'machine',
+    })).toBe('SOFTWARE\\HBX\\InstalledApps');
+  });
+
+  it.each([
+    { detectionRules: [saved8x8Rule, saved8x8Rule], version: '8.36.2', scope: 'machine' },
+    { detectionRules: [{ ...saved8x8Rule, detectionValue: '8.35.0' }], version: '8.36.2', scope: 'machine' },
+    { detectionRules: [{ ...saved8x8Rule, keyPath: saved8x8Rule.keyPath.replace('HKEY_LOCAL_MACHINE', 'HKEY_CURRENT_USER') }], version: '8.36.2', scope: 'machine' },
+    { detectionRules: [{ ...saved8x8Rule, keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\8x8_Work' }], version: '8.36.2', scope: 'machine' },
+  ])('refuses ambiguous or non-marker-shaped saved rules', ({ detectionRules, version, scope }) => {
+    expect(inferSavedCustomMarkerPath({
+      detectionRules,
+      wingetId: '8x8.Work',
+      version,
+      installScope: scope,
+    })).toBeNull();
+  });
+
+  it('does not materialize an explicit config value for the default marker root', () => {
+    expect(inferSavedCustomMarkerPath({
+      detectionRules: [{
+        ...saved8x8Rule,
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\8x8_Work',
+      }],
+      wingetId: '8x8.Work',
+      version: '8.36.2',
+      installScope: 'machine',
+    })).toBeNull();
+  });
+});
 
 describe('normalizeMarkerPath', () => {
   it('should return the default for undefined input', () => {

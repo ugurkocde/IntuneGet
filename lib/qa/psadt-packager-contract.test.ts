@@ -1336,6 +1336,32 @@ describe.skipIf(!canRunWindowsPowerShellPackager)(
 );
 
 describe('PSADT registry uninstall identity contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'writes and removes the exact saved custom marker root used by customer detection',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        '8x8 Work',
+        [],
+        { registryMarkerPath: 'SOFTWARE\\HBX\\InstalledApps' },
+        [],
+        '8x8.Work',
+        '8x8 Work',
+        '8.36.2',
+        'REGISTRY_UNINSTALL:8x8 Work',
+        '/S'
+      );
+
+      expect(generated).toContain(
+        "$regPath = 'HKLM\\SOFTWARE\\HBX\\InstalledApps\\8x8_Work'"
+      );
+      expect(generated).toContain(
+        "$regPathHKLM = 'HKLM\\SOFTWARE\\HBX\\InstalledApps\\8x8_Work'"
+      );
+    },
+    30_000
+  );
+
   it('parses and persists a manifest product code for multi-entry installers', () => {
     expect(packager).toContain(
       "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):(.+)$"

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { assertPackagingContract } from '@/lib/packaging-contract';
+import { inferSavedCustomMarkerPath } from '@/lib/registry-marker';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
@@ -878,7 +879,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     input.wingetId,
     input.installScope || 'machine'
   );
-  const detectionRules = normalizeCatalogDetectionRules({
+  let detectionRules = normalizeCatalogDetectionRules({
     detectionRules: parsedDetectionRules,
     fallbackDetectionRules: rawConfig.detectionRules,
     wingetId: input.wingetId,
@@ -887,9 +888,30 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     markerPath: preliminaryConfig.registryMarkerPath,
     installerType: input.nestedInstallerType || input.installerType,
   });
+  const inferredMarkerPath = preliminaryConfig.registryMarkerPath
+    ? null
+    : inferSavedCustomMarkerPath({
+        detectionRules,
+        wingetId: input.wingetId,
+        version: input.version,
+        installScope,
+      });
+  const effectiveRawConfig = inferredMarkerPath
+    ? { ...rawConfig, registryMarkerPath: inferredMarkerPath }
+    : rawConfig;
+  if (inferredMarkerPath) {
+    detectionRules = normalizeCatalogDetectionRules({
+      detectionRules,
+      wingetId: input.wingetId,
+      version: input.version,
+      installScope,
+      markerPath: inferredMarkerPath,
+      installerType: input.nestedInstallerType || input.installerType,
+    });
+  }
   const psadtConfig = applyApplicationPackagingAdapter(
     input.wingetId,
-    normalizeQaPsadtConfig(rawConfig, detectionRules)
+    normalizeQaPsadtConfig(effectiveRawConfig, detectionRules)
   );
   const uninstallCommand = resolveApplicationUninstallCommand(
     input.wingetId,

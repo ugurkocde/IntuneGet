@@ -687,6 +687,55 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
+  it('restores a saved custom marker root for both QA and customer packaging', async () => {
+    const savedRule = {
+      type: 'registry',
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\HBX\\InstalledApps\\8x8_Work',
+      valueName: 'Version',
+      check32BitOn64System: false,
+      detectionType: 'version',
+      operator: 'greaterThanOrEqual',
+      detectionValue: '8.36.2',
+    };
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: '8x8.Work',
+          displayName: '8x8 Work',
+          version: '8.36.2',
+          installerType: 'msi',
+          detectionRules: [savedRule],
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules: [savedRule] },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    for (const serializedConfig of [
+      ensureQaDemandMock.mock.calls[0][1].psadtConfig,
+      triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig,
+    ]) {
+      expect(JSON.parse(serializedConfig)).toMatchObject({
+        registryMarkerPath: 'SOFTWARE\\HBX\\InstalledApps',
+        detectionRules: [savedRule],
+      });
+    }
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      detectionRules: [savedRule],
+      psadtConfig: {
+        registryMarkerPath: 'SOFTWARE\\HBX\\InstalledApps',
+        detectionRules: [savedRule],
+      },
+    });
+  });
+
   it('repairs stale generated MSIX detection before both QA and customer MSI packaging', async () => {
     const staleMsixRule = {
       type: 'script',

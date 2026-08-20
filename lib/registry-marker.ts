@@ -23,6 +23,79 @@ export function sanitizeWingetIdForRegistry(wingetId: string): string {
 }
 
 /**
+ * Recover the custom marker root from an older saved catalog profile that
+ * retained its generated detection rule but lost psadtConfig.registryMarkerPath.
+ *
+ * Inference is intentionally narrow: the profile must contain exactly one
+ * registry rule, and every field must match the marker rule IntuneGet would
+ * generate for this app, version, and scope. The root must live below
+ * SOFTWARE and must differ from the default. Customer-authored rules, mixed
+ * rule sets, stale versions, and uninstall-key rules are left untouched.
+ */
+export function inferSavedCustomMarkerPath({
+  detectionRules,
+  wingetId,
+  version,
+  installScope,
+}: {
+  detectionRules: DetectionRule[];
+  wingetId: string;
+  version: string;
+  installScope?: string;
+}): string | null {
+  if (detectionRules.length !== 1) return null;
+
+  const [rule] = detectionRules;
+  if (
+    rule.type !== 'registry' ||
+    typeof rule.keyPath !== 'string' ||
+    rule.valueName?.toUpperCase() !== 'VERSION' ||
+    rule.check32BitOn64System !== false ||
+    rule.detectionValue !== version
+  ) {
+    return null;
+  }
+
+  const versionParts = /^\d+(?:\.\d+){1,3}$/.test(version) ? version.split('.') : [];
+  const useVersionComparison =
+    versionParts.length >= 2 &&
+    versionParts.length <= 4 &&
+    versionParts.every((part) => Number(part) <= 2_147_483_647);
+  if (
+    rule.detectionType !== (useVersionComparison ? 'version' : 'string') ||
+    rule.operator !== (useVersionComparison ? 'greaterThanOrEqual' : 'equal')
+  ) {
+    return null;
+  }
+
+  const match = /^(HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER)\\(.+)$/i.exec(rule.keyPath);
+  const expectedHive = installScope?.toLowerCase() === 'user'
+    ? 'HKEY_CURRENT_USER'
+    : 'HKEY_LOCAL_MACHINE';
+  if (!match || match[1].toUpperCase() !== expectedHive) return null;
+
+  const segments = match[2].split('\\');
+  const sanitizedWingetId = sanitizeWingetIdForRegistry(wingetId);
+  if (segments.length < 3 || segments.at(-1)?.toUpperCase() !== sanitizedWingetId.toUpperCase()) {
+    return null;
+  }
+
+  const markerPath = normalizeMarkerPath(segments.slice(0, -1).join('\\'));
+  const markerPathUpper = markerPath.toUpperCase();
+  if (
+    !markerPathUpper.startsWith('SOFTWARE\\') ||
+    markerPathUpper === DEFAULT_REGISTRY_MARKER_PATH.toUpperCase() ||
+    /^SOFTWARE\\(?:WOW6432NODE\\)?MICROSOFT\\WINDOWS\\CURRENTVERSION\\UNINSTALL(?:\\|$)/.test(
+      markerPathUpper
+    )
+  ) {
+    return null;
+  }
+
+  return markerPath;
+}
+
+/**
  * Normalize a user-supplied registry marker path into a safe subpath under
  * the hive (e.g. 'SOFTWARE\\Contoso\\Apps').
  *

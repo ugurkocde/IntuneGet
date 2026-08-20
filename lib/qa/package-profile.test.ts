@@ -271,6 +271,39 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('restores a saved custom marker root before hashing the deployment profile', () => {
+    const savedRule = {
+      type: 'registry',
+      keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\HBX\\InstalledApps\\8x8_Work',
+      valueName: 'Version',
+      check32BitOn64System: false,
+      detectionType: 'version',
+      operator: 'greaterThanOrEqual',
+      detectionValue: '8.36.2',
+    };
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: '8x8.Work',
+      displayName: '8x8.Work',
+      publisher: 'IntuneGet QA',
+      version: '8.36.2',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'wix',
+      silentSwitches: '/qn /norestart',
+      uninstallCommand: 'msiexec /x "{A92AC549-F4B9-4875-B02C-F51FA50A0F19}" /qn /norestart',
+      installScope: 'machine',
+      detectionRules: JSON.stringify([savedRule]),
+      psadtConfig: JSON.stringify({ detectionRules: [savedRule] }),
+    });
+    const psadtConfig = JSON.parse(normalized.psadtConfigJson);
+
+    expect(psadtConfig.registryMarkerPath).toBe('SOFTWARE\\HBX\\InstalledApps');
+    expect(psadtConfig.detectionRules).toEqual(normalized.detectionRules);
+    expect(normalized.detectionRules).toEqual([savedRule]);
+    expect((normalized.identity.profile.psadtConfig as { registryMarkerPath?: string })
+      .registryMarkerPath).toBe('SOFTWARE\\HBX\\InstalledApps');
+  });
+
   it('repairs generated detection when a saved catalog profile changed from MSIX to MSI', () => {
     const staleMsixRule = {
       type: 'script',
