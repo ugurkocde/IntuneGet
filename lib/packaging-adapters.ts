@@ -174,6 +174,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser',
   },
   {
+    // Speek 1.7.0's reviewed NSIS source installs the complete application to
+    // `$PROGRAMFILES\Speek`, writes Speek.exe plus uninstall.exe there, and
+    // never creates an Add/Remove Programs entry. NSIS resolves $PROGRAMFILES
+    // to Program Files (x86) on 64-bit Windows unless the script explicitly
+    // selects the 64-bit view, which Speek does not. Verify and own only that
+    // dedicated vendor directory instead of waiting for an ARP identity that
+    // the package intentionally omits. Direct managed-directory removal also
+    // avoids relying on the vendor uninstaller's incomplete cleanup section.
+    wingetId: 'Speek.Speek',
+    reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Speek',
+    reviewedManagedInstallEvidenceFile: '%ProgramFiles(x86)%\\Speek\\Speek.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 2,
+  },
+  {
     // darktable's official CPack/NSIS installer writes its ARP registration
     // only after the complete application tree has been extracted. The signed
     // 5.6.0 package can therefore remain quiet longer than the generic QA

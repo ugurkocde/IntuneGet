@@ -766,6 +766,55 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies and removes Speek from its reviewed non-ARP directory',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        'Speek',
+        [],
+        {
+          reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Speek',
+          reviewedManagedInstallEvidenceFile:
+            '%ProgramFiles(x86)%\\Speek\\Speek.exe',
+          reviewedManagedInstallCompletionTimeoutMinutes: 2,
+        },
+        [],
+        'Speek.Speek',
+        'Speek',
+        '1.7.0',
+        'REGISTRY_UNINSTALL:Speek',
+        '/S',
+        'machine'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Speek')"
+      );
+      expect(installFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Speek\\Speek.exe')"
+      );
+      expect(installFunction).toContain(
+        'Verified stable managed installation evidence'
+      );
+      expect(installFunction).not.toContain('Captured vendor uninstall entry');
+      expect(uninstallFunction).toContain(
+        'Remove-Item -LiteralPath $managedInstallDirectory'
+      );
+      expect(uninstallFunction).not.toContain(
+        'Waiting for vendor uninstall registration'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects a reviewed user Desktop directory for a machine-scope package',
     () => {
       expect(() =>

@@ -687,6 +687,35 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds the Speek non-ARP directory lifecycle to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Speek.Speek',
+      displayName: 'Speek',
+      publisher: 'Speek App',
+      version: '1.7.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Speek',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = {
+      reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Speek',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramFiles(x86)%\\Speek\\Speek.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 2,
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+  });
+
   it('binds the Visual Studio 2022 Build Tools x86 instance root to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.VisualStudio.2022.BuildTools',
