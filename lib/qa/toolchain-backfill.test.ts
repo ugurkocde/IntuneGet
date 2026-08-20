@@ -94,6 +94,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        '8x8.Work',
         'Microsoft.FSLogix',
         'Microsoft.RMSClient',
         'SoftwareOK.DesktopOK',
@@ -135,6 +136,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'f79b14647328d39bca04dada822a07f70573aa49',
       { wingetId: 'Microsoft.FSLogix', status: 'error' }
+    )).toBe(false);
+  });
+
+  it('retries the saved custom marker profile only after activating marker recovery', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: '8X8.work', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'bd61ef8e81dac8b16289a4a572022d4d1702b333',
+      { wingetId: '8x8.Work', status: 'failed' }
     )).toBe(false);
   });
 

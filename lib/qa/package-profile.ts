@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'bd61ef8e81dac8b16289a4a572022d4d1702b333',
+  packagerCommit: '9aaebb8f2af8bf3144fb5358b8b34e99195c088e',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -208,6 +208,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Nested executable archives now use their effective installer engine for
   // safe wrapper identity selection. Preserve every unrelated compatible pass.
   '31faef7cae75613243bc36c9bb0af38c88761437',
+  // Saved custom marker profiles now restore their exact detection root. A
+  // profile that already passed did not exercise the repaired mismatch.
+  'bd61ef8e81dac8b16289a4a572022d4d1702b333',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
