@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f5d7258e504f10679f54f025cebf11bfe9584221',
+  packagerCommit: '8ed88e9a9889fec478235b1623e313f9fd86bd59',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -218,6 +218,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // reviewed service stop affect only those two failed uninstall paths.
   // Preserve every unrelated compatible pass from the preceding release.
   'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
+  // Logi Bolt's exact /silent helper affects only its failed uninstall path.
+  // Preserve every unrelated compatible pass from the preceding release.
+  'f5d7258e504f10679f54f025cebf11bfe9584221',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

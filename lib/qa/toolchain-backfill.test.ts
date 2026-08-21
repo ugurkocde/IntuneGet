@@ -91,6 +91,7 @@ describe('QA toolchain targeted retries', () => {
       'Daum.PotPlayer',
       'Wiris.MathType.7',
       'Microsoft.AzureMonitorAgent',
+      'Logitech.LogiBolt',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
 
@@ -124,6 +125,7 @@ describe('QA toolchain targeted retries', () => {
         'Daum.PotPlayer',
         'Wiris.MathType.7',
         'Microsoft.AzureMonitorAgent',
+        'Logitech.LogiBolt',
       ])
     );
     expect(
@@ -761,6 +763,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
       { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Logi Bolt only after activating its exact /silent uninstaller', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'logitech.logibolt', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f5d7258e504f10679f54f025cebf11bfe9584221',
+      { wingetId: 'Logitech.LogiBolt', status: 'failed' }
     )).toBe(false);
   });
 
