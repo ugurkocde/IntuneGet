@@ -422,6 +422,35 @@ describe('application packaging adapters', () => {
     });
     expect(
       applyApplicationPackagingAdapter(
+        'Autodesk.DesignReview',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory:
+        '%ProgramW6432%\\Autodesk\\Autodesk Design Review',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramW6432%\\Autodesk\\Autodesk Design Review\\DesignReview.exe',
+      reviewedManagedInstallCompletionProcess:
+        '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 15,
+      reviewedManagedUninstall: {
+        executablePath: '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+        arguments: [
+          '-i',
+          'uninstall',
+          '--silent',
+          '--trigger_point',
+          'system',
+          '-m',
+          '%ProgramData%\\Autodesk\\ODIS\\metadata\\{C1AF4762-AE0A-3B4E-836B-D4C091BF46F8}\\bundleManifest.xml',
+          '-x',
+          '%ProgramData%\\Autodesk\\ODIS\\metadata\\{C1AF4762-AE0A-3B4E-836B-D4C091BF46F8}\\SetupRes\\manifest.xsd',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    });
+    expect(
+      applyApplicationPackagingAdapter(
         'Autodesk.NavisworksFreedom.2026',
         DEFAULT_PSADT_CONFIG
       )

@@ -656,6 +656,36 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // Design Review is delivered by Autodesk ODIS. Its SFX bootstrapper exits
+    // before ODIS finishes registering the product, so generic ARP capture can
+    // race the background install. Wait for the reviewed product evidence and
+    // ODIS completion, then use the exact manifest lifecycle observed from the
+    // vendor registration and installer URL.
+    wingetId: 'Autodesk.DesignReview',
+    reviewedManagedInstallDirectory:
+      '%ProgramW6432%\\Autodesk\\Autodesk Design Review',
+    reviewedManagedInstallEvidenceFile:
+      '%ProgramW6432%\\Autodesk\\Autodesk Design Review\\DesignReview.exe',
+    reviewedManagedInstallCompletionProcess:
+      '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 15,
+    reviewedManagedUninstall: {
+      executablePath: '%ProgramW6432%\\Autodesk\\AdODIS\\V1\\Installer.exe',
+      arguments: [
+        '-i',
+        'uninstall',
+        '--silent',
+        '--trigger_point',
+        'system',
+        '-m',
+        '%ProgramData%\\Autodesk\\ODIS\\metadata\\{C1AF4762-AE0A-3B4E-836B-D4C091BF46F8}\\bundleManifest.xml',
+        '-x',
+        '%ProgramData%\\Autodesk\\ODIS\\metadata\\{C1AF4762-AE0A-3B4E-836B-D4C091BF46F8}\\SetupRes\\manifest.xsd',
+      ],
+      completionTimeoutMinutes: 15,
+    },
+  },
+  {
     // Navisworks Freedom 2026 is installed by Autodesk ODIS. The bootstrapper
     // changes multiple Autodesk registrations, so a generic ARP capture cannot
     // identify the product safely. Autodesk documents the ODIS manifest-based
