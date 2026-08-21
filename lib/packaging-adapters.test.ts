@@ -773,6 +773,19 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('selects TreeSize administrative Inno mode for LocalSystem deployment', () => {
+    expect(resolveApplicationInstallScope('JAMSoftware.TreeSize', 'user')).toBe('machine');
+    const adapted = applyApplicationPackagingAdapter(
+      'JAMSoftware.TreeSize',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe(
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS'
+    );
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('selects Podman Desktop all-users mode for the full Intune lifecycle', () => {
     const adapted = applyApplicationPackagingAdapter(
       'redhat.podman-desktop',

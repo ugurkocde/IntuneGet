@@ -321,6 +321,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // TreeSize's dual-mode Inno installer defaults to the invoking account even
+    // when the catalog declares machine scope. Under LocalSystem that places the
+    // app and its uninstaller below the 32-bit system profile, where silent
+    // removal never clears the exact registration. Inno's reviewed /ALLUSERS
+    // contract selects administrative install mode and the machine-wide
+    // Program Files/HKLM lifecycle required by Intune.
+    wingetId: 'JAMSoftware.TreeSize',
+    requiredInstallScope: 'machine',
+    reviewedInstallArgumentsOverride:
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS',
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.

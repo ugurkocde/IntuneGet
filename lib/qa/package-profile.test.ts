@@ -600,6 +600,32 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds TreeSize to administrative Inno mode', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'JAMSoftware.TreeSize',
+      displayName: 'TreeSize',
+      publisher: 'JAMSoftware',
+      version: '9.8.2',
+      architecture: 'x64',
+      installerSha256: '3'.repeat(64),
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:TreeSize_is1:TreeSize',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS'
+    );
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',
