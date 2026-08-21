@@ -308,7 +308,7 @@ export function LivePipelinePanel() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 border-b border-overlay/[0.06] px-4 py-3 md:px-5">
         <span className="text-[13.5px] font-semibold text-text-primary">
-          <T>Live pipeline</T>
+          <T>Live packaging pipeline</T>
         </span>
         <span
           className={cn(
