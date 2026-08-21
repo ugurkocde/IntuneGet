@@ -823,9 +823,13 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('carries the bounded BlueJ retry into its user-writable MSI release', () => {
+  it('carries the bounded BlueJ retry into its explicit per-user MSI release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ad6cdec44cd8ec47ce12c9ae59487f2fa9dda52',
       { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(

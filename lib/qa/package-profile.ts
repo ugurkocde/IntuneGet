@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '0ad6cdec44cd8ec47ce12c9ae59487f2fa9dda52',
+  packagerCommit: 'd7293535636c41b795088f4d265e4e085445a05c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -227,6 +227,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // BlueJ's explicit LocalAppData directory affects only its still-failing
   // silent install path. Preserve every unrelated compatible passing result.
   'f91af4469ba113dac1524f8764c4a03d535eb188',
+  // BlueJ's modern dual-purpose MSI context changes only its still-failing
+  // install path. Preserve every unrelated compatible passing result.
+  '0ad6cdec44cd8ec47ce12c9ae59487f2fa9dda52',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
