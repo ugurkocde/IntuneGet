@@ -399,6 +399,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallServiceNames: ['AzureMonitorAgent'],
   },
   {
+    // Logi Bolt's dedicated uninstaller is not a conventional NSIS helper:
+    // the generic /S fallback returns while leaving the exact LogiBolt ARP
+    // registration installed. Its unattended removal verb is /silent. Bind
+    // that switch to the exact machine-wide helper captured by QA so hidden
+    // SYSTEM sessions never wait behind Logitech's confirmation dialog.
+    wingetId: 'Logitech.LogiBolt',
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles%\\Logi\\LogiBolt\\LogiBoltUninstaller.exe',
+      arguments: ['/silent'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // Link Controller remains active in the notification area after its UI is
     // closed, and its optional camera helper can hold the Inno installation
     // directory open. The silent uninstaller then exits without removing the

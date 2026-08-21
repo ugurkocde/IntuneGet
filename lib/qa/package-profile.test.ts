@@ -511,6 +511,33 @@ describe('PSADT QA package identity', () => {
     ).toEqual(['AzureMonitorAgent']);
   });
 
+  it('binds Logi Bolt to its exact /silent uninstaller', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Logitech.LogiBolt',
+      displayName: 'Logi Bolt',
+      publisher: 'Logitech',
+      version: '1.2.6024.0',
+      architecture: 'x64',
+      installerSha256: '6'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:LogiBolt:Logi Bolt',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(
+      (normalized.identity.profile as {
+        psadtConfig: { reviewedExactUninstall?: unknown };
+      }).psadtConfig.reviewedExactUninstall
+    ).toEqual({
+      executablePath: '%ProgramFiles%\\Logi\\LogiBolt\\LogiBoltUninstaller.exe',
+      arguments: ['/silent'],
+      completionTimeoutMinutes: 5,
+    });
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',

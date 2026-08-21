@@ -309,6 +309,14 @@ describe('application packaging adapters', () => {
       ).reviewedUninstallServiceNames
     ).toEqual(['AzureMonitorAgent']);
     expect(
+      applyApplicationPackagingAdapter('Logitech.LogiBolt', DEFAULT_PSADT_CONFIG)
+        .reviewedExactUninstall
+    ).toEqual({
+      executablePath: '%ProgramFiles%\\Logi\\LogiBolt\\LogiBoltUninstaller.exe',
+      arguments: ['/silent'],
+      completionTimeoutMinutes: 5,
+    });
+    expect(
       applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedExactUninstall: {

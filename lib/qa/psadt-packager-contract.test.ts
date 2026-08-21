@@ -2156,6 +2156,36 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses Logi Bolt /silent instead of the generic Nullsoft /S fallback',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        'Logi Bolt',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath: '%ProgramFiles%\\Logi\\LogiBolt\\LogiBoltUninstaller.exe',
+            arguments: ['/silent'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Logitech.LogiBolt',
+        'Logi Bolt',
+        '1.2.6024.0',
+        'REGISTRY_UNINSTALL_KEY:LogiBolt:Logi Bolt',
+        '/silent'
+      );
+
+      expect(generated).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\Logi\\LogiBolt\\LogiBoltUninstaller.exe')"
+      );
+      expect(generated).toContain("$registeredUninstallArguments = @('/silent')");
+      expect(generated).not.toContain("$registeredUninstallArguments = @('/S')");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'stops the reviewed Azure Monitor Agent service before MSI removal',
     () => {
       const generated = generateRegistryUninstallPackage(
