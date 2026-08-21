@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '8ed88e9a9889fec478235b1623e313f9fd86bd59',
+  packagerCommit: 'f91af4469ba113dac1524f8764c4a03d535eb188',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -221,6 +221,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Logi Bolt's exact /silent helper affects only its failed uninstall path.
   // Preserve every unrelated compatible pass from the preceding release.
   'f5d7258e504f10679f54f025cebf11bfe9584221',
+  // BlueJ's reviewed per-user MSI arguments affect only its previously failed
+  // install path. Preserve Logi Bolt and every unrelated compatible pass.
+  '8ed88e9a9889fec478235b1623e313f9fd86bd59',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

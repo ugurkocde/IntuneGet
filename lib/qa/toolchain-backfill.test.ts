@@ -92,6 +92,7 @@ describe('QA toolchain targeted retries', () => {
       'Wiris.MathType.7',
       'Microsoft.AzureMonitorAgent',
       'Logitech.LogiBolt',
+      'BlueJTeam.BlueJ',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
 
@@ -126,6 +127,7 @@ describe('QA toolchain targeted retries', () => {
         'Wiris.MathType.7',
         'Microsoft.AzureMonitorAgent',
         'Logitech.LogiBolt',
+        'BlueJTeam.BlueJ',
       ])
     );
     expect(
@@ -818,6 +820,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '63172f3739807b25bbd54b970dc6f56d1cfc2c9d',
       { wingetId: 'Microsoft.VisualStudio.2017.Enterprise', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries BlueJ only after activating its reviewed per-user MSI arguments', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8ed88e9a9889fec478235b1623e313f9fd86bd59',
+      { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
     )).toBe(false);
   });
 
