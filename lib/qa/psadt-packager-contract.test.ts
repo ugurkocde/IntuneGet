@@ -1133,14 +1133,17 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'replaces BlueJ automatic context with its explicit per-user MSI property',
+    'replaces BlueJ automatic context and expands its per-user MSI directory',
     () => {
       const productCode = '{BAF3564F-5DE4-48AC-8CC4-260BFFD56D30}';
       const generated = generateRegistryUninstallPackage(
         'msi',
         'BlueJ',
         [],
-        { reviewedInstallArgumentsOverride: '/qn /norestart ALLUSERS=0' },
+        {
+          reviewedInstallArgumentsOverride:
+            '/qn /norestart ALLUSERS=0 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"',
+        },
         [],
         'BlueJTeam.BlueJ',
         'BlueJ',
@@ -1151,7 +1154,10 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(generated).toContain(
-        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=0'"
+        "$effectiveMsiProperties = [Environment]::ExpandEnvironmentVariables('/norestart ALLUSERS=0 INSTALLDIR=\"%LOCALAPPDATA%\\Programs\\BlueJ\"')"
+      );
+      expect(generated).toContain(
+        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList $effectiveMsiProperties"
       );
       expect(generated).not.toContain("AdditionalArgumentList '/norestart ALLUSERS=2'");
     }

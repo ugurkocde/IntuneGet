@@ -222,16 +222,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
-    // BlueJ's WiX source deliberately defaults to WixPerUserFolder so a
-    // limited-rights user can install it. Its official silent-install example
-    // uses ALLUSERS=0, while the WinGet manifest currently supplies
-    // ALLUSERS=2; that automatic-context value makes the 6.0.0 MSI attempt a
-    // Program Files install and roll back with 1603 in the user-scoped Intune
-    // execution. Replace the full command with the vendor's explicit per-user
-    // contract for both QA and customer packages.
+    // BlueJ documents ALLUSERS=0 and an explicit INSTALLDIR for unattended
+    // installs. Its 6.0.0 MSI Directory table still roots INSTALLDIR below
+    // ProgramFiles64Folder when the WiX UI sequence is suppressed, so changing
+    // ALLUSERS alone leaves a limited-rights user writing to Program Files and
+    // rolling back with 1603. Pin the per-user directory to LocalAppData for
+    // both QA and customer packages.
     wingetId: 'BlueJTeam.BlueJ',
     requiredInstallScope: 'user',
-    reviewedInstallArgumentsOverride: '/qn /norestart ALLUSERS=0',
+    reviewedInstallArgumentsOverride:
+      '/qn /norestart ALLUSERS=0 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"',
   },
   {
     // PDFsam documents this exact MSI command for managed Windows deployment.
