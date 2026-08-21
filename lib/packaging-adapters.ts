@@ -340,6 +340,7 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // LocalSystem context used by managed Intune deployment.
     wingetId: 'Kingsoft.WPSOffice',
     requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
   },
   {
     // MEGA's installer source makes silent installs current-user by default.

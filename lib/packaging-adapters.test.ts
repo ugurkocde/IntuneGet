@@ -788,6 +788,10 @@ describe('application packaging adapters', () => {
 
   it('runs the elevation-requiring WPS Office installer as LocalSystem', () => {
     expect(resolveApplicationInstallScope('Kingsoft.WPSOffice', 'user')).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope(
+      'Kingsoft.WPSOffice',
+      'machine'
+    )).toBe('user');
     const adapted = applyApplicationPackagingAdapter(
       'kingsoft.wpsoffice',
       DEFAULT_PSADT_CONFIG

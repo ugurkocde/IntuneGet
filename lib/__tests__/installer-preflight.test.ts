@@ -173,6 +173,29 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts WPS Office user manifest bytes for reviewed SYSTEM execution', async () => {
+    const wpsRequest = {
+      ...request,
+      wingetId: 'Kingsoft.WPSOffice',
+      architecture: 'x86',
+      installerUrl: 'https://example.test/wps-office.exe',
+      installerType: 'exe',
+    };
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x86',
+      url: wpsRequest.installerUrl,
+      sha256: expectedSha256,
+      type: 'exe',
+      scope: 'user',
+    }]);
+
+    await expect(enforceInstallerPreflight(wpsRequest)).resolves.toMatchObject({
+      status: 'healthy',
+      source: 'live',
+    });
+    expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
   it('still rejects an opposite manifest scope without a reviewed adapter', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
