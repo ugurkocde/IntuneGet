@@ -1970,6 +1970,12 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       '$capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode)'
     );
     expect(packager).toContain(
+      "$registeredUninstallLeaf -in @(''msiexec'', ''msiexec.exe'') -and [string]$registeredApplication.PSChildName -match"
+    );
+    expect(packager).toContain(
+      'The exact GUID key plus an MsiExec command is still an authoritative MSI identity.'
+    );
+    expect(packager).toContain(
       'The Burn-labeled package registered Windows Installer product [$capturedMsiProductCode]; executing its exact MSI uninstall.'
     );
     expect(packager).toContain(
@@ -2684,10 +2690,12 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         'Split-Path'
       );
 
-      const hostedMsiBranch = hostedPackager.indexOf('if ($capturedMsiProductCode) {');
       const hostedExeParsing = hostedPackager.indexOf(
-        "$registeredUninstallProperty = if ($hasQuietUninstall) { 'QuietUninstallString' } else { 'UninstallString' }",
-        hostedMsiBranch
+        "$registeredUninstallProperty = if ($hasQuietUninstall) { 'QuietUninstallString' } else { 'UninstallString' }"
+      );
+      const hostedMsiBranch = hostedPackager.lastIndexOf(
+        'if ($capturedMsiProductCode) {',
+        hostedExeParsing
       );
       expect(hostedMsiBranch).toBeGreaterThan(-1);
       expect(hostedExeParsing).toBeGreaterThan(hostedMsiBranch);

@@ -1753,6 +1753,26 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
     } elseif (-not [string]::IsNullOrWhiteSpace($registeredApplication.UninstallStringFilePath)) {
         'UninstallString'
     } else {
+        $null
+    }
+    $registeredUninstallFile = if ($registeredUninstallProperty) { [string]$registeredApplication."$($registeredUninstallProperty)FilePath" } else { '' }
+    $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile
+    $capturedMsiProductCode = if ($registeredApplication.WindowsInstaller -and $registeredApplication.ProductCode) {
+        $registeredApplication.ProductCode
+    } elseif ($registeredApplication.WindowsInstaller -and [string]$registeredApplication.PSChildName -match '^\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}$') {
+        [string]$registeredApplication.PSChildName
+    } elseif ($registeredUninstallLeaf -in @('msiexec', 'msiexec.exe') -and [string]$registeredApplication.PSChildName -match '^\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}$') {
+        # Older chained MSI registrations can omit the WindowsInstaller value.
+        # The exact GUID key plus an MsiExec command is still an authoritative MSI identity.
+        [string]$registeredApplication.PSChildName
+    } else {
+        $null
+    }
+    if ($capturedMsiProductCode) {
+        Write-ADTLogEntry -Message "The Burn-labeled package registered MSI product [$capturedMsiProductCode]; executing its exact MSI uninstall." -Source 'Uninstall-ADTDeployment'
+        ${capturedMsiUninstallBlock}
+    } else {
+    if (-not $registeredUninstallProperty) {
         throw "The captured Burn bundle does not provide an uninstall command."
     }
     [string[]]$registeredUninstallArguments = @($registeredApplication."$($registeredUninstallProperty)ArgumentList" | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
@@ -1760,7 +1780,6 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         $registeredUninstallArguments = @('/uninstall', '/quiet', '/norestart')
     }
     ${reviewedUninstallArgumentsBlock}
-    $registeredUninstallFile = [string]$registeredApplication."$($registeredUninstallProperty)FilePath"
     $bundledUninstaller = Join-Path $adtSession.DirFiles '${fileNameEscaped}'
     if (-not (Test-Path -LiteralPath $bundledUninstaller -PathType Leaf)) {
         throw "The packaged Burn uninstaller was not found: $bundledUninstaller"
@@ -1831,6 +1850,7 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
     }
     if ($remainingApplications.Count -gt 0) {
         throw "The Burn uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."
+    }
     }`;
       }
 

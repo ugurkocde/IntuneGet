@@ -406,7 +406,7 @@ describe('Burn bundle PSADT generation', () => {
     );
     expect(script).toContain("Join-Path $adtSession.DirFiles 'python-3.14.7-amd64.exe'");
     expect(script).toContain(
-      '$registeredUninstallFile = [string]$registeredApplication."$($registeredUninstallProperty)FilePath"'
+      '$registeredUninstallFile = if ($registeredUninstallProperty) { [string]$registeredApplication."$($registeredUninstallProperty)FilePath" } else {'
     );
     expect(script).toContain('$burnUninstaller = $registeredUninstallFile');
     expect(script).toContain('$burnUninstaller = $bundledUninstaller');
@@ -422,7 +422,13 @@ describe('Burn bundle PSADT generation', () => {
     expect(script).toContain('$uninstallHandle = Start-ADTProcess @uninstallProcessParameters');
     expect(script).toContain('The Burn uninstall parent process exited with code');
     expect(script).toContain('foreach ($verificationAttempt in 1..5)');
-    expect(script).not.toContain("Start-ADTMsiProcess -Action 'Uninstall'");
+    expect(script).toContain("$registeredUninstallLeaf -in @('msiexec', 'msiexec.exe')");
+    expect(script).toContain(
+      "Start-ADTMsiProcess -Action 'Uninstall' -ProductCode $capturedMsiProductCode"
+    );
+    expect(script.indexOf('$registeredUninstallLeaf =')).toBeLessThan(
+      script.indexOf('$capturedMsiProductCode =')
+    );
   });
 
   it('narrows duplicate bundle and chained-MSI display names to the bundle entry', () => {
