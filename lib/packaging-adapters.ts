@@ -222,6 +222,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
+    // BlueJ's WiX source deliberately defaults to WixPerUserFolder so a
+    // limited-rights user can install it. Its official silent-install example
+    // uses ALLUSERS=0, while the WinGet manifest currently supplies
+    // ALLUSERS=2; that automatic-context value makes the 6.0.0 MSI attempt a
+    // Program Files install and roll back with 1603 in the user-scoped Intune
+    // execution. Replace the full command with the vendor's explicit per-user
+    // contract for both QA and customer packages.
+    wingetId: 'BlueJTeam.BlueJ',
+    requiredInstallScope: 'user',
+    reviewedInstallArgumentsOverride: '/qn /norestart ALLUSERS=0',
+  },
+  {
     // PDFsam documents this exact MSI command for managed Windows deployment.
     // WinGet currently publishes /quiet with only SKIPTHANKSPAGE, which can
     // leave the WiX install inactive under non-interactive LocalSystem. Keep

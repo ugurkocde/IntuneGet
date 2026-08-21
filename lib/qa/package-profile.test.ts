@@ -538,6 +538,34 @@ describe('PSADT QA package identity', () => {
     });
   });
 
+  it('binds BlueJ to the documented explicit per-user MSI contract', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'BlueJTeam.BlueJ',
+      displayName: 'BlueJ',
+      publisher: 'BlueJTeam',
+      version: '6.0.0',
+      architecture: 'x64',
+      installerSha256: '4'.repeat(64),
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart ALLUSERS=2',
+      uninstallCommand:
+        'msiexec /x "{BAF3564F-5DE4-48AC-8CC4-260BFFD56D30}" /qn /norestart',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=2');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
+      '/qn /norestart ALLUSERS=0'
+    );
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',

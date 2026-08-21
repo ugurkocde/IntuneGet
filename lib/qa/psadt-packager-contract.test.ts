@@ -35,7 +35,7 @@ const canRunWindowsPowerShellPackager =
   ]).status === 0;
 
 function generateRegistryUninstallPackage(
-  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft',
+  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft' | 'msi',
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
   psadtConfig: unknown = {},
@@ -1129,6 +1129,31 @@ describe('PSADT vendor argument contract', () => {
       expect(generated).not.toContain(
         "-ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'"
       );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'replaces BlueJ automatic context with its explicit per-user MSI property',
+    () => {
+      const productCode = '{BAF3564F-5DE4-48AC-8CC4-260BFFD56D30}';
+      const generated = generateRegistryUninstallPackage(
+        'msi',
+        'BlueJ',
+        [],
+        { reviewedInstallArgumentsOverride: '/qn /norestart ALLUSERS=0' },
+        [],
+        'BlueJTeam.BlueJ',
+        'BlueJ',
+        '6.0.0',
+        `msiexec /x "${productCode}" /qn /norestart`,
+        '/qn /norestart ALLUSERS=2',
+        'user'
+      );
+
+      expect(generated).toContain(
+        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=0'"
+      );
+      expect(generated).not.toContain("AdditionalArgumentList '/norestart ALLUSERS=2'");
     }
   );
 

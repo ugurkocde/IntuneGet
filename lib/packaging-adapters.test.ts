@@ -667,6 +667,19 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses BlueJ\'s documented explicit per-user MSI contract', () => {
+    expect(resolveApplicationInstallScope('BlueJTeam.BlueJ', 'machine')).toBe('user');
+    const adapted = applyApplicationPackagingAdapter(
+      'BlueJTeam.BlueJ',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe(
+      '/qn /norestart ALLUSERS=0'
+    );
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('uses PTC Creo View Express documented MSI-forwarding syntax', () => {
     const adapted = applyApplicationPackagingAdapter(
       'PTC.CreoView.Express',
