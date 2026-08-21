@@ -791,6 +791,22 @@ describe('application packaging adapters', () => {
     ).toBe(true);
   });
 
+  it('uses exact Microsoft Appx evidence for Windows App Runtime 1.8', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'microsoft.windowsappruntime.1.8',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+      reviewedAppxInstallEvidence: {
+        packageName: 'Microsoft.WindowsAppRuntime.1.8',
+        publisherId: '8wekyb3d8bbwe',
+        minimumVersion: '8000.879.2017.0',
+      },
+    });
+  });
+
   it('uses reviewed multi-product evidence for the shared Visual C++ runtime bundle', () => {
     expect(
       applyApplicationPackagingAdapter('ABBODI1406.VCREDIST', DEFAULT_PSADT_CONFIG)
@@ -831,6 +847,11 @@ describe('application packaging adapters', () => {
         valueName: 'Release',
         minimumDword: 1,
       },
+      reviewedAppxInstallEvidence: {
+        packageName: 'Example.Framework',
+        publisherId: 'example1234567',
+        minimumVersion: '1.0.0.0',
+      },
       reviewedInstallShieldAdministrativeImage: {
         expectedMsiFileName: 'customer-controlled.msi',
       },
@@ -856,6 +877,7 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedMultiProductInstallDisplayNamePrefixes).toBeUndefined();
     expect(adapted.reviewedMultiProductInstallMinimumCount).toBeUndefined();
     expect(adapted.reviewedRegistryInstallEvidence).toBeUndefined();
+    expect(adapted.reviewedAppxInstallEvidence).toBeUndefined();
     expect(adapted.reviewedInstallShieldAdministrativeImage).toBeUndefined();
     expect(adapted.reviewedInstallCompletionTimeoutMinutes).toBeUndefined();
     expect(adapted.reviewedManagedInstallDirectory).toBeUndefined();

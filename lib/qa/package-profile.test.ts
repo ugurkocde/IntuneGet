@@ -920,6 +920,42 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds reviewed Windows App Runtime Appx evidence to the QA identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.WindowsAppRuntime.1.8',
+      displayName: 'Windows App Runtime 1.8',
+      publisher: 'Microsoft',
+      version: '1.8.9',
+      architecture: 'x64',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--quiet',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Windows App Runtime 1.8',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedEvidence = {
+      packageName: 'Microsoft.WindowsAppRuntime.1.8',
+      publisherId: '8wekyb3d8bbwe',
+      minimumVersion: '8000.879.2017.0',
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        preserveVendorInstallationOnUninstall?: boolean;
+        reviewedAppxInstallEvidence?: typeof expectedEvidence;
+      };
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+      reviewedAppxInstallEvidence: expectedEvidence,
+    });
+    expect(profile.psadtConfig.reviewedAppxInstallEvidence).toEqual(
+      expectedEvidence
+    );
+  });
+
   it('preserves PSADT detection rules when the top-level workflow list is unusable', () => {
     const fileRule = {
       type: 'file' as const,

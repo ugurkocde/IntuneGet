@@ -43,6 +43,11 @@ interface ApplicationPackagingAdapter {
     valueName: string;
     minimumDword: number;
   }>;
+  reviewedAppxInstallEvidence?: Readonly<{
+    packageName: string;
+    publisherId: string;
+    minimumVersion: string;
+  }>;
 }
 
 const POSTGRESQL_PACKAGING_ADAPTER: ApplicationPackagingAdapter = {
@@ -830,6 +835,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSuccessCodes: [1223],
   },
   {
+    // Windows App Runtime is a shared MSIX framework. Microsoft's package
+    // identity is Microsoft.WindowsAppRuntime.1.8, and the 1.8.9 installer
+    // deploys framework version 8000.879.2017.0 under Microsoft's publisher.
+    // Verify that exact Appx identity and retain it when Intune relinquishes
+    // ownership; ARP activity from WebView2 or other servicing is unrelated.
+    wingetId: 'Microsoft.WindowsAppRuntime.1.8',
+    preserveVendorInstallationOnUninstall: true,
+    reviewedAppxInstallEvidence: {
+      packageName: 'Microsoft.WindowsAppRuntime.1.8',
+      publisherId: '8wekyb3d8bbwe',
+      minimumVersion: '8000.879.2017.0',
+    },
+  },
+  {
     // The Evergreen WebView2 Runtime is shared by every WebView2 application,
     // automatically serviced by Microsoft, and preinstalled on Windows 11.
     // Removing the shared runtime can break unrelated applications, while the
@@ -1171,6 +1190,7 @@ export function applyApplicationPackagingAdapter(
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedRegistryInstallEvidence &&
+      !config.reviewedAppxInstallEvidence &&
       !config.reviewedUninstallProcessGuard &&
       !config.reviewedUninstallServiceNames &&
       !config.reviewedManagedInstallDirectory &&
@@ -1189,6 +1209,7 @@ export function applyApplicationPackagingAdapter(
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedRegistryInstallEvidence: undefined,
+      reviewedAppxInstallEvidence: undefined,
       reviewedUninstallProcessGuard: undefined,
       reviewedUninstallServiceNames: undefined,
       reviewedManagedInstallDirectory: undefined,
@@ -1314,6 +1335,9 @@ export function applyApplicationPackagingAdapter(
       adapter.reviewedMultiProductInstallMinimumCount,
     reviewedRegistryInstallEvidence: adapter.reviewedRegistryInstallEvidence
       ? { ...adapter.reviewedRegistryInstallEvidence }
+      : undefined,
+    reviewedAppxInstallEvidence: adapter.reviewedAppxInstallEvidence
+      ? { ...adapter.reviewedAppxInstallEvidence }
       : undefined,
   };
 }

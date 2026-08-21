@@ -424,6 +424,97 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies Windows App Runtime with exact shared Appx framework evidence',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Windows App Runtime 1.8',
+        [],
+        {
+          verifyInstall: true,
+          preserveVendorInstallationOnUninstall: true,
+          reviewedAppxInstallEvidence: {
+            packageName: 'Microsoft.WindowsAppRuntime.1.8',
+            publisherId: '8wekyb3d8bbwe',
+            minimumVersion: '8000.879.2017.0',
+          },
+        },
+        [],
+        'Microsoft.WindowsAppRuntime.1.8'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "Get-AppxPackage -AllUsers -Name 'Microsoft.WindowsAppRuntime.1.8'"
+      );
+      expect(installFunction).toContain(
+        "[string]$_.PublisherId -eq '8wekyb3d8bbwe'"
+      );
+      expect(installFunction).toContain('[bool]$_.IsFramework');
+      expect(installFunction).toContain(
+        "[version]$_.Version -ge $minimumAppxVersion"
+      );
+      expect(installFunction).toContain(
+        'Post-install verification passed for reviewed shared Appx framework evidence'
+      );
+      expect(installFunction).not.toContain('$preInstallApplications');
+      expect(installFunction).not.toContain(
+        'Could not select one vendor uninstall entry'
+      );
+      expect(uninstallFunction).toContain(
+        'Retaining the shared vendor installation and removing only the IntuneGet management marker.'
+      );
+      expect(uninstallFunction).not.toContain('Microsoft EdgeWebView');
+      expect(uninstallFunction).not.toContain('Start-ADTProcess @uninstallProcessParameters');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects wildcard and unretained reviewed Appx evidence',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe Appx Evidence',
+          [],
+          {
+            preserveVendorInstallationOnUninstall: true,
+            reviewedAppxInstallEvidence: {
+              packageName: 'Microsoft.WindowsAppRuntime.*',
+              publisherId: '8wekyb3d8bbwe',
+              minimumVersion: '8000.879.2017.0',
+            },
+          }
+        )
+      ).toThrow('packageName must be a safe exact Appx package name');
+
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unretained Appx Evidence',
+          [],
+          {
+            reviewedAppxInstallEvidence: {
+              packageName: 'Microsoft.WindowsAppRuntime.1.8',
+              publisherId: '8wekyb3d8bbwe',
+              minimumVersion: '8000.879.2017.0',
+            },
+          }
+        )
+      ).toThrow(
+        'reviewedAppxInstallEvidence requires preserveVendorInstallationOnUninstall'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects unsafe reviewed registry install evidence',
     () => {
       expect(() =>

@@ -555,9 +555,58 @@ if ($psadtConfig.Contains('reviewedRegistryInstallEvidence') -and
     $reviewedRegistryInstallEvidenceConfigured = $true
 }
 
+$reviewedAppxInstallEvidenceConfigured = $false
+$reviewedAppxInstallEvidencePackageName = ''
+$reviewedAppxInstallEvidencePublisherId = ''
+$reviewedAppxInstallEvidenceMinimumVersion = [version]'0.0.0.0'
+if ($psadtConfig.Contains('reviewedAppxInstallEvidence') -and
+    $null -ne $psadtConfig['reviewedAppxInstallEvidence']) {
+    $rawAppxEvidence = $psadtConfig['reviewedAppxInstallEvidence']
+    if ($rawAppxEvidence -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedAppxInstallEvidence must be a JSON object.'
+    }
+
+    $allowedAppxEvidenceKeys = @('packageName', 'publisherId', 'minimumVersion')
+    foreach ($appxEvidenceKey in @($rawAppxEvidence.Keys)) {
+        if ([string]$appxEvidenceKey -notin $allowedAppxEvidenceKeys) {
+            throw "PSADT reviewedAppxInstallEvidence contains an unsupported property: $appxEvidenceKey"
+        }
+    }
+    foreach ($requiredAppxEvidenceKey in $allowedAppxEvidenceKeys) {
+        if (-not $rawAppxEvidence.Contains($requiredAppxEvidenceKey) -or
+            $rawAppxEvidence[$requiredAppxEvidenceKey] -isnot [string]) {
+            throw "PSADT reviewedAppxInstallEvidence must include string property $requiredAppxEvidenceKey."
+        }
+    }
+
+    $reviewedAppxInstallEvidencePackageName = ([string]$rawAppxEvidence['packageName']).Trim()
+    $reviewedAppxInstallEvidencePublisherId = ([string]$rawAppxEvidence['publisherId']).Trim()
+    $reviewedAppxInstallEvidenceMinimumVersionText = ([string]$rawAppxEvidence['minimumVersion']).Trim()
+    if ($reviewedAppxInstallEvidencePackageName -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]{0,127}$') {
+        throw 'PSADT reviewedAppxInstallEvidence packageName must be a safe exact Appx package name.'
+    }
+    if ($reviewedAppxInstallEvidencePublisherId -notmatch '^[a-z0-9]{13}$') {
+        throw 'PSADT reviewedAppxInstallEvidence publisherId must be a 13-character package publisher ID.'
+    }
+    if ($reviewedAppxInstallEvidenceMinimumVersionText -notmatch '^\d{1,5}\.\d{1,5}\.\d{1,5}\.\d{1,5}$') {
+        throw 'PSADT reviewedAppxInstallEvidence minimumVersion must contain four numeric components.'
+    }
+    try {
+        $reviewedAppxInstallEvidenceMinimumVersion = [version]$reviewedAppxInstallEvidenceMinimumVersionText
+    } catch {
+        throw 'PSADT reviewedAppxInstallEvidence minimumVersion is invalid.'
+    }
+    $reviewedAppxInstallEvidenceConfigured = $true
+}
+
 if ($reviewedRegistryInstallEvidenceConfigured -and
     $reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0) {
     throw 'PSADT reviewed registry and multi-product install evidence cannot be combined.'
+}
+if ($reviewedAppxInstallEvidenceConfigured -and
+    ($reviewedRegistryInstallEvidenceConfigured -or
+     $reviewedMultiProductInstallDisplayNamePrefixes.Count -gt 0)) {
+    throw 'PSADT reviewed Appx install evidence cannot be combined with registry or multi-product evidence.'
 }
 
 $uninstallCompletionTimeoutMinutes = 5
@@ -601,6 +650,10 @@ $preserveVendorInstallationOnUninstall = Get-StrictPSADTBoolean `
 if ($reviewedRegistryInstallEvidenceConfigured -and
     -not $preserveVendorInstallationOnUninstall) {
     throw 'PSADT reviewedRegistryInstallEvidence requires preserveVendorInstallationOnUninstall.'
+}
+if ($reviewedAppxInstallEvidenceConfigured -and
+    -not $preserveVendorInstallationOnUninstall) {
+    throw 'PSADT reviewedAppxInstallEvidence requires preserveVendorInstallationOnUninstall.'
 }
 
 function Expand-ReviewedVersionPlaceholder {
@@ -1069,6 +1122,8 @@ $reviewedExactUninstallArgumentsLiteral = @(
 ) -join ', '
 $reviewedRegistryInstallEvidenceProviderPathEscaped = $reviewedRegistryInstallEvidenceProviderPath -replace "'", "''"
 $reviewedRegistryInstallEvidenceValueNameEscaped = $reviewedRegistryInstallEvidenceValueName -replace "'", "''"
+$reviewedAppxInstallEvidencePackageNameEscaped = $reviewedAppxInstallEvidencePackageName -replace "'", "''"
+$reviewedAppxInstallEvidencePublisherIdEscaped = $reviewedAppxInstallEvidencePublisherId -replace "'", "''"
 $reviewedInstallShieldMsiExpectedFileNameEscaped = $reviewedInstallShieldMsiExpectedFileName -replace "'", "''"
 $displayNameEscaped = $DisplayName -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
 $publisherEscaped = $Publisher -replace "'", "''" -replace '`', '``' -replace '\$', '`$'
@@ -1340,6 +1395,16 @@ if ($useManagedDirectoryLifecycle) {
     # Never let unrelated background servicing become the captured identity.
     $useRegistryUninstall = $false
     Write-Host "Using reviewed managed-directory lifecycle: $reviewedManagedInstallDirectory"
+}
+
+if ($reviewedAppxInstallEvidenceConfigured) {
+    # A reviewed Appx framework lifecycle is deliberately not an ARP lifecycle.
+    # Never capture unrelated background servicing such as WebView2.
+    $useRegistryUninstall = $false
+    if ($IsUserScope) {
+        throw 'PSADT reviewedAppxInstallEvidence requires a machine-scope package.'
+    }
+    Write-Host "Using reviewed Appx framework evidence: $reviewedAppxInstallEvidencePackageName"
 }
 
 if ($reviewedRegistryInstallEvidenceConfigured) {
@@ -2061,7 +2126,22 @@ $lines += @(
 )
 $lines += $dependencyInstallLines
 
-if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
+if ($reviewedAppxInstallEvidenceConfigured) {
+    $lines += @(
+        '    # Verify the exact adapter-reviewed shared Appx framework identity.'
+        '    function Test-IntuneGetReviewedAppxInstallEvidence {'
+        "        `$minimumAppxVersion = [version]'$reviewedAppxInstallEvidenceMinimumVersion'"
+        "        `$matchingPackages = @(Get-AppxPackage -AllUsers -Name '$reviewedAppxInstallEvidencePackageNameEscaped' -ErrorAction SilentlyContinue | Where-Object {"
+        "            [string]`$_.Name -eq '$reviewedAppxInstallEvidencePackageNameEscaped' -and"
+        "            [string]`$_.PublisherId -eq '$reviewedAppxInstallEvidencePublisherIdEscaped' -and"
+        '            [bool]$_.IsFramework -and'
+        '            [version]$_.Version -ge $minimumAppxVersion'
+        '        })'
+        '        return $matchingPackages.Count -gt 0'
+        '    }'
+        ''
+    )
+} elseif ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
     $lines += @(
         '    # Verify the adapter-reviewed Windows runtime signal instead of guessing an ARP identity.'
         '    $capturedUninstallKey = $null'
@@ -2565,7 +2645,24 @@ if ($useManagedDirectoryLifecycle) {
 # Optional post-install verification (opt-in via PSADT config)
 # Throwing here routes through the standard catch -> Close-ADTSession error exit,
 # and the detection marker write below is skipped because it never runs
-if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
+if ($reviewedAppxInstallEvidenceConfigured) {
+    $lines += @(
+        '    # Wait briefly for the exact shared Appx framework to become visible.'
+        '    $reviewedAppxInstallationVerified = $false'
+        '    foreach ($verificationAttempt in 1..30) {'
+        '        if (Test-IntuneGetReviewedAppxInstallEvidence) {'
+        '            $reviewedAppxInstallationVerified = $true'
+        '            break'
+        '        }'
+        '        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }'
+        '    }'
+        '    if (-not $reviewedAppxInstallationVerified) {'
+        "        throw 'Reviewed Appx install verification failed: expected framework $reviewedAppxInstallEvidencePackageNameEscaped from publisher $reviewedAppxInstallEvidencePublisherIdEscaped at version $reviewedAppxInstallEvidenceMinimumVersion or newer.'"
+        '    }'
+        "    Write-ADTLogEntry -Message 'Verified reviewed shared Appx framework evidence.' -Severity 'Success' -Source 'Install-ADTDeployment'"
+        ''
+    )
+} elseif ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
     $lines += @(
         '    # Wait briefly for the documented Windows runtime registry signal to become visible.'
         '    foreach ($verificationAttempt in 1..30) {'
@@ -2788,7 +2885,16 @@ if ($useRegistryUninstall -and $reviewedRegistryInstallEvidenceConfigured) {
 
 if ($verifyInstall) {
     Write-Host "Post-install verification enabled"
-    if ($useRegistryUninstall) {
+    if ($reviewedAppxInstallEvidenceConfigured) {
+        $lines += @(
+            ''
+            '    ## Recheck the exact adapter-reviewed shared Appx framework evidence.'
+            '    if (-not (Test-IntuneGetReviewedAppxInstallEvidence)) {'
+            '        throw "Post-install verification failed: the reviewed shared Appx framework was not found."'
+            '    }'
+            "    Write-ADTLogEntry -Message 'Post-install verification passed for reviewed shared Appx framework evidence' -Source 'Install-ADTDeployment'"
+        )
+    } elseif ($useRegistryUninstall) {
         if ($reviewedRegistryInstallEvidenceConfigured) {
             $lines += @(
                 ''
