@@ -128,6 +128,12 @@ describe('application packaging adapters', () => {
       'user'
     );
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
+    expect(
+      resolveApplicationInstallScope(
+        'AppiumDevelopers.AppiumInspector',
+        'machine'
+      )
+    ).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Youdao.YoudaoTranslate', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' youdao.youdaotranslate ', undefined)).toBe('user');

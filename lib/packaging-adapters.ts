@@ -144,6 +144,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Appium Inspector's own Electron Builder configuration uses assisted NSIS
+    // without enabling perMachine. WinGet currently labels the installer as
+    // machine scope, which installs into LocalSystem's disposable systemprofile
+    // and registers an uninstaller that is unavailable for the later Intune
+    // removal cycle. Run the package in the intended signed-in user context.
+    wingetId: 'AppiumDevelopers.AppiumInspector',
+    requiredInstallScope: 'user',
+  },
+  {
     // UHK Agent is built with Electron Builder's assisted NSIS profile
     // (oneClick: false) without perMachine. Electron Builder defaults that
     // profile to per-user installation. WinGet currently omits Scope, so the
