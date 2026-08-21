@@ -483,8 +483,8 @@ function DashboardContent() {
       <ServiceHealth data={data} />
       <CurrentTest data={data} />
 
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <section className="rounded-2xl border border-overlay/10 bg-bg-elevated p-5 sm:p-6" aria-labelledby="queue-heading">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <section className="min-w-0 rounded-2xl border border-overlay/10 bg-bg-elevated p-5 sm:p-6" aria-labelledby="queue-heading">
           <div className="mb-4 flex items-baseline justify-between gap-3">
             <h2 id="queue-heading" className="text-lg font-semibold text-text-primary"><T>Next in queue</T></h2>
             <span className="text-xs text-text-muted"><T>One app tested at a time</T></span>
