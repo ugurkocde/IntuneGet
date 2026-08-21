@@ -102,19 +102,16 @@ function StepRow({ label, state, detail, isLast, reduceMotion }: StepRowProps) {
   );
 }
 
-function OutcomePill({ outcome }: { outcome: "running" | "passed" | "failed" }) {
+function OutcomePill({ outcome }: { outcome: "running" | "queued" }) {
   return (
     <span
       className={cn(
         "inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold",
         outcome === "running" && "bg-accent-cyan/10 text-accent-cyan",
-        outcome === "passed" && "bg-status-success/10 text-status-success",
-        outcome === "failed" && "bg-status-error/10 text-status-error"
+        outcome === "queued" && "bg-overlay/[0.05] text-text-secondary"
       )}
     >
-      {outcome === "running" && <T>Running</T>}
-      {outcome === "passed" && <T>Passed</T>}
-      {outcome === "failed" && <T>Failed</T>}
+      {outcome === "running" ? <T>Running</T> : <T>Queued</T>}
     </span>
   );
 }
@@ -132,6 +129,17 @@ export function LivePipelinePanel() {
   const failCountRef = useRef(0);
   const hasDataRef = useRef(false);
   const renderKeyRef = useRef("");
+  // Wall-clock moment the current snapshot arrived, so relative times can
+  // keep advancing between polls instead of freezing at the payload time.
+  const receivedAtRef = useRef(0);
+  const [, setClockTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden) setClockTick((tick) => tick + 1);
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,9 +177,11 @@ export function LivePipelinePanel() {
           data.current ? Math.floor((data.current.elapsedSeconds ?? 0) / 30) : null,
           data.recent[0]?.testedAtUtc,
           data.queue.count,
+          data.queue.next[0]?.wingetId,
         ]);
         if (key !== renderKeyRef.current && !cancelled) {
           renderKeyRef.current = key;
+          receivedAtRef.current = Date.now();
           setSnapshot(data);
         }
       } catch {
@@ -207,10 +217,14 @@ export function LivePipelinePanel() {
     publishing: t("publishing results"),
   };
 
-  const nowMs = snapshot ? Date.parse(snapshot.serverTime) : 0;
+  const nowMs = snapshot
+    ? Date.parse(snapshot.serverTime) + (Date.now() - receivedAtRef.current)
+    : 0;
   const current = snapshot?.current ?? null;
   const recent = snapshot?.recent ?? [];
   const lastRun = recent[0] ?? null;
+  // Between runs, feature the next queued app instead of a stale finished run.
+  const nextUp = !current && snapshot ? (snapshot.queue.next[0] ?? null) : null;
 
   if (disabled) {
     // Static explainer for installs without the public live feed.
@@ -253,7 +267,8 @@ export function LivePipelinePanel() {
     );
   }
 
-  // Featured run: the live one, or the most recent completed run when idle.
+  // Featured slot: the live run, else the next queued app, else the most
+  // recent completed run (only when the queue is empty too).
   const featured = current
     ? {
         wingetId: current.wingetId,
@@ -263,21 +278,30 @@ export function LivePipelinePanel() {
         activeDetail: phaseDetail[current.phase] ?? current.phase,
         outcome: "running" as const,
       }
-    : lastRun
+    : nextUp
       ? {
-          wingetId: lastRun.wingetId,
-          displayName: lastRun.displayName,
-          kindLine: `${lastRun.wingetId} @ ${lastRun.testedVersion}${
-            lastRun.durationSeconds != null ? ` · ${formatDuration(lastRun.durationSeconds)}` : ""
-          }`,
-          activeStep: stepLabels.length,
+          wingetId: nextUp.wingetId,
+          displayName: nextUp.displayName,
+          kindLine: `${nextUp.wingetId} @ ${nextUp.version}`,
+          activeStep: -1,
           activeDetail: "",
-          outcome: lastRun.outcome === "Passed" ? ("passed" as const) : ("failed" as const),
+          outcome: "queued" as const,
         }
-      : null;
+      : lastRun
+        ? {
+            wingetId: lastRun.wingetId,
+            displayName: lastRun.displayName,
+            kindLine: `${lastRun.wingetId} @ ${lastRun.testedVersion}${
+              lastRun.durationSeconds != null ? ` · ${formatDuration(lastRun.durationSeconds)}` : ""
+            }`,
+            activeStep: stepLabels.length,
+            activeDetail: "",
+            outcome: "done" as const,
+          }
+        : null;
 
-  // Recent rows, excluding the run currently featured while idle.
-  const recentRows = (current ? recent : recent.slice(1)).slice(0, 3);
+  // Recent rows; skip the first entry only when it is the featured item.
+  const recentRows = (current || nextUp ? recent : recent.slice(1)).slice(0, 3);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-overlay/[0.08] bg-bg-elevated shadow-soft-lg">
@@ -334,9 +358,9 @@ export function LivePipelinePanel() {
               {featured ? featured.kindLine : <T>Public QA · live</T>}
             </p>
           </div>
-          {featured && featured.outcome === "running" && (
+          {featured && featured.outcome !== "done" && (
             <span className="ml-auto flex-shrink-0">
-              <OutcomePill outcome="running" />
+              <OutcomePill outcome={featured.outcome} />
             </span>
           )}
         </div>
