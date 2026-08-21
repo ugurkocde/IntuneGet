@@ -897,6 +897,29 @@ describe('TreeSize managed uninstall block migration contract', () => {
   });
 });
 
+describe('WPS Office unsupported managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260821212500_block_wps_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks both failed unattended WPS execution contexts', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Kingsoft.WPSOffice'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32527160668'
+    );
+    expect(sql).toContain('user scope requests elevation and is cancelled');
+    expect(sql).toContain('reviewed LocalSystem -S retry stalls without activity');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
