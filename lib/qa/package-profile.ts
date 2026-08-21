@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'fbc3d4483515b6c5e83a9c31fc46d02b4fa8abb0',
+  packagerCommit: '568f59b206634c6f7342f6d398cbdf7e3b650ed9',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -248,6 +248,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // The legacy chained-MSI repair changes only Burn-labeled packages whose
   // exact GUID registration launches MsiExec without WindowsInstaller=1.
   'c0bc405098e377db345bb4304fc8e46f889415b2',
+  // Complete-token MSI UI normalization changes only packages whose manifest
+  // uses /quiet. Preserve every unrelated compatible pass from this release.
+  'fbc3d4483515b6c5e83a9c31fc46d02b4fa8abb0',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
