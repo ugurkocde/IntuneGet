@@ -851,6 +851,29 @@ describe('FlashPrint managed install block migration contract', () => {
   });
 });
 
+describe('.NET Framework Developer Pack managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260821180000_block_dotnet_developerpack_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the legacy developer pack after both exact vendor removal identities fail', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Microsoft.DotNet.Framework.DeveloperPack.4.6'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32510508197'
+    );
+    expect(sql).toContain('exact Burn removal command');
+    expect(sql).toContain('exact legacy MSI identity');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
