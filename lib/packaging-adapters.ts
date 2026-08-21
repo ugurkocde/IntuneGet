@@ -333,6 +333,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS',
   },
   {
+    // WPS Office is cataloged as a per-user EXE, but the signed installer
+    // elevates even with its exact -S switch. A standard-user launch therefore
+    // ends at the unattended UAC boundary without creating the registered
+    // product. Run that same vendor command in the already-elevated
+    // LocalSystem context used by managed Intune deployment.
+    wingetId: 'Kingsoft.WPSOffice',
+    requiredInstallScope: 'machine',
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.

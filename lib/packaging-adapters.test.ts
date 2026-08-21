@@ -786,6 +786,17 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('runs the elevation-requiring WPS Office installer as LocalSystem', () => {
+    expect(resolveApplicationInstallScope('Kingsoft.WPSOffice', 'user')).toBe('machine');
+    const adapted = applyApplicationPackagingAdapter(
+      'kingsoft.wpsoffice',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('selects Podman Desktop all-users mode for the full Intune lifecycle', () => {
     const adapted = applyApplicationPackagingAdapter(
       'redhat.podman-desktop',

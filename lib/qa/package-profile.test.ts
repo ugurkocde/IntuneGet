@@ -626,6 +626,31 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds WPS Office to the elevated managed deployment context', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Kingsoft.WPSOffice',
+      displayName: 'WPS Office',
+      publisher: 'Kingsoft',
+      version: '12.2.0.23196',
+      architecture: 'x86',
+      installerSha256: '1'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '-S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Kingsoft Office:WPS Office',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.installer.silentArgs).toBe('-S');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',
