@@ -829,6 +829,28 @@ describe('darktable managed install block migration contract', () => {
   });
 });
 
+describe('FlashPrint managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260821164000_block_flashprint_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the non-terminating nested LocalSystem lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Flashforge.FlashPrint'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32501894421'
+    );
+    expect(sql).toContain('reviewed 15-minute LocalSystem installation ceiling');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
