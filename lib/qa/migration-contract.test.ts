@@ -874,6 +874,29 @@ describe('.NET Framework Developer Pack managed uninstall block migration contra
   });
 });
 
+describe('TreeSize managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260821195200_block_treesize_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks TreeSize after both exact Inno install modes fail managed removal', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'JAMSoftware.TreeSize'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32519690272'
+    );
+    expect(sql).toContain('default current-user mode');
+    expect(sql).toContain('reviewed /ALLUSERS administrative mode');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
