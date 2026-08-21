@@ -481,6 +481,40 @@ describe('Burn bundle PSADT generation', () => {
     );
   });
 
+  it('keeps a reviewed nested EXE installer observable within its bounded wait', () => {
+    const script = generator.getInstallCommand.call(
+      generator,
+      packagingJob({
+        winget_id: 'Flashforge.FlashPrint',
+        installer_type: 'zip',
+        install_command:
+          'FlashPrint.exe /exenoui /qb! REBOOT=ReallySuppress',
+        package_config: {
+          nestedInstallerType: 'exe',
+          nestedInstallerPath: 'FlashPrint 5_5.8.3_x64.exe',
+          psadtConfig: {
+            reviewedInstallCompletionTimeoutMinutes: 15,
+          },
+        },
+      }),
+      'FlashPrint.zip',
+      '/exenoui /qb! REBOOT=ReallySuppress'
+    );
+
+    expect(script).toContain(
+      '$installDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+    );
+    expect(script).toContain(
+      'Start-ADTProcess -FilePath $nestedInstallerPath -ArgumentList \'/exenoui /qb! REBOOT=ReallySuppress\' -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
+    );
+    expect(script).toContain(
+      'The reviewed nested vendor installer is still working.'
+    );
+    expect(script).toContain(
+      '$installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+    );
+  });
+
   it('keeps executable-wrapper duplicate-entry narrowing disabled for native framework packages', () => {
     const job = packagingJob({
       installer_type: 'inno',

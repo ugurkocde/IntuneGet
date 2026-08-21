@@ -2457,6 +2457,29 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                         default {
                             if ($IsUserScope) {
                                 $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                            } elseif ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
+                                $nestedExecuteLine = @(
+                                    "        `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
+                                    "        `$installHandle = Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
+                                    '        $nextInstallProgressLog = [DateTime]::UtcNow'
+                                    '        while (-not $installHandle.Task.IsCompleted) {'
+                                    '            if ([DateTime]::UtcNow -ge $installDeadline) {'
+                                    "                throw 'The reviewed nested vendor installer did not complete within $reviewedInstallCompletionTimeoutMinutes minutes.'"
+                                    '            }'
+                                    '            if ([DateTime]::UtcNow -ge $nextInstallProgressLog) {'
+                                    '                Write-ADTLogEntry -Message "The reviewed nested vendor installer is still working." -Source ''Install-ADTDeployment'''
+                                    '                $nextInstallProgressLog = [DateTime]::UtcNow.AddSeconds(15)'
+                                    '            }'
+                                    '            Start-Sleep -Seconds 5'
+                                    '        }'
+                                    '        $installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+                                    '        if ($installProcessExitCode -in @(1641, 3010)) {'
+                                    '            $script:InstallRebootExitCode = 3010'
+                                    '            Write-ADTLogEntry -Message "The reviewed nested vendor installer requested a reboot with exit code [$installProcessExitCode]." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+                                    '        } elseif ($installProcessExitCode -ne 0) {'
+                                    '            throw "The reviewed nested vendor installer exited with code [$installProcessExitCode]."'
+                                    '        }'
+                                )
                             } else {
                                 $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                             }

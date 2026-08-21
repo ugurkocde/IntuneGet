@@ -35,7 +35,7 @@ const canRunWindowsPowerShellPackager =
   ]).status === 0;
 
 function generateRegistryUninstallPackage(
-  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft' | 'msi',
+  installerType: 'exe' | 'inno' | 'burn' | 'nullsoft' | 'msi' | 'zip',
   displayName = 'Contract Test App',
   installerSuccessCodes: number[] = [],
   psadtConfig: unknown = {},
@@ -45,7 +45,9 @@ function generateRegistryUninstallPackage(
   version = '1.0.0',
   uninstallCommand = `REGISTRY_UNINSTALL:${uninstallDisplayName}`,
   silentSwitches = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
-  installScope: 'machine' | 'user' = 'machine'
+  installScope: 'machine' | 'user' = 'machine',
+  nestedInstallerType = '',
+  nestedInstallerPath = ''
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -59,7 +61,10 @@ function generateRegistryUninstallPackage(
       mkdirSync(join(fixtureRoot, directory), { recursive: true });
     }
 
-    const installerPath = join(fixtureRoot, 'setup.exe');
+    const installerFileName = installerType === 'zip' && nestedInstallerPath
+      ? 'setup.zip'
+      : 'setup.exe';
+    const installerPath = join(fixtureRoot, installerFileName);
     writeFileSync(installerPath, 'fixture');
     writeFileSync(join(fixtureRoot, 'psadt/Invoke-AppDeployToolkit.exe'), 'fixture');
     writeFileSync(
@@ -91,12 +96,14 @@ function generateRegistryUninstallPackage(
         INPUT_WINGET_ID: wingetId,
         INPUT_INSTALLER_TYPE: installerType,
         INPUT_INSTALL_SCOPE: installScope,
+        INPUT_NESTED_INSTALLER_TYPE: nestedInstallerType,
+        INPUT_NESTED_INSTALLER_PATH: nestedInstallerPath,
         INPUT_SILENT_SWITCHES: silentSwitches,
         INPUT_INSTALLER_SUCCESS_CODES: JSON.stringify(installerSuccessCodes),
         INPUT_PACKAGE_DEPENDENCIES: JSON.stringify(packageDependencies),
         INPUT_UNINSTALL_COMMAND: uninstallCommand,
         INSTALLER_PATH: installerPath,
-        INSTALLER_FILENAME: 'setup.exe',
+        INSTALLER_FILENAME: installerFileName,
         ...(packageDependencies.length > 0
           ? { DEPENDENCIES_PATH: dependencyPath }
           : {}),
@@ -2245,6 +2252,43 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       );
       expect(generated).toContain('$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 10 }');
       expect(generated).toContain("@{ Name = 'lghub'; Description = 'Logitech G HUB' }");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps a reviewed nested FlashPrint bootstrapper observable',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'zip',
+        'FlashPrint',
+        [],
+        { reviewedInstallCompletionTimeoutMinutes: 15 },
+        [],
+        'Flashforge.FlashPrint',
+        'FlashPrint',
+        '5.8.3',
+        'REGISTRY_UNINSTALL:FlashPrint',
+        '/exenoui /qb! REBOOT=ReallySuppress',
+        'machine',
+        'exe',
+        'FlashPrint 5_5.8.3_x64.exe'
+      );
+
+      expect(generated).toContain(
+        '$installDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+      );
+      expect(generated).toContain(
+        "Start-ADTProcess -FilePath $nestedInstallerPath -ArgumentList '/exenoui /qb! REBOOT=ReallySuppress' -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
+      );
+      expect(generated).toContain(
+        'Write-ADTLogEntry -Message "The reviewed nested vendor installer is still working."'
+      );
+      expect(generated).toContain(
+        '$installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+      );
+      expect(generated).not.toContain(
+        "Start-ADTProcess -FilePath $nestedInstallerPath -ArgumentList '/exenoui /qb! REBOOT=ReallySuppress' -WindowStyle Hidden -WaitForMsiExec -Timeout"
+      );
     }
   );
 
