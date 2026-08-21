@@ -105,6 +105,28 @@ describe('installer dispatch preflight', () => {
     }));
   });
 
+  it('accepts Appium machine-labelled manifest bytes for reviewed user execution', async () => {
+    const appiumRequest = {
+      ...request,
+      wingetId: 'AppiumDevelopers.AppiumInspector',
+      installerUrl: 'https://example.test/appium-inspector.exe',
+      installScope: 'user' as const,
+    };
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: appiumRequest.installerUrl,
+      sha256: expectedSha256,
+      type: 'exe',
+      scope: 'machine',
+    }]);
+
+    await expect(enforceInstallerPreflight(appiumRequest)).resolves.toMatchObject({
+      status: 'healthy',
+      source: 'live',
+    });
+    expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts Logitech Presentation user manifest bytes for reviewed SYSTEM execution', async () => {
     const logitechRequest = {
       ...request,

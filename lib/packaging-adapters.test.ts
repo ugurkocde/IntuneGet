@@ -155,6 +155,17 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
   });
 
+  it('keeps Appium Inspector on its machine-labelled manifest bytes while executing per-user', () => {
+    expect(resolveApplicationInstallScope(
+      'AppiumDevelopers.AppiumInspector',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope(
+      'AppiumDevelopers.AppiumInspector',
+      'user'
+    )).toBe('machine');
+  });
+
   it('runs Logitech Presentation elevated without weakening catalog scope matching', () => {
     expect(resolveApplicationInstallScope('Logitech.Presentation', 'user')).toBe('machine');
     expect(resolveApplicationInstallerSelectionScope(

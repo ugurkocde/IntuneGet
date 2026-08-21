@@ -151,6 +151,9 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // removal cycle. Run the package in the intended signed-in user context.
     wingetId: 'AppiumDevelopers.AppiumInspector',
     requiredInstallScope: 'user',
+    // Keep selecting and attesting the exact machine-labelled WinGet bytes;
+    // only their execution context is corrected by the reviewed adapter.
+    reviewedInstallerSelectionScope: 'machine',
   },
   {
     // UHK Agent is built with Electron Builder's assisted NSIS profile
