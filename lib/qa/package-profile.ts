@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd7293535636c41b795088f4d265e4e085445a05c',
+  packagerCommit: '06b92432e61d66eab624085dfd6db138d3778862',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -230,6 +230,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // BlueJ's modern dual-purpose MSI context changes only its still-failing
   // install path. Preserve every unrelated compatible passing result.
   '0ad6cdec44cd8ec47ce12c9ae59487f2fa9dda52',
+  // Design Review's ODIS adapter changes only its previously failing
+  // asynchronous lifecycle. Preserve every compatible pass from this release.
+  'd7293535636c41b795088f4d265e4e085445a05c',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -93,6 +93,7 @@ describe('QA toolchain targeted retries', () => {
       'Microsoft.AzureMonitorAgent',
       'Logitech.LogiBolt',
       'BlueJTeam.BlueJ',
+      'Autodesk.DesignReview',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
 
@@ -128,6 +129,7 @@ describe('QA toolchain targeted retries', () => {
         'Microsoft.AzureMonitorAgent',
         'Logitech.LogiBolt',
         'BlueJTeam.BlueJ',
+        'Autodesk.DesignReview',
       ])
     );
     expect(
@@ -839,6 +841,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '8ed88e9a9889fec478235b1623e313f9fd86bd59',
       { wingetId: 'BlueJTeam.BlueJ', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Design Review only on its bounded ODIS lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'autodesk.designreview', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd7293535636c41b795088f4d265e4e085445a05c',
+      { wingetId: 'Autodesk.DesignReview', status: 'failed' }
     )).toBe(false);
   });
 
