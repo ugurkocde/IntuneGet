@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd47d2f11a544fcab04bfa20f1fc02e78940a0807',
+  packagerCommit: 'c0bc405098e377db345bb4304fc8e46f889415b2',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -242,6 +242,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // FlashPrint's bounded installer wait changes only its previously
   // interrupted lifecycle. Preserve every unrelated compatible pass.
   'aeb0d77229d31867de933fa3f24ff94be7ea3eab',
+  // The nested-EXE wiring repair changes only reviewed archive installers.
+  // Preserve every unrelated compatible pass from the prior activation.
+  'd47d2f11a544fcab04bfa20f1fc02e78940a0807',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
