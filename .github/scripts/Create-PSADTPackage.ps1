@@ -322,6 +322,38 @@ $reviewedUninstallArgumentsLiteral = @(
     $reviewedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
 ) -join ', '
 
+$reviewedUninstallServiceNames = @()
+if ($psadtConfig.Contains('reviewedUninstallServiceNames') -and
+    $null -ne $psadtConfig['reviewedUninstallServiceNames']) {
+    $rawReviewedServiceNames = $psadtConfig['reviewedUninstallServiceNames']
+    if ($rawReviewedServiceNames -is [string] -or
+        $rawReviewedServiceNames -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedUninstallServiceNames must be an array.'
+    }
+
+    $seenReviewedServiceNames = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($rawReviewedServiceName in @($rawReviewedServiceNames)) {
+        if ($rawReviewedServiceName -isnot [string]) {
+            throw 'Every PSADT reviewed uninstall service name must be a string.'
+        }
+        $reviewedServiceName = $rawReviewedServiceName.Trim()
+        if ($reviewedServiceName -notmatch '^[A-Za-z0-9_.-]{1,128}$') {
+            throw 'Every PSADT reviewed uninstall service name must be a safe service-name literal.'
+        }
+        if ($seenReviewedServiceNames.Add($reviewedServiceName)) {
+            $reviewedUninstallServiceNames += $reviewedServiceName
+        }
+    }
+    if ($reviewedUninstallServiceNames.Count -gt 10) {
+        throw 'PSADT reviewedUninstallServiceNames must contain at most 10 entries.'
+    }
+}
+$reviewedUninstallServiceNamesLiteral = @(
+    $reviewedUninstallServiceNames | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
+) -join ', '
+
 $reviewedUninstallProcessGuardConfigured = $false
 $reviewedUninstallProcessGuardName = ''
 $reviewedUninstallProcessGuardPattern = ''
@@ -2901,6 +2933,21 @@ if ($uninstallWelcomeCall) {
 # Add pre-uninstall prompts
 if ($preUninstallPromptCalls) {
     $lines += $preUninstallPromptCalls
+}
+
+if ($reviewedUninstallServiceNames.Count -gt 0) {
+    $lines += @(
+        ''
+        '    ## Stop vendor services required by the reviewed uninstall contract'
+        "    foreach (`$reviewedServiceName in @($reviewedUninstallServiceNamesLiteral)) {"
+        '        $reviewedService = Get-Service -Name $reviewedServiceName -ErrorAction SilentlyContinue'
+        '        if ($null -ne $reviewedService -and $reviewedService.Status -ne ''Stopped'') {'
+        '            Write-ADTLogEntry -Message "Stopping reviewed vendor service [$reviewedServiceName] before uninstall." -Source ''Uninstall-ADTDeployment'''
+        '            Stop-Service -Name $reviewedServiceName -Force -ErrorAction Stop'
+        '            $reviewedService.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(30))'
+        '        }'
+        '    }'
+    )
 }
 
 # Generate uninstall command. A reviewed shared-runtime adapter takes

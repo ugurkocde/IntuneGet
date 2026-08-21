@@ -2126,6 +2126,68 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses Wiris MathType official silent removal instead of the generic Nullsoft fallback',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        'MathType 7',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath: '%ProgramFiles(x86)%\\MathType\\Setup.exe',
+            arguments: ['-Q', '-R'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Wiris.MathType.7',
+        'MathType 7',
+        '7.12.2',
+        'REGISTRY_UNINSTALL_KEY:DSMT7:MathType 7',
+        '-Q'
+      );
+
+      expect(generated).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\MathType\\Setup.exe')"
+      );
+      expect(generated).toContain("$registeredUninstallArguments = @('-Q', '-R')");
+      expect(generated).not.toContain("$registeredUninstallArguments = @('-R', '/S')");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'stops the reviewed Azure Monitor Agent service before MSI removal',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Azure Monitor Agent',
+        [],
+        { reviewedUninstallServiceNames: ['AzureMonitorAgent'] },
+        [],
+        'Microsoft.AzureMonitorAgent',
+        'Azure Monitor Agent',
+        '1.44.0.0',
+        'REGISTRY_UNINSTALL:Azure Monitor Agent',
+        '/qn /norestart ALLUSERS=1'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "foreach ($reviewedServiceName in @('AzureMonitorAgent'))"
+      );
+      expect(uninstallFunction).toContain(
+        'Stop-Service -Name $reviewedServiceName -Force -ErrorAction Stop'
+      );
+      expect(uninstallFunction.indexOf('Stop-Service')).toBeLessThan(
+        uninstallFunction.indexOf('Executing MSI uninstall')
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'emits one valid force-countdown parameter set and never combines it with Silent',
     () => {
       const generated = generateRegistryUninstallPackage(

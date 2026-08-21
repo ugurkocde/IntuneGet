@@ -234,6 +234,11 @@ export interface PSADTConfig {
     graceSeconds: number;
   };
 
+  // Internal list of exact Windows service names that a reviewed vendor
+  // requires to be stopped before removal. Application adapters are the only
+  // trusted source; the packager validates every literal before emitting it.
+  reviewedUninstallServiceNames?: string[];
+
   // Internal completion window for vendor uninstallers that hand work to a
   // child process. Application adapters may extend the five-minute default;
   // the exact registry identity remains the authoritative completion signal.
@@ -370,6 +375,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   reviewedInstallShieldAdministrativeImage: undefined,
   reviewedUninstallArguments: [],
   reviewedUninstallProcessGuard: undefined,
+  reviewedUninstallServiceNames: undefined,
 };
 
 /**

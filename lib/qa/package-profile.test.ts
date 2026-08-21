@@ -464,6 +464,53 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds reviewed Wiris and Azure Monitor removal contracts to QA profiles', () => {
+    const mathType = normalizeQaWorkflowPackageInput({
+      wingetId: 'Wiris.MathType.7',
+      displayName: 'MathType 7',
+      publisher: 'Wiris',
+      version: '7.12.2',
+      architecture: 'x86',
+      installerSha256: 'f'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '-Q',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:DSMT7:MathType 7',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const azureMonitor = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.AzureMonitorAgent',
+      displayName: 'Azure Monitor Agent',
+      publisher: 'Microsoft',
+      version: '1.44.0.0',
+      architecture: 'x64',
+      installerSha256: 'a'.repeat(64),
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand:
+        'msiexec /x "{C4F6939C-A3A2-4556-AEB6-889F720A8AB8}" /qn /norestart',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+
+    expect(
+      (mathType.identity.profile as {
+        psadtConfig: { reviewedExactUninstall?: unknown };
+      }).psadtConfig.reviewedExactUninstall
+    ).toEqual({
+      executablePath: '%ProgramFiles(x86)%\\MathType\\Setup.exe',
+      arguments: ['-Q', '-R'],
+      completionTimeoutMinutes: 5,
+    });
+    expect(
+      (azureMonitor.identity.profile as {
+        psadtConfig: { reviewedUninstallServiceNames?: string[] };
+      }).psadtConfig.reviewedUninstallServiceNames
+    ).toEqual(['AzureMonitorAgent']);
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',

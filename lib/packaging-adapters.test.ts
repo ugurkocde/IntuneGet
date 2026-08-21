@@ -295,6 +295,20 @@ describe('application packaging adapters', () => {
       ],
     });
     expect(
+      applyApplicationPackagingAdapter('Wiris.MathType.7', DEFAULT_PSADT_CONFIG)
+        .reviewedExactUninstall
+    ).toEqual({
+      executablePath: '%ProgramFiles(x86)%\\MathType\\Setup.exe',
+      arguments: ['-Q', '-R'],
+      completionTimeoutMinutes: 5,
+    });
+    expect(
+      applyApplicationPackagingAdapter(
+        'Microsoft.AzureMonitorAgent',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallServiceNames
+    ).toEqual(['AzureMonitorAgent']);
+    expect(
       applyApplicationPackagingAdapter('Dell.Optimizer', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedExactUninstall: {

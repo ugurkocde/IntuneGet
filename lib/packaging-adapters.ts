@@ -19,6 +19,7 @@ interface ApplicationPackagingAdapter {
     argumentsPattern: string;
     graceSeconds: number;
   }>;
+  reviewedUninstallServiceNames?: readonly string[];
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
   reviewedManagedInstallDirectory?: string;
@@ -348,6 +349,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // Wiris documents MathType 7's unattended removal command as Setup.exe
+    // with -Q -R, in that order. The registered command contains only -R, and
+    // the generic Nullsoft /S fallback leaves the exact DSMT7 registration
+    // installed. Bind the official Program Files (x86) command to QA and
+    // customer packages while retaining DSMT7 as authoritative evidence.
+    wingetId: 'Wiris.MathType.7',
+    reviewedExactUninstall: {
+      executablePath: '%ProgramFiles(x86)%\\MathType\\Setup.exe',
+      arguments: ['-Q', '-R'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // Bitvise uses its own unattended switch rather than the generic /S that
     // WinGet currently publishes. The vendor documents -unat together with
     // explicit EULA acceptance for scripted installation.
@@ -376,6 +390,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredProcessesToClose: [
       { name: 'Bria', description: 'Bria' },
     ],
+  },
+  {
+    // Microsoft's Azure Monitor Agent client guidance says to stop the agent
+    // service before retrying an uninstall that cannot stop it. The signed MSI
+    // otherwise returns 1601 and leaves its exact product registration behind.
+    wingetId: 'Microsoft.AzureMonitorAgent',
+    reviewedUninstallServiceNames: ['AzureMonitorAgent'],
   },
   {
     // Link Controller remains active in the notification area after its UI is
@@ -1085,6 +1106,7 @@ export function applyApplicationPackagingAdapter(
       !config.reviewedMultiProductInstallMinimumCount &&
       !config.reviewedRegistryInstallEvidence &&
       !config.reviewedUninstallProcessGuard &&
+      !config.reviewedUninstallServiceNames &&
       !config.reviewedManagedInstallDirectory &&
       !config.reviewedManagedInstallEvidenceFile &&
       !config.reviewedManagedInstallCompletionProcess &&
@@ -1102,6 +1124,7 @@ export function applyApplicationPackagingAdapter(
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedRegistryInstallEvidence: undefined,
       reviewedUninstallProcessGuard: undefined,
+      reviewedUninstallServiceNames: undefined,
       reviewedManagedInstallDirectory: undefined,
       reviewedManagedInstallEvidenceFile: undefined,
       reviewedManagedInstallCompletionProcess: undefined,
@@ -1187,6 +1210,9 @@ export function applyApplicationPackagingAdapter(
     reviewedUninstallArguments,
     reviewedUninstallProcessGuard: adapter.reviewedUninstallProcessGuard
       ? { ...adapter.reviewedUninstallProcessGuard }
+      : undefined,
+    reviewedUninstallServiceNames: adapter.reviewedUninstallServiceNames
+      ? [...adapter.reviewedUninstallServiceNames]
       : undefined,
     ...(adapter.uninstallCompletionTimeoutMinutes
       ? { uninstallCompletionTimeoutMinutes: adapter.uninstallCompletionTimeoutMinutes }

@@ -498,6 +498,7 @@ function Uninstall-ADTDeployment
     [CmdletBinding()]
     param ()
 ${processLifecycle.uninstallBlock}
+${this.getReviewedUninstallServiceStopBlock(job)}
 
     ## Uninstall the application
     ${this.getUninstallCommand(job, installerFileName)}
@@ -894,6 +895,49 @@ catch
       }
     }
     return result;
+  }
+
+  /**
+   * Stop only exact, adapter-reviewed Windows services before vendor removal.
+   * This remains declarative and bounded so it cannot become a free-form
+   * customer command surface.
+   */
+  private getReviewedUninstallServiceStopBlock(job: PackagingJob): string {
+    const raw = this.getPsadtConfig(job)?.reviewedUninstallServiceNames;
+    if (raw === undefined || raw === null) return '';
+    if (!Array.isArray(raw) || raw.length > 10) {
+      throw new Error('PSADT reviewedUninstallServiceNames must be an array of at most 10 entries');
+    }
+
+    const serviceNames: string[] = [];
+    const seen = new Set<string>();
+    for (const value of raw) {
+      if (typeof value !== 'string') {
+        throw new Error('Each reviewed uninstall service name must be a string');
+      }
+      const serviceName = value.trim();
+      if (!/^[A-Za-z0-9_.-]{1,128}$/.test(serviceName)) {
+        throw new Error('Each reviewed uninstall service name must be a safe service-name literal');
+      }
+      const key = serviceName.toLowerCase();
+      if (!seen.has(key)) {
+        serviceNames.push(serviceName);
+        seen.add(key);
+      }
+    }
+
+    if (serviceNames.length === 0) return '';
+    const literals = serviceNames.map((name) => `'${name.replace(/'/g, "''")}'`).join(', ');
+    return `
+    ## Stop vendor services required by the reviewed uninstall contract
+    foreach ($reviewedServiceName in @(${literals})) {
+        $reviewedService = Get-Service -Name $reviewedServiceName -ErrorAction SilentlyContinue
+        if ($null -ne $reviewedService -and $reviewedService.Status -ne 'Stopped') {
+            Write-ADTLogEntry -Message "Stopping reviewed vendor service [$reviewedServiceName] before uninstall." -Source 'Uninstall-ADTDeployment'
+            Stop-Service -Name $reviewedServiceName -Force -ErrorAction Stop
+            $reviewedService.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(30))
+        }
+    }`;
   }
 
   /**

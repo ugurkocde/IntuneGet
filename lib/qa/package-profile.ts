@@ -761,6 +761,7 @@ export function normalizeQaPsadtConfig(
     reviewedInstallArguments: value?.reviewedInstallArguments || [],
     reviewedInstallArgumentsOverride: value?.reviewedInstallArgumentsOverride,
     reviewedUninstallArguments: value?.reviewedUninstallArguments || [],
+    reviewedUninstallServiceNames: value?.reviewedUninstallServiceNames,
   };
 }
 
