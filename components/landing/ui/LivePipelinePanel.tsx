@@ -141,6 +141,17 @@ export function LivePipelinePanel() {
     return () => clearInterval(interval);
   }, []);
 
+  // While a run is active, tick every second so its elapsed timer is real
+  // time instead of jumping on each poll.
+  const isRunning = Boolean(snapshot?.current);
+  useEffect(() => {
+    if (!isRunning) return;
+    const interval = setInterval(() => {
+      if (!document.hidden) setClockTick((tick) => tick + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -174,7 +185,6 @@ export function LivePipelinePanel() {
         const key = JSON.stringify([
           data.current?.wingetId,
           data.current?.phase,
-          data.current ? Math.floor((data.current.elapsedSeconds ?? 0) / 30) : null,
           data.recent[0]?.testedAtUtc,
           data.queue.count,
           data.queue.next[0]?.wingetId,
@@ -273,7 +283,9 @@ export function LivePipelinePanel() {
     ? {
         wingetId: current.wingetId,
         displayName: current.displayName,
-        kindLine: `${current.wingetId} @ ${current.version} · ${formatDuration(current.elapsedSeconds ?? 0)}`,
+        kindLine: `${current.wingetId} @ ${current.version} · ${formatDuration(
+          (current.elapsedSeconds ?? 0) + Math.max(0, (Date.now() - receivedAtRef.current) / 1000)
+        )}`,
         activeStep: STEP_INDEX[current.phase] ?? 0,
         activeDetail: phaseDetail[current.phase] ?? current.phase,
         outcome: "running" as const,
