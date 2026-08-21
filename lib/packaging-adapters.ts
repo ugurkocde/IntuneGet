@@ -218,6 +218,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallCompletionTimeoutMinutes: 15,
   },
   {
+    // FlashPrint 5.8.3 is distributed as a ZIP containing an Advanced
+    // Installer bootstrapper. Its manifest-provided unattended command stays
+    // alive without observable file-system activity for longer than the
+    // generic QA inactivity window before it completes registration. Keep the
+    // vendor command and normal ARP lifecycle, but make the shared packager
+    // wait observable and bounded for both QA and customer Intune packages.
+    wingetId: 'Flashforge.FlashPrint',
+    reviewedInstallCompletionTimeoutMinutes: 15,
+  },
+  {
     // ZeeDrive's official MSI is a command wrapper that deliberately does not
     // register in Add/Remove Programs. Thinkscape documents COMMAND=Install,
     // versioned Program Files detection, and direct directory removal for its

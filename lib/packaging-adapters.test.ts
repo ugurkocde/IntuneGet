@@ -223,6 +223,17 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('keeps the FlashPrint bootstrapper observable within a bounded wait', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'Flashforge.FlashPrint',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('does not extend the blocked Acronis managed-uninstall lifecycle', () => {
     expect(
       applyApplicationPackagingAdapter(

@@ -464,6 +464,40 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds the bounded FlashPrint nested EXE wait to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Flashforge.FlashPrint',
+      displayName: 'FlashPrint',
+      publisher: 'Flashforge',
+      version: '5.8.3',
+      architecture: 'x64',
+      installerSha256: 'a'.repeat(64),
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: 'FlashPrint 5_5.8.3_x64.exe',
+      silentSwitches: '/exenoui /qb! REBOOT=ReallySuppress',
+      uninstallCommand: 'REGISTRY_UNINSTALL:FlashPrint',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: {
+        sourceType: string;
+        nestedInstallerType: string;
+        nestedInstallerFiles: string[];
+      };
+      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+    };
+
+    expect(profile.installer.sourceType).toBe('zip');
+    expect(profile.installer.nestedInstallerType).toBe('exe');
+    expect(profile.installer.nestedInstallerFiles).toEqual([
+      'FlashPrint 5_5.8.3_x64.exe',
+    ]);
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+  });
+
   it('binds reviewed Wiris and Azure Monitor removal contracts to QA profiles', () => {
     const mathType = normalizeQaWorkflowPackageInput({
       wingetId: 'Wiris.MathType.7',
