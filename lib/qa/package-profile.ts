@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '06b92432e61d66eab624085dfd6db138d3778862',
+  packagerCommit: '912df5d19accc0344f7538596e353076c4a6f66c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -233,6 +233,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Design Review's ODIS adapter changes only its previously failing
   // asynchronous lifecycle. Preserve every compatible pass from this release.
   'd7293535636c41b795088f4d265e4e085445a05c',
+  // Appium Inspector's scope correction changes only its previously failing
+  // systemprofile removal path. Preserve compatible passing coverage.
+  '06b92432e61d66eab624085dfd6db138d3778862',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

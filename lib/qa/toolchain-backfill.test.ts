@@ -94,6 +94,7 @@ describe('QA toolchain targeted retries', () => {
       'Logitech.LogiBolt',
       'BlueJTeam.BlueJ',
       'Autodesk.DesignReview',
+      'AppiumDevelopers.AppiumInspector',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
 
@@ -130,6 +131,7 @@ describe('QA toolchain targeted retries', () => {
         'Logitech.LogiBolt',
         'BlueJTeam.BlueJ',
         'Autodesk.DesignReview',
+        'AppiumDevelopers.AppiumInspector',
       ])
     );
     expect(
@@ -852,6 +854,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'd7293535636c41b795088f4d265e4e085445a05c',
       { wingetId: 'Autodesk.DesignReview', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Appium Inspector only on its user-scope lifecycle release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'appiumdevelopers.appiuminspector', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '06b92432e61d66eab624085dfd6db138d3778862',
+      { wingetId: 'AppiumDevelopers.AppiumInspector', status: 'failed' }
     )).toBe(false);
   });
 
