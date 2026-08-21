@@ -850,3 +850,25 @@ describe('ReSharper EAP host-dependent install block migration contract', () => 
     expect(sql).toContain("status in ('queued', 'failed')");
   });
 });
+
+describe('AMD Cloud Edition hardware-dependent install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260821132000_block_amd_cloud_hardware_dependent_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the Azure AMD GPU-dependent lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'AMD.AMDSoftwareCloudEdition'");
+    expect(sql).toContain(
+      'https://learn.microsoft.com/en-us/azure/virtual-machines/windows/n-series-amd-driver-setup'
+    );
+    expect(sql).toContain('32484265649');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
