@@ -22,12 +22,12 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
 
   return (
     <section className="relative isolate w-full overflow-hidden">
-      <div className="container relative z-10 mx-auto max-w-6xl px-4 pb-14 pt-28 md:px-6 md:pb-20 md:pt-32">
-        <div className="grid items-center gap-12 lg:grid-cols-[54fr_46fr] lg:gap-16">
+      <div className="container relative z-10 mx-auto flex min-h-dvh max-w-6xl items-center px-4 pb-12 pt-24 md:px-6 md:pb-14 md:pt-28">
+        <div className="grid w-full items-center gap-12 lg:grid-cols-[54fr_46fr] lg:gap-16">
           {/* Left: copy + search */}
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
             <FadeIn animateOnMount duration={0.4} direction="up">
-              <h1 className="text-balance text-4xl font-extrabold tracking-tight text-text-primary md:text-5xl">
+              <h1 className="text-balance text-5xl font-extrabold tracking-tight text-text-primary md:text-[3.5rem] md:leading-[1.08]">
                 <T id="hero.headline">Deploy any Windows app to Intune.</T>{" "}
                 <span className="text-accent-cyan">
                   <T id="hero.headline.accent">Search it, ship it.</T>
@@ -36,10 +36,10 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
             </FadeIn>
 
             <FadeIn delay={0.08} animateOnMount duration={0.4} direction="up">
-              <p className="mt-5 max-w-xl text-base leading-relaxed text-text-secondary md:text-lg">
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-text-secondary md:text-xl">
                 {appsSupported > 0 ? (
                   <T id="hero.subheadline">
-                    IntuneGet turns the Winget catalog — <Var>{supportedAppsDisplay}</Var>+ apps —
+                    IntuneGet turns the Winget catalog of <Var>{supportedAppsDisplay}</Var>+ apps
                     into ready-to-deploy Intune packages: detection rules, silent switches, and
                     updates handled for you. No scripting required.
                   </T>
@@ -84,7 +84,7 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
             <LivePipelinePanel />
             <p className="mt-3 px-1 text-xs text-text-muted">
               <T id="hero.pipeline.caption">
-                Live from the public QA pipeline — every result above is a real run on a real
+                Live from the public QA pipeline. Every result above is a real run on a real
                 machine.
               </T>
             </p>

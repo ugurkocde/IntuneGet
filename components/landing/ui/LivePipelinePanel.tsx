@@ -334,9 +334,9 @@ export function LivePipelinePanel() {
               {featured ? featured.kindLine : <T>Public QA · live</T>}
             </p>
           </div>
-          {featured && (
+          {featured && featured.outcome === "running" && (
             <span className="ml-auto flex-shrink-0">
-              <OutcomePill outcome={featured.outcome} />
+              <OutcomePill outcome="running" />
             </span>
           )}
         </div>
@@ -388,12 +388,9 @@ export function LivePipelinePanel() {
                   {run.virusTotalStatus === "clean" ? ` · ${t("VT clean")}` : ""}
                 </p>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2.5">
-                <OutcomePill outcome={run.outcome === "Passed" ? "passed" : "failed"} />
-                <span className="min-w-[9ch] text-right font-mono text-[11px] tabular-nums text-text-muted">
-                  {formatAgo(run.testedAtUtc, nowMs, localeTag)}
-                </span>
-              </div>
+              <span className="min-w-[9ch] flex-shrink-0 text-right font-mono text-[11px] tabular-nums text-text-muted">
+                {formatAgo(run.testedAtUtc, nowMs, localeTag)}
+              </span>
             </div>
           ))
         ) : (
