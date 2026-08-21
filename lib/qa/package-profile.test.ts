@@ -562,7 +562,7 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.installScope).toBe('user');
     expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=2');
     expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
-      '/qn /norestart ALLUSERS=0 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"'
+      '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"'
     );
   });
 

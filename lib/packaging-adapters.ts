@@ -222,16 +222,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
-    // BlueJ documents ALLUSERS=0 and an explicit INSTALLDIR for unattended
-    // installs. Its 6.0.0 MSI Directory table still roots INSTALLDIR below
-    // ProgramFiles64Folder when the WiX UI sequence is suppressed, so changing
-    // ALLUSERS alone leaves a limited-rights user writing to Program Files and
-    // rolling back with 1603. Pin the per-user directory to LocalAppData for
-    // both QA and customer packages.
+    // BlueJ 6.0.0 is a dual-purpose WiX MSI. Windows Installer 5 requires
+    // ALLUSERS=2 with MSIINSTALLPERUSER=1 to select its per-user registration
+    // context; the older ALLUSERS=0 example leaves this package failing under a
+    // limited-rights account. Its silent UI also leaves INSTALLDIR rooted below
+    // Program Files, so pin that directory to LocalAppData for QA and customers.
     wingetId: 'BlueJTeam.BlueJ',
     requiredInstallScope: 'user',
     reviewedInstallArgumentsOverride:
-      '/qn /norestart ALLUSERS=0 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"',
+      '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"',
   },
   {
     // PDFsam documents this exact MSI command for managed Windows deployment.

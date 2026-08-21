@@ -675,7 +675,7 @@ describe('application packaging adapters', () => {
     );
 
     expect(adapted.reviewedInstallArgumentsOverride).toBe(
-      '/qn /norestart ALLUSERS=0 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"'
+      '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"'
     );
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });

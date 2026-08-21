@@ -1142,7 +1142,7 @@ describe('PSADT vendor argument contract', () => {
         [],
         {
           reviewedInstallArgumentsOverride:
-            '/qn /norestart ALLUSERS=0 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"',
+            '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1 INSTALLDIR="%LOCALAPPDATA%\\Programs\\BlueJ"',
         },
         [],
         'BlueJTeam.BlueJ',
@@ -1154,12 +1154,13 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(generated).toContain(
-        "$effectiveMsiProperties = [Environment]::ExpandEnvironmentVariables('/norestart ALLUSERS=0 INSTALLDIR=\"%LOCALAPPDATA%\\Programs\\BlueJ\"')"
+        "$effectiveMsiProperties = [Environment]::ExpandEnvironmentVariables('/norestart ALLUSERS=2 MSIINSTALLPERUSER=1 INSTALLDIR=\"%LOCALAPPDATA%\\Programs\\BlueJ\"')"
       );
       expect(generated).toContain(
         "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList $effectiveMsiProperties"
       );
       expect(generated).not.toContain("AdditionalArgumentList '/norestart ALLUSERS=2'");
+      expect(generated).not.toContain('ALLUSERS=0');
     }
   );
 
