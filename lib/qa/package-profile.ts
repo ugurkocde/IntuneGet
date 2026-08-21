@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'aeb0d77229d31867de933fa3f24ff94be7ea3eab',
+  packagerCommit: 'd47d2f11a544fcab04bfa20f1fc02e78940a0807',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -239,6 +239,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Windows App Runtime's exact Appx evidence changes only its previously
   // failing shared-framework lifecycle. Preserve every unrelated pass.
   '912df5d19accc0344f7538596e353076c4a6f66c',
+  // FlashPrint's bounded installer wait changes only its previously
+  // interrupted lifecycle. Preserve every unrelated compatible pass.
+  'aeb0d77229d31867de933fa3f24ff94be7ea3eab',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
