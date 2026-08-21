@@ -11,7 +11,6 @@ import { DocsDropdown } from "./DocsDropdown";
 import { ResourcesDropdown } from "./ResourcesDropdown";
 import { T, useGT, useLocale } from "gt-next";
 import { LocaleSwitcher } from "./LocaleSwitcher";
-import { ThemeToggle } from "./ThemeToggle";
 import dynamic from "next/dynamic";
 import { useSharedGitHubStats } from "@/components/providers/LandingStatsProvider";
 import { useAuthHint } from "@/hooks/useAuthHint";
@@ -196,7 +195,6 @@ export function Header() {
               </span>
             </a>
             <LocaleSwitcher />
-            <ThemeToggle />
             {isAuthenticated ? (
               <Link
                 href="/dashboard"
@@ -317,7 +315,6 @@ export function Header() {
               </a>
               <div className="flex items-center gap-2">
                 <LocaleSwitcher />
-                <ThemeToggle />
               </div>
               {isAuthenticated ? (
                 <Link

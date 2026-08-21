@@ -24,14 +24,13 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { PageHeader } from '@/components/dashboard';
 import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { WebhookManager } from '@/components/settings/WebhookManager';
-import { useTheme } from '@/components/providers/theme-context';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { cn } from '@/lib/utils';
 import { useCartStore } from '@/stores/cart-store';
 import { clearConsentPending, isConsentPending } from '@/components/AdminConsentBanner';
 
 type SettingsTab = 'general' | 'permissions' | 'notifications' | 'exports' | 'data';
-type PreferenceKey = 'theme' | 'cart' | 'assignments' | 'supersedence';
+type PreferenceKey = 'cart' | 'assignments' | 'supersedence';
 
 type PermissionErrorType =
   | 'missing_credentials'
@@ -81,21 +80,6 @@ export default function SettingsPage() {
   const { settings: userSettings, isSaving, syncError, setCartAutoOpenOnAdd, setCarryOverAssignments, setSupersedePreviousApp } = useUserSettings();
   const autoOpenOnAdd = userSettings.cartAutoOpenOnAdd;
   const setAutoOpenOnAddStore = useCartStore((state) => state.setAutoOpenOnAdd);
-  const { theme, setTheme } = useTheme();
-
-  const handleThemeToggle = useCallback(
-    async (isDark: boolean) => {
-      setActivePreferenceSave('theme');
-      setLastUpdatedPreference('theme');
-      try {
-        await setTheme(isDark ? 'dark' : 'light');
-      } finally {
-        setActivePreferenceSave(null);
-      }
-    },
-    [setTheme]
-  );
-
   const handleCartToggle = useCallback(
     async (value: boolean) => {
       setAutoOpenOnAddStore(value);
@@ -373,34 +357,6 @@ export default function SettingsPage() {
                       />
                     </div>
                 </motion.section>
-
-                  {/* Theme card */}
-                  <motion.section
-                    variants={itemVariants}
-                    className="glass-light rounded-xl p-6 border border-overlay/5 hover:border-accent-cyan/20 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-text-primary font-medium"><T>Theme</T></p>
-                        <p className="text-sm text-text-muted">
-                          <T>Choose dark mode for visual comfort</T>
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <ToggleSwitch
-                          checked={theme === 'dark'}
-                          onChange={(value) => void handleThemeToggle(value)}
-                          disabled={isSaving && activePreferenceSave !== 'theme'}
-                        />
-                        {isSaving && activePreferenceSave === 'theme' && (
-                          <span className="text-xs text-text-muted"><T>Saving...</T></span>
-                        )}
-                        {!isSaving && syncError && lastUpdatedPreference === 'theme' && (
-                          <span className="text-xs text-status-warning"><T>Saved locally</T></span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.section>
 
                   {/* Intune connection card */}
                   <motion.section

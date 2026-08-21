@@ -218,15 +218,10 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `(() => {
   try {
-    const storedTheme = localStorage.getItem("intuneget-theme");
-    if (storedTheme === "light" || storedTheme === "dark") {
-      document.documentElement.classList.toggle("dark", storedTheme === "dark");
-      return;
-    }
-
-    // First-time visitors always start in light mode. Explicit local or
-    // account preferences still take precedence on later visits.
+    // The site is light-only. Clear the class and any stored dark
+    // preference left over from when a theme toggle existed.
     document.documentElement.classList.remove("dark");
+    localStorage.removeItem("intuneget-theme");
   } catch (error) {
     if (typeof console !== "undefined" && console.warn) {
       console.warn("Failed to initialize theme preference:", error);
