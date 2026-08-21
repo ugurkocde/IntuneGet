@@ -828,3 +828,25 @@ describe('darktable managed install block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed')");
   });
 });
+
+describe('ReSharper EAP host-dependent install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260821104500_block_resharper_eap_host_dependent_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the Visual Studio-dependent lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'JetBrains.ReSharper.EAP'");
+    expect(sql).toContain(
+      'https://www.jetbrains.com/help/resharper/Installation_Guide.html'
+    );
+    expect(sql).toContain('32472961245');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
