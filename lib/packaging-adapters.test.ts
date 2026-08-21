@@ -801,6 +801,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses JetBrains silent mode with the exact dotPeek ARP command', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'jetbrains.dotpeek',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/Silent=True']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
   it('selects Podman Desktop all-users mode for the full Intune lifecycle', () => {
     const adapted = applyApplicationPackagingAdapter(
       'redhat.podman-desktop',

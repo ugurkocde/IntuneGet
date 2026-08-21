@@ -651,6 +651,29 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('binds dotPeek to JetBrains documented silent removal mode', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'JetBrains.dotPeek',
+      displayName: 'JetBrains dotPeek',
+      publisher: 'JetBrains',
+      version: '2026.2.1',
+      architecture: 'x86',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/Silent=True /PerMachine=True',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:{90d6dc38-94fa-5eca-b0fc-228f2e524373}:JetBrains dotPeek 2026.2.1',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/Silent=True']);
+  });
+
   it('binds the elevated NVM lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'CoreyButler.NVMforWindows',

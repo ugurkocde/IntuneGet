@@ -343,6 +343,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'user',
   },
   {
+    // dotPeek registers a versioned JetBrains.Platform.Installer command with
+    // /HostsToRemove and /PerMachine, but that command opens the interactive
+    // removal path unless JetBrains' documented /Silent=True switch is also
+    // present. Append only that vendor-owned mode to the exact captured ARP
+    // command and keep the versioned host identity unchanged.
+    wingetId: 'JetBrains.dotPeek',
+    reviewedUninstallArguments: ['/Silent=True'],
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.
