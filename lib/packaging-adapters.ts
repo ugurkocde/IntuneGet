@@ -352,6 +352,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/Silent=True'],
   },
   {
+    // Zen Browser uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
+    // command omits the silent switch and opens the hidden uninstall wizard
+    // under SYSTEM, leaving the exact registration present until timeout.
+    // Mozilla's enterprise removal contract documents helper.exe /S.
+    wingetId: 'Zen-Team.Zen-Browser',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.

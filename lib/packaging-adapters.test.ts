@@ -811,6 +811,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('uses Mozilla NSIS silent mode with the exact Zen Browser ARP command', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'zen-team.zen-browser',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/S']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
   it('selects Podman Desktop all-users mode for the full Intune lifecycle', () => {
     const adapted = applyApplicationPackagingAdapter(
       'redhat.podman-desktop',
