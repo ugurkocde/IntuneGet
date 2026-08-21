@@ -42,6 +42,7 @@ const secondaryNavLinks = [
   { href: "/#faq", label: "FAQ" },
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
+  { href: "/roadmap", label: "Roadmap" },
 ];
 
 export function Header() {
