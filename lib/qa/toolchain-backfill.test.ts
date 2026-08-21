@@ -89,6 +89,8 @@ describe('QA toolchain targeted retries', () => {
       'DATEV.SicherheitspaketCompact',
       'Autodesk.LicensingService',
       'Daum.PotPlayer',
+      'Wiris.MathType.7',
+      'Microsoft.AzureMonitorAgent',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
 
@@ -120,6 +122,8 @@ describe('QA toolchain targeted retries', () => {
         'DATEV.SicherheitspaketCompact',
         'Autodesk.LicensingService',
         'Daum.PotPlayer',
+        'Wiris.MathType.7',
+        'Microsoft.AzureMonitorAgent',
       ])
     );
     expect(
@@ -743,6 +747,20 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '7b2938c853d9a799ac76957bd122c5c7eb5406f5',
       { wingetId: 'Logitech.GHUB', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'Wiris.MathType.7',
+    'Microsoft.AzureMonitorAgent',
+  ])('retries %s only after activating its reviewed uninstall repair', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
+      { wingetId, status: 'failed' }
     )).toBe(false);
   });
 

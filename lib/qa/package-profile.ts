@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
+  packagerCommit: 'f5d7258e504f10679f54f025cebf11bfe9584221',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -214,6 +214,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Speek's reviewed managed-directory adapter affects only its previously
   // failing no-ARP lifecycle. Preserve every unrelated compatible pass.
   '9aaebb8f2af8bf3144fb5358b8b34e99195c088e',
+  // MathType's official exact removal command and Azure Monitor Agent's
+  // reviewed service stop affect only those two failed uninstall paths.
+  // Preserve every unrelated compatible pass from the preceding release.
+  'b29b7b930651b6b0d98eb5985ced7ee191550a3c',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
