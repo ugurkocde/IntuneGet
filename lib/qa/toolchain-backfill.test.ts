@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Microsoft.WindowsAppRuntime.1.8',
       'Speek.Speek',
       '8x8.Work',
       'Microsoft.FSLogix',
@@ -102,6 +103,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Microsoft.WindowsAppRuntime.1.8',
         'Speek.Speek',
         '8x8.Work',
         'Microsoft.FSLogix',
