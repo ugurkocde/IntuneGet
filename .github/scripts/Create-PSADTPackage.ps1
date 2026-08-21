@@ -2270,7 +2270,10 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
     }
     switch ($installerTypeLower) {
         { $_ -in 'msi', 'wix' } {
-            $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
+            # Strip only complete MSI UI tokens. Matching /q before /quiet used to
+            # leave the trailing token "iet", producing a malformed hidden MSI
+            # command that could stall indefinitely under LocalSystem.
+            $msiProperties = ($silentSwitchesEscaped -replace '(?i)(?<!\S)/(?:quiet|q[nbrfu]?)(?=\s|$)\s*', '').Trim()
             if ($msiProperties) {
                 $msiPropertiesEscaped = $msiProperties -replace "'", "''"
                 if ($msiPropertiesEscaped -match '%[A-Za-z][A-Za-z0-9()_]*%') {
@@ -2447,7 +2450,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     # Build the execution line for a non-portable nested installer.
                     switch ($nestedInstallerTypeLower) {
                         { $_ -in 'msi', 'wix' } {
-                            $msiProperties = ($silentSwitchesEscaped -replace '/q[nbrfu]?\s*', '' -replace '/quiet\s*', '').Trim()
+                            $msiProperties = ($silentSwitchesEscaped -replace '(?i)(?<!\S)/(?:quiet|q[nbrfu]?)(?=\s|$)\s*', '').Trim()
                             if ($msiProperties) {
                                 $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath -AdditionalArgumentList '$msiProperties'"
                             } else {

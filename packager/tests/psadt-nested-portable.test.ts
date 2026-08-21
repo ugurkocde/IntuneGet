@@ -9,6 +9,7 @@ type ScriptGenerator = {
   getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string;
   getUninstallCommand(job: PackagingJob, fileName: string): string;
   getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string): string;
+  extractMsiProperties(silentSwitches: string): string;
   extractSilentSwitches(
     installCommand: string,
     installerType: string,
@@ -57,6 +58,15 @@ function uninstallScript(job: PackagingJob): string {
 }
 
 describe('nested portable PSADT generation', () => {
+  it('strips complete MSI UI tokens without leaking quiet suffix fragments', () => {
+    expect(
+      generator.extractMsiProperties.call(
+        generator,
+        '/quiet /norestart IACCEPTMSODBCSQLLICENSETERMS=YES ALLUSERS=1'
+      )
+    ).toBe('IACCEPTMSODBCSQLLICENSETERMS=YES ALLUSERS=1');
+  });
+
   it('safely stages a top-level portable zip payload', () => {
     const script = installScript(packagingJob({
       installer_type: 'portable',

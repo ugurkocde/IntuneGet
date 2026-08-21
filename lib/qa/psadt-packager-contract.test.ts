@@ -1231,6 +1231,29 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'strips the complete MSI quiet token without leaking a trailing fragment',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'msi',
+        'Microsoft ODBC Driver 13 for SQL Server',
+        [],
+        {},
+        [],
+        'Microsoft.msodbcsql.13',
+        'Microsoft ODBC Driver 13 for SQL Server',
+        '13.1.4414.46',
+        'msiexec /x "{7E425BFB-1DEB-499F-8F3F-3522A6E98754}" /qn /norestart',
+        '/quiet /norestart IACCEPTMSODBCSQLLICENSETERMS=YES ALLUSERS=1'
+      );
+
+      expect(generated).toContain(
+        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart IACCEPTMSODBCSQLLICENSETERMS=YES ALLUSERS=1'"
+      );
+      expect(generated).not.toMatch(/AdditionalArgumentList '[^']*\biet\b/);
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'replaces BlueJ automatic context and expands its per-user MSI directory',
     () => {
       const productCode = '{BAF3564F-5DE4-48AC-8CC4-260BFFD56D30}';
