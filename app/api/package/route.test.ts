@@ -476,6 +476,54 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
   });
 
+  it('preflights ImageGlass through its renamed official asset while preserving manifest identity', async () => {
+    const manifestUrl =
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64.msi';
+    const releaseAssetUrl =
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64_pro-business.msi';
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: manifestUrl,
+      sha256: 'D'.repeat(64),
+      type: 'wix',
+      scope: 'machine',
+      silentArgs: 'ALLUSERS=1',
+      productCode: '{6D0C2C70-3535-5F89-AC42-194E255ED60E}',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'DuongDieuPhap.ImageGlass',
+          displayName: 'ImageGlass',
+          version: '10.0.4.819',
+          installerType: 'wix',
+          installerUrl: manifestUrl,
+          installerSha256: 'D'.repeat(64),
+          installCommand: 'ALLUSERS=1',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'DuongDieuPhap.ImageGlass',
+        installerUrl: releaseAssetUrl,
+        manifestInstallerUrl: manifestUrl,
+        installerSha256: 'D'.repeat(64),
+      }),
+      expect.any(Array),
+    );
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
+  });
+
   it('does not apply catalog retirement policy to a custom package', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

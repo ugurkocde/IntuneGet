@@ -23,6 +23,13 @@ export const INSTALLER_URL_OVERRIDES: Record<string, OverrideFn> = {
     architecture.toLowerCase() === 'x64'
       ? `https://mirror.blender.org/release/Blender4.2/blender-${version}-windows-x64.msi`
       : null,
+  // ImageGlass 10.0.4.819 was published to WinGet with the correct trusted
+  // hash, but the release asset was renamed after publication. Keep this
+  // exact tuple on the official GitHub release without guessing future names.
+  'DuongDieuPhap.ImageGlass': (version, architecture) =>
+    version === '10.0.4.819' && architecture.toLowerCase() === 'x64'
+      ? 'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64_pro-business.msi'
+      : null,
   'Freeplane.Freeplane': (version) =>
     `https://github.com/freeplane/freeplane/releases/download/release-${version}/Freeplane-Setup-${version}.exe`,
 };

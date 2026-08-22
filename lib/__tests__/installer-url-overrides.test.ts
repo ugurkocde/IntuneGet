@@ -52,6 +52,36 @@ describe('applyInstallerUrlOverride', () => {
     )).toBe(original);
   });
 
+  it('routes the affected ImageGlass x64 release to its renamed official asset', () => {
+    const url = applyInstallerUrlOverride(
+      'DuongDieuPhap.ImageGlass',
+      '10.0.4.819',
+      'x64',
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64.msi',
+    );
+
+    expect(url).toBe(
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64_pro-business.msi',
+    );
+  });
+
+  it('does not guess ImageGlass asset names for other versions or architectures', () => {
+    const original = 'https://github.com/d2phap/ImageGlass/releases/download/setup.msi';
+
+    expect(applyInstallerUrlOverride(
+      'DuongDieuPhap.ImageGlass',
+      '10.0.5.900',
+      'x64',
+      original,
+    )).toBe(original);
+    expect(applyInstallerUrlOverride(
+      'DuongDieuPhap.ImageGlass',
+      '10.0.4.819',
+      'arm64',
+      original,
+    )).toBe(original);
+  });
+
   it('interpolates the version into the Freeplane GitHub Releases URL', () => {
     const url = applyInstallerUrlOverride(
       'Freeplane.Freeplane',
@@ -90,5 +120,9 @@ describe('INSTALLER_URL_OVERRIDES', () => {
 
   it('contains the Blender 4.2 LTS entry', () => {
     expect(INSTALLER_URL_OVERRIDES['BlenderFoundation.Blender.LTS.4.2']).toBeDefined();
+  });
+
+  it('contains the ImageGlass entry', () => {
+    expect(INSTALLER_URL_OVERRIDES['DuongDieuPhap.ImageGlass']).toBeDefined();
   });
 });

@@ -118,6 +118,43 @@ describe('dispatchQaCandidate', () => {
     expect(JSON.parse(body.inputs.candidate_payload).installerUrl).toBe(mirrorUrl);
   });
 
+  it('uses the renamed ImageGlass release asset for QA preflight and runner payload', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const manifestUrl =
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64.msi';
+    const releaseAssetUrl =
+      'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64_pro-business.msi';
+
+    await dispatchQaCandidate({
+      id: '33333333-3333-4333-8333-333333333333',
+      winget_id: 'DuongDieuPhap.ImageGlass',
+      definition_path: null,
+      version: '10.0.4.819',
+      architecture: 'x64',
+      installer_url: manifestUrl,
+      installer_sha256: 'D'.repeat(64),
+      installer_file_name: 'ImageGlass_10.0.4.819_win-x64.msi',
+      installer_type: 'msi',
+      test_level: 'psadt-package',
+      package_profile_sha256: 'E'.repeat(64),
+      test_config: { mode: 'psadt-package', sourceInstallerType: 'wix' },
+    });
+
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(expect.objectContaining({
+      installerUrl: releaseAssetUrl,
+      manifestInstallerUrl: manifestUrl,
+      installerSha256: 'D'.repeat(64),
+    }));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.parse(body.inputs.candidate_payload).installerUrl).toBe(releaseAssetUrl);
+  });
+
   it('surfaces a rejected GitHub dispatch', async () => {
     enforceInstallerPreflightMock.mockResolvedValue({
       cacheKey: 'healthy',
