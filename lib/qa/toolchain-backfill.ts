@@ -74,6 +74,12 @@ const EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS = [
   ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3add630cf3483c2e9ecff61647ca23b727295b9a': [
+    // Retry Amazon Music with its exact reviewed argument-free contract.
+    'Amazon.Music',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    ...EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS,
+  ],
   '3ce4c3b514ade5658515f6ba9d7a790f695e44f3': [
     // Retry Amazon Music now that argument-free EXE launches omit PSADT's
     // invalid empty ArgumentList parameter.
