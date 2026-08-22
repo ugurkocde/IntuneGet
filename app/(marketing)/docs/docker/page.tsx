@@ -324,7 +324,7 @@ services:
           </p>
         </Callout>
 
-        <div className="grid gap-4 sm:grid-cols-3 mt-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mt-6">
           <div className="rounded-lg border border-overlay/10 bg-bg-elevated p-4">
             <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
               <Shield className="h-4 w-4 text-accent-cyan" />

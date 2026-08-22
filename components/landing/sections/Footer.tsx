@@ -220,7 +220,7 @@ export function Footer() {
                   aria-hidden="true"
                 />
               </summary>
-              <ul className="grid gap-3 pb-5 sm:grid-cols-3">
+              <ul className="grid grid-cols-1 gap-3 pb-5 sm:grid-cols-3">
                 {group.links.map((link) => (
                   <li key={link.label}>
                     <FooterNavLink link={link} />
