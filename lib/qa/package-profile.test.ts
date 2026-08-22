@@ -395,6 +395,39 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'MiKTeX.MiKTeX',
+      displayName: 'MiKTeX',
+      publisher: 'MiKTeX',
+      version: '25.12',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--unattended --shared',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:MiKTeX:MiKTeX',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        reviewedExactUninstall?: {
+          executablePath: string;
+          arguments: string[];
+          completionTimeoutMinutes: number;
+        };
+      };
+    };
+
+    expect(profile.psadtConfig.reviewedExactUninstall).toEqual({
+      executablePath:
+        '%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe',
+      arguments: ['--quiet', '--shared=yes', 'uninstall'],
+      completionTimeoutMinutes: 15,
+    });
+  });
+
   it('binds Logitech Presentation remote deployment to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Logitech.Presentation',

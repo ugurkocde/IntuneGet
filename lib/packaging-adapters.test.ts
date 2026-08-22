@@ -365,6 +365,15 @@ describe('application packaging adapters', () => {
       completionTimeoutMinutes: 5,
     });
     expect(
+      applyApplicationPackagingAdapter('MiKTeX.MiKTeX', DEFAULT_PSADT_CONFIG)
+        .reviewedExactUninstall
+    ).toEqual({
+      executablePath:
+        '%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe',
+      arguments: ['--quiet', '--shared=yes', 'uninstall'],
+      completionTimeoutMinutes: 15,
+    });
+    expect(
       applyApplicationPackagingAdapter(
         'Microsoft.AzureMonitorAgent',
         DEFAULT_PSADT_CONFIG

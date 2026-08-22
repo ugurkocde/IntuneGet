@@ -472,6 +472,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // MiKTeX registers its Console cleanup page as the ARP uninstall command.
+    // That command opens an interactive Qt workflow and leaves the exact
+    // registration installed under non-interactive LocalSystem. MiKTeX's
+    // integrated setup utility is the documented unattended removal path;
+    // --shared=yes is required for the all-users installation selected here.
+    wingetId: 'MiKTeX.MiKTeX',
+    reviewedExactUninstall: {
+      executablePath:
+        '%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe',
+      arguments: ['--quiet', '--shared=yes', 'uninstall'],
+      completionTimeoutMinutes: 15,
+    },
+  },
+  {
     // Bitvise uses its own unattended switch rather than the generic /S that
     // WinGet currently publishes. The vendor documents -unat together with
     // explicit EULA acceptance for scripted installation.
