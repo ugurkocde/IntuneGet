@@ -1118,6 +1118,29 @@ describe('Standard Notes SYSTEM-profile lifecycle block migration contract', () 
   });
 });
 
+describe('superProductivity SYSTEM-profile lifecycle block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822111500_block_superproductivity_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsafe per-user lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'JohannesMillan.superProductivity'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32564266080'
+    );
+    expect(sql).toContain('LocalSystem profile');
+    expect(sql).toContain('2,914');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('AMD Cloud Edition hardware-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
