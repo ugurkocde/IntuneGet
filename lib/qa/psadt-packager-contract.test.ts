@@ -181,6 +181,36 @@ describe('PSADT Inno packaging contract', () => {
 
 describe('PSADT vendor argument contract', () => {
   it.runIf(canRunWindowsPowerShellPackager)(
+    'appends NeoLoad unattended removal to the exact captured install4j command',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'NeoLoad',
+        [],
+        { reviewedUninstallArguments: ['-q'] },
+        [],
+        'Tricentis.NeoLoad',
+        'NeoLoad',
+        '8.2.1',
+        'REGISTRY_UNINSTALL_KEY:0878-6793-3006-4848:NeoLoad',
+        '-q'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$configuredProductCode = '0878-6793-3006-4848'"
+      );
+      expect(uninstallFunction).toContain("$reviewedUninstallArguments = @('-q')");
+      expect(uninstallFunction).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'appends SketchUp silent removal to the exact captured InstallShield command',
     () => {
       const generated = generateRegistryUninstallPackage(

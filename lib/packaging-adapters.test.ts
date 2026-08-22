@@ -347,6 +347,10 @@ describe('application packaging adapters', () => {
       ).reviewedUninstallArguments
     ).toEqual(['-silent']);
     expect(
+      applyApplicationPackagingAdapter('Tricentis.NeoLoad', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['-q']);
+    expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['--force-uninstall']);

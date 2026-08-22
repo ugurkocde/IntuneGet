@@ -1078,6 +1078,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-silent'],
   },
   {
+    // NeoLoad registers its install4j uninstaller without an unattended
+    // argument. install4j documents -q for both installers and uninstallers;
+    // append it to the exact captured registration instead of guessing a
+    // product path or replacing the vendor command.
+    wingetId: 'Tricentis.NeoLoad',
+    reviewedUninstallArguments: ['-q'],
+  },
+  {
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
