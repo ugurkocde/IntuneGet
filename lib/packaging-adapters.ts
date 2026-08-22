@@ -149,6 +149,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // ElegantClipboard's tagged Tauri v2 configuration explicitly builds its
+    // NSIS installer with installMode=currentUser, while the WinGet manifest
+    // omits Scope. The generic machine default installs below LocalSystem's
+    // systemprofile and registers an uninstall.exe path that is already absent
+    // by the managed removal cycle. Keep the package in the intended signed-in
+    // user context so customer deployment and QA share the vendor's lifecycle.
+    wingetId: 'Y-ASLant.ElegantClipboard',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.

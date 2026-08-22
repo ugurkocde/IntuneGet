@@ -367,6 +367,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps ElegantClipboard out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Y-ASLant.ElegantClipboard',
+      displayName: 'ElegantClipboard',
+      publisher: 'Y-ASLant',
+      version: '1.2.7',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:ElegantClipboard',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Y_ASLant_ElegantClipboard',
+      }),
+    ]);
+  });
+
   it('binds Logitech Presentation remote deployment to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Logitech.Presentation',

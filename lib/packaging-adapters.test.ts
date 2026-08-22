@@ -149,6 +149,12 @@ describe('application packaging adapters', () => {
   });
 
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
+    expect(
+      resolveApplicationInstallScope('Y-ASLant.ElegantClipboard', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' y-aslant.elegantclipboard ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
       'user'
     );
