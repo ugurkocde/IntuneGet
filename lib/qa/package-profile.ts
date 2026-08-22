@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
+  packagerCommit: '98019d2c6e06ff51a35d178bedc41f9f67a99107',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -272,6 +272,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // ElegantClipboard's publisher-declared current-user scope changes only its
   // failed systemprofile lifecycle. Preserve every unrelated valid pass.
   'ffb7638dd870b188654c84673663b8ff151a7985',
+  // MiKTeX's documented unattended setup command changes only its previously
+  // failed interactive cleanup lifecycle. Preserve every unrelated valid pass.
+  'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

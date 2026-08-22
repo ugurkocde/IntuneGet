@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'MiKTeX.MiKTeX',
       'Y-ASLant.ElegantClipboard',
       'Amazon.Music',
       'Greenshot.Greenshot.Preview',
@@ -108,6 +109,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'MiKTeX.MiKTeX',
         'Y-ASLant.ElegantClipboard',
         'Amazon.Music',
         'Greenshot.Greenshot.Preview',
@@ -159,6 +161,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'ffb7638dd870b188654c84673663b8ff151a7985',
       { wingetId: 'Y-ASLant.ElegantClipboard', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries MiKTeX only after activating its unattended setup lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' miktex.miktex ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
+      { wingetId: 'MiKTeX.MiKTeX', status: 'failed' }
     )).toBe(false);
   });
 
