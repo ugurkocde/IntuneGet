@@ -1086,6 +1086,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-q'],
   },
   {
+    // Postgres Pro's Windows installer is built from the vendor's PostgreSQL
+    // NSIS source and registers an ordinary `PostgreSQL <major> (64bit)` ARP
+    // entry. Its generated uninstaller accepts NSIS /S; append that reviewed
+    // switch to the exact captured command for unattended Intune removal.
+    wingetId: 'PostgresPro.Standard.17',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
@@ -1287,6 +1295,16 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'Memory',
     registeredDisplayName: 'Memory',
     registeredRegistryKey: 'Memory',
+  },
+  // Postgres Pro's official Windows build scripts keep PRODUCT_NAME set to
+  // PostgreSQL and derive the x64 ARP branding as `PostgreSQL <major>
+  // (64bit)`. Bind that exact stable NSIS key so prerequisite registry deltas
+  // cannot win capture and the same identity drives customer detection and
+  // removal.
+  'postgrespro.standard.17': {
+    generatedDisplayName: 'Postgres Pro Standard 17',
+    registeredDisplayName: 'PostgreSQL 17 (64bit)',
+    registeredRegistryKey: 'PostgreSQL 17 (64bit)',
   },
   'msys2.msys2': {
     generatedDisplayName: 'MSYS2 Installer',

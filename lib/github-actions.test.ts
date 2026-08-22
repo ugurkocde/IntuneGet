@@ -144,6 +144,39 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(JSON.parse(payload.client_payload.installer.successCodes)).toEqual([1223]);
   });
 
+  it('dispatches the reviewed Postgres Pro lifecycle through the customer packager', async () => {
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: {
+        ...item,
+        uninstallCommand:
+          'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)',
+      },
+      trustedInstallers: [],
+    }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'PostgresPro.Standard.17',
+      displayName: 'Postgres Pro Standard 17',
+      publisher: 'Postgres Professional',
+      version: '17.7',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'nullsoft',
+      silentSwitches: '--mode unattended',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Postgres Pro Standard 17',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)'
+    );
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['/S'] });
+  });
+
   it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

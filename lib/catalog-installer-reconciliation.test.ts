@@ -365,4 +365,29 @@ describe('catalog installer reconciliation', () => {
 
     expect(reconciled.item.uninstallCommand).toBe('REGISTRY_UNINSTALL:Google Chrome');
   });
+
+  it('uses Postgres Pro 17\'s exact vendor ARP identity for customer packages', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x64',
+      url: 'https://example.test/postgrespro-17.exe',
+      sha256,
+      type: 'nullsoft',
+      scope: 'machine',
+      silentArgs: '--mode unattended',
+    } satisfies NormalizedInstaller]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'PostgresPro.Standard.17',
+      displayName: 'Postgres Pro Standard 17',
+      version: '17.7',
+      installerType: 'nullsoft',
+      installerUrl: 'https://example.test/postgrespro-17.exe',
+      installCommand: '--mode unattended',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Postgres Pro Standard 17',
+    }));
+
+    expect(reconciled.item.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)'
+    );
+  });
 });

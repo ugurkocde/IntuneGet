@@ -142,6 +142,23 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Postgres Pro 17\'s exact PostgreSQL NSIS registry identity', () => {
+    expect(resolveApplicationUninstallCommand(
+      'PostgresPro.Standard.17',
+      'REGISTRY_UNINSTALL:Postgres Pro Standard 17'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'PostgresPro.Standard.17',
+      'REGISTRY_UNINSTALL:Postgres Pro Standard 16'
+    )).toBe('REGISTRY_UNINSTALL:Postgres Pro Standard 16');
+    expect(resolveApplicationUninstallCommand(
+      'PostgreSQL.PostgreSQL.17',
+      'REGISTRY_UNINSTALL:PostgreSQL 17'
+    )).toBe('REGISTRY_UNINSTALL:PostgreSQL 17');
+  });
+
   it('uses MSYS2\'s registered product family instead of its catalog title', () => {
     expect(resolveApplicationUninstallCommand(
       'MSYS2.MSYS2',
@@ -898,6 +915,16 @@ describe('application packaging adapters', () => {
   it('uses Mozilla NSIS silent mode with the exact Zen Browser ARP command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'zen-team.zen-browser',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/S']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
+  it('uses Postgres Pro 17\'s reviewed NSIS silent uninstall mode', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'postgrespro.standard.17',
       DEFAULT_PSADT_CONFIG
     );
 

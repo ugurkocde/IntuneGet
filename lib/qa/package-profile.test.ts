@@ -161,6 +161,33 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.successCodes).toEqual([1223]);
   });
 
+  it('binds Postgres Pro 17 customer packages to the exact vendor lifecycle', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'PostgresPro.Standard.17',
+      displayName: 'Postgres Pro Standard 17',
+      publisher: 'Postgres Professional',
+      version: '17.7',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '--mode unattended',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Postgres Pro Standard 17',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(normalized.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)'
+    );
+    expect(profile.installer.uninstallCommand).toBe(normalized.uninstallCommand);
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/S']);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['/S']);
+  });
+
   it('binds offline dependency installers to the execution profile only when present', () => {
     const baseline = buildQaPackageIdentity(input);
     const dependency = {
