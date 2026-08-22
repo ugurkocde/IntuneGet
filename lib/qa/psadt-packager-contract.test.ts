@@ -1198,6 +1198,34 @@ describe('PSADT vendor argument contract', () => {
   });
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'omits ArgumentList when an EXE installer declares no arguments',
+    () => {
+      for (const installScope of ['machine', 'user'] as const) {
+        const generated = generateRegistryUninstallPackage(
+          'exe',
+          'No Arguments Contract App',
+          [],
+          {},
+          [],
+          'IntuneGet.NoArguments',
+          'No Arguments Contract App',
+          '1.0.0',
+          'REGISTRY_UNINSTALL:No Arguments Contract App',
+          '',
+          installScope
+        );
+
+        expect(generated).not.toContain("-ArgumentList ''");
+        expect(generated).toContain(
+          installScope === 'user'
+            ? 'Start-ADTProcess -FilePath $installerDest -UseShellExecute'
+            : 'Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\setup.exe" -WindowStyle Hidden'
+        );
+      }
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'appends bounded reviewed install arguments to the synthesized vendor command',
     () => {
       const generated = generateRegistryUninstallPackage(

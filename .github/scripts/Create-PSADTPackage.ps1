@@ -2037,7 +2037,12 @@ foreach ($dependency in @($PackageDependencies | Sort-Object order)) {
         )
     }
     else {
-        $dependencyInstallLines += "    `$dependencyResult = Start-ADTProcess -FilePath `$dependencyPath -ArgumentList '$dependencyArgumentsEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
+        $dependencyArgumentListFragment = if ([string]::IsNullOrWhiteSpace($dependencyArgumentsEscaped)) {
+            ''
+        } else {
+            " -ArgumentList '$dependencyArgumentsEscaped'"
+        }
+        $dependencyInstallLines += "    `$dependencyResult = Start-ADTProcess -FilePath `$dependencyPath$dependencyArgumentListFragment -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 10) -TimeoutAction Stop -SuccessExitCodes @($dependencySuccessLiteral) -RebootExitCodes @($dependencyRebootLiteral) -PassThru"
     }
     $dependencyInstallLines += @(
         "    if (`$dependencyResult.ExitCode -in @($dependencyRebootLiteral)) {"
@@ -2268,6 +2273,11 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
         $lines += "    `$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('$effectiveInstallerArgumentsEscaped')"
         $installerArgumentList = '$effectiveInstallerArguments'
     }
+    $installerArgumentListFragment = if ([string]::IsNullOrWhiteSpace($effectiveInstallerArgumentsEscaped)) {
+        ''
+    } else {
+        " -ArgumentList $installerArgumentList"
+    }
     switch ($installerTypeLower) {
         { $_ -in 'msi', 'wix' } {
             # Strip only complete MSI UI tokens. Matching /q before /quiet used to
@@ -2458,12 +2468,17 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                             }
                         }
                         default {
+                            $nestedInstallerArgumentListFragment = if ([string]::IsNullOrWhiteSpace($silentSwitchesEscaped)) {
+                                ''
+                            } else {
+                                " -ArgumentList '$silentSwitchesEscaped'"
+                            }
                             if ($IsUserScope) {
-                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath$nestedInstallerArgumentListFragment -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                             } elseif ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
                                 $nestedExecuteLine = @(
                                     "        `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
-                                    "        `$installHandle = Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
+                                    "        `$installHandle = Start-ADTProcess -FilePath `$nestedInstallerPath$nestedInstallerArgumentListFragment -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
                                     '        $nextInstallProgressLog = [DateTime]::UtcNow'
                                     '        while (-not $installHandle.Task.IsCompleted) {'
                                     '            if ([DateTime]::UtcNow -ge $installDeadline) {'
@@ -2484,7 +2499,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                                     '        }'
                                 )
                             } else {
-                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath -ArgumentList '$silentSwitchesEscaped' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                                $nestedExecuteLine = "        Start-ADTProcess -FilePath `$nestedInstallerPath$nestedInstallerArgumentListFragment -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                             }
                         }
                     }
@@ -2574,7 +2589,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     '    try {'
                     '        Write-ADTLogEntry -Message "Running per-user installer from user temp directory" -Severity ''Info'' -Source ''Install-ADTDeployment'''
                     '        # Use -UseShellExecute for shell context which inherits environment variables'
-                    "        Start-ADTProcess -FilePath `$installerDest -ArgumentList $installerArgumentList -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                    "        Start-ADTProcess -FilePath `$installerDest$installerArgumentListFragment -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                     '    }'
                     '    finally {'
                     '        # Cleanup temp directory'
@@ -2588,7 +2603,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     $lines += @(
                         "    `$installerPath = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
                         "    `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
-                        "    `$installHandle = Start-ADTProcess -FilePath `$installerPath -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
+                        "    `$installHandle = Start-ADTProcess -FilePath `$installerPath$installerArgumentListFragment -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru"
                         '    $nextInstallProgressLog = [DateTime]::UtcNow'
                         '    while (-not $installHandle.Task.IsCompleted) {'
                         '        if ([DateTime]::UtcNow -ge $installDeadline) {'
@@ -2610,7 +2625,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     )
                 } else {
                     $lines += @(
-                        "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`" -ArgumentList $installerArgumentList -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                        "    Start-ADTProcess -FilePath `"`$(`$adtSession.DirFiles)\$installerFileName`"$installerArgumentListFragment -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
                     )
                 }
             }
