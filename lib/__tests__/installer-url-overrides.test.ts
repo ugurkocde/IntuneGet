@@ -82,6 +82,44 @@ describe('applyInstallerUrlOverride', () => {
     )).toBe(original);
   });
 
+  it('routes the affected MariaDB release to its official archive', () => {
+    const original =
+      'https://downloads.mariadb.org/rest-api/mariadb/12.3.3/mariadb-12.3.3-winx64.msi';
+    expect(applyInstallerUrlOverride(
+      'MariaDB.Server',
+      '12.3.3.0',
+      'x64',
+      original,
+    )).toBe(
+      'https://archive.mariadb.org/mariadb-12.3.3/winx64-packages/mariadb-12.3.3-winx64.msi',
+    );
+    expect(applyInstallerUrlOverride(
+      'MariaDB.Server',
+      '12.3.4.0',
+      'x64',
+      original,
+    )).toBe(original);
+  });
+
+  it('routes the affected PostgresPro release to its official international repository', () => {
+    const original =
+      'https://repo.postgrespro.ru/win/64/PostgreSQL_17.7_64bit_Setup.exe';
+    expect(applyInstallerUrlOverride(
+      'PostgresPro.Standard.17',
+      '17.7',
+      'x64',
+      original,
+    )).toBe(
+      'https://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    );
+    expect(applyInstallerUrlOverride(
+      'PostgresPro.Standard.17',
+      '17.7',
+      'arm64',
+      original,
+    )).toBe(original);
+  });
+
   it('interpolates the version into the Freeplane GitHub Releases URL', () => {
     const url = applyInstallerUrlOverride(
       'Freeplane.Freeplane',
@@ -124,5 +162,10 @@ describe('INSTALLER_URL_OVERRIDES', () => {
 
   it('contains the ImageGlass entry', () => {
     expect(INSTALLER_URL_OVERRIDES['DuongDieuPhap.ImageGlass']).toBeDefined();
+  });
+
+  it('contains the MariaDB and PostgresPro entries', () => {
+    expect(INSTALLER_URL_OVERRIDES['MariaDB.Server']).toBeDefined();
+    expect(INSTALLER_URL_OVERRIDES['PostgresPro.Standard.17']).toBeDefined();
   });
 });

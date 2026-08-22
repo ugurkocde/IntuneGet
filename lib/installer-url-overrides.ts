@@ -30,6 +30,19 @@ export const INSTALLER_URL_OVERRIDES: Record<string, OverrideFn> = {
     version === '10.0.4.819' && architecture.toLowerCase() === 'x64'
       ? 'https://github.com/d2phap/ImageGlass/releases/download/10.0.4.819/ImageGlass_10.0.4.819_win-x64_pro-business.msi'
       : null,
+  // MariaDB removed the REST download endpoint after publishing this WinGet
+  // tuple. Its official archive retains the exact MSI and published hash.
+  'MariaDB.Server': (version, architecture) =>
+    version === '12.3.3.0' && architecture.toLowerCase() === 'x64'
+      ? 'https://archive.mariadb.org/mariadb-12.3.3/winx64-packages/mariadb-12.3.3-winx64.msi'
+      : null,
+  // The Russian PostgresPro repository repeatedly times out from hosted
+  // egress. The official international repository serves the same release
+  // from a separate network while the WinGet SHA256 remains authoritative.
+  'PostgresPro.Standard.17': (version, architecture) =>
+    version === '17.7' && architecture.toLowerCase() === 'x64'
+      ? 'https://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe'
+      : null,
   'Freeplane.Freeplane': (version) =>
     `https://github.com/freeplane/freeplane/releases/download/release-${version}/Freeplane-Setup-${version}.exe`,
 };
