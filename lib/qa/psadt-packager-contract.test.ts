@@ -733,6 +733,37 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps QQ exact registry removal non-interactive under LocalSystem',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'QQ',
+        [],
+        { reviewedUninstallArguments: ['/S'] },
+        [],
+        'Tencent.QQ.NT'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$reviewedUninstallArguments = @('/S')"
+      );
+      expect(uninstallFunction).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+      expect(uninstallFunction).toContain(
+        'Waiting for vendor uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+      );
+      expect(uninstallFunction).toContain(
+        'Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey }'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'uses the hash-verified packaged installer for a reviewed vendor removal lifecycle',
     () => {
       const generated = generateRegistryUninstallPackage(

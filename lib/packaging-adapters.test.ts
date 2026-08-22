@@ -334,6 +334,10 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['--force-uninstall']);
     expect(
+      applyApplicationPackagingAdapter('Tencent.QQ.NT', DEFAULT_PSADT_CONFIG)
+        .reviewedUninstallArguments
+    ).toEqual(['/S']);
+    expect(
       applyApplicationPackagingAdapter('Dropbox.Dropbox', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       reviewedInstallArgumentsOverride: '/NOLAUNCH',

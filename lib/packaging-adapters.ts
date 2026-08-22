@@ -393,6 +393,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // QQ NT registers its machine-wide Uninstall.exe without a quiet argument.
+    // Isolated LocalSystem QA run 32579988209 showed that the argument-free
+    // command exits after opening its confirmation flow and leaves the exact
+    // QQ registration installed. Append the same case-insensitive /S contract
+    // used by Tencent's unattended installer while preserving the captured
+    // Program Files executable and exact registry identity.
+    wingetId: 'Tencent.QQ.NT',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.
