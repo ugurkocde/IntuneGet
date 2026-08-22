@@ -1259,6 +1259,21 @@ describe('PSADT vendor argument contract', () => {
     expect(generated).toContain('AppSuccessExitCodes = @(0, 1168)');
   });
 
+  it('honors signed process equivalents of unsigned WinGet success codes', () => {
+    if (!canRunWindowsPowerShellPackager) return;
+    const generated = generateRegistryUninstallPackage(
+      'nullsoft',
+      'Recuva',
+      [-1073741819, -1073740791],
+      {},
+      [],
+      'Piriform.Recuva'
+    );
+    expect(generated).toContain(
+      'AppSuccessExitCodes = @(-1073741819, -1073740791, 0)'
+    );
+  });
+
   it('does not rewrite dollar signs or backticks in generic silent switches', () => {
     expect(packager).toContain('$silentSwitchesEscaped = $effectiveSilentSwitches -replace "\'", "\'\'"');
     const assignment = packager.match(/^\$silentSwitchesEscaped\s*=.*$/m)?.[0] ?? '';

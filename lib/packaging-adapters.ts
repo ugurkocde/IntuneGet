@@ -1106,7 +1106,8 @@ function normalizeInstallerSuccessCodes(
 ): number[] {
   return Array.from(new Set((successCodes || [])
     .map(Number)
-    .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)))
+    .filter((code) => Number.isInteger(code) && code >= -2147483648 && code <= 4294967295)
+    .map((code) => code > 2147483647 ? code - 4294967296 : code)))
     .sort((left, right) => left - right);
 }
 

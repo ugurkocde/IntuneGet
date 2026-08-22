@@ -130,9 +130,14 @@ describe('PSADT QA package identity', () => {
 
   it('hashes manifest-declared success exit codes without changing empty profiles', () => {
     const baseline = buildQaPackageIdentity(input);
-    const withSuccessCode = buildQaPackageIdentity({ ...input, successCodes: [1168] });
+    const withSuccessCode = buildQaPackageIdentity({
+      ...input,
+      successCodes: [1168, 3221225477, 3221226505],
+    });
     expect(withSuccessCode.packageProfileSha256).not.toBe(baseline.packageProfileSha256);
-    expect(withSuccessCode.profile.installer).toMatchObject({ successCodes: [1168] });
+    expect(withSuccessCode.profile.installer).toMatchObject({
+      successCodes: [-1073741819, -1073740791, 1168],
+    });
     expect(buildQaPackageIdentity({ ...input, successCodes: [] })).toEqual(baseline);
   });
 

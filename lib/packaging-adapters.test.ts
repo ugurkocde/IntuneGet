@@ -36,6 +36,10 @@ describe('application packaging adapters', () => {
       'Example.App',
       [3010]
     )).toEqual([3010]);
+    expect(resolveApplicationInstallerSuccessCodes(
+      'Piriform.Recuva',
+      [3221225477, 3221226505]
+    )).toEqual([-1073741819, -1073740791]);
   });
 
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {

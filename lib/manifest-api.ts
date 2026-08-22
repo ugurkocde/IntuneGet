@@ -707,7 +707,8 @@ function normalizeInstallerSuccessCodes(value: unknown): number[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const codes = Array.from(new Set(value
     .map((code) => typeof code === 'number' ? code : Number(code))
-    .filter((code) => Number.isInteger(code) && code >= 0 && code <= 65535)));
+    .filter((code) => Number.isInteger(code) && code >= -2147483648 && code <= 4294967295)
+    .map((code) => code > 2147483647 ? code - 4294967296 : code)));
   return codes.length > 0 ? codes : undefined;
 }
 

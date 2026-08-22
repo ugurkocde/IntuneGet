@@ -678,15 +678,25 @@ describe('normalizeManifestInstallers', () => {
   it('preserves manifest-declared installer success codes', () => {
     const [installer] = normalizeManifestInstallers({
       InstallerType: 'exe',
-      InstallerSuccessCodes: [1168, 1168, '3010'],
+      InstallerSuccessCodes: [1168, 1168, '3010', 3221225477, 3221226505],
       Installers: [{
         Architecture: 'x64',
         InstallerUrl: 'https://example.com/installer.exe',
         InstallerSha256: 'abc123',
       }],
     });
-    expect(installer.InstallerSuccessCodes).toEqual([1168, 3010]);
-    expect(normalizeInstaller(installer).installerSuccessCodes).toEqual([1168, 3010]);
+    expect(installer.InstallerSuccessCodes).toEqual([
+      1168,
+      3010,
+      -1073741819,
+      -1073740791,
+    ]);
+    expect(normalizeInstaller(installer).installerSuccessCodes).toEqual([
+      1168,
+      3010,
+      -1073741819,
+      -1073740791,
+    ]);
   });
 
   it('normalizes installer and root AppsAndFeatures product identities', () => {

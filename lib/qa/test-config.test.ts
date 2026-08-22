@@ -337,6 +337,23 @@ describe('buildQaCatalogTestConfig', () => {
     expect(config.successCodes).toEqual([1168]);
   });
 
+  it('converts Recuva unsigned WinGet success codes to signed process exit codes', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Piriform.Recuva',
+        name: 'Recuva',
+        publisher: 'Piriform',
+        version: '1.54.120',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        InstallerSuccessCodes: [3221225477, 3221226505],
+      },
+      installer: { Architecture: 'x64', InstallerType: 'nullsoft' },
+    });
+    expect(config.successCodes).toEqual([-1073741819, -1073740791]);
+  });
+
   it('uses an EXE AppsAndFeatures product code as the exact uninstall identity', () => {
     const config = buildQaCatalogTestConfig({
       app: {

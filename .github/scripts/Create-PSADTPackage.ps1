@@ -34,7 +34,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:INPUT_INSTALLER_SUCCESS_CODES)) {
 }
 $InstallerSuccessCodes = @($InstallerSuccessCodes | ForEach-Object {
     $parsedCode = 0
-    if (-not [int]::TryParse([string]$_, [ref]$parsedCode) -or $parsedCode -lt 0 -or $parsedCode -gt 65535) {
+    if (-not [int]::TryParse([string]$_, [ref]$parsedCode)) {
         throw "Invalid installer success exit code: $_"
     }
     $parsedCode
