@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '3add630cf3483c2e9ecff61647ca23b727295b9a',
+  packagerCommit: 'cf5933d805df9dae22d6ff4d1ace03f5dd4c1655',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -263,6 +263,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Amazon Music's reviewed argument-free contract affects only its failed
   // bootstrapper lifecycle. Preserve every unrelated valid pass.
   '3ce4c3b514ade5658515f6ba9d7a790f695e44f3',
+  // Amazon Music's extended uninstall completion deadline affects only its
+  // reviewed adapter. Preserve every unrelated valid pass.
+  '3add630cf3483c2e9ecff61647ca23b727295b9a',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
