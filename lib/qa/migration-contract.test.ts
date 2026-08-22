@@ -983,6 +983,29 @@ describe('OpenSCAD unsupported managed uninstall block migration contract', () =
   });
 });
 
+describe('Open Live Writer unsupported managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822010000_block_openlivewriter_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the Squirrel per-user lifecycle from LocalSystem deployment', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'OpenLiveWriter.OpenLiveWriter'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32541754573'
+    );
+    expect(sql).toContain('executing user\'s %LocalAppData%');
+    expect(sql).toContain('SYSTEM profile instead of employee profiles');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
