@@ -393,9 +393,7 @@ jobs:
               if (!forceRefresh) {
                 query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
               }
-            }
-
-            if (missingSizesOnly && appIds === 'all') {
+            } else if (missingSizesOnly) {
               // Top-up mode: target apps that already have a binary-sourced icon.
               // Web-sourced icons are handled by the fetch-web-icons job.
               // Use deterministic ordering + range so we can walk through the
