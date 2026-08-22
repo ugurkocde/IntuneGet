@@ -47,7 +47,7 @@ export default function DatabaseSetupPage() {
         <p className="text-text-secondary mb-4">
           <T>The self-hosted version of IntuneGet uses SQLite, providing:</T>
         </p>
-        <div className="grid gap-4 sm:grid-cols-3 mb-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
           <div className="rounded-lg border border-overlay/10 bg-bg-elevated p-4">
             <div className="flex items-center gap-3 mb-3">
               <Database className="h-5 w-5 text-accent-cyan" />
