@@ -74,6 +74,12 @@ const EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS = [
   ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'ffb7638dd870b188654c84673663b8ff151a7985': [
+    // Retry Amazon Music with its reviewed fifteen-minute uninstall deadline.
+    'Amazon.Music',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    ...EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS,
+  ],
   'cf5933d805df9dae22d6ff4d1ace03f5dd4c1655': [
     // Retry Amazon Music with its reviewed extended uninstall deadline.
     'Amazon.Music',

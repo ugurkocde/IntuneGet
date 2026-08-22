@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'cf5933d805df9dae22d6ff4d1ace03f5dd4c1655',
+  packagerCommit: 'ffb7638dd870b188654c84673663b8ff151a7985',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -266,6 +266,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Amazon Music's extended uninstall completion deadline affects only its
   // reviewed adapter. Preserve every unrelated valid pass.
   '3add630cf3483c2e9ecff61647ca23b727295b9a',
+  // Amazon Music's longer exact-registration deadline affects only its
+  // reviewed adapter. Preserve every unrelated valid pass.
+  'cf5933d805df9dae22d6ff4d1ace03f5dd4c1655',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
