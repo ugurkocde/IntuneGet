@@ -1095,6 +1095,29 @@ describe('Amazon Music managed uninstall block migration contract', () => {
   });
 });
 
+describe('Standard Notes SYSTEM-profile lifecycle block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822104500_block_standard_notes_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsafe per-user lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'StandardNotes.StandardNotes'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32562682034'
+    );
+    expect(sql).toContain('LocalSystem profile');
+    expect(sql).toContain('2,890');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('AMD Cloud Edition hardware-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
