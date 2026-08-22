@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Greenshot.Greenshot.Preview',
       'ABB.RobotStudio',
       'Microsoft.msodbcsql.13',
       'Microsoft.WindowsAppRuntime.1.8',
@@ -105,6 +106,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Greenshot.Greenshot.Preview',
         'ABB.RobotStudio',
         'Microsoft.msodbcsql.13',
         'Microsoft.WindowsAppRuntime.1.8',
@@ -541,6 +543,21 @@ describe('QA toolchain targeted retries', () => {
       '681b7510f7f30bec92c17581213c9ebc7f72765a',
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }
     )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Greenshot Preview only through its exact Inno identity release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Greenshot.Greenshot.Preview', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '21fbdbc5a29ca42ac0d2dd1c5939b9ad1f94adc2',
+      { wingetId: 'Greenshot.Greenshot.Preview', status: 'failed' }
+    )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }

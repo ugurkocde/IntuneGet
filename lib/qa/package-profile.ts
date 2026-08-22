@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '21fbdbc5a29ca42ac0d2dd1c5939b9ad1f94adc2',
+  packagerCommit: 'c2af5b6dfdd0a6bf44d344366abc23878c23d48b',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -254,6 +254,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // RobotStudio's exact MSI identity and guarded EXE fallback affect only its
   // previously failed wrapper lifecycle. Preserve every unrelated valid pass.
   '568f59b206634c6f7342f6d398cbdf7e3b650ed9',
+  // Greenshot Preview's exact Inno registry identity affects only its failed
+  // preview-channel lifecycle. Preserve every unrelated valid pass.
+  '21fbdbc5a29ca42ac0d2dd1c5939b9ad1f94adc2',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
