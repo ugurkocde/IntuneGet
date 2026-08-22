@@ -9,8 +9,7 @@ export interface QaToolchainBackfillCandidate {
 // application failure. Record only the apps whose previously failing path is
 // changed by the current packager release. Successful and never-tested apps
 // continue through the normal compatibility/backfill logic.
-const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
-  'c2af5b6dfdd0a6bf44d344366abc23878c23d48b': [
+const EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS = [
     // Retry Preview with the vendor's exact Greenshot_is1 Inno identity.
     'Greenshot.Greenshot.Preview',
     // Carry every still-unconsumed bounded target across the atomic pin.
@@ -72,7 +71,17 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
     'PTC.CreoView.Express',
     'Blizzard.BattleNet',
     'DATEV.SicherheitspaketCompact',
+  ] as const;
+
+const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3ce4c3b514ade5658515f6ba9d7a790f695e44f3': [
+    // Retry Amazon Music now that argument-free EXE launches omit PSADT's
+    // invalid empty ArgumentList parameter.
+    'Amazon.Music',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    ...EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS,
   ],
+  'c2af5b6dfdd0a6bf44d344366abc23878c23d48b': EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS,
   '1490844284f84f807e207fb9970bddc499bbe446': [
     // Evernote's NSIS uninstaller cannot finish while its desktop process is
     // active. This release closes it through the shared PSADT lifecycle.

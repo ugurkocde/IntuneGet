@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Amazon.Music',
       'Greenshot.Greenshot.Preview',
       'ABB.RobotStudio',
       'Microsoft.msodbcsql.13',
@@ -106,6 +107,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Amazon.Music',
         'Greenshot.Greenshot.Preview',
         'ABB.RobotStudio',
         'Microsoft.msodbcsql.13',
@@ -561,6 +563,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Greenshot.Greenshot', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Amazon Music only through the empty EXE argument release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Amazon.Music', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'c2af5b6dfdd0a6bf44d344366abc23878c23d48b',
+      { wingetId: 'Amazon.Music', status: 'failed' }
     )).toBe(false);
   });
 

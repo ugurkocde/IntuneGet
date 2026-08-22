@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c2af5b6dfdd0a6bf44d344366abc23878c23d48b',
+  packagerCommit: '3ce4c3b514ade5658515f6ba9d7a790f695e44f3',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -257,6 +257,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Greenshot Preview's exact Inno registry identity affects only its failed
   // preview-channel lifecycle. Preserve every unrelated valid pass.
   '21fbdbc5a29ca42ac0d2dd1c5939b9ad1f94adc2',
+  // Empty EXE argument handling affects only catalog installers that omit
+  // silent arguments. Preserve every unrelated valid pass.
+  'c2af5b6dfdd0a6bf44d344366abc23878c23d48b',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
