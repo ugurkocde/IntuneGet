@@ -89,6 +89,13 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'dde6e9ae4e569568b4a15c087ba711d1bb3a8895': [
+    // Retry SketchUp 2022 with its reviewed silent removal argument.
+    'Trimble.SketchUp.2022',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    'Webroot.SecureAnywhere',
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
+  ],
   'b67135eb2f947485e54c2583cfb6083b1e2f24ba': [
     // Retry Webroot with its published unattended MSI lifecycle.
     'Webroot.SecureAnywhere',

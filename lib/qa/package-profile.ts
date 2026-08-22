@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b67135eb2f947485e54c2583cfb6083b1e2f24ba',
+  packagerCommit: 'dde6e9ae4e569568b4a15c087ba711d1bb3a8895',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -284,6 +284,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Webroot's reviewed MSI selection changes only its previously failing EXE
   // lifecycle. Preserve every unrelated valid pass from the prior release.
   '49775d3657a1b11b4ec1603e80ba8f78882b174f',
+  // SketchUp 2022's reviewed silent removal argument changes only its failed
+  // lifecycle. Preserve every unrelated valid pass from the prior release.
+  'b67135eb2f947485e54c2583cfb6083b1e2f24ba',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

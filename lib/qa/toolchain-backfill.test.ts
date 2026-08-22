@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Trimble.SketchUp.2022',
       'Webroot.SecureAnywhere',
       'MiKTeX.MiKTeX',
       'Y-ASLant.ElegantClipboard',
@@ -111,6 +112,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Trimble.SketchUp.2022',
         'Webroot.SecureAnywhere',
         'MiKTeX.MiKTeX',
         'Y-ASLant.ElegantClipboard',
@@ -190,6 +192,20 @@ describe('QA toolchain targeted retries', () => {
       '49775d3657a1b11b4ec1603e80ba8f78882b174f',
       { wingetId: 'Webroot.SecureAnywhere', status: 'failed' }
     )).toBe(false);
+  });
+
+  it('retries SketchUp 2022 only after activating its reviewed silent removal argument', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' trimble.sketchup.2022 ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b67135eb2f947485e54c2583cfb6083b1e2f24ba',
+      { wingetId: 'Trimble.SketchUp.2022', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      'b67135eb2f947485e54c2583cfb6083b1e2f24ba'
+    )).toContain('Webroot.SecureAnywhere');
   });
 
   it('does not retry blocked QQ NT after removing its ineffective adapter', () => {
