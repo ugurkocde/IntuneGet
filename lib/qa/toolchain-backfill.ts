@@ -81,13 +81,21 @@ const ELEGANT_CLIPBOARD_RELEASE_RETRY_TARGETS = [
   ...EMPTY_ARGUMENT_PREDECESSOR_RETRY_TARGETS,
 ] as const;
 
+const MIKTEX_RELEASE_RETRY_TARGETS = [
+  // Retry MiKTeX with its documented integrated unattended setup utility.
+  'MiKTeX.MiKTeX',
+  // Carry every still-unconsumed bounded target across the atomic pin.
+  ...ELEGANT_CLIPBOARD_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
-  '98019d2c6e06ff51a35d178bedc41f9f67a99107': [
-    // Retry MiKTeX with its documented integrated unattended setup utility.
-    'MiKTeX.MiKTeX',
+  '765d02a3041cc304d2df403aafc18b6f14258f59': [
+    // Retry QQ NT with its reviewed non-interactive registered uninstaller.
+    'Tencent.QQ.NT',
     // Carry every still-unconsumed bounded target across the atomic pin.
-    ...ELEGANT_CLIPBOARD_RELEASE_RETRY_TARGETS,
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
   ],
+  '98019d2c6e06ff51a35d178bedc41f9f67a99107': MIKTEX_RELEASE_RETRY_TARGETS,
   'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918': ELEGANT_CLIPBOARD_RELEASE_RETRY_TARGETS,
   'ffb7638dd870b188654c84673663b8ff151a7985': [
     // Retry Amazon Music with its reviewed fifteen-minute uninstall deadline.

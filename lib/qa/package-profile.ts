@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '98019d2c6e06ff51a35d178bedc41f9f67a99107',
+  packagerCommit: '765d02a3041cc304d2df403aafc18b6f14258f59',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -275,6 +275,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // MiKTeX's documented unattended setup command changes only its previously
   // failed interactive cleanup lifecycle. Preserve every unrelated valid pass.
   'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
+  // QQ NT's reviewed /S argument changes only its previously failed hidden
+  // confirmation lifecycle. Preserve every unrelated valid pass.
+  '98019d2c6e06ff51a35d178bedc41f9f67a99107',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

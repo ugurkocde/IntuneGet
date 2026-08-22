@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Tencent.QQ.NT',
       'MiKTeX.MiKTeX',
       'Y-ASLant.ElegantClipboard',
       'Amazon.Music',
@@ -109,6 +110,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Tencent.QQ.NT',
         'MiKTeX.MiKTeX',
         'Y-ASLant.ElegantClipboard',
         'Amazon.Music',
@@ -172,6 +174,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
       { wingetId: 'MiKTeX.MiKTeX', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries QQ NT only after activating its unattended registered uninstaller', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' tencent.qq.nt ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '98019d2c6e06ff51a35d178bedc41f9f67a99107',
+      { wingetId: 'Tencent.QQ.NT', status: 'failed' }
     )).toBe(false);
   });
 
