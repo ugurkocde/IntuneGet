@@ -382,10 +382,20 @@ jobs:
 
             if (appIds !== 'all') {
               const targetIds = appIds.split(',').map(id => id.trim());
-              query = query.in('winget_id', targetIds);
+              // Explicitly targeted run (e.g. healing audit-flagged icons):
+              // bypass icon-state filters so named apps are re-extracted no
+              // matter what their current icon_source is.
+              query = supabase
+                .from('curated_apps')
+                .select('winget_id, name, publisher, latest_version, has_icon, icon_extraction_attempts, icon_source')
+                .in('winget_id', targetIds)
+                .order('winget_id', { ascending: true });
+              if (!forceRefresh) {
+                query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
+              }
             }
 
-            if (missingSizesOnly) {
+            if (missingSizesOnly && appIds === 'all') {
               // Top-up mode: target apps that already have a binary-sourced icon.
               // Web-sourced icons are handled by the fetch-web-icons job.
               // Use deterministic ordering + range so we can walk through the
@@ -430,6 +440,16 @@ jobs:
               return null;
             }
 
+            // Cheap change detector: when an ancestor's icons were re-extracted
+            // (new version, healed publisher-level icon), the signature differs
+            // and every variant below it re-copies exactly once, then converges.
+            function dirSignature(dir) {
+              return TARGET_SIZES.map(s => {
+                const p = path.join(dir, `icon-${s}.png`);
+                return fs.existsSync(p) ? `${s}:${fs.statSync(p).size}` : `${s}:missing`;
+              }).join('|');
+            }
+
             const wingetIds = [];
             const inheritedResults = [];
 
@@ -439,19 +459,27 @@ jobs:
                 if (ancestorDir) {
                   const iconDir = path.join('public/icons', app.winget_id);
                   fs.mkdirSync(iconDir, { recursive: true });
-                  for (const file of fs.readdirSync(ancestorDir)) {
-                    if (/^icon-\d+\.png$/.test(file) && !fs.existsSync(path.join(iconDir, file))) {
-                      fs.copyFileSync(path.join(ancestorDir, file), path.join(iconDir, file));
+                  const stale = dirSignature(ancestorDir) !== dirSignature(iconDir);
+                  if (stale) {
+                    for (const file of fs.readdirSync(ancestorDir)) {
+                      if (!/^icon-\d+\.png$/.test(file)) continue;
+                      const src = path.join(ancestorDir, file);
+                      const dst = path.join(iconDir, file);
+                      if (!fs.existsSync(dst) || fs.statSync(src).size !== fs.statSync(dst).size) {
+                        fs.copyFileSync(src, dst);
+                      }
                     }
+                    console.log(`Inherited refreshed icon for ${app.winget_id} from ${path.basename(ancestorDir)} (no installer download needed)`);
+                    inheritedResults.push({
+                      winget_id: app.winget_id,
+                      status: 'success',
+                      icon_path: `/icons/${app.winget_id}/`,
+                      icon_source: 'family_inherited'
+                    });
+                    continue;
                   }
-                  console.log(`Inherited icon for ${app.winget_id} from ${path.basename(ancestorDir)} (no installer download needed)`);
-                  inheritedResults.push({
-                    winget_id: app.winget_id,
-                    status: 'success',
-                    icon_path: `/icons/${app.winget_id}/`,
-                    icon_source: 'family_inherited'
-                  });
-                  continue;
+                  // Ancestor matches what we already ship -- fall through to
+                  // normal rules so converged variants cost nothing.
                 }
               }
               wingetIds.push(app.winget_id);
@@ -491,11 +519,11 @@ jobs:
                 appsToProcess.push(app);
               } else {
                 const iconPath = `${iconDir}/icon-64.png`;
-                const hasWebIcon = WEB_SOURCES.includes(app.icon_source);
-                if (forceRefresh || !fs.existsSync(iconPath) || hasWebIcon) {
+                const wantsHeal = WEB_SOURCES.includes(app.icon_source) || appIds !== 'all';
+                if (forceRefresh || !fs.existsSync(iconPath) || wantsHeal) {
                   const attempts = app.icon_extraction_attempts || 0;
                   if (!forceRefresh && attempts >= 3) {
-                    console.log(`Skipping ${app.winget_id} (${attempts} failed attempts)`);
+                    console.log(`Skipping ${app.winget_id} (source=${app.icon_source}, ${attempts} failed attempts)`);
                     continue;
                   }
                   app.cached_installer_url = installerMap[app.winget_id]?.url || null;
