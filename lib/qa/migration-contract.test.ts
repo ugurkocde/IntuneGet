@@ -943,6 +943,29 @@ describe('SQL Server 2017 Express unsupported managed install block migration co
   });
 });
 
+describe('SQL Server 2025 Express unsupported managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822120000_block_sql_server_2025_express_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the deployment-specific SQL Server lifecycle from generic packaging', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Microsoft.SQLServer.2025.Express'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32566074806'
+    );
+    expect(sql).toContain('features or role, instance identity, and SQL sysadmin accounts');
+    expect(sql).toContain('exact manifest command exited -1');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('QA canonical sync statement timeout migration contract', () => {
   const sql = readFileSync(
     resolve(
