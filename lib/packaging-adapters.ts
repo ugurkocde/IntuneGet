@@ -1004,6 +1004,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Preview builds use the same executable and Inno AppId as stable builds.
+    // Close the tray process before the exact vendor uninstaller runs.
+    wingetId: 'Greenshot.Greenshot.Preview',
+    requiredProcessesToClose: [
+      { name: 'Greenshot', description: 'Greenshot' },
+    ],
+  },
+  {
     // Qfinder Pro starts its desktop process after a silent install. Close it
     // before removal so the NSIS uninstaller can delete the product instead
     // of waiting behind the running application or its startup-error dialog.
@@ -1130,6 +1138,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   'docker.dockerdesktopedge': {
     generatedDisplayName: 'Docker Desktop Edge',
     registeredDisplayName: 'Docker Desktop',
+  },
+  // Greenshot's preview catalog title is `Greenshot Preview`, while the
+  // vendor's Inno source keeps AppId and AppName fixed at `Greenshot` for both
+  // channels. Bind the stable `_is1` key so background ARP changes cannot be
+  // selected and stable/preview packages never rely on broad name matching.
+  'greenshot.greenshot.preview': {
+    generatedDisplayName: 'Greenshot Preview',
+    registeredDisplayName: 'Greenshot',
+    registeredRegistryKey: 'Greenshot_is1',
   },
   // FSLogix is distributed as a ZIP containing Microsoft's Burn-style EXE.
   // WinGet publishes `Microsoft FSLogix Apps` in ProductCode, but the bundle

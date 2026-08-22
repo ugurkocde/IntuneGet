@@ -50,6 +50,21 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Greenshot Preview\'s exact shared Inno registry identity', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Greenshot.Greenshot.Preview',
+      'REGISTRY_UNINSTALL:Greenshot Preview'
+    )).toBe('REGISTRY_UNINSTALL_KEY:Greenshot_is1:Greenshot');
+    expect(resolveApplicationUninstallCommand(
+      'Greenshot.Greenshot',
+      'REGISTRY_UNINSTALL:Greenshot'
+    )).toBe('REGISTRY_UNINSTALL:Greenshot');
+    expect(resolveApplicationUninstallCommand(
+      'Greenshot.Greenshot.Preview',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses FSLogix\'s registered bundle display identity', () => {
     expect(resolveApplicationUninstallCommand(
       'Microsoft.FSLogix',
@@ -1109,14 +1124,19 @@ describe('application packaging adapters', () => {
   });
 
   it('closes Greenshot before install and removal lifecycle actions', () => {
-    const adapted = applyApplicationPackagingAdapter(
+    for (const wingetId of [
       'Greenshot.Greenshot',
-      DEFAULT_PSADT_CONFIG
-    );
+      'Greenshot.Greenshot.Preview',
+    ]) {
+      const adapted = applyApplicationPackagingAdapter(
+        wingetId,
+        DEFAULT_PSADT_CONFIG
+      );
 
-    expect(adapted.processesToClose).toEqual([
-      { name: 'Greenshot', description: 'Greenshot' },
-    ]);
+      expect(adapted.processesToClose).toEqual([
+        { name: 'Greenshot', description: 'Greenshot' },
+      ]);
+    }
   });
 
   it('closes Qfinder Pro before its NSIS removal lifecycle', () => {
