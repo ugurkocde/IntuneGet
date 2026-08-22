@@ -1185,3 +1185,28 @@ describe('AMD Cloud Edition hardware-dependent install block migration contract'
     expect(sql).toContain("status in ('queued', 'failed')");
   });
 });
+
+describe('Teradata TTU Base suite managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822130000_block_teradata_base_suite_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks both suite aliases after the exact vendor removal left the suite installed', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Teradata.TeradataBaseSuite'");
+    expect(sql).toContain("'Teradata.TTUBase'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32568333477'
+    );
+    expect(sql).toContain('all 28 added uninstall entries');
+    expect(sql).toContain('6,033');
+    expect(sql).toContain('all 18 shortcuts');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
