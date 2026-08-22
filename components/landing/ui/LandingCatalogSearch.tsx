@@ -26,7 +26,11 @@ interface CatalogResult {
   iconPath: string | null;
 }
 
-const popularSearches = ["Chrome", "7-Zip", "Visual Studio Code"];
+const popularSearches = [
+  { label: "Chrome", query: "Chrome" },
+  { label: "7-Zip", query: "7-Zip" },
+  { label: "VS Code", query: "Visual Studio Code" },
+];
 
 function MicrosoftLogo({ className }: { className?: string }) {
   return (
@@ -455,23 +459,23 @@ export function LandingCatalogSearch() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.15 }}
-            className="mt-4 flex flex-col items-center justify-between gap-3 rounded-2xl border border-overlay/[0.07] bg-bg-elevated/75 px-4 py-3 shadow-soft sm:flex-row sm:px-5"
+            className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 lg:justify-start"
           >
             <p className="flex items-center gap-2 text-sm text-text-secondary">
-              <PackageCheck aria-hidden="true" className="h-4 w-4 text-accent-cyan" />
-              <T>Search the public catalog without signing in</T>
+              <PackageCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
+              <T>Search without signing in</T>
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-xs text-text-muted"><T>Try</T></span>
-              {popularSearches.map((value) => (
+              {popularSearches.map(({ label, query }) => (
                 <button
-                  key={value}
+                  key={query}
                   type="button"
-                  onClick={() => runPopularSearch(value)}
+                  onClick={() => runPopularSearch(query)}
                   translate="no"
-                  className="min-h-11 cursor-pointer rounded-lg border border-overlay/10 bg-bg-elevated px-3 text-sm text-text-secondary transition-colors hover:border-accent-cyan/30 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+                  className="min-h-10 cursor-pointer rounded-full border border-overlay/10 bg-bg-elevated px-3.5 text-[13px] font-medium text-text-secondary shadow-soft transition-colors hover:border-accent-cyan/30 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                 >
-                  {value}
+                  {label}
                 </button>
               ))}
             </div>
