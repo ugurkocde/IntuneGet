@@ -1050,6 +1050,28 @@ describe('ReSharper stable host-dependent install block migration contract', () 
   });
 });
 
+describe('Gather SYSTEM-profile install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822093000_block_gather_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the per-user lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Gather.Gather'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32558961384'
+    );
+    expect(sql).toContain('systemprofile');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('AMD Cloud Edition hardware-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
