@@ -1258,3 +1258,27 @@ describe('Tencent QQ NT managed uninstall block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('Git for Windows SDK managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822173000_block_git_sdk_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the extraction-only SDK lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Git.SDK'");
+    expect(sql).toContain(
+      'git-sdk-1.0.8/sdk-installer/release.sh'
+    );
+    expect(sql).toContain('self-extracting .7z archive');
+    expect(sql).toContain('zero matching uninstall entries');
+    expect(sql).toContain('2,944');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
