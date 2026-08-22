@@ -1234,3 +1234,27 @@ describe('Wise Disk Cleaner managed uninstall block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('Tencent QQ NT managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822170000_block_tencent_qq_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the interactive vendor removal lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Tencent.QQ.NT'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32582110657'
+    );
+    expect(sql).toContain('exact QQ registration');
+    expect(sql).toContain('both shortcuts');
+    expect(sql).toContain('4,826');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});

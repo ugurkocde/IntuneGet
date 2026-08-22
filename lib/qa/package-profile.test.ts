@@ -395,30 +395,6 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
-  it('binds QQ NT to its unattended registered-uninstaller lifecycle', () => {
-    const normalized = normalizeQaWorkflowPackageInput({
-      wingetId: 'Tencent.QQ.NT',
-      displayName: 'QQ',
-      publisher: 'Tencent',
-      version: '9.9.33.51802',
-      architecture: 'x64',
-      installerSha256: 'c'.repeat(64),
-      installerType: 'exe',
-      silentSwitches: '/s',
-      uninstallCommand: 'REGISTRY_UNINSTALL:QQ',
-      installScope: 'machine',
-      detectionRules: '[]',
-      psadtConfig: JSON.stringify({ detectionRules: [] }),
-    });
-    const profile = normalized.identity.profile as {
-      installer: { uninstallCommand: string };
-      psadtConfig: { reviewedUninstallArguments?: string[] };
-    };
-
-    expect(profile.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL:QQ');
-    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/S']);
-  });
-
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',
