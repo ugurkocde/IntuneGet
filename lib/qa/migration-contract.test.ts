@@ -1072,6 +1072,29 @@ describe('Gather SYSTEM-profile install block migration contract', () => {
   });
 });
 
+describe('Amazon Music managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822100000_block_amazon_music_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the incomplete vendor removal lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Amazon.Music'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32559549247'
+    );
+    expect(sql).toContain('fifteen minutes');
+    expect(sql).toContain('residual snapshot');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('AMD Cloud Edition hardware-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
