@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '49775d3657a1b11b4ec1603e80ba8f78882b174f',
+  packagerCommit: 'b67135eb2f947485e54c2583cfb6083b1e2f24ba',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -281,6 +281,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Removing the ineffective QQ NT /S adapter affects only an app now blocked
   // at the shared eligibility gate. Preserve every unrelated valid pass.
   '765d02a3041cc304d2df403aafc18b6f14258f59',
+  // Webroot's reviewed MSI selection changes only its previously failing EXE
+  // lifecycle. Preserve every unrelated valid pass from the prior release.
+  '49775d3657a1b11b4ec1603e80ba8f78882b174f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

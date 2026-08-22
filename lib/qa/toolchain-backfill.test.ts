@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Webroot.SecureAnywhere',
       'MiKTeX.MiKTeX',
       'Y-ASLant.ElegantClipboard',
       'Amazon.Music',
@@ -110,6 +111,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Webroot.SecureAnywhere',
         'MiKTeX.MiKTeX',
         'Y-ASLant.ElegantClipboard',
         'Amazon.Music',
@@ -176,6 +178,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'a2fa7cc7aec6faf0b22c0dcb7146ea8301ee9918',
       { wingetId: 'MiKTeX.MiKTeX', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Webroot only after activating its reviewed MSI lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' webroot.secureanywhere ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '49775d3657a1b11b4ec1603e80ba8f78882b174f',
+      { wingetId: 'Webroot.SecureAnywhere', status: 'failed' }
     )).toBe(false);
   });
 
