@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PublicThemeProvider } from "@/components/providers/theme-context";
@@ -11,17 +10,12 @@ import { getLocale } from "gt-next/server";
 // Analytics configuration
 const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
 
-const inter = localFont({
-  src: "./fonts/InterVariable.woff2",
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const jetbrainsMono = localFont({
-  src: "./fonts/JetBrainsMono-Variable.woff2",
-  variable: "--font-mono",
-  display: "swap",
-});
+// Fonts are self-hosted from /public/fonts with @font-face rules in
+// globals.css. next/font was dropped because it failed to emit the font
+// preload links in this setup, leaving the fonts to load after CSS parse
+// (late swap = slow LCP and occasional layout shift). The explicit preloads
+// live in the <head> below; metric-adjusted fallbacks in globals.css keep
+// the swap shift-free.
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://intuneget.com"),
@@ -205,6 +199,20 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
+        <link
+          rel="preload"
+          href="/fonts/InterVariable.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/JetBrainsMono-Variable.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <link rel="preconnect" href="https://plausible.io" />
         <script
           dangerouslySetInnerHTML={{
@@ -218,10 +226,15 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `(() => {
   try {
-    // The site is light-only. Clear the class and any stored dark
-    // preference left over from when a theme toggle existed.
+    const storedTheme = localStorage.getItem("intuneget-theme");
+    if (storedTheme === "light" || storedTheme === "dark") {
+      document.documentElement.classList.toggle("dark", storedTheme === "dark");
+      return;
+    }
+
+    // First-time visitors always start in light mode. Explicit local or
+    // account preferences still take precedence on later visits.
     document.documentElement.classList.remove("dark");
-    localStorage.removeItem("intuneget-theme");
   } catch (error) {
     if (typeof console !== "undefined" && console.warn) {
       console.warn("Failed to initialize theme preference:", error);
@@ -250,7 +263,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+        className="font-sans antialiased"
       >
         {content}
       </body>

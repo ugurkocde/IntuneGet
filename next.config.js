@@ -42,6 +42,16 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Self-hosted fonts; rename the files if they are ever re-subset.
+        source: "/fonts/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
     ];
   },
 };
