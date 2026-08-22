@@ -962,6 +962,27 @@ describe('QA canonical sync statement timeout migration contract', () => {
   });
 });
 
+describe('OpenSCAD unsupported managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822005500_block_openscad_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the vendor-confirmed orphaned uninstall registration lifecycle', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'OpenSCAD.OpenSCAD'");
+    expect(sql).toContain('https://github.com/openscad/openscad/issues/5494');
+    expect(sql).toContain('documented /S switch');
+    expect(sql).toContain('full five-minute completion window');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
