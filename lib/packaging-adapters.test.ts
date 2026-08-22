@@ -15,7 +15,7 @@ describe('application packaging adapters', () => {
       { ...DEFAULT_PSADT_CONFIG }
     );
     expect(adapted.reviewedArgumentlessInstall).toBe(true);
-    expect(adapted.uninstallCompletionTimeoutMinutes).toBe(10);
+    expect(adapted.uninstallCompletionTimeoutMinutes).toBe(15);
     expect(applyApplicationPackagingAdapter(
       'Example.App',
       { ...DEFAULT_PSADT_CONFIG, reviewedArgumentlessInstall: true }

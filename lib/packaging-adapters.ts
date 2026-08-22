@@ -125,10 +125,11 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     wingetId: 'Amazon.Music',
     reviewedArgumentlessInstall: true,
     // The signed vendor uninstaller removes the app immediately but its exact
-    // per-user registration can remain for slightly more than five minutes.
+    // per-user registration remained for slightly more than ten minutes in
+    // isolated QA run 32557346184.
     // Keep waiting for that exact identity rather than reporting failure while
     // the verified removal is still completing.
-    uninstallCompletionTimeoutMinutes: 10,
+    uninstallCompletionTimeoutMinutes: 15,
   },
   {
     // ABB documents ADDLOCAL=ALL for a complete unattended RobotStudio
