@@ -204,6 +204,11 @@ export interface PSADTConfig {
   // adapters populate this field; customers cannot supply it directly.
   reviewedInstallArgumentsOverride?: string;
 
+  // Internal attestation for a reviewed vendor bootstrapper whose unattended
+  // contract intentionally uses no command-line arguments. Application
+  // adapters populate this field; customers cannot supply it directly.
+  reviewedArgumentlessInstall?: boolean;
+
   // Internal completion window for a reviewed silent bootstrapper that keeps
   // working without producing console output. The generated PSADT package
   // emits bounded progress heartbeats while it waits, so QA and Intune use the
@@ -381,6 +386,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   uninstallCommand: undefined,
   reviewedInstallArguments: [],
   reviewedInstallArgumentsOverride: undefined,
+  reviewedArgumentlessInstall: undefined,
   reviewedInstallCompletionTimeoutMinutes: undefined,
   reviewedInstallShieldAdministrativeImage: undefined,
   reviewedUninstallArguments: [],

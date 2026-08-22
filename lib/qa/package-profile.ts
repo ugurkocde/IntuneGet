@@ -806,6 +806,7 @@ export function normalizeQaPsadtConfig(
     postUninstallCommands: value?.postUninstallCommands || [],
     reviewedInstallArguments: value?.reviewedInstallArguments || [],
     reviewedInstallArgumentsOverride: value?.reviewedInstallArgumentsOverride,
+    reviewedArgumentlessInstall: value?.reviewedArgumentlessInstall,
     reviewedUninstallArguments: value?.reviewedUninstallArguments || [],
     reviewedUninstallServiceNames: value?.reviewedUninstallServiceNames,
   };

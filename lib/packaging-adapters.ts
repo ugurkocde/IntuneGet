@@ -9,6 +9,7 @@ interface ApplicationPackagingAdapter {
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
   reviewedInstallArgumentsOverride?: string;
+  reviewedArgumentlessInstall?: boolean;
   reviewedInstallCompletionTimeoutMinutes?: number;
   reviewedInstallShieldAdministrativeImage?: Readonly<{
     expectedMsiFileName: string;
@@ -117,6 +118,13 @@ const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
  * in the QA execution-profile hash.
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
+  {
+    // Amazon's official WinGet submission intentionally declares its user-scope
+    // bootstrapper without switches and passed Microsoft's unattended validation
+    // (winget-pkgs#94441). Preserve that exact argument-free vendor contract.
+    wingetId: 'Amazon.Music',
+    reviewedArgumentlessInstall: true,
+  },
   {
     // ABB documents ADDLOCAL=ALL for a complete unattended RobotStudio
     // installation. The 2025.2 InstallShield wrapper also services Edge while
@@ -1081,6 +1089,7 @@ export function hasReviewedApplicationInstallContract(wingetId: string): boolean
     adapter && (
       adapter.reviewedInstallArguments?.some((argument) => argument.trim()) ||
       adapter.reviewedInstallArgumentsOverride?.trim() ||
+      adapter.reviewedArgumentlessInstall ||
       adapter.reviewedInstallCompletionTimeoutMinutes ||
       adapter.reviewedInstallShieldAdministrativeImage
     )
@@ -1268,6 +1277,7 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedInstallArgumentsOverride &&
+      !config.reviewedArgumentlessInstall &&
       !config.reviewedInstallCompletionTimeoutMinutes &&
       !config.reviewedInstallShieldAdministrativeImage &&
       !config.reviewedMultiProductInstallDisplayNamePrefixes &&
@@ -1287,6 +1297,7 @@ export function applyApplicationPackagingAdapter(
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedInstallArgumentsOverride: undefined,
+      reviewedArgumentlessInstall: undefined,
       reviewedInstallCompletionTimeoutMinutes: undefined,
       reviewedInstallShieldAdministrativeImage: undefined,
       reviewedMultiProductInstallDisplayNamePrefixes: undefined,
@@ -1368,6 +1379,7 @@ export function applyApplicationPackagingAdapter(
     processesToClose,
     reviewedInstallArguments,
     reviewedInstallArgumentsOverride,
+    reviewedArgumentlessInstall: adapter.reviewedArgumentlessInstall || undefined,
     reviewedInstallCompletionTimeoutMinutes:
       adapter.reviewedInstallCompletionTimeoutMinutes,
     installCommand: adapter.reviewedInstallShieldAdministrativeImage

@@ -244,6 +244,15 @@ if ($psadtConfig.Contains('reviewedInstallArgumentsOverride') -and
     }
 }
 
+$reviewedArgumentlessInstall = $false
+if ($psadtConfig.Contains('reviewedArgumentlessInstall') -and
+    $null -ne $psadtConfig['reviewedArgumentlessInstall']) {
+    if ($psadtConfig['reviewedArgumentlessInstall'] -isnot [bool]) {
+        throw 'PSADT reviewedArgumentlessInstall must be a boolean.'
+    }
+    $reviewedArgumentlessInstall = $psadtConfig['reviewedArgumentlessInstall']
+}
+
 $reviewedInstallCompletionTimeoutMinutes = 0
 if ($psadtConfig.Contains('reviewedInstallCompletionTimeoutMinutes') -and
     $null -ne $psadtConfig['reviewedInstallCompletionTimeoutMinutes']) {
@@ -1303,6 +1312,14 @@ if ($installerTypeLower -eq 'zip' -and -not [string]::IsNullOrWhiteSpace($Nested
     if ($nestedPathIsUnsafe) {
         throw "Unsafe nested installer path: $NestedInstallerPath"
     }
+}
+
+$executesArgumentlessPlainExe = [string]::IsNullOrWhiteSpace($effectiveSilentSwitches) -and (
+    $installerTypeLower -eq 'exe' -or
+    ($installerTypeLower -eq 'zip' -and $NestedInstallerType.ToLowerInvariant() -eq 'exe')
+)
+if ($executesArgumentlessPlainExe -and -not $reviewedArgumentlessInstall) {
+    throw 'A plain EXE package without installer arguments requires a reviewed argumentless install contract.'
 }
 
 # Registry uninstall behavior belongs to the executable inside an archive, not

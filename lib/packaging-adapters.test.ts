@@ -9,6 +9,17 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('attests Amazon Music as an argument-free unattended bootstrapper', () => {
+    expect(applyApplicationPackagingAdapter(
+      'Amazon.Music',
+      { ...DEFAULT_PSADT_CONFIG }
+    ).reviewedArgumentlessInstall).toBe(true);
+    expect(applyApplicationPackagingAdapter(
+      'Example.App',
+      { ...DEFAULT_PSADT_CONFIG, reviewedArgumentlessInstall: true }
+    ).reviewedArgumentlessInstall).toBeUndefined();
+  });
+
   it('adds Movavi Photo Focus vendor success code without weakening other apps', () => {
     expect(resolveApplicationInstallerSuccessCodes(
       'Movavi.MovaviPhotoFocus',

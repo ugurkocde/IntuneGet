@@ -21,6 +21,18 @@ describe('evaluatePackagingContract', () => {
     }).valid).toBe(true);
   });
 
+  it('accepts Amazon Music through its reviewed argument-free adapter', () => {
+    expect(evaluatePackagingContract({
+      wingetId: 'Amazon.Music',
+      installerType: 'exe',
+      silentArgs: '',
+    })).toEqual({
+      valid: true,
+      family: 'standard-exe',
+      dependencyMode: 'self-contained',
+    });
+  });
+
   it('accepts an EXE whose reviewed adapter supplies the install contract', () => {
     expect(evaluatePackagingContract({
       wingetId: 'Bitvise.SSH.Client',

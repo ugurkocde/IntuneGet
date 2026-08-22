@@ -1205,7 +1205,7 @@ describe('PSADT vendor argument contract', () => {
           'exe',
           'No Arguments Contract App',
           [],
-          {},
+          { reviewedArgumentlessInstall: true },
           [],
           'IntuneGet.NoArguments',
           'No Arguments Contract App',
@@ -1222,6 +1222,24 @@ describe('PSADT vendor argument contract', () => {
             : 'Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\setup.exe" -WindowStyle Hidden'
         );
       }
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects an argument-free EXE without the reviewed vendor contract',
+    () => {
+      expect(() => generateRegistryUninstallPackage(
+        'exe',
+        'Unreviewed No Arguments App',
+        [],
+        {},
+        [],
+        'IntuneGet.UnreviewedNoArguments',
+        'Unreviewed No Arguments App',
+        '1.0.0',
+        'REGISTRY_UNINSTALL:Unreviewed No Arguments App',
+        ''
+      )).toThrow('requires a reviewed argumentless install contract');
     }
   );
 
