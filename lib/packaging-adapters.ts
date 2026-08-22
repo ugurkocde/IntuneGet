@@ -149,6 +149,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // ElegantClipboard's tagged Tauri v2 configuration explicitly builds its
+    // NSIS installer with installMode=currentUser, while the WinGet manifest
+    // omits Scope. The generic machine default installs below LocalSystem's
+    // systemprofile and registers an uninstall.exe path that is already absent
+    // by the managed removal cycle. Keep the package in the intended signed-in
+    // user context so customer deployment and QA share the vendor's lifecycle.
+    wingetId: 'Y-ASLant.ElegantClipboard',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.
@@ -383,6 +393,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // QQ NT registers its machine-wide Uninstall.exe without a quiet argument.
+    // Isolated LocalSystem QA run 32579988209 showed that the argument-free
+    // command exits after opening its confirmation flow and leaves the exact
+    // QQ registration installed. Append the same case-insensitive /S contract
+    // used by Tencent's unattended installer while preserving the captured
+    // Program Files executable and exact registry identity.
+    wingetId: 'Tencent.QQ.NT',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.
@@ -459,6 +479,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       executablePath: '%ProgramFiles(x86)%\\MathType\\Setup.exe',
       arguments: ['-Q', '-R'],
       completionTimeoutMinutes: 5,
+    },
+  },
+  {
+    // MiKTeX registers its Console cleanup page as the ARP uninstall command.
+    // That command opens an interactive Qt workflow and leaves the exact
+    // registration installed under non-interactive LocalSystem. MiKTeX's
+    // integrated setup utility is the documented unattended removal path;
+    // --shared=yes is required for the all-users installation selected here.
+    wingetId: 'MiKTeX.MiKTeX',
+    reviewedExactUninstall: {
+      executablePath:
+        '%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe',
+      arguments: ['--quiet', '--shared=yes', 'uninstall'],
+      completionTimeoutMinutes: 15,
     },
   },
   {

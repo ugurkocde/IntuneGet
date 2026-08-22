@@ -694,6 +694,76 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses MiKTeX integrated setup instead of its interactive Console cleanup page',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'MiKTeX',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath:
+              '%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe',
+            arguments: ['--quiet', '--shared=yes', 'uninstall'],
+            completionTimeoutMinutes: 15,
+          },
+        },
+        [],
+        'MiKTeX.MiKTeX'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe')"
+      );
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallArguments = @('--quiet', '--shared=yes', 'uninstall')"
+      );
+      expect(uninstallFunction).toContain(
+        '$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 15 }'
+      );
+      expect(uninstallFunction).toContain(
+        'Waiting for vendor uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+      );
+      expect(uninstallFunction).not.toContain('--start-page cleanup');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps QQ exact registry removal non-interactive under LocalSystem',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'QQ',
+        [],
+        { reviewedUninstallArguments: ['/S'] },
+        [],
+        'Tencent.QQ.NT'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$reviewedUninstallArguments = @('/S')"
+      );
+      expect(uninstallFunction).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+      expect(uninstallFunction).toContain(
+        'Waiting for vendor uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+      );
+      expect(uninstallFunction).toContain(
+        'Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey }'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'uses the hash-verified packaged installer for a reviewed vendor removal lifecycle',
     () => {
       const generated = generateRegistryUninstallPackage(

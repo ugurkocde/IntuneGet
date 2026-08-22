@@ -943,6 +943,29 @@ describe('SQL Server 2017 Express unsupported managed install block migration co
   });
 });
 
+describe('SQL Server 2025 Express unsupported managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822120000_block_sql_server_2025_express_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the deployment-specific SQL Server lifecycle from generic packaging', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Microsoft.SQLServer.2025.Express'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32566074806'
+    );
+    expect(sql).toContain('features or role, instance identity, and SQL sysadmin accounts');
+    expect(sql).toContain('exact manifest command exited -1');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('QA canonical sync statement timeout migration contract', () => {
   const sql = readFileSync(
     resolve(
@@ -1118,6 +1141,29 @@ describe('Standard Notes SYSTEM-profile lifecycle block migration contract', () 
   });
 });
 
+describe('superProductivity SYSTEM-profile lifecycle block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822111500_block_superproductivity_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsafe per-user lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'JohannesMillan.superProductivity'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32564266080'
+    );
+    expect(sql).toContain('LocalSystem profile');
+    expect(sql).toContain('2,914');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('AMD Cloud Edition hardware-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
@@ -1137,5 +1183,54 @@ describe('AMD Cloud Edition hardware-dependent install block migration contract'
     expect(sql).toContain('set is_verified = false');
     expect(sql).toContain("status = 'superseded'");
     expect(sql).toContain("status in ('queued', 'failed')");
+  });
+});
+
+describe('Teradata TTU Base suite managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822130000_block_teradata_base_suite_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks both suite aliases after the exact vendor removal left the suite installed', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Teradata.TeradataBaseSuite'");
+    expect(sql).toContain("'Teradata.TTUBase'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32568333477'
+    );
+    expect(sql).toContain('all 28 added uninstall entries');
+    expect(sql).toContain('6,033');
+    expect(sql).toContain('all 18 shortcuts');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
+describe('Wise Disk Cleaner managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822133000_block_wise_disk_cleaner_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the incomplete vendor removal lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'WiseCleaner.WiseDiskCleaner'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32569486048'
+    );
+    expect(sql).toContain('Wise Disk Cleaner_is1');
+    expect(sql).toContain('both shortcuts');
+    expect(sql).toContain('2,967');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
