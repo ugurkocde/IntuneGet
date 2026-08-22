@@ -14,7 +14,7 @@ const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
 const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
-const PREFLIGHT_CACHE_SCHEMA_VERSION = '3';
+const PREFLIGHT_CACHE_SCHEMA_VERSION = '4';
 const LEASE_SECONDS = 240;
 const WAIT_FOR_CLAIM_MS = 240_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -351,6 +351,12 @@ async function performLivePreflight(
       : HEALTHY_VERSIONED_TTL_MS;
     await writeHealth(buildHealthRow(cacheKey, input, 'healthy', {
       actual_sha256: downloaded.sha256,
+      reason_code: downloaded.verificationMethod === 'publisher-checksum'
+        ? 'PUBLISHER_CHECKSUM_ATTESTED'
+        : null,
+      reason_message: downloaded.verificationMethod === 'publisher-checksum'
+        ? 'The trusted WinGet SHA256 matched the publisher checksum and the installer source passed bounded byte-range probes. The packager will still hash the complete downloaded payload.'
+        : null,
       expires_at: new Date(Date.now() + ttl).toISOString(),
     }));
 

@@ -97,7 +97,7 @@ describe('installer dispatch preflight', () => {
 
   it('keeps user and machine health identities separate', () => {
     expect(createInstallerHealthKey(request)).toBe(
-      '3b7e40af357d2af41613cc5526ad84c5fbaa2d2ce127b6c88b66e014fce7f9bd'
+      '4a163d0ab2ee36349a086201a52a30090585393dee25fec8889fee47d254d937'
     );
     expect(createInstallerHealthKey(request)).not.toBe(createInstallerHealthKey({
       ...request,

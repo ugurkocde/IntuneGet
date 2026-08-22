@@ -5,6 +5,8 @@ import {
   isLikelyMutableInstallerUrl,
   isPublicIpAddress,
   parseByteContentRange,
+  parsePublisherChecksum,
+  publisherChecksumUrlForInstaller,
   shouldUseRangedInstallerHash,
 } from '@/lib/installer-download';
 
@@ -51,6 +53,45 @@ describe('installer download safety helpers', () => {
     expect(shouldUseRangedInstallerHash(
       'https://repo.postgrespro.ru.example.test/setup.exe',
     )).toBe(false);
+  });
+
+  it('uses a publisher checksum only for exact official PostgresPro installer URLs', () => {
+    expect(publisherChecksumUrlForInstaller(
+      'https://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBe(
+      'https://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe.sha256sum',
+    );
+    expect(publisherChecksumUrlForInstaller(
+      'http://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBeNull();
+    expect(publisherChecksumUrlForInstaller(
+      'https://repo.postgrespro.com.example.test/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBeNull();
+    expect(publisherChecksumUrlForInstaller(
+      'https://repo.postgrespro.com/win/32/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBeNull();
+    expect(publisherChecksumUrlForInstaller(
+      'https://repo.postgrespro.com/win/64/archive/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBeNull();
+    expect(publisherChecksumUrlForInstaller(
+      'https://repo.postgrespro.com/win/64/PostgreSQL_17.7_64bit_Setup.exe?mirror=1',
+    )).toBeNull();
+  });
+
+  it('strictly parses the publisher checksum for the exact installer filename', () => {
+    const checksum = '58f961e7ee44676c1fecb111e4eb5429701cdbc3ee057df336d378b2094dc94d';
+    expect(parsePublisherChecksum(
+      `${checksum}  PostgreSQL_17.7_64bit_Setup.exe\n`,
+      'PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBe(checksum.toUpperCase());
+    expect(parsePublisherChecksum(
+      `${checksum}  different.exe\n`,
+      'PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBeNull();
+    expect(parsePublisherChecksum(
+      `${checksum}  PostgreSQL_17.7_64bit_Setup.exe\nextra`,
+      'PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBeNull();
   });
 
   it('builds ordered non-overlapping byte ranges including a short final range', () => {
