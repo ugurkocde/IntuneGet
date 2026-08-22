@@ -73,11 +73,49 @@ describe('dispatchQaCandidate', () => {
       version: '2.0.0',
       architecture: 'x64',
       installerUrl: 'https://example.test/setup.exe',
+      manifestInstallerUrl: 'https://example.test/setup.exe',
       installerSha256: 'A'.repeat(64),
       installerType: 'wix',
       installScope: 'user',
       sourceType: 'winget',
     });
+  });
+
+  it('uses a reviewed mirror for both QA preflight and the runner payload', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const manifestUrl =
+      'https://download.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi';
+    const mirrorUrl =
+      'https://mirror.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi';
+
+    await dispatchQaCandidate({
+      id: '22222222-2222-4222-8222-222222222222',
+      winget_id: 'BlenderFoundation.Blender.LTS.4.2',
+      definition_path: null,
+      version: '4.2.16',
+      architecture: 'x64',
+      installer_url: manifestUrl,
+      installer_sha256: 'B'.repeat(64),
+      installer_file_name: 'blender-4.2.16-windows-x64.msi',
+      installer_type: 'msi',
+      test_level: 'psadt-package',
+      package_profile_sha256: 'C'.repeat(64),
+      test_config: { mode: 'psadt-package', sourceInstallerType: 'wix' },
+    });
+
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(expect.objectContaining({
+      installerUrl: mirrorUrl,
+      manifestInstallerUrl: manifestUrl,
+      installerSha256: 'B'.repeat(64),
+    }));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.parse(body.inputs.candidate_payload).installerUrl).toBe(mirrorUrl);
   });
 
   it('surfaces a rejected GitHub dispatch', async () => {

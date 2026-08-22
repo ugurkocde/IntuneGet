@@ -29,6 +29,29 @@ describe('applyInstallerUrlOverride', () => {
     );
   });
 
+  it('routes Blender 4.2 LTS x64 to Blender official mirror service', () => {
+    const url = applyInstallerUrlOverride(
+      'BlenderFoundation.Blender.LTS.4.2',
+      '4.2.16',
+      'x64',
+      'https://download.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi',
+    );
+
+    expect(url).toBe(
+      'https://mirror.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi',
+    );
+  });
+
+  it('does not guess a Blender mirror payload for another architecture', () => {
+    const original = 'https://download.blender.org/release/Blender4.2/setup-arm64.msi';
+    expect(applyInstallerUrlOverride(
+      'BlenderFoundation.Blender.LTS.4.2',
+      '4.2.16',
+      'arm64',
+      original,
+    )).toBe(original);
+  });
+
   it('interpolates the version into the Freeplane GitHub Releases URL', () => {
     const url = applyInstallerUrlOverride(
       'Freeplane.Freeplane',
@@ -63,5 +86,9 @@ describe('applyInstallerUrlOverride', () => {
 describe('INSTALLER_URL_OVERRIDES', () => {
   it('contains the Freeplane entry', () => {
     expect(INSTALLER_URL_OVERRIDES['Freeplane.Freeplane']).toBeDefined();
+  });
+
+  it('contains the Blender 4.2 LTS entry', () => {
+    expect(INSTALLER_URL_OVERRIDES['BlenderFoundation.Blender.LTS.4.2']).toBeDefined();
   });
 });

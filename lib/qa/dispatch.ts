@@ -1,5 +1,6 @@
 import { getGitHubActionsConfig } from '@/lib/github-actions';
 import { enforceInstallerPreflight } from '@/lib/installer-preflight';
+import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import type { Json } from '@/types/database';
 
 export interface QaDispatchCandidate {
@@ -25,6 +26,12 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
   const sourceInstallerType = typeof testConfig.sourceInstallerType === 'string' && testConfig.sourceInstallerType.trim()
     ? testConfig.sourceInstallerType.trim()
     : candidate.installer_type;
+  const executionInstallerUrl = applyInstallerUrlOverride(
+    candidate.winget_id,
+    candidate.version,
+    candidate.architecture,
+    candidate.installer_url,
+  );
 
   // Keep the QA dispatch boundary aligned with customer packaging. A vendor
   // can replace the bytes behind a mutable URL after WinGet publishes its
@@ -34,7 +41,8 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
     wingetId: candidate.winget_id,
     version: candidate.version,
     architecture: candidate.architecture,
-    installerUrl: candidate.installer_url,
+    installerUrl: executionInstallerUrl,
+    manifestInstallerUrl: candidate.installer_url,
     installerSha256: candidate.installer_sha256,
     // The candidate column is the normalized execution type (for example,
     // WinGet Wix becomes MSI). Preflight must compare the original WinGet
@@ -65,7 +73,7 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
           wingetId: candidate.winget_id,
           version: candidate.version,
           architecture: candidate.architecture,
-          installerUrl: candidate.installer_url,
+          installerUrl: executionInstallerUrl,
           installerSha256: candidate.installer_sha256,
           installerFileName: candidate.installer_file_name,
           installerType: candidate.installer_type,

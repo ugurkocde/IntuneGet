@@ -16,6 +16,13 @@
 type OverrideFn = (version: string, architecture: string) => string | null;
 
 export const INSTALLER_URL_OVERRIDES: Record<string, OverrideFn> = {
+  // download.blender.org returns HTTP 403 to hosted preflight egress for this
+  // release family. Blender's official mirror service selects a healthy
+  // geographic mirror while the WinGet manifest hash remains authoritative.
+  'BlenderFoundation.Blender.LTS.4.2': (version, architecture) =>
+    architecture.toLowerCase() === 'x64'
+      ? `https://mirror.blender.org/release/Blender4.2/blender-${version}-windows-x64.msi`
+      : null,
   'Freeplane.Freeplane': (version) =>
     `https://github.com/freeplane/freeplane/releases/download/release-${version}/Freeplane-Setup-${version}.exe`,
 };

@@ -428,6 +428,54 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it('preflights Blender through its official mirror while preserving manifest identity', async () => {
+    const manifestUrl =
+      'https://download.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi';
+    const mirrorUrl =
+      'https://mirror.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi';
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: manifestUrl,
+      sha256: 'A'.repeat(64),
+      type: 'wix',
+      scope: 'machine',
+      silentArgs: '',
+      productCode: '{3CA82049-A4E1-4EFC-B529-4ED32AEF3F4F}',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'BlenderFoundation.Blender.LTS.4.2',
+          displayName: 'Blender 4.2 LTS',
+          version: '4.2.16',
+          installerType: 'wix',
+          installerUrl: manifestUrl,
+          installerSha256: 'A'.repeat(64),
+          installCommand: '',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'BlenderFoundation.Blender.LTS.4.2',
+        installerUrl: mirrorUrl,
+        manifestInstallerUrl: manifestUrl,
+        installerSha256: 'A'.repeat(64),
+      }),
+      expect.any(Array),
+    );
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledOnce();
+  });
+
   it('does not apply catalog retirement policy to a custom package', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

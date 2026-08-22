@@ -37,6 +37,7 @@ import {
   enforceInstallerPreflight,
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
+import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import { ensureQaDemand } from '@/lib/qa/demand';
 import {
   applyApplicationPackagingAdapter,
@@ -337,19 +338,27 @@ export async function POST(request: NextRequest) {
     // batches responsive.
     for (let i = 0; i < win32Items.length; i += 2) {
       const preflightResults = await Promise.allSettled(
-        win32Items.slice(i, i + 2).map((item) => enforceInstallerPreflight(
-          {
+        win32Items.slice(i, i + 2).map((item) => {
+          const executionInstallerUrl = applyInstallerUrlOverride(
+            item.wingetId,
+            item.version,
+            item.architecture || '',
+            item.installerUrl,
+          );
+          return enforceInstallerPreflight({
             wingetId: item.wingetId,
             version: item.version,
             architecture: item.architecture,
-            installerUrl: item.installerUrl,
+            installerUrl: executionInstallerUrl,
+            manifestInstallerUrl: item.installerUrl,
             installerSha256: item.installerSha256,
             installerType: item.installerType,
             installScope: item.installScope,
             sourceType: item.sourceType,
           },
           trustedInstallersByItem.get(item),
-        )),
+          );
+        }),
       );
 
       const failedIndex = preflightResults.findIndex((result) => result.status === 'rejected');
