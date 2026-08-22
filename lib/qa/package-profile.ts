@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '765d02a3041cc304d2df403aafc18b6f14258f59',
+  packagerCommit: '49775d3657a1b11b4ec1603e80ba8f78882b174f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -278,6 +278,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // QQ NT's reviewed /S argument changes only its previously failed hidden
   // confirmation lifecycle. Preserve every unrelated valid pass.
   '98019d2c6e06ff51a35d178bedc41f9f67a99107',
+  // Removing the ineffective QQ NT /S adapter affects only an app now blocked
+  // at the shared eligibility gate. Preserve every unrelated valid pass.
+  '765d02a3041cc304d2df403aafc18b6f14258f59',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

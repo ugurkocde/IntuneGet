@@ -64,7 +64,6 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
-      'Tencent.QQ.NT',
       'MiKTeX.MiKTeX',
       'Y-ASLant.ElegantClipboard',
       'Amazon.Music',
@@ -105,12 +104,12 @@ describe('QA toolchain targeted retries', () => {
       'AppiumDevelopers.AppiumInspector',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
+    expect(targets).not.toContain('Tencent.QQ.NT');
 
     targets.length = 0;
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
-        'Tencent.QQ.NT',
         'MiKTeX.MiKTeX',
         'Y-ASLant.ElegantClipboard',
         'Amazon.Music',
@@ -153,6 +152,9 @@ describe('QA toolchain targeted retries', () => {
     expect(
       terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
     ).not.toContain('Acronis.CyberProtectHomeOffice');
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+    ).not.toContain('Tencent.QQ.NT');
   });
 
   it('retries ElegantClipboard only after activating its reviewed user scope', () => {
@@ -177,15 +179,15 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries QQ NT only after activating its unattended registered uninstaller', () => {
+  it('does not retry blocked QQ NT after removing its ineffective adapter', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' tencent.qq.nt ', status: 'failed' }
-    )).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(
-      '98019d2c6e06ff51a35d178bedc41f9f67a99107',
-      { wingetId: 'Tencent.QQ.NT', status: 'failed' }
     )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '765d02a3041cc304d2df403aafc18b6f14258f59',
+      { wingetId: 'Tencent.QQ.NT', status: 'failed' }
+    )).toBe(true);
   });
 
   it('carries FSLogix from its reviewed identity release into nested-EXE disambiguation', () => {

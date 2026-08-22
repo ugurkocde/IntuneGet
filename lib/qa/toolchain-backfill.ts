@@ -89,6 +89,7 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '49775d3657a1b11b4ec1603e80ba8f78882b174f': MIKTEX_RELEASE_RETRY_TARGETS,
   '765d02a3041cc304d2df403aafc18b6f14258f59': [
     // Retry QQ NT with its reviewed non-interactive registered uninstaller.
     'Tencent.QQ.NT',
