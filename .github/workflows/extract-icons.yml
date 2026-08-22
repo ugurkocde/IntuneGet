@@ -114,11 +114,27 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MAX_APPS: ${{ env.MAX_APPS }}
+          # Web fetching is fast (seconds per app); allow a larger batch than
+          # the binary job so the cursor advances meaningfully per run.
+          MAX_APPS: ${{ github.event.inputs.max_apps || '300' }}
           ICONS_DIR: public/icons
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
           BINARY_GAP_FILL: ${{ github.event.inputs.binary_gap_fill || 'false' }}
         run: node .github/scripts/fetch-web-icons.mjs
+
+      - name: Audit duplicate icons
+        if: always()
+        env:
+          ICONS_DIR: public/icons
+        run: node .github/scripts/audit-duplicate-icons.mjs
+
+      - name: Upload icon audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: icon-audit
+          path: icon-audit.json
+          if-no-files-found: ignore
 
       - name: Commit web icons
         id: commit-web-icons
@@ -243,11 +259,13 @@ jobs:
             FAVICON=$(jq '[.[] | select(.icon_source == "favicon")] | length' web-icon-results.json)
             STORE=$(jq '[.[] | select(.icon_source == "microsoft_store")] | length' web-icon-results.json)
             HOMEPAGE=$(jq '[.[] | select(.icon_source == "homepage_image")] | length' web-icon-results.json)
+            INHERITED=$(jq '[.[] | select(.icon_source == "family_inherited")] | length' web-icon-results.json)
             TOTAL=$(jq 'length' web-icon-results.json)
             echo "- **GitHub avatars:** $GITHUB" >> $GITHUB_STEP_SUMMARY
             echo "- **Favicons:** $FAVICON" >> $GITHUB_STEP_SUMMARY
             echo "- **Microsoft Store:** $STORE" >> $GITHUB_STEP_SUMMARY
             echo "- **Homepage images:** $HOMEPAGE" >> $GITHUB_STEP_SUMMARY
+            echo "- **Family inherited:** $INHERITED" >> $GITHUB_STEP_SUMMARY
             echo "- **Total success:** $SUCCESS" >> $GITHUB_STEP_SUMMARY
             echo "- **Total processed:** $TOTAL" >> $GITHUB_STEP_SUMMARY
           fi
@@ -355,7 +373,12 @@ jobs:
           async function getApps() {
             let query = supabase
               .from('curated_apps')
-              .select('winget_id, name, publisher, latest_version, icon_extraction_attempts, icon_source');
+              .select('winget_id, name, publisher, latest_version, has_icon, icon_extraction_attempts, icon_source');
+
+            // Low-fidelity web sources are placeholders: binary extraction
+            // always wins over them, so include them here to heal wrong icons
+            // (e.g. publisher avatars shown for product apps like Firefox).
+            const WEB_SOURCES = ['github_avatar', 'favicon', 'homepage_image'];
 
             if (appIds !== 'all') {
               const targetIds = appIds.split(',').map(id => id.trim());
@@ -377,12 +400,10 @@ jobs:
                 .range(startOffset, startOffset + maxApps - 1);
             } else {
               if (!forceRefresh) {
-                query = query.or('has_icon.is.null,has_icon.eq.false');
-              }
-
-              if (!forceRefresh) {
+                query = query.or('has_icon.is.null,has_icon.eq.false,icon_source.in.(github_avatar,favicon,homepage_image)');
                 query = query.or('icon_extraction_attempts.is.null,icon_extraction_attempts.lt.3');
               }
+              query = query.order('winget_id', { ascending: true });
               query = query.limit(maxApps);
             }
 
@@ -393,7 +414,49 @@ jobs:
               process.exit(1);
             }
 
-            const wingetIds = apps.map(a => a.winget_id);
+            // Resolve an app's package-family ancestors (Mozilla.Firefox.es-ES ->
+            // Mozilla.Firefox). Returns the longest ancestor directory that
+            // already has every target size on disk, so locale/variant packages
+            // reuse their base product's extracted icon instead of each
+            // downloading its own installer.
+            function findFullAncestorDir(wingetId) {
+              const parts = wingetId.split('.');
+              for (let take = parts.length - 1; take >= 2; take--) {
+                const dir = path.join('public/icons', parts.slice(0, take).join('.'));
+                if (!fs.existsSync(dir)) continue;
+                const complete = TARGET_SIZES.every(s => fs.existsSync(path.join(dir, `icon-${s}.png`)));
+                if (complete) return dir;
+              }
+              return null;
+            }
+
+            const wingetIds = [];
+            const inheritedResults = [];
+
+            for (const app of apps) {
+              if (!missingSizesOnly && !forceRefresh) {
+                const ancestorDir = findFullAncestorDir(app.winget_id);
+                if (ancestorDir) {
+                  const iconDir = path.join('public/icons', app.winget_id);
+                  fs.mkdirSync(iconDir, { recursive: true });
+                  for (const file of fs.readdirSync(ancestorDir)) {
+                    if (/^icon-\d+\.png$/.test(file) && !fs.existsSync(path.join(iconDir, file))) {
+                      fs.copyFileSync(path.join(ancestorDir, file), path.join(iconDir, file));
+                    }
+                  }
+                  console.log(`Inherited icon for ${app.winget_id} from ${path.basename(ancestorDir)} (no installer download needed)`);
+                  inheritedResults.push({
+                    winget_id: app.winget_id,
+                    status: 'success',
+                    icon_path: `/icons/${app.winget_id}/`,
+                    icon_source: 'family_inherited'
+                  });
+                  continue;
+                }
+              }
+              wingetIds.push(app.winget_id);
+            }
+
             const installerMap = {};
             if (wingetIds.length > 0) {
               const { data: vhRows } = await supabase
@@ -415,6 +478,7 @@ jobs:
 
             const appsToProcess = [];
             for (const app of apps) {
+              if (inheritedResults.some(r => r.winget_id === app.winget_id)) continue;
               const iconDir = `public/icons/${app.winget_id}`;
               if (missingSizesOnly) {
                 // Process only if at least one target size is missing on disk.
@@ -427,7 +491,8 @@ jobs:
                 appsToProcess.push(app);
               } else {
                 const iconPath = `${iconDir}/icon-64.png`;
-                if (forceRefresh || !fs.existsSync(iconPath)) {
+                const hasWebIcon = WEB_SOURCES.includes(app.icon_source);
+                if (forceRefresh || !fs.existsSync(iconPath) || hasWebIcon) {
                   const attempts = app.icon_extraction_attempts || 0;
                   if (!forceRefresh && attempts >= 3) {
                     console.log(`Skipping ${app.winget_id} (${attempts} failed attempts)`);
@@ -441,13 +506,27 @@ jobs:
               if (appsToProcess.length >= maxApps) break;
             }
 
-            console.log(`Processing ${appsToProcess.length} apps for binary icon extraction`);
+            // Merge inherited successes into the results file so the commit and
+            // database steps publish them even when no installer downloads ran.
+            let existingResults = [];
+            if (inheritedResults.length > 0) {
+              try {
+                existingResults = JSON.parse(fs.readFileSync('icon-results.json', 'utf8'));
+              } catch {}
+              fs.writeFileSync(
+                'icon-results.json',
+                JSON.stringify([...existingResults.filter(r => !inheritedResults.some(i => i.winget_id === r.winget_id)), ...inheritedResults], null, 2)
+              );
+            }
+
+            console.log(`Processing ${appsToProcess.length} apps for binary icon extraction (${inheritedResults.length} resolved via family inheritance)`);
 
             fs.writeFileSync('apps-to-process.json', JSON.stringify(appsToProcess, null, 2));
 
             const outputFile = process.env.GITHUB_OUTPUT;
             if (outputFile) {
-              fs.appendFileSync(outputFile, `app_count=${appsToProcess.length}\n`);
+              fs.appendFileSync(outputFile, `app_count=${appsToProcess.length + inheritedResults.length}\n`);
+              fs.appendFileSync(outputFile, `inherited_count=${inheritedResults.length}\n`);
             }
           }
 
@@ -471,6 +550,13 @@ jobs:
           }
 
           $apps = Get-Content "apps-to-process.json" | ConvertFrom-Json
+
+          # Preserve family-inherited successes written by the get-apps step;
+          # this file is rewritten below so they must be carried through.
+          $priorResults = @()
+          if (Test-Path "icon-results.json") {
+            try { $priorResults = @(Get-Content "icon-results.json" -Raw | ConvertFrom-Json) } catch {}
+          }
 
           $extracted = 0
           $failed = 0
@@ -710,7 +796,7 @@ jobs:
           Write-Host "Extracted: $extracted"
           Write-Host "Failed: $failed"
 
-          ConvertTo-Json -InputObject @($results) -Depth 10 | Out-File "icon-results.json" -Encoding utf8NoBOM
+          ConvertTo-Json -InputObject @($priorResults + $results) -Depth 10 | Out-File "icon-results.json" -Encoding utf8NoBOM
 
           echo "extracted=$extracted" >> $env:GITHUB_OUTPUT
           echo "failed=$failed" >> $env:GITHUB_OUTPUT

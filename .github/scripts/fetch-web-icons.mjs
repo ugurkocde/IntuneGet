@@ -190,6 +190,34 @@ async function resizeAndSave(sourceBuffer, outputDir) {
 }
 
 /**
+ * Family inheritance: locale/variant packages (e.g. Mozilla.Firefox.es-ES)
+ * should reuse the icon already produced for their base package
+ * (e.g. Mozilla.Firefox) instead of hitting the network tiers independently.
+ * Walks proper prefixes of the winget ID from longest to shortest and returns
+ * the best available source buffer (prefers 256 > 128 > 64).
+ * Returns { buffer, ancestorId } on success, null when no ancestor has an icon.
+ */
+function findAncestorIcon(wingetId) {
+  const parts = wingetId.split('.');
+  for (let take = parts.length - 1; take >= 1; take--) {
+    const ancestorId = parts.slice(0, take).join('.');
+    const ancestorDir = path.join(ICONS_DIR, ancestorId);
+    if (!fs.existsSync(ancestorDir)) continue;
+    for (const size of [256, 128, 64]) {
+      const p = path.join(ancestorDir, `icon-${size}.png`);
+      if (fs.existsSync(p)) {
+        try {
+          return { buffer: fs.readFileSync(p), ancestorId };
+        } catch {
+          continue;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Tier 2: Try to fetch the publisher's GitHub avatar.
  * Returns the image buffer on success, null on failure.
  */
@@ -488,6 +516,7 @@ async function main() {
   let faviconHits = 0;
   let storeHits = 0;
   let homepageHits = 0;
+  let inheritedHits = 0;
   let misses = 0;
 
   for (const app of apps) {
@@ -513,6 +542,28 @@ async function main() {
 
     let source = null;
     let buffer = null;
+
+    // Family inheritance first: a locale/variant package whose base package
+    // already has an icon never needs a network fetch. This keeps every
+    // variant visually consistent with its product family and avoids
+    // publisher-level images (org avatars, favicons) leaking onto variants.
+    if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
+      const ancestor = findAncestorIcon(wingetId);
+      if (ancestor) {
+        const savedInherited = await resizeAndSave(ancestor.buffer, outputDir);
+        if (savedInherited) {
+          console.log(`  [family_inherited] ${wingetId} <- ${ancestor.ancestorId}`);
+          results.push({
+            winget_id: wingetId,
+            status: 'success',
+            icon_source: 'family_inherited',
+            icon_path: `/icons/${wingetId}/`,
+          });
+          inheritedHits++;
+          continue;
+        }
+      }
+    }
 
     if (MISSING_SIZES_ONLY) {
       // Re-use the source that originally produced this app's icon so the
@@ -598,6 +649,7 @@ async function main() {
         if (source === 'github_avatar') githubHits++;
         else if (source === 'microsoft_store') storeHits++;
         else if (source === 'homepage_image') homepageHits++;
+        else if (source === 'family_inherited') inheritedHits++;
         else faviconHits++;
         continue;
       }
@@ -617,6 +669,7 @@ async function main() {
   console.log(`Microsoft Store: ${storeHits}`);
   console.log(`GitHub avatars: ${githubHits}`);
   console.log(`Homepage images: ${homepageHits}`);
+  console.log(`Family inherited: ${inheritedHits}`);
   console.log(`Favicons: ${faviconHits}`);
   console.log(`No icon found: ${misses}`);
   console.log(`Total processed: ${apps.length}`);
@@ -635,11 +688,12 @@ async function main() {
   // Write counts for GitHub Actions output
   const outputFile = process.env.GITHUB_OUTPUT;
   if (outputFile) {
-    fs.appendFileSync(outputFile, `github_hits=${githubHits}\n`);
-    fs.appendFileSync(outputFile, `favicon_hits=${faviconHits}\n`);
-    fs.appendFileSync(outputFile, `store_hits=${storeHits}\n`);
-    fs.appendFileSync(outputFile, `homepage_hits=${homepageHits}\n`);
-    fs.appendFileSync(outputFile, `total_hits=${githubHits + faviconHits + storeHits + homepageHits}\n`);
+  fs.appendFileSync(outputFile, `github_hits=${githubHits}\n`);
+  fs.appendFileSync(outputFile, `favicon_hits=${faviconHits}\n`);
+  fs.appendFileSync(outputFile, `store_hits=${storeHits}\n`);
+  fs.appendFileSync(outputFile, `homepage_hits=${homepageHits}\n`);
+  fs.appendFileSync(outputFile, `inherited_hits=${inheritedHits}\n`);
+  fs.appendFileSync(outputFile, `total_hits=${githubHits + faviconHits + storeHits + homepageHits + inheritedHits}\n`);
   }
 }
 
