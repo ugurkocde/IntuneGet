@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Tricentis.NeoLoad',
       'Piriform.Recuva',
       'Trimble.SketchUp.2022',
       'Webroot.SecureAnywhere',
@@ -113,6 +114,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Tricentis.NeoLoad',
         'Piriform.Recuva',
         'Trimble.SketchUp.2022',
         'Webroot.SecureAnywhere',
@@ -222,6 +224,24 @@ describe('QA toolchain targeted retries', () => {
     expect(terminalToolchainRetryTargets(
       'dde6e9ae4e569568b4a15c087ba711d1bb3a8895'
     )).toEqual(expect.arrayContaining([
+      'Trimble.SketchUp.2022',
+      'Webroot.SecureAnywhere',
+    ]));
+  });
+
+  it('retries NeoLoad only after activating its reviewed install4j quiet argument', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' tricentis.neoload ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d',
+      { wingetId: 'Tricentis.NeoLoad', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d'
+    )).toEqual(expect.arrayContaining([
+      'Piriform.Recuva',
       'Trimble.SketchUp.2022',
       'Webroot.SecureAnywhere',
     ]));

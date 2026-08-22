@@ -89,6 +89,15 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'c163bad8c16908ada436222bc2cdba0bf49f794e': [
+    // Retry NeoLoad with install4j's documented unattended uninstall argument.
+    'Tricentis.NeoLoad',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    'Piriform.Recuva',
+    'Trimble.SketchUp.2022',
+    'Webroot.SecureAnywhere',
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
+  ],
   'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d': [
     // Retry Recuva with its manifest-declared full-width success codes.
     'Piriform.Recuva',

@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d',
+  packagerCommit: 'c163bad8c16908ada436222bc2cdba0bf49f794e',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -290,6 +290,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Full-width WinGet success-code handling changes only installers that declare
   // those exit codes. Preserve every unrelated valid pass from the prior release.
   'dde6e9ae4e569568b4a15c087ba711d1bb3a8895',
+  // NeoLoad's reviewed install4j quiet argument changes only its failed
+  // uninstall lifecycle. Preserve every unrelated valid pass from the prior release.
+  'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
