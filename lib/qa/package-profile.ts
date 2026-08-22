@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'dde6e9ae4e569568b4a15c087ba711d1bb3a8895',
+  packagerCommit: 'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -287,6 +287,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // SketchUp 2022's reviewed silent removal argument changes only its failed
   // lifecycle. Preserve every unrelated valid pass from the prior release.
   'b67135eb2f947485e54c2583cfb6083b1e2f24ba',
+  // Full-width WinGet success-code handling changes only installers that declare
+  // those exit codes. Preserve every unrelated valid pass from the prior release.
+  'dde6e9ae4e569568b4a15c087ba711d1bb3a8895',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

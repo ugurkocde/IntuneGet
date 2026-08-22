@@ -89,6 +89,14 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d': [
+    // Retry Recuva with its manifest-declared full-width success codes.
+    'Piriform.Recuva',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    'Trimble.SketchUp.2022',
+    'Webroot.SecureAnywhere',
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
+  ],
   'dde6e9ae4e569568b4a15c087ba711d1bb3a8895': [
     // Retry SketchUp 2022 with its reviewed silent removal argument.
     'Trimble.SketchUp.2022',

@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Piriform.Recuva',
       'Trimble.SketchUp.2022',
       'Webroot.SecureAnywhere',
       'MiKTeX.MiKTeX',
@@ -112,6 +113,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Piriform.Recuva',
         'Trimble.SketchUp.2022',
         'Webroot.SecureAnywhere',
         'MiKTeX.MiKTeX',
@@ -206,6 +208,23 @@ describe('QA toolchain targeted retries', () => {
     expect(terminalToolchainRetryTargets(
       'b67135eb2f947485e54c2583cfb6083b1e2f24ba'
     )).toContain('Webroot.SecureAnywhere');
+  });
+
+  it('retries Recuva only after activating full-width WinGet success codes', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' piriform.recuva ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'dde6e9ae4e569568b4a15c087ba711d1bb3a8895',
+      { wingetId: 'Piriform.Recuva', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      'dde6e9ae4e569568b4a15c087ba711d1bb3a8895'
+    )).toEqual(expect.arrayContaining([
+      'Trimble.SketchUp.2022',
+      'Webroot.SecureAnywhere',
+    ]));
   });
 
   it('does not retry blocked QQ NT after removing its ineffective adapter', () => {
