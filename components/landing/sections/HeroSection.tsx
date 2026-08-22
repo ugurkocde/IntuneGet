@@ -23,7 +23,7 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
   return (
     <section className="relative isolate w-full overflow-hidden">
       <div className="container relative z-10 mx-auto flex min-h-dvh max-w-6xl items-center px-4 pb-12 pt-24 md:px-6 md:pb-14 md:pt-28">
-        <div className="grid w-full items-center gap-12 lg:grid-cols-[54fr_46fr] lg:gap-16">
+        <div className="grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,54fr)_minmax(0,46fr)] lg:gap-16">
           {/* Left: copy + search */}
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
             <FadeIn animateOnMount duration={0.4} direction="up">

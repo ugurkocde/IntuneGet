@@ -149,6 +149,12 @@ describe('application packaging adapters', () => {
   });
 
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
+    expect(
+      resolveApplicationInstallScope('Y-ASLant.ElegantClipboard', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' y-aslant.elegantclipboard ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
       'user'
     );
@@ -357,6 +363,15 @@ describe('application packaging adapters', () => {
       executablePath: '%ProgramFiles(x86)%\\MathType\\Setup.exe',
       arguments: ['-Q', '-R'],
       completionTimeoutMinutes: 5,
+    });
+    expect(
+      applyApplicationPackagingAdapter('MiKTeX.MiKTeX', DEFAULT_PSADT_CONFIG)
+        .reviewedExactUninstall
+    ).toEqual({
+      executablePath:
+        '%ProgramFiles%\\MiKTeX\\miktex\\bin\\x64\\miktexsetup.exe',
+      arguments: ['--quiet', '--shared=yes', 'uninstall'],
+      completionTimeoutMinutes: 15,
     });
     expect(
       applyApplicationPackagingAdapter(
