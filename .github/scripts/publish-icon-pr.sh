@@ -53,7 +53,7 @@ The database is updated only after this PR passes required checks and merges.")
 
 gh pr merge "$pr_url" --auto --squash --delete-branch
 
-for _ in $(seq 1 120); do
+for _ in $(seq 1 180); do
   state=$(gh pr view "$pr_url" --json state --jq .state)
   if [[ "$state" == "MERGED" ]]; then
     {
@@ -66,6 +66,15 @@ for _ in $(seq 1 120); do
   if [[ "$state" == "CLOSED" ]]; then
     echo "Icon publication PR closed without merging: $pr_url" >&2
     exit 1
+  fi
+
+  # Anything else merging to main while we wait puts the PR in BEHIND, which
+  # blocks auto-merge when up-to-date branches are required. Update the branch
+  # so auto-merge can proceed instead of stalling until the timeout.
+  merge_state=$(gh pr view "$pr_url" --json mergeStateStatus --jq .mergeStateStatus 2>/dev/null || echo UNKNOWN)
+  if [[ "$merge_state" == "BEHIND" || "$merge_state" == "DIRTY" ]]; then
+    echo "Icon publication PR is $merge_state -- updating branch: $pr_url"
+    gh pr update-branch "$pr_url" >/dev/null 2>&1 || true
   fi
 
   failed_checks=$(gh pr checks "$pr_url" --json bucket --jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' 2>/dev/null || echo 0)

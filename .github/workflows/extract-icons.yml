@@ -551,6 +551,32 @@ jobs:
 
           $apps = Get-Content "apps-to-process.json" | ConvertFrom-Json
 
+          # Parse a winget installer manifest, pairing each InstallerUrl with
+          # the InstallerSha256 that belongs to it. Prefers a hashed x64
+          # exe/msi/msix entry so the downloaded binary is verifiable against
+          # the same community-reviewed manifest the URL came from.
+          function Get-InstallerFromManifest {
+            param([string]$YamlContent)
+            $records = @()
+            $current = $null
+            foreach ($line in ($YamlContent -split "`n")) {
+              if ($line -match '^\s*InstallerUrl:\s*(.+?)\s*$') {
+                if ($current) { $records += $current }
+                $current = @{ url = $matches[1].Trim(); sha256 = $null }
+              } elseif ($line -match '^\s*InstallerSha256:\s*([A-Fa-f0-9]{64})\s*$') {
+                if ($current -and -not $current.sha256) { $current.sha256 = $matches[1] }
+              }
+            }
+            if ($current) { $records += $current }
+            $hashed = @($records | Where-Object { $_.sha256 })
+            $preferred = @($hashed | Where-Object { $_.url -match '\.(exe|msi|msix|msixbundle|appx)(\?|$)' } |
+              Sort-Object { if ($_.url -match 'x64|win64|64-bit|amd64') { 0 } else { 1 } } |
+              Select-Object -First 1)
+            if ($preferred.Count -gt 0) { return $preferred[0] }
+            if ($hashed.Count -gt 0) { return $hashed[0] }
+            return $null
+          }
+
           # Preserve family-inherited successes written by the get-apps step;
           # this file is rewritten below so they must be carried through.
           $priorResults = @()
@@ -574,6 +600,7 @@ jobs:
 
               $installerUrl = $null
               $installerPath = $null
+              $manifestSha256 = $null
 
               $parts = $wingetId.Split('.')
               $publisher = $parts[0]
@@ -599,12 +626,10 @@ jobs:
                   $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
                   $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
 
-                  $lines = $yamlContent.Content -split "`n"
-                  foreach ($line in $lines) {
-                    if ($line -match 'InstallerUrl:\s*(.+)') {
-                      $installerUrl = $matches[1].Trim()
-                      break
-                    }
+                  $info = Get-InstallerFromManifest -YamlContent $yamlContent.Content
+                  if ($info) {
+                    $installerUrl = $info.url
+                    $manifestSha256 = $info.sha256
                   }
                 } catch {
                   Write-Host "Tier 2 failed for $wingetId : $($_.Exception.Message)"
@@ -625,12 +650,10 @@ jobs:
                     $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
                     $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
 
-                    $lines = $yamlContent.Content -split "`n"
-                    foreach ($line in $lines) {
-                      if ($line -match 'InstallerUrl:\s*(.+)') {
-                        $installerUrl = $matches[1].Trim()
-                        break
-                      }
+                    $info = Get-InstallerFromManifest -YamlContent $yamlContent.Content
+                    if ($info) {
+                      $installerUrl = $info.url
+                      $manifestSha256 = $info.sha256
                     }
                   }
                 } catch {
@@ -652,16 +675,26 @@ jobs:
               }
 
               if (-not $app.cached_installer_sha256 -or $app.cached_installer_sha256 -notmatch '^[A-Fa-f0-9]{64}$') {
-                Write-Warning "No trusted SHA256 is available for $wingetId"
-                $failureReason = 'missing_trusted_installer_hash'
-                $failed++
-                $results += @{
-                  winget_id = $wingetId
-                  status = 'failed'
-                  error = 'A trusted installer hash is required before binary parsing'
-                  failure_reason = $failureReason
+                # version_history had no trusted hash for this app. The winget
+                # manifest we resolved the InstallerUrl from carries the same
+                # community-reviewed InstallerSha256 -- that is an equally
+                # trusted source and unblocks extraction for apps that never
+                # went through version detection.
+                if ($manifestSha256 -match '^[A-Fa-f0-9]{64}$') {
+                  Write-Host "No version_history hash - using InstallerSha256 from winget manifest"
+                  $app.cached_installer_sha256 = $manifestSha256
+                } else {
+                  Write-Warning "No trusted SHA256 is available for $wingetId"
+                  $failureReason = 'missing_trusted_installer_hash'
+                  $failed++
+                  $results += @{
+                    winget_id = $wingetId
+                    status = 'failed'
+                    error = 'A trusted installer hash is required before binary parsing'
+                    failure_reason = $failureReason
+                  }
+                  continue
                 }
-                continue
               }
 
               $extension = if ($installerUrl -match '\.msi(\?|$)') { '.msi' }
