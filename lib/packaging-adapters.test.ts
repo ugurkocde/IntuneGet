@@ -337,6 +337,12 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['pr', '--confirm-command']);
     expect(
+      applyApplicationPackagingAdapter(
+        'Trimble.SketchUp.2022',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['-silent']);
+    expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['--force-uninstall']);

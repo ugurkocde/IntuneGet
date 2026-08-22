@@ -181,6 +181,36 @@ describe('PSADT Inno packaging contract', () => {
 
 describe('PSADT vendor argument contract', () => {
   it.runIf(canRunWindowsPowerShellPackager)(
+    'appends SketchUp silent removal to the exact captured InstallShield command',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'SketchUp Pro 2022',
+        [],
+        { reviewedUninstallArguments: ['-silent'] },
+        [],
+        'Trimble.SketchUp.2022',
+        'SketchUp Pro 2022',
+        '22.0.354',
+        'REGISTRY_UNINSTALL_PRODUCT:{C631706C-1735-11EC-9621-0242AC130015}:SketchUp Pro 2022',
+        '/silent'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$configuredProductCode = '{C631706C-1735-11EC-9621-0242AC130015}'"
+      );
+      expect(uninstallFunction).toContain("$reviewedUninstallArguments = @('-silent')");
+      expect(uninstallFunction).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'expands required WinGet install locations on the target machine',
     () => {
       const generated = generateRegistryUninstallPackage(

@@ -1069,6 +1069,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // SketchUp Pro 2022 registers its cached InstallShield wrapper with
+    // -remove -runfromtemp, but that command remains interactive and left the
+    // exact {C631706C-...} registration after the bounded QA deadline. The
+    // vendor-family wrapper supports -silent on removal; append only that
+    // missing argument to the exact captured command.
+    wingetId: 'Trimble.SketchUp.2022',
+    reviewedUninstallArguments: ['-silent'],
+  },
+  {
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
