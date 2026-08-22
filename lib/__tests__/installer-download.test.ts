@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildByteRanges,
   hashesEqual,
   isLikelyMutableInstallerUrl,
   isPublicIpAddress,
+  parseByteContentRange,
+  shouldUseRangedInstallerHash,
 } from '@/lib/installer-download';
 
 describe('installer download safety helpers', () => {
@@ -36,5 +39,37 @@ describe('installer download safety helpers', () => {
       'https://example.test/download/setup.exe?bad=%ZZ',
       '1.2.3',
     )).toBe(true);
+  });
+
+  it('selects ranged hashing only for the reviewed PostgresPro HTTPS origin', () => {
+    expect(shouldUseRangedInstallerHash(
+      'https://repo.postgrespro.ru/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBe(true);
+    expect(shouldUseRangedInstallerHash(
+      'http://repo.postgrespro.ru/win/64/PostgreSQL_17.7_64bit_Setup.exe',
+    )).toBe(false);
+    expect(shouldUseRangedInstallerHash(
+      'https://repo.postgrespro.ru.example.test/setup.exe',
+    )).toBe(false);
+  });
+
+  it('builds ordered non-overlapping byte ranges including a short final range', () => {
+    expect(buildByteRanges(10, 4)).toEqual([
+      { start: 0, end: 3 },
+      { start: 4, end: 7 },
+      { start: 8, end: 9 },
+    ]);
+    expect(buildByteRanges(0, 4)).toEqual([]);
+  });
+
+  it('strictly parses complete byte content-range headers', () => {
+    expect(parseByteContentRange('bytes 0-1048575/157645328')).toEqual({
+      start: 0,
+      end: 1048575,
+      total: 157645328,
+    });
+    expect(parseByteContentRange('bytes */157645328')).toBeNull();
+    expect(parseByteContentRange('bytes 10-9/100')).toBeNull();
+    expect(parseByteContentRange('bytes 0-100/100')).toBeNull();
   });
 });
