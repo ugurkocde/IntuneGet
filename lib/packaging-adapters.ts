@@ -124,6 +124,11 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // (winget-pkgs#94441). Preserve that exact argument-free vendor contract.
     wingetId: 'Amazon.Music',
     reviewedArgumentlessInstall: true,
+    // The signed vendor uninstaller removes the app immediately but its exact
+    // per-user registration can remain for slightly more than five minutes.
+    // Keep waiting for that exact identity rather than reporting failure while
+    // the verified removal is still completing.
+    uninstallCompletionTimeoutMinutes: 10,
   },
   {
     // ABB documents ADDLOCAL=ALL for a complete unattended RobotStudio

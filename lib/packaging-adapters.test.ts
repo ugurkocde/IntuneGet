@@ -10,10 +10,12 @@ import {
 
 describe('application packaging adapters', () => {
   it('attests Amazon Music as an argument-free unattended bootstrapper', () => {
-    expect(applyApplicationPackagingAdapter(
+    const adapted = applyApplicationPackagingAdapter(
       'Amazon.Music',
       { ...DEFAULT_PSADT_CONFIG }
-    ).reviewedArgumentlessInstall).toBe(true);
+    );
+    expect(adapted.reviewedArgumentlessInstall).toBe(true);
+    expect(adapted.uninstallCompletionTimeoutMinutes).toBe(10);
     expect(applyApplicationPackagingAdapter(
       'Example.App',
       { ...DEFAULT_PSADT_CONFIG, reviewedArgumentlessInstall: true }
