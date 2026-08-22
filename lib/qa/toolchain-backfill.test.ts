@@ -64,6 +64,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'ABB.RobotStudio',
       'Microsoft.msodbcsql.13',
       'Microsoft.WindowsAppRuntime.1.8',
       'Speek.Speek',
@@ -104,6 +105,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'ABB.RobotStudio',
         'Microsoft.msodbcsql.13',
         'Microsoft.WindowsAppRuntime.1.8',
         'Speek.Speek',

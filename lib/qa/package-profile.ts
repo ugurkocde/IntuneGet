@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '568f59b206634c6f7342f6d398cbdf7e3b650ed9',
+  packagerCommit: '21fbdbc5a29ca42ac0d2dd1c5939b9ad1f94adc2',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -251,6 +251,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Complete-token MSI UI normalization changes only packages whose manifest
   // uses /quiet. Preserve every unrelated compatible pass from this release.
   'fbc3d4483515b6c5e83a9c31fc46d02b4fa8abb0',
+  // RobotStudio's exact MSI identity and guarded EXE fallback affect only its
+  // previously failed wrapper lifecycle. Preserve every unrelated valid pass.
+  '568f59b206634c6f7342f6d398cbdf7e3b650ed9',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
