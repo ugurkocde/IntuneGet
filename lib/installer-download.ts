@@ -7,7 +7,8 @@ import * as https from 'node:https';
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_REDIRECTS = 5;
-const DEFAULT_RANGE_CHUNK_BYTES = 16 * 1024 * 1024;
+const DEFAULT_RANGE_CHUNK_BYTES = 1024 * 1024;
+const RANGE_DOWNLOAD_CONCURRENCY = 4;
 const RANGE_DOWNLOAD_ATTEMPTS = 3;
 const RANGED_HASH_HOSTS = new Set(['repo.postgrespro.ru']);
 
@@ -364,18 +365,27 @@ async function hashUrlInRanges(
     return hashUrl(metadata.finalUrl, redirectsRemaining, maxBytes, timeoutMs);
   }
 
+  const totalBytes = metadata.totalBytes;
+  const validator = metadata.validator;
   const hash = createHash('sha256');
   let bytes = 0;
-  for (const range of buildByteRanges(metadata.totalBytes)) {
-    const chunk = await downloadInstallerRangeWithRetry(
-      metadata.finalUrl,
-      range,
-      metadata.totalBytes,
-      metadata.validator,
-      timeoutMs,
+  const ranges = buildByteRanges(totalBytes);
+  for (let index = 0; index < ranges.length; index += RANGE_DOWNLOAD_CONCURRENCY) {
+    const chunks = await Promise.all(
+      ranges.slice(index, index + RANGE_DOWNLOAD_CONCURRENCY).map((range) =>
+        downloadInstallerRangeWithRetry(
+          metadata.finalUrl,
+          range,
+          totalBytes,
+          validator,
+          timeoutMs,
+        )
+      ),
     );
-    hash.update(chunk);
-    bytes += chunk.length;
+    for (const chunk of chunks) {
+      hash.update(chunk);
+      bytes += chunk.length;
+    }
   }
 
   return {
