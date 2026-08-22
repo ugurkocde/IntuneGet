@@ -104,7 +104,7 @@ export default function SecurityPage() {
       />
 
       {/* Content */}
-      <main id="main-content" className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28">
+      <main id="main-content" className="flex-1 mx-auto max-w-4xl px-4 py-12 lg:px-8 lg:py-16 pt-24 lg:pt-28 w-full">
         <div className="space-y-8">
           <div>
             <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">
