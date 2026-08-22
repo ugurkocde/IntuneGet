@@ -292,7 +292,9 @@ export async function buildDefaultDeploymentConfig(
     : [];
   const selectedManifestInstaller = selectWingetInstaller(
     manifestInstallers,
-    'x64'
+    'x64',
+    undefined,
+    wingetId,
   ) as WingetInstaller | null;
   const normalizedInstaller: NormalizedInstaller = selectedManifestInstaller
     ? normalizeInstaller({

@@ -126,6 +126,96 @@ describe('catalog installer reconciliation', () => {
     expect(selected?.productCode).toBe('{1DE15838-06D0-4C9D-B513-F86B806149D5}');
   });
 
+  it('selects Webroot MSI instead of its machine EXE lifecycle', () => {
+    const webrootInstallers: NormalizedInstaller[] = [
+      {
+        architecture: 'x86',
+        url: 'https://example.test/wsainstall.msi',
+        sha256: 'A'.repeat(64),
+        type: 'msi',
+        silentArgs: '/qn /norestart',
+        productCode: '{11111111-1111-1111-1111-111111111111}',
+      },
+      {
+        architecture: 'x86',
+        url: 'https://example.test/wsainstall.exe',
+        sha256: 'B'.repeat(64),
+        type: 'exe',
+        scope: 'machine',
+        silentArgs: '/silent /exeshowaddremove /lang=en',
+      },
+    ];
+
+    const selected = selectTrustedCatalogInstaller(webrootInstallers, {
+      wingetId: 'Webroot.SecureAnywhere',
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installScope: 'machine',
+      installerUrl: webrootInstallers[1].url,
+      installerSha256: webrootInstallers[1].sha256,
+    });
+
+    expect(selected?.type).toBe('msi');
+    expect(selected?.url).toBe('https://example.test/wsainstall.msi');
+  });
+
+  it('fails closed when Webroot no longer publishes its reviewed MSI lifecycle', () => {
+    const selected = selectTrustedCatalogInstaller([{
+      architecture: 'x86',
+      url: 'https://example.test/wsainstall.exe',
+      sha256,
+      type: 'exe',
+      scope: 'machine',
+      silentArgs: '/silent /exeshowaddremove /lang=en',
+    }], {
+      wingetId: 'Webroot.SecureAnywhere',
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installScope: 'machine',
+    });
+
+    expect(selected).toBeNull();
+  });
+
+  it('rebuilds Webroot packaging around the manifest MSI lifecycle', async () => {
+    getLiveInstallersMock.mockResolvedValue([
+      {
+        architecture: 'x86',
+        url: 'https://example.test/wsainstall.msi',
+        sha256: 'B'.repeat(64),
+        type: 'msi',
+      },
+      {
+        architecture: 'x86',
+        url: 'https://example.test/wsainstall.exe',
+        sha256,
+        type: 'exe',
+        scope: 'machine',
+        silentArgs: '/silent /exeshowaddremove /lang=en',
+      },
+    ] satisfies NormalizedInstaller[]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'Webroot.SecureAnywhere',
+      displayName: 'Webroot SecureAnywhere',
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installerType: 'exe',
+      installerUrl: 'https://example.test/wsainstall.exe',
+      installCommand: '"wsainstall.exe" /silent /exeshowaddremove /lang=en',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Webroot SecureAnywhere',
+    }));
+
+    expect(reconciled.item.installerType).toBe('msi');
+    expect(reconciled.item.installerUrl).toBe('https://example.test/wsainstall.msi');
+    expect(reconciled.item.installCommand).toBe(
+      'msiexec /i "wsainstall.msi" /qn ALLUSERS=1 /norestart'
+    );
+    expect(reconciled.item.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:Webroot SecureAnywhere'
+    );
+  });
+
   it('rebuilds a stale cart command from the trusted machine manifest entry', async () => {
     const reconciled = await reconcileCatalogInstaller(operaItem());
 

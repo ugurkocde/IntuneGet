@@ -98,17 +98,27 @@ export function normalizeQaArchitecture(value?: string | null): 'x64' | 'x86' | 
 export function selectWingetInstaller(
   installers: WingetInstallerCandidate[] | null | undefined,
   architecture?: string | null,
-  requestedScope?: 'machine' | 'user'
+  requestedScope?: 'machine' | 'user',
+  wingetId?: string,
 ): WingetInstallerCandidate | null {
   if (!installers?.length) return null;
+  const reviewedInstallerType = wingetId
+    ? resolveApplicationInstallerSelectionType(wingetId)
+    : undefined;
+  const typeCandidates = reviewedInstallerType
+    ? installers.filter(
+        (installer) => installer.InstallerType?.trim().toLowerCase() === reviewedInstallerType
+      )
+    : installers;
+  if (!typeCandidates.length) return null;
   const target = normalizeQaArchitecture(architecture);
-  const exactArchitecture = installers.filter(
+  const exactArchitecture = typeCandidates.filter(
     (installer) => installer.Architecture?.toLowerCase() === target
   );
   if (exactArchitecture.length) {
     return preferredScopeInstaller(exactArchitecture, requestedScope);
   }
-  const neutral = installers.filter(
+  const neutral = typeCandidates.filter(
     (installer) => installer.Architecture?.toLowerCase() === 'neutral'
   );
   return preferredScopeInstaller(neutral, requestedScope);
@@ -119,19 +129,29 @@ export function selectWingetInstaller(
  * machine scope so elevated PSADT execution does not launch a per-user setup.
  */
 export function selectQaVmInstaller(
-  installers: WingetInstallerCandidate[] | null | undefined
+  installers: WingetInstallerCandidate[] | null | undefined,
+  wingetId?: string,
 ): QaInstallerSelection | null {
   if (!installers?.length) return null;
+  const reviewedInstallerType = wingetId
+    ? resolveApplicationInstallerSelectionType(wingetId)
+    : undefined;
+  const typeCandidates = reviewedInstallerType
+    ? installers.filter(
+        (installer) => installer.InstallerType?.trim().toLowerCase() === reviewedInstallerType
+      )
+    : installers;
+  if (!typeCandidates.length) return null;
   const x64 = preferredScopeInstaller(
-    installers.filter((installer) => installer.Architecture?.toLowerCase() === 'x64')
+    typeCandidates.filter((installer) => installer.Architecture?.toLowerCase() === 'x64')
   );
   if (x64) return { installer: x64, architecture: 'x64' };
   const neutral = preferredScopeInstaller(
-    installers.filter((installer) => installer.Architecture?.toLowerCase() === 'neutral')
+    typeCandidates.filter((installer) => installer.Architecture?.toLowerCase() === 'neutral')
   );
   if (neutral) return { installer: neutral, architecture: 'x64' };
   const x86 = preferredScopeInstaller(
-    installers.filter((installer) => installer.Architecture?.toLowerCase() === 'x86')
+    typeCandidates.filter((installer) => installer.Architecture?.toLowerCase() === 'x86')
   );
   return x86 ? { installer: x86, architecture: 'x86' } : null;
 }
@@ -162,3 +182,4 @@ export function qaInstallerFileName(installerUrl: string, installerType: string)
   return resolveInstallerFileName(installerUrl, normalizeQaInstallerType(installerType));
 }
 import { resolveInstallerFileName } from '@/lib/installer-filename';
+import { resolveApplicationInstallerSelectionType } from '@/lib/packaging-adapters';

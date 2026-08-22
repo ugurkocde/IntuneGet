@@ -937,7 +937,8 @@ export async function getLatestInstallerInfo(
     const selectedInstaller = selectWingetInstaller(
       versionInfo.installers,
       architecture,
-      requestedScope
+      requestedScope,
+      wingetId,
     );
     if (!selectedInstaller) {
       return {

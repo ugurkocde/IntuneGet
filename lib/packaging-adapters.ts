@@ -1,10 +1,11 @@
 import type { ProcessToClose, PSADTConfig } from '@/types/psadt';
-import type { WingetScope } from '@/types/winget';
+import type { WingetInstallerType, WingetScope } from '@/types/winget';
 
 interface ApplicationPackagingAdapter {
   wingetId: string;
   requiredInstallScope?: WingetScope;
   reviewedInstallerSelectionScope?: WingetScope;
+  reviewedInstallerSelectionType?: WingetInstallerType;
   reviewedInstallerSuccessCodes?: readonly number[];
   requiredProcessesToClose?: readonly ProcessToClose[];
   reviewedInstallArguments?: readonly string[];
@@ -1067,6 +1068,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       { name: 'download', description: 'OCS Inventory download helper' },
     ],
   },
+  {
+    // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
+    // registered WRUNINST removal route is interactive, while the MSI has the
+    // standard unattended Windows Installer lifecycle required by Intune.
+    // Never fall back to the EXE if the reviewed MSI entry disappears.
+    wingetId: 'Webroot.SecureAnywhere',
+    reviewedInstallerSelectionType: 'msi',
+  },
 ];
 
 function applicationPackagingAdapter(
@@ -1146,6 +1155,17 @@ export function resolveApplicationInstallerSelectionScope(
 ): WingetScope {
   return applicationPackagingAdapter(wingetId)?.reviewedInstallerSelectionScope ||
     executionScope;
+}
+
+/**
+ * Return an app-specific trusted manifest installer type. A reviewed type is a
+ * strict lifecycle requirement: callers must fail closed rather than fall back
+ * to a different wrapper when the requested type is absent.
+ */
+export function resolveApplicationInstallerSelectionType(
+  wingetId: string
+): WingetInstallerType | undefined {
+  return applicationPackagingAdapter(wingetId)?.reviewedInstallerSelectionType;
 }
 
 const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{

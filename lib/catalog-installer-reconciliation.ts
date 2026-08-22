@@ -9,6 +9,7 @@ import { getLiveInstallers } from '@/lib/manifest-api';
 import {
   resolveApplicationInstallScope,
   resolveApplicationInstallerSelectionScope,
+  resolveApplicationInstallerSelectionType,
   resolveApplicationUninstallCommand,
 } from '@/lib/packaging-adapters';
 import { evaluatePackagingContract } from '@/lib/packaging-contract';
@@ -98,8 +99,14 @@ export function selectTrustedCatalogInstaller(
   const architectureCandidates = exactArchitecture.length > 0
     ? exactArchitecture
     : installers.filter((installer) => normalized(installer.architecture) === 'neutral');
+  const reviewedInstallerType = resolveApplicationInstallerSelectionType(input.wingetId);
+  const typeCandidates = reviewedInstallerType
+    ? architectureCandidates.filter(
+        (installer) => normalized(installer.type) === reviewedInstallerType
+      )
+    : architectureCandidates;
 
-  const exactScope = architectureCandidates.filter(
+  const exactScope = typeCandidates.filter(
     (installer) => normalized(installer.scope) === input.installScope
   );
   if (exactScope.length > 0) {
@@ -109,7 +116,7 @@ export function selectTrustedCatalogInstaller(
     );
   }
 
-  const unspecifiedScope = architectureCandidates.filter(
+  const unspecifiedScope = typeCandidates.filter(
     (installer) => !installer.scope?.trim()
   );
   return selectPreferredIdentity(
@@ -145,9 +152,12 @@ export async function reconcileCatalogInstaller(
     localeCode: item.localeCode,
   });
   if (!installer) {
+    const reviewedInstallerType = resolveApplicationInstallerSelectionType(item.wingetId);
     throw new InstallerPreflightError(
-      'INSTALL_SCOPE_UNAVAILABLE',
-      `WinGet does not publish a ${item.architecture || 'x64'} ${installerSelectionScope}-scope installer for ${item.wingetId} ${item.version}`,
+      reviewedInstallerType ? 'INSTALLER_TYPE_UNAVAILABLE' : 'INSTALL_SCOPE_UNAVAILABLE',
+      reviewedInstallerType
+        ? `WinGet does not publish the reviewed ${reviewedInstallerType.toUpperCase()} lifecycle for ${item.wingetId} ${item.version} (${item.architecture || 'x64'}, ${installerSelectionScope} scope)`
+        : `WinGet does not publish a ${item.architecture || 'x64'} ${installerSelectionScope}-scope installer for ${item.wingetId} ${item.version}`,
     );
   }
   if (!installer.url?.trim() || !/^[A-Fa-f0-9]{64}$/.test(installer.sha256?.trim() || '')) {

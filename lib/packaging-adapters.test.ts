@@ -5,6 +5,7 @@ import {
   resolveApplicationInstallScope,
   resolveApplicationInstallerSuccessCodes,
   resolveApplicationInstallerSelectionScope,
+  resolveApplicationInstallerSelectionType,
   resolveApplicationUninstallCommand,
 } from './packaging-adapters';
 
@@ -198,6 +199,12 @@ describe('application packaging adapters', () => {
       'AppiumDevelopers.AppiumInspector',
       'user'
     )).toBe('machine');
+  });
+
+  it('requires Webroot SecureAnywhere to use its unattended MSI lifecycle', () => {
+    expect(resolveApplicationInstallerSelectionType('Webroot.SecureAnywhere')).toBe('msi');
+    expect(resolveApplicationInstallerSelectionType(' webroot.secureanywhere ')).toBe('msi');
+    expect(resolveApplicationInstallerSelectionType('Example.App')).toBeUndefined();
   });
 
   it('runs Logitech Presentation elevated without weakening catalog scope matching', () => {

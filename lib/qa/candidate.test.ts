@@ -78,6 +78,37 @@ describe('QA candidate normalization', () => {
       .toBe('wix');
   });
 
+  it('requires Webroot MSI across QA and deployment selection', () => {
+    const webrootInstallers = [
+      {
+        Architecture: 'x86',
+        InstallerType: 'msi',
+        InstallerUrl: 'https://example.test/wsainstall.msi',
+      },
+      {
+        Architecture: 'x86',
+        InstallerType: 'exe',
+        Scope: 'machine',
+        InstallerUrl: 'https://example.test/wsainstall.exe',
+      },
+    ];
+
+    expect(
+      selectQaVmInstaller(webrootInstallers, 'Webroot.SecureAnywhere')?.installer.InstallerType
+    ).toBe('msi');
+    expect(
+      selectWingetInstaller(
+        webrootInstallers,
+        'x86',
+        'machine',
+        'Webroot.SecureAnywhere',
+      )?.InstallerType
+    ).toBe('msi');
+    expect(
+      selectQaVmInstaller([webrootInstallers[1]], 'Webroot.SecureAnywhere')
+    ).toBeNull();
+  });
+
   it('falls back to user scope when no machine or unspecified-scope installer exists', () => {
     const userInstaller = {
       Architecture: 'x64',

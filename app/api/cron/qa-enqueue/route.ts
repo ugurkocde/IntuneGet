@@ -700,12 +700,17 @@ export async function GET(request: Request) {
             const installers = (manifest.Installers || []) as Array<Record<string, unknown>>;
             const selectedForVm = recipe
               ? (() => {
-                  const installer = selectWingetInstaller(installers, recipe.architecture);
+                  const installer = selectWingetInstaller(
+                    installers,
+                    recipe.architecture,
+                    undefined,
+                    app.winget_id,
+                  );
                   return installer
                     ? { installer, architecture: recipe.architecture as 'x64' | 'x86' | 'arm64' }
                     : null;
                 })()
-              : selectQaVmInstaller(installers);
+              : selectQaVmInstaller(installers, app.winget_id);
             if (!selectedForVm) {
               summary.unavailable++;
               return;
