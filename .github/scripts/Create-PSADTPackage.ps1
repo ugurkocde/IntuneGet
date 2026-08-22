@@ -2829,10 +2829,16 @@ if ($reviewedAppxInstallEvidenceConfigured) {
             '            })'
             '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
             '        }'
-            '        if ($selectedApplications.Count -eq 0) {'
-            '            $bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
-            '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
-            '        }'
+        '        if ($selectedApplications.Count -eq 0 -and -not $configuredUninstallProductCode -and $configuredUninstallPublisherName) {'
+        '            # A wrapper fallback must remain vendor-bound. Background updaters can be the only'
+        '            # non-MSI ARP delta while the real installer is still working; accepting one by count'
+        '            # alone can capture and later remove an unrelated shared application.'
+        '            $bundleCandidates = @($changedApplications | Where-Object {'
+        '                -not $_.WindowsInstaller -and'
+        '                    [string]$_.Publisher -eq $configuredUninstallPublisherName'
+        '            })'
+        '            if ($bundleCandidates.Count -eq 1) { $selectedApplications = $bundleCandidates }'
+        '        }'
         )
     }
 

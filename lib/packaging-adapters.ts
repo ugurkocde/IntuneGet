@@ -118,6 +118,15 @@ const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
   {
+    // ABB documents ADDLOCAL=ALL for a complete unattended RobotStudio
+    // installation. The 2025.2 InstallShield wrapper also services Edge while
+    // it runs, so keep the long-running nested process observable and bind the
+    // resulting package to RobotStudio's exact MSI identity below.
+    wingetId: 'ABB.RobotStudio',
+    reviewedInstallArgumentsOverride: '/s /v"/qn ADDLOCAL=ALL /norestart"',
+    reviewedInstallCompletionTimeoutMinutes: 15,
+  },
+  {
     // Ava Desktop's NSIS bootstrapper installs below the invoking account's
     // LocalAppData even though its WinGet manifest omits Scope. Running it as
     // LocalSystem records a systemprofile uninstaller that is absent by the
@@ -1097,6 +1106,14 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // RobotStudio's InstallShield wrapper updates Edge during installation. The
+  // exact 2025.2 MSI identity prevents that unrelated servicing delta from
+  // being captured as RobotStudio's uninstall command.
+  'abb.robotstudio': {
+    generatedDisplayName: 'RobotStudio',
+    registeredDisplayName: 'ABB RobotStudio 2025.2',
+    registeredRegistryKey: '{F8E387C8-8D36-4513-A1AB-9C438461D926}',
+  },
   // The EXE package's catalog name distinguishes it from Google.Chrome, but
   // Google's machine installer registers the ordinary `Google Chrome` ARP
   // identity. Keep that exact vendor identity for capture, verification, and

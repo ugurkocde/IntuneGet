@@ -811,6 +811,26 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('pins RobotStudio to its complete silent install and exact 2025.2 MSI identity', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'abb.robotstudio',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe(
+      '/s /v"/qn ADDLOCAL=ALL /norestart"'
+    );
+    expect(adapted.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(
+      resolveApplicationUninstallCommand(
+        'ABB.RobotStudio',
+        'REGISTRY_UNINSTALL:RobotStudio'
+      )
+    ).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{F8E387C8-8D36-4513-A1AB-9C438461D926}:ABB RobotStudio 2025.2'
+    );
+  });
+
   it('uses Mozilla NSIS silent mode with the exact Zen Browser ARP command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'zen-team.zen-browser',

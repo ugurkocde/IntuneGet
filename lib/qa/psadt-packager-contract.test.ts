@@ -1985,6 +1985,12 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(packager).not.toContain(
       '$selectedApplications = @($changedApplications[0])'
     );
+    expect(packager).toContain(
+      'if ($selectedApplications.Count -eq 0 -and -not $configuredUninstallProductCode -and $configuredUninstallPublisherName)'
+    );
+    expect(packager).toContain(
+      '[string]$_.Publisher -eq $configuredUninstallPublisherName'
+    );
   });
 
   it('prefers a registered Burn helper and keeps the packaged fallback for disposable caches', () => {
@@ -2032,7 +2038,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
     expect(packager).toContain('-WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru');
     expect(packager).toContain(
-      '$bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
+      '$bundleCandidates = @($changedApplications | Where-Object {'
     );
     expect(packager).toContain(
       '$bundleCandidates = @($selectedApplications | Where-Object {'
@@ -2108,7 +2114,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       expect(innoGenerated).not.toContain('$originalInstallerType');
       expect(burnGenerated).not.toContain('$originalInstallerType');
       expect(burnGenerated).toContain(
-        '$bundleCandidates = @($changedApplications | Where-Object { -not $_.WindowsInstaller })'
+        '[string]$_.Publisher -eq $configuredUninstallPublisherName'
       );
       expect(burnGenerated).toContain('$isVisibleApplication -and -not $_.WindowsInstaller');
       expect(burnGenerated).toContain(
