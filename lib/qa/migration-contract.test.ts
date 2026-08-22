@@ -943,6 +943,25 @@ describe('SQL Server 2017 Express unsupported managed install block migration co
   });
 });
 
+describe('QA canonical sync statement timeout migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260822000500_extend_qa_sync_statement_timeout.sql'
+    ),
+    'utf8'
+  );
+
+  it('extends only the secret-gated sync RPC instead of the shared anon role', () => {
+    expect(sql).toContain(
+      'alter function public.sync_qa_results_v2(text, jsonb, jsonb, boolean)'
+    );
+    expect(sql).toContain("set statement_timeout = '30s'");
+    expect(sql).not.toContain('alter role anon');
+    expect(sql).not.toContain('alter role authenticator');
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
