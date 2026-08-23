@@ -2293,6 +2293,24 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('logs bounded ARP identity metadata before rejecting an ambiguous install delta', () => {
+    expect(packager).toContain(
+      'foreach ($ambiguousApplication in @($selectedApplications))'
+    );
+    expect(packager).toContain(
+      'Ambiguous vendor uninstall candidate: name=[$($ambiguousApplication.DisplayName)]; publisher=[$($ambiguousApplication.Publisher)]; version=[$($ambiguousApplication.DisplayVersion)]; key=[$($ambiguousApplication.PSChildName)]; windowsInstaller=[$([bool]$ambiguousApplication.WindowsInstaller)]; systemComponent=[$ambiguousSystemComponent]; uninstallLeaf=[$ambiguousUninstallLeaf].'
+    );
+    expect(packager).toContain(
+      'throw "Could not select one vendor uninstall entry. The installer changed $($changedApplications.Count) entries and $($selectedApplications.Count) matched the configured identity."'
+    );
+    expect(packager).toContain(
+      'throw "Could not find one unambiguous vendor uninstall registry entry for [$appName]. Found $($installedApps.Count); refusing broad removal."'
+    );
+    expect(packager).toContain(
+      "-Severity ''Warning'' -Source ''Uninstall-ADTDeployment''"
+    );
+  });
+
   it('prefers a registered Burn helper and keeps the packaged fallback for disposable caches', () => {
     expect(packager).toContain("if ($registeredInstallerTypeLower -eq 'burn')");
     expect(packager).toContain(
