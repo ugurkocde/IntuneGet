@@ -43,6 +43,10 @@ on:
         description: 'Pagination offset for missing-sizes-only mode (winget_id-ordered). Use to walk through the binary tier batch by batch.'
         required: false
         default: '0'
+      budget_minutes:
+        description: 'Wall-clock ceiling per job for the per-app loop. Apps not reached stay untouched and are re-selected by the next run, so max_apps can be raised for throughput without long runs. 0 disables the guard.'
+        required: false
+        default: '40'
 
 # Prevent concurrent runs that could cause git conflicts
 # Use same group as build-app-list and sync-manifests to ensure sequential execution
@@ -52,6 +56,7 @@ concurrency:
 
 env:
   MAX_APPS: ${{ github.event.inputs.max_apps || '100' }}
+  BUDGET_MINUTES: ${{ github.event.inputs.budget_minutes || '40' }}
 
 permissions:
   contents: write
@@ -117,6 +122,7 @@ jobs:
           # Web fetching is fast (seconds per app); allow a larger batch than
           # the binary job so the cursor advances meaningfully per run.
           MAX_APPS: ${{ github.event.inputs.max_apps || '300' }}
+          BUDGET_MINUTES: ${{ env.BUDGET_MINUTES }}
           ICONS_DIR: public/icons
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
           BINARY_GAP_FILL: ${{ github.event.inputs.binary_gap_fill || 'false' }}
@@ -566,6 +572,7 @@ jobs:
         if: steps.get-apps.outputs.app_count != '0'
         env:
           MISSING_SIZES_ONLY: ${{ github.event.inputs.missing_sizes_only || 'false' }}
+          BUDGET_MINUTES: ${{ env.BUDGET_MINUTES }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
@@ -612,9 +619,27 @@ jobs:
 
           $extracted = 0
           $failed = 0
+          $deferred = 0
           $results = @()
 
+          # Wall-clock ceiling. Installer downloads make per-app cost wildly
+          # uneven, so a fixed app count cannot bound the run. Apps we never
+          # reach are left completely untouched -- no attempt counter, no
+          # failure reason -- so the next run re-selects them and resumes
+          # exactly where this one stopped.
+          $budgetMinutes = 0
+          [int]::TryParse($env:BUDGET_MINUTES, [ref]$budgetMinutes) | Out-Null
+          $deadline = if ($budgetMinutes -gt 0) {
+            (Get-Date).AddMinutes($budgetMinutes)
+          } else {
+            [datetime]::MaxValue
+          }
+
           foreach ($app in $apps) {
+            if ((Get-Date) -gt $deadline) {
+              $deferred++
+              continue
+            }
             $wingetId = $app.winget_id
             Write-Host "`n=== Processing $wingetId ===" -ForegroundColor Cyan
 
@@ -854,6 +879,9 @@ jobs:
           Write-Host "`n=== Binary Icon Extraction Summary ===" -ForegroundColor Cyan
           Write-Host "Extracted: $extracted"
           Write-Host "Failed: $failed"
+          if ($deferred -gt 0) {
+            Write-Host "Deferred to next run ($budgetMinutes-minute budget reached): $deferred"
+          }
 
           ConvertTo-Json -InputObject @($priorResults + $results) -Depth 10 | Out-File "icon-results.json" -Encoding utf8NoBOM
 

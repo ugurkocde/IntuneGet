@@ -20,6 +20,11 @@ import sharp from 'sharp';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const MAX_APPS = parseInt(process.env.MAX_APPS || '500', 10);
+// Wall-clock ceiling for the fetch loop. Apps we never reach keep their current
+// state (no attempt counter is touched), so the next run picks them up again.
+// This lets MAX_APPS be raised for throughput without the job overrunning.
+const BUDGET_MINUTES = parseInt(process.env.BUDGET_MINUTES || '0', 10);
+const BUDGET_MS = BUDGET_MINUTES > 0 ? BUDGET_MINUTES * 60_000 : Infinity;
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
 const ICON_SIZES = [32, 64, 128, 256];
 // When true, target apps that already have an icon and only generate sizes
@@ -519,7 +524,21 @@ async function main() {
   let inheritedHits = 0;
   let misses = 0;
 
-  for (const app of apps) {
+  const startedAt = Date.now();
+  let budgetStopped = 0;
+  // Index of the last app the loop actually reached. The cursor below must not
+  // advance past it, or a budget stop would silently skip the untouched tail.
+  let lastReachedIndex = apps.length - 1;
+
+  for (const [index, app] of apps.entries()) {
+    if (Date.now() - startedAt > BUDGET_MS) {
+      budgetStopped = apps.length - index;
+      lastReachedIndex = index - 1;
+      console.log(
+        `Budget of ${BUDGET_MINUTES}m reached - stopping early, ${budgetStopped} apps left for the next run`
+      );
+      break;
+    }
     const wingetId = app.winget_id;
     const publisher = wingetId.split('.')[0];
     const outputDir = path.join(ICONS_DIR, wingetId);
@@ -672,7 +691,10 @@ async function main() {
   console.log(`Family inherited: ${inheritedHits}`);
   console.log(`Favicons: ${faviconHits}`);
   console.log(`No icon found: ${misses}`);
-  console.log(`Total processed: ${apps.length}`);
+  console.log(`Total processed: ${lastReachedIndex + 1}`);
+  if (budgetStopped > 0) {
+    console.log(`Deferred to next run (budget): ${budgetStopped}`);
+  }
 
   fs.writeFileSync('web-icon-results.json', JSON.stringify(results, null, 2));
 
@@ -681,7 +703,7 @@ async function main() {
     // icons have been committed. Upserting it here would advance the cursor
     // even when the commit fails, silently skipping these apps until the
     // cursor wraps around.
-    const nextCursor = apps.length > 0 ? apps[apps.length - 1].winget_id : null;
+    const nextCursor = lastReachedIndex >= 0 ? apps[lastReachedIndex].winget_id : null;
     fs.writeFileSync('web-icon-cursor.json', JSON.stringify({ last_winget_id: nextCursor }));
   }
 
