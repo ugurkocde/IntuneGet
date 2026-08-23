@@ -1127,6 +1127,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-q'],
   },
   {
+    // Jira Service Management registers its install4j uninstaller without an
+    // unattended argument. Atlassian documents `uninstall.exe -q` for quiet
+    // Windows removal; append only -q to the exact captured ARP command.
+    wingetId: 'Atlassian.ServiceManagementLTS',
+    reviewedUninstallArguments: ['-q'],
+  },
+  {
     // Postgres Pro's Windows installer is built from the vendor's PostgreSQL
     // NSIS source and registers an ordinary `PostgreSQL <major> (64bit)` ARP
     // entry. Its generated uninstaller accepts NSIS /S; append that reviewed

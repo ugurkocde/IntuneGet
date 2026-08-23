@@ -418,6 +418,12 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['-q']);
     expect(
+      applyApplicationPackagingAdapter(
+        'Atlassian.ServiceManagementLTS',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['-q']);
+    expect(
       applyApplicationPackagingAdapter('Ecosia.EcosiaBrowser', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['--force-uninstall']);
