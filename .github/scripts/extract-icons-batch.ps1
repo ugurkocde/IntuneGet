@@ -56,6 +56,69 @@ function Get-InstallerFromManifest {
   return $null
 }
 
+function Resolve-InstallerFromWinget {
+  # Tiers 2 and 3: resolve the current installer URL and its community-reviewed
+  # SHA256 straight from the winget manifest. Called when version_history has
+  # no cached URL, and again when a cached URL turns out to be stale.
+  param(
+    [Parameter(Mandatory=$true)][string]$WingetId,
+    [string]$LatestVersion
+  )
+
+  $parts = $WingetId.Split('.')
+  $publisher = $parts[0]
+  $firstLetter = $publisher.Substring(0,1).ToLower()
+  $namePath = $parts[1..($parts.Length-1)] -join '/'
+  $rawBaseUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/$firstLetter/$publisher/$namePath"
+
+  $encodedParts = $parts[1..($parts.Length-1)] | ForEach-Object { [uri]::EscapeDataString($_) }
+  $encodedNamePath = $encodedParts -join '/'
+  $encodedPublisher = [uri]::EscapeDataString($publisher)
+  $apiBaseUrl = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$firstLetter/$encodedPublisher/$encodedNamePath"
+
+  if ($LatestVersion) {
+    try {
+      Write-Host "Tier 2: Using latest_version '$LatestVersion' with raw URL"
+      $installerYamlUrl = "$rawBaseUrl/$LatestVersion/$WingetId.installer.yaml"
+      $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
+      $info = Get-InstallerFromManifest -YamlContent $yamlContent.Content
+      if ($info) { return $info }
+    } catch {
+      Write-Host "Tier 2 failed for $WingetId : $($_.Exception.Message)"
+    }
+  }
+
+  try {
+    Write-Host "Tier 3: Listing versions via GitHub API"
+    $versions = Invoke-RestMethod -Uri $apiBaseUrl -Headers @{ 'User-Agent' = 'IntuneGet' } -ErrorAction Stop -TimeoutSec 30
+    $versionDirs = $versions | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' }
+    $resolved = ($versionDirs | Sort-Object { [version]($_.name -replace '[^\d.]', '.') } -Descending -ErrorAction SilentlyContinue | Select-Object -First 1).name
+    if (-not $resolved) {
+      $resolved = ($versionDirs | Sort-Object name -Descending | Select-Object -First 1).name
+    }
+
+    if ($resolved) {
+      $installerYamlUrl = "$rawBaseUrl/$resolved/$WingetId.installer.yaml"
+      $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
+      $info = Get-InstallerFromManifest -YamlContent $yamlContent.Content
+      if ($info) { return $info }
+    }
+  } catch {
+    Write-Warning "Tier 3 failed for $WingetId : $_"
+  }
+
+  return $null
+}
+
+function Get-InstallerExtension {
+  param([Parameter(Mandatory=$true)][string]$Url)
+  if ($Url -match '\.msi(\?|$)') { return '.msi' }
+  if ($Url -match '\.msixbundle(\?|$)') { return '.msixbundle' }
+  if ($Url -match '\.msix(\?|$)') { return '.msix' }
+  if ($Url -match '\.appx(\?|$)') { return '.appx' }
+  return '.exe'
+}
+
 # Preserve family-inherited successes written by the get-apps step;
 # this file is rewritten below so they must be carried through.
 $priorResults = @()
@@ -98,63 +161,19 @@ foreach ($app in $apps) {
     $installerUrl = $null
     $installerPath = $null
     $manifestSha256 = $null
-
-    $parts = $wingetId.Split('.')
-    $publisher = $parts[0]
-    $firstLetter = $publisher.Substring(0,1).ToLower()
-
-    $namePath = $parts[1..($parts.Length-1)] -join '/'
-    $rawBaseUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/$firstLetter/$publisher/$namePath"
-
-    $encodedParts = $parts[1..($parts.Length-1)] | ForEach-Object { [uri]::EscapeDataString($_) }
-    $encodedNamePath = $encodedParts -join '/'
-    $encodedPublisher = [uri]::EscapeDataString($publisher)
-    $apiBaseUrl = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$firstLetter/$encodedPublisher/$encodedNamePath"
+    $usedCachedUrl = $false
 
     if ($app.cached_installer_url) {
       Write-Host "Tier 1: Using cached installer URL from version_history"
       $installerUrl = $app.cached_installer_url
-    }
-
-    if (-not $installerUrl -and $app.latest_version) {
-      try {
-        $latestVersion = $app.latest_version
-        Write-Host "Tier 2: Using latest_version '$latestVersion' with raw URL"
-        $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
-        $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
-
-        $info = Get-InstallerFromManifest -YamlContent $yamlContent.Content
-        if ($info) {
-          $installerUrl = $info.url
-          $manifestSha256 = $info.sha256
-        }
-      } catch {
-        Write-Host "Tier 2 failed for $wingetId : $($_.Exception.Message)"
-      }
+      $usedCachedUrl = $true
     }
 
     if (-not $installerUrl) {
-      try {
-        Write-Host "Tier 3: Listing versions via GitHub API"
-        $versions = Invoke-RestMethod -Uri $apiBaseUrl -Headers @{ 'User-Agent' = 'IntuneGet' } -ErrorAction Stop -TimeoutSec 30
-        $versionDirs = $versions | Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' }
-        $latestVersion = ($versionDirs | Sort-Object { [version]($_.name -replace '[^\d.]', '.') } -Descending -ErrorAction SilentlyContinue | Select-Object -First 1).name
-        if (-not $latestVersion) {
-          $latestVersion = ($versionDirs | Sort-Object name -Descending | Select-Object -First 1).name
-        }
-
-        if ($latestVersion) {
-          $installerYamlUrl = "$rawBaseUrl/$latestVersion/$wingetId.installer.yaml"
-          $yamlContent = Invoke-WebRequest -Uri $installerYamlUrl -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
-
-          $info = Get-InstallerFromManifest -YamlContent $yamlContent.Content
-          if ($info) {
-            $installerUrl = $info.url
-            $manifestSha256 = $info.sha256
-          }
-        }
-      } catch {
-        Write-Warning "Tier 3 failed for $wingetId : $_"
+      $info = Resolve-InstallerFromWinget -WingetId $wingetId -LatestVersion $app.latest_version
+      if ($info) {
+        $installerUrl = $info.url
+        $manifestSha256 = $info.sha256
       }
     }
 
@@ -194,12 +213,7 @@ foreach ($app in $apps) {
       }
     }
 
-    $extension = if ($installerUrl -match '\.msi(\?|$)') { '.msi' }
-                elseif ($installerUrl -match '\.msixbundle(\?|$)') { '.msixbundle' }
-                elseif ($installerUrl -match '\.msix(\?|$)') { '.msix' }
-                elseif ($installerUrl -match '\.appx(\?|$)') { '.appx' }
-                else { '.exe' }
-
+    $extension = Get-InstallerExtension -Url $installerUrl
     $installerPath = "$env:TEMP\installer_$([System.IO.Path]::GetRandomFileName())$extension"
 
     Write-Host "Downloading installer from $installerUrl"
@@ -251,16 +265,58 @@ foreach ($app in $apps) {
 
     $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash
     if ($actualHash -ine $app.cached_installer_sha256) {
-      Write-Warning "SHA256 mismatch for $wingetId"
-      $failureReason = 'installer_hash_mismatch'
-      $failed++
-      $results += @{
-        winget_id = $wingetId
-        status = 'failed'
-        error = "Installer SHA256 did not match the trusted manifest"
-        failure_reason = $failureReason
+      # version_history pairs an installer URL with the hash that URL served
+      # when the version was recorded. Publishers who publish to a stable
+      # "latest" link replace the file underneath it, so the pair goes stale
+      # and the download stops matching. That is an outdated row, not a
+      # tampered installer, and refusing outright loses apps we can still
+      # verify. Re-resolve the current winget manifest and check against the
+      # hash it publishes instead. A mismatch against a freshly resolved
+      # manifest is still fatal.
+      $recovered = $false
+
+      if ($usedCachedUrl) {
+        Write-Host "Cached hash is stale for $wingetId - re-resolving the winget manifest"
+        Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+        $fresh = Resolve-InstallerFromWinget -WingetId $wingetId -LatestVersion $app.latest_version
+
+        if ($fresh -and $fresh.sha256 -match '^[A-Fa-f0-9]{64}$') {
+          $extension = Get-InstallerExtension -Url $fresh.url
+          $installerPath = "$env:TEMP\installer_$([System.IO.Path]::GetRandomFileName())$extension"
+          try {
+            & "$env:GITHUB_WORKSPACE\.github\scripts\save-safe-download.ps1" `
+              -Uri $fresh.url -Destination $installerPath -MaxBytes 524288000 -MaxRedirects 5 -TimeoutSeconds 90
+
+            if (Test-Path $installerPath) {
+              $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash
+              if ($actualHash -ieq $fresh.sha256) {
+                Write-Host "Manifest hash matches after re-resolve for $wingetId"
+                $installerUrl = $fresh.url
+                $app.cached_installer_sha256 = $fresh.sha256
+                $recovered = $true
+              } else {
+                Write-Warning "Freshly resolved manifest hash still does not match for $wingetId"
+              }
+            }
+          } catch {
+            Write-Warning "Re-resolve download failed for ${wingetId}: $_"
+          }
+        }
       }
-      continue
+
+      if (-not $recovered) {
+        Write-Warning "SHA256 mismatch for $wingetId"
+        Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+        $failureReason = 'installer_hash_mismatch'
+        $failed++
+        $results += @{
+          winget_id = $wingetId
+          status = 'failed'
+          error = "Installer SHA256 did not match the trusted manifest"
+          failure_reason = $failureReason
+        }
+        continue
+      }
     }
 
     $iconSourceType = switch ($extension) {
