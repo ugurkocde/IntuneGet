@@ -1,21 +1,30 @@
 /**
  * Shared icon fingerprinting.
  *
- * An 8x8 average hash is enough to answer the only question asked of it here:
- * are two icons the same picture? It is cheap, stable across the resamples the
- * pipeline performs, and comparable with a Hamming distance.
+ * Two different questions get asked of an icon here, and they need two
+ * different tools:
  *
- * Used by audit-duplicate-icons.mjs to cluster identical icons, and by
- * reject-generic-icons.mjs to recognise the installer-toolkit defaults listed
- * in .github/data/generic-icon-hashes.json.
+ *   - "which icons look roughly alike?" -- an 8x8 average hash, used by
+ *     audit-duplicate-icons.mjs to cluster the catalog.
+ *   - "is this exactly the picture we decided to reject?" -- a 32x32 greyscale
+ *     raster digest, used to confirm a blocklist hit.
+ *
+ * The average hash alone is not enough to decide the second question. It
+ * collapses an icon to 64 bits, so any two flat logos with a centred glyph
+ * land in the same bucket: ArtisteerLimited.Nicepage (a real product logo)
+ * shares an average hash with Arihant25.Chargle. Deleting on that basis would
+ * destroy real icons. So the average hash is only ever a cheap prefilter, and
+ * a pixel digest has to agree before anything is rejected.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 export const HASH_SIZE = 8;
+export const PIXEL_KEY_SIZE = 32;
 export const ICON_SIZE_PREFERENCE = [256, 128, 64];
 
 /** 64-bit average hash of an image, as a string of '0'/'1'. */
@@ -30,6 +39,31 @@ export async function averageHash(filePath) {
   let bits = '';
   for (const byte of data) bits += byte > avg ? '1' : '0';
   return bits;
+}
+
+/**
+ * Digest of the decoded pixels rather than the file. Two PNGs of the same
+ * picture routinely differ byte for byte (different encoder, different resize
+ * path), so hashing the file would report them as unrelated.
+ */
+export async function pixelKey(filePath) {
+  const { data } = await sharp(filePath)
+    .resize(PIXEL_KEY_SIZE, PIXEL_KEY_SIZE, { fit: 'fill' })
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
+}
+
+/** Greyscale standard deviation. Near zero means the image carries no detail. */
+export async function greyscaleStdDev(filePath) {
+  const { data } = await sharp(filePath)
+    .resize(PIXEL_KEY_SIZE, PIXEL_KEY_SIZE, { fit: 'fill' })
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const mean = data.reduce((a, b) => a + b, 0) / data.length;
+  return Math.sqrt(data.reduce((a, b) => a + (b - mean) ** 2, 0) / data.length);
 }
 
 export function hamming(a, b) {
@@ -58,17 +92,39 @@ export function loadGenericHashes(
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   return {
     maxDistance: parsed.max_hamming_distance ?? 2,
+    blankMaxStdDev: parsed.blank_max_std_dev ?? 0,
     hashes: parsed.hashes ?? []
   };
 }
 
 /**
- * Returns the matching blocklist entry, or null when the icon is not one of
- * the known non-product images.
+ * Decides whether an icon is one of the known non-product images.
+ *
+ * Returns the matching entry, or null. A hit requires the average hash to be
+ * within the configured radius AND the pixel digest to be one this entry was
+ * recorded with, so an average-hash collision with a real logo cannot reject
+ * it. Entries carrying no pixel keys never match, which makes a half-filled
+ * blocklist entry inert rather than dangerous.
+ *
+ * The separate blank rule is a property, not a picture: any image whose
+ * greyscale standard deviation is near zero has no detail to show, whatever
+ * its colour.
  */
-export function matchGeneric(hash, { maxDistance, hashes }) {
-  for (const entry of hashes) {
-    if (hamming(hash, entry.hash) <= maxDistance) return entry;
+export async function classifyIcon(filePath, blocklist) {
+  if (blocklist.blankMaxStdDev > 0) {
+    const sd = await greyscaleStdDev(filePath);
+    if (sd <= blocklist.blankMaxStdDev) {
+      return { label: 'blank_image', note: `no detail (greyscale sd ${sd.toFixed(2)})` };
+    }
+  }
+
+  const hash = await averageHash(filePath);
+  const near = blocklist.hashes.filter(e => hamming(hash, e.hash) <= blocklist.maxDistance);
+  if (near.length === 0) return null;
+
+  const key = await pixelKey(filePath);
+  for (const entry of near) {
+    if ((entry.pixel_keys ?? []).includes(key)) return entry;
   }
   return null;
 }

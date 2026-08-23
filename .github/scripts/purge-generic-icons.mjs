@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { averageHash, bestIconPath, loadGenericHashes, matchGeneric } from './icon-hash.mjs';
+import { bestIconPath, loadGenericHashes, classifyIcon } from './icon-hash.mjs';
 
 const MODE = process.env.MODE || 'scan';
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
@@ -46,15 +46,13 @@ async function scan() {
     if (!iconPath) continue;
     scanned++;
 
-    let hash;
+    let match;
     try {
-      hash = await averageHash(iconPath);
+      match = await classifyIcon(iconPath, blocklist);
     } catch (err) {
-      console.warn(`Could not hash ${id}: ${err.message}`);
+      console.warn(`Could not screen ${id}: ${err.message}`);
       continue;
     }
-
-    const match = matchGeneric(hash, blocklist);
     if (!match) continue;
 
     fs.rmSync(dir, { recursive: true, force: true });

@@ -25,7 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { averageHash, bestIconPath, loadGenericHashes, matchGeneric } from './icon-hash.mjs';
+import { bestIconPath, loadGenericHashes, classifyIcon } from './icon-hash.mjs';
 
 const RESULTS_FILE = process.env.RESULTS_FILE || 'icon-results.json';
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
@@ -69,15 +69,13 @@ async function main() {
     const iconPath = bestIconPath(dir);
     if (!iconPath) continue;
 
-    let hash;
+    let match;
     try {
-      hash = await averageHash(iconPath);
+      match = await classifyIcon(iconPath, blocklist);
     } catch (err) {
-      console.warn(`Could not hash ${result.winget_id}: ${err.message}`);
+      console.warn(`Could not screen ${result.winget_id}: ${err.message}`);
       continue;
     }
-
-    const match = matchGeneric(hash, blocklist);
     if (!match) continue;
 
     const disposition = restoreIconDir(dir);
