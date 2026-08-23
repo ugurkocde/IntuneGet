@@ -60,6 +60,30 @@ const DEMAND_BACKFILL_BATCH_SIZE = 20;
 const MAX_TARGETED_PACKAGE_IDS = 20;
 const TARGETED_QA_PRIORITY = 1_000;
 
+type QaCatalogReconciliationReason =
+  | 'package_or_version_missing'
+  | 'installer_manifest_missing'
+  | 'no_compatible_vm_installer'
+  | 'missing_trusted_installer_metadata'
+  | 'installer_hash_quarantined'
+  | 'package_compatibility_blocked';
+
+function installerTupleKey(input: {
+  wingetId: string;
+  version: string;
+  architecture: string;
+  installerUrl: string;
+  installerSha256: string;
+}): string {
+  return [
+    input.wingetId.trim().toLowerCase(),
+    input.version.trim(),
+    input.architecture.trim().toLowerCase(),
+    input.installerUrl.trim(),
+    input.installerSha256.trim().toUpperCase(),
+  ].join('\0');
+}
+
 function targetedPackageIds(request: Request): string[] {
   const url = new URL(request.url);
   const values = [
@@ -350,6 +374,36 @@ async function findDemandBackfillIds(
   );
 }
 
+async function persistQaCatalogReconciliation(
+  supabase: ReturnType<typeof createServerClient>,
+  input: {
+    wingetId: string;
+    catalogVersion: string;
+    observedHeadSha: string | null;
+    reasonCode: QaCatalogReconciliationReason;
+    observedLiveVersion?: string;
+  }
+): Promise<void> {
+  if (!input.observedHeadSha || !/^[a-f0-9]{40}$/.test(input.observedHeadSha)) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('qa_catalog_reconciliations')
+    .upsert({
+      winget_id: input.wingetId,
+      catalog_version: input.catalogVersion,
+      observed_head_sha: input.observedHeadSha,
+      observed_live_version: input.observedLiveVersion || null,
+      reason_code: input.reasonCode,
+      observed_at: now,
+      updated_at: now,
+    }, {
+      onConflict: 'winget_id,catalog_version',
+    });
+  if (error) {
+    throw new Error(`Could not persist the QA catalog reconciliation: ${error.message}`);
+  }
+}
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
@@ -589,8 +643,9 @@ export async function GET(request: Request) {
       tested_at_utc: string;
       package_profile_sha256: string | null;
     }> = [];
+    let quarantinedInstallerTuples = new Set<string>();
     if (supportedIds.length > 0) {
-      const [recipeResult, policyResult, deployedResult, resultResult] = await Promise.all([
+      const [recipeResult, policyResult, deployedResult, resultResult, healthResult] = await Promise.all([
         supabase
           .from('qa_recipes')
           .select('winget_id, definition_path, architecture, installer_type')
@@ -612,6 +667,11 @@ export async function GET(request: Request) {
             'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, package_profile_sha256'
           )
           .in('winget_id', supportedIds),
+        supabase
+          .from('installer_health')
+          .select('winget_id, version, architecture, installer_url, expected_sha256')
+          .in('winget_id', supportedIds)
+          .eq('status', 'quarantined'),
       ]);
       if (recipeResult.error) {
         throw new Error(`Could not read optional QA recipes: ${recipeResult.error.message}`);
@@ -625,10 +685,22 @@ export async function GET(request: Request) {
       if (resultResult.error) {
         throw new Error(`Could not read existing QA results: ${resultResult.error.message}`);
       }
+      if (healthResult.error) {
+        throw new Error(`Could not read quarantined QA installers: ${healthResult.error.message}`);
+      }
       recipes = recipeResult.data || [];
       policies = policyResult.data || [];
       deployedApps = deployedResult.data || [];
       results = resultResult.data || [];
+      quarantinedInstallerTuples = new Set((healthResult.data || []).map((row) =>
+        installerTupleKey({
+          wingetId: row.winget_id,
+          version: row.version,
+          architecture: row.architecture,
+          installerUrl: row.installer_url,
+          installerSha256: row.expected_sha256,
+        })
+      ));
     }
 
     const priorities = new Map<string, number>();
@@ -686,6 +758,17 @@ export async function GET(request: Request) {
               preferLive: true,
             });
             if (resolution.status !== 'resolved') {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: resolution.reason === 'installer_manifest_missing'
+                  ? 'installer_manifest_missing'
+                  : 'package_or_version_missing',
+                observedLiveVersion: 'version' in resolution && typeof resolution.version === 'string'
+                  ? resolution.version
+                  : undefined,
+              });
               summary.unavailable++;
               structuredQaPollLog('info', 'qa_manifest_resolution_unavailable', {
                 runId,
@@ -712,6 +795,13 @@ export async function GET(request: Request) {
                 })()
               : selectQaVmInstaller(installers, app.winget_id);
             if (!selectedForVm) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'no_compatible_vm_installer',
+                observedLiveVersion: resolution.version,
+              });
               summary.unavailable++;
               return;
             }
@@ -728,6 +818,13 @@ export async function GET(request: Request) {
               recipe?.installer_type || 'exe'
             );
             if (!installerUrl.startsWith('https://') || !installerSha256) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'missing_trusted_installer_metadata',
+                observedLiveVersion: resolution.version,
+              });
               summary.unavailable++;
               structuredQaPollLog('info', 'qa_manifest_installer_unavailable', {
                 runId,
@@ -739,6 +836,29 @@ export async function GET(request: Request) {
             }
 
             const architecture = selectedForVm.architecture;
+            if (quarantinedInstallerTuples.has(installerTupleKey({
+              wingetId: app.winget_id,
+              version: resolution.version,
+              architecture,
+              installerUrl,
+              installerSha256,
+            }))) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'installer_hash_quarantined',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_installer_hash_quarantined', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+              });
+              return;
+            }
             const testConfig = buildQaCatalogTestConfig({
               app: { ...app, wingetId: app.winget_id, version: resolution.version },
               manifest,
@@ -774,6 +894,13 @@ export async function GET(request: Request) {
               if (blockError) {
                 throw new Error(`Could not persist the QA compatibility block: ${blockError.message}`);
               }
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'package_compatibility_blocked',
+                observedLiveVersion: resolution.version,
+              });
               summary.unavailable++;
               structuredQaPollLog('info', 'qa_package_compatibility_blocked', {
                 runId,

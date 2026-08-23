@@ -83,12 +83,14 @@ function createSupabaseStub(options: {
   deployedApps?: string[];
   pollState?: Record<string, unknown>;
   packageResults?: Array<Record<string, unknown>>;
+  installerHealth?: Array<Record<string, unknown>>;
 }) {
   const pollRunInserts: Array<Record<string, unknown>> = [];
   const pollRunUpdates: Array<Record<string, unknown>> = [];
   const cursorUpdates: Array<Record<string, unknown>> = [];
   const candidateInserts: Array<Record<string, unknown>> = [];
   const compatibilityBlocks: Array<Record<string, unknown>> = [];
+  const catalogReconciliations: Array<Record<string, unknown>> = [];
   const pipelineControlUpdates: Array<Record<string, unknown>> = [];
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   let candidatePageIndex = 0;
@@ -186,10 +188,21 @@ function createSupabaseStub(options: {
       if (table === 'qa_package_results') {
         return query({ data: options.packageResults || [], error: null });
       }
+      if (table === 'installer_health') {
+        return query({ data: options.installerHealth || [], error: null });
+      }
       if (table === 'qa_package_blocks') {
         return {
           upsert: vi.fn((row: Record<string, unknown>) => {
             compatibilityBlocks.push(row);
+            return query({ data: null, error: null });
+          }),
+        };
+      }
+      if (table === 'qa_catalog_reconciliations') {
+        return {
+          upsert: vi.fn((row: Record<string, unknown>) => {
+            catalogReconciliations.push(row);
             return query({ data: null, error: null });
           }),
         };
@@ -221,6 +234,7 @@ function createSupabaseStub(options: {
     cursorUpdates,
     candidateInserts,
     compatibilityBlocks,
+    catalogReconciliations,
     pipelineControlUpdates,
     rpcCalls,
   };
@@ -599,8 +613,120 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(resolveManifestMock).not.toHaveBeenCalled();
   });
 
+  it('records a current-head reconciliation when the live installer manifest is unavailable', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Unavailable.App'],
+      supportedApps: [{
+        winget_id: 'Unavailable.App',
+        name: 'Unavailable',
+        publisher: 'Contoso',
+        latest_version: '2.0.0',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'unavailable',
+      reason: 'installer_manifest_missing',
+      version: '2.0.0',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Unavailable.App',
+        catalog_version: '2.0.0',
+        observed_live_version: '2.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_manifest_missing',
+      }),
+    ]);
+  });
+
+  it('records a current-head reconciliation when no installer can run on the QA VM', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Unsupported.Architecture'],
+      supportedApps: [{
+        winget_id: 'Unsupported.Architecture',
+        name: 'Unsupported',
+        publisher: 'Contoso',
+        latest_version: '3.0.0',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue({
+      status: 'resolved',
+      version: '3.0.0',
+      manifest: { InstallerType: 'exe', Installers: [] },
+      source: 'live',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Unsupported.Architecture',
+        catalog_version: '3.0.0',
+        observed_live_version: '3.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'no_compatible_vm_installer',
+      }),
+    ]);
+  });
+
+  it('skips only an exact quarantined installer tuple for the current WinGet head', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Quarantined.App'],
+      supportedApps: [{
+        winget_id: 'Quarantined.App',
+        name: 'Quarantined',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      installerHealth: [{
+        winget_id: 'Quarantined.App',
+        version: '1.0.0',
+        architecture: 'x64',
+        installer_url: 'https://example.com/setup.exe',
+        expected_sha256: 'A'.repeat(64),
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Quarantined.App',
+        catalog_version: '1.0.0',
+        observed_live_version: '1.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_hash_quarantined',
+      }),
+    ]);
+  });
+
   it('persists a user-scope dependency compatibility block without degrading polling', async () => {
-    const { client, candidateInserts, compatibilityBlocks, pollRunUpdates } =
+    const {
+      client,
+      candidateInserts,
+      compatibilityBlocks,
+      catalogReconciliations,
+      pollRunUpdates,
+    } =
       createSupabaseStub({
         demandBackfillApps: ['Blocked.App'],
         supportedApps: [
@@ -639,6 +765,15 @@ describe('GET /api/cron/qa-enqueue', () => {
         architecture: 'x64',
         installer_sha256: 'A'.repeat(64),
         block_code: 'user_scope_machine_dependencies',
+      }),
+    ]);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Blocked.App',
+        catalog_version: '1.0.0',
+        observed_live_version: '1.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'package_compatibility_blocked',
       }),
     ]);
     expect(pollRunUpdates[0]).toMatchObject({

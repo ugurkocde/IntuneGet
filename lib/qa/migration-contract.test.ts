@@ -1307,3 +1307,41 @@ describe('Webroot tenant-provisioned install block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('QA demand reconciliation migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260823180000_advance_qa_demand_reconciliation.sql'
+    ),
+    'utf8'
+  );
+
+  it('keeps deterministic unavailable observations private and scoped to a WinGet head', () => {
+    expect(sql).toContain('create table public.qa_catalog_reconciliations');
+    expect(sql).toContain('primary key (winget_id, catalog_version)');
+    expect(sql).toContain("observed_head_sha ~ '^[a-f0-9]{40}$'");
+    expect(sql).toContain('enable row level security');
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+    expect(sql).toContain('poll_state.head_sha = reconciliation.observed_head_sha');
+  });
+
+  it('uses captured catalog versions and seeds only exact quarantined tuples', () => {
+    expect(sql).toContain('candidate.catalog_version_at_enqueue = app.latest_version');
+    expect(sql).toContain('join public.installer_health as health');
+    expect(sql).toContain("health.status = 'quarantined'");
+    expect(sql).toContain('health.installer_url = candidate.installer_url');
+    expect(sql).toContain('health.expected_sha256 = candidate.installer_sha256');
+    expect(sql).toContain("'installer_hash_quarantined'");
+    expect(sql).not.toContain('health.version = app.latest_version');
+    expect(sql).toContain('from public.package_eligibility_blocks as eligibility_block');
+    expect(sql).toContain('from public.qa_package_blocks as block');
+  });
+
+  it('preserves bounded deployed-only demand and failed-app priority', () => {
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain('failure.last_failed_at desc nulls last');
+    expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 100))');
+  });
+});

@@ -23,6 +23,41 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      installer_health: {
+        Row: {
+          cache_key: string;
+          winget_id: string;
+          version: string;
+          architecture: string;
+          installer_url: string;
+          expected_sha256: string;
+          actual_sha256: string | null;
+          status: 'checking' | 'healthy' | 'quarantined' | 'error';
+          reason_code: string | null;
+          reason_message: string | null;
+          checked_at: string | null;
+          expires_at: string | null;
+          lease_expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['installer_health']['Row'],
+          'actual_sha256' | 'reason_code' | 'reason_message' | 'checked_at' |
+          'expires_at' | 'lease_expires_at' | 'created_at' | 'updated_at'
+        > & {
+          actual_sha256?: string | null;
+          reason_code?: string | null;
+          reason_message?: string | null;
+          checked_at?: string | null;
+          expires_at?: string | null;
+          lease_expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['installer_health']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_results: {
         Row: {
           winget_id: string;
@@ -307,6 +342,34 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_package_blocks']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_catalog_reconciliations: {
+        Row: {
+          winget_id: string;
+          catalog_version: string;
+          observed_head_sha: string;
+          observed_live_version: string | null;
+          reason_code:
+            | 'package_or_version_missing'
+            | 'installer_manifest_missing'
+            | 'no_compatible_vm_installer'
+            | 'missing_trusted_installer_metadata'
+            | 'installer_hash_quarantined'
+            | 'package_compatibility_blocked';
+          observed_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['qa_catalog_reconciliations']['Row'],
+          'observed_at' | 'updated_at'
+        > & {
+          observed_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['qa_catalog_reconciliations']['Insert']
+        >;
         Relationships: GenericRelationship[];
       };
       package_eligibility_blocks: {
