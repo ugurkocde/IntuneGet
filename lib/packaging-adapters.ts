@@ -1107,13 +1107,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // standard unattended Windows Installer lifecycle required by Intune.
     // Never fall back to the EXE if the reviewed MSI entry disappears. The
     // MSI's MainWSAInstall custom action can remain quiet beyond the generic
-    // QA inactivity window. Production QA run 32613430533 showed the exact
-    // signed MSI still holding the global MSI mutex after the 15-minute
-    // wrapper ceiling and releasing it at roughly minute 24, so keep that
-    // exact PSADT install observable with a Webroot-only 30-minute bound for
-    // customer Intune execution and QA alike.
+    // QA inactivity window. The exact 9.0.45.63 MSI exposes Webroot's documented
+    // CMDLINE property but defaults it to -null. Production QA run 32617479599
+    // showed that default still owning the global MSI mutex at the reviewed
+    // 30-minute ceiling. Select Webroot's documented SME quiet mode while
+    // retaining the observable, fail-closed bound for customer Intune execution
+    // and QA alike.
     wingetId: 'Webroot.SecureAnywhere',
     reviewedInstallerSelectionType: 'msi',
+    reviewedInstallArguments: ['CMDLINE=SME,quiet'],
     reviewedInstallCompletionTimeoutMinutes: 30,
   },
 ];

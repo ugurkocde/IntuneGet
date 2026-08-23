@@ -141,7 +141,10 @@ describe('dispatchQaCandidate', () => {
       package_profile_sha256: 'A'.repeat(64),
       test_config: {
         mode: 'psadt-package',
-        psadtConfig: { reviewedInstallCompletionTimeoutMinutes: 30 },
+        psadtConfig: {
+          reviewedInstallArguments: ['CMDLINE=SME,quiet'],
+          reviewedInstallCompletionTimeoutMinutes: 30,
+        },
       },
     });
 

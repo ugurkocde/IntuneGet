@@ -192,7 +192,7 @@ if ($script:CapturedFilePath -ne "$env:SystemRoot\\System32\\msiexec.exe") {
 if (-not $script:CapturedArgumentList.Contains(('/i "{0}"' -f $expectedInstallerPath))) {
     throw "The reviewed MSI argument list omitted the exact installer path: $script:CapturedArgumentList"
 }
-if ($script:CapturedArgumentList -notlike '*REBOOT=ReallySuppress /QN /norestart ALLUSERS=1 /L*V*') {
+if ($script:CapturedArgumentList -notlike '*REBOOT=ReallySuppress /QN /norestart ALLUSERS=1 CMDLINE=SME,quiet /L*V*') {
     throw "The reviewed MSI argument list did not retain PSADT defaults, vendor properties, and verbose logging: $script:CapturedArgumentList"
 }
 `;
@@ -2522,7 +2522,10 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         'msi',
         'Webroot SecureAnywhere',
         [],
-        { reviewedInstallCompletionTimeoutMinutes: 15 },
+        {
+          reviewedInstallArguments: ['CMDLINE=SME,quiet'],
+          reviewedInstallCompletionTimeoutMinutes: 30,
+        },
         [],
         'Webroot.SecureAnywhere',
         'Webroot SecureAnywhere',
@@ -2532,7 +2535,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       );
 
       expect(generated).toContain(
-        '$installDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+        '$installDeadline = [DateTime]::UtcNow.AddMinutes(30)'
       );
       expect(generated).toContain(
         "$msiInstallerPath = Join-Path $adtSession.DirFiles 'setup.exe'"
@@ -2541,7 +2544,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         '$msiArgumentList = \'/i "{0}" REBOOT=ReallySuppress /QN\' -f $msiInstallerPath'
       );
       expect(generated).toContain(
-        '$msiAdditionalArgumentList = \'/norestart ALLUSERS=1\''
+        "$msiAdditionalArgumentList = '/norestart ALLUSERS=1 CMDLINE=SME,quiet'"
       );
       expect(generated).toContain(
         '$msiArgumentList = "$msiArgumentList /L*V `"$msiLogPath`""'
@@ -2557,7 +2560,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         '$installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
       );
       expect(generated).toContain(
-        "throw 'The reviewed MSI installer did not complete within 15 minutes.'"
+        "throw 'The reviewed MSI installer did not complete within 30 minutes.'"
       );
       executeReviewedMsiInstallBlock(generated);
     }

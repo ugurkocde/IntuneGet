@@ -228,6 +228,7 @@ describe('application packaging adapters', () => {
     expect(
       applyApplicationPackagingAdapter('Webroot.SecureAnywhere', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
+      reviewedInstallArguments: ['CMDLINE=SME,quiet'],
       reviewedInstallCompletionTimeoutMinutes: 30,
     });
     expect(resolveApplicationInstallerSelectionType('Example.App')).toBeUndefined();

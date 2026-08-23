@@ -630,11 +630,15 @@ describe('PSADT QA package identity', () => {
     });
     const profile = normalized.identity.profile as {
       installer: { sourceType: string; silentArgs: string };
-      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+      psadtConfig: {
+        reviewedInstallArguments?: string[];
+        reviewedInstallCompletionTimeoutMinutes?: number;
+      };
     };
 
     expect(profile.installer.sourceType).toBe('msi');
     expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=1');
+    expect(profile.psadtConfig.reviewedInstallArguments).toEqual(['CMDLINE=SME,quiet']);
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(30);
   });
 
