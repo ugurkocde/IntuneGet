@@ -1282,3 +1282,28 @@ describe('Git for Windows SDK managed uninstall block migration contract', () =>
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('Webroot tenant-provisioned install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260823061000_block_webroot_unlicensed_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unprovisioned generic catalog install across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Webroot.SecureAnywhere'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32620368724'
+    );
+    expect(sql).toContain('32617479599');
+    expect(sql).toContain('GUILIC');
+    expect(sql).toContain('CMDLINE=SME,quiet');
+    expect(sql).toContain('30-minute');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
