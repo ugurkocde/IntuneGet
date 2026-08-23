@@ -435,6 +435,9 @@ async function fetchAppsNeedingIcons(limit) {
   let offset = 0;
   let cursor = null;
   let cursorReset = false;
+  // Wrapping revisits ids from the start, so the same row can come back in the
+  // second pass. Dedupe rather than fetching it twice.
+  const seen = new Set();
 
   if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) {
     const { data } = await supabase
@@ -485,18 +488,37 @@ async function fetchAppsNeedingIcons(limit) {
       process.exit(1);
     }
 
-    if (data.length === 0 && cursor && !cursorReset) {
+    const cursorMode = !MISSING_SIZES_ONLY && !BINARY_GAP_FILL;
+    // The cursor walks winget_id order and has to wrap to pick up everything
+    // before where it stopped last time. Wrapping only on an empty page was
+    // not enough: a short page also means the tail is exhausted, and breaking
+    // there ended the sweep with the whole head of the alphabet unvisited. A
+    // request for 2,500 apps would return 209 and report itself complete.
+    const exhausted = data.length < batchSize;
+    if (exhausted && cursorMode && cursor && !cursorReset) {
+      for (const row of data) {
+        if (!seen.has(row.winget_id)) {
+          seen.add(row.winget_id);
+          apps.push(row);
+        }
+      }
       cursor = null;
       cursorReset = true;
       continue;
     }
     if (data.length === 0) break;
-    apps.push(...data);
-    offset += data.length;
-    if (!MISSING_SIZES_ONLY && !BINARY_GAP_FILL) cursor = data[data.length - 1].winget_id;
 
-    // If we got fewer than requested, there are no more rows
-    if (data.length < batchSize) break;
+    for (const row of data) {
+      if (seen.has(row.winget_id)) continue;
+      seen.add(row.winget_id);
+      apps.push(row);
+    }
+    offset += data.length;
+    if (cursorMode) cursor = data[data.length - 1].winget_id;
+
+    // A short page means no more rows in this direction. After a wrap there is
+    // nowhere left to go, so the sweep is genuinely done.
+    if (exhausted) break;
   }
 
   return apps;
