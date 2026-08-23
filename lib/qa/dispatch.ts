@@ -18,6 +18,36 @@ export interface QaDispatchCandidate {
   test_config: Json;
 }
 
+const DEFAULT_QA_COMMAND_TIMEOUT_MINUTES = 20;
+const REVIEWED_INSTALL_TIMEOUT_HEADROOM_MINUTES = 5;
+
+function qaCommandTimeoutMinutes(
+  testConfig: Record<string, Json | undefined>
+): number {
+  const psadtConfig = testConfig.psadtConfig;
+  if (!psadtConfig || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig)) {
+    return DEFAULT_QA_COMMAND_TIMEOUT_MINUTES;
+  }
+
+  const reviewedTimeout = psadtConfig.reviewedInstallCompletionTimeoutMinutes;
+  if (
+    typeof reviewedTimeout !== 'number' ||
+    !Number.isInteger(reviewedTimeout) ||
+    reviewedTimeout < 1 ||
+    reviewedTimeout > 60
+  ) {
+    return DEFAULT_QA_COMMAND_TIMEOUT_MINUTES;
+  }
+
+  // The generated customer package owns the reviewed installer deadline. Keep
+  // the outer QA command guard beyond it so PSADT can report its bounded result
+  // and perform teardown instead of QA terminating a still-valid installer.
+  return Math.max(
+    DEFAULT_QA_COMMAND_TIMEOUT_MINUTES,
+    reviewedTimeout + REVIEWED_INSTALL_TIMEOUT_HEADROOM_MINUTES
+  );
+}
+
 export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promise<void> {
   const testConfig = candidate.test_config && typeof candidate.test_config === 'object' && !Array.isArray(candidate.test_config)
     ? candidate.test_config as Record<string, Json | undefined>
@@ -81,7 +111,7 @@ export async function dispatchQaCandidate(candidate: QaDispatchCandidate): Promi
           packageProfileSha256: candidate.package_profile_sha256,
           testConfig: candidate.test_config,
         }),
-        timeout_minutes: '20',
+        timeout_minutes: String(qaCommandTimeoutMinutes(testConfig)),
       },
     }),
   });

@@ -118,6 +118,37 @@ describe('dispatchQaCandidate', () => {
     expect(JSON.parse(body.inputs.candidate_payload).installerUrl).toBe(mirrorUrl);
   });
 
+  it('keeps the outer QA guard beyond a reviewed customer-package installer deadline', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await dispatchQaCandidate({
+      id: '44444444-4444-4444-8444-444444444444',
+      winget_id: 'Webroot.SecureAnywhere',
+      definition_path: null,
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installer_url: 'https://example.test/wsainstall.msi',
+      installer_sha256: 'F'.repeat(64),
+      installer_file_name: 'wsainstall.msi',
+      installer_type: 'msi',
+      test_level: 'psadt-package',
+      package_profile_sha256: 'A'.repeat(64),
+      test_config: {
+        mode: 'psadt-package',
+        psadtConfig: { reviewedInstallCompletionTimeoutMinutes: 30 },
+      },
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.inputs.timeout_minutes).toBe('35');
+  });
+
   it('uses the renamed ImageGlass release asset for QA preflight and runner payload', async () => {
     enforceInstallerPreflightMock.mockResolvedValue({
       cacheKey: 'healthy',
