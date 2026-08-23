@@ -23,11 +23,11 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
   return (
     <section className="relative isolate w-full overflow-hidden">
       <div className="container relative z-10 mx-auto flex min-h-dvh max-w-6xl items-center px-4 pb-12 pt-24 md:px-6 md:pb-14 md:pt-28 xl:max-w-7xl">
-        <div className="grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,54fr)_minmax(0,46fr)] lg:gap-16 xl:gap-24">
+        <div className="grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,54fr)_minmax(0,46fr)] lg:gap-16 xl:gap-20">
           {/* Left: copy + search */}
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
             <FadeIn animateOnMount duration={0.4} direction="up">
-              <h1 className="text-balance text-5xl font-extrabold tracking-tight text-text-primary md:text-[3.5rem] md:leading-[1.08] xl:text-[4.25rem] xl:leading-[1.06]">
+              <h1 className="text-balance text-5xl font-extrabold tracking-tight text-text-primary md:text-[3.5rem] md:leading-[1.08] xl:text-[4rem] xl:leading-[1.06]">
                 <T id="hero.headline">Deploy any Windows app to Intune.</T>{" "}
                 <span className="text-accent-cyan">
                   <T id="hero.headline.accent">Search it, ship it.</T>
