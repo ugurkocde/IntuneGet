@@ -100,7 +100,7 @@ async function fetchInstallerMap(wingetIds) {
       .select('winget_id, installer_url, installer_sha256')
       .in('winget_id', chunk)
       .not('installer_url', 'is', null)
-      .order('detected_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch version_history:', error.message);

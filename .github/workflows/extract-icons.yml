@@ -491,12 +491,22 @@ jobs:
 
             const installerMap = {};
             if (wingetIds.length > 0) {
-              const { data: vhRows } = await supabase
+              // version_history has no detected_at column; ordering by it made
+              // PostgREST reject the whole query. The error was discarded, so
+              // installerMap silently stayed empty and every app fell through
+              // to the slower manifest tiers. Surface the error now so a
+              // schema drift like that cannot go unnoticed again.
+              const { data: vhRows, error: vhError } = await supabase
                 .from('version_history')
                 .select('winget_id, installer_url, installer_sha256')
                 .in('winget_id', wingetIds)
                 .not('installer_url', 'is', null)
-                .order('detected_at', { ascending: false });
+                .order('created_at', { ascending: false });
+
+              if (vhError) {
+                console.error('Failed to fetch version_history:', vhError.message);
+                process.exit(1);
+              }
 
               if (vhRows) {
                 for (const row of vhRows) {
