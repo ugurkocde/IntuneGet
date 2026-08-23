@@ -15,6 +15,13 @@
  * shares an average hash with Arihant25.Chargle. Deleting on that basis would
  * destroy real icons. So the average hash is only ever a cheap prefilter, and
  * a pixel digest has to agree before anything is rejected.
+ *
+ * Every measurement flattens onto white first. Greyscale conversion discards
+ * the alpha channel, so a monochrome glyph drawn on a transparent background
+ * reads as a uniform field: AltDrag's black cursor, AlgoKit's black logo and
+ * fifty-nine other perfectly good icons all produced an identical all-zero
+ * hash and an identical pixel digest. Compositing over an opaque background
+ * first is what makes the shape visible to the maths.
  */
 
 import fs from 'node:fs';
@@ -27,9 +34,14 @@ export const HASH_SIZE = 8;
 export const PIXEL_KEY_SIZE = 32;
 export const ICON_SIZE_PREFERENCE = [256, 128, 64];
 
+/** Composite over white so transparency cannot masquerade as flat colour. */
+function opaque(filePath) {
+  return sharp(filePath).flatten({ background: { r: 255, g: 255, b: 255 } });
+}
+
 /** 64-bit average hash of an image, as a string of '0'/'1'. */
 export async function averageHash(filePath) {
-  const { data } = await sharp(filePath)
+  const { data } = await opaque(filePath)
     .resize(HASH_SIZE, HASH_SIZE, { fit: 'fill' })
     .greyscale()
     .raw()
@@ -47,7 +59,7 @@ export async function averageHash(filePath) {
  * path), so hashing the file would report them as unrelated.
  */
 export async function pixelKey(filePath) {
-  const { data } = await sharp(filePath)
+  const { data } = await opaque(filePath)
     .resize(PIXEL_KEY_SIZE, PIXEL_KEY_SIZE, { fit: 'fill' })
     .greyscale()
     .raw()
@@ -57,7 +69,7 @@ export async function pixelKey(filePath) {
 
 /** Greyscale standard deviation. Near zero means the image carries no detail. */
 export async function greyscaleStdDev(filePath) {
-  const { data } = await sharp(filePath)
+  const { data } = await opaque(filePath)
     .resize(PIXEL_KEY_SIZE, PIXEL_KEY_SIZE, { fit: 'fill' })
     .greyscale()
     .raw()

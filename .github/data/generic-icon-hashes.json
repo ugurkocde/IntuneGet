@@ -1,44 +1,44 @@
 {
-  "_comment": "Images that are not product icons. Binary extraction pulls the icon out of an installer, and a wrapper installer carrying no app icon yields its toolkit's own artwork instead, which is then recorded as hundreds of unrelated apps' icon. An entry matches only when the 8x8 average hash is within max_hamming_distance AND the 32x32 greyscale pixel digest is one of pixel_keys. The average hash alone is not sufficient evidence: it collapses an icon to 64 bits, so ArtisteerLimited.Nicepage (a real logo) collides with Arihant25.Chargle. Treating that as a match would delete real icons. To add an entry, run inspect-icon-cluster.mjs against a candidate hash: it reports how many distinct pictures share it, and only a cluster that resolves to a handful of confirmed-generic pictures belongs here. An entry with no pixel_keys never matches anything.",
+  "_comment": "Images that are not product icons. Binary extraction pulls the icon out of an installer, and a wrapper installer carrying no app icon yields its toolkit's own artwork instead, which is then recorded as hundreds of unrelated apps' icon. An entry matches only when the 8x8 average hash is within max_hamming_distance AND the 32x32 pixel digest is one of pixel_keys. The average hash alone is not sufficient evidence: it collapses an icon to 64 bits, so ArtisteerLimited.Nicepage (a real logo) collides with Arihant25.Chargle, and treating that as a match would delete real icons. To add an entry, run inspect-icon-cluster.mjs against a candidate hash: it reports how many distinct pictures share it, and only a cluster resolving to a handful of confirmed-generic pictures belongs here. An entry with no pixel_keys never matches anything. All values here are computed with the alpha-flattening in icon-hash.mjs; changing that function invalidates every hash and key in this file.",
   "max_hamming_distance": 2,
   "blank_max_std_dev": 4,
-  "_blank_note": "Separate rule, a property rather than a picture: an image whose greyscale standard deviation is at or below this has no detail to show. Measured blanks scored 0.00 and 1.36; the least contrasty real icon in the catalog scored 34.63, so this threshold has roughly an 8x margin.",
+  "_blank_note": "Separate rule, a property rather than a picture: an image whose greyscale standard deviation over a white background is at or below this carries no detail. Flattening matters here more than anywhere else. Measured against transparency, a black glyph reads as a uniform field and scored zero; AltDrag's cursor and sixty other real icons were wrongly classified as blank on that basis. Composited over white they score 70 to 121, while a genuinely flat image still scores 0.00.",
   "hashes": [
     {
-      "hash": "0000000011111111111001111110001111000011110000111111111100111100",
+      "hash": "1111111100000010110000111100001111000011110000110100001111111111",
       "label": "windows_generic_application",
-      "note": "Default Windows application-window glyph. 894 packages resolved to just 2 pictures.",
-      "pixel_keys": ["5ef659bd25802b77", "88b875c5d8188380"]
+      "note": "Default Windows application-window glyph. 894 packages resolved to 2 pictures.",
+      "pixel_keys": ["4b7e4aa9dfc50ba3", "e04bd0c4f964adac"]
     },
     {
-      "hash": "1101111001101110100010101000001011001000110101001101010000011100",
+      "hash": "1111000011101100110010001000000011001000100100011001011110110011",
       "label": "windows_installer_default",
-      "note": "Classic Windows Installer computer-and-disc icon, including its red-X remove variant. 458 packages, 5 pictures.",
+      "note": "Classic Windows Installer computer-and-disc icon, including its red-X remove variant. 458 packages, 5 pictures. The variants sit within one bit of this hash.",
       "pixel_keys": [
-        "0bd43484eea5e863",
-        "7ab3c06ffbb6d02e",
-        "b7f0de0fb51fede6",
-        "32e1d7968c869c0c",
-        "f9bfc169e3228fab"
+        "35c5136da56889f0",
+        "04e1695cf8a79969",
+        "65d7606157f89022",
+        "e04ed78ec1265f6b",
+        "02648204dfaf13f7"
       ]
     },
     {
-      "hash": "0100100000010000010000100001000011101111111111111111111101111110",
+      "hash": "1111111111101111111011111100101100000000011111000111111000000000",
       "label": "generic_install_arrow",
       "note": "Install/download arrow used as a default by several installer toolkits. 310 packages, 2 pictures.",
-      "pixel_keys": ["80c5b622692b780c", "a809c5e0d1e5485a"]
+      "pixel_keys": ["3c80f4888622c487", "ab97310a9ea0ab84"]
     },
     {
-      "hash": "0011110001111110011111110111110001111110001101100011010000111100",
+      "hash": "1111111110001011101000110011000000110000001001001000000111111111",
       "label": "generic_setup_disc",
       "note": "Setup disc with download arrow. 69 packages, 2 pictures.",
-      "pixel_keys": ["5c1cb4f4e699d41a", "883f20a30af980cd"]
+      "pixel_keys": ["e11e6b409dda0797", "34f5348183f5341b"]
     },
     {
-      "hash": "1110000011100000111100001110000001100000001111110011111000111100",
+      "hash": "1110000111100001111100011110000111100001100111011011110010111111",
       "label": "pyinstaller_bundler",
       "note": "PyInstaller bundler icon: identifies the packaging toolchain, not the application. 57 packages, all 1 picture.",
-      "pixel_keys": ["4aff344a8195824c"]
+      "pixel_keys": ["3133e638b6d2412a"]
     }
   ]
 }
