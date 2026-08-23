@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'bb762159825bb59be2649f4cff4bf25fbbaef8b8',
+  packagerCommit: '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -324,6 +324,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // path. Preserve passing profiles while collecting exact identities for the
   // affected terminal candidate.
   '228cd9def01122182631c91910554c05e9181edb',
+  // Bounded diagnostics did not change successful package behavior. Preserve
+  // every passing profile while the reviewed Surfshark primary-ARP selector
+  // invalidates only Surfshark through its canonical adapter field.
+  'bb762159825bb59be2649f4cff4bf25fbbaef8b8',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
