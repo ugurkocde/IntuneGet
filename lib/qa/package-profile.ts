@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '326eafef044af8579bc0089c9556a3d59e26cbe0',
+  packagerCommit: '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -332,6 +332,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // command parser exercised by Surfshark. Preserve every unrelated compatible
   // pass from the visible-primary release.
   '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1',
+  // The reviewed -q argument changes only Atlassian Service Management LTS.
+  // Preserve every unrelated compatible pass from the parser release.
+  '326eafef044af8579bc0089c9556a3d59e26cbe0',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

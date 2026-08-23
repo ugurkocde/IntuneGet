@@ -159,7 +159,16 @@ const LEAF_ONLY_UNINSTALL_PATH_RELEASE_RETRY_TARGETS = [
   ...SURFSHARK_VISIBLE_PRIMARY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ATLASSIAN_QUIET_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Re-run Jira Service Management with Atlassian's documented unattended
+  // uninstaller argument, then carry every still-unconsumed bounded target.
+  'Atlassian.ServiceManagementLTS',
+  ...LEAF_ONLY_UNINSTALL_PATH_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '2eaa857bc5a1297ec7e7b521307079de4622b0b7':
+    ATLASSIAN_QUIET_UNINSTALL_RELEASE_RETRY_TARGETS,
   '326eafef044af8579bc0089c9556a3d59e26cbe0':
     LEAF_ONLY_UNINSTALL_PATH_RELEASE_RETRY_TARGETS,
   '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1':

@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Atlassian only after activating its documented quiet uninstall', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' atlassian.servicemanagementlts ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '326eafef044af8579bc0089c9556a3d59e26cbe0',
+      { wingetId: 'Atlassian.ServiceManagementLTS', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('carries Surfshark through diagnostics, visible-primary, and leaf-only releases', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
