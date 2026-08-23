@@ -1,6 +1,6 @@
 "use client";
 
-import { Code2, Container, Package, Scale } from "lucide-react";
+import { Code2, Container, MonitorCheck, Package, Scale, ShieldCheck } from "lucide-react";
 import { T, Var, useLocale } from "gt-next";
 import { LandingCatalogSearch } from "../ui/LandingCatalogSearch";
 import { LivePipelinePanel } from "../ui/LivePipelinePanel";
@@ -58,21 +58,29 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
             </FadeIn>
 
             <FadeIn delay={0.24} animateOnMount duration={0.4} direction="up" className="mt-5 w-full md:mt-6">
-              <div className="grid grid-cols-2 gap-x-3 rounded-2xl border border-overlay/[0.07] bg-bg-elevated/60 px-3 py-2 text-xs text-text-secondary shadow-soft sm:text-sm lg:px-5">
+              <div className="grid grid-cols-2 gap-x-3 rounded-2xl border border-overlay/[0.07] bg-bg-elevated/60 px-3 py-2 text-xs text-text-secondary shadow-soft sm:text-sm lg:grid-cols-3 lg:px-5">
                 <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
-                  <Code2 aria-hidden="true" className="h-4 w-4 text-accent-cyan" />
+                  <MonitorCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
+                  <T>Tested on real machines</T>
+                </span>
+                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                  <ShieldCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
+                  <T>VirusTotal checked</T>
+                </span>
+                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                  <Code2 aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>No scripting</T>
                 </span>
                 <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
-                  <Package aria-hidden="true" className="h-4 w-4 text-accent-cyan" />
+                  <Package aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>No per-device fees</T>
                 </span>
                 <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
-                  <Container aria-hidden="true" className="h-4 w-4 text-accent-cyan" />
+                  <Container aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>Self-hostable</T>
                 </span>
                 <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
-                  <Scale aria-hidden="true" className="h-4 w-4 text-accent-cyan" />
+                  <Scale aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>Open source, AGPL-3.0</T>
                 </span>
               </div>
@@ -84,8 +92,9 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
             <LivePipelinePanel />
             <p className="mt-3 px-1 text-xs text-text-muted">
               <T id="hero.pipeline.caption">
-                Live from the public QA pipeline. Every result above is a real run on a real
-                machine.
+                Live from the public QA pipeline: every package is test-installed, detection-checked,
+                and uninstalled on a real Windows machine, and installer hashes are checked against
+                VirusTotal. Flagged installers are blocked.
               </T>
             </p>
           </FadeIn>
