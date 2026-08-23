@@ -1,0 +1,263 @@
+name: Heal Publisher-Avatar Icons
+
+# The GitHub-avatar web tier resolves github.com/<publisher>.png, which is org
+# branding rather than a product icon. A publisher shipping many packages
+# therefore has all of them wearing the same logo. Binary extraction produces
+# the real icon but costs a full installer download (1.5-2 min per app), so the
+# weekly single-runner pipeline in extract-icons.yml cannot work through the
+# backlog in any reasonable time.
+#
+# This workflow fans that work out: one planner picks the highest-impact
+# publishers, a matrix of Windows runners extracts in parallel, and a single
+# collector publishes one PR and writes the database once.
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_publisher_apps:
+        description: 'Only heal apps whose publisher ships at least this many heal-eligible packages. Lower values widen the campaign to smaller publishers, where the org avatar is more often the correct icon anyway.'
+        required: false
+        default: '10'
+      shards:
+        description: 'Number of parallel Windows runners.'
+        required: false
+        default: '20'
+      max_apps_per_shard:
+        description: 'Apps queued per shard. Combined with budget_minutes this bounds a wave.'
+        required: false
+        default: '40'
+      budget_minutes:
+        description: 'Wall-clock ceiling for each shard extraction loop. Apps not reached stay untouched and return in the next wave.'
+        required: false
+        default: '35'
+
+# Shares the pipeline group so a campaign wave and the weekly icon run never
+# race each other into conflicting icon publication PRs.
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      shard_count: ${{ steps.plan.outputs.shard_count }}
+      queued: ${{ steps.plan.outputs.queued }}
+      remaining: ${{ steps.plan.outputs.remaining }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Plan shards
+        id: plan
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MIN_PUBLISHER_APPS: ${{ github.event.inputs.min_publisher_apps || '10' }}
+          SHARDS: ${{ github.event.inputs.shards || '20' }}
+          MAX_APPS_PER_SHARD: ${{ github.event.inputs.max_apps_per_shard || '40' }}
+        run: node .github/scripts/plan-icon-heal.mjs
+
+      - name: Upload plan
+        if: steps.plan.outputs.shard_count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: heal-plan
+          path: plan/
+          retention-days: 1
+
+  extract:
+    needs: plan
+    if: needs.plan.outputs.shard_count != '' && needs.plan.outputs.shard_count != '0'
+    runs-on: windows-2025
+    # Bounded by budget_minutes inside the loop; this is the backstop for a
+    # runner that wedges on a download the loop guard cannot interrupt.
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      # Each shard is independent, so a wedged runner must not stall the wave.
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+        shell: pwsh
+
+      - name: Install ImageMagick and 7-Zip
+        run: choco install imagemagick.app 7zip -y --no-progress
+        shell: pwsh
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: heal-plan
+          path: plan
+
+      - name: Select shard
+        shell: pwsh
+        run: |
+          Copy-Item "plan/shard-${{ matrix.shard }}.json" "apps-to-process.json" -Force
+          Write-Host "Shard ${{ matrix.shard }}: ${{ matrix.count }} apps queued"
+
+      - name: Extract icons
+        env:
+          BUDGET_MINUTES: ${{ github.event.inputs.budget_minutes || '35' }}
+        shell: pwsh
+        run: .github/scripts/extract-icons-batch.ps1
+
+      # Only the directories this shard produced are uploaded. Shipping the
+      # whole public/icons tree would move tens of thousands of files per shard
+      # and make the collector's merge ambiguous about who wrote what.
+      - name: Package shard output
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          cp icon-results.json "out/results-${{ matrix.shard }}.json" 2>/dev/null || echo '[]' > "out/results-${{ matrix.shard }}.json"
+          if [ -d public/icons ] && ! git diff --quiet -- public/icons; then
+            git diff --name-only -- public/icons > changed.txt
+          else
+            : > changed.txt
+          fi
+          # Untracked directories are new apps that had no icon before.
+          git ls-files --others --exclude-standard -- public/icons >> changed.txt
+          if [ -s changed.txt ]; then
+            sort -u changed.txt | tar -cf "out/icons-${{ matrix.shard }}.tar" -T -
+            echo "Packaged $(sort -u changed.txt | wc -l) icon files"
+          else
+            echo "No icon files changed in this shard"
+          fi
+
+      - name: Upload shard output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heal-shard-${{ matrix.shard }}
+          path: out/
+          retention-days: 1
+
+  publish:
+    needs: [plan, extract]
+    if: always() && needs.plan.outputs.shard_count != '' && needs.plan.outputs.shard_count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Download shard outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: heal-shard-*
+          path: shards
+          merge-multiple: true
+
+      - name: Merge shard results
+        id: merge
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for tarball in shards/icons-*.tar; do
+            echo "Unpacking $tarball"
+            tar -xf "$tarball"
+          done
+          # Shards never overlap (the planner assigns each app to exactly one),
+          # so concatenating the result files needs no conflict resolution.
+          # jq with no matching file would read stdin and hang, so guard first.
+          results=(shards/results-*.json)
+          if [ ${#results[@]} -eq 0 ]; then
+            echo '[]' > icon-results.json
+          else
+            jq -s 'add // []' "${results[@]}" > icon-results.json
+          fi
+          total=$(jq 'length' icon-results.json)
+          success=$(jq '[.[] | select(.status == "success")] | length' icon-results.json)
+          echo "Merged $total results ($success successful) from ${#results[@]} shards"
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+
+      - name: Audit duplicate icons
+        if: always()
+        env:
+          ICONS_DIR: public/icons
+        run: node .github/scripts/audit-duplicate-icons.mjs
+
+      - name: Upload icon audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: icon-audit
+          path: icon-audit.json
+          if-no-files-found: ignore
+
+      - name: Publish icons
+        id: commit-icons
+        if: steps.merge.outputs.total != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          .github/scripts/publish-icon-pr.sh heal "chore: heal publisher-avatar icons"
+
+      - name: Update database
+        if: steps.commit-icons.outputs.committed == 'true'
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          COMMITTED_APPS: ${{ steps.commit-icons.outputs.committed_apps }}
+          RESULTS_FILE: icon-results.json
+          SYNC_ID: heal-icons
+        run: node .github/scripts/update-icon-db.mjs
+
+      - name: Wave summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Heal Wave Summary"
+            echo ""
+            echo "- **Queued:** ${{ needs.plan.outputs.queued }} apps across ${{ needs.plan.outputs.shard_count }} shards"
+            echo "- **Targeted apps remaining after this wave:** ${{ needs.plan.outputs.remaining }}"
+            echo "- **Published:** ${{ steps.commit-icons.outputs.committed || 'false' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
