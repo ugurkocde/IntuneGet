@@ -1150,6 +1150,7 @@ describe('PSADT vendor argument contract', () => {
         [],
         {
           reviewedInstallArguments: [
+            '--installPath "%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools"',
             '--add Microsoft.VisualStudio.Workload.MSBuildTools',
             '--norestart',
           ],
@@ -1185,8 +1186,9 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(installFunction).toContain(
-        "-ArgumentList '--quiet --wait --campaign \"winget\" --add Microsoft.VisualStudio.Workload.MSBuildTools --norestart'"
+        "$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('--quiet --wait --campaign \"winget\" --installPath \"%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools\" --add Microsoft.VisualStudio.Workload.MSBuildTools --norestart')"
       );
+      expect(installFunction).toContain('-ArgumentList $effectiveInstallerArguments');
       expect(uninstallFunction).toContain(
         "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe')"
       );
