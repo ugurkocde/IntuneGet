@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '20fbdeff5e6a4dc9d911019a244f7e46ab19b708',
+  packagerCommit: '228cd9def01122182631c91910554c05e9181edb',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -317,6 +317,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Tools profiles that previously produced no manageable product instance.
   // Preserve Chrome Beta and every unrelated compatible passing result.
   'c1c9410f58318d055c09a60bc067996a4b9b4597',
+  // Build Tools' explicit instance path changes only profiles using the
+  // reviewed Build Tools lifecycle. Preserve every unrelated compatible pass.
+  '20fbdeff5e6a4dc9d911019a244f7e46ab19b708',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

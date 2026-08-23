@@ -218,7 +218,7 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries every Build Tools generation after activating its workload', () => {
+  it('retries every Build Tools generation after activating its deterministic install path', () => {
     for (const wingetId of [
       'Microsoft.VisualStudio.BuildTools',
       'Microsoft.VisualStudio.2017.BuildTools',
@@ -231,9 +231,9 @@ describe('QA toolchain targeted retries', () => {
       )).toBe(true);
     }
     expect(shouldRetryTerminalToolchainCandidate(
-      'c1c9410f58318d055c09a60bc067996a4b9b4597',
+      '20fbdeff5e6a4dc9d911019a244f7e46ab19b708',
       { wingetId: 'Microsoft.VisualStudio.2017.BuildTools', status: 'failed' }
-    )).toBe(false);
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       'c1c9410f58318d055c09a60bc067996a4b9b4597',
       { wingetId: 'Microsoft.VisualStudio.2019.BuildTools', status: 'failed' }
