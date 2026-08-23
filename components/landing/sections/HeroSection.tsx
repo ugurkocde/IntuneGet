@@ -22,12 +22,12 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
 
   return (
     <section className="relative isolate w-full overflow-hidden">
-      <div className="container relative z-10 mx-auto flex min-h-dvh max-w-6xl items-center px-4 pb-12 pt-24 md:px-6 md:pb-14 md:pt-28">
-        <div className="grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,54fr)_minmax(0,46fr)] lg:gap-16">
+      <div className="container relative z-10 mx-auto flex min-h-dvh max-w-6xl items-center px-4 pb-12 pt-24 md:px-6 md:pb-14 md:pt-28 xl:max-w-7xl">
+        <div className="grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,54fr)_minmax(0,46fr)] lg:gap-16 xl:gap-24">
           {/* Left: copy + search */}
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
             <FadeIn animateOnMount duration={0.4} direction="up">
-              <h1 className="text-balance text-5xl font-extrabold tracking-tight text-text-primary md:text-[3.5rem] md:leading-[1.08]">
+              <h1 className="text-balance text-5xl font-extrabold tracking-tight text-text-primary md:text-[3.5rem] md:leading-[1.08] xl:text-[4.25rem] xl:leading-[1.06]">
                 <T id="hero.headline">Deploy any Windows app to Intune.</T>{" "}
                 <span className="text-accent-cyan">
                   <T id="hero.headline.accent">Search it, ship it.</T>
@@ -36,7 +36,7 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
             </FadeIn>
 
             <FadeIn delay={0.08} animateOnMount duration={0.4} direction="up">
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-text-secondary md:text-xl">
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-text-secondary md:text-xl xl:mt-7 xl:max-w-2xl xl:text-[1.375rem]">
                 {appsSupported > 0 ? (
                   <T id="hero.subheadline">
                     IntuneGet turns the Winget catalog of <Var>{supportedAppsDisplay}</Var>+ apps
@@ -58,28 +58,29 @@ export function HeroSection({ initialStats }: HeroSectionProps) {
             </FadeIn>
 
             <FadeIn delay={0.24} animateOnMount duration={0.4} direction="up" className="mt-5 w-full md:mt-6">
-              <div className="grid grid-cols-2 gap-x-3 rounded-2xl border border-overlay/[0.07] bg-bg-elevated/60 px-3 py-2 text-xs text-text-secondary shadow-soft sm:text-sm lg:grid-cols-3 lg:px-5">
-                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+              {/* Flowing row: items wrap between chips, never inside a label. */}
+              <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-1 rounded-2xl border border-overlay/[0.07] bg-bg-elevated/60 px-5 py-2.5 text-sm text-text-secondary shadow-soft lg:justify-start xl:gap-x-8 xl:px-6 xl:py-3 xl:text-[15px]">
+                <span className="flex min-h-9 items-center gap-2 whitespace-nowrap">
                   <MonitorCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>Tested on real machines</T>
                 </span>
-                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                <span className="flex min-h-9 items-center gap-2 whitespace-nowrap">
                   <ShieldCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>VirusTotal checked</T>
                 </span>
-                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                <span className="flex min-h-9 items-center gap-2 whitespace-nowrap">
                   <Code2 aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>No scripting</T>
                 </span>
-                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                <span className="flex min-h-9 items-center gap-2 whitespace-nowrap">
                   <Package aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>No per-device fees</T>
                 </span>
-                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                <span className="flex min-h-9 items-center gap-2 whitespace-nowrap">
                   <Container aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>Self-hostable</T>
                 </span>
-                <span className="flex min-h-10 items-center justify-center gap-2 sm:justify-start">
+                <span className="flex min-h-9 items-center gap-2 whitespace-nowrap">
                   <Scale aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-accent-cyan" />
                   <T>Open source, AGPL-3.0</T>
                 </span>

@@ -58,7 +58,7 @@ interface StepRowProps {
 
 function StepRow({ label, state, detail, isLast, reduceMotion }: StepRowProps) {
   return (
-    <div className="relative flex min-h-9 items-center gap-3">
+    <div className="relative flex min-h-9 items-center gap-3 xl:min-h-10">
       {!isLast && (
         <span
           aria-hidden="true"
@@ -84,7 +84,7 @@ function StepRow({ label, state, detail, isLast, reduceMotion }: StepRowProps) {
       </span>
       <span
         className={cn(
-          "text-[13px] font-medium",
+          "text-[13px] font-medium xl:text-sm",
           state === "pending" ? "text-text-muted" : "text-text-primary"
         )}
       >
@@ -92,7 +92,7 @@ function StepRow({ label, state, detail, isLast, reduceMotion }: StepRowProps) {
       </span>
       <span
         className={cn(
-          "ml-auto max-w-[55%] truncate font-mono text-[11.5px] tabular-nums",
+          "ml-auto max-w-[55%] truncate font-mono text-[11.5px] tabular-nums xl:text-[12.5px]",
           state === "pending" ? "text-text-muted" : "text-text-secondary"
         )}
       >
@@ -240,8 +240,8 @@ export function LivePipelinePanel() {
     // Static explainer for installs without the public live feed.
     return (
       <div className="overflow-hidden rounded-2xl border border-overlay/[0.08] bg-bg-elevated shadow-soft-lg">
-        <div className="flex items-center justify-between gap-3 border-b border-overlay/[0.06] px-4 py-3 md:px-5">
-          <span className="text-[13.5px] font-semibold text-text-primary">
+        <div className="flex items-center justify-between gap-3 border-b border-overlay/[0.06] px-4 py-3 md:px-5 xl:px-6 xl:py-4">
+          <span className="text-[13.5px] font-semibold text-text-primary xl:text-[15px]">
             <T>QA pipeline</T>
           </span>
           <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-overlay/[0.08] bg-overlay/[0.03] px-2.5 py-1 text-[11.5px] font-semibold text-text-secondary">
@@ -355,7 +355,7 @@ export function LivePipelinePanel() {
       </div>
 
       {/* Featured run */}
-      <div className="px-4 pb-1 pt-3.5 md:px-5">
+      <div className="px-4 pb-1 pt-3.5 md:px-5 xl:px-6 xl:pt-4">
         <div className="mb-2.5 flex items-center gap-3">
           {featured ? (
             <AppIcon packageId={featured.wingetId} packageName={featured.displayName} size="sm" />
@@ -363,10 +363,10 @@ export function LivePipelinePanel() {
             <div className="h-8 w-8 flex-shrink-0 rounded-lg bg-overlay/[0.06]" />
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-primary">
+            <p className="truncate text-sm font-semibold text-text-primary xl:text-[15.5px]">
               {featured ? featured.displayName : t("Connecting to pipeline…")}
             </p>
-            <p className="truncate font-mono text-[11px] tabular-nums text-text-muted">
+            <p className="truncate font-mono text-[11px] tabular-nums text-text-muted xl:text-xs">
               {featured ? featured.kindLine : <T>Public QA · live</T>}
             </p>
           </div>
@@ -404,7 +404,7 @@ export function LivePipelinePanel() {
       </div>
 
       {/* Recent results */}
-      <div className="mt-2 border-t border-overlay/[0.06] px-4 pb-1 pt-2.5 md:px-5">
+      <div className="mt-2 border-t border-overlay/[0.06] px-4 pb-1 pt-2.5 md:px-5 xl:px-6">
         <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
           <T>Recent</T>
         </p>
@@ -416,7 +416,7 @@ export function LivePipelinePanel() {
             >
               <AppIcon packageId={run.wingetId} packageName={run.displayName} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-text-primary">
+                <p className="truncate text-[13px] font-semibold text-text-primary xl:text-sm">
                   {run.displayName} {run.testedVersion}
                 </p>
                 <p className="truncate font-mono text-[11px] text-text-muted">
@@ -442,7 +442,7 @@ export function LivePipelinePanel() {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between gap-3 border-t border-overlay/[0.06] bg-overlay/[0.02] px-4 py-2.5 text-xs text-text-muted md:px-5">
+      <div className="flex items-center justify-between gap-3 border-t border-overlay/[0.06] bg-overlay/[0.02] px-4 py-2.5 text-xs text-text-muted md:px-5 xl:px-6 xl:py-3 xl:text-[13px]">
         <span className="tabular-nums">
           {snapshot ? (
             <T id="hero.pipeline.queue">
