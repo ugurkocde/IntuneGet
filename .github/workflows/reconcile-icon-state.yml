@@ -1,0 +1,60 @@
+name: Reconcile Icon State
+
+# curated_apps.has_icon and the committed icon files can drift apart, and
+# neither direction self-heals. A row marked as having no icon while its files
+# are present is stuck: fetch-web-icons.mjs skips any package whose
+# icon-64.png exists, so it never refills it and the site never shows it. A row
+# marked as having an icon whose files are gone points the site at a 404.
+#
+# Reports by default; writing requires choosing apply.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'report lists the drift without touching anything; apply writes the corrections.'
+        required: false
+        default: 'report'
+        type: choice
+        options:
+          - report
+          - apply
+  schedule:
+    # Weekly, after the Saturday icon run has settled. Report only, so drift
+    # surfaces in the run summary rather than being silently corrected.
+    - cron: '0 9 * * 6'
+
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Reconcile
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ICONS_DIR: public/icons
+          # The scheduled run reports only; applying is always a deliberate act.
+          MODE: ${{ github.event_name == 'schedule' && 'report' || github.event.inputs.mode }}
+        run: node .github/scripts/reconcile-icon-state.mjs
