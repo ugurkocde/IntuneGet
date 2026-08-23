@@ -42,6 +42,16 @@ const WEB_SOURCES = ['github_avatar', 'favicon', 'homepage_image'];
 // those placeholders with the real product icon.
 const INCLUDE_UNTRACKED = process.env.INCLUDE_UNTRACKED === 'true';
 
+// Apps whose last binary attempt produced installer-toolkit artwork rather
+// than a product icon. Extraction is deterministic -- the same installer holds
+// the same embedded icon -- so re-running one of these reproduces the image
+// reject-generic-icons.mjs already refused, and spends an attempt doing it.
+// 1,330 of them exist, 673 inside the multi-product tier the campaign targets.
+//
+// The one thing that can change the answer is the publisher shipping a new
+// installer, so RETRY_GENERIC exists for a sweep after a version bump.
+const RETRY_GENERIC = process.env.RETRY_GENERIC === 'true';
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('SUPABASE_URL and SUPABASE_SERVICE_KEY are required');
   process.exit(1);
@@ -77,7 +87,7 @@ async function fetchAllEligible() {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from('curated_apps')
-      .select('winget_id, name, publisher, latest_version, icon_source, icon_extraction_attempts')
+      .select('winget_id, name, publisher, latest_version, icon_source, icon_extraction_attempts, icon_failure_reason')
       .or(
         INCLUDE_UNTRACKED
           ? `icon_source.in.(${WEB_SOURCES.join(',')}),icon_source.is.null`
@@ -146,11 +156,25 @@ async function main() {
   };
 
   const variants = eligible.filter(app => hasCatalogAncestor(app.winget_id));
-  const candidates = eligible.filter(app => !hasCatalogAncestor(app.winget_id));
+  const withoutVariants = eligible.filter(app => !hasCatalogAncestor(app.winget_id));
   console.log(
     `Deferring ${variants.length} variant packages to family inheritance; ` +
-      `${candidates.length} need their own binary`
+      `${withoutVariants.length} need their own binary`
   );
+
+  const knownGeneric = RETRY_GENERIC
+    ? []
+    : withoutVariants.filter(app => app.icon_failure_reason === 'generic_installer_icon');
+  const candidates = RETRY_GENERIC
+    ? withoutVariants
+    : withoutVariants.filter(app => app.icon_failure_reason !== 'generic_installer_icon');
+
+  if (knownGeneric.length > 0) {
+    console.log(
+      `Skipping ${knownGeneric.length} apps whose installer is already known to ` +
+        `hold only toolkit artwork (set retry_generic to sweep them after a version bump)`
+    );
+  }
 
   // Group by the winget_id publisher segment rather than the `publisher`
   // column: the avatar tier keys off the ID segment, so that is what decides
@@ -258,6 +282,7 @@ async function main() {
         '',
         `- **Heal-eligible catalog-wide:** ${eligible.length}`,
         `- **Deferred to family inheritance (variant packages):** ${variants.length}`,
+        `- **Skipped, installer known to hold only toolkit artwork:** ${knownGeneric.length}`,
         `- **Targeted (publisher ships >= ${MIN_PUBLISHER_APPS}):** ${targetedTotal}`,
         `- **Queued this wave:** ${queuedApps.length} across ${matrix.length} shards`,
         `- **Targeted apps remaining after this wave:** ${remaining}`,
