@@ -102,7 +102,17 @@ const FSLOGIX_RELEASE_RETRY_TARGETS = [
   ),
 ] as const;
 
+const CHROME_BETA_REGISTRY_RELEASE_RETRY_TARGETS = [
+  // Retry Chrome Beta EXE with Chromium's exact channel-specific ARP key after
+  // the stale WinGet stable-channel identity made capture ambiguous.
+  'Google.Chrome.Beta.EXE',
+  // Carry every still-unconsumed bounded target across the atomic pin.
+  ...FSLOGIX_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'c1c9410f58318d055c09a60bc067996a4b9b4597':
+    CHROME_BETA_REGISTRY_RELEASE_RETRY_TARGETS,
   '00983d36128aef319cc36f901beeff6dd03d847f':
     FSLOGIX_RELEASE_RETRY_TARGETS,
   'db444b2d99905ecbf17ed20e20bfa0b3abc1aeec': [

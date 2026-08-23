@@ -105,6 +105,7 @@ describe('QA toolchain targeted retries', () => {
       'BlueJTeam.BlueJ',
       'Autodesk.DesignReview',
       'AppiumDevelopers.AppiumInspector',
+      'Google.Chrome.Beta.EXE',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -127,6 +128,7 @@ describe('QA toolchain targeted retries', () => {
         'Speek.Speek',
         '8x8.Work',
         'Microsoft.FSLogix',
+        'Google.Chrome.Beta.EXE',
         'Microsoft.RMSClient',
         'SoftwareOK.DesktopOK',
         'Movavi.MovaviPhotoFocus',
@@ -194,6 +196,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '49775d3657a1b11b4ec1603e80ba8f78882b174f',
       { wingetId: 'Webroot.SecureAnywhere', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Chrome Beta EXE only after activating its exact vendor ARP identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' google.chrome.beta.exe ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '00983d36128aef319cc36f901beeff6dd03d847f',
+      { wingetId: 'Google.Chrome.Beta.EXE', status: 'failed' }
     )).toBe(false);
   });
 

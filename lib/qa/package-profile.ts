@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '00983d36128aef319cc36f901beeff6dd03d847f',
+  packagerCommit: 'c1c9410f58318d055c09a60bc067996a4b9b4597',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -309,6 +309,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // uninstall path. Webroot is blocked at the shared eligibility gate; preserve
   // every unrelated compatible pass from the prior protected release.
   'db444b2d99905ecbf17ed20e20bfa0b3abc1aeec',
+  // Chrome Beta's exact vendor ARP identity and final customer-payload
+  // normalization change only adapter-resolved uninstall paths. Preserve every
+  // unrelated compatible pass from the prior protected release.
+  '00983d36128aef319cc36f901beeff6dd03d847f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
