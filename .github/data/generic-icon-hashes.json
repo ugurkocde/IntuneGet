@@ -1,0 +1,36 @@
+{
+  "_comment": "Average-hash fingerprints of images that are not product icons. Binary extraction pulls the icon out of an installer, and a wrapper installer that carries no app icon yields its toolkit's default artwork instead: the Windows generic-application glyph, the Windows Installer disc, an Inno/NSIS install arrow, the PyInstaller bundler icon. Recording one of those as an app's icon is worse than recording nothing, because hundreds of unrelated apps end up identical. Entries are matched with a Hamming distance of 2, which absorbs resampling variants without colliding with real icons (the closest real-icon cluster sits far outside that radius). Derived from a full scan of public/icons and confirmed by eye; regenerate with audit-duplicate-icons.mjs, which reports each cluster's hash.",
+  "max_hamming_distance": 2,
+  "hashes": [
+    {
+      "hash": "0000000011111111111001111110001111000011110000111111111100111100",
+      "label": "windows_generic_application",
+      "note": "Default Windows application-window glyph. Largest cluster: 769 packages across ~700 publishers."
+    },
+    {
+      "hash": "1101111001101110100010101000001011001000110101001101010000011100",
+      "label": "windows_installer_default",
+      "note": "Classic Windows Installer computer-and-disc icon. 422 packages."
+    },
+    {
+      "hash": "0100100000010000010000100001000011101111111111111111111101111110",
+      "label": "generic_install_arrow",
+      "note": "Install/download arrow used as the default by several installer toolkits. 312 packages."
+    },
+    {
+      "hash": "0011110001111110011111110111110001111110001101100011010000111100",
+      "label": "generic_setup_disc",
+      "note": "Setup disc with download arrow. 69 packages."
+    },
+    {
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "label": "blank_image",
+      "note": "Uniform image with no detail. An all-equal hash means every pixel sits at the mean, so nothing was extracted. 64 packages."
+    },
+    {
+      "hash": "1110000011100000111100001110000001100000001111110011111000111100",
+      "label": "pyinstaller_bundler",
+      "note": "PyInstaller/Python bundler icon. Identifies the packaging toolchain, not the application. 57 packages."
+    }
+  ]
+}

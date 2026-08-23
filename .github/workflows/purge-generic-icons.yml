@@ -1,0 +1,84 @@
+name: Purge Generic Installer Icons
+
+# Binary extraction reports success whenever it pulls *an* icon out of an
+# installer. When the installer carries no application icon, what it pulls is
+# the packaging toolkit's own artwork: the Windows generic-application glyph,
+# the Windows Installer disc, an install arrow. Roughly 1,900 catalog packages
+# across ~1,200 publishers currently show one of six such images.
+#
+# reject-generic-icons.mjs stops new ones being written during a heal wave.
+# This workflow clears the ones already published and queues those packages for
+# re-resolution through the web tiers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_purge:
+        description: 'Stop after removing this many icons. 0 removes every match. Use a small number first to inspect the resulting PR.'
+        required: false
+        default: '0'
+
+# Shares the pipeline group: this rewrites the same icon tree the heal waves
+# and the weekly run publish to.
+concurrency:
+  group: curated-apps-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  purge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Purge generic icons
+        id: purge
+        env:
+          ICONS_DIR: public/icons
+          MAX_PURGE: ${{ github.event.inputs.max_purge || '0' }}
+          MODE: scan
+        run: node .github/scripts/purge-generic-icons.mjs
+
+      - name: Upload purge list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generic-icon-purge
+          path: purged-apps.json
+          if-no-files-found: ignore
+
+      - name: Publish removals
+        id: commit-icons
+        if: steps.purge.outputs.purged != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          .github/scripts/publish-icon-pr.sh generic-purge "chore: remove generic installer icons"
+
+      # Only after the removals are on main. Resetting the database first would
+      # advertise apps as icon-less while their files were still being served.
+      - name: Reset purged apps
+        if: steps.commit-icons.outputs.committed == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: commit
+        run: node .github/scripts/purge-generic-icons.mjs

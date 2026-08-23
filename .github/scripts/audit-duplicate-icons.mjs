@@ -13,36 +13,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
+import { averageHash, hamming, bestIconPath } from './icon-hash.mjs';
 
 const ICONS_DIR = process.env.ICONS_DIR || 'public/icons';
-const HASH_SIZE = 8;
-
-async function averageHash(filePath) {
-  const { data } = await sharp(filePath)
-    .resize(HASH_SIZE, HASH_SIZE, { fit: 'fill' })
-    .greyscale()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const avg = data.reduce((a, b) => a + b, 0) / data.length;
-  let bits = '';
-  for (const byte of data) bits += byte > avg ? '1' : '0';
-  return bits;
-}
-
-function hamming(a, b) {
-  let d = 0;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
-  return d;
-}
-
-function bestIconPath(dir) {
-  for (const size of [256, 128, 64]) {
-    const p = path.join(dir, `icon-${size}.png`);
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
 
 async function main() {
   if (!fs.existsSync(ICONS_DIR)) {
@@ -89,6 +62,9 @@ async function main() {
       const topPublisher = Object.entries(publishers).sort((a, b) => b[1] - a[1])[0];
       const dominantShare = topPublisher[1] / c.members.length;
       return {
+        // Reported so a cluster confirmed to be non-product artwork can be
+        // copied straight into .github/data/generic-icon-hashes.json.
+        hash: c.hash,
         cluster_size: c.members.length,
         dominant_publisher: topPublisher[0],
         dominant_publisher_share: Number(dominantShare.toFixed(2)),

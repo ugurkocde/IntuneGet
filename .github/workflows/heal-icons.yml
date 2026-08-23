@@ -140,6 +140,14 @@ jobs:
         shell: pwsh
         run: .github/scripts/extract-icons-batch.ps1
 
+      # An installer with no embedded app icon still yields its toolkit's
+      # default artwork, and extraction reports that as a success. Screen it
+      # out here so the shard never carries a generic image into the
+      # publication PR or records one as an app's icon.
+      - name: Screen out generic installer icons
+        shell: bash
+        run: node .github/scripts/reject-generic-icons.mjs
+
       # Only the directories this shard produced are uploaded. Shipping the
       # whole public/icons tree would move tens of thousands of files per shard
       # and make the collector's merge ambiguous about who wrote what.
