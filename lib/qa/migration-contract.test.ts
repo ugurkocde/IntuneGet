@@ -1345,3 +1345,30 @@ describe('QA demand reconciliation migration contract', () => {
     expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 100))');
   });
 });
+
+describe('QA live-version reconciliation migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260823195500_recognize_live_qa_version_coverage.sql'
+    ),
+    'utf8'
+  );
+
+  it('recognizes the immutable live version after the curated catalog catches up', () => {
+    expect(sql).toContain('candidate.version = current_app.latest_version');
+    expect(sql).toContain('candidate.version = app.latest_version');
+    expect(sql).toContain('candidate.catalog_version_at_enqueue = app.latest_version');
+    expect(sql).not.toContain('candidate.catalog_version_at_enqueue is null');
+    expect(sql).toContain("candidate.test_config @> '{\"profileKind\":\"catalog-default\"}'::jsonb");
+  });
+
+  it('preserves the production demand, block, and current-head reconciliation guards', () => {
+    expect(sql).toContain('from public.upload_history as history');
+    expect(sql).toContain('from public.package_eligibility_blocks as eligibility_block');
+    expect(sql).toContain('from public.qa_package_blocks as block');
+    expect(sql).toContain('poll_state.head_sha = reconciliation.observed_head_sha');
+    expect(sql).toContain('failure.last_failed_at desc nulls last');
+    expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 100))');
+  });
+});
