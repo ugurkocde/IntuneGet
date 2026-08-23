@@ -3057,6 +3057,19 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(actionBoundArgumentCheck).toBeGreaterThan(registryIdentityCheck);
   });
 
+  it('accepts leaf-only registered uninstall executables before exact command parsing', () => {
+    expect(packager).toContain(
+      '$registeredUninstallParentPath = Split-Path -Parent $registeredUninstallFile'
+    );
+    expect(packager).toContain(
+      '$registeredUninstallParentLeaf = if ([string]::IsNullOrWhiteSpace($registeredUninstallParentPath)) {'
+    );
+    expect(packager).toContain("Split-Path -Leaf $registeredUninstallParentPath");
+    expect(packager).not.toContain(
+      'Split-Path -Leaf (Split-Path -Parent $registeredUninstallFile)'
+    );
+  });
+
   it('preserves reboot requests observed from asynchronous uninstallers', () => {
     expect(packager).toContain(
       '$script:UninstallRebootExitCode = 3010'
