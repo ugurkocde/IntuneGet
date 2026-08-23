@@ -226,6 +226,34 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     });
   });
 
+  it('dispatches FSLogix removal with restart suppression through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Microsoft.FSLogix',
+      displayName: 'FSLogix',
+      publisher: 'Microsoft',
+      version: '3.26.126.19110',
+      architecture: 'x64',
+      installerSha256: 'C'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      silentSwitches: '/install /quiet /norestart',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft FSLogix Apps',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:Microsoft FSLogix Apps'
+    );
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedUninstallArguments: ['/norestart'],
+    });
+  });
+
   it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

@@ -90,6 +90,9 @@ describe('buildQaCatalogTestConfig', () => {
     expect(config.uninstallCommand).toBe(
       'REGISTRY_UNINSTALL:Microsoft FSLogix Apps'
     );
+    expect(config.psadtConfig.reviewedUninstallArguments).toEqual([
+      '/norestart',
+    ]);
   });
 
   it.each([

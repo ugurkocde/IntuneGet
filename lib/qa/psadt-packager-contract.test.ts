@@ -276,6 +276,35 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'appends FSLogix restart suppression to the exact captured Burn command',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'zip',
+        'FSLogix',
+        [],
+        { reviewedUninstallArguments: ['/norestart'] },
+        [],
+        'Microsoft.FSLogix',
+        'FSLogix',
+        '3.26.126.19110',
+        'REGISTRY_UNINSTALL:Microsoft FSLogix Apps',
+        '/install /quiet /norestart'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$reviewedUninstallArguments = @('/norestart')"
+      );
+      expect(uninstallFunction).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'appends SketchUp silent removal to the exact captured InstallShield command',
     () => {
       const generated = generateRegistryUninstallPackage(

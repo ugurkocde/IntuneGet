@@ -92,6 +92,12 @@ describe('application packaging adapters', () => {
       'microsoft.fslogix',
       'vendor-uninstall.exe --custom'
     )).toBe('vendor-uninstall.exe --custom');
+    expect(
+      applyApplicationPackagingAdapter(
+        'Microsoft.FSLogix',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['/norestart']);
   });
 
   it('uses the exact stable Inno registry key for every K-Lite edition', () => {

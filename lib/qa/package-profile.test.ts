@@ -210,6 +210,37 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/S']);
   });
 
+  it('binds FSLogix restart suppression to customer and QA package identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.FSLogix',
+      displayName: 'FSLogix',
+      publisher: 'Microsoft',
+      version: '3.26.126.19110',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: 'x64\\Release\\FSLogixAppsSetup.exe',
+      silentSwitches: '/install /quiet /norestart',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft FSLogix Apps',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(normalized.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:Microsoft FSLogix Apps'
+    );
+    expect(profile.installer.uninstallCommand).toBe(normalized.uninstallCommand);
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual([
+      '/norestart',
+    ]);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['/norestart']);
+  });
+
   it('binds offline dependency installers to the execution profile only when present', () => {
     const baseline = buildQaPackageIdentity(input);
     const dependency = {

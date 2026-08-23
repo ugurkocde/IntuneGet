@@ -913,6 +913,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // Microsoft's FSLogix bundle documents /norestart for suppressing every
+    // restart attempt. The registered Burn uninstall command contains only
+    // /uninstall /quiet; production QA run 32622117211 confirmed that exact
+    // command powered off the isolated endpoint before the lifecycle report
+    // could be written. Append the vendor-supported restart suppression to the
+    // exact captured command for both customer Intune removal and QA.
+    wingetId: 'Microsoft.FSLogix',
+    reviewedUninstallArguments: ['/norestart'],
+  },
+  {
     // The VSTO redistributable registers a visible External Installer command
     // with no arguments. Invoking that bare install.exe returns successfully
     // without removing the runtime. Supply the redistributable's unattended
@@ -1255,6 +1265,8 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   // creates a generated GUID ARP key with that value as its DisplayName. Bind
   // the reviewed display identity so prerequisite ARP changes cannot prevent
   // install capture and the same exact vendor entry drives customer removal.
+  // The application adapter also appends Microsoft's documented /norestart so
+  // that removal cannot unexpectedly restart the managed endpoint.
   'microsoft.fslogix': {
     generatedDisplayName: 'FSLogix',
     registeredDisplayName: 'Microsoft FSLogix Apps',
