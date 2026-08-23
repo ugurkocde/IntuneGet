@@ -89,6 +89,16 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'db444b2d99905ecbf17ed20e20bfa0b3abc1aeec': [
+    // Retry Webroot with the vendor-documented SME quiet MSI property after its
+    // default -null command line retained the global MSI mutex past 30 minutes.
+    'Webroot.SecureAnywhere',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    'Tricentis.NeoLoad',
+    'Piriform.Recuva',
+    'Trimble.SketchUp.2022',
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
+  ],
   'ecc0b406cf37259aed2947e4d9b26af5c2abf648': [
     // Retry Webroot with the measured 30-minute ceiling after its signed MSI
     // remained active beyond the former 15-minute bound in production QA.

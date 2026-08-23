@@ -187,7 +187,7 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Webroot only after activating its reviewed MSI lifecycle', () => {
+  it('retries Webroot on the current reviewed quiet MSI release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' webroot.secureanywhere ', status: 'failed' }
