@@ -41,6 +41,18 @@
   --font-mono: "JetBrains Mono", "JetBrains Mono Fallback";
 }
 
+/* ===== MOBILE OVERFLOW SAFETY NETS =====
+   Long unbreakable tokens (Winget package IDs, Graph permission scopes,
+   URLs) must wrap instead of stretching the layout on small screens, and
+   code blocks must scroll instead of widening the page. */
+body {
+  overflow-wrap: anywhere;
+}
+pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 /* ===== REDUCED MOTION SUPPORT ===== */
 @media (prefers-reduced-motion: reduce) {
   *,
