@@ -613,6 +613,31 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
   });
 
+  it('binds the bounded Webroot MSI wait to the QA execution profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Webroot.SecureAnywhere',
+      displayName: 'Webroot SecureAnywhere',
+      publisher: 'Webroot',
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Webroot SecureAnywhere',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { sourceType: string; silentArgs: string };
+      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+    };
+
+    expect(profile.installer.sourceType).toBe('msi');
+    expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=1');
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+  });
+
   it('binds reviewed Wiris and Azure Monitor removal contracts to QA profiles', () => {
     const mathType = normalizeQaWorkflowPackageInput({
       wingetId: 'Wiris.MathType.7',

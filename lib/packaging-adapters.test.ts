@@ -225,6 +225,11 @@ describe('application packaging adapters', () => {
   it('requires Webroot SecureAnywhere to use its unattended MSI lifecycle', () => {
     expect(resolveApplicationInstallerSelectionType('Webroot.SecureAnywhere')).toBe('msi');
     expect(resolveApplicationInstallerSelectionType(' webroot.secureanywhere ')).toBe('msi');
+    expect(
+      applyApplicationPackagingAdapter('Webroot.SecureAnywhere', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
     expect(resolveApplicationInstallerSelectionType('Example.App')).toBeUndefined();
   });
 

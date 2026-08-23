@@ -1105,9 +1105,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
-    // Never fall back to the EXE if the reviewed MSI entry disappears.
+    // Never fall back to the EXE if the reviewed MSI entry disappears. The
+    // MSI's MainWSAInstall custom action can remain quiet beyond the generic
+    // QA inactivity window, so keep that exact PSADT install observable and
+    // bounded for customer Intune execution and QA alike.
     wingetId: 'Webroot.SecureAnywhere',
     reviewedInstallerSelectionType: 'msi',
+    reviewedInstallCompletionTimeoutMinutes: 15,
   },
 ];
 

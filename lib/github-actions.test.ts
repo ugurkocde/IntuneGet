@@ -200,6 +200,31 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       .toMatchObject({ reviewedUninstallArguments: ['/S'] });
   });
 
+  it('dispatches the observable Webroot MSI lifecycle through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Webroot.SecureAnywhere',
+      displayName: 'Webroot SecureAnywhere',
+      publisher: 'Webroot',
+      version: '9.0.45.63',
+      architecture: 'x86',
+      installerSha256: 'B'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Webroot SecureAnywhere',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.type).toBe('msi');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

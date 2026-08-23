@@ -2451,6 +2451,40 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps a reviewed Webroot MSI custom action observable and bounded',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'msi',
+        'Webroot SecureAnywhere',
+        [],
+        { reviewedInstallCompletionTimeoutMinutes: 15 },
+        [],
+        'Webroot.SecureAnywhere',
+        'Webroot SecureAnywhere',
+        '9.0.45.63',
+        'REGISTRY_UNINSTALL:Webroot SecureAnywhere',
+        '/qn /norestart ALLUSERS=1'
+      );
+
+      expect(generated).toContain(
+        '$installDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+      );
+      expect(generated).toContain(
+        "$installHandle = Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=1' -NoWait -PassThru"
+      );
+      expect(generated).toContain(
+        'Write-ADTLogEntry -Message "The reviewed MSI installer is still working."'
+      );
+      expect(generated).toContain(
+        '$installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+      );
+      expect(generated).toContain(
+        "throw 'The reviewed MSI installer did not complete within 15 minutes.'"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'keeps a reviewed nested FlashPrint bootstrapper observable',
     () => {
       const generated = generateRegistryUninstallPackage(

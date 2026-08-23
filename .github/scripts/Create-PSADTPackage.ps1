@@ -2301,22 +2301,46 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
             # leave the trailing token "iet", producing a malformed hidden MSI
             # command that could stall indefinitely under LocalSystem.
             $msiProperties = ($silentSwitchesEscaped -replace '(?i)(?<!\S)/(?:quiet|q[nbrfu]?)(?=\s|$)\s*', '').Trim()
+            $msiPreparationLines = @()
             if ($msiProperties) {
                 $msiPropertiesEscaped = $msiProperties -replace "'", "''"
                 if ($msiPropertiesEscaped -match '%[A-Za-z][A-Za-z0-9()_]*%') {
-                    $lines += @(
+                    $msiPreparationLines = @(
                         "    `$effectiveMsiProperties = [Environment]::ExpandEnvironmentVariables('$msiPropertiesEscaped')"
-                        "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList `$effectiveMsiProperties"
                     )
+                    $msiInstallLine = "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList `$effectiveMsiProperties"
                 } else {
-                    $lines += @(
-                        "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList '$msiPropertiesEscaped'"
-                    )
+                    $msiInstallLine = "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList '$msiPropertiesEscaped'"
                 }
             } else {
+                $msiInstallLine = "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped'"
+            }
+            $lines += $msiPreparationLines
+            if ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
                 $lines += @(
-                    "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped'"
+                    "    `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
+                    "    `$installHandle = $($msiInstallLine.Trim()) -NoWait -PassThru"
+                    '    $nextInstallProgressLog = [DateTime]::UtcNow'
+                    '    while (-not $installHandle.Task.IsCompleted) {'
+                    '        if ([DateTime]::UtcNow -ge $installDeadline) {'
+                    "            throw 'The reviewed MSI installer did not complete within $reviewedInstallCompletionTimeoutMinutes minutes.'"
+                    '        }'
+                    '        if ([DateTime]::UtcNow -ge $nextInstallProgressLog) {'
+                    '            Write-ADTLogEntry -Message "The reviewed MSI installer is still working." -Source ''Install-ADTDeployment'''
+                    '            $nextInstallProgressLog = [DateTime]::UtcNow.AddSeconds(15)'
+                    '        }'
+                    '        Start-Sleep -Seconds 5'
+                    '    }'
+                    '    $installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+                    '    if ($installProcessExitCode -in @(1641, 3010)) {'
+                    '        $script:InstallRebootExitCode = 3010'
+                    '        Write-ADTLogEntry -Message "The reviewed MSI installer requested a reboot with exit code [$installProcessExitCode]." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+                    '    } elseif ($installProcessExitCode -ne 0) {'
+                    '        throw "The reviewed MSI installer exited with code [$installProcessExitCode]."'
+                    '    }'
                 )
+            } else {
+                $lines += $msiInstallLine
             }
         }
         { $_ -in 'msix', 'appx' } {
