@@ -1010,9 +1010,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       // A Build Tools bootstrapper without an explicit workload only installs
       // or updates the shared Visual Studio Installer and leaves no product
       // instance to detect or manage. Microsoft's unattended examples require
-      // --add; MSBuildTools is the smallest useful, generation-stable workload.
+      // a deterministic --installPath together with --add; MSBuildTools is the
+      // smallest useful, generation-stable workload. Keep install, evidence,
+      // and uninstall pinned to the same reviewed instance path.
       reviewedInstallArguments: wingetId.endsWith('.BuildTools')
-        ? ['--add Microsoft.VisualStudio.Workload.MSBuildTools', '--norestart']
+        ? [
+            `--installPath "${installPath}"`,
+            '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+            '--norestart',
+          ]
         : undefined,
       reviewedManagedInstallDirectory: installPath,
       reviewedManagedUninstall: {

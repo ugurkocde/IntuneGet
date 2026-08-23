@@ -1042,6 +1042,7 @@ describe('PSADT QA package identity', () => {
       '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\BuildTools';
     const expectedConfig = {
       reviewedInstallArguments: [
+        `--installPath "${expectedPath}"`,
         '--add Microsoft.VisualStudio.Workload.MSBuildTools',
         '--norestart',
       ],
@@ -1148,6 +1149,7 @@ describe('PSADT QA package identity', () => {
       '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools';
     const expectedConfig = {
       reviewedInstallArguments: [
+        `--installPath "${expectedPath}"`,
         '--add Microsoft.VisualStudio.Workload.MSBuildTools',
         '--norestart',
       ],

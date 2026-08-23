@@ -663,6 +663,7 @@ describe('application packaging adapters', () => {
       )
     ).toMatchObject({
       reviewedInstallArguments: [
+        '--installPath "%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools"',
         '--add Microsoft.VisualStudio.Workload.MSBuildTools',
         '--norestart',
       ],
@@ -722,6 +723,7 @@ describe('application packaging adapters', () => {
       )
     ).toMatchObject({
       reviewedInstallArguments: [
+        '--installPath "%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools"',
         '--add Microsoft.VisualStudio.Workload.MSBuildTools',
         '--norestart',
       ],

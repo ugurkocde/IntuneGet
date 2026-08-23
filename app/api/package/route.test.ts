@@ -800,6 +800,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     const expectedAdapter = {
       reviewedInstallArguments: [
+        '--installPath "%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools"',
         '--add Microsoft.VisualStudio.Workload.MSBuildTools',
         '--norestart',
       ],
