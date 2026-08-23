@@ -88,7 +88,23 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
   ...ELEGANT_CLIPBOARD_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const FSLOGIX_RELEASE_RETRY_TARGETS = [
+  // Retry FSLogix with Microsoft's documented restart suppression after its
+  // registered /uninstall /quiet command powered off the isolated endpoint.
+  'Microsoft.FSLogix',
+  // Carry every still-unconsumed bounded target across the atomic pin. Exclude
+  // the existing FSLogix carry-forward entry to keep the dispatch list unique.
+  'Tricentis.NeoLoad',
+  'Piriform.Recuva',
+  'Trimble.SketchUp.2022',
+  ...MIKTEX_RELEASE_RETRY_TARGETS.filter(
+    (wingetId) => wingetId !== 'Microsoft.FSLogix'
+  ),
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '00983d36128aef319cc36f901beeff6dd03d847f':
+    FSLOGIX_RELEASE_RETRY_TARGETS,
   'db444b2d99905ecbf17ed20e20bfa0b3abc1aeec': [
     // Retry Webroot with the vendor-documented SME quiet MSI property after its
     // default -null command line retained the global MSI mutex past 30 minutes.

@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'db444b2d99905ecbf17ed20e20bfa0b3abc1aeec',
+  packagerCommit: '00983d36128aef319cc36f901beeff6dd03d847f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -305,6 +305,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Webroot's reviewed vendor quiet property changes only its previously timed-out
   // MSI lifecycle. Preserve every unrelated valid pass from the prior release.
   'ecc0b406cf37259aed2947e4d9b26af5c2abf648',
+  // FSLogix restart suppression changes only its previously interrupted
+  // uninstall path. Webroot is blocked at the shared eligibility gate; preserve
+  // every unrelated compatible pass from the prior protected release.
+  'db444b2d99905ecbf17ed20e20bfa0b3abc1aeec',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -67,7 +67,6 @@ describe('QA toolchain targeted retries', () => {
       'Tricentis.NeoLoad',
       'Piriform.Recuva',
       'Trimble.SketchUp.2022',
-      'Webroot.SecureAnywhere',
       'MiKTeX.MiKTeX',
       'Y-ASLant.ElegantClipboard',
       'Amazon.Music',
@@ -109,6 +108,7 @@ describe('QA toolchain targeted retries', () => {
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
+    expect(targets).not.toContain('Webroot.SecureAnywhere');
 
     targets.length = 0;
 
@@ -117,7 +117,6 @@ describe('QA toolchain targeted retries', () => {
         'Tricentis.NeoLoad',
         'Piriform.Recuva',
         'Trimble.SketchUp.2022',
-        'Webroot.SecureAnywhere',
         'MiKTeX.MiKTeX',
         'Y-ASLant.ElegantClipboard',
         'Amazon.Music',
@@ -187,11 +186,11 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Webroot on the current reviewed quiet MSI release', () => {
+  it('does not retry blocked Webroot on the current release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' webroot.secureanywhere ', status: 'failed' }
-    )).toBe(true);
+    )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
       '49775d3657a1b11b4ec1603e80ba8f78882b174f',
       { wingetId: 'Webroot.SecureAnywhere', status: 'failed' }
