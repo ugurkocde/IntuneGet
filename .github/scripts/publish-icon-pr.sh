@@ -24,7 +24,10 @@ if git diff --staged --quiet; then
   exit 0
 fi
 
-committed_apps=$(git diff --staged --name-only \
+# core.quotePath would octal-escape any path containing a non-ASCII byte, so
+# the app id parsed out of it would not match the winget_id in the database
+# and the app would be committed but never marked as having an icon.
+committed_apps=$(git -c core.quotePath=false diff --staged --name-only \
   | awk -F/ '/^public\/icons\// && NF >= 3 { print $3 }' \
   | sort -u \
   | paste -sd, -)

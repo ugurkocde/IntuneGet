@@ -149,13 +149,17 @@ jobs:
         run: |
           mkdir -p out
           cp icon-results.json "out/results-${{ matrix.shard }}.json" 2>/dev/null || echo '[]' > "out/results-${{ matrix.shard }}.json"
+          # core.quotePath makes git wrap any path with a non-ASCII byte in
+          # quotes and octal-escape it, which tar -T then cannot stat. Nine
+          # catalog ids are non-ASCII (ReceitaFederaldoBrasil.SpedContabil and
+          # friends), and one of them failing takes the whole shard down.
           if [ -d public/icons ] && ! git diff --quiet -- public/icons; then
-            git diff --name-only -- public/icons > changed.txt
+            git -c core.quotePath=false diff --name-only -- public/icons > changed.txt
           else
             : > changed.txt
           fi
           # Untracked directories are new apps that had no icon before.
-          git ls-files --others --exclude-standard -- public/icons >> changed.txt
+          git -c core.quotePath=false ls-files --others --exclude-standard -- public/icons >> changed.txt
           if [ -s changed.txt ]; then
             sort -u changed.txt | tar -cf "out/icons-${{ matrix.shard }}.tar" -T -
             echo "Packaged $(sort -u changed.txt | wc -l) icon files"
