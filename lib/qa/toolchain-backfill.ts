@@ -89,6 +89,16 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3af4748ef271a2abb26003b2c42182a2769c8b53': [
+    // Retry Webroot with the supported PSADT process handle after the pinned
+    // toolkit's MSI no-wait wrapper rejected the exact installer path.
+    'Webroot.SecureAnywhere',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    'Tricentis.NeoLoad',
+    'Piriform.Recuva',
+    'Trimble.SketchUp.2022',
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
+  ],
   '59686c39a99aa6202d2d4c8ef947e81a4eb0ef38': [
     // Retry Webroot with an observable bounded wait around its long-running
     // MSI custom action instead of classifying the quiet work as stalled.

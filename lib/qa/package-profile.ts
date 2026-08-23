@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '59686c39a99aa6202d2d4c8ef947e81a4eb0ef38',
+  packagerCommit: '3af4748ef271a2abb26003b2c42182a2769c8b53',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -296,6 +296,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Webroot's observable MSI completion contract changes only its previously
   // interrupted custom-action lifecycle. Preserve every unrelated valid pass.
   'c163bad8c16908ada436222bc2cdba0bf49f794e',
+  // The PSADT 4.1.8 asynchronous MSI correction changes only reviewed MSI
+  // profiles that failed before launching. Preserve every unrelated valid pass.
+  '59686c39a99aa6202d2d4c8ef947e81a4eb0ef38',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
