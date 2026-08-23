@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Surfshark only on the bounded ambiguity-diagnostics release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' surfshark.surfshark ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '228cd9def01122182631c91910554c05e9181edb',
+      { wingetId: 'Surfshark.Surfshark', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('does not carry blocked Bria into the PotPlayer release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
@@ -110,6 +121,7 @@ describe('QA toolchain targeted retries', () => {
       'Microsoft.VisualStudio.2017.BuildTools',
       'Microsoft.VisualStudio.2019.BuildTools',
       'Microsoft.VisualStudio.2022.BuildTools',
+      'Surfshark.Surfshark',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');

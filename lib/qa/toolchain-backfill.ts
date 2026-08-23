@@ -138,7 +138,17 @@ const VISUAL_STUDIO_BUILD_TOOLS_INSTALL_PATH_RELEASE_RETRY_TARGETS = [
   ),
 ] as const;
 
+const AMBIGUOUS_UNINSTALL_DIAGNOSTICS_RELEASE_RETRY_TARGETS = [
+  // Capture the two exact Surfshark ARP identities before defining a reviewed
+  // selector. The shared packager remains fail-closed and logs bounded fields.
+  'Surfshark.Surfshark',
+  // Carry every still-unconsumed bounded target across the atomic pin.
+  ...VISUAL_STUDIO_BUILD_TOOLS_INSTALL_PATH_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'bb762159825bb59be2649f4cff4bf25fbbaef8b8':
+    AMBIGUOUS_UNINSTALL_DIAGNOSTICS_RELEASE_RETRY_TARGETS,
   '228cd9def01122182631c91910554c05e9181edb':
     VISUAL_STUDIO_BUILD_TOOLS_INSTALL_PATH_RELEASE_RETRY_TARGETS,
   '20fbdeff5e6a4dc9d911019a244f7e46ab19b708':
