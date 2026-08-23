@@ -221,7 +221,7 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     const payload = JSON.parse(String(request.body));
     expect(payload.client_payload.installer.type).toBe('msi');
     expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
-      reviewedInstallCompletionTimeoutMinutes: 15,
+      reviewedInstallCompletionTimeoutMinutes: 30,
     });
   });
 

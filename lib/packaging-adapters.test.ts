@@ -228,7 +228,7 @@ describe('application packaging adapters', () => {
     expect(
       applyApplicationPackagingAdapter('Webroot.SecureAnywhere', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
-      reviewedInstallCompletionTimeoutMinutes: 15,
+      reviewedInstallCompletionTimeoutMinutes: 30,
     });
     expect(resolveApplicationInstallerSelectionType('Example.App')).toBeUndefined();
   });

@@ -635,7 +635,7 @@ describe('PSADT QA package identity', () => {
 
     expect(profile.installer.sourceType).toBe('msi');
     expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=1');
-    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(30);
   });
 
   it('binds reviewed Wiris and Azure Monitor removal contracts to QA profiles', () => {
