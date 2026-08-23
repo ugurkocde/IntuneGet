@@ -43,6 +43,11 @@ const OTHER_BLACK_ON_TRANSPARENT = `<svg xmlns="http://www.w3.org/2000/svg" widt
   <circle cx="128" cy="128" r="96" fill="#000"/>
 </svg>`;
 
+/** The mirror case: a white glyph on transparent vanishes against white. */
+const WHITE_ON_TRANSPARENT = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+  <circle cx="128" cy="128" r="96" fill="#fff"/>
+</svg>`;
+
 /** Genuinely featureless. */
 const SOLID = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
   <rect width="256" height="256" fill="#1b1b2f"/>
@@ -50,12 +55,14 @@ const SOLID = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
 
 let glyph: string;
 let otherGlyph: string;
+let whiteGlyph: string;
 let solid: string;
 
 beforeAll(async () => {
   fs.mkdirSync(tmp, { recursive: true });
   glyph = await writeIcon('glyph', BLACK_ON_TRANSPARENT);
   otherGlyph = await writeIcon('other-glyph', OTHER_BLACK_ON_TRANSPARENT);
+  whiteGlyph = await writeIcon('white-glyph', WHITE_ON_TRANSPARENT);
   solid = await writeIcon('solid', SOLID);
 });
 
@@ -63,6 +70,11 @@ describe('alpha handling', () => {
   it('sees detail in a black glyph drawn on transparency', async () => {
     // Without flattening this measured 0 and the icon was deleted as blank.
     expect(await greyscaleStdDev(glyph)).toBeGreaterThan(20);
+  });
+
+  it('sees detail in a white glyph drawn on transparency', async () => {
+    // The mirror of the above: flattening onto white alone would erase this.
+    expect(await greyscaleStdDev(whiteGlyph)).toBeGreaterThan(20);
   });
 
   it('still reports a genuinely flat image as featureless', async () => {
@@ -81,6 +93,10 @@ describe('classifyIcon', () => {
 
   it('keeps a real black-on-transparent icon', async () => {
     expect(await classifyIcon(glyph, blocklist)).toBeNull();
+  });
+
+  it('keeps a real white-on-transparent icon', async () => {
+    expect(await classifyIcon(whiteGlyph, blocklist)).toBeNull();
   });
 
   it('rejects an image with no detail', async () => {
@@ -128,5 +144,33 @@ describe('shipped blocklist', () => {
     for (const entry of hashes) {
       expect(entry.pixel_keys?.length, `${entry.label} has no pixel keys`).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('stability across image library versions', () => {
+  /**
+   * The recorded blocklist values are only meaningful if the same picture
+   * hashes the same everywhere. It did not: sharp 0.34.5 and 0.35.3 disagreed
+   * about flatten, and a purge run on CI's older version deleted 27
+   * white-on-transparent logos that scored as detailed locally.
+   *
+   * Compositing is arithmetic now, so these are fixed points. If an upgrade
+   * moves them, this fails and the blocklist gets recomputed deliberately
+   * rather than a purge run quietly deleting a different set of files.
+   */
+  it('produces the documented fingerprints for a known raster', async () => {
+    expect(await pixelKey(solid)).toBe('32c7fb6c11862c97');
+    expect(await averageHash(solid)).toBe('0'.repeat(64));
+  });
+
+  it('scores a half-transparent field by its composited contrast', async () => {
+    const file = path.join(tmp, 'half.png');
+    // Half opaque black, half fully transparent: the two halves are identical
+    // against black and maximally different against white.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+      <rect x="0" y="0" width="128" height="256" fill="#000"/>
+    </svg>`;
+    await sharp(Buffer.from(svg)).resize(256, 256).png().toFile(file);
+    expect(await greyscaleStdDev(file)).toBeCloseTo(126.6, 0);
   });
 });
