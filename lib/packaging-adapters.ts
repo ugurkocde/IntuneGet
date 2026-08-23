@@ -386,6 +386,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/Silent=True'],
   },
   {
+    // JetBrains Toolbox registers its per-user Uninstall.exe without a quiet
+    // argument. JetBrains documents /headless as the completely background
+    // Windows uninstall mode; append it to the exact captured Toolbox ARP
+    // command so Intune removal cannot wait behind an invisible UI.
+    wingetId: 'JetBrains.Toolbox',
+    reviewedUninstallArguments: ['/headless'],
+  },
+  {
     // Zen Browser uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
     // command omits the silent switch and opens the hidden uninstall wizard
     // under SYSTEM, leaving the exact registration present until timeout.

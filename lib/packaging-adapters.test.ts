@@ -922,6 +922,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('uses JetBrains Toolbox\'s documented headless uninstall mode', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'jetbrains.toolbox',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/headless']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
   it('uses Postgres Pro 17\'s reviewed NSIS silent uninstall mode', () => {
     const adapted = applyApplicationPackagingAdapter(
       'postgrespro.standard.17',

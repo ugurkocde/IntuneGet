@@ -144,6 +144,29 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(JSON.parse(payload.client_payload.installer.successCodes)).toEqual([1223]);
   });
 
+  it('dispatches JetBrains Toolbox headless removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'JetBrains.Toolbox',
+      displayName: 'JetBrains Toolbox',
+      publisher: 'JetBrains',
+      version: '3.7.2.0',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '/headless',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Toolbox:JetBrains Toolbox',
+      installScope: 'user',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['/headless'] });
+  });
+
   it('dispatches the reviewed Postgres Pro lifecycle through the customer packager', async () => {
     reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
       item: {

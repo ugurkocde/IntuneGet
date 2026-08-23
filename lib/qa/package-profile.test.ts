@@ -161,6 +161,28 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.successCodes).toEqual([1223]);
   });
 
+  it('binds JetBrains Toolbox customer packages to headless removal', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'JetBrains.Toolbox',
+      displayName: 'JetBrains Toolbox',
+      publisher: 'JetBrains',
+      version: '3.7.2.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/headless',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Toolbox:JetBrains Toolbox',
+      installScope: 'user',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/headless']);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['/headless']);
+  });
+
   it('binds Postgres Pro 17 customer packages to the exact vendor lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'PostgresPro.Standard.17',
