@@ -656,6 +656,9 @@ function Get-StrictPSADTBoolean {
 $preserveVendorInstallationOnUninstall = Get-StrictPSADTBoolean `
     -Config $psadtConfig `
     -Name 'preserveVendorInstallationOnUninstall'
+$reviewedPreferVisiblePrimaryUninstallRegistration = Get-StrictPSADTBoolean `
+    -Config $psadtConfig `
+    -Name 'reviewedPreferVisiblePrimaryUninstallRegistration'
 if ($reviewedRegistryInstallEvidenceConfigured -and
     -not $preserveVendorInstallationOnUninstall) {
     throw 'PSADT reviewedRegistryInstallEvidence requires preserveVendorInstallationOnUninstall.'
@@ -2916,6 +2919,21 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         )
     }
 
+    if ($reviewedPreferVisiblePrimaryUninstallRegistration) {
+        $lines += @(
+            '        if ($selectedApplications.Count -gt 1) {'
+            '            # This reviewed package registers one visible primary application plus a hidden system'
+            '            # component under the same exact identity. Narrow only the already identity-matched set'
+            '            # and accept it only when exactly one visible registration remains.'
+            '            $visiblePrimaryMatches = @($selectedApplications | Where-Object {'
+            '                $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
+            '                -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
+            '            })'
+            '            if ($visiblePrimaryMatches.Count -eq 1) { $selectedApplications = $visiblePrimaryMatches }'
+            '        }'
+        )
+    }
+
     $lines += @(
         '        if ($selectedApplications.Count -eq 0 -and $configuredUninstallProductCode) {'
         '            $configuredMatches = @($postInstallApplications | Where-Object { [string]$_.PSChildName -eq $configuredUninstallProductCode })'
@@ -3312,6 +3330,19 @@ if ($useManagedDirectoryLifecycle) {
             '            $isVisibleApplication -and -not $_.WindowsInstaller'
             '        })'
             '        if ($topLevelWrapperMatches.Count -eq 1) { $installedApps = $topLevelWrapperMatches }'
+            '    }'
+        )
+    }
+    if ($reviewedPreferVisiblePrimaryUninstallRegistration) {
+        $lines += @(
+            '    if ($installedApps.Count -gt 1) {'
+            '        # Apply the reviewed primary-registration rule only to the exact/captured identity set.'
+            '        # Never widen the search, and retain fail-closed behavior unless one visible entry remains.'
+            '        $visiblePrimaryMatches = @($installedApps | Where-Object {'
+            '            $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
+            '            -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
+            '        })'
+            '        if ($visiblePrimaryMatches.Count -eq 1) { $installedApps = $visiblePrimaryMatches }'
             '    }'
         )
     }

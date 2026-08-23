@@ -42,6 +42,19 @@ describe('application packaging adapters', () => {
     )).toEqual([-1073741819, -1073740791]);
   });
 
+  it('selects Surfshark visible primary ARP registration without trusting customer config', () => {
+    expect(
+      applyApplicationPackagingAdapter('Surfshark.Surfshark', DEFAULT_PSADT_CONFIG)
+        .reviewedPreferVisiblePrimaryUninstallRegistration
+    ).toBe(true);
+    expect(
+      applyApplicationPackagingAdapter('Example.App', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedPreferVisiblePrimaryUninstallRegistration: true,
+      }).reviewedPreferVisiblePrimaryUninstallRegistration
+    ).toBeUndefined();
+  });
+
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
     expect(resolveApplicationUninstallCommand(
       'Google.Chrome.EXE',

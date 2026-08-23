@@ -24,6 +24,7 @@ interface ApplicationPackagingAdapter {
   reviewedUninstallServiceNames?: readonly string[];
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
+  reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
   reviewedManagedInstallDirectory?: string;
   reviewedManagedInstallEvidenceFile?: string;
   reviewedManagedInstallCompletionProcess?: string;
@@ -353,6 +354,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallShieldAdministrativeImage: {
       expectedMsiFileName: 'Sonos.msi',
     },
+  },
+  {
+    // Surfshark 6.16 registers the same exact display identity twice: one
+    // visible primary MSI and one hidden MSI system component. QA run
+    // 32654170672 proved that SystemComponent is the only bounded distinction.
+    // Select the single visible entry only after ordinary identity matching;
+    // zero or multiple visible matches remain an ambiguity failure.
+    wingetId: 'Surfshark.Surfshark',
+    reviewedPreferVisiblePrimaryUninstallRegistration: true,
   },
   {
     // TreeSize's dual-mode Inno installer defaults to the invoking account even
@@ -1423,6 +1433,7 @@ export function applyApplicationPackagingAdapter(
     // These internal lifecycle fields are never accepted from customer config.
     if (
       !config.preserveVendorInstallationOnUninstall &&
+      !config.reviewedPreferVisiblePrimaryUninstallRegistration &&
       !config.reviewedInstallArgumentsOverride &&
       !config.reviewedArgumentlessInstall &&
       !config.reviewedInstallCompletionTimeoutMinutes &&
@@ -1443,6 +1454,7 @@ export function applyApplicationPackagingAdapter(
     return {
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
+      reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
       reviewedInstallArgumentsOverride: undefined,
       reviewedArgumentlessInstall: undefined,
       reviewedInstallCompletionTimeoutMinutes: undefined,
@@ -1548,6 +1560,8 @@ export function applyApplicationPackagingAdapter(
       : {}),
     preserveVendorInstallationOnUninstall:
       adapter.preserveVendorInstallationOnUninstall || undefined,
+    reviewedPreferVisiblePrimaryUninstallRegistration:
+      adapter.reviewedPreferVisiblePrimaryUninstallRegistration || undefined,
     reviewedManagedInstallDirectory:
       adapter.reviewedManagedInstallDirectory || undefined,
     reviewedManagedInstallEvidenceFile:

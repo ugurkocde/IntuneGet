@@ -254,6 +254,13 @@ export interface PSADTConfig {
   // the only trusted source for this value; it is not customer-configurable.
   preserveVendorInstallationOnUninstall?: boolean;
 
+  // Internal ARP identity policy for a reviewed package that registers one
+  // visible primary application and a hidden system component under the same
+  // exact display name. The shared packager narrows only an already-matched
+  // identity set and still requires exactly one visible result. Application
+  // adapters are the only trusted source for this value.
+  reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
+
   // Internal lifecycle contract for reviewed self-extracting packages that do
   // not register an application in Add/Remove Programs. The generated package
   // verifies this exact directory after install and removes it on uninstall.
@@ -392,6 +399,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   reviewedUninstallArguments: [],
   reviewedUninstallProcessGuard: undefined,
   reviewedUninstallServiceNames: undefined,
+  reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
 };
 
 /**

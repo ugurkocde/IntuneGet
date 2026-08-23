@@ -2293,6 +2293,54 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('keeps visible-primary ARP selection opt-in, identity-bounded, and fail-closed', () => {
+    expect(packager).toContain(
+      "-Name 'reviewedPreferVisiblePrimaryUninstallRegistration'"
+    );
+    expect(packager).toContain(
+      '$visiblePrimaryMatches = @($selectedApplications | Where-Object {'
+    );
+    expect(packager).toContain(
+      'if ($visiblePrimaryMatches.Count -eq 1) { $selectedApplications = $visiblePrimaryMatches }'
+    );
+    expect(packager).toContain(
+      '$visiblePrimaryMatches = @($installedApps | Where-Object {'
+    );
+    expect(packager).toContain(
+      'if ($visiblePrimaryMatches.Count -eq 1) { $installedApps = $visiblePrimaryMatches }'
+    );
+    expect(packager.indexOf('$visiblePrimaryMatches = @($selectedApplications')).toBeLessThan(
+      packager.indexOf("'    if ($selectedApplications.Count -eq 1) {'")
+    );
+    expect(packager.indexOf('$visiblePrimaryMatches = @($installedApps')).toBeLessThan(
+      packager.indexOf('if ($installedApps.Count -ne 1)')
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits the reviewed visible-primary selector only when enabled',
+    () => {
+      const enabled = generateRegistryUninstallPackage(
+        'exe',
+        'Surfshark',
+        [],
+        { reviewedPreferVisiblePrimaryUninstallRegistration: true },
+        [],
+        'Surfshark.Surfshark'
+      );
+      const disabled = generateRegistryUninstallPackage('exe');
+
+      expect(enabled).toContain(
+        '$visiblePrimaryMatches = @($selectedApplications | Where-Object {'
+      );
+      expect(enabled).toContain(
+        '$visiblePrimaryMatches = @($installedApps | Where-Object {'
+      );
+      expect(disabled).not.toContain('$visiblePrimaryMatches');
+    },
+    30_000
+  );
+
   it('logs bounded ARP identity metadata before rejecting an ambiguous install delta', () => {
     expect(packager).toContain(
       'foreach ($ambiguousApplication in @($selectedApplications))'

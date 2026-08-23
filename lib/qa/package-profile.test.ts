@@ -1200,6 +1200,35 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.preserveVendorInstallationOnUninstall).toBe(true);
   });
 
+  it('binds Surfshark visible-primary ARP selection to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Surfshark.Surfshark',
+      displayName: 'Surfshark',
+      publisher: 'Surfshark',
+      version: '6.16.0.999',
+      architecture: 'x64',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/quiet',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Surfshark',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
+      };
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      reviewedPreferVisiblePrimaryUninstallRegistration: true,
+    });
+    expect(
+      profile.psadtConfig.reviewedPreferVisiblePrimaryUninstallRegistration
+    ).toBe(true);
+  });
+
   it('binds reviewed .NET Framework registry evidence to the QA identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.DotNet.Framework.Runtime',
