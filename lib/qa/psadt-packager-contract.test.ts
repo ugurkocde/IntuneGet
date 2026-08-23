@@ -147,6 +147,71 @@ function generateRegistryUninstallPackage(
   }
 }
 
+function executeReviewedMsiInstallBlock(generated: string): void {
+  const startMarker = '    # IntuneGet reviewed asynchronous MSI start';
+  const endMarker = '    # IntuneGet reviewed asynchronous MSI end';
+  const start = generated.indexOf(startMarker);
+  const end = generated.indexOf(endMarker, start);
+  if (start < 0 || end < 0) {
+    throw new Error('Generated reviewed MSI block markers are missing.');
+  }
+
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-reviewed-msi-runtime-'));
+  const runtimeScriptPath = join(fixtureRoot, 'contract.ps1');
+  const reviewedMsiBlock = generated.slice(start, end + endMarker.length);
+  const runtimeScript = `$ErrorActionPreference = 'Stop'
+$adtSession = [pscustomobject]@{
+    DirFiles = '${fixtureRoot.replace(/'/g, "''")}'
+    LogPath = '${fixtureRoot.replace(/'/g, "''")}'
+}
+function Write-ADTLogEntry { param($Message, $Source, $Severity) }
+function Start-ADTProcess {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$FilePath,
+        [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string[]]$ArgumentList,
+        [Parameter(Mandatory = $false)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $false)][string]$WindowStyle,
+        [Parameter(Mandatory = $false)][switch]$WaitForMsiExec,
+        [Parameter(Mandatory = $true)][switch]$NoWait,
+        [Parameter(Mandatory = $true)][switch]$PassThru
+    )
+    if (-not $WaitForMsiExec -or -not $NoWait -or -not $PassThru) {
+        throw 'The reviewed MSI process contract is missing a required switch.'
+    }
+    $script:CapturedFilePath = $FilePath
+    $script:CapturedArgumentList = [string]::Join(' ', [string[]]$ArgumentList)
+    $completedTask = [System.Threading.Tasks.Task]::FromResult([pscustomobject]@{ ExitCode = 0 })
+    [pscustomobject]@{ Task = $completedTask }
+}
+${reviewedMsiBlock}
+$expectedInstallerPath = Join-Path $adtSession.DirFiles 'setup.exe'
+if ($script:CapturedFilePath -ne "$env:SystemRoot\\System32\\msiexec.exe") {
+    throw "Unexpected reviewed MSI executable [$script:CapturedFilePath]."
+}
+if (-not $script:CapturedArgumentList.Contains(('/i "{0}"' -f $expectedInstallerPath))) {
+    throw "The reviewed MSI argument list omitted the exact installer path: $script:CapturedArgumentList"
+}
+if ($script:CapturedArgumentList -notlike '*REBOOT=ReallySuppress /QN /norestart ALLUSERS=1 /L*V*') {
+    throw "The reviewed MSI argument list did not retain PSADT defaults, vendor properties, and verbose logging: $script:CapturedArgumentList"
+}
+`;
+
+  try {
+    writeFileSync(runtimeScriptPath, runtimeScript);
+    const result = spawnSync('pwsh', ['-NoProfile', '-File', runtimeScriptPath], {
+      encoding: 'utf8',
+    });
+    if (result.status !== 0) {
+      throw new Error(
+        `Reviewed MSI runtime contract failed (${result.status}):\n${result.stdout}\n${result.stderr}`
+      );
+    }
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+}
+
 describe('PSADT Inno packaging contract', () => {
   it('does not inject diagnostic switches into the vendor command line', () => {
     const innoBlock = packager.slice(
@@ -2470,8 +2535,21 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         '$installDeadline = [DateTime]::UtcNow.AddMinutes(15)'
       );
       expect(generated).toContain(
-        "$installHandle = Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=1' -NoWait -PassThru"
+        "$msiInstallerPath = Join-Path $adtSession.DirFiles 'setup.exe'"
       );
+      expect(generated).toContain(
+        '$msiArgumentList = \'/i "{0}" REBOOT=ReallySuppress /QN\' -f $msiInstallerPath'
+      );
+      expect(generated).toContain(
+        '$msiAdditionalArgumentList = \'/norestart ALLUSERS=1\''
+      );
+      expect(generated).toContain(
+        '$msiArgumentList = "$msiArgumentList /L*V `"$msiLogPath`""'
+      );
+      expect(generated).toContain(
+        '$installHandle = Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\msiexec.exe" -ArgumentList $msiArgumentList -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
+      );
+      expect(generated).not.toMatch(/Start-ADTMsiProcess[^\r\n]*-NoWait/);
       expect(generated).toContain(
         'Write-ADTLogEntry -Message "The reviewed MSI installer is still working."'
       );
@@ -2481,6 +2559,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       expect(generated).toContain(
         "throw 'The reviewed MSI installer did not complete within 15 minutes.'"
       );
+      executeReviewedMsiInstallBlock(generated);
     }
   );
 

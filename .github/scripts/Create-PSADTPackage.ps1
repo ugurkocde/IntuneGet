@@ -2302,6 +2302,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
             # command that could stall indefinitely under LocalSystem.
             $msiProperties = ($silentSwitchesEscaped -replace '(?i)(?<!\S)/(?:quiet|q[nbrfu]?)(?=\s|$)\s*', '').Trim()
             $msiPreparationLines = @()
+            $reviewedMsiAdditionalArgumentLine = '    $msiAdditionalArgumentList = $null'
             if ($msiProperties) {
                 $msiPropertiesEscaped = $msiProperties -replace "'", "''"
                 if ($msiPropertiesEscaped -match '%[A-Za-z][A-Za-z0-9()_]*%') {
@@ -2309,17 +2310,33 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                         "    `$effectiveMsiProperties = [Environment]::ExpandEnvironmentVariables('$msiPropertiesEscaped')"
                     )
                     $msiInstallLine = "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList `$effectiveMsiProperties"
+                    $reviewedMsiAdditionalArgumentLine = '    $msiAdditionalArgumentList = $effectiveMsiProperties'
                 } else {
                     $msiInstallLine = "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped' -AdditionalArgumentList '$msiPropertiesEscaped'"
+                    $reviewedMsiAdditionalArgumentLine = "    `$msiAdditionalArgumentList = '$msiPropertiesEscaped'"
                 }
             } else {
                 $msiInstallLine = "    Start-ADTMsiProcess -Action 'Install' -FilePath '$installerFileNameSingleQuoteEscaped'"
             }
             $lines += $msiPreparationLines
             if ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
+                # PSADT 4.1.8's Start-ADTMsiProcess FilePath_NoWait branch does not
+                # resolve the FilePath parameter and passes a null MSI path into
+                # Start-ADTProcess. Use the supported process handle directly while
+                # retaining PSADT's MSI defaults and verbose logging contract.
                 $lines += @(
+                    '    # IntuneGet reviewed asynchronous MSI start'
+                    "    `$msiInstallerPath = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
+                    '    $msiLogFileName = ''{0}_Install_{1:yyyyMMddHHmmssfff}.log'' -f [IO.Path]::GetFileNameWithoutExtension($msiInstallerPath), [DateTime]::UtcNow'
+                    '    $msiLogPath = Join-Path $adtSession.LogPath $msiLogFileName'
+                    $reviewedMsiAdditionalArgumentLine
+                    '    $msiArgumentList = ''/i "{0}" REBOOT=ReallySuppress /QN'' -f $msiInstallerPath'
+                    '    if (-not [string]::IsNullOrWhiteSpace($msiAdditionalArgumentList)) {'
+                    '        $msiArgumentList = "$msiArgumentList $msiAdditionalArgumentList"'
+                    '    }'
+                    '    $msiArgumentList = "$msiArgumentList /L*V `"$msiLogPath`""'
                     "    `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
-                    "    `$installHandle = $($msiInstallLine.Trim()) -NoWait -PassThru"
+                    '    $installHandle = Start-ADTProcess -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList $msiArgumentList -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden -WaitForMsiExec -NoWait -PassThru'
                     '    $nextInstallProgressLog = [DateTime]::UtcNow'
                     '    while (-not $installHandle.Task.IsCompleted) {'
                     '        if ([DateTime]::UtcNow -ge $installDeadline) {'
@@ -2338,6 +2355,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     '    } elseif ($installProcessExitCode -ne 0) {'
                     '        throw "The reviewed MSI installer exited with code [$installProcessExitCode]."'
                     '    }'
+                    '    # IntuneGet reviewed asynchronous MSI end'
                 )
             } else {
                 $lines += $msiInstallLine
