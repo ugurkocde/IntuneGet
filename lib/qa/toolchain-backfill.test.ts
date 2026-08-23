@@ -6,10 +6,14 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries Surfshark only on the bounded ambiguity-diagnostics release', () => {
+  it('carries Surfshark from diagnostics into the visible-primary release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' surfshark.surfshark ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'bb762159825bb59be2649f4cff4bf25fbbaef8b8',
+      { wingetId: 'Surfshark.Surfshark', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '228cd9def01122182631c91910554c05e9181edb',

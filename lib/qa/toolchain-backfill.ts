@@ -146,7 +146,16 @@ const AMBIGUOUS_UNINSTALL_DIAGNOSTICS_RELEASE_RETRY_TARGETS = [
   ...VISUAL_STUDIO_BUILD_TOOLS_INSTALL_PATH_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SURFSHARK_VISIBLE_PRIMARY_RELEASE_RETRY_TARGETS = [
+  // Re-run the exact failed Surfshark release with the reviewed selector that
+  // distinguishes its visible primary MSI from the hidden system component.
+  // Carry all still-unconsumed bounded targets across the atomic pin.
+  ...AMBIGUOUS_UNINSTALL_DIAGNOSTICS_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1':
+    SURFSHARK_VISIBLE_PRIMARY_RELEASE_RETRY_TARGETS,
   'bb762159825bb59be2649f4cff4bf25fbbaef8b8':
     AMBIGUOUS_UNINSTALL_DIAGNOSTICS_RELEASE_RETRY_TARGETS,
   '228cd9def01122182631c91910554c05e9181edb':
