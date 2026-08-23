@@ -30,6 +30,11 @@ on:
         description: 'Wall-clock ceiling for each shard extraction loop. Apps not reached stay untouched and return in the next wave.'
         required: false
         default: '35'
+      include_untracked:
+        description: 'Also heal rows whose icon_source is null. These predate source tracking and include large blocks sharing one generic installer image, but some already carry a good icon, so re-extracting them costs runner time for no gain.'
+        required: false
+        default: 'false'
+        type: boolean
 
 # Shares the pipeline group so a campaign wave and the weekly icon run never
 # race each other into conflicting icon publication PRs.
@@ -73,6 +78,7 @@ jobs:
           MIN_PUBLISHER_APPS: ${{ github.event.inputs.min_publisher_apps || '10' }}
           SHARDS: ${{ github.event.inputs.shards || '20' }}
           MAX_APPS_PER_SHARD: ${{ github.event.inputs.max_apps_per_shard || '40' }}
+          INCLUDE_UNTRACKED: ${{ github.event.inputs.include_untracked || 'false' }}
         run: node .github/scripts/plan-icon-heal.mjs
 
       - name: Upload plan

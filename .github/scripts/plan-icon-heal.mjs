@@ -34,6 +34,14 @@ const PLAN_DIR = process.env.PLAN_DIR || 'plan';
 // overwrite. Binary-sourced icons are already authoritative and never queued.
 const WEB_SOURCES = ['github_avatar', 'favicon', 'homepage_image'];
 
+// Rows written before icon_source existed. They claim an icon but nothing
+// records where it came from, and the duplicate audit shows large blocks of
+// them sharing one generic installer image -- the biggest single cluster is
+// 1,161 unrelated packages. Because every heal query filters on icon_source,
+// this population was unreachable. Including it lets binary extraction replace
+// those placeholders with the real product icon.
+const INCLUDE_UNTRACKED = process.env.INCLUDE_UNTRACKED === 'true';
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('SUPABASE_URL and SUPABASE_SERVICE_KEY are required');
   process.exit(1);
@@ -70,7 +78,11 @@ async function fetchAllEligible() {
     const { data, error } = await supabase
       .from('curated_apps')
       .select('winget_id, name, publisher, latest_version, icon_source, icon_extraction_attempts')
-      .in('icon_source', WEB_SOURCES)
+      .or(
+        INCLUDE_UNTRACKED
+          ? `icon_source.in.(${WEB_SOURCES.join(',')}),icon_source.is.null`
+          : `icon_source.in.(${WEB_SOURCES.join(',')})`
+      )
       .or(`icon_extraction_attempts.is.null,icon_extraction_attempts.lt.${MAX_ATTEMPTS}`)
       .order('winget_id', { ascending: true })
       .range(offset, offset + pageSize - 1);
@@ -117,7 +129,8 @@ async function fetchInstallerMap(wingetIds) {
 
 async function main() {
   const [eligible, catalogIds] = await Promise.all([fetchAllEligible(), fetchAllWingetIds()]);
-  console.log(`Heal-eligible apps (web-sourced, under ${MAX_ATTEMPTS} attempts): ${eligible.length}`);
+  const scope = INCLUDE_UNTRACKED ? 'web-sourced or untracked' : 'web-sourced';
+  console.log(`Heal-eligible apps (${scope}, under ${MAX_ATTEMPTS} attempts): ${eligible.length}`);
 
   // Mozilla.Firefox.de is a locale build of Mozilla.Firefox: same product, same
   // icon. Downloading its installer would spend ~2 minutes reproducing a file
