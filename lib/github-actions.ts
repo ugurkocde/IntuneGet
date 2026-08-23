@@ -243,6 +243,17 @@ export async function triggerPackagingWorkflow(
   const normalizedPackageInput = inputs.sourceType === 'custom'
     ? null
     : normalizeQaWorkflowPackageInput({ ...inputs, packageDependencies });
+  // Keep the workflow payload and its hashed execution profile identical even
+  // when live catalog reconciliation is temporarily unavailable. Reviewed app
+  // identities are resolved again by normalizeQaWorkflowPackageInput; dispatch
+  // that exact command so the customer PSADT package cannot retain stale
+  // manifest metadata while its QA gate evaluates the corrected profile.
+  if (normalizedPackageInput) {
+    inputs = {
+      ...inputs,
+      uninstallCommand: normalizedPackageInput.uninstallCommand,
+    };
+  }
   const packageDependenciesJson = JSON.stringify(packageDependencies);
   const dependencyBundleSignature = packageDependencies.length > 0
     ? (() => {

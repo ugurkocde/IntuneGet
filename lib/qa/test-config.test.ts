@@ -95,6 +95,37 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
+  it('binds Chrome Beta EXE QA to the vendor channel uninstall key', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Google.Chrome.Beta.EXE',
+        name: 'Google Chrome Beta (EXE)',
+        publisher: 'Google',
+        version: '152.0.7977.54',
+      },
+      manifest: {
+        InstallerType: 'exe',
+        ProductCode: 'Google Chrome',
+        InstallerSwitches: {
+          Silent: '--do-not-launch-chrome --system-level --chrome-beta',
+        },
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'exe',
+        ProductCode: 'Google Chrome',
+        AppsAndFeaturesEntries: [{
+          DisplayName: 'Google Chrome Beta (EXE)',
+          ProductCode: 'Google Chrome',
+        }],
+      },
+    });
+
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:Google Chrome Beta:Google Chrome Beta'
+    );
+  });
+
   it.each([
     ['inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
     ['nullsoft', '/S'],

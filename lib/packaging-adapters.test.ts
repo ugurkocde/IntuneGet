@@ -148,6 +148,31 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Chrome Beta EXE\'s vendor channel key instead of WinGet\'s stable key', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Google.Chrome.Beta.EXE',
+      'REGISTRY_UNINSTALL_KEY:Google Chrome:Google Chrome Beta (EXE)'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:Google Chrome Beta:Google Chrome Beta'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'google.chrome.beta.exe',
+      'REGISTRY_UNINSTALL:Google Chrome Beta (EXE)'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:Google Chrome Beta:Google Chrome Beta'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'Google.Chrome.Beta.EXE',
+      'REGISTRY_UNINSTALL_KEY:Different Key:Google Chrome Beta (EXE)'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:Different Key:Google Chrome Beta (EXE)'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'Google.Chrome.Beta.EXE',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses Postgres Pro 17\'s exact PostgreSQL NSIS registry identity', () => {
     expect(resolveApplicationUninstallCommand(
       'PostgresPro.Standard.17',

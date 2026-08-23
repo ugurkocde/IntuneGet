@@ -1873,6 +1873,35 @@ describe('PSADT registry uninstall identity contract', () => {
     30_000
   );
 
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits Chrome Beta EXE capture and removal against its exact channel key',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Google Chrome Beta (EXE)',
+        [],
+        {},
+        [],
+        'Google.Chrome.Beta.EXE',
+        'Google Chrome Beta (EXE)',
+        '152.0.7977.54',
+        'REGISTRY_UNINSTALL_KEY:Google Chrome Beta:Google Chrome Beta',
+        '--do-not-launch-chrome --system-level --chrome-beta'
+      );
+
+      expect(generated).toContain(
+        "$configuredUninstallProductCode = 'Google Chrome Beta'"
+      );
+      expect(generated).toContain(
+        "$configuredUninstallDisplayName = 'Google Chrome Beta'"
+      );
+      expect(generated).toContain(
+        'No captured entry; searching for manifest registry key: $configuredProductCode'
+      );
+    },
+    30_000
+  );
+
   it('selects one architecture-decorated ARP entry without accepting an ambiguous set', () => {
     expect(packager).toContain('$configuredUninstallComparableName = ((');
     expect(packager).toContain('$architectureAgnosticMatches = @($changedApplications');

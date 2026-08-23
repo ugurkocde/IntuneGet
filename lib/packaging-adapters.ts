@@ -1223,6 +1223,7 @@ export function resolveApplicationInstallerSelectionType(
 
 const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   generatedDisplayName: string;
+  manifestRegistryKey?: string;
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
@@ -1241,6 +1242,17 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   'google.chrome.exe': {
     generatedDisplayName: 'Google Chrome (EXE)',
     registeredDisplayName: 'Google Chrome',
+  },
+  // Chromium's own install-mode contract registers the Beta channel below the
+  // `Google Chrome Beta` uninstall key with the same long display name. WinGet's
+  // EXE manifest currently combines the stable-channel `Google Chrome` key with
+  // the catalog-only `Google Chrome Beta (EXE)` label. Bind the vendor's exact
+  // channel identity so Google Updater ARP changes cannot make capture ambiguous.
+  'google.chrome.beta.exe': {
+    generatedDisplayName: 'Google Chrome Beta (EXE)',
+    manifestRegistryKey: 'Google Chrome',
+    registeredDisplayName: 'Google Chrome Beta',
+    registeredRegistryKey: 'Google Chrome Beta',
   },
   // The legacy Edge-channel package is still named `Docker Desktop Edge` in
   // the catalog, but Docker registers the installed product as the ordinary
@@ -1348,7 +1360,14 @@ export function resolveApplicationUninstallCommand(
   const reviewed = REVIEWED_REGISTRY_UNINSTALL_IDENTITIES[wingetId.trim().toLowerCase()];
   if (!reviewed) return uninstallCommand;
   const expected = `REGISTRY_UNINSTALL:${reviewed.generatedDisplayName}`;
-  if (uninstallCommand.trim() !== expected) return uninstallCommand;
+  const expectedManifestKey = reviewed.manifestRegistryKey
+    ? `REGISTRY_UNINSTALL_KEY:${reviewed.manifestRegistryKey}:${reviewed.generatedDisplayName}`
+    : undefined;
+  const normalizedUninstallCommand = uninstallCommand.trim();
+  if (
+    normalizedUninstallCommand !== expected &&
+    normalizedUninstallCommand !== expectedManifestKey
+  ) return uninstallCommand;
   if (!reviewed.registeredRegistryKey) {
     return `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`;
   }

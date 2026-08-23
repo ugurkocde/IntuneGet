@@ -241,6 +241,30 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/norestart']);
   });
 
+  it('binds Chrome Beta EXE customer and QA profiles to the vendor channel key', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Google.Chrome.Beta.EXE',
+      displayName: 'Google Chrome Beta (EXE)',
+      publisher: 'Google',
+      version: '152.0.7977.54',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--do-not-launch-chrome --system-level --chrome-beta',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:Google Chrome:Google Chrome Beta (EXE)',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+    };
+
+    expect(normalized.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:Google Chrome Beta:Google Chrome Beta'
+    );
+    expect(profile.installer.uninstallCommand).toBe(normalized.uninstallCommand);
+  });
+
   it('binds offline dependency installers to the execution profile only when present', () => {
     const baseline = buildQaPackageIdentity(input);
     const dependency = {
