@@ -153,7 +153,15 @@ const SURFSHARK_VISIBLE_PRIMARY_RELEASE_RETRY_TARGETS = [
   ...AMBIGUOUS_UNINSTALL_DIAGNOSTICS_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const LEAF_ONLY_UNINSTALL_PATH_RELEASE_RETRY_TARGETS = [
+  // Re-run Surfshark after allowing its exact leaf-only msiexec.exe command to
+  // reach the existing product-code parser. Carry every bounded target forward.
+  ...SURFSHARK_VISIBLE_PRIMARY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '326eafef044af8579bc0089c9556a3d59e26cbe0':
+    LEAF_ONLY_UNINSTALL_PATH_RELEASE_RETRY_TARGETS,
   '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1':
     SURFSHARK_VISIBLE_PRIMARY_RELEASE_RETRY_TARGETS,
   'bb762159825bb59be2649f4cff4bf25fbbaef8b8':

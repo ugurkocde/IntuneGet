@@ -6,10 +6,14 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('carries Surfshark from diagnostics into the visible-primary release', () => {
+  it('carries Surfshark through diagnostics, visible-primary, and leaf-only releases', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' surfshark.surfshark ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2d3d1b82c818613b2bd677ddbcf309e1f6dd12b1',
+      { wingetId: 'Surfshark.Surfshark', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       'bb762159825bb59be2649f4cff4bf25fbbaef8b8',
