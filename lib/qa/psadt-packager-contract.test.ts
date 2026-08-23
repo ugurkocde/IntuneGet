@@ -1145,10 +1145,14 @@ describe('PSADT vendor argument contract', () => {
     'uses a reviewed vendor command for a managed installation instance',
     () => {
       const generated = generateRegistryUninstallPackage(
-        'inno',
+        'exe',
         'Visual Studio BuildTools 2026',
         [],
         {
+          reviewedInstallArguments: [
+            '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+            '--norestart',
+          ],
           reviewedManagedInstallDirectory:
             '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
           reviewedManagedUninstall: {
@@ -1165,13 +1169,24 @@ describe('PSADT vendor argument contract', () => {
           },
         },
         [],
-        'Microsoft.VisualStudio.BuildTools'
+        'Microsoft.VisualStudio.BuildTools',
+        'Visual Studio BuildTools 2026',
+        '18.9.1',
+        'REGISTRY_UNINSTALL:Visual Studio BuildTools 2026',
+        '--quiet --wait --campaign "winget"'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
       );
       const uninstallFunction = generated.slice(
         generated.indexOf('function Uninstall-ADTDeployment'),
         generated.indexOf('function Repair-ADTDeployment')
       );
 
+      expect(installFunction).toContain(
+        "-ArgumentList '--quiet --wait --campaign \"winget\" --add Microsoft.VisualStudio.Workload.MSBuildTools --norestart'"
+      );
       expect(uninstallFunction).toContain(
         "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe')"
       );

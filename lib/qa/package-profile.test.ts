@@ -1041,6 +1041,10 @@ describe('PSADT QA package identity', () => {
     const expectedPath =
       '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\BuildTools';
     const expectedConfig = {
+      reviewedInstallArguments: [
+        '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+        '--norestart',
+      ],
       reviewedManagedInstallDirectory: expectedPath,
       reviewedManagedUninstall: {
         executablePath:
@@ -1143,6 +1147,10 @@ describe('PSADT QA package identity', () => {
     const expectedPath =
       '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools';
     const expectedConfig = {
+      reviewedInstallArguments: [
+        '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+        '--norestart',
+      ],
       reviewedManagedInstallDirectory: expectedPath,
       reviewedManagedUninstall: {
         executablePath:

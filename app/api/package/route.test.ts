@@ -778,6 +778,57 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
+  it('adds a usable Build Tools workload to QA and customer packaging', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Microsoft.VisualStudio.BuildTools',
+          displayName: 'Visual Studio BuildTools 2026',
+          version: '18.9.1',
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const expectedAdapter = {
+      reviewedInstallArguments: [
+        '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+        '--norestart',
+      ],
+      reviewedManagedInstallDirectory:
+        '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
+      reviewedManagedUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe',
+        arguments: [
+          'uninstall',
+          '--installPath',
+          '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
+          '--quiet',
+          '--norestart',
+        ],
+        completionTimeoutMinutes: 15,
+      },
+    };
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
+      expectedAdapter
+    );
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(
+      expectedAdapter
+    );
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      psadtConfig: expectedAdapter,
+    });
+  });
+
   it('repairs empty catalog detection rules for both QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

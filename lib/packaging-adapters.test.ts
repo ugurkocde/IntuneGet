@@ -662,6 +662,10 @@ describe('application packaging adapters', () => {
         DEFAULT_PSADT_CONFIG
       )
     ).toMatchObject({
+      reviewedInstallArguments: [
+        '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+        '--norestart',
+      ],
       reviewedManagedInstallDirectory:
         '%ProgramFiles%\\Microsoft Visual Studio\\18\\BuildTools',
       reviewedManagedUninstall: {
@@ -717,6 +721,10 @@ describe('application packaging adapters', () => {
         DEFAULT_PSADT_CONFIG
       )
     ).toMatchObject({
+      reviewedInstallArguments: [
+        '--add Microsoft.VisualStudio.Workload.MSBuildTools',
+        '--norestart',
+      ],
       reviewedManagedInstallDirectory:
         '%ProgramFiles(x86)%\\Microsoft Visual Studio\\2022\\BuildTools',
       reviewedManagedUninstall: {

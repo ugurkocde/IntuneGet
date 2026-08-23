@@ -1007,6 +1007,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       // exact edition directory and use Microsoft's setup.exe instance
       // lifecycle for every supported Visual Studio generation and edition.
       wingetId,
+      // A Build Tools bootstrapper without an explicit workload only installs
+      // or updates the shared Visual Studio Installer and leaves no product
+      // instance to detect or manage. Microsoft's unattended examples require
+      // --add; MSBuildTools is the smallest useful, generation-stable workload.
+      reviewedInstallArguments: wingetId.endsWith('.BuildTools')
+        ? ['--add Microsoft.VisualStudio.Workload.MSBuildTools', '--norestart']
+        : undefined,
       reviewedManagedInstallDirectory: installPath,
       reviewedManagedUninstall: {
         executablePath:
