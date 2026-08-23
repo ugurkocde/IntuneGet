@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c1c9410f58318d055c09a60bc067996a4b9b4597',
+  packagerCommit: '20fbdeff5e6a4dc9d911019a244f7e46ab19b708',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -313,6 +313,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // normalization change only adapter-resolved uninstall paths. Preserve every
   // unrelated compatible pass from the prior protected release.
   '00983d36128aef319cc36f901beeff6dd03d847f',
+  // Build Tools' explicit MSBuild workload changes only Visual Studio Build
+  // Tools profiles that previously produced no manageable product instance.
+  // Preserve Chrome Beta and every unrelated compatible passing result.
+  'c1c9410f58318d055c09a60bc067996a4b9b4597',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

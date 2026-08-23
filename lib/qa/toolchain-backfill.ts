@@ -110,7 +110,23 @@ const CHROME_BETA_REGISTRY_RELEASE_RETRY_TARGETS = [
   ...FSLOGIX_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const VISUAL_STUDIO_BUILD_TOOLS_RELEASE_RETRY_TARGETS = [
+  // Retry every supported Build Tools generation with a minimal explicit
+  // workload so the bootstrapper creates a detectable product instance.
+  'Microsoft.VisualStudio.BuildTools',
+  'Microsoft.VisualStudio.2017.BuildTools',
+  'Microsoft.VisualStudio.2019.BuildTools',
+  'Microsoft.VisualStudio.2022.BuildTools',
+  // Carry every still-unconsumed bounded target across the atomic pin while
+  // excluding Build Tools entries already declared above.
+  ...CHROME_BETA_REGISTRY_RELEASE_RETRY_TARGETS.filter(
+    (wingetId) => !wingetId.toLowerCase().endsWith('.buildtools')
+  ),
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '20fbdeff5e6a4dc9d911019a244f7e46ab19b708':
+    VISUAL_STUDIO_BUILD_TOOLS_RELEASE_RETRY_TARGETS,
   'c1c9410f58318d055c09a60bc067996a4b9b4597':
     CHROME_BETA_REGISTRY_RELEASE_RETRY_TARGETS,
   '00983d36128aef319cc36f901beeff6dd03d847f':

@@ -106,6 +106,10 @@ describe('QA toolchain targeted retries', () => {
       'Autodesk.DesignReview',
       'AppiumDevelopers.AppiumInspector',
       'Google.Chrome.Beta.EXE',
+      'Microsoft.VisualStudio.BuildTools',
+      'Microsoft.VisualStudio.2017.BuildTools',
+      'Microsoft.VisualStudio.2019.BuildTools',
+      'Microsoft.VisualStudio.2022.BuildTools',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -156,6 +160,10 @@ describe('QA toolchain targeted retries', () => {
         'BlueJTeam.BlueJ',
         'Autodesk.DesignReview',
         'AppiumDevelopers.AppiumInspector',
+        'Microsoft.VisualStudio.BuildTools',
+        'Microsoft.VisualStudio.2017.BuildTools',
+        'Microsoft.VisualStudio.2019.BuildTools',
+        'Microsoft.VisualStudio.2022.BuildTools',
       ])
     );
     expect(
@@ -207,6 +215,28 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '00983d36128aef319cc36f901beeff6dd03d847f',
       { wingetId: 'Google.Chrome.Beta.EXE', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries every Build Tools generation after activating its workload', () => {
+    for (const wingetId of [
+      'Microsoft.VisualStudio.BuildTools',
+      'Microsoft.VisualStudio.2017.BuildTools',
+      'Microsoft.VisualStudio.2019.BuildTools',
+      'Microsoft.VisualStudio.2022.BuildTools',
+    ]) {
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+    }
+    expect(shouldRetryTerminalToolchainCandidate(
+      'c1c9410f58318d055c09a60bc067996a4b9b4597',
+      { wingetId: 'Microsoft.VisualStudio.2017.BuildTools', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'c1c9410f58318d055c09a60bc067996a4b9b4597',
+      { wingetId: 'Microsoft.VisualStudio.2019.BuildTools', status: 'failed' }
     )).toBe(false);
   });
 
@@ -597,7 +627,6 @@ describe('QA toolchain targeted retries', () => {
   });
 
   it.each([
-    'Microsoft.VisualStudio.2019.BuildTools',
     'Microsoft.VisualStudio.2019.Community',
     'Microsoft.VisualStudio.2019.Enterprise',
     'Microsoft.VisualStudio.2019.Professional',
