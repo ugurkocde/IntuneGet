@@ -37,8 +37,21 @@ async function main() {
   const results = JSON.parse(fs.readFileSync(RESULTS_FILE, 'utf8'));
   const now = new Date().toISOString();
 
-  const toUpdate = results.filter(r => r.status === 'success' && committedApps.has(r.winget_id));
-  console.log(`Marking ${toUpdate.length} healed icons (of ${results.length} results)`);
+  // An extraction whose bytes matched what is already committed produces no
+  // diff, so it is absent from the publication PR. It is still a correct
+  // result: the desired icon is on main. Recording only the committed ones
+  // left those apps looking unhealed forever, so every wave re-downloaded and
+  // re-extracted them. Wave 32657709971 recorded 7 of 373 successes for this
+  // reason. files_changed comes from the shard, which is the only place that
+  // can tell "already correct" apart from "artifact lost".
+  const toUpdate = results.filter(
+    r => r.status === 'success' && (committedApps.has(r.winget_id) || r.files_changed === false)
+  );
+  const alreadyCorrect = toUpdate.filter(r => !committedApps.has(r.winget_id)).length;
+  console.log(
+    `Marking ${toUpdate.length} healed icons (of ${results.length} results); ` +
+      `${alreadyCorrect} already matched what is committed`
+  );
 
   for (const result of toUpdate) {
     const { error } = await supabase
@@ -110,6 +123,7 @@ async function main() {
         '## Icon Heal Results',
         '',
         `- **Healed:** ${toUpdate.length}`,
+        `  - of which already matched what is committed: ${alreadyCorrect}`,
         `- **Failed:** ${failed.length}`,
         ...Object.entries(failureBreakdown).map(([k, v]) => `  - ${k}: ${v}`),
         ''

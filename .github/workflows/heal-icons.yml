@@ -162,7 +162,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          cp icon-results.json "out/results-${{ matrix.shard }}.json" 2>/dev/null || echo '[]' > "out/results-${{ matrix.shard }}.json"
           # core.quotePath makes git wrap any path with a non-ASCII byte in
           # quotes and octal-escape it, which tar -T then cannot stat. Nine
           # catalog ids are non-ASCII (ReceitaFederaldoBrasil.SpedContabil and
@@ -180,6 +179,10 @@ jobs:
           else
             echo "No icon files changed in this shard"
           fi
+          # Tells the collector which successes actually wrote something, so an
+          # app whose icon was already correct is recorded rather than being
+          # re-extracted on every future wave.
+          node .github/scripts/mark-changed-results.mjs changed.txt "out/results-${{ matrix.shard }}.json"
 
       - name: Upload shard output
         if: always()
