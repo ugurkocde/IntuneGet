@@ -3509,7 +3509,12 @@ if ($useManagedDirectoryLifecycle) {
             '        # PSADT correctly prefers QuietUninstallString. Some vendors only publish an interactive'
             '        # UninstallString, so add narrowly verified unattended arguments for known signatures.'
             '        $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile'
-            '        $registeredUninstallParentLeaf = Split-Path -Leaf (Split-Path -Parent $registeredUninstallFile)'
+            '        $registeredUninstallParentPath = Split-Path -Parent $registeredUninstallFile'
+            '        $registeredUninstallParentLeaf = if ([string]::IsNullOrWhiteSpace($registeredUninstallParentPath)) {'
+            "            ''"
+            '        } else {'
+            '            Split-Path -Leaf $registeredUninstallParentPath'
+            '        }'
             '        $autodeskOdisInstaller = [Environment]::ExpandEnvironmentVariables(''%ProgramW6432%\Autodesk\AdODIS\V1\Installer.exe'')'
             '        $isAutodeskOdisUninstall = ('
             '            $registeredUninstallFile -ieq $autodeskOdisInstaller -and'
