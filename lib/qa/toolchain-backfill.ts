@@ -89,6 +89,16 @@ const MIKTEX_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '59686c39a99aa6202d2d4c8ef947e81a4eb0ef38': [
+    // Retry Webroot with an observable bounded wait around its long-running
+    // MSI custom action instead of classifying the quiet work as stalled.
+    'Webroot.SecureAnywhere',
+    // Carry every still-unconsumed bounded target across the atomic pin.
+    'Tricentis.NeoLoad',
+    'Piriform.Recuva',
+    'Trimble.SketchUp.2022',
+    ...MIKTEX_RELEASE_RETRY_TARGETS,
+  ],
   'c163bad8c16908ada436222bc2cdba0bf49f794e': [
     // Retry NeoLoad with install4j's documented unattended uninstall argument.
     'Tricentis.NeoLoad',

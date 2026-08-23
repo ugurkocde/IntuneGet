@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c163bad8c16908ada436222bc2cdba0bf49f794e',
+  packagerCommit: '59686c39a99aa6202d2d4c8ef947e81a4eb0ef38',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -293,6 +293,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // NeoLoad's reviewed install4j quiet argument changes only its failed
   // uninstall lifecycle. Preserve every unrelated valid pass from the prior release.
   'dcaffc9d6fc7e9afb94fcf9a3035426a0156ee0d',
+  // Webroot's observable MSI completion contract changes only its previously
+  // interrupted custom-action lifecycle. Preserve every unrelated valid pass.
+  'c163bad8c16908ada436222bc2cdba0bf49f794e',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
