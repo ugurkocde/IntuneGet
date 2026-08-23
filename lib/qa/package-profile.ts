@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '228cd9def01122182631c91910554c05e9181edb',
+  packagerCommit: 'bb762159825bb59be2649f4cff4bf25fbbaef8b8',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -320,6 +320,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Build Tools' explicit instance path changes only profiles using the
   // reviewed Build Tools lifecycle. Preserve every unrelated compatible pass.
   '20fbdeff5e6a4dc9d911019a244f7e46ab19b708',
+  // Bounded ambiguous-ARP diagnostics execute only on the existing fail-closed
+  // path. Preserve passing profiles while collecting exact identities for the
+  // affected terminal candidate.
+  '228cd9def01122182631c91910554c05e9181edb',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
