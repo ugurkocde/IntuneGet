@@ -1,10 +1,37 @@
 import { MetadataRoute } from "next";
 import { blogPosts } from "@/lib/data/blog-data";
+import { getCatalogSource } from "@/lib/catalog";
+import { absoluteAppCatalogUrl, categorySlug } from "@/lib/catalog/seo";
 
 const BASE_URL = "https://intuneget.com";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export function generateSitemaps() {
+  return [{ id: 0 }, { id: 1 }, { id: 2 }];
+}
+
+export default async function sitemap({ id }: { id: Promise<number> }): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  const sitemapId = await id;
+
+  if (sitemapId === 1) {
+    const apps = await getCatalogSource().getVerifiedAppIds().catch(() => []);
+    return apps.map((app) => ({
+      url: absoluteAppCatalogUrl(app.winget_id),
+      lastModified: now,
+      changeFrequency: "daily" as const,
+      priority: 0.8,
+    }));
+  }
+
+  if (sitemapId === 2) {
+    const categories = await getCatalogSource().getCategories().catch(() => []);
+    return categories.map(({ category }) => ({
+      url: `${BASE_URL}/apps/category/${categorySlug(category)}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
+  }
 
   // Static public pages
   const staticPages: MetadataRoute.Sitemap = [
@@ -18,6 +45,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${BASE_URL}/apps`,
       lastModified: now,
       changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/qa`,
+      lastModified: now,
+      changeFrequency: "daily",
       priority: 0.8,
     },
     {
