@@ -457,6 +457,8 @@ export interface Database {
           supported_changed_count: number;
           demand_backfill_requested_count: number;
           demand_backfill_count: number;
+          catalog_backfill_requested_count: number;
+          catalog_backfill_count: number;
           created_at: string;
         };
         Insert: {
@@ -481,6 +483,8 @@ export interface Database {
           supported_changed_count?: number;
           demand_backfill_requested_count?: number;
           demand_backfill_count?: number;
+          catalog_backfill_requested_count?: number;
+          catalog_backfill_count?: number;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['qa_poll_runs']['Insert']>;
@@ -2448,6 +2452,14 @@ export interface Database {
         Returns: boolean;
       };
       qa_missing_demand_backfill_ids: {
+        Args: {
+          p_limit?: number;
+        };
+        Returns: Array<{
+          winget_id: string;
+        }>;
+      };
+      qa_idle_catalog_backfill_ids: {
         Args: {
           p_limit?: number;
         };

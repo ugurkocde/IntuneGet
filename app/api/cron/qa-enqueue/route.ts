@@ -57,6 +57,7 @@ const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
 // deployed-app demand per poll to avoid spending hours reclassifying known
 // payloads three at a time.
 const DEMAND_BACKFILL_BATCH_SIZE = 20;
+const IDLE_CATALOG_BACKFILL_BATCH_SIZE = 3;
 const MAX_TARGETED_PACKAGE_IDS = 20;
 const TARGETED_QA_PRIORITY = 1_000;
 
@@ -374,6 +375,22 @@ async function findDemandBackfillIds(
   );
 }
 
+async function findIdleCatalogBackfillIds(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc('qa_idle_catalog_backfill_ids', {
+    p_limit: IDLE_CATALOG_BACKFILL_BATCH_SIZE,
+  });
+  if (error) throw new Error(`Could not select idle catalog QA backfill: ${error.message}`);
+  return Array.from(
+    new Set(
+      ((data || []) as Array<{ winget_id?: unknown }>)
+        .map((row) => (typeof row.winget_id === 'string' ? row.winget_id.trim() : ''))
+        .filter(Boolean)
+    )
+  );
+}
+
 async function persistQaCatalogReconciliation(
   supabase: ReturnType<typeof createServerClient>,
   input: {
@@ -435,6 +452,8 @@ export async function GET(request: Request) {
   let toolchainBackfillPagesScanned = 0;
   let demandBackfillRequestedCount = 0;
   let demandBackfillCount = 0;
+  let catalogBackfillRequestedCount = 0;
+  let catalogBackfillCount = 0;
   let targetedCount = 0;
   let baseSha: string | null = null;
   let headSha: string | null = null;
@@ -468,6 +487,8 @@ export async function GET(request: Request) {
         supported_changed_count: supportedChangedCount,
         demand_backfill_requested_count: demandBackfillRequestedCount,
         demand_backfill_count: demandBackfillCount,
+        catalog_backfill_requested_count: catalogBackfillRequestedCount,
+        catalog_backfill_count: catalogBackfillCount,
       })
       .eq('id', runId);
     if (error) throw new Error(`Could not finalize QA poll run ${runId}: ${error.message}`);
@@ -568,12 +589,14 @@ export async function GET(request: Request) {
         `WinGet GitHub change feed paused until ${changes.rateLimitedUntil}`
       );
     }
-    const [backfill, demandBackfillIds] = await Promise.all([
+    const [backfill, demandBackfillIds, catalogBackfillIds] = await Promise.all([
       findToolchainBackfillIds(supabase),
       findDemandBackfillIds(supabase),
+      findIdleCatalogBackfillIds(supabase),
     ]);
     toolchainBackfillPagesScanned = backfill.pagesScanned;
     demandBackfillRequestedCount = demandBackfillIds.length;
+    catalogBackfillRequestedCount = catalogBackfillIds.length;
     if (demandBackfillIds.length > 0) {
       const { error: demandSelectionError } = await supabase.rpc(
         'record_qa_demand_backfill_selection',
@@ -588,9 +611,16 @@ export async function GET(request: Request) {
     const changedIds = new Set(changes.changedPackageIds);
     const backfillIds = new Set(backfill.ids);
     const demandBackfillIdSet = new Set(demandBackfillIds);
+    const catalogBackfillIdSet = new Set(catalogBackfillIds);
     const targetedIdSet = new Set(requestedPackageIds);
     const targetPackageIds = Array.from(
-      new Set([...changedIds, ...backfillIds, ...demandBackfillIdSet, ...targetedIdSet])
+      new Set([
+        ...changedIds,
+        ...backfillIds,
+        ...demandBackfillIdSet,
+        ...catalogBackfillIdSet,
+        ...targetedIdSet,
+      ])
     );
 
     structuredQaPollLog('info', 'qa_poll_started', {
@@ -604,6 +634,7 @@ export async function GET(request: Request) {
       toolchainBackfillRequestedCount: backfill.ids.length,
       toolchainBackfillPagesScanned,
       demandBackfillRequestedCount,
+      catalogBackfillRequestedCount,
       targetedRequestedCount: requestedPackageIds.length,
     });
 
@@ -712,7 +743,9 @@ export async function GET(request: Request) {
       demandedIds.add(deployed.winget_id);
       if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
     }
-    supportedApps = supportedApps.filter((app) => demandedIds.has(app.winget_id));
+    supportedApps = supportedApps.filter((app) =>
+      demandedIds.has(app.winget_id) || catalogBackfillIdSet.has(app.winget_id)
+    );
     targetedCount = supportedApps.filter((app) => targetedIdSet.has(app.winget_id)).length;
     for (const app of supportedApps) {
       if (targetedIdSet.has(app.winget_id)) {
@@ -726,6 +759,9 @@ export async function GET(request: Request) {
     toolchainBackfillCount = supportedApps.filter((app) => backfillIds.has(app.winget_id)).length;
     demandBackfillCount = supportedApps.filter((app) =>
       demandBackfillIdSet.has(app.winget_id)
+    ).length;
+    catalogBackfillCount = supportedApps.filter((app) =>
+      catalogBackfillIdSet.has(app.winget_id)
     ).length;
     const recipeById = new Map(recipes.map((row) => [row.winget_id, row]));
     const passedResultByPayload = new Map<string, (typeof results)[number]>();
@@ -982,7 +1018,9 @@ export async function GET(request: Request) {
                   ? 'auto_update'
                   : targetedIdSet.has(app.winget_id)
                     ? 'operator'
-                  : 'managed',
+                    : catalogBackfillIdSet.has(app.winget_id)
+                      ? 'catalog'
+                      : 'managed',
                 failure_summary: !packagingContract.valid
                   ? `Packaging preflight: ${packagingContract.message}`
                   : null,
@@ -1130,6 +1168,8 @@ export async function GET(request: Request) {
       toolchainBackfillPagesScanned,
       demandBackfillRequestedCount,
       demandBackfillCount,
+      catalogBackfillRequestedCount,
+      catalogBackfillCount,
       targetedRequestedCount: requestedPackageIds.length,
       targetedCount,
       ...summary,
@@ -1150,6 +1190,8 @@ export async function GET(request: Request) {
         toolchainBackfillPagesScanned,
         demandBackfillRequestedCount,
         demandBackfillCount,
+        catalogBackfillRequestedCount,
+        catalogBackfillCount,
         targetedRequestedCount: requestedPackageIds.length,
         targetedCount,
         ...summary,
@@ -1192,6 +1234,8 @@ export async function GET(request: Request) {
         toolchainBackfillPagesScanned,
         demandBackfillRequestedCount,
         demandBackfillCount,
+        catalogBackfillRequestedCount,
+        catalogBackfillCount,
         targetedRequestedCount: requestedPackageIds.length,
         targetedCount,
         ...summary,
