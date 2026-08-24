@@ -1147,6 +1147,18 @@ describe('application packaging adapters', () => {
     ]);
   });
 
+  it('closes both Playnite frontends before its exact Inno removal', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'playnite.playnite',
+        DEFAULT_PSADT_CONFIG
+      ).processesToClose
+    ).toEqual([
+      { name: 'Playnite.DesktopApp', description: 'Playnite Desktop' },
+      { name: 'Playnite.FullscreenApp', description: 'Playnite Fullscreen' },
+    ]);
+  });
+
   it.each([
     'Microsoft.SQLServerManagementStudio.21',
     'Microsoft.SQLServerManagementStudio.22',

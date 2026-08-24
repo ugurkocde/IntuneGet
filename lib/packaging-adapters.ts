@@ -1083,6 +1083,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Playnite can keep either of its signed desktop frontends running after
+    // installation. Its Inno uninstaller then exits with code 1 even with the
+    // full unattended switch set and leaves the exact Playnite_is1 registration
+    // installed. Close only the executable identities published by Playnite so
+    // QA and customer Intune packages share the same reliable removal path.
+    wingetId: 'Playnite.Playnite',
+    requiredProcessesToClose: [
+      { name: 'Playnite.DesktopApp', description: 'Playnite Desktop' },
+      { name: 'Playnite.FullscreenApp', description: 'Playnite Fullscreen' },
+    ],
+  },
+  {
     // Qfinder Pro starts its desktop process after a silent install. Close it
     // before removal so the NSIS uninstaller can delete the product instead
     // of waiting behind the running application or its startup-error dialog.
