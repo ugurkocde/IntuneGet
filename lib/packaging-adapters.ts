@@ -667,20 +667,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
-    // DesktopOK publishes both user- and machine-scope installers. Intune runs
-    // Win32 packages as SYSTEM, and the reviewed exact uninstaller lives below
-    // Program Files, so keep package creation on the machine-scope variant.
-    // Reuse the vendor's documented /silent mode ahead of the registered
-    // -?uninstall verb so removal never waits for interactive UI.
-    wingetId: 'SoftwareOK.DesktopOK',
-    requiredInstallScope: 'machine',
-    reviewedExactUninstall: {
-      executablePath: '%ProgramFiles%\\DesktopOK\\DesktopOK_x64.exe',
-      arguments: ['/silent', '-?uninstall'],
-      completionTimeoutMinutes: 5,
-    },
-  },
-  {
     wingetId: 'SoftwareOK.Q-Dir',
     reviewedUninstallArguments: ['/silent', 'forall'],
   },

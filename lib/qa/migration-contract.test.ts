@@ -1401,3 +1401,26 @@ describe('QA idle catalog backfill migration contract', () => {
     expect(sql).toContain('poll_state.head_sha = reconciliation.observed_head_sha');
   });
 });
+
+describe('DesktopOK managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260824163000_block_desktopok_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported vendor removal lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'SoftwareOK.DesktopOK'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32747225410'
+    );
+    expect(sql).toContain('exact DesktopOK registration');
+    expect(sql).toContain('three isolated lifecycle runs');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
