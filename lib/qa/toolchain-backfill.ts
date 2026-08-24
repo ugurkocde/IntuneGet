@@ -190,7 +190,16 @@ const WATERFOX_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...SPEEK_BLOCK_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const PLAYNITE_PROCESS_CLOSE_RELEASE_RETRY_TARGETS = [
+  // Re-run Playnite with both vendor-published desktop frontends closed before
+  // its exact Inno removal, then carry every still-unconsumed bounded target.
+  'Playnite.Playnite',
+  ...WATERFOX_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5':
+    PLAYNITE_PROCESS_CLOSE_RELEASE_RETRY_TARGETS,
   '937a4d51d8c62885f76cb896fa3d742069436ee2':
     WATERFOX_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   // Speek is eligibility-blocked after its reviewed machine install contract

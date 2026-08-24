@@ -162,6 +162,7 @@ describe('QA toolchain targeted retries', () => {
       'Microsoft.VisualStudio.2022.BuildTools',
       'Surfshark.Surfshark',
       'Waterfox.Waterfox',
+      'Playnite.Playnite',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -216,6 +217,7 @@ describe('QA toolchain targeted retries', () => {
         'Microsoft.VisualStudio.2019.BuildTools',
         'Microsoft.VisualStudio.2022.BuildTools',
         'Waterfox.Waterfox',
+        'Playnite.Playnite',
       ])
     );
     expect(
@@ -234,6 +236,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '44c38ddec97b546c7423374e09387d812e2386cc',
       { wingetId: 'Waterfox.Waterfox', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Playnite only after activating its process-close contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' playnite.playnite ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '937a4d51d8c62885f76cb896fa3d742069436ee2',
+      { wingetId: 'Playnite.Playnite', status: 'failed' }
     )).toBe(false);
   });
 
