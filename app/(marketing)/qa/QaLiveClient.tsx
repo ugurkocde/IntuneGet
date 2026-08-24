@@ -570,11 +570,11 @@ function DashboardContent() {
                 <table className="w-full text-left text-sm">
                   <thead className="border-y border-overlay/10 text-xs text-text-muted">
                     <tr>
-                      <th className="px-6 py-3 font-medium"><T>Application</T></th>
-                      <th className="px-3 py-3 font-medium"><T>Result</T></th>
-                      <th className="px-3 py-3 font-medium"><T>VirusTotal</T></th>
-                      <th className="px-3 py-3 font-medium"><T>Duration</T></th>
-                      <th className="px-6 py-3 font-medium"><T>Tested</T></th>
+                      <th className="w-full px-6 py-3 font-medium"><T>Application</T></th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium"><T>Result</T></th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium"><T>VirusTotal</T></th>
+                      <th className="whitespace-nowrap px-3 py-3 font-medium"><T>Duration</T></th>
+                      <th className="whitespace-nowrap px-6 py-3 font-medium"><T>Tested</T></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-overlay/10">
@@ -588,7 +588,7 @@ function DashboardContent() {
                         })}
                         className="cursor-pointer transition-colors hover:bg-overlay/5"
                       >
-                        <td className={cn('border-l-2 px-6 py-3', resultEdgeClass(item.outcome))}>
+                        <td className={cn('w-full max-w-0 border-l-2 px-6 py-3', resultEdgeClass(item.outcome))}>
                           <button
                             type="button"
                             onClick={() => setSelected({
@@ -605,13 +605,13 @@ function DashboardContent() {
                             </span>
                           </button>
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="whitespace-nowrap px-3 py-3">
                           <QaResultStatus outcome={item.outcome} />
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="whitespace-nowrap px-3 py-3">
                           <QaVirusTotalCell status={item.virusTotalStatus} />
                         </td>
-                        <td className="px-3 py-3 font-mono text-xs text-text-secondary">{formatQaDuration(item.durationSeconds)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-text-secondary">{formatQaDuration(item.durationSeconds)}</td>
                         <td className="whitespace-nowrap px-6 py-3 text-xs text-text-muted">
                           {formatRelativeTime(item.testedAtUtc, data.serverTime) ?? <T>Not recorded</T>}
                         </td>
