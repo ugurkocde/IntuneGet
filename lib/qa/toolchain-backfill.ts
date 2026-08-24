@@ -178,7 +178,16 @@ const DESKTOPOK_BLOCK_RELEASE_RETRY_TARGETS =
     (wingetId) => wingetId.toLowerCase() !== 'softwareok.desktopok'
   );
 
+const SPEEK_BLOCK_RELEASE_RETRY_TARGETS =
+  DESKTOPOK_BLOCK_RELEASE_RETRY_TARGETS.filter(
+    (wingetId) => wingetId.toLowerCase() !== 'speek.speek'
+  );
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  // Speek is eligibility-blocked after its reviewed machine install contract
+  // failed, so carry the bounded set without replaying Speek or DesktopOK.
+  '44c38ddec97b546c7423374e09387d812e2386cc':
+    SPEEK_BLOCK_RELEASE_RETRY_TARGETS,
   // DesktopOK is eligibility-blocked, so this release carries the prior
   // bounded retry set without replaying its unsupported removal lifecycle.
   'd64f6815b43c16428d83cde1b909e6503d7cc40f':

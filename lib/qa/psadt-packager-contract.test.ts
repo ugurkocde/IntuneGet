@@ -1057,23 +1057,23 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'verifies and removes Speek from its reviewed non-ARP directory',
+    'verifies and removes a reviewed non-ARP machine directory',
     () => {
       const generated = generateRegistryUninstallPackage(
         'nullsoft',
-        'Speek',
+        'Managed Payload Example',
         [],
         {
-          reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Speek',
+          reviewedManagedInstallDirectory: '%ProgramFiles%\\ManagedPayloadExample',
           reviewedManagedInstallEvidenceFile:
-            '%ProgramFiles(x86)%\\Speek\\Speek.exe',
+            '%ProgramFiles%\\ManagedPayloadExample\\ManagedPayloadExample.exe',
           reviewedManagedInstallCompletionTimeoutMinutes: 2,
         },
         [],
-        'Speek.Speek',
-        'Speek',
-        '1.7.0',
-        'REGISTRY_UNINSTALL:Speek',
+        'Example.ManagedPayload',
+        'Managed Payload Example',
+        '1.0.0',
+        'REGISTRY_UNINSTALL:Managed Payload Example',
         '/S',
         'machine'
       );
@@ -1087,10 +1087,10 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(installFunction).toContain(
-        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Speek')"
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\ManagedPayloadExample')"
       );
       expect(installFunction).toContain(
-        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Speek\\Speek.exe')"
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\ManagedPayloadExample\\ManagedPayloadExample.exe')"
       );
       expect(installFunction).toContain(
         'Verified stable managed installation evidence'

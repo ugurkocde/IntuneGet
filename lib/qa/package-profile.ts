@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd64f6815b43c16428d83cde1b909e6503d7cc40f',
+  packagerCommit: '44c38ddec97b546c7423374e09387d812e2386cc',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -341,6 +341,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // DesktopOK is now blocked because it has no verified unattended removal
   // contract. Preserve every compatible pass for the remaining eligible apps.
   'fe8a13f4473a3528368d7a97ff410df1961c594a',
+  // Speek is now blocked after its reviewed non-ARP adapter failed to produce a
+  // stable machine payload. Preserve compatible passes for all eligible apps.
+  'd64f6815b43c16428d83cde1b909e6503d7cc40f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

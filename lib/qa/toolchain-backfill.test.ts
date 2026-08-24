@@ -126,7 +126,6 @@ describe('QA toolchain targeted retries', () => {
       'ABB.RobotStudio',
       'Microsoft.msodbcsql.13',
       'Microsoft.WindowsAppRuntime.1.8',
-      'Speek.Speek',
       '8x8.Work',
       'Microsoft.FSLogix',
       'AvaCC.AvaDesktop',
@@ -166,6 +165,7 @@ describe('QA toolchain targeted retries', () => {
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
     expect(targets).not.toContain('Webroot.SecureAnywhere');
+    expect(targets).not.toContain('Speek.Speek');
 
     targets.length = 0;
 
@@ -181,7 +181,6 @@ describe('QA toolchain targeted retries', () => {
         'ABB.RobotStudio',
         'Microsoft.msodbcsql.13',
         'Microsoft.WindowsAppRuntime.1.8',
-        'Speek.Speek',
         '8x8.Work',
         'Microsoft.FSLogix',
         'Google.Chrome.Beta.EXE',
@@ -377,15 +376,15 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Speek only after activating its reviewed non-ARP lifecycle', () => {
+  it('does not replay Speek after activating its managed-install block', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'speek.speek', status: 'failed' }
-    )).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(
-      '9aaebb8f2af8bf3144fb5358b8b34e99195c088e',
-      { wingetId: 'Speek.Speek', status: 'failed' }
     )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd64f6815b43c16428d83cde1b909e6503d7cc40f',
+      { wingetId: 'Speek.Speek', status: 'failed' }
+    )).toBe(true);
   });
 
   it.each([
