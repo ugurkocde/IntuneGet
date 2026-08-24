@@ -1372,3 +1372,32 @@ describe('QA live-version reconciliation migration contract', () => {
     expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 100))');
   });
 });
+
+describe('QA idle catalog backfill migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260824101502_add_qa_idle_catalog_backfill.sql'
+    ),
+    'utf8'
+  );
+
+  it('uses idle capacity only and keeps the selector private', () => {
+    expect(sql).toContain("waiting_work.status = 'queued'");
+    expect(sql).toContain("active_work.status in ('dispatched', 'running')");
+    expect(sql).toContain('security invoker');
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+    expect(sql).toContain('limit greatest(1, least(coalesce(p_limit, 3), 20))');
+  });
+
+  it('selects popular verified Win32 apps without bypassing QA safety state', () => {
+    expect(sql).toContain("app.app_source = 'win32'");
+    expect(sql).toContain('app.popularity_rank asc nulls last');
+    expect(sql).toContain('app.chocolatey_downloads desc nulls last');
+    expect(sql).toContain('from public.package_eligibility_blocks as eligibility_block');
+    expect(sql).toContain('from public.qa_package_blocks as block');
+    expect(sql).toContain('candidate.version = app.latest_version');
+    expect(sql).toContain('poll_state.head_sha = reconciliation.observed_head_sha');
+  });
+});

@@ -80,6 +80,7 @@ function createSupabaseStub(options: {
   candidates?: Array<Record<string, unknown>>;
   candidatePages?: Array<Array<Record<string, unknown>>>;
   demandBackfillApps?: string[];
+  catalogBackfillApps?: string[];
   deployedApps?: string[];
   pollState?: Record<string, unknown>;
   packageResults?: Array<Record<string, unknown>>;
@@ -100,6 +101,12 @@ function createSupabaseStub(options: {
       rpcCalls.push({ name, args });
       if (name === 'record_qa_demand_backfill_selection') {
         return Promise.resolve({ data: null, error: null });
+      }
+      if (name === 'qa_idle_catalog_backfill_ids') {
+        return Promise.resolve({
+          data: (options.catalogBackfillApps || []).map((winget_id) => ({ winget_id })),
+          error: null,
+        });
       }
       if (name !== 'qa_missing_demand_backfill_ids') {
         throw new Error(`Unexpected RPC: ${name}`);
@@ -445,6 +452,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     ]);
     expect(rpcCalls).toEqual([
       { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 20 } },
+      { name: 'qa_idle_catalog_backfill_ids', args: { p_limit: 3 } },
     ]);
     expect(pollRunUpdates).toEqual([
       expect.objectContaining({
@@ -454,6 +462,8 @@ describe('GET /api/cron/qa-enqueue', () => {
         supported_changed_count: 0,
         demand_backfill_requested_count: 0,
         demand_backfill_count: 0,
+        catalog_backfill_requested_count: 0,
+        catalog_backfill_count: 0,
       }),
     ]);
   });
@@ -526,6 +536,10 @@ describe('GET /api/cron/qa-enqueue', () => {
       name: 'record_qa_demand_backfill_selection',
       args: { p_winget_ids: ['Missing.App'] },
     });
+    expect(rpcCalls).toContainEqual({
+      name: 'qa_idle_catalog_backfill_ids',
+      args: { p_limit: 3 },
+    });
     expect(candidateInserts[0]).toMatchObject({
       winget_id: 'Missing.App',
       version: '1.0.0',
@@ -538,6 +552,98 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(pollRunUpdates[0]).toMatchObject({
       demand_backfill_requested_count: 1,
       demand_backfill_count: 1,
+      catalog_backfill_requested_count: 0,
+      catalog_backfill_count: 0,
+    });
+  });
+
+  it('queues popularity-ranked catalog coverage when higher-priority demand is empty', async () => {
+    const { client, candidateInserts, pollRunUpdates, rpcCalls } = createSupabaseStub({
+      catalogBackfillApps: ['Popular.CatalogApp'],
+      supportedApps: [
+        {
+          winget_id: 'Popular.CatalogApp',
+          name: 'Popular Catalog App',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      deployedApps: [],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      demandBackfillRequestedCount: 0,
+      catalogBackfillRequestedCount: 1,
+      catalogBackfillCount: 1,
+    });
+    expect(rpcCalls).toContainEqual({
+      name: 'qa_idle_catalog_backfill_ids',
+      args: { p_limit: 3 },
+    });
+    expect(candidateInserts).toEqual([
+      expect.objectContaining({
+        winget_id: 'Popular.CatalogApp',
+        status: 'queued',
+        priority: 0,
+        demand_source: 'catalog',
+        catalog_version_at_enqueue: '1.0.0',
+        test_config: expect.objectContaining({ profileKind: 'catalog-default' }),
+      }),
+    ]);
+    expect(pollRunUpdates[0]).toMatchObject({
+      catalog_backfill_requested_count: 1,
+      catalog_backfill_count: 1,
+    });
+  });
+
+  it('keeps customer demand ahead of catalog work selected during the same idle poll', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      demandBackfillApps: ['Customer.App'],
+      catalogBackfillApps: ['Catalog.App'],
+      supportedApps: [
+        {
+          winget_id: 'Customer.App',
+          name: 'Customer App',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+        {
+          winget_id: 'Catalog.App',
+          name: 'Catalog App',
+          publisher: 'Contoso',
+          latest_version: '1.0.0',
+        },
+      ],
+      deployedApps: ['Customer.App'],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 2,
+      queued: 2,
+      demandBackfillCount: 1,
+      catalogBackfillCount: 1,
+    });
+    expect(candidateInserts.find((row) => row.winget_id === 'Customer.App')).toMatchObject({
+      priority: 1,
+      demand_source: 'managed',
+    });
+    expect(candidateInserts.find((row) => row.winget_id === 'Catalog.App')).toMatchObject({
+      priority: 0,
+      demand_source: 'catalog',
     });
   });
 
