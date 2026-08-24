@@ -23,8 +23,10 @@ import { createHash } from 'node:crypto';
 import { createGunzip } from 'node:zlib';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, rename, readFile, writeFile, rm, stat } from 'node:fs/promises';
+import { get as httpsGet } from 'node:https';
+import type { IncomingMessage } from 'node:http';
 import { pipeline } from 'node:stream/promises';
-import { Readable, Transform } from 'node:stream';
+import { Transform } from 'node:stream';
 import path from 'node:path';
 import type BetterSqlite3 from 'better-sqlite3';
 
@@ -108,16 +110,50 @@ function assertTables(db: DB): void {
   }
 }
 
+/**
+ * Raw https GET (follows redirects). Uses node:https instead of the global
+ * fetch on purpose: Next.js instruments fetch, and a no-store fetch during a
+ * static/ISR page render marks the route as dynamic and fails the render with
+ * DYNAMIC_SERVER_USAGE. These are infrastructure downloads, not page data, so
+ * they must stay invisible to the framework.
+ */
+function httpsGetStream(url: string, redirectsLeft = 5): Promise<IncomingMessage> {
+  if (!url.startsWith('https://')) {
+    return Promise.reject(
+      new SnapshotUnavailableError('CATALOG_SNAPSHOT_BASE_URL must be an https URL')
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const req = httpsGet(url, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status >= 300 && status < 400 && res.headers.location) {
+        res.resume();
+        if (redirectsLeft <= 0) {
+          reject(new SnapshotUnavailableError('Too many redirects downloading catalog snapshot'));
+          return;
+        }
+        resolve(httpsGetStream(new URL(res.headers.location, url).toString(), redirectsLeft - 1));
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        res.resume();
+        reject(new SnapshotUnavailableError(`Failed to download catalog asset (HTTP ${status})`));
+        return;
+      }
+      resolve(res);
+    });
+    req.on('error', reject);
+  });
+}
+
 async function fetchManifest(): Promise<SnapshotManifest | null> {
   const url = `${baseUrl()}/manifest.json`;
-  if (!url.startsWith('https://')) {
-    throw new SnapshotUnavailableError('CATALOG_SNAPSHOT_BASE_URL must be an https URL');
+  const res = await httpsGetStream(url);
+  const chunks: Buffer[] = [];
+  for await (const chunk of res) {
+    chunks.push(chunk as Buffer);
   }
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    throw new SnapshotUnavailableError(`Failed to fetch catalog manifest (HTTP ${res.status})`);
-  }
-  const manifest = (await res.json()) as SnapshotManifest;
+  const manifest = JSON.parse(Buffer.concat(chunks).toString('utf8')) as SnapshotManifest;
   if (manifest.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) {
     throw new SnapshotUnavailableError(
       `Catalog snapshot schemaVersion ${manifest.schemaVersion} is not supported by this build (expected ${SNAPSHOT_SCHEMA_VERSION}). Update the app.`
@@ -156,14 +192,7 @@ function byteCap(maxBytes: number, message: string): Transform {
 
 async function downloadGz(dest: string): Promise<void> {
   const url = `${baseUrl()}/catalog.sqlite.gz`;
-  if (!url.startsWith('https://')) {
-    throw new SnapshotUnavailableError('CATALOG_SNAPSHOT_BASE_URL must be an https URL');
-  }
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok || !res.body) {
-    throw new SnapshotUnavailableError(`Failed to download catalog snapshot (HTTP ${res.status})`);
-  }
-  const source = Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]);
+  const source = await httpsGetStream(url);
   // Cap before the WriteStream, so an over-limit asset never fully lands on disk.
   await pipeline(
     source,
@@ -319,6 +348,12 @@ export async function getSnapshotDb(): Promise<DB> {
   const now = Date.now();
   if (_db && now - _lastCheckedAt < REFRESH_INTERVAL_MS) {
     return _db;
+  }
+  if (!_db && !process.env.CATALOG_SNAPSHOT_FILE) {
+    // Cold start: serve a previously downloaded snapshot immediately and check
+    // for a newer one in the background, so page renders never block on (or
+    // fail with) the network.
+    await openExistingIfPresent().catch(() => false);
   }
   if (!_db) {
     await ensureFresh();
