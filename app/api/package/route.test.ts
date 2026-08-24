@@ -742,42 +742,6 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
-  it('applies the reviewed Speek non-ARP lifecycle to QA and customer packaging', async () => {
-    const request = new NextRequest('http://localhost:3000/api/package', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer test-token',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        items: [makeWin32Item({
-          wingetId: 'Speek.Speek',
-          displayName: 'Speek',
-          psadtConfig: { ...DEFAULT_PSADT_CONFIG },
-        })],
-      }),
-    });
-
-    const response = await POST(request);
-
-    expect(response.status).toBe(200);
-    const expectedAdapter = {
-      reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Speek',
-      reviewedManagedInstallEvidenceFile:
-        '%ProgramFiles(x86)%\\Speek\\Speek.exe',
-      reviewedManagedInstallCompletionTimeoutMinutes: 2,
-    };
-    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
-      expectedAdapter
-    );
-    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(
-      expectedAdapter
-    );
-    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
-      psadtConfig: expectedAdapter,
-    });
-  });
-
   it('adds a usable Build Tools workload to QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

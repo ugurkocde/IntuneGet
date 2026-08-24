@@ -322,17 +322,6 @@ describe('application packaging adapters', () => {
     });
   });
 
-  it('models Speek as the reviewed non-ARP Program Files payload', () => {
-    expect(
-      applyApplicationPackagingAdapter('Speek.Speek', DEFAULT_PSADT_CONFIG)
-    ).toMatchObject({
-      reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Speek',
-      reviewedManagedInstallEvidenceFile:
-        '%ProgramFiles(x86)%\\Speek\\Speek.exe',
-      reviewedManagedInstallCompletionTimeoutMinutes: 2,
-    });
-  });
-
   it('keeps the darktable NSIS extraction observable within a bounded wait', () => {
     expect(
       applyApplicationPackagingAdapter('darktable.darktable', DEFAULT_PSADT_CONFIG)

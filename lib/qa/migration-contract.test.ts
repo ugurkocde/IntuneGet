@@ -1424,3 +1424,26 @@ describe('DesktopOK managed uninstall block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('Speek managed lifecycle block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260824165000_block_speek_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the disproven non-ARP adapter across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Speek.Speek'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32752063718'
+    );
+    expect(sql).toContain('requests user-level execution');
+    expect(sql).toContain('zero new uninstall entries');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
