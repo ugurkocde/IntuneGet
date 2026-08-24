@@ -247,6 +247,12 @@ describe('application packaging adapters', () => {
       ' ultimategadgetlaboratories.uhkagent ',
       undefined
     )).toBe('user');
+    expect(
+      resolveApplicationInstallScope('RedisInsight.RedisInsight', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' redisinsight.redisinsight ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('Rakuten.Viber', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' rakuten.viber ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('TorProject.TorBrowser', 'machine')).toBe('user');

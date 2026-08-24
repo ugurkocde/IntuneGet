@@ -206,6 +206,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // RedisInsight 3.4.2's tagged Electron Builder configuration explicitly
+    // sets NSIS perMachine=false. WinGet omits Scope, so the generic machine
+    // default installs below LocalSystem's disposable systemprofile and records
+    // an uninstaller that is gone by the removal cycle. Keep the shared customer
+    // package and QA lifecycle in the vendor's intended signed-in user context.
+    // https://github.com/RedisInsight/RedisInsight/blob/3.4.2/electron-builder.json
+    wingetId: 'RedisInsight.RedisInsight',
+    requiredInstallScope: 'user',
+  },
+  {
     // Viber's MSI is declared machine-scope by WinGet, but its Directory
     // table targets LocalAppData. Under LocalSystem that resolves to the
     // system profile and the vendor's VerifyInstalledFiles action rolls the

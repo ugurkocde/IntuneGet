@@ -651,6 +651,35 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
+  it('tests RedisInsight in user context when its NSIS manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'RedisInsight.RedisInsight',
+        name: 'Redis Insight',
+        publisher: 'Redis Ltd.',
+        version: '3.4.2',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        ProductCode: '35443657-9fe0-5c86-a3fe-135cfbd99cbb',
+        AppsAndFeaturesEntries: [{ DisplayName: 'Redis Insight' }],
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\RedisInsight_RedisInsight',
+      }),
+    ]);
+  });
+
   it('tests Youdao in user context when its NSIS manifest omits scope', () => {
     const config = buildQaCatalogTestConfig({
       app: {
