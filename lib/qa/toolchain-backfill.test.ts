@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('does not replay DesktopOK after activating its managed-uninstall block', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' softwareok.desktopok ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('softwareok.desktopok');
+  });
+
   it('retries RedisInsight only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
@@ -120,7 +131,6 @@ describe('QA toolchain targeted retries', () => {
       'Microsoft.FSLogix',
       'AvaCC.AvaDesktop',
       'Microsoft.RMSClient',
-      'SoftwareOK.DesktopOK',
       'Movavi.MovaviPhotoFocus',
       'RedHat.Podman-Desktop',
       'PDFsam.PDFsam',
@@ -176,7 +186,6 @@ describe('QA toolchain targeted retries', () => {
         'Microsoft.FSLogix',
         'Google.Chrome.Beta.EXE',
         'Microsoft.RMSClient',
-        'SoftwareOK.DesktopOK',
         'Movavi.MovaviPhotoFocus',
         'RedHat.Podman-Desktop',
         'PDFsam.PDFsam',
@@ -393,10 +402,14 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries DesktopOK only after activating its exact silent removal command', () => {
+  it('keeps DesktopOK retries confined to its retired repair releases', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'softwareok.desktopok', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f79b14647328d39bca04dada822a07f70573aa49',
+      { wingetId: 'SoftwareOK.DesktopOK', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '0a3741207b9fbab73f108b0b6f214ab9d2ffedfa',

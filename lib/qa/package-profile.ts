@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'fe8a13f4473a3528368d7a97ff410df1961c594a',
+  packagerCommit: 'd64f6815b43c16428d83cde1b909e6503d7cc40f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -338,6 +338,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // RedisInsight's reviewed per-user scope changes only its Electron NSIS
   // lifecycle. Preserve every unrelated compatible pass from the prior release.
   '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
+  // DesktopOK is now blocked because it has no verified unattended removal
+  // contract. Preserve every compatible pass for the remaining eligible apps.
+  'fe8a13f4473a3528368d7a97ff410df1961c594a',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

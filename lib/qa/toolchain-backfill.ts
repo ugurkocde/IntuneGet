@@ -173,7 +173,16 @@ const REDISINSIGHT_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...ATLASSIAN_QUIET_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const DESKTOPOK_BLOCK_RELEASE_RETRY_TARGETS =
+  REDISINSIGHT_USER_SCOPE_RELEASE_RETRY_TARGETS.filter(
+    (wingetId) => wingetId.toLowerCase() !== 'softwareok.desktopok'
+  );
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  // DesktopOK is eligibility-blocked, so this release carries the prior
+  // bounded retry set without replaying its unsupported removal lifecycle.
+  'd64f6815b43c16428d83cde1b909e6503d7cc40f':
+    DESKTOPOK_BLOCK_RELEASE_RETRY_TARGETS,
   'fe8a13f4473a3528368d7a97ff410df1961c594a':
     REDISINSIGHT_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '2eaa857bc5a1297ec7e7b521307079de4622b0b7':
