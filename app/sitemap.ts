@@ -11,16 +11,21 @@ export function generateSitemaps() {
 
 export default async function sitemap({ id }: { id: Promise<number> }): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
-  const sitemapId = await id;
+  // At request time Next resolves the [id] URL segment as a string, so coerce
+  // before comparing; otherwise every segment falls through to the static set.
+  const sitemapId = Number(await id);
 
   if (sitemapId === 1) {
     const apps = await getCatalogSource().getVerifiedAppIds().catch(() => []);
-    return apps.map((app) => ({
-      url: absoluteAppCatalogUrl(app.winget_id),
-      lastModified: now,
-      changeFrequency: "daily" as const,
-      priority: 0.8,
-    }));
+    return apps.map((app) => {
+      const updated = app.updated_at ? new Date(app.updated_at) : null;
+      return {
+        url: absoluteAppCatalogUrl(app.winget_id),
+        lastModified: updated && !Number.isNaN(updated.getTime()) ? updated : now,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+      };
+    });
   }
 
   if (sitemapId === 2) {
