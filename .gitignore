@@ -67,3 +67,6 @@ packager/work/
 packager/tools/
 packager/.env
 packager/.env.*
+
+# Catalog snapshot runtime artifacts
+/data/

@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 import { blogPosts } from "@/lib/data/blog-data";
 import { getCatalogSource } from "@/lib/catalog";
-import { absoluteAppCatalogUrl, categorySlug } from "@/lib/catalog/seo";
+import { absoluteAppCatalogUrl, mergeCategoryCounts } from "@/lib/catalog/seo";
 
 const BASE_URL = "https://intuneget.com";
 
@@ -25,8 +25,8 @@ export default async function sitemap({ id }: { id: Promise<number> }): Promise<
 
   if (sitemapId === 2) {
     const categories = await getCatalogSource().getCategories().catch(() => []);
-    return categories.map(({ category }) => ({
-      url: `${BASE_URL}/apps/category/${categorySlug(category)}`,
+    return mergeCategoryCounts(categories).map(({ slug }) => ({
+      url: `${BASE_URL}/apps/category/${slug}`,
       lastModified: now,
       changeFrequency: "weekly" as const,
       priority: 0.7,

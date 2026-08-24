@@ -113,7 +113,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       baseQuery = baseQuery.eq('is_verified', true);
     }
 
-    const countQuery = category ? baseQuery.eq('category', category) : baseQuery;
+    const countQuery = category ? baseQuery.ilike('category', category) : baseQuery;
     const { count: totalCount, error: countError } = await countQuery;
 
     if (countError) {
@@ -134,7 +134,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
 
     if (category) {
-      dataQuery = dataQuery.eq('category', category);
+      dataQuery = dataQuery.ilike('category', category);
     }
 
     switch (sort) {

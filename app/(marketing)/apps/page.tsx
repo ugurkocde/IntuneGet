@@ -1,12 +1,13 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { T, Var } from "gt-next";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/sections/Footer";
 import { CatalogAppCard } from "@/components/catalog/CatalogAppCard";
 import { CatalogCta } from "@/components/catalog/CatalogCta";
 import { getCatalogSource } from "@/lib/catalog";
-import { categorySlug } from "@/lib/catalog/seo";
+import { mergeCategoryCounts } from "@/lib/catalog/seo";
 import { formatAppCountLabel } from "@/lib/stats/public-stats";
 import { CatalogSearch } from "./CatalogSearch";
 
@@ -58,6 +59,7 @@ export default async function AppsPage() {
 
   const apps = popular?.data ?? [];
   const countLabel = formatAppCountLabel(stats.totalApps);
+  const mergedCategories = mergeCategoryCounts(categories);
 
   return (
     <div className="min-h-screen bg-bg-deepest flex flex-col">
@@ -123,19 +125,36 @@ export default async function AppsPage() {
           </section>
 
           <section aria-labelledby="browse-category-heading" className="space-y-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <h2 id="browse-category-heading" className="text-xl font-semibold text-text-primary"><T>Browse by category</T></h2>
-              <Link href="/apps/browse" className="text-sm font-medium text-accent-cyan hover:underline"><T>Browse all apps</T></Link>
-            </div>
-            {categories.length > 0 ? (
+            <h2 id="browse-category-heading" className="text-xl font-semibold text-text-primary"><T>Browse by category</T></h2>
+            {mergedCategories.length > 0 ? (
               <div className="flex flex-wrap gap-3">
-                {categories.map(({ category, count }) => (
-                  <Link key={category} href={`/apps/category/${categorySlug(category)}`} className="rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 text-sm text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-accent-cyan">
-                    <T><Var>{category}</Var> <Var>{count}</Var></T>
+                {mergedCategories.map(({ slug, name, count }) => (
+                  <Link
+                    key={slug}
+                    href={`/apps/category/${slug}`}
+                    className="group inline-flex items-center gap-2.5 rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-2.5 transition-colors hover:border-accent-cyan/40"
+                  >
+                    <span className="text-sm font-medium text-text-primary group-hover:text-accent-cyan">
+                      <Var>{name}</Var>
+                    </span>
+                    <span className="rounded-full bg-bg-surface px-2 py-0.5 text-xs tabular-nums text-text-muted">
+                      <Var>{count.toLocaleString("en-US")}</Var>
+                    </span>
                   </Link>
                 ))}
               </div>
             ) : <p className="text-text-secondary"><T>Categories are temporarily unavailable. You can still browse the full catalog.</T></p>}
+            <Link
+              href="/apps/browse"
+              className="inline-flex items-center gap-2 rounded-xl border border-accent-cyan/40 px-6 py-3 text-base font-semibold text-accent-cyan transition-colors hover:bg-accent-cyan/10"
+            >
+              {countLabel ? (
+                <T>Browse all <Var>{countLabel}</Var> apps</T>
+              ) : (
+                <T>Browse all apps</T>
+              )}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </section>
 
           <CatalogCta />

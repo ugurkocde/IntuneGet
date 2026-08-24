@@ -281,7 +281,7 @@ export class SnapshotCatalogSource implements CatalogSource {
     return withDb(
       (db) => {
         const { limit, offset, category, sort, verifiedOnly = true } = opts;
-        const categoryClause = category ? 'AND category = @category' : '';
+        const categoryClause = category ? 'AND category = @category COLLATE NOCASE' : '';
         const verifiedClause = verifiedOnly ? 'AND is_verified = 1' : '';
         const baseParams: Record<string, unknown> = category ? { category } : {};
 

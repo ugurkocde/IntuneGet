@@ -14,6 +14,7 @@ import { getCatalogSource } from '@/lib/catalog';
 import {
   absoluteAppCatalogUrl,
   appCatalogHref,
+  categoryDisplayName,
   categorySlug,
   resolveCatalogIconUrl,
 } from '@/lib/catalog/seo';
@@ -65,16 +66,38 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+// Maps the catalog's category slugs to schema.org ApplicationCategory values.
 const schemaCategory: Record<string, string> = {
-  browsers: 'BrowserApplication',
+  audio: 'MultimediaApplication',
+  automation: 'DeveloperApplication',
+  backup: 'UtilitiesApplication',
+  browser: 'BrowserApplication',
+  business: 'BusinessApplication',
+  'cloud-storage': 'UtilitiesApplication',
+  collaboration: 'CommunicationApplication',
   communication: 'CommunicationApplication',
-  development: 'DeveloperApplication',
+  database: 'DeveloperApplication',
+  design: 'DesignApplication',
+  'developer-tools': 'DeveloperApplication',
+  devops: 'DeveloperApplication',
   education: 'EducationalApplication',
-  games: 'GameApplication',
-  multimedia: 'MultimediaApplication',
+  finance: 'FinanceApplication',
+  gaming: 'GameApplication',
+  graphics: 'MultimediaApplication',
+  ide: 'DeveloperApplication',
+  media: 'MultimediaApplication',
+  monitoring: 'UtilitiesApplication',
+  networking: 'UtilitiesApplication',
+  office: 'BusinessApplication',
+  'package-management': 'DeveloperApplication',
+  photo: 'MultimediaApplication',
   productivity: 'BusinessApplication',
+  runtime: 'UtilitiesApplication',
   security: 'SecurityApplication',
+  system: 'UtilitiesApplication',
   utilities: 'UtilitiesApplication',
+  video: 'MultimediaApplication',
+  virtualization: 'UtilitiesApplication',
 };
 
 export default async function AppDetailPage({ params }: PageProps) {
@@ -94,6 +117,7 @@ export default async function AppDetailPage({ params }: PageProps) {
   ]);
   const related = (relatedResult?.data ?? []).filter((item) => item.winget_id !== app.winget_id).slice(0, 6);
   const category = app.category || null;
+  const categoryName = category ? categoryDisplayName(category) : null;
   const categoryHref = category ? `/apps/category/${categorySlug(category)}` : null;
   const recentVersions = versions.slice(0, 10);
   const appSource = app.app_source === 'store' ? 'Microsoft Store' : app.app_source === 'winget' ? 'WinGet' : app.app_source;
@@ -141,7 +165,7 @@ export default async function AppDetailPage({ params }: PageProps) {
 
         <header className="space-y-3">
           <h1 className="text-3xl font-bold text-text-primary sm:text-4xl"><T>Deploy <Var>{app.name}</Var> to Microsoft Intune</T></h1>
-          <p className="text-lg text-text-secondary"><T>Published by <Var>{app.publisher}</Var>{category ? <> in <Var>{category}</Var></> : null}</T></p>
+          <p className="text-lg text-text-secondary"><T>Published by <Var>{app.publisher}</Var>{categoryName ? <> in <Var>{categoryName}</Var></> : null}</T></p>
         </header>
 
         <section className="rounded-2xl border border-overlay/10 bg-bg-elevated p-6">
@@ -153,9 +177,8 @@ export default async function AppDetailPage({ params }: PageProps) {
                 <div><dt className="text-text-muted"><T>Publisher</T></dt><dd className="text-text-primary"><Var>{app.publisher}</Var></dd></div>
                 {app.homepage && <div><dt className="text-text-muted"><T>Homepage</T></dt><dd><a href={app.homepage} target="_blank" rel="noopener nofollow" className="inline-flex items-center gap-1 text-accent-cyan hover:underline"><T>Visit publisher website</T><ExternalLink className="h-3.5 w-3.5" /></a></dd></div>}
                 {app.license && <div><dt className="text-text-muted"><T>License</T></dt><dd className="text-text-primary"><Var>{app.license}</Var></dd></div>}
-                {category && <div><dt className="text-text-muted"><T>Category</T></dt><dd className="text-text-primary"><Var>{category}</Var></dd></div>}
+                {categoryName && <div><dt className="text-text-muted"><T>Category</T></dt><dd className="text-text-primary">{categoryHref ? <Link href={categoryHref} className="text-accent-cyan hover:underline"><Var>{categoryName}</Var></Link> : <Var>{categoryName}</Var>}</dd></div>}
               </dl>
-              {app.tags && app.tags.length > 0 && <div className="flex flex-wrap gap-2">{app.tags.map((tag) => <span key={tag} className="rounded-full bg-bg-surface px-3 py-1 text-xs text-text-secondary"><Var>{tag}</Var></span>)}</div>}
             </div>
           </div>
         </section>
@@ -164,12 +187,12 @@ export default async function AppDetailPage({ params }: PageProps) {
 
         {qa && <section className="space-y-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-6"><h2 className="text-2xl font-semibold text-text-primary"><T>Tested by IntuneGet QA</T></h2><div className="flex items-center gap-2">{qa.outcome === 'Passed' ? <CheckCircle2 className="h-5 w-5 text-green-400" /> : <XCircle className="h-5 w-5 text-red-400" />}<span className="font-medium text-text-primary"><Var>{qa.outcome}</Var></span></div><p className="text-sm text-text-secondary"><T>Version <Var>{qa.tested_version}</Var> tested on <Var>{new Date(qa.tested_at_utc).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</Var>.</T></p></section>}
 
-        {recentVersions.length > 0 && <section className="space-y-5"><h2 className="text-2xl font-semibold text-text-primary"><T>Version history</T></h2><ol className="grid gap-3 sm:grid-cols-2">{recentVersions.map((version) => <li key={version} className="rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 font-mono text-sm text-text-secondary"><Var>{version}</Var></li>)}</ol></section>}
+        {recentVersions.length > 0 && <section className="space-y-4"><h2 className="text-2xl font-semibold text-text-primary"><T>Recent versions</T></h2><ol className="flex flex-wrap gap-2">{recentVersions.map((version) => <li key={version} className="rounded-lg border border-overlay/10 bg-bg-elevated px-3 py-1.5 font-mono text-sm text-text-secondary"><Var>{version}</Var></li>)}</ol></section>}
 
         <section className="space-y-3"><h2 className="text-2xl font-semibold text-text-primary"><T>How deployment works</T></h2><p className="max-w-3xl text-text-secondary"><T>IntuneGet packages <Var>{app.name}</Var> as a Win32 app and uploads it directly to your Microsoft Intune tenant. You review the package settings, configure assignments, and start the deployment from one guided workflow.</T></p></section>
         <CatalogCta appName={app.name} />
 
-        <section className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><h2 className="text-2xl font-semibold text-text-primary"><T>Related apps</T></h2><div className="flex gap-4 text-sm">{categoryHref && <Link href={categoryHref} className="text-accent-cyan hover:underline"><T>Browse <Var>{category}</Var></T></Link>}<Link href="/apps" className="text-accent-cyan hover:underline"><T>View app catalog</T></Link></div></div>{related.length > 0 && <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{related.map((item) => <CatalogAppCard key={item.winget_id} app={item} />)}</div>}</section>
+        <section className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><h2 className="text-2xl font-semibold text-text-primary"><T>Related apps</T></h2><div className="flex gap-4 text-sm">{categoryHref && <Link href={categoryHref} className="text-accent-cyan hover:underline"><T>Browse <Var>{categoryName}</Var></T></Link>}<Link href="/apps" className="text-accent-cyan hover:underline"><T>View app catalog</T></Link></div></div>{related.length > 0 && <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{related.map((item) => <CatalogAppCard key={item.winget_id} app={item} />)}</div>}</section>
       </main>
       <Footer />
     </div>
