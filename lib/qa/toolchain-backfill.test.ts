@@ -161,6 +161,7 @@ describe('QA toolchain targeted retries', () => {
       'Microsoft.VisualStudio.2019.BuildTools',
       'Microsoft.VisualStudio.2022.BuildTools',
       'Surfshark.Surfshark',
+      'Waterfox.Waterfox',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -214,6 +215,7 @@ describe('QA toolchain targeted retries', () => {
         'Microsoft.VisualStudio.2017.BuildTools',
         'Microsoft.VisualStudio.2019.BuildTools',
         'Microsoft.VisualStudio.2022.BuildTools',
+        'Waterfox.Waterfox',
       ])
     );
     expect(
@@ -222,6 +224,17 @@ describe('QA toolchain targeted retries', () => {
     expect(
       terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
     ).not.toContain('Tencent.QQ.NT');
+  });
+
+  it('retries Waterfox only after activating its silent helper contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' waterfox.waterfox ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '44c38ddec97b546c7423374e09387d812e2386cc',
+      { wingetId: 'Waterfox.Waterfox', status: 'failed' }
+    )).toBe(false);
   });
 
   it('retries ElegantClipboard only after activating its reviewed user scope', () => {

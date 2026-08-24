@@ -183,7 +183,16 @@ const SPEEK_BLOCK_RELEASE_RETRY_TARGETS =
     (wingetId) => wingetId.toLowerCase() !== 'speek.speek'
   );
 
+const WATERFOX_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Re-run the exact failed Waterfox release with Mozilla's unattended /S
+  // helper contract, then carry every still-unconsumed bounded target.
+  'Waterfox.Waterfox',
+  ...SPEEK_BLOCK_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '937a4d51d8c62885f76cb896fa3d742069436ee2':
+    WATERFOX_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   // Speek is eligibility-blocked after its reviewed machine install contract
   // failed, so carry the bounded set without replaying Speek or DesktopOK.
   '44c38ddec97b546c7423374e09387d812e2386cc':

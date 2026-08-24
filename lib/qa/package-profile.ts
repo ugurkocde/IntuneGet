@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '44c38ddec97b546c7423374e09387d812e2386cc',
+  packagerCommit: '937a4d51d8c62885f76cb896fa3d742069436ee2',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -344,6 +344,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Speek is now blocked after its reviewed non-ARP adapter failed to produce a
   // stable machine payload. Preserve compatible passes for all eligible apps.
   'd64f6815b43c16428d83cde1b909e6503d7cc40f',
+  // Waterfox now appends the reviewed Mozilla-family /S switch only to its
+  // captured ARP helper command. Preserve every unrelated compatible pass.
+  '44c38ddec97b546c7423374e09387d812e2386cc',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
