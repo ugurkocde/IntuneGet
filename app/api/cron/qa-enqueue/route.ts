@@ -111,6 +111,7 @@ interface QaCandidateProfileRow {
   test_config: unknown;
   status: string;
   priority: number;
+  demand_source: string;
 }
 
 interface QaPackagePassRow {
@@ -164,19 +165,36 @@ async function findToolchainBackfillIds(
   const decidedIds = new Set<string>();
   const supportedStaleCandidates: QaToolchainBackfillCandidate[] = [];
   const retryTargets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
+  const terminalRetryIds = new Set(retryTargets.map((id) => id.trim().toLowerCase()));
   let pendingTerminalRetryIds = new Set<string>();
   if (retryTargets.length > 0) {
-    const { data: deployedRetryTargets, error: deployedRetryTargetsError } = await supabase
-      .from('upload_history')
-      .select('winget_id')
-      .in('winget_id', retryTargets);
+    const [deployedRetryResult, customerRetryResult] = await Promise.all([
+      supabase
+        .from('upload_history')
+        .select('winget_id')
+        .in('winget_id', retryTargets),
+      supabase
+        .from('packaging_jobs')
+        .select('winget_id')
+        .in('winget_id', retryTargets)
+        .in('status', ['awaiting_qa', 'qa_failed']),
+    ]);
+    const { data: deployedRetryTargets, error: deployedRetryTargetsError } = deployedRetryResult;
     if (deployedRetryTargetsError) {
       throw new Error(
         `Could not read deployed QA toolchain retry targets: ${deployedRetryTargetsError.message}`
       );
     }
+    if (customerRetryResult.error) {
+      throw new Error(
+        `Could not read customer QA toolchain retry targets: ${customerRetryResult.error.message}`
+      );
+    }
     pendingTerminalRetryIds = new Set(
-      (deployedRetryTargets || []).map((row) => row.winget_id.trim().toLowerCase())
+      [
+        ...(deployedRetryTargets || []),
+        ...(customerRetryResult.data || []),
+      ].map((row) => row.winget_id.trim().toLowerCase())
     );
   }
   let cursor: { enqueuedAt: string; id: string } | null = null;
@@ -186,7 +204,7 @@ async function findToolchainBackfillIds(
     let candidateQuery = supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_sha256, enqueued_at, package_profile_sha256, test_config, status, priority'
+        'id, winget_id, version, architecture, installer_sha256, enqueued_at, package_profile_sha256, test_config, status, priority, demand_source'
       )
       .eq('test_level', 'psadt-package')
       .not('package_profile_sha256', 'is', null)
@@ -208,7 +226,15 @@ async function findToolchainBackfillIds(
     for (const row of rows) {
       const config = object(row.test_config);
       const normalizedWingetId = row.winget_id.trim().toLowerCase();
-      if (config.profileKind !== 'catalog-default' || decidedIds.has(normalizedWingetId)) continue;
+      const isReviewedCustomerTerminalRetry =
+        config.profileKind === 'deployment-config' &&
+        row.demand_source === 'customer' &&
+        ['failed', 'error'].includes(row.status) &&
+        terminalRetryIds.has(normalizedWingetId);
+      if (
+        (config.profileKind !== 'catalog-default' && !isReviewedCustomerTerminalRetry) ||
+        decidedIds.has(normalizedWingetId)
+      ) continue;
       decidedIds.add(normalizedWingetId);
       pendingTerminalRetryIds.delete(normalizedWingetId);
       const validation = validateCurrentQaPackageProfile({
@@ -279,7 +305,7 @@ async function findToolchainBackfillIds(
 
     if (pageStaleRows.length > 0) {
       const pageStaleIds = pageStaleRows.map((row) => row.winget_id);
-      const [supportedResult, deployedResult] = await Promise.all([
+      const [supportedResult, deployedResult, customerJobResult] = await Promise.all([
         supabase
           .from('curated_apps')
           .select('winget_id')
@@ -292,6 +318,11 @@ async function findToolchainBackfillIds(
           .from('upload_history')
           .select('winget_id')
           .in('winget_id', pageStaleIds),
+        supabase
+          .from('packaging_jobs')
+          .select('winget_id')
+          .in('winget_id', pageStaleIds)
+          .in('status', ['awaiting_qa', 'qa_failed']),
       ]);
       const { data: supported, error: supportedError } = supportedResult;
       if (supportedError) {
@@ -302,12 +333,21 @@ async function findToolchainBackfillIds(
           `Could not filter QA toolchain backfill demand: ${deployedResult.error.message}`
         );
       }
+      if (customerJobResult.error) {
+        throw new Error(
+          `Could not filter QA toolchain customer demand: ${customerJobResult.error.message}`
+        );
+      }
       const supportedIds = new Set((supported || []).map((app) => app.winget_id));
       // Toolchain refreshes consume the same single-VM queue as new tests.
-      // An auto-update policy may raise priority, but only a durable tenant
-      // deployment is allowed to put an app into the background campaign.
+      // An auto-update policy may raise priority. A completed tenant deployment
+      // or a still-recorded customer packaging request may put an app into a
+      // reviewed terminal retry; both are durable customer demand.
       const demandedIds = new Set(
-        (deployedResult.data || []).map((row) => row.winget_id)
+        [
+          ...(deployedResult.data || []),
+          ...(customerJobResult.data || []),
+        ].map((row) => row.winget_id)
       );
       for (const row of pageStaleRows) {
         if (supportedIds.has(row.winget_id) && demandedIds.has(row.winget_id)) {
@@ -610,6 +650,10 @@ export async function GET(request: Request) {
     }
     const changedIds = new Set(changes.changedPackageIds);
     const backfillIds = new Set(backfill.ids);
+    const terminalBackfillIds = new Set(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((id) => id.trim().toLowerCase())
+    );
     const demandBackfillIdSet = new Set(demandBackfillIds);
     const catalogBackfillIdSet = new Set(catalogBackfillIds);
     const targetedIdSet = new Set(requestedPackageIds);
@@ -743,8 +787,15 @@ export async function GET(request: Request) {
       demandedIds.add(deployed.winget_id);
       if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
     }
+    for (const wingetId of backfillIds) {
+      if (terminalBackfillIds.has(wingetId.trim().toLowerCase())) {
+        priorities.set(wingetId, Math.max(priorities.get(wingetId) || 0, TARGETED_QA_PRIORITY));
+      }
+    }
     supportedApps = supportedApps.filter((app) =>
-      demandedIds.has(app.winget_id) || catalogBackfillIdSet.has(app.winget_id)
+      demandedIds.has(app.winget_id) ||
+      backfillIds.has(app.winget_id) ||
+      catalogBackfillIdSet.has(app.winget_id)
     );
     targetedCount = supportedApps.filter((app) => targetedIdSet.has(app.winget_id)).length;
     for (const app of supportedApps) {
@@ -1018,9 +1069,11 @@ export async function GET(request: Request) {
                   ? 'auto_update'
                   : targetedIdSet.has(app.winget_id)
                     ? 'operator'
-                    : catalogBackfillIdSet.has(app.winget_id)
-                      ? 'catalog'
-                      : 'managed',
+                    : terminalBackfillIds.has(app.winget_id.trim().toLowerCase())
+                      ? 'operator'
+                      : catalogBackfillIdSet.has(app.winget_id)
+                        ? 'catalog'
+                        : 'managed',
                 failure_summary: !packagingContract.valid
                   ? `Packaging preflight: ${packagingContract.message}`
                   : null,

@@ -82,6 +82,7 @@ function createSupabaseStub(options: {
   demandBackfillApps?: string[];
   catalogBackfillApps?: string[];
   deployedApps?: string[];
+  customerQaJobs?: string[];
   pollState?: Record<string, unknown>;
   packageResults?: Array<Record<string, unknown>>;
   installerHealth?: Array<Record<string, unknown>>;
@@ -189,6 +190,12 @@ function createSupabaseStub(options: {
           error: null,
         });
       }
+      if (table === 'packaging_jobs') {
+        return query({
+          data: (options.customerQaJobs || []).map((winget_id) => ({ winget_id })),
+          error: null,
+        });
+      }
       if (table === 'app_update_policies') {
         return query({ data: [], error: null });
       }
@@ -259,6 +266,7 @@ function profileCandidate(options: {
   interactive?: boolean;
   status?: string;
   priority?: number;
+  demandSource?: string;
 }): Record<string, unknown> {
   const profileKind = options.profileKind || 'catalog-default';
   const version = '1.0.0';
@@ -310,6 +318,7 @@ function profileCandidate(options: {
     enqueued_at: options.enqueuedAt || '2026-08-08T10:00:00.000Z',
     status: options.status || 'superseded',
     priority: options.priority ?? 1,
+    demand_source: options.demandSource || 'managed',
     package_profile_sha256: packageProfileSha256,
     test_config: {
       profileKind,
@@ -1204,6 +1213,43 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(body).toMatchObject({ checked: 0, queued: 0, toolchainBackfillCount: 0 });
     expect(candidateInserts).toHaveLength(0);
     expect(resolveManifestMock).not.toHaveBeenCalled();
+  });
+
+  it('retries a reviewed customer failure before the first successful upload', async () => {
+    const wingetId = 'RedisInsight.RedisInsight';
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: wingetId, name: 'Redis Insight', publisher: 'Redis' }],
+      deployedApps: [],
+      customerQaJobs: [wingetId],
+      candidates: [
+        profileCandidate({
+          id: 'redisinsight-customer-failure',
+          wingetId,
+          packagerCommit: '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
+          profileKind: 'deployment-config',
+          status: 'failed',
+          priority: 2000,
+          demandSource: 'customer',
+        }),
+      ],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 1, toolchainBackfillCount: 1 });
+    expect(candidateInserts[0]).toMatchObject({
+      winget_id: wingetId,
+      priority: 1000,
+      demand_source: 'operator',
+    });
+    const canonical = JSON.parse(
+      String((candidateInserts[0].test_config as Record<string, unknown>).packageProfileCanonicalJson)
+    );
+    expect(canonical.installer.installScope).toBe('user');
   });
 
   it('reuses a passing release from the immediately preceding compatible packager', async () => {
