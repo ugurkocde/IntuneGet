@@ -1,11 +1,12 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { T, Var } from "gt-next";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/sections/Footer";
-import { AppIcon } from "@/components/AppIcon";
+import { CatalogAppCard } from "@/components/catalog/CatalogAppCard";
+import { CatalogCta } from "@/components/catalog/CatalogCta";
 import { getCatalogSource } from "@/lib/catalog";
+import { categorySlug } from "@/lib/catalog/seo";
 import { formatAppCountLabel } from "@/lib/stats/public-stats";
 import { CatalogSearch } from "./CatalogSearch";
 
@@ -47,11 +48,12 @@ const breadcrumbJsonLd = {
 
 export default async function AppsPage() {
   const source = getCatalogSource();
-  const [popular, stats] = await Promise.all([
+  const [popular, stats, categories] = await Promise.all([
     source
       .getPopularApps({ limit: 24, offset: 0, sort: "popular" })
       .catch(() => null),
     source.getCatalogStats().catch(() => ({ totalApps: 0 })),
+    source.getCategories().catch(() => []),
   ]);
 
   const apps = popular?.data ?? [];
@@ -108,27 +110,7 @@ export default async function AppsPage() {
             </h2>
             {apps.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {apps.map((app) => (
-                  <div
-                    key={app.winget_id}
-                    className="flex items-center gap-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-4"
-                  >
-                    <AppIcon
-                      packageId={app.winget_id}
-                      packageName={app.name}
-                      iconPath={app.icon_path ?? undefined}
-                      size="lg"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-text-primary">
-                        {app.name}
-                      </p>
-                      <p className="truncate text-sm text-text-muted">
-                        {app.publisher}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                {apps.map((app) => <CatalogAppCard key={app.winget_id} app={app} />)}
               </div>
             ) : (
               <p className="text-text-secondary">
@@ -140,25 +122,23 @@ export default async function AppsPage() {
             )}
           </section>
 
-          {/* Closing CTA band */}
-          <section className="rounded-2xl border border-overlay/10 bg-bg-elevated p-8 text-center space-y-4">
-            <h2 className="text-2xl font-bold text-text-primary">
-              <T>Ready to deploy these apps to Intune?</T>
-            </h2>
-            <p className="mx-auto max-w-xl text-text-secondary">
-              <T>
-                Sign in with your Microsoft work account, pick your apps, and
-                deploy your first one in about 5 minutes.
-              </T>
-            </p>
-            <Link
-              href="/auth/signin"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base font-semibold text-white bg-accent-cyan rounded-xl hover:bg-accent-cyan-dim transition-all duration-300 shadow-glow-cyan hover:shadow-glow-cyan-lg"
-            >
-              <T>Start Deploying Free</T>
-              <ArrowRight className="h-5 w-5" />
-            </Link>
+          <section aria-labelledby="browse-category-heading" className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h2 id="browse-category-heading" className="text-xl font-semibold text-text-primary"><T>Browse by category</T></h2>
+              <Link href="/apps/browse" className="text-sm font-medium text-accent-cyan hover:underline"><T>Browse all apps</T></Link>
+            </div>
+            {categories.length > 0 ? (
+              <div className="flex flex-wrap gap-3">
+                {categories.map(({ category, count }) => (
+                  <Link key={category} href={`/apps/category/${categorySlug(category)}`} className="rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 text-sm text-text-secondary transition-colors hover:border-accent-cyan/40 hover:text-accent-cyan">
+                    <T><Var>{category}</Var> <Var>{count}</Var></T>
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="text-text-secondary"><T>Categories are temporarily unavailable. You can still browse the full catalog.</T></p>}
           </section>
+
+          <CatalogCta />
         </div>
       </main>
 

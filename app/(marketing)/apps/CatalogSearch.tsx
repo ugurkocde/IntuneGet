@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Loader2, Search } from "lucide-react";
 import { T, Var, useGT } from "gt-next";
 import { AppIcon } from "@/components/AppIcon";
+import { appCatalogHref } from "@/lib/catalog/seo";
 
 interface SearchResult {
   id: string;
@@ -108,9 +110,10 @@ export function CatalogSearch() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {results.map((app) => (
-                <div
+                <Link
                   key={app.id}
-                  className="flex items-center gap-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-4"
+                  href={appCatalogHref(app.id)}
+                  className="group flex items-center gap-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-4 transition-colors hover:border-accent-cyan/40 hover:bg-bg-surface"
                 >
                   <AppIcon
                     packageId={app.id}
@@ -119,14 +122,15 @@ export function CatalogSearch() {
                     size="lg"
                   />
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-text-primary">
+                    <p className="truncate font-medium text-text-primary group-hover:text-accent-cyan">
                       {app.name}
                     </p>
                     <p className="truncate text-sm text-text-muted">
                       {app.publisher}
                     </p>
                   </div>
-                </div>
+                  <span className="sr-only"><T>View deployment details</T></span>
+                </Link>
               ))}
             </div>
           )}
