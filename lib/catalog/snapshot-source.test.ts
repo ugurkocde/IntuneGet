@@ -246,10 +246,8 @@ describe('SnapshotCatalogSource', () => {
   });
 
   it('getVerifiedAppIds returns canonical apps in popularity order', async () => {
-    await expect(source.getVerifiedAppIds(2)).resolves.toEqual([
-      { winget_id: 'Google.Chrome' },
-      { winget_id: 'Mozilla.Firefox' },
-    ]);
+    const ids = await source.getVerifiedAppIds(2);
+    expect(ids.map((row) => row.winget_id)).toEqual(['Google.Chrome', 'Mozilla.Firefox']);
   });
 
   it('getCategories returns per-category counts', async () => {

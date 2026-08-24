@@ -209,19 +209,21 @@ export class SupabaseCatalogSource implements CatalogSource {
     }));
   }
 
-  async getVerifiedAppIds(limit?: number): Promise<{ winget_id: string }[]> {
+  async getVerifiedAppIds(
+    limit?: number
+  ): Promise<{ winget_id: string; updated_at?: string | null }[]> {
     const supabase = serviceOrAnonClient();
     if (!supabase) return [];
 
     const pageSize = limit === undefined ? 1000 : Math.min(limit, 1000);
-    const rows: { winget_id: string }[] = [];
+    const rows: { winget_id: string; updated_at?: string | null }[] = [];
     let offset = 0;
 
     while (limit === undefined || rows.length < limit) {
       const requested = limit === undefined ? pageSize : Math.min(pageSize, limit - rows.length);
       const { data, error } = await supabase
         .from('curated_apps')
-        .select('winget_id')
+        .select('winget_id, updated_at')
         .eq('is_verified', true)
         .eq('is_locale_variant', false)
         .not('latest_version', 'is', null)
@@ -233,7 +235,7 @@ export class SupabaseCatalogSource implements CatalogSource {
         console.error('Failed to list verified catalog apps:', error.message);
         return rows;
       }
-      const page = (data || []) as { winget_id: string }[];
+      const page = (data || []) as { winget_id: string; updated_at: string | null }[];
       rows.push(...page);
       if (page.length < requested) break;
       offset += page.length;

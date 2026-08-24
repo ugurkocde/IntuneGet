@@ -369,18 +369,25 @@ export class SnapshotCatalogSource implements CatalogSource {
     );
   }
 
-  async getVerifiedAppIds(limit?: number): Promise<{ winget_id: string }[]> {
+  async getVerifiedAppIds(
+    limit?: number
+  ): Promise<{ winget_id: string; updated_at?: string | null }[]> {
     return withDb(
       (db) => {
         const limitClause = limit === undefined ? '' : 'LIMIT @limit';
+        // The snapshot schema has no updated_at; created_at is the closest
+        // last-changed signal it carries.
         return db
           .prepare(
-            `SELECT winget_id FROM curated_apps
+            `SELECT winget_id, created_at AS updated_at FROM curated_apps
              WHERE is_verified = 1 AND is_locale_variant = 0 AND latest_version IS NOT NULL
              ORDER BY popularity_rank IS NULL, popularity_rank ASC, winget_id ASC
              ${limitClause}`
           )
-          .all(limit === undefined ? {} : { limit }) as { winget_id: string }[];
+          .all(limit === undefined ? {} : { limit }) as {
+          winget_id: string;
+          updated_at: string | null;
+        }[];
       },
       () => []
     );

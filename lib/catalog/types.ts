@@ -183,8 +183,12 @@ export interface CatalogSource {
   /** RPC get_curated_categories. */
   getCategories(): Promise<CategoryCount[]>;
 
-  /** Verified, canonical app ids for prerendering and segmented sitemaps. */
-  getVerifiedAppIds(limit?: number): Promise<{ winget_id: string }[]>;
+  /** Verified, canonical app ids for prerendering and segmented sitemaps.
+   *  updated_at carries the row's last catalog update when the store has one
+   *  (the snapshot only records created_at). */
+  getVerifiedAppIds(
+    limit?: number
+  ): Promise<{ winget_id: string; updated_at?: string | null }[]>;
 
   /** curated_apps count(head) with optional is_verified filter. */
   getCategoryCount(opts: { verifiedOnly: boolean }): Promise<number | null>;
