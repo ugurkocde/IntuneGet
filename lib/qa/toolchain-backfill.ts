@@ -166,7 +166,16 @@ const ATLASSIAN_QUIET_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...LEAF_ONLY_UNINSTALL_PATH_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const REDISINSIGHT_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // RedisInsight's NSIS installer is explicitly per-user. Re-run the failed
+  // release in user context, then carry every still-unconsumed bounded target.
+  'RedisInsight.RedisInsight',
+  ...ATLASSIAN_QUIET_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'fe8a13f4473a3528368d7a97ff410df1961c594a':
+    REDISINSIGHT_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '2eaa857bc5a1297ec7e7b521307079de4622b0b7':
     ATLASSIAN_QUIET_UNINSTALL_RELEASE_RETRY_TARGETS,
   '326eafef044af8579bc0089c9556a3d59e26cbe0':

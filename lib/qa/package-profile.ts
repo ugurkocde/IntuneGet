@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
+  packagerCommit: 'fe8a13f4473a3528368d7a97ff410df1961c594a',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -335,6 +335,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // The reviewed -q argument changes only Atlassian Service Management LTS.
   // Preserve every unrelated compatible pass from the parser release.
   '326eafef044af8579bc0089c9556a3d59e26cbe0',
+  // RedisInsight's reviewed per-user scope changes only its Electron NSIS
+  // lifecycle. Preserve every unrelated compatible pass from the prior release.
+  '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries RedisInsight only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' redisinsight.redisinsight ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2eaa857bc5a1297ec7e7b521307079de4622b0b7',
+      { wingetId: 'RedisInsight.RedisInsight', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries Atlassian only after activating its documented quiet uninstall', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
