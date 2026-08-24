@@ -1,3 +1,4 @@
+import { PopularAppLinks } from "@/components/catalog/PopularAppLinks";
 import { Metadata } from "next";
 import Link from "next/link";
 import { T } from "gt-next";
@@ -504,6 +505,8 @@ nssm start IntuneGetPackager`}
           </li>
         </ul>
       </section>
+
+      <PopularAppLinks />
     </div>
   );
 }

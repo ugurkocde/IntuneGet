@@ -1,3 +1,4 @@
+import { PopularAppLinks } from "@/components/catalog/PopularAppLinks";
 import { Metadata } from "next";
 import Link from "next/link";
 import { getBlogPost } from "@/lib/data/blog-data";
@@ -899,6 +900,9 @@ Write-Host "Results saved to C:\\Migration\\WingetMatchResults.csv"`}</code>
                 </Link>
                 .</T>
               </p>
+
+              <div className="mt-10"><PopularAppLinks /></div>
+
 
               {/* CTA */}
               <div className="mt-10 p-6 rounded-2xl bg-accent-cyan/5 border border-accent-cyan/20">
