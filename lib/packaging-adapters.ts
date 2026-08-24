@@ -408,6 +408,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // Waterfox uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
+    // command contains only the helper path, so invoking it unchanged opens an
+    // uninstall wizard that is invisible under SYSTEM and leaves the exact
+    // registration present. Append the Mozilla-family /S contract to that
+    // captured, version-specific command for both QA and customer packages.
+    wingetId: 'Waterfox.Waterfox',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // MEGA's installer source makes silent installs current-user by default.
     // Its reviewed /MULTIUSER option selects the AllUsers path required for
     // non-interactive LocalSystem deployment and machine-wide detection.

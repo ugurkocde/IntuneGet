@@ -979,6 +979,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('uses Mozilla NSIS silent mode with the exact Waterfox ARP command', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'waterfox.waterfox',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/S']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
   it('uses JetBrains Toolbox\'s documented headless uninstall mode', () => {
     const adapted = applyApplicationPackagingAdapter(
       'jetbrains.toolbox',
