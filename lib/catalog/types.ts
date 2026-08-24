@@ -171,6 +171,7 @@ export interface CatalogSource {
     offset: number;
     category?: string | null;
     sort: SearchSort;
+    verifiedOnly?: boolean;
   }): Promise<PopularPackagesResult | null>;
 
   /** RPC get_popular_curated_apps (normalized in winget-api). */
@@ -181,6 +182,9 @@ export interface CatalogSource {
 
   /** RPC get_curated_categories. */
   getCategories(): Promise<CategoryCount[]>;
+
+  /** Verified, canonical app ids for prerendering and segmented sitemaps. */
+  getVerifiedAppIds(limit?: number): Promise<{ winget_id: string }[]>;
 
   /** curated_apps count(head) with optional is_verified filter. */
   getCategoryCount(opts: { verifiedOnly: boolean }): Promise<number | null>;

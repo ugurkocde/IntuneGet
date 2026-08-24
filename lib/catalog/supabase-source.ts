@@ -89,6 +89,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     offset: number;
     category?: string | null;
     sort: SearchSort;
+    verifiedOnly?: boolean;
   }): Promise<PopularPackagesResult | null> {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey =
@@ -100,14 +101,17 @@ export class SupabaseCatalogSource implements CatalogSource {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { limit, offset, category, sort } = opts;
+    const { limit, offset, category, sort, verifiedOnly = true } = opts;
 
-    const baseQuery = supabase
+    let baseQuery = supabase
       .from('curated_apps')
       .select('*', { count: 'exact', head: true })
-      .eq('is_verified', true)
       .not('latest_version', 'is', null)
       .eq('is_locale_variant', false);
+
+    if (verifiedOnly) {
+      baseQuery = baseQuery.eq('is_verified', true);
+    }
 
     const countQuery = category ? baseQuery.eq('category', category) : baseQuery;
     const { count: totalCount, error: countError } = await countQuery;
@@ -122,9 +126,12 @@ export class SupabaseCatalogSource implements CatalogSource {
       .select(
         'id, winget_id, name, publisher, latest_version, description, homepage, category, tags, icon_path, popularity_rank, app_source, store_package_id'
       )
-      .eq('is_verified', true)
       .not('latest_version', 'is', null)
       .eq('is_locale_variant', false);
+
+    if (verifiedOnly) {
+      dataQuery = dataQuery.eq('is_verified', true);
+    }
 
     if (category) {
       dataQuery = dataQuery.eq('category', category);
@@ -200,6 +207,38 @@ export class SupabaseCatalogSource implements CatalogSource {
       category: c.category,
       count: c.app_count,
     }));
+  }
+
+  async getVerifiedAppIds(limit?: number): Promise<{ winget_id: string }[]> {
+    const supabase = serviceOrAnonClient();
+    if (!supabase) return [];
+
+    const pageSize = limit === undefined ? 1000 : Math.min(limit, 1000);
+    const rows: { winget_id: string }[] = [];
+    let offset = 0;
+
+    while (limit === undefined || rows.length < limit) {
+      const requested = limit === undefined ? pageSize : Math.min(pageSize, limit - rows.length);
+      const { data, error } = await supabase
+        .from('curated_apps')
+        .select('winget_id')
+        .eq('is_verified', true)
+        .eq('is_locale_variant', false)
+        .not('latest_version', 'is', null)
+        .order('popularity_rank', { ascending: true, nullsFirst: false })
+        .order('winget_id', { ascending: true })
+        .range(offset, offset + requested - 1);
+
+      if (error) {
+        console.error('Failed to list verified catalog apps:', error.message);
+        return rows;
+      }
+      const page = (data || []) as { winget_id: string }[];
+      rows.push(...page);
+      if (page.length < requested) break;
+      offset += page.length;
+    }
+    return rows;
   }
 
   async getCategoryCount(opts: { verifiedOnly: boolean }): Promise<number | null> {

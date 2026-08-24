@@ -62,6 +62,17 @@ const curatedApps = [
     popularity_rank: 5,
   },
   {
+    id: 5,
+    winget_id: 'Example.Unverified',
+    name: 'Unverified Example',
+    publisher: 'Example',
+    latest_version: '1.0',
+    category: 'Utilities',
+    is_verified: false,
+    is_locale_variant: false,
+    popularity_rank: 99,
+  },
+  {
     id: 4,
     winget_id: 'Google.Chrome.de',
     name: 'Google Chrome (German)',
@@ -222,6 +233,25 @@ describe('SnapshotCatalogSource', () => {
     expect((data || [])[0].winget_id).toBe('Google.Chrome');
   });
 
+  it('getPopularApps can include the full non-variant catalog', async () => {
+    const result = await source.getPopularApps({
+      limit: 10,
+      offset: 0,
+      sort: 'name',
+      verifiedOnly: false,
+    });
+    expect(result?.data.map((app) => app.winget_id)).toContain('Example.Unverified');
+    expect(result?.data.map((app) => app.winget_id)).not.toContain('Google.Chrome.de');
+    expect(result?.total).toBe(4);
+  });
+
+  it('getVerifiedAppIds returns canonical apps in popularity order', async () => {
+    await expect(source.getVerifiedAppIds(2)).resolves.toEqual([
+      { winget_id: 'Google.Chrome' },
+      { winget_id: 'Mozilla.Firefox' },
+    ]);
+  });
+
   it('getCategories returns per-category counts', async () => {
     const cats = await source.getCategories();
     const browsers = cats.find((c) => c.category === 'Browsers');
@@ -325,12 +355,12 @@ describe('SnapshotCatalogSource', () => {
 
   it('getCatalogStats counts all curated apps', async () => {
     const stats = await source.getCatalogStats();
-    expect(stats.totalApps).toBe(4);
+    expect(stats.totalApps).toBe(5);
   });
 
   it('getCategoryCount respects verifiedOnly', async () => {
     expect(await source.getCategoryCount({ verifiedOnly: true })).toBe(4);
-    expect(await source.getCategoryCount({ verifiedOnly: false })).toBe(4);
+    expect(await source.getCategoryCount({ verifiedOnly: false })).toBe(5);
   });
 });
 

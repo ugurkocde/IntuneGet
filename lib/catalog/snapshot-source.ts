@@ -276,17 +276,19 @@ export class SnapshotCatalogSource implements CatalogSource {
     offset: number;
     category?: string | null;
     sort: SearchSort;
+    verifiedOnly?: boolean;
   }): Promise<PopularPackagesResult | null> {
     return withDb(
       (db) => {
-        const { limit, offset, category, sort } = opts;
+        const { limit, offset, category, sort, verifiedOnly = true } = opts;
         const categoryClause = category ? 'AND category = @category' : '';
+        const verifiedClause = verifiedOnly ? 'AND is_verified = 1' : '';
         const baseParams: Record<string, unknown> = category ? { category } : {};
 
         const countRow = db
           .prepare(
             `SELECT COUNT(*) AS c FROM curated_apps
-             WHERE is_verified = 1 AND latest_version IS NOT NULL AND is_locale_variant = 0 ${categoryClause}`
+             WHERE latest_version IS NOT NULL AND is_locale_variant = 0 ${verifiedClause} ${categoryClause}`
           )
           .get(baseParams) as { c: number };
 
@@ -308,7 +310,7 @@ export class SnapshotCatalogSource implements CatalogSource {
           .prepare(
             `SELECT ${CURATED_RPC_COLUMNS}
              FROM curated_apps
-             WHERE is_verified = 1 AND latest_version IS NOT NULL AND is_locale_variant = 0 ${categoryClause}
+             WHERE latest_version IS NOT NULL AND is_locale_variant = 0 ${verifiedClause} ${categoryClause}
              ORDER BY ${orderBy}
              LIMIT @limit OFFSET @offset`
           )
@@ -362,6 +364,23 @@ export class SnapshotCatalogSource implements CatalogSource {
           .all() as { category: string; count: number }[];
 
         return rows.map((r) => ({ category: r.category, count: r.count }));
+      },
+      () => []
+    );
+  }
+
+  async getVerifiedAppIds(limit?: number): Promise<{ winget_id: string }[]> {
+    return withDb(
+      (db) => {
+        const limitClause = limit === undefined ? '' : 'LIMIT @limit';
+        return db
+          .prepare(
+            `SELECT winget_id FROM curated_apps
+             WHERE is_verified = 1 AND is_locale_variant = 0 AND latest_version IS NOT NULL
+             ORDER BY popularity_rank IS NULL, popularity_rank ASC, winget_id ASC
+             ${limitClause}`
+          )
+          .all(limit === undefined ? {} : { limit }) as { winget_id: string }[];
       },
       () => []
     );
