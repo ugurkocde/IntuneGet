@@ -39,6 +39,37 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+/**
+ * Hand-written intros for the largest categories so the hubs read as curated
+ * pages rather than templated listings. Everything else gets the generic copy.
+ */
+function CategoryIntro({ slug, name }: { slug: string; name: string }) {
+  switch (slug) {
+    case 'browser':
+      return <T>Browsers are usually the first app every managed Windows device needs. IntuneGet packages Chrome, Firefox, Edge and the alternatives as Win32 apps with silent installs, so you can assign a standard browser to your whole tenant in minutes.</T>;
+    case 'security':
+      return <T>Security tooling has to install silently and predictably on every endpoint. These packages ship with verified silent switches and detection rules so agents, scanners and VPN clients deploy cleanly through Intune without user interaction.</T>;
+    case 'developer-tools':
+      return <T>Developer machines need editors, runtimes, SDKs and command line tools that install without prompts. IntuneGet turns these WinGet packages into Win32 apps you can assign to engineering groups instead of asking developers to install everything by hand.</T>;
+    case 'utilities':
+      return <T>Everyday utilities like archivers, viewers and small system helpers round out most Windows baselines. Each one here can be packaged and uploaded to Intune automatically, silent install arguments included.</T>;
+    case 'system':
+      return <T>System tools often ship as vendor installers with awkward switches. IntuneGet normalizes them into Win32 packages with tested silent installs so platform tools and agents deploy reliably across your fleet.</T>;
+    case 'communication':
+      return <T>Meeting and messaging clients are among the most requested Intune deployments. These packages install silently and machine wide, so users are ready for their first call as soon as they sign in.</T>;
+    case 'runtime':
+      return <T>Runtimes and redistributables such as .NET, Visual C++ and Java are prerequisites for countless line of business apps. Deploy them once through Intune and stop chasing missing dependency errors on end user devices.</T>;
+    case 'productivity':
+      return <T>Productivity apps are the core of most software baselines. From note taking to PDF tools, these packages deploy silently through Intune so a new device is a working machine on day one.</T>;
+    case 'networking':
+      return <T>Network clients, VPNs and remote access tools need consistent machine wide installs. These packages carry verified silent arguments so they roll out through Intune without a single prompt.</T>;
+    case 'office':
+      return <T>Office suites, PDF editors and document tools are staple deployments in every tenant. IntuneGet packages them with the right silent switches and detection rules for dependable rollouts.</T>;
+    default:
+      return <T>Explore <Var>{name}</Var> tools that your organization can package as Win32 apps and upload to Microsoft Intune. IntuneGet keeps the deployment workflow consistent while you choose assignments for each app.</T>;
+  }
+}
+
 export default async function CategoryPage({ params }: PageProps) {
   const { slug } = await params;
   const categoryInfo = await resolveCategory(slug);
@@ -81,7 +112,7 @@ export default async function CategoryPage({ params }: PageProps) {
         </nav>
         <header className="space-y-4">
           <h1 className="text-3xl font-bold text-text-primary sm:text-4xl"><T>Deploy <Var>{categoryInfo.name}</Var> apps to Microsoft Intune</T></h1>
-          <p className="max-w-3xl text-lg text-text-secondary"><T>Explore <Var>{categoryInfo.name}</Var> tools that your organization can package as Win32 apps and upload to Microsoft Intune. IntuneGet keeps the deployment workflow consistent while you choose assignments for each app.</T></p>
+          <p className="max-w-3xl text-lg text-text-secondary"><CategoryIntro slug={slug} name={categoryInfo.name} /></p>
           <p className="text-sm text-text-muted"><T><Var>{categoryInfo.count.toLocaleString('en-US')}</Var> apps are available in this category. Showing up to 60 verified apps.</T></p>
         </header>
         <section aria-label="Category apps">
