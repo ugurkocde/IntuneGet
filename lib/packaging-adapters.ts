@@ -680,17 +680,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   },
   {
     // IObit Uninstaller is published as an Inno Setup package, but its ARP
-    // command contains only the uninstaller path. Invoking that command
-    // unchanged leaves the confirmation flow waiting under LocalSystem and the
-    // exact IObitUninstall registration present. Append Inno Setup's documented
-    // unattended removal switches to the captured product-specific command for
-    // both QA and customer Intune packages.
+    // command contains only the uninstaller path. Standard Inno unattended
+    // switches make the launcher exit without removing the product. IObit's
+    // maintained deployment package adds the vendor-specific /DetainUninstall
+    // switch; append it to the captured product command for both QA and customer
+    // Intune packages. The shared Inno normalizer supplies the standard silent,
+    // message-box, restart, and startup-prompt suppression switches.
     wingetId: 'IObit.Uninstaller',
-    reviewedUninstallArguments: [
-      '/VERYSILENT',
-      '/SUPPRESSMSGBOXES',
-      '/NORESTART',
-    ],
+    reviewedUninstallArguments: ['/DetainUninstall'],
   },
   {
     // REAPER registers an interactive uninstall command without a separate
