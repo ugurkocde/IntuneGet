@@ -288,6 +288,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArguments: ['MY_SPECIAL_MODE=2'],
   },
   {
+    // Egnyte Desktop App 4.2.1 and newer requires this documented property
+    // whenever an MDM package suppresses the installer-requested reboot.
+    // PSADT adds REBOOT=ReallySuppress for managed installs, so keep the
+    // vendor's update-on-boot contract in both QA and customer packages.
+    wingetId: 'Egnyte.EgnyteDesktopApp',
+    reviewedInstallArguments: ['ED_UPDATE_ON_BOOT=1'],
+  },
+  {
     // BlueJ 6.0.0 is a dual-purpose WiX MSI. Windows Installer 5 requires
     // ALLUSERS=2 with MSIINSTALLPERUSER=1 to select its per-user registration
     // context; the older ALLUSERS=0 example leaves this package failing under a

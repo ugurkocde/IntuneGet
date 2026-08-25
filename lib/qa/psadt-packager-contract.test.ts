@@ -2904,6 +2904,28 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'combines Egnyte update-on-boot with the managed MSI reboot suppression',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'msi',
+        'Egnyte Desktop App',
+        [],
+        { reviewedInstallArguments: ['ED_UPDATE_ON_BOOT=1'] },
+        [],
+        'Egnyte.EgnyteDesktopApp',
+        'Egnyte Desktop App',
+        '4.5.1.201',
+        'msiexec /x "{D205BFAE-B251-4EDF-B4DF-5ABF19F96B59}" /qn /norestart',
+        '/quiet ALLUSERS=1'
+      );
+
+      expect(generated).toContain(
+        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList 'ALLUSERS=1 ED_UPDATE_ON_BOOT=1'"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'keeps a reviewed nested FlashPrint bootstrapper observable',
     () => {
       const generated = generateRegistryUninstallPackage(

@@ -899,6 +899,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('stages Egnyte updates on boot when managed packaging suppresses reboot', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Egnyte.EgnyteDesktopApp',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArguments).toEqual(['ED_UPDATE_ON_BOOT=1']);
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('uses PDFsam\'s documented managed MSI command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'PDFsam.PDFsam',

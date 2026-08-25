@@ -773,6 +773,33 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(30);
   });
 
+  it('binds Egnyte\'s reboot-suppressed update contract to QA and customer packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Egnyte.EgnyteDesktopApp',
+      displayName: 'Egnyte Desktop App',
+      publisher: 'Egnyte',
+      version: '4.5.1.201',
+      architecture: 'x64',
+      installerSha256: 'e'.repeat(64),
+      installerType: 'msi',
+      silentSwitches: '/quiet ALLUSERS=1',
+      uninstallCommand: 'msiexec /x "{D205BFAE-B251-4EDF-B4DF-5ABF19F96B59}" /qn /norestart',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedInstallArguments?: string[] };
+    };
+
+    expect(profile.psadtConfig.reviewedInstallArguments).toEqual([
+      'ED_UPDATE_ON_BOOT=1',
+    ]);
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      reviewedInstallArguments: ['ED_UPDATE_ON_BOOT=1'],
+    });
+  });
+
   it('binds reviewed Wiris and Azure Monitor removal contracts to QA profiles', () => {
     const mathType = normalizeQaWorkflowPackageInput({
       wingetId: 'Wiris.MathType.7',
