@@ -23,6 +23,10 @@ import {
 import { createAppSuggestionIssue } from '@/lib/github-issues';
 import { checkWingetPackageExists } from '@/lib/winget-existence';
 import { getCatalogSource } from '@/lib/catalog';
+import {
+  getPackageEligibilityBlocks,
+  PACKAGE_UNAVAILABLE_MESSAGE,
+} from '@/lib/package-eligibility';
 
 /**
  * GET /api/community/suggestions
@@ -191,6 +195,24 @@ export async function POST(request: NextRequest) {
           error: 'This app has already been suggested',
           existingSuggestionId: existing.id,
           status: existing.status,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Refuse ids that are blocked from automated deployment. This runs before
+    // the catalog check because a blocked app stays in curated_apps (the block
+    // row references it), so the catalog branch would otherwise answer with a
+    // misleading "already available in IntuneGet".
+    const eligibilityBlocks = await getPackageEligibilityBlocks(supabase, [
+      winget_id,
+    ]);
+    if (eligibilityBlocks.length > 0) {
+      return NextResponse.json(
+        {
+          error: PACKAGE_UNAVAILABLE_MESSAGE,
+          code: 'PACKAGE_UNAVAILABLE',
+          wingetId: eligibilityBlocks[0].wingetId,
         },
         { status: 409 }
       );

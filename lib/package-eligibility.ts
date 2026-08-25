@@ -5,7 +5,8 @@ export type PackageEligibilityBlockCode =
   | 'vendor_retired'
   | 'upstream_removed'
   | 'unsupported_managed_install'
-  | 'unsupported_managed_uninstall';
+  | 'unsupported_managed_uninstall'
+  | 'unsupported_installer_source';
 
 export interface PackageEligibilityBlock {
   wingetId: string;

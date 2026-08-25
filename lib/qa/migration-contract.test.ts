@@ -1447,3 +1447,49 @@ describe('Speek managed lifecycle block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('WinSCP Beta installer source block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260825120000_block_winscp_beta_unavailable_installer_source.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks an installer the packaging service can never fetch', () => {
+    expect(sql).toContain("'unsupported_installer_source'");
+    expect(sql).toContain("'WinSCP.WinSCP.Beta'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32475327124'
+    );
+    expect(sql).toContain('HTTP 403');
+    expect(sql).toContain('source-access restriction');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+
+  it('keeps the new code in the shared block_code constraint', () => {
+    expect(sql).toContain('package_eligibility_blocks_block_code_check');
+    for (const code of [
+      'vendor_retired',
+      'upstream_removed',
+      'unsupported_managed_install',
+      'unsupported_managed_uninstall',
+      'unsupported_installer_source',
+    ]) {
+      expect(sql).toContain(`'${code}'`);
+    }
+  });
+
+  it('closes any open community request for the blocked id', () => {
+    expect(sql).toContain('update public.app_suggestions');
+    expect(sql).toContain("status = 'rejected'");
+    expect(sql).toContain("status in ('pending', 'approved')");
+  });
+
+  it('does not block the reviewed stable WinSCP id', () => {
+    expect(sql).not.toContain("'WinSCP.WinSCP',");
+  });
+});
