@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c649792a94f23b4c3fc04e07b81c4aa655887301',
+  packagerCommit: '943851a66f72cf115e2d97058a6415ee71e3f50f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -353,6 +353,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Internet Download Manager now supplies /S to its otherwise interactive
   // registered uninstaller. Preserve every unrelated pass from Playnite.
   'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5',
+  // IDM's reviewed window sequence replaces its ineffective /S argument and
+  // changes only that adapter's canonical profile. Preserve unrelated passes.
+  'c649792a94f23b4c3fc04e07b81c4aa655887301',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

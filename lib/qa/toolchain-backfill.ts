@@ -204,7 +204,15 @@ const IDM_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...PLAYNITE_PROCESS_CLOSE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IDM_WINDOW_AUTOMATION_RELEASE_RETRY_TARGETS = [
+  // Replace IDM's ineffective /S attempt with the reviewed, exact-process
+  // window sequence, then carry every still-unconsumed bounded target.
+  ...IDM_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '943851a66f72cf115e2d97058a6415ee71e3f50f':
+    IDM_WINDOW_AUTOMATION_RELEASE_RETRY_TARGETS,
   'c649792a94f23b4c3fc04e07b81c4aa655887301':
     IDM_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5':
