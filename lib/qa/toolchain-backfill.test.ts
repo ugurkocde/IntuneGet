@@ -313,6 +313,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
   });
 
+  it('retries Windows App Runtime 1.3 only after activating exact shared Appx evidence', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' microsoft.windowsappruntime.1.3 ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
+      { wingetId: 'Microsoft.WindowsAppRuntime.1.3', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries ElegantClipboard only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

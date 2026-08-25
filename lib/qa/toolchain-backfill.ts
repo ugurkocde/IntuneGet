@@ -245,7 +245,17 @@ const STREAM_DECK_EXISTING_HELPER_RELEASE_RETRY_TARGETS = [
   ...EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const WINDOWS_APP_RUNTIME_13_RELEASE_RETRY_TARGETS = [
+  // Retry the exact failed 1.3.3 installer with Microsoft's observed shared
+  // Appx framework identity instead of requiring a nonexistent ARP entry.
+  'Microsoft.WindowsAppRuntime.1.3',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '384d36477200c3410f47645e376fe2dfd3682a9e':
+    WINDOWS_APP_RUNTIME_13_RELEASE_RETRY_TARGETS,
   // Stream Deck is eligibility-blocked after five identical MSI removal
   // stalls, so carry every prior bounded target without replaying it.
   'd30bedbc4374346b7900b4ffef2d7c77f222d3d2':

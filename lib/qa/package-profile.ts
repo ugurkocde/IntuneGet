@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
+  packagerCommit: '384d36477200c3410f47645e376fe2dfd3682a9e',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -378,6 +378,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Removing Stream Deck's disproven adapter affects only an app now blocked
   // at the shared eligibility gate. Preserve every unrelated compatible pass.
   '63219f1fe5c953c8fd799c79030176444ba637b4',
+  // Windows App Runtime 1.3 now uses its exact shared Appx framework identity
+  // instead of a nonexistent ARP entry. Preserve every unrelated pass from
+  // the Stream Deck eligibility-block release.
+  'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
