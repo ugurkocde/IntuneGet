@@ -7,8 +7,10 @@ const h = vi.hoisted(() => {
   // A blocked id is still present in curated_apps, because the block row
   // references it, so the catalog lookup would otherwise answer
   // "already available in IntuneGet".
-  const state: { blockRows: Array<{ winget_id: string; block_code: string }> } =
-    { blockRows: [] };
+  const state: {
+    blockRows: Array<{ winget_id: string; block_code: string }>;
+    excludedRow: { winget_id: string; reason: string } | null;
+  } = { blockRows: [], excludedRow: null };
 
   const catalogAppExists = vi.fn();
   const wingetExists = vi.fn();
@@ -30,12 +32,24 @@ const h = vi.hoisted(() => {
         };
         return builder;
       }
+      if (table === 'curated_excluded_apps') {
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          ilike: () => builder,
+          limit: () => builder,
+          maybeSingle: () =>
+            Promise.resolve({ data: state.excludedRow, error: null }),
+        };
+        return builder;
+      }
       // app_suggestions duplicate lookup: no existing suggestion
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
         in: () => builder,
+        limit: () => builder,
         single: () => Promise.resolve({ data: null, error: null }),
+        maybeSingle: () => Promise.resolve({ data: null, error: null }),
       };
       return builder;
     },
@@ -90,7 +104,29 @@ function request(wingetId: string) {
 }
 
 describe('POST /api/community/suggestions eligibility gate', () => {
+  it('refuses a request for a denylisted package with the recorded reason', async () => {
+    h.state.blockRows = [];
+    h.state.excludedRow = {
+      winget_id: 'WinSCP.WinSCP',
+      reason: 'SourceForge installers fail to download in CI',
+    };
+    h.catalogAppExists.mockReset().mockResolvedValue(null);
+    h.wingetExists.mockReset().mockResolvedValue('exists');
+
+    const response = await POST(request('winscp.winscp'));
+
+    expect(response.status).toBe(422);
+    const body = await response.json();
+    expect(body.code).toBe('PACKAGE_EXCLUDED');
+    expect(body.wingetId).toBe('WinSCP.WinSCP');
+    expect(body.error).toContain('SourceForge installers fail to download in CI');
+    // The denylist must short-circuit before the catalog and winget checks,
+    // otherwise the caller is sent down the request path again.
+    expect(h.catalogAppExists).not.toHaveBeenCalled();
+  });
+
   it('refuses a request for an app blocked from automated deployment', async () => {
+    h.state.excludedRow = null;
     h.state.blockRows = [
       {
         winget_id: 'WinSCP.WinSCP.Beta',
@@ -115,6 +151,7 @@ describe('POST /api/community/suggestions eligibility gate', () => {
 
   it('leaves unblocked ids to the existing catalog and winget checks', async () => {
     h.state.blockRows = [];
+    h.state.excludedRow = null;
     h.catalogAppExists.mockReset().mockResolvedValue({
       winget_id: 'Google.Chrome',
     });
