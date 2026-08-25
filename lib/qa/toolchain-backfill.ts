@@ -246,6 +246,10 @@ const STREAM_DECK_EXISTING_HELPER_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  // Stream Deck is eligibility-blocked after five identical MSI removal
+  // stalls, so carry every prior bounded target without replaying it.
+  'd30bedbc4374346b7900b4ffef2d7c77f222d3d2':
+    EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
   '63219f1fe5c953c8fd799c79030176444ba637b4':
     STREAM_DECK_EXISTING_HELPER_RELEASE_RETRY_TARGETS,
   'eee661ae3eab578d011dd5052df5e901ffa3a4bf':

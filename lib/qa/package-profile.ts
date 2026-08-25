@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '63219f1fe5c953c8fd799c79030176444ba637b4',
+  packagerCommit: 'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -375,6 +375,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Stream Deck's first exact helper guard did not see the already-running
   // process. Preserve unrelated passes while the bounded lookback rolls out.
   'eee661ae3eab578d011dd5052df5e901ffa3a4bf',
+  // Removing Stream Deck's disproven adapter affects only an app now blocked
+  // at the shared eligibility gate. Preserve every unrelated compatible pass.
+  '63219f1fe5c953c8fd799c79030176444ba637b4',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

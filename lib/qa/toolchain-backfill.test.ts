@@ -167,7 +167,6 @@ describe('QA toolchain targeted retries', () => {
       'IObit.Uninstaller',
       'Autodesk.DesktopConnector',
       'Egnyte.EgnyteDesktopApp',
-      'Elgato.StreamDeck',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -227,7 +226,6 @@ describe('QA toolchain targeted retries', () => {
         'IObit.Uninstaller',
         'Autodesk.DesktopConnector',
         'Egnyte.EgnyteDesktopApp',
-        'Elgato.StreamDeck',
       ])
     );
     expect(
@@ -304,15 +302,15 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Stream Deck only after activating the existing-helper lookback', () => {
+  it('does not retry blocked Stream Deck after removing the disproven guard', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' elgato.streamdeck ', status: 'failed' }
-    )).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(
-      'eee661ae3eab578d011dd5052df5e901ffa3a4bf',
-      { wingetId: 'Elgato.StreamDeck', status: 'failed' }
     )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '63219f1fe5c953c8fd799c79030176444ba637b4',
+      { wingetId: 'Elgato.StreamDeck', status: 'failed' }
+    )).toBe(true);
   });
 
   it('retries ElegantClipboard only after activating its reviewed user scope', () => {
