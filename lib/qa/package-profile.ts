@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '384d36477200c3410f47645e376fe2dfd3682a9e',
+  packagerCommit: '5636cda74d31de95d9ee5689050ba04e432ede61',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -382,6 +382,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // instead of a nonexistent ARP entry. Preserve every unrelated pass from
   // the Stream Deck eligibility-block release.
   'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
+  // Total Commander now appends Ghisler's documented unattended /7 mode to
+  // its exact captured uninstaller. Preserve every unrelated pass from the
+  // Windows App Runtime identity release.
+  '384d36477200c3410f47645e376fe2dfd3682a9e',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

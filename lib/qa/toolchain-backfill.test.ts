@@ -116,6 +116,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Ghisler.TotalCommander',
       'Tricentis.NeoLoad',
       'Piriform.Recuva',
       'Trimble.SketchUp.2022',
@@ -177,6 +178,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Ghisler.TotalCommander',
         'Tricentis.NeoLoad',
         'Piriform.Recuva',
         'Trimble.SketchUp.2022',
@@ -321,6 +323,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'd30bedbc4374346b7900b4ffef2d7c77f222d3d2',
       { wingetId: 'Microsoft.WindowsAppRuntime.1.3', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Total Commander only after activating its unattended uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' ghisler.totalcommander ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '384d36477200c3410f47645e376fe2dfd3682a9e',
+      { wingetId: 'Ghisler.TotalCommander', status: 'failed' }
     )).toBe(false);
   });
 

@@ -253,7 +253,17 @@ const WINDOWS_APP_RUNTIME_13_RELEASE_RETRY_TARGETS = [
   ...EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const TOTAL_COMMANDER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry the exact failed 11.58 lifecycle with Ghisler's documented /7
+  // unattended mode appended to the captured Total Commander uninstaller.
+  'Ghisler.TotalCommander',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...WINDOWS_APP_RUNTIME_13_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '5636cda74d31de95d9ee5689050ba04e432ede61':
+    TOTAL_COMMANDER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   '384d36477200c3410f47645e376fe2dfd3682a9e':
     WINDOWS_APP_RUNTIME_13_RELEASE_RETRY_TARGETS,
   // Stream Deck is eligibility-blocked after five identical MSI removal
