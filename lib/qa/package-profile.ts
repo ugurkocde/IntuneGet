@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9',
+  packagerCommit: 'eee661ae3eab578d011dd5052df5e901ffa3a4bf',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -369,6 +369,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Egnyte now carries the vendor-required update-on-boot property whenever
   // the managed package suppresses reboots. Preserve unrelated prior passes.
   'b798917a85465cb2fe7b55582322d1e30b20e088',
+  // Stream Deck now guards only the fresh CloseApplication helper launched by
+  // its MSI uninstall. Preserve every unrelated pass from the Egnyte release.
+  'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -302,6 +302,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Stream Deck only after activating its MSI close-helper guard', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' elgato.streamdeck ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9',
+      { wingetId: 'Elgato.StreamDeck', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries ElegantClipboard only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
