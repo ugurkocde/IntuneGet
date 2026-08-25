@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PageHeader, AnimatedStatCard, StatCardGrid, AnimatedEmptyState } from '@/components/dashboard';
 import { UpdateCard, UpdateCardSkeleton, AutoUpdateHistory } from '@/components/updates';
+import { AutoUpdateAppsModal } from '@/components/updates/AutoUpdateAppsModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   useAvailableUpdates,
@@ -76,6 +77,7 @@ export default function UpdatesPage() {
   const [activeTab, setActiveTab] = useState<'available' | 'history'>('available');
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [autoUpdateModalOpen, setAutoUpdateModalOpen] = useState(false);
   const [newAppDialogOpen, setNewAppDialogOpen] = useState(false);
   const [pendingNewAppUpdate, setPendingNewAppUpdate] = useState<AvailableUpdate | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{
@@ -175,11 +177,13 @@ export default function UpdatesPage() {
   // Stats
   const availableCount = updates.length;
   const criticalCount = updates.filter((u) => u.is_critical).length;
-  // Count every app with auto-update enabled for this tenant, not just the
-  // ones that currently have an update pending.
-  const autoUpdateCount = ((policiesData?.policies || []) as AppUpdatePolicy[]).filter(
+  // Every app with auto-update enabled for this tenant, not just the ones
+  // that currently have an update pending. Backs both the stat card count
+  // and the card's click-through list.
+  const autoUpdatePolicies = ((policiesData?.policies || []) as AppUpdatePolicy[]).filter(
     (p) => p.policy_type === 'auto_update' && p.is_enabled
-  ).length;
+  );
+  const autoUpdateCount = autoUpdatePolicies.length;
   const recentAutoUpdates = history.filter(
     (h) => h.status === 'completed' && isWithinDays(h.completed_at, 7)
   ).length;
@@ -738,6 +742,10 @@ export default function UpdatesPage() {
           color="cyan"
           delay={0}
           loading={isLoadingUpdates}
+          onClick={() => {
+            setActiveTab('available');
+            setShowCriticalOnly(false);
+          }}
         />
         <AnimatedStatCard
           title={<T>Critical Updates</T>}
@@ -747,6 +755,11 @@ export default function UpdatesPage() {
           delay={0.1}
           loading={isLoadingUpdates}
           description={oldestCriticalAge || undefined}
+          onClick={() => {
+            setActiveTab('available');
+            setShowCriticalOnly(true);
+          }}
+          isActive={activeTab === 'available' && showCriticalOnly}
         />
         <AnimatedStatCard
           title={<T>Auto-Update Enabled</T>}
@@ -755,6 +768,7 @@ export default function UpdatesPage() {
           color="success"
           delay={0.2}
           loading={isLoadingPolicies}
+          onClick={() => setAutoUpdateModalOpen(true)}
         />
         <AnimatedStatCard
           title={<T>Updated (7 days)</T>}
@@ -764,6 +778,7 @@ export default function UpdatesPage() {
           delay={0.3}
           loading={isLoadingHistory}
           description={failedUpdates > 0 ? `${failedUpdates} failed` : undefined}
+          onClick={() => setActiveTab('history')}
         />
       </StatCardGrid>
 
@@ -1032,6 +1047,20 @@ export default function UpdatesPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Auto-update apps list, opened from the stat card */}
+      <AutoUpdateAppsModal
+        open={autoUpdateModalOpen}
+        onOpenChange={setAutoUpdateModalOpen}
+        policies={autoUpdatePolicies}
+        onPolicyChange={async (policy, policyType) => {
+          await updatePolicy({
+            winget_id: policy.winget_id,
+            tenant_id: policy.tenant_id,
+            policy_type: policyType,
+          });
+        }}
+      />
     </div>
   );
 }
