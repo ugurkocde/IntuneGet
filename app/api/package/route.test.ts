@@ -671,47 +671,6 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
-  it('uses the reviewed app adapter for both QA and customer packaging', async () => {
-    const request = new NextRequest('http://localhost:3000/api/package', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer test-token',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        items: [makeWin32Item({
-          wingetId: 'Elgato.StreamDeck',
-          displayName: 'Elgato Stream Deck',
-          psadtConfig: { ...DEFAULT_PSADT_CONFIG, processesToClose: [] },
-        })],
-      }),
-    });
-
-    const response = await POST(request);
-
-    expect(response.status).toBe(200);
-    const expectedAdapter = {
-      processesToClose: [
-        { name: 'StreamDeck', description: 'Elgato Stream Deck' },
-      ],
-      reviewedUninstallProcessGuard: {
-        processName: 'StreamDeck.exe',
-        argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
-        graceSeconds: 20,
-        creationLookbackSeconds: 300,
-      },
-    };
-    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
-      expectedAdapter
-    );
-    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(
-      expectedAdapter
-    );
-    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
-      psadtConfig: expectedAdapter,
-    });
-  });
-
   it('applies the reviewed Opera immediate-uninstall contract to QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

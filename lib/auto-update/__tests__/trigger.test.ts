@@ -448,7 +448,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     const supabase = createSupabaseMock({});
     const trigger = makeTrigger(supabase);
     const storedConfig: DeploymentConfig = {
-      displayName: 'Elgato Stream Deck',
+      displayName: 'Elgato Camera Hub',
       publisher: 'Elgato',
       architecture: 'x64',
       installerType: 'msi',
@@ -466,33 +466,33 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'createHistoryRecord' as never)
-      .mockResolvedValue({ id: 'history-elgato' } as never);
+      .mockResolvedValue({ id: 'history-camera-hub' } as never);
     const createPackagingJobSpy = vi.spyOn(trigger as never, 'createPackagingJob' as never)
-      .mockResolvedValue({ id: 'job-elgato' } as never);
+      .mockResolvedValue({ id: 'job-camera-hub' } as never);
     vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
 
     const result = await trigger.triggerAutoUpdate(policy, {
       ...UPDATE_INFO,
-      wingetId: 'elgato.streamdeck',
-      displayName: 'Elgato Stream Deck',
+      wingetId: 'elgato.camerahub',
+      displayName: 'Elgato Camera Hub',
       installerType: 'msi',
       nestedInstallerType: undefined,
       nestedInstallerPath: undefined,
     }, { skipRateLimits: true });
 
-    expect(result).toMatchObject({ success: true, packagingJobId: 'job-elgato' });
+    expect(result).toMatchObject({ success: true, packagingJobId: 'job-camera-hub' });
     const qaInput = ensureQaDemandMock.mock.calls[0][1] as {
       psadtConfig: string;
     };
     expect(JSON.parse(qaInput.psadtConfig).processesToClose).toEqual([
-      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+      { name: 'Camera Hub', description: 'Elgato Camera Hub' },
     ]);
     const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
     expect(
       (effectivePolicy.deployment_config as DeploymentConfig).psadtConfig?.processesToClose
     ).toEqual([
-      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+      { name: 'Camera Hub', description: 'Elgato Camera Hub' },
     ]);
     expect(storedConfig.psadtConfig?.processesToClose).toEqual([]);
   });

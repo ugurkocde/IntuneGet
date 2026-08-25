@@ -1335,21 +1335,14 @@ describe('application packaging adapters', () => {
     expect(adapted.processesToClose).toHaveLength(11);
   });
 
-  it('adds the reviewed Stream Deck lifecycle guard to the exact app', () => {
+  it('does not retain the disproven Stream Deck lifecycle guard', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Elgato.StreamDeck',
       DEFAULT_PSADT_CONFIG
     );
 
-    expect(adapted.processesToClose).toEqual([
-      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
-    ]);
-    expect(adapted.reviewedUninstallProcessGuard).toEqual({
-      processName: 'StreamDeck.exe',
-      argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
-      graceSeconds: 20,
-      creationLookbackSeconds: 300,
-    });
+    expect(adapted.processesToClose).toEqual([]);
+    expect(adapted.reviewedUninstallProcessGuard).toBeUndefined();
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
 
@@ -1414,33 +1407,35 @@ describe('application packaging adapters', () => {
 
   it('matches WinGet identities case-insensitively', () => {
     expect(
-      applyApplicationPackagingAdapter('  elgato.streamdeck  ', DEFAULT_PSADT_CONFIG)
+      applyApplicationPackagingAdapter('  elgato.camerahub  ', DEFAULT_PSADT_CONFIG)
     ).toMatchObject({
       processesToClose: [
-        { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+        { name: 'Camera Hub', description: 'Elgato Camera Hub' },
       ],
       reviewedUninstallProcessGuard: {
-        processName: 'StreamDeck.exe',
-        argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
+        processName: 'Camera Hub.exe',
+        argumentsPattern: '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)',
         graceSeconds: 20,
-        creationLookbackSeconds: 300,
       },
     });
   });
 
-  it('preserves customer processes and deduplicates names with an exe suffix', () => {
-    const adapted = applyApplicationPackagingAdapter('Elgato.StreamDeck', {
+  it('preserves customer Stream Deck configuration without an adapter', () => {
+    const config = {
       ...DEFAULT_PSADT_CONFIG,
       processesToClose: [
         { name: 'streamdeck.exe', description: 'Customer description' },
         { name: 'companion', description: 'Companion app' },
       ],
-    });
+    };
+    const adapted = applyApplicationPackagingAdapter('Elgato.StreamDeck', config);
 
+    expect(adapted).toBe(config);
     expect(adapted.processesToClose).toEqual([
-      { name: 'streamdeck', description: 'Customer description' },
+      { name: 'streamdeck.exe', description: 'Customer description' },
       { name: 'companion', description: 'Companion app' },
     ]);
+    expect(adapted.reviewedUninstallProcessGuard).toBeUndefined();
   });
 
   it('does not attach an adapter to a different application identity', () => {

@@ -1125,24 +1125,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
-    // Stream Deck can relaunch its desktop process after installation, before
-    // the MSI CloseApplication custom action begins removal. Production QA run
-    // 32878010393 proved that the default two-second guard never matched before
-    // the same custom action stalled. Keep the exact executable/command checks,
-    // but include only processes created during the preceding five minutes and
-    // give the match a short grace period before ending it.
-    wingetId: 'Elgato.StreamDeck',
-    requiredProcessesToClose: [
-      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
-    ],
-    reviewedUninstallProcessGuard: {
-      processName: 'StreamDeck.exe',
-      argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
-      graceSeconds: 20,
-      creationLookbackSeconds: 300,
-    },
-  },
-  {
     wingetId: 'Greenshot.Greenshot',
     requiredProcessesToClose: [
       { name: 'Greenshot', description: 'Greenshot' },

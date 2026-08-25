@@ -1611,7 +1611,7 @@ describe('current catalog QA package validation', () => {
     const legacyIdentity = identityWithPackagerCommit(
       buildQaPackageIdentity({
         ...input,
-        wingetId: 'Elgato.StreamDeck',
+        wingetId: 'Elgato.CameraHub',
       }),
       priorCommit
     );

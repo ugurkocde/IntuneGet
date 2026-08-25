@@ -1425,6 +1425,29 @@ describe('DesktopOK managed uninstall block migration contract', () => {
   });
 });
 
+describe('Elgato Stream Deck managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260825203000_block_elgato_streamdeck_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the repeatedly stalled MSI lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Elgato.StreamDeck'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32882785478'
+    );
+    expect(sql).toContain('five isolated LocalSystem lifecycle runs');
+    expect(sql).toContain('CloseApplication custom action');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('Speek managed lifecycle block migration contract', () => {
   const sql = readFileSync(
     resolve(
