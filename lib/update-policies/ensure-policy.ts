@@ -56,20 +56,11 @@ export async function ensureUpdatePolicy(args: {
     let originalUploadHistoryId: string | null = null;
 
     if (policyType === 'auto_update') {
-      const { data: userSettingsRow } = await (supabase as any)
-        .from('user_settings')
-        .select('settings')
-        .eq('user_id', userId)
-        .maybeSingle();
-      const userSettings = (userSettingsRow?.settings as Record<string, unknown> | null) || null;
-      const globalCarryOver = Boolean(userSettings?.carryOverAssignments);
-
       const built = await buildDeploymentConfigForApp(supabase, {
         userId,
         tenantId,
         wingetId,
         latestVersion: deployedVersion,
-        globalCarryOver,
       });
 
       // A null-config auto_update policy is worse than no policy: nothing

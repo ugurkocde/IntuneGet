@@ -34,9 +34,16 @@ const POLICY_OPTIONS: PolicyOption[] = [
 interface CartUpdatePolicyPickerProps {
   value: CartUpdatePolicyValue;
   onChange: (value: CartUpdatePolicyValue) => void;
+  carryOverAssignments: boolean;
+  onCarryOverAssignmentsChange: (value: boolean) => void;
 }
 
-export function CartUpdatePolicyPicker({ value, onChange }: CartUpdatePolicyPickerProps) {
+export function CartUpdatePolicyPicker({
+  value,
+  onChange,
+  carryOverAssignments,
+  onCarryOverAssignmentsChange,
+}: CartUpdatePolicyPickerProps) {
   const selected = POLICY_OPTIONS.find((option) => option.value === value) ?? POLICY_OPTIONS[0];
 
   return (
@@ -59,6 +66,24 @@ export function CartUpdatePolicyPicker({ value, onChange }: CartUpdatePolicyPick
         ))}
       </div>
       <p className="text-xs text-text-muted">{selected.description}</p>
+      {value === 'auto_update' && (
+        <label className="flex items-start gap-2.5 rounded-lg border border-overlay/15 bg-bg-elevated px-3 py-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={carryOverAssignments}
+            onChange={(e) => onCarryOverAssignmentsChange(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-overlay/30 accent-blue-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-text-primary">
+              Carry over assignments
+            </span>
+            <span className="block text-xs text-text-muted mt-0.5">
+              Move this app&apos;s group assignments to each new version and remove them from the previous one.
+            </span>
+          </span>
+        </label>
+      )}
       <p className="text-xs text-text-muted">
         Applies after this deployment completes. You can change it anytime on the Updates page.
       </p>

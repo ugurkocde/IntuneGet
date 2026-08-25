@@ -64,6 +64,7 @@ import type { AppRelationship } from '@/types/intune';
 import type { EspProfileSelection } from '@/types/esp';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
 import { useCartStore, createStoreCartItem } from '@/stores/cart-store';
+import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
@@ -209,6 +210,11 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   );
   const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
     deployedConfig?.updatePolicy
+  );
+  const { settings: userSettings } = useUserSettings();
+  const [carryOverAssignments, setCarryOverAssignments] = useState<boolean>(
+    deployedConfig?.assignmentMigration?.carryOverAssignments ??
+      Boolean(userSettings.carryOverAssignments)
   );
 
   // UI state
@@ -471,6 +477,13 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           localeCode: selectedLocale || undefined,
           iconPath: pkg.iconPath,
           updatePolicy,
+          assignmentMigration:
+            updatePolicy === 'auto_update'
+              ? {
+                  carryOverAssignments,
+                  removeAssignmentsFromPreviousApp: carryOverAssignments,
+                }
+              : undefined,
           ...(isDeployed ? { forceCreate: true } : {}),
         });
       }
@@ -1785,7 +1798,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   <p className="text-sm text-text-secondary">
                     Choose how IntuneGet handles future versions of this app.
                   </p>
-                  <CartUpdatePolicyPicker value={updatePolicy} onChange={setUpdatePolicy} />
+                  <CartUpdatePolicyPicker
+                    value={updatePolicy}
+                    onChange={setUpdatePolicy}
+                    carryOverAssignments={carryOverAssignments}
+                    onCarryOverAssignmentsChange={setCarryOverAssignments}
+                  />
                 </div>
               </ConfigSection>}
 

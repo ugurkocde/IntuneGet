@@ -48,13 +48,14 @@ import {
   useRefreshAvailableUpdates,
   useTriggerUpdate,
   useUpdatePolicy,
+  useUpdatePolicies,
 } from '@/hooks/use-updates';
 import { useMspOptional } from '@/hooks/useMspOptional';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { fadeIn } from '@/lib/animations/variants';
 import { cn } from '@/lib/utils';
 import { classifyUpdateType } from '@/types/update-policies';
-import type { AvailableUpdate, TriggerUpdateResponse, UpdatePolicyType, UpdateType } from '@/types/update-policies';
+import type { AppUpdatePolicy, AvailableUpdate, TriggerUpdateResponse, UpdatePolicyType, UpdateType } from '@/types/update-policies';
 
 type SortOption = 'name' | 'severity' | 'type' | 'detected';
 
@@ -116,6 +117,7 @@ export default function UpdatesPage() {
   const { refreshUpdates, isRefreshing } = useRefreshAvailableUpdates({ tenantId });
   const { triggerUpdate } = useTriggerUpdate();
   const { updatePolicy } = useUpdatePolicy();
+  const { data: policiesData, isLoading: isLoadingPolicies } = useUpdatePolicies(tenantId);
 
   const updates = updatesData?.updates || [];
   const history = historyData?.history || [];
@@ -173,8 +175,10 @@ export default function UpdatesPage() {
   // Stats
   const availableCount = updates.length;
   const criticalCount = updates.filter((u) => u.is_critical).length;
-  const autoUpdateCount = updates.filter(
-    (u) => u.policy?.policy_type === 'auto_update' && u.policy?.is_enabled
+  // Count every app with auto-update enabled for this tenant, not just the
+  // ones that currently have an update pending.
+  const autoUpdateCount = ((policiesData?.policies || []) as AppUpdatePolicy[]).filter(
+    (p) => p.policy_type === 'auto_update' && p.is_enabled
   ).length;
   const recentAutoUpdates = history.filter(
     (h) => h.status === 'completed' && isWithinDays(h.completed_at, 7)
@@ -750,8 +754,7 @@ export default function UpdatesPage() {
           icon={RefreshCw}
           color="success"
           delay={0.2}
-          loading={isLoadingUpdates}
-          description={availableCount > 0 ? `${autoUpdateCount} of ${availableCount}` : undefined}
+          loading={isLoadingPolicies}
         />
         <AnimatedStatCard
           title={<T>Updated (7 days)</T>}

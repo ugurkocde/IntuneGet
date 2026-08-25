@@ -190,7 +190,6 @@ export async function POST(request: NextRequest) {
             tenantId: req.tenant_id,
             wingetId: req.winget_id,
             latestVersion: updateResult.latest_version,
-            globalCarryOver,
           });
 
           if (built.status === 'orphaned_job') {

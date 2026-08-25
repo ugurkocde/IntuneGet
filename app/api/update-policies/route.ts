@@ -171,21 +171,11 @@ export async function POST(request: NextRequest) {
         latestVersion = catalogApp?.latest_version || '';
       }
 
-      // Read the user's global carry-over setting (same source as the trigger route)
-      const { data: userSettingsRow } = await (supabase as any)
-        .from('user_settings')
-        .select('settings')
-        .eq('user_id', user.userId)
-        .maybeSingle();
-      const userSettings = (userSettingsRow?.settings as Record<string, unknown> | null) || null;
-      const globalCarryOver = Boolean(userSettings?.carryOverAssignments);
-
       const built = await buildDeploymentConfigForApp(supabase, {
         userId: user.userId,
         tenantId: body.tenant_id,
         wingetId: body.winget_id,
         latestVersion,
-        globalCarryOver,
       });
 
       if (built.status !== 'ok') {

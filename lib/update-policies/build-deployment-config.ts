@@ -364,10 +364,9 @@ export async function buildDeploymentConfigForApp(
     tenantId: string;
     wingetId: string;
     latestVersion: string;
-    globalCarryOver: boolean;
   }
 ): Promise<BuildDeploymentConfigResult> {
-  const { userId, tenantId, wingetId, latestVersion, globalCarryOver } = args;
+  const { userId, tenantId, wingetId, latestVersion } = args;
 
   // Get the original deployment config from upload_history
   const { data: uploadHistory } = await supabase
@@ -398,16 +397,11 @@ export async function buildDeploymentConfigForApp(
     const parsedCategories = parsePackageCategories(packageConfig);
     const parsedRequirementRules = parseRequirementRules(packageConfig);
     const parsedRelationships = parseAppRelationships(packageConfig);
-    let assignmentMigration = parseAssignmentMigration(packageConfig);
-
-    // If no explicit migration config was stored on the packaging job,
-    // fall back to the user's global carryOverAssignments setting.
-    if (!assignmentMigration) {
-      assignmentMigration = {
-        carryOverAssignments: globalCarryOver,
-        removeAssignmentsFromPreviousApp: globalCarryOver,
-      };
-    }
+    // Explicit per-app choice only. When the packaging job stored no
+    // migration config, leave it undefined so the auto-update trigger falls
+    // back to the user's current global carryOverAssignments setting at
+    // update time (baking the global value in here would freeze it).
+    const assignmentMigration = parseAssignmentMigration(packageConfig);
 
     const deploymentConfig: DeploymentConfig = {
       displayName: packagingJob.display_name,

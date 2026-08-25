@@ -56,6 +56,7 @@ import type {
 } from '@/types/psadt';
 import type { WingetScope } from '@/types/winget';
 import { useCartStore } from '@/stores/cart-store';
+import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 
@@ -113,6 +114,12 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
     isWin32 ? item.updatePolicy : undefined
   );
+  const { settings: userSettings } = useUserSettings();
+  const [carryOverAssignments, setCarryOverAssignments] = useState<boolean>(
+    isWin32
+      ? item.assignmentMigration?.carryOverAssignments ?? Boolean(userSettings.carryOverAssignments)
+      : false
+  );
 
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStore ? 'assignment' : 'behavior');
@@ -126,6 +133,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
     storeInstallExperience, selectedScope, config, assignments, categories,
     espProfiles, relationships, installCommand, uninstallCommand,
     updatePolicy: updatePolicy ?? null,
+    carryOverAssignments,
   });
   const baselineSnapshotRef = useRef(configSnapshot);
   const requestClose = () => {
@@ -221,6 +229,13 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           installCommand,
           uninstallCommand,
           updatePolicy,
+          assignmentMigration:
+            updatePolicy === 'auto_update'
+              ? {
+                  carryOverAssignments,
+                  removeAssignmentsFromPreviousApp: carryOverAssignments,
+                }
+              : undefined,
         });
       }
       onClose();
@@ -1154,7 +1169,12 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   <p className="text-sm text-text-secondary">
                     Choose how IntuneGet handles future versions of this app.
                   </p>
-                  <CartUpdatePolicyPicker value={updatePolicy} onChange={setUpdatePolicy} />
+                  <CartUpdatePolicyPicker
+                    value={updatePolicy}
+                    onChange={setUpdatePolicy}
+                    carryOverAssignments={carryOverAssignments}
+                    onCarryOverAssignmentsChange={setCarryOverAssignments}
+                  />
                 </div>
               </ConfigSection>}
 

@@ -105,7 +105,6 @@ describe('ensureUpdatePolicy', () => {
       tenantId: 'tenant-1',
       wingetId: 'Publisher.App',
       latestVersion: '1.2.3',
-      globalCarryOver: true,
     });
     expect(upsertMock).toHaveBeenCalledWith(
       expect.objectContaining({

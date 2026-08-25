@@ -632,12 +632,13 @@ export class AutoUpdateTrigger {
     const assignments = normalizeAssignments(config);
     const categories = normalizeCategories(config);
 
-    // Always re-read the user's current global settings instead of trusting
-    // the stored policy values, which may be stale if the user toggled the
-    // settings after the policy was created.
+    // Re-read the user's current global settings so policies without an
+    // explicit per-app choice follow the settings toggle live. An explicit
+    // assignmentMigration on the policy config (set via the deployment
+    // flow's App Updates checkbox) wins over the global value.
     const { carryOverAssignments: globalCarryOver, supersedePreviousApp } =
       await this.getUserUpdateSettings(policy.user_id);
-    const assignmentMigration = {
+    const assignmentMigration = config.assignmentMigration ?? {
       carryOverAssignments: globalCarryOver,
       removeAssignmentsFromPreviousApp: globalCarryOver,
     };
