@@ -165,6 +165,7 @@ describe('QA toolchain targeted retries', () => {
       'Playnite.Playnite',
       'Tonec.InternetDownloadManager',
       'IObit.Uninstaller',
+      'Autodesk.DesktopConnector',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -222,6 +223,7 @@ describe('QA toolchain targeted retries', () => {
         'Playnite.Playnite',
         'Tonec.InternetDownloadManager',
         'IObit.Uninstaller',
+        'Autodesk.DesktopConnector',
       ])
     );
     expect(
@@ -273,6 +275,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '943851a66f72cf115e2d97058a6415ee71e3f50f',
       { wingetId: 'IObit.Uninstaller', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Desktop Connector only after activating its ODIS registration wait', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' autodesk.desktopconnector ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3400509334e29c78e960ba3b05ba3e4bec408b87',
+      { wingetId: 'Autodesk.DesktopConnector', status: 'failed' }
     )).toBe(false);
   });
 

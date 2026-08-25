@@ -223,7 +223,16 @@ const IOBIT_DETAIN_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...IOBIT_INNO_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const AUTODESK_DESKTOP_CONNECTOR_ODIS_RELEASE_RETRY_TARGETS = [
+  // Re-run Desktop Connector with a bounded wait for its detached ODIS product
+  // registration, then carry every still-unconsumed targeted retry.
+  'Autodesk.DesktopConnector',
+  ...IOBIT_DETAIN_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'b798917a85465cb2fe7b55582322d1e30b20e088':
+    AUTODESK_DESKTOP_CONNECTOR_ODIS_RELEASE_RETRY_TARGETS,
   '3400509334e29c78e960ba3b05ba3e4bec408b87':
     IOBIT_DETAIN_UNINSTALL_RELEASE_RETRY_TARGETS,
   'f7be39a95d529bc613f0ec8d4f2483762a5e02a2':

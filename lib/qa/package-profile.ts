@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '3400509334e29c78e960ba3b05ba3e4bec408b87',
+  packagerCommit: 'b798917a85465cb2fe7b55582322d1e30b20e088',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -363,6 +363,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // path. Preserve every unrelated compatible pass while its vendor-specific
   // detain switch becomes the current exact profile.
   'f7be39a95d529bc613f0ec8d4f2483762a5e02a2',
+  // Desktop Connector now waits for its detached ODIS registration. Preserve
+  // every package that already passed on the prior IObit detain release.
+  '3400509334e29c78e960ba3b05ba3e4bec408b87',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
