@@ -679,6 +679,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     uninstallCompletionTimeoutMinutes: 3,
   },
   {
+    // IObit Uninstaller is published as an Inno Setup package, but its ARP
+    // command contains only the uninstaller path. Invoking that command
+    // unchanged leaves the confirmation flow waiting under LocalSystem and the
+    // exact IObitUninstall registration present. Append Inno Setup's documented
+    // unattended removal switches to the captured product-specific command for
+    // both QA and customer Intune packages.
+    wingetId: 'IObit.Uninstaller',
+    reviewedUninstallArguments: [
+      '/VERYSILENT',
+      '/SUPPRESSMSGBOXES',
+      '/NORESTART',
+    ],
+  },
+  {
     // REAPER registers an interactive uninstall command without a separate
     // QuietUninstallString. Its vendor installer and uninstaller both accept
     // the manifest's case-sensitive /S switch; without it, a SYSTEM removal

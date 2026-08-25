@@ -850,6 +850,19 @@ describe('application packaging adapters', () => {
     expect(adapted.uninstallCompletionTimeoutMinutes).toBe(3);
   });
 
+  it('uses Inno Setup silent removal with the exact IObit ARP command', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'iobit.uninstaller',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual([
+      '/VERYSILENT',
+      '/SUPPRESSMSGBOXES',
+      '/NORESTART',
+    ]);
+  });
+
   it('uses ZeeDrive\'s documented no-ARP Intune lifecycle', () => {
     expect(
       applyApplicationPackagingAdapter(
