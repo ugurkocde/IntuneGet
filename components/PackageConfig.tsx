@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import {
+  ArrowUpCircle,
   X,
   Settings,
   Terminal,
@@ -41,6 +42,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AppIcon } from '@/components/AppIcon';
 import { AssignmentConfig } from '@/components/AssignmentConfig';
+import { CartUpdatePolicyPicker, type CartUpdatePolicyValue } from '@/components/updates/CartUpdatePolicyPicker';
 import { CategoryConfig } from '@/components/CategoryConfig';
 import { DependencyConfig } from '@/components/DependencyConfig';
 import { EspProfileSelector } from '@/components/EspProfileSelector';
@@ -101,6 +103,7 @@ type ConfigSection =
   | 'assignment'
   | 'category'
   | 'esp'
+  | 'updates'
   | 'dependencies'
   | 'branding'
   | 'advanced';
@@ -204,6 +207,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const [relationships, setRelationships] = useState<AppRelationship[]>(
     deployedConfig?.relationships || []
   );
+  const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
+    deployedConfig?.updatePolicy
+  );
 
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStoreApp ? 'assignment' : 'detection');
@@ -211,7 +217,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const [addedToCartSuccess, setAddedToCartSuccess] = useState(false);
   const [configMode, setConfigMode] = useState<'quick' | 'advanced'>('quick');
 
-  const quickSections: ConfigSection[] = ['detection', 'assignment', 'category', 'esp', 'dependencies'];
+  const quickSections: ConfigSection[] = ['detection', 'assignment', 'category', 'esp', 'updates', 'dependencies'];
   const isQuickSection = (section: ConfigSection) => quickSections.includes(section);
   const visibleSections = configMode === 'quick' ? quickSections : null; // null = show all
 
@@ -464,6 +470,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           relationships: relationships.length > 0 ? relationships : undefined,
           localeCode: selectedLocale || undefined,
           iconPath: pkg.iconPath,
+          updatePolicy,
           ...(isDeployed ? { forceCreate: true } : {}),
         });
       }
@@ -1765,6 +1772,21 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   mode="pre-deploy"
                   hasRequiredAssignment={assignments.some((a) => a.intent === 'required')}
                 />
+              </ConfigSection>}
+
+              {/* App Updates (quick + advanced, win32 only) */}
+              {!isStoreApp && (visibleSections === null || visibleSections.includes('updates')) && <ConfigSection
+                title="App Updates"
+                icon={<ArrowUpCircle className="w-4 h-4" />}
+                expanded={expandedSection === 'updates'}
+                onToggle={() => toggleSection('updates')}
+              >
+                <div className="space-y-3">
+                  <p className="text-sm text-text-secondary">
+                    Choose how IntuneGet handles future versions of this app.
+                  </p>
+                  <CartUpdatePolicyPicker value={updatePolicy} onChange={setUpdatePolicy} />
+                </div>
               </ConfigSection>}
 
               {/* Dependencies & Supersedence (quick + advanced, win32 only) */}

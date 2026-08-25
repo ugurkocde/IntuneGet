@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowUpCircle,
   X,
   Settings,
   Terminal,
@@ -34,6 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { AssignmentConfig } from '@/components/AssignmentConfig';
+import { CartUpdatePolicyPicker, type CartUpdatePolicyValue } from '@/components/updates/CartUpdatePolicyPicker';
 import { CategoryConfig } from '@/components/CategoryConfig';
 import { DependencyConfig } from '@/components/DependencyConfig';
 import { EspProfileSelector } from '@/components/EspProfileSelector';
@@ -72,6 +74,7 @@ type ConfigSection =
   | 'assignment'
   | 'category'
   | 'esp'
+  | 'updates'
   | 'dependencies'
   | 'branding'
   | 'advanced';
@@ -107,6 +110,9 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   );
   const [installCommand, setInstallCommand] = useState(isWin32 ? item.installCommand : '');
   const [uninstallCommand, setUninstallCommand] = useState(isWin32 ? item.uninstallCommand : '');
+  const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
+    isWin32 ? item.updatePolicy : undefined
+  );
 
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStore ? 'assignment' : 'behavior');
@@ -119,6 +125,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const configSnapshot = JSON.stringify({
     storeInstallExperience, selectedScope, config, assignments, categories,
     espProfiles, relationships, installCommand, uninstallCommand,
+    updatePolicy: updatePolicy ?? null,
   });
   const baselineSnapshotRef = useRef(configSnapshot);
   const requestClose = () => {
@@ -213,6 +220,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           requirementRules,
           installCommand,
           uninstallCommand,
+          updatePolicy,
         });
       }
       onClose();
@@ -1134,6 +1142,21 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                   hasRequiredAssignment={assignments.some((a) => a.intent === 'required')}
                 />
               </ConfigSection>
+
+              {/* App Updates (win32 only) */}
+              {isWin32 && <ConfigSection
+                title="App Updates"
+                icon={<ArrowUpCircle className="w-4 h-4" />}
+                expanded={expandedSection === 'updates'}
+                onToggle={() => toggleSection('updates')}
+              >
+                <div className="space-y-3">
+                  <p className="text-sm text-text-secondary">
+                    Choose how IntuneGet handles future versions of this app.
+                  </p>
+                  <CartUpdatePolicyPicker value={updatePolicy} onChange={setUpdatePolicy} />
+                </div>
+              </ConfigSection>}
 
               {/* Dependencies & Supersedence (win32 only) */}
               {isWin32 && <ConfigSection

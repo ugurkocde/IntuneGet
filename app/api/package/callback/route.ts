@@ -9,6 +9,7 @@ import { getDatabase } from '@/lib/db';
 import { verifyCallbackSignature } from '@/lib/callback-signature';
 import { onJobCompleted } from '@/lib/msp/batch-orchestrator';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
+import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies/ensure-policy';
 import { quarantineInstaller } from '@/lib/installer-preflight';
 import {
   packageCallbackSchema,
@@ -194,6 +195,22 @@ export async function POST(request: NextRequest) {
         // The terminal job state is authoritative. Do not ask the workflow to
         // retry a callback that can no longer repeat this side effect.
         console.error(`[Callback] Failed to create upload history for ${data.jobId}:`, historyError);
+      }
+
+      // Materialize an update policy chosen in the cart, now that the
+      // upload_history row exists to anchor original_upload_history_id.
+      const chosenPolicy = parseCartUpdatePolicy(currentJob.package_config);
+      if (chosenPolicy && currentJob.tenant_id) {
+        const policyResult = await ensureUpdatePolicy({
+          userId: currentJob.user_id,
+          tenantId: currentJob.tenant_id,
+          wingetId: currentJob.winget_id,
+          policyType: chosenPolicy,
+          deployedVersion: currentJob.version,
+        });
+        if (policyResult.status !== 'saved') {
+          console.warn(`[Callback] Update policy not saved for ${data.jobId}:`, policyResult);
+        }
       }
     }
 

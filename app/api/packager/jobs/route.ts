@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, verifyPackagerApiKey } from '@/lib/db';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
+import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies/ensure-policy';
 
 // Verify the packager auth key (API key for SQLite, service role key for Supabase)
 function verifyPackagerAuth(request: NextRequest): boolean {
@@ -218,6 +219,22 @@ export async function PATCH(request: NextRequest) {
           `[Packager Jobs API] Failed to write upload_history for job ${job.id}:`,
           historyError
         );
+      }
+
+      // Materialize an update policy chosen in the cart, now that the
+      // upload_history row exists to anchor original_upload_history_id.
+      const chosenPolicy = parseCartUpdatePolicy(job.package_config);
+      if (chosenPolicy && job.tenant_id) {
+        const policyResult = await ensureUpdatePolicy({
+          userId: job.user_id,
+          tenantId: job.tenant_id,
+          wingetId: job.winget_id,
+          policyType: chosenPolicy,
+          deployedVersion: job.version,
+        });
+        if (policyResult.status !== 'saved') {
+          console.warn(`[Packager Jobs API] Update policy not saved for job ${job.id}:`, policyResult);
+        }
       }
 
       // Clean up stale update_check_results so the Updates page no longer
