@@ -163,6 +163,7 @@ describe('QA toolchain targeted retries', () => {
       'Surfshark.Surfshark',
       'Waterfox.Waterfox',
       'Playnite.Playnite',
+      'Tonec.InternetDownloadManager',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -218,6 +219,7 @@ describe('QA toolchain targeted retries', () => {
         'Microsoft.VisualStudio.2022.BuildTools',
         'Waterfox.Waterfox',
         'Playnite.Playnite',
+        'Tonec.InternetDownloadManager',
       ])
     );
     expect(
@@ -247,6 +249,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '937a4d51d8c62885f76cb896fa3d742069436ee2',
       { wingetId: 'Playnite.Playnite', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Internet Download Manager only after activating its silent uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' tonec.internetdownloadmanager ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5',
+      { wingetId: 'Tonec.InternetDownloadManager', status: 'failed' }
     )).toBe(false);
   });
 

@@ -197,7 +197,16 @@ const PLAYNITE_PROCESS_CLOSE_RELEASE_RETRY_TARGETS = [
   ...WATERFOX_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IDM_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Re-run the exact failed IDM release with its unattended /S uninstall
+  // switch, then carry every still-unconsumed bounded target.
+  'Tonec.InternetDownloadManager',
+  ...PLAYNITE_PROCESS_CLOSE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'c649792a94f23b4c3fc04e07b81c4aa655887301':
+    IDM_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5':
     PLAYNITE_PROCESS_CLOSE_RELEASE_RETRY_TARGETS,
   '937a4d51d8c62885f76cb896fa3d742069436ee2':
