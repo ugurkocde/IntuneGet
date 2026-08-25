@@ -901,6 +901,14 @@ export function normalizeQaPsadtConfig(
     reviewedInstallArgumentsOverride: value?.reviewedInstallArgumentsOverride,
     reviewedArgumentlessInstall: value?.reviewedArgumentlessInstall,
     reviewedUninstallArguments: value?.reviewedUninstallArguments || [],
+    reviewedUninstallWindowAutomation: value?.reviewedUninstallWindowAutomation
+      ? {
+          processName: value.reviewedUninstallWindowAutomation.processName,
+          steps: value.reviewedUninstallWindowAutomation.steps.map((step) => ({
+            ...step,
+          })),
+        }
+      : undefined,
     reviewedUninstallServiceNames: value?.reviewedUninstallServiceNames,
   };
 }

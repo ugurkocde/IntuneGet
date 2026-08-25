@@ -356,12 +356,6 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['/S']);
     expect(
-      applyApplicationPackagingAdapter(
-        'Tonec.InternetDownloadManager',
-        DEFAULT_PSADT_CONFIG
-      ).reviewedUninstallArguments
-    ).toEqual(['/S']);
-    expect(
       applyApplicationPackagingAdapter('Cockos.REAPER', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['/S']);
@@ -828,6 +822,32 @@ describe('application packaging adapters', () => {
       reviewedUninstallArguments: ['--quiet', '--norestart', '--noweb'],
       uninstallCompletionTimeoutMinutes: 15,
     });
+  });
+
+  it('drives only IDM reviewed uninstaller windows and keeps ARP removal authoritative', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Tonec.InternetDownloadManager',
+      { ...DEFAULT_PSADT_CONFIG, reviewedUninstallArguments: ['/S'] }
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+    expect(adapted.reviewedUninstallWindowAutomation).toEqual({
+      processName: 'Uninstall.exe',
+      steps: [
+        {
+          windowText: 'Internet Download Manager',
+          buttonIndex: 2,
+          timeoutSeconds: 60,
+        },
+        { buttonIndex: 3, timeoutSeconds: 15 },
+        {
+          windowText: 'Internet protocol options',
+          buttonIndex: 2,
+          timeoutSeconds: 15,
+        },
+      ],
+    });
+    expect(adapted.uninstallCompletionTimeoutMinutes).toBe(3);
   });
 
   it('uses ZeeDrive\'s documented no-ARP Intune lifecycle', () => {

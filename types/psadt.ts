@@ -229,6 +229,19 @@ export interface PSADTConfig {
   // not exposed as a customer-facing free-form command surface.
   reviewedUninstallArguments?: string[];
 
+  // Internal window-control contract for a reviewed vendor uninstaller that
+  // exposes no reliable silent command line. The generated package restricts
+  // automation to a newly started exact process name and fixed Button class
+  // indices. Application adapters are the only trusted source.
+  reviewedUninstallWindowAutomation?: {
+    processName: string;
+    steps: Array<{
+      windowText?: string;
+      buttonIndex: number;
+      timeoutSeconds: number;
+    }>;
+  };
+
   // Internal guard for a reviewed vendor MSI custom-action helper that can
   // remain alive indefinitely during removal. The packager only accepts this
   // value from an application adapter and matches both the executable name and
@@ -397,6 +410,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   reviewedInstallCompletionTimeoutMinutes: undefined,
   reviewedInstallShieldAdministrativeImage: undefined,
   reviewedUninstallArguments: [],
+  reviewedUninstallWindowAutomation: undefined,
   reviewedUninstallProcessGuard: undefined,
   reviewedUninstallServiceNames: undefined,
   reviewedPreferVisiblePrimaryUninstallRegistration: undefined,

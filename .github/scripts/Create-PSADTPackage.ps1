@@ -331,6 +331,80 @@ $reviewedUninstallArgumentsLiteral = @(
     $reviewedUninstallArguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
 ) -join ', '
 
+$reviewedUninstallWindowAutomationConfigured = $false
+$reviewedUninstallWindowAutomation = $null
+if ($psadtConfig.Contains('reviewedUninstallWindowAutomation') -and
+    $null -ne $psadtConfig['reviewedUninstallWindowAutomation']) {
+    $rawWindowAutomation = $psadtConfig['reviewedUninstallWindowAutomation']
+    if ($rawWindowAutomation -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedUninstallWindowAutomation must be an object.'
+    }
+    foreach ($windowAutomationKey in $rawWindowAutomation.Keys) {
+        if ([string]$windowAutomationKey -notin @('processName', 'steps')) {
+            throw "PSADT reviewedUninstallWindowAutomation contains an unsupported property: $windowAutomationKey"
+        }
+    }
+    $windowAutomationProcessName = ([string]$rawWindowAutomation['processName']).Trim()
+    if ($windowAutomationProcessName -notmatch '^[A-Za-z0-9 _().-]+\.exe$' -or
+        $windowAutomationProcessName.Length -gt 128 -or
+        [System.IO.Path]::GetFileName($windowAutomationProcessName) -ne $windowAutomationProcessName) {
+        throw 'PSADT reviewedUninstallWindowAutomation.processName must be a bounded executable leaf name.'
+    }
+    $rawWindowAutomationSteps = $rawWindowAutomation['steps']
+    if ($rawWindowAutomationSteps -is [string] -or
+        $rawWindowAutomationSteps -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedUninstallWindowAutomation.steps must be an array.'
+    }
+    $windowAutomationSteps = @()
+    foreach ($rawWindowAutomationStep in @($rawWindowAutomationSteps)) {
+        if ($rawWindowAutomationStep -isnot [System.Collections.IDictionary]) {
+            throw 'Every PSADT reviewed uninstall window-automation step must be an object.'
+        }
+        foreach ($windowAutomationStepKey in $rawWindowAutomationStep.Keys) {
+            if ([string]$windowAutomationStepKey -notin @('windowText', 'buttonIndex', 'timeoutSeconds')) {
+                throw "PSADT reviewed uninstall window-automation step contains an unsupported property: $windowAutomationStepKey"
+            }
+        }
+        $windowText = if ($rawWindowAutomationStep.Contains('windowText')) {
+            [string]$rawWindowAutomationStep['windowText']
+        } else {
+            ''
+        }
+        if ($windowText.Length -gt 128 -or [regex]::IsMatch($windowText, '[\x00-\x1F\x7F]')) {
+            throw 'Every PSADT reviewed uninstall windowText must be a bounded, single-line string.'
+        }
+        $rawButtonIndex = $rawWindowAutomationStep['buttonIndex']
+        if (($rawButtonIndex -isnot [byte] -and
+             $rawButtonIndex -isnot [int16] -and
+             $rawButtonIndex -isnot [int32] -and
+             $rawButtonIndex -isnot [int64]) -or
+            [int]$rawButtonIndex -lt 1 -or [int]$rawButtonIndex -gt 20) {
+            throw 'Every PSADT reviewed uninstall buttonIndex must be an integer from 1 to 20.'
+        }
+        $rawTimeoutSeconds = $rawWindowAutomationStep['timeoutSeconds']
+        if (($rawTimeoutSeconds -isnot [byte] -and
+             $rawTimeoutSeconds -isnot [int16] -and
+             $rawTimeoutSeconds -isnot [int32] -and
+             $rawTimeoutSeconds -isnot [int64]) -or
+            [int]$rawTimeoutSeconds -lt 1 -or [int]$rawTimeoutSeconds -gt 120) {
+            throw 'Every PSADT reviewed uninstall timeoutSeconds must be an integer from 1 to 120.'
+        }
+        $windowAutomationSteps += [ordered]@{
+            windowText = $windowText
+            buttonIndex = [int]$rawButtonIndex
+            timeoutSeconds = [int]$rawTimeoutSeconds
+        }
+    }
+    if ($windowAutomationSteps.Count -lt 1 -or $windowAutomationSteps.Count -gt 10) {
+        throw 'PSADT reviewedUninstallWindowAutomation.steps must contain from 1 to 10 entries.'
+    }
+    $reviewedUninstallWindowAutomation = [ordered]@{
+        processName = $windowAutomationProcessName
+        steps = $windowAutomationSteps
+    }
+    $reviewedUninstallWindowAutomationConfigured = $true
+}
+
 $reviewedUninstallServiceNames = @()
 if ($psadtConfig.Contains('reviewedUninstallServiceNames') -and
     $null -ne $psadtConfig['reviewedUninstallServiceNames']) {
@@ -1446,6 +1520,30 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
         throw 'PSADT reviewedInstallShieldAdministrativeImage cannot be combined with a custom install command.'
     }
     Write-Host "Using reviewed InstallShield administrative-image lifecycle: $reviewedInstallShieldMsiExpectedFileName"
+}
+
+if ($reviewedUninstallWindowAutomationConfigured) {
+    if ($IsUserScope -or
+        -not $useRegistryUninstall -or
+        $registeredInstallerTypeLower -in @('msi', 'wix', 'burn') -or
+        -not [string]::IsNullOrWhiteSpace($customUninstallCommand) -or
+        $preserveVendorInstallationOnUninstall) {
+        throw 'PSADT reviewedUninstallWindowAutomation requires a machine-scope registry EXE uninstall lifecycle.'
+    }
+
+    $supportFilesDir = Join-Path $packageDir 'SupportFiles'
+    $null = New-Item -ItemType Directory -Path $supportFilesDir -Force
+    $windowAutomationConfigPath = Join-Path $supportFilesDir 'ReviewedUninstallWindowAutomation.json'
+    $reviewedUninstallWindowAutomation |
+        ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath $windowAutomationConfigPath -Encoding UTF8
+
+    $windowAutomationHelperSource = Join-Path $PSScriptRoot 'Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1'
+    if (-not (Test-Path -LiteralPath $windowAutomationHelperSource -PathType Leaf)) {
+        throw 'The reviewed uninstall window-automation helper source is missing.'
+    }
+    Copy-Item -LiteralPath $windowAutomationHelperSource -Destination (Join-Path $supportFilesDir 'Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1') -Force
+    Write-Host "Embedded reviewed uninstall window automation for: $windowAutomationProcessName"
 }
 
 if ($useRegistryUninstall) {
@@ -3209,6 +3307,24 @@ if ($reviewedExactUninstallConfigured) {
         '    Write-ADTLogEntry -Message "Using the reviewed exact vendor uninstall command [$registeredUninstallFile]." -Source ''Uninstall-ADTDeployment'''
     )
 }
+$reviewedUninstallWindowAutomationLines = @(
+    '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
+)
+if ($reviewedUninstallWindowAutomationConfigured) {
+    $reviewedUninstallWindowAutomationLines = @(
+        '        $uninstallInvocationStartedAt = [DateTime]::UtcNow.AddSeconds(-2)'
+        '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
+        '        $windowAutomationScript = Join-Path $adtSession.DirSupportFiles ''Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1'''
+        '        if (-not (Test-Path -LiteralPath $windowAutomationScript -PathType Leaf)) {'
+        '            throw "The reviewed uninstall window-automation helper was not found: $windowAutomationScript"'
+        '        }'
+        '        Write-ADTLogEntry -Message "Starting reviewed window automation for the exact vendor uninstaller." -Source ''Uninstall-ADTDeployment'''
+        '        $windowAutomationEvents = @(& $windowAutomationScript -ExpectedProcessPath $registeredUninstallFile -MinimumStartTimeUtc $uninstallInvocationStartedAt)'
+        '        foreach ($windowAutomationEvent in $windowAutomationEvents) {'
+        '            Write-ADTLogEntry -Message $windowAutomationEvent -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
+        '        }'
+    )
+}
 if ($useManagedDirectoryLifecycle) {
     Write-Host 'Using reviewed managed-directory removal'
     $lines += @('', "    `$managedInstallDirectory = [Environment]::ExpandEnvironmentVariables('$reviewedManagedInstallDirectoryEscaped')")
@@ -3655,7 +3771,7 @@ if ($useManagedDirectoryLifecycle) {
             '        }'
             "        `$effectiveUninstallCompletionTimeoutMinutes = if (`$useReviewedExactUninstall) { $reviewedExactUninstallTimeoutMinutes } else { $uninstallCompletionTimeoutMinutes }"
             '        $uninstallDeadline = [DateTime]::UtcNow.AddMinutes($effectiveUninstallCompletionTimeoutMinutes)'
-            '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
+            $reviewedUninstallWindowAutomationLines
             '        $uninstallProcessExitLogged = $false'
             '        $nextUninstallProgressLog = [DateTime]::UtcNow'
             '        do {'

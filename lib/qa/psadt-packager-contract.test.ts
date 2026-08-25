@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,6 +19,14 @@ const packager = readFileSync(
 
 const hostedPackager = readFileSync(
   resolve(process.cwd(), 'packager/src/job-processor.ts'),
+  'utf8'
+);
+
+const reviewedWindowAutomationHelper = readFileSync(
+  resolve(
+    process.cwd(),
+    '.github/scripts/Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1'
+  ),
   'utf8'
 );
 
@@ -47,7 +56,8 @@ function generateRegistryUninstallPackage(
   silentSwitches = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
   installScope: 'machine' | 'user' = 'machine',
   nestedInstallerType = '',
-  nestedInstallerPath = ''
+  nestedInstallerPath = '',
+  verifyPackage?: (packageDirectory: string) => void
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -140,6 +150,8 @@ function generateRegistryUninstallPackage(
         `Generated deployment script did not parse:\n${parseResult.stdout}\n${parseResult.stderr}`
       );
     }
+
+    verifyPackage?.(join(fixtureRoot, 'package'));
 
     return readFileSync(generatedPath, 'utf8');
   } finally {
@@ -245,6 +257,161 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'loads the reviewed window-control native helper and fails closed without a matching button',
+    () => {
+      const fixtureRoot = mkdtempSync(
+        join(tmpdir(), 'intuneget-window-automation-helper-')
+      );
+      try {
+        const helperPath = join(
+          fixtureRoot,
+          'Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1'
+        );
+        writeFileSync(helperPath, reviewedWindowAutomationHelper);
+        writeFileSync(
+          join(fixtureRoot, 'ReviewedUninstallWindowAutomation.json'),
+          JSON.stringify({
+            processName: 'pwsh.exe',
+            steps: [{ windowText: '', buttonIndex: 1, timeoutSeconds: 1 }],
+          })
+        );
+        const pwshPath = spawnSync(
+          'pwsh',
+          ['-NoProfile', '-Command', '(Get-Process -Id $PID).Path'],
+          { encoding: 'utf8' }
+        ).stdout.trim();
+        const result = spawnSync(
+          'pwsh',
+          [
+            '-NoProfile',
+            '-File',
+            helperPath,
+            '-ExpectedProcessPath',
+            pwshPath,
+            '-MinimumStartTimeUtc',
+            '1970-01-01T00:00:00Z',
+          ],
+          { encoding: 'utf8' }
+        );
+
+        expect(result.status).toBe(1);
+        expect(`${result.stdout}\n${result.stderr}`).toContain(
+          'Reviewed uninstall window-automation step [1] did not find its exact process window'
+        );
+      } finally {
+        rmSync(fixtureRoot, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'rejects unsafe reviewed uninstall window automation',
+    () => {
+      expect(() =>
+        generateRegistryUninstallPackage(
+          'exe',
+          'Unsafe Window Automation',
+          [],
+          {
+            reviewedUninstallWindowAutomation: {
+              processName: '..\\Uninstall.exe',
+              steps: [{ buttonIndex: 0, timeoutSeconds: 500 }],
+            },
+          }
+        )
+      ).toThrow(
+        'reviewedUninstallWindowAutomation.processName must be a bounded executable leaf name'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'embeds and invokes bounded IDM window automation while retaining exact ARP verification',
+    () => {
+      let embeddedConfig: unknown;
+      let embeddedHelper = '';
+      const automation = {
+        processName: 'Uninstall.exe',
+        steps: [
+          {
+            windowText: 'Internet Download Manager',
+            buttonIndex: 2,
+            timeoutSeconds: 60,
+          },
+          { buttonIndex: 3, timeoutSeconds: 15 },
+          {
+            windowText: 'Internet protocol options',
+            buttonIndex: 2,
+            timeoutSeconds: 15,
+          },
+        ],
+      };
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Internet Download Manager',
+        [],
+        {
+          reviewedUninstallWindowAutomation: automation,
+          uninstallCompletionTimeoutMinutes: 3,
+        },
+        [],
+        'Tonec.InternetDownloadManager',
+        'Internet Download Manager',
+        '6.43.10',
+        'REGISTRY_UNINSTALL:Internet Download Manager',
+        '/skipdlgs',
+        'machine',
+        '',
+        '',
+        (packageDirectory) => {
+          const supportDirectory = join(packageDirectory, 'SupportFiles');
+          const configPath = join(
+            supportDirectory,
+            'ReviewedUninstallWindowAutomation.json'
+          );
+          const helperPath = join(
+            supportDirectory,
+            'Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1'
+          );
+          expect(existsSync(configPath)).toBe(true);
+          expect(existsSync(helperPath)).toBe(true);
+          embeddedConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+          embeddedHelper = readFileSync(helperPath, 'utf8');
+        }
+      );
+
+      expect(embeddedConfig).toEqual({
+        processName: automation.processName,
+        steps: [
+          automation.steps[0],
+          { windowText: '', ...automation.steps[1] },
+          automation.steps[2],
+        ],
+      });
+      expect(embeddedHelper).toContain(
+        '[System.IO.Path]::GetFullPath($_.Path) -ieq $expectedFullPath'
+      );
+      expect(embeddedHelper).toContain(
+        '$_.StartTime.ToUniversalTime() -ge $minimumStartUtc'
+      );
+      expect(embeddedHelper).toContain('private const uint BM_CLICK = 0x00F5;');
+      expect(embeddedHelper).toContain('private const uint SMTO_ABORTIFHUNG = 0x0002;');
+      expect(generated).toContain(
+        '$uninstallInvocationStartedAt = [DateTime]::UtcNow.AddSeconds(-2)'
+      );
+      expect(generated).toContain(
+        '& $windowAutomationScript -ExpectedProcessPath $registeredUninstallFile -MinimumStartTimeUtc $uninstallInvocationStartedAt'
+      );
+      expect(generated).toContain(
+        'Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey }'
+      );
+      expect(generated).toContain(
+        'The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline.'
+      );
+    }
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'appends NeoLoad unattended removal to the exact captured install4j command',
     () => {

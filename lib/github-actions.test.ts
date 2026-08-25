@@ -167,6 +167,46 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       .toMatchObject({ reviewedUninstallArguments: ['/headless'] });
   });
 
+  it('dispatches IDM reviewed window automation through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Tonec.InternetDownloadManager',
+      displayName: 'Internet Download Manager',
+      publisher: 'Tonec Inc.',
+      version: '6.43.10',
+      architecture: 'x86',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '/skipdlgs',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Internet Download Manager',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    const psadtConfig = JSON.parse(payload.client_payload.config.psadtConfig);
+    expect(psadtConfig.reviewedUninstallArguments).toEqual([]);
+    expect(psadtConfig.reviewedUninstallWindowAutomation).toEqual({
+      processName: 'Uninstall.exe',
+      steps: [
+        {
+          windowText: 'Internet Download Manager',
+          buttonIndex: 2,
+          timeoutSeconds: 60,
+        },
+        { buttonIndex: 3, timeoutSeconds: 15 },
+        {
+          windowText: 'Internet protocol options',
+          buttonIndex: 2,
+          timeoutSeconds: 15,
+        },
+      ],
+    });
+  });
+
   it('dispatches the reviewed Postgres Pro lifecycle through the customer packager', async () => {
     reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
       item: {

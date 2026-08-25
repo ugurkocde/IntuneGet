@@ -210,6 +210,49 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/S']);
   });
 
+  it('binds IDM reviewed window automation to customer and QA package identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Tonec.InternetDownloadManager',
+      displayName: 'Internet Download Manager',
+      publisher: 'Tonec Inc.',
+      version: '6.43.10',
+      architecture: 'x86',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/skipdlgs',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Internet Download Manager',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        reviewedUninstallArguments?: string[];
+        reviewedUninstallWindowAutomation?: unknown;
+      };
+    };
+    const expected = {
+      processName: 'Uninstall.exe',
+      steps: [
+        {
+          windowText: 'Internet Download Manager',
+          buttonIndex: 2,
+          timeoutSeconds: 60,
+        },
+        { buttonIndex: 3, timeoutSeconds: 15 },
+        {
+          windowText: 'Internet protocol options',
+          buttonIndex: 2,
+          timeoutSeconds: 15,
+        },
+      ],
+    };
+
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual([]);
+    expect(profile.psadtConfig.reviewedUninstallWindowAutomation).toEqual(expected);
+    expect(
+      JSON.parse(normalized.psadtConfigJson).reviewedUninstallWindowAutomation
+    ).toEqual(expected);
+  });
+
   it('binds FSLogix restart suppression to customer and QA package identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.FSLogix',

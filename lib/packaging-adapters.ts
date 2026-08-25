@@ -16,6 +16,14 @@ interface ApplicationPackagingAdapter {
     expectedMsiFileName: string;
   }>;
   reviewedUninstallArguments?: readonly string[];
+  reviewedUninstallWindowAutomation?: Readonly<{
+    processName: string;
+    steps: readonly Readonly<{
+      windowText?: string;
+      buttonIndex: number;
+      timeoutSeconds: number;
+    }>[];
+  }>;
   reviewedUninstallProcessGuard?: Readonly<{
     processName: string;
     argumentsPattern: string;
@@ -654,13 +662,21 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
-    // Internet Download Manager registers Uninstall.exe without a quiet
-    // command. Replaying that bare ARP command under Intune's non-interactive
-    // SYSTEM session leaves the uninstall wizard hidden and the exact product
-    // registration intact. Its uninstaller accepts the case-sensitive /S
-    // switch used by the product's unattended executable lifecycle.
+    // Internet Download Manager 6.43.10 ignores /S and leaves its ARP entry
+    // intact. Its vendor uninstaller requires three deterministic wizard
+    // control actions. Drive only the exact newly-started Uninstall.exe window
+    // on the SYSTEM desktop, then keep exact ARP removal as the completion
+    // signal. This same adapter is emitted into QA and customer PSADT packages.
     wingetId: 'Tonec.InternetDownloadManager',
-    reviewedUninstallArguments: ['/S'],
+    reviewedUninstallWindowAutomation: {
+      processName: 'Uninstall.exe',
+      steps: [
+        { windowText: 'Internet Download Manager', buttonIndex: 2, timeoutSeconds: 60 },
+        { buttonIndex: 3, timeoutSeconds: 15 },
+        { windowText: 'Internet protocol options', buttonIndex: 2, timeoutSeconds: 15 },
+      ],
+    },
+    uninstallCompletionTimeoutMinutes: 3,
   },
   {
     // REAPER registers an interactive uninstall command without a separate
@@ -1482,6 +1498,7 @@ export function applyApplicationPackagingAdapter(
       reviewedMultiProductInstallMinimumCount: undefined,
       reviewedRegistryInstallEvidence: undefined,
       reviewedAppxInstallEvidence: undefined,
+      reviewedUninstallWindowAutomation: undefined,
       reviewedUninstallProcessGuard: undefined,
       reviewedUninstallServiceNames: undefined,
       reviewedManagedInstallDirectory: undefined,
@@ -1533,9 +1550,14 @@ export function applyApplicationPackagingAdapter(
       )
     : undefined;
 
-  const reviewedUninstallArguments = (config.reviewedUninstallArguments || []).map(
-    (argument) => normalizeReviewedArgument(argument, adapter.wingetId)
-  );
+  // A reviewed window sequence replaces a previously learned command-line
+  // contract. This deliberately clears stale arguments (such as IDM's former
+  // /S adapter) when a failed candidate is regenerated from an older profile.
+  const reviewedUninstallArguments = (
+    adapter.reviewedUninstallWindowAutomation
+      ? []
+      : config.reviewedUninstallArguments || []
+  ).map((argument) => normalizeReviewedArgument(argument, adapter.wingetId));
   const configuredArguments = new Set(
     reviewedUninstallArguments.map((argument) => argument.toLowerCase())
   );
@@ -1568,6 +1590,14 @@ export function applyApplicationPackagingAdapter(
       ? { ...adapter.reviewedInstallShieldAdministrativeImage }
       : undefined,
     reviewedUninstallArguments,
+    reviewedUninstallWindowAutomation: adapter.reviewedUninstallWindowAutomation
+      ? {
+          processName: adapter.reviewedUninstallWindowAutomation.processName,
+          steps: adapter.reviewedUninstallWindowAutomation.steps.map((step) => ({
+            ...step,
+          })),
+        }
+      : undefined,
     reviewedUninstallProcessGuard: adapter.reviewedUninstallProcessGuard
       ? { ...adapter.reviewedUninstallProcessGuard }
       : undefined,
