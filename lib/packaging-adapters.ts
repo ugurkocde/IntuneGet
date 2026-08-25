@@ -654,6 +654,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // Internet Download Manager registers Uninstall.exe without a quiet
+    // command. Replaying that bare ARP command under Intune's non-interactive
+    // SYSTEM session leaves the uninstall wizard hidden and the exact product
+    // registration intact. Its uninstaller accepts the case-sensitive /S
+    // switch used by the product's unattended executable lifecycle.
+    wingetId: 'Tonec.InternetDownloadManager',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // REAPER registers an interactive uninstall command without a separate
     // QuietUninstallString. Its vendor installer and uninstaller both accept
     // the manifest's case-sensitive /S switch; without it, a SYSTEM removal

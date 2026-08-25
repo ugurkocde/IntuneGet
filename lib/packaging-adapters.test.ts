@@ -356,6 +356,12 @@ describe('application packaging adapters', () => {
         .reviewedUninstallArguments
     ).toEqual(['/S']);
     expect(
+      applyApplicationPackagingAdapter(
+        'Tonec.InternetDownloadManager',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['/S']);
+    expect(
       applyApplicationPackagingAdapter('Cockos.REAPER', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['/S']);
