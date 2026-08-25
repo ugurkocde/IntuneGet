@@ -167,6 +167,7 @@ describe('QA toolchain targeted retries', () => {
       'IObit.Uninstaller',
       'Autodesk.DesktopConnector',
       'Egnyte.EgnyteDesktopApp',
+      'Elgato.StreamDeck',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -226,6 +227,7 @@ describe('QA toolchain targeted retries', () => {
         'IObit.Uninstaller',
         'Autodesk.DesktopConnector',
         'Egnyte.EgnyteDesktopApp',
+        'Elgato.StreamDeck',
       ])
     );
     expect(
@@ -302,13 +304,13 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Stream Deck only after activating its MSI close-helper guard', () => {
+  it('retries Stream Deck only after activating the existing-helper lookback', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' elgato.streamdeck ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9',
+      'eee661ae3eab578d011dd5052df5e901ffa3a4bf',
       { wingetId: 'Elgato.StreamDeck', status: 'failed' }
     )).toBe(false);
   });

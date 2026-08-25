@@ -237,17 +237,19 @@ const EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS = [
   ...AUTODESK_DESKTOP_CONNECTOR_ODIS_RELEASE_RETRY_TARGETS,
 ] as const;
 
-const STREAM_DECK_CLOSE_HELPER_RELEASE_RETRY_TARGETS = [
-  // Re-run Stream Deck with the command-line-scoped guard for the fresh
-  // executable launched by its stalled MSI CloseApplication custom action.
+const STREAM_DECK_EXISTING_HELPER_RELEASE_RETRY_TARGETS = [
+  // Re-run Stream Deck after extending only its exact helper guard to include
+  // a bounded pre-uninstall creation window.
   'Elgato.StreamDeck',
   // Carry every still-unconsumed targeted retry across the atomic pin.
   ...EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '63219f1fe5c953c8fd799c79030176444ba637b4':
+    STREAM_DECK_EXISTING_HELPER_RELEASE_RETRY_TARGETS,
   'eee661ae3eab578d011dd5052df5e901ffa3a4bf':
-    STREAM_DECK_CLOSE_HELPER_RELEASE_RETRY_TARGETS,
+    EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
   'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9':
     EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
   'b798917a85465cb2fe7b55582322d1e30b20e088':
