@@ -698,6 +698,7 @@ describe('POST /api/package (workflow dispatch)', () => {
         processName: 'StreamDeck.exe',
         argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
         graceSeconds: 20,
+        creationLookbackSeconds: 300,
       },
     };
     expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(

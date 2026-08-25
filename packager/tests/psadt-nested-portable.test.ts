@@ -911,7 +911,7 @@ describe('EXE product identity PSADT generation', () => {
     )).toThrow('single-line');
   });
 
-  it('guards only the reviewed newly spawned MSI uninstall helper', () => {
+  it('guards only the reviewed recently created MSI uninstall helper', () => {
     const uninstall = generator.getUninstallCommand.call(
       generator,
       packagingJob({
@@ -924,6 +924,7 @@ describe('EXE product identity PSADT generation', () => {
               processName: 'Camera Hub.exe',
               argumentsPattern: '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)',
               graceSeconds: 20,
+              creationLookbackSeconds: 300,
             },
           },
         },
@@ -936,6 +937,10 @@ describe('EXE product identity PSADT generation', () => {
       "$reviewedGuardArgumentsPattern = '(?:^|\\s)--pre-uninstall(?:\\s|$).*--quit(?:\\s|$)'"
     );
     expect(uninstall).toContain('$reviewedGuardGraceSeconds = 20');
+    expect(uninstall).toContain('$reviewedGuardCreationLookbackSeconds = 300');
+    expect(uninstall).toContain(
+      '[DateTime]::UtcNow.AddSeconds(-$reviewedGuardCreationLookbackSeconds)'
+    );
     expect(uninstall).toContain('$_.CreationDate.ToUniversalTime() -ge $StartedAt');
     expect(uninstall).toContain('$current.Name -ieq $ProcessName');
     expect(uninstall).toContain('Stop-Process -Id $current.ProcessId -Force');
@@ -962,6 +967,25 @@ describe('EXE product identity PSADT generation', () => {
       }),
       'example.msi'
     )).toThrow('executable leaf name');
+
+    expect(() => generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        installer_type: 'msi',
+        uninstall_command: 'REGISTRY_UNINSTALL:Example',
+        package_config: {
+          psadtConfig: {
+            reviewedUninstallProcessGuard: {
+              processName: 'helper.exe',
+              argumentsPattern: '--quit',
+              graceSeconds: 20,
+              creationLookbackSeconds: 601,
+            },
+          },
+        },
+      }),
+      'example.msi'
+    )).toThrow('creationLookbackSeconds');
   });
 
   it('extends registry-aware completion only for a reviewed vendor profile', () => {

@@ -441,6 +441,7 @@ $reviewedUninstallProcessGuardConfigured = $false
 $reviewedUninstallProcessGuardName = ''
 $reviewedUninstallProcessGuardPattern = ''
 $reviewedUninstallProcessGuardGraceSeconds = 0
+$reviewedUninstallProcessGuardCreationLookbackSeconds = 2
 if ($psadtConfig.Contains('reviewedUninstallProcessGuard') -and
     $null -ne $psadtConfig['reviewedUninstallProcessGuard']) {
     $rawProcessGuard = $psadtConfig['reviewedUninstallProcessGuard']
@@ -451,6 +452,11 @@ if ($psadtConfig.Contains('reviewedUninstallProcessGuard') -and
     $reviewedUninstallProcessGuardName = ([string]$rawProcessGuard['processName']).Trim()
     $reviewedUninstallProcessGuardPattern = ([string]$rawProcessGuard['argumentsPattern']).Trim()
     $rawProcessGuardGraceSeconds = $rawProcessGuard['graceSeconds']
+    $rawProcessGuardCreationLookbackSeconds = if ($rawProcessGuard.Contains('creationLookbackSeconds')) {
+        $rawProcessGuard['creationLookbackSeconds']
+    } else {
+        2
+    }
     if ($reviewedUninstallProcessGuardName -notmatch '^[A-Za-z0-9 _().-]+\.exe$' -or
         $reviewedUninstallProcessGuardName.Length -gt 128) {
         throw 'PSADT reviewedUninstallProcessGuard.processName must be a bounded executable leaf name.'
@@ -475,6 +481,15 @@ if ($psadtConfig.Contains('reviewedUninstallProcessGuard') -and
         throw 'PSADT reviewedUninstallProcessGuard.graceSeconds must be an integer from 5 to 120.'
     }
     $reviewedUninstallProcessGuardGraceSeconds = [int]$rawProcessGuardGraceSeconds
+    if (($rawProcessGuardCreationLookbackSeconds -isnot [byte] -and
+         $rawProcessGuardCreationLookbackSeconds -isnot [int16] -and
+         $rawProcessGuardCreationLookbackSeconds -isnot [int32] -and
+         $rawProcessGuardCreationLookbackSeconds -isnot [int64]) -or
+        [int]$rawProcessGuardCreationLookbackSeconds -lt 2 -or
+        [int]$rawProcessGuardCreationLookbackSeconds -gt 600) {
+        throw 'PSADT reviewedUninstallProcessGuard.creationLookbackSeconds must be an integer from 2 to 600.'
+    }
+    $reviewedUninstallProcessGuardCreationLookbackSeconds = [int]$rawProcessGuardCreationLookbackSeconds
     $reviewedUninstallProcessGuardConfigured = $true
 }
 
@@ -488,7 +503,8 @@ if ($reviewedUninstallProcessGuardConfigured) {
         "        `$reviewedGuardProcessName = '$reviewedUninstallProcessGuardNameLiteral'"
         "        `$reviewedGuardArgumentsPattern = '$reviewedUninstallProcessGuardPatternLiteral'"
         "        `$reviewedGuardGraceSeconds = $reviewedUninstallProcessGuardGraceSeconds"
-        '        $reviewedGuardStartedAt = [DateTime]::UtcNow.AddSeconds(-2)'
+        "        `$reviewedGuardCreationLookbackSeconds = $reviewedUninstallProcessGuardCreationLookbackSeconds"
+        '        $reviewedGuardStartedAt = [DateTime]::UtcNow.AddSeconds(-$reviewedGuardCreationLookbackSeconds)'
         '        $reviewedGuardJob = Start-Job -ScriptBlock {'
         '            param($ProcessName, $ArgumentsPattern, $StartedAt, $GraceSeconds)'
         '            $deadline = [DateTime]::UtcNow.AddMinutes(3)'

@@ -1348,6 +1348,7 @@ describe('application packaging adapters', () => {
       processName: 'StreamDeck.exe',
       argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
       graceSeconds: 20,
+      creationLookbackSeconds: 300,
     });
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
@@ -1422,6 +1423,7 @@ describe('application packaging adapters', () => {
         processName: 'StreamDeck.exe',
         argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
         graceSeconds: 20,
+        creationLookbackSeconds: 300,
       },
     });
   });

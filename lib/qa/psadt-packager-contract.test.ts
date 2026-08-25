@@ -3223,6 +3223,10 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       expect(source).toContain('reviewedUninstallProcessGuard');
       expect(source).toContain('Get-CimInstance -ClassName Win32_Process');
       expect(source).toContain('CreationDate.ToUniversalTime()');
+      expect(source).toContain('reviewedGuardCreationLookbackSeconds');
+      expect(source).toContain(
+        '[DateTime]::UtcNow.AddSeconds(-$reviewedGuardCreationLookbackSeconds)'
+      );
       expect(source).toContain('Stop-Process -Id $current.ProcessId -Force');
       expect(source).toContain('Ended the reviewed vendor uninstall helper after its grace period.');
     }

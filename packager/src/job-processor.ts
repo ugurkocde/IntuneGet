@@ -943,13 +943,15 @@ catch
   /**
    * Validate the adapter-only guard for an MSI custom-action helper that can
    * otherwise wait indefinitely. Both the executable leaf name and command
-   * line must match before a newly spawned process is ended after its grace
-   * period. This is intentionally not a general customer command surface.
+   * line must match before a recently created process is ended after its grace
+   * period. The optional bounded lookback covers vendor processes relaunched
+   * shortly before MSI removal. This is not a general customer command surface.
    */
   private getReviewedUninstallProcessGuard(job: PackagingJob): {
     processName: string;
     argumentsPattern: string;
     graceSeconds: number;
+    creationLookbackSeconds: number;
   } | null {
     const raw = this.getPsadtConfig(job)?.reviewedUninstallProcessGuard;
     if (raw === undefined || raw === null) return null;
@@ -965,6 +967,9 @@ catch
       ? record.argumentsPattern.trim()
       : '';
     const graceSeconds = record.graceSeconds;
+    const creationLookbackSeconds = record.creationLookbackSeconds === undefined
+      ? 2
+      : record.creationLookbackSeconds;
     if (
       !/^[A-Za-z0-9 _().-]+\.exe$/.test(processName) ||
       processName.length > 128
@@ -998,11 +1003,21 @@ catch
         'PSADT reviewedUninstallProcessGuard.graceSeconds must be an integer from 5 to 120'
       );
     }
+    if (
+      !Number.isInteger(creationLookbackSeconds) ||
+      (creationLookbackSeconds as number) < 2 ||
+      (creationLookbackSeconds as number) > 600
+    ) {
+      throw new Error(
+        'PSADT reviewedUninstallProcessGuard.creationLookbackSeconds must be an integer from 2 to 600'
+      );
+    }
 
     return {
       processName,
       argumentsPattern,
       graceSeconds: graceSeconds as number,
+      creationLookbackSeconds: creationLookbackSeconds as number,
     };
   }
 
@@ -1660,7 +1675,8 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         ? `$reviewedGuardProcessName = '${reviewedUninstallProcessGuard.processName.replace(/'/g, "''")}'
         $reviewedGuardArgumentsPattern = '${reviewedUninstallProcessGuard.argumentsPattern.replace(/'/g, "''")}'
         $reviewedGuardGraceSeconds = ${reviewedUninstallProcessGuard.graceSeconds}
-        $reviewedGuardStartedAt = [DateTime]::UtcNow.AddSeconds(-2)
+        $reviewedGuardCreationLookbackSeconds = ${reviewedUninstallProcessGuard.creationLookbackSeconds}
+        $reviewedGuardStartedAt = [DateTime]::UtcNow.AddSeconds(-$reviewedGuardCreationLookbackSeconds)
         $reviewedGuardJob = Start-Job -ScriptBlock {
             param($ProcessName, $ArgumentsPattern, $StartedAt, $GraceSeconds)
             $deadline = [DateTime]::UtcNow.AddMinutes(3)

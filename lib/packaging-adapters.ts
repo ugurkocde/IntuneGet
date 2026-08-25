@@ -28,6 +28,7 @@ interface ApplicationPackagingAdapter {
     processName: string;
     argumentsPattern: string;
     graceSeconds: number;
+    creationLookbackSeconds?: number;
   }>;
   reviewedUninstallServiceNames?: readonly string[];
   uninstallCompletionTimeoutMinutes?: number;
@@ -1124,11 +1125,12 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
-    // Stream Deck's MSI launches a fresh StreamDeck.exe from its
-    // CloseApplication custom action during removal. Under LocalSystem that
-    // helper can remain idle indefinitely even after PSADT closes the original
-    // desktop process. Give only the newly spawned executable a short grace
-    // period before ending it so the exact MSI uninstall can continue.
+    // Stream Deck can relaunch its desktop process after installation, before
+    // the MSI CloseApplication custom action begins removal. Production QA run
+    // 32878010393 proved that the default two-second guard never matched before
+    // the same custom action stalled. Keep the exact executable/command checks,
+    // but include only processes created during the preceding five minutes and
+    // give the match a short grace period before ending it.
     wingetId: 'Elgato.StreamDeck',
     requiredProcessesToClose: [
       { name: 'StreamDeck', description: 'Elgato Stream Deck' },
@@ -1137,6 +1139,7 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       processName: 'StreamDeck.exe',
       argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
       graceSeconds: 20,
+      creationLookbackSeconds: 300,
     },
   },
   {

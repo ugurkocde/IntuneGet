@@ -592,6 +592,7 @@ describe('buildQaCatalogTestConfig', () => {
       processName: 'StreamDeck.exe',
       argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
       graceSeconds: 20,
+      creationLookbackSeconds: 300,
     });
   });
 

@@ -245,11 +245,13 @@ export interface PSADTConfig {
   // Internal guard for a reviewed vendor MSI custom-action helper that can
   // remain alive indefinitely during removal. The packager only accepts this
   // value from an application adapter and matches both the executable name and
-  // command line before ending the newly spawned helper after a grace period.
+  // command line before ending a recently created helper after a grace period.
+  // The optional lookback remains bounded and is supplied only by an adapter.
   reviewedUninstallProcessGuard?: {
     processName: string;
     argumentsPattern: string;
     graceSeconds: number;
+    creationLookbackSeconds?: number;
   };
 
   // Internal list of exact Windows service names that a reviewed vendor
