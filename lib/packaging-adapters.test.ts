@@ -1335,7 +1335,7 @@ describe('application packaging adapters', () => {
     expect(adapted.processesToClose).toHaveLength(11);
   });
 
-  it('adds the reviewed Stream Deck lifecycle process to the exact app', () => {
+  it('adds the reviewed Stream Deck lifecycle guard to the exact app', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Elgato.StreamDeck',
       DEFAULT_PSADT_CONFIG
@@ -1344,6 +1344,11 @@ describe('application packaging adapters', () => {
     expect(adapted.processesToClose).toEqual([
       { name: 'StreamDeck', description: 'Elgato Stream Deck' },
     ]);
+    expect(adapted.reviewedUninstallProcessGuard).toEqual({
+      processName: 'StreamDeck.exe',
+      argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
+      graceSeconds: 20,
+    });
     expect(DEFAULT_PSADT_CONFIG.processesToClose).toEqual([]);
   });
 
@@ -1409,10 +1414,16 @@ describe('application packaging adapters', () => {
   it('matches WinGet identities case-insensitively', () => {
     expect(
       applyApplicationPackagingAdapter('  elgato.streamdeck  ', DEFAULT_PSADT_CONFIG)
-        .processesToClose
-    ).toEqual([
-      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
-    ]);
+    ).toMatchObject({
+      processesToClose: [
+        { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+      ],
+      reviewedUninstallProcessGuard: {
+        processName: 'StreamDeck.exe',
+        argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
+        graceSeconds: 20,
+      },
+    });
   });
 
   it('preserves customer processes and deduplicates names with an exe suffix', () => {

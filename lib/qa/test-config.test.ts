@@ -566,7 +566,7 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
-  it('includes the reviewed Stream Deck process adapter in the catalog profile', () => {
+  it('includes the reviewed Stream Deck uninstall guard in the catalog profile', () => {
     const config = buildQaCatalogTestConfig({
       app: {
         wingetId: 'Elgato.StreamDeck',
@@ -588,6 +588,11 @@ describe('buildQaCatalogTestConfig', () => {
     expect(config.psadtConfig.processesToClose).toEqual([
       { name: 'StreamDeck', description: 'Elgato Stream Deck' },
     ]);
+    expect(config.psadtConfig.reviewedUninstallProcessGuard).toEqual({
+      processName: 'StreamDeck.exe',
+      argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
+      graceSeconds: 20,
+    });
   });
 
   it('includes the reviewed Creative Cloud process adapter in the catalog profile', () => {

@@ -1124,10 +1124,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // Stream Deck's MSI launches a fresh StreamDeck.exe from its
+    // CloseApplication custom action during removal. Under LocalSystem that
+    // helper can remain idle indefinitely even after PSADT closes the original
+    // desktop process. Give only the newly spawned executable a short grace
+    // period before ending it so the exact MSI uninstall can continue.
     wingetId: 'Elgato.StreamDeck',
     requiredProcessesToClose: [
       { name: 'StreamDeck', description: 'Elgato Stream Deck' },
     ],
+    reviewedUninstallProcessGuard: {
+      processName: 'StreamDeck.exe',
+      argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
+      graceSeconds: 20,
+    },
   },
   {
     wingetId: 'Greenshot.Greenshot',

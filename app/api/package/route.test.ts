@@ -690,17 +690,24 @@ describe('POST /api/package (workflow dispatch)', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    const expectedProcesses = [
-      { name: 'StreamDeck', description: 'Elgato Stream Deck' },
-    ];
-    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject({
-      processesToClose: expectedProcesses,
-    });
-    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject({
-      processesToClose: expectedProcesses,
-    });
+    const expectedAdapter = {
+      processesToClose: [
+        { name: 'StreamDeck', description: 'Elgato Stream Deck' },
+      ],
+      reviewedUninstallProcessGuard: {
+        processName: 'StreamDeck.exe',
+        argumentsPattern: '(?:^|\\\\)StreamDeck\\.exe"?(?:\\s|$)',
+        graceSeconds: 20,
+      },
+    };
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
+      expectedAdapter
+    );
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(
+      expectedAdapter
+    );
     expect(createMock.mock.calls[0][0].package_config).toMatchObject({
-      psadtConfig: { processesToClose: expectedProcesses },
+      psadtConfig: expectedAdapter,
     });
   });
 
