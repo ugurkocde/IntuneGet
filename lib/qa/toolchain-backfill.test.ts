@@ -164,6 +164,7 @@ describe('QA toolchain targeted retries', () => {
       'Waterfox.Waterfox',
       'Playnite.Playnite',
       'Tonec.InternetDownloadManager',
+      'IObit.Uninstaller',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -220,6 +221,7 @@ describe('QA toolchain targeted retries', () => {
         'Waterfox.Waterfox',
         'Playnite.Playnite',
         'Tonec.InternetDownloadManager',
+        'IObit.Uninstaller',
       ])
     );
     expect(
@@ -260,6 +262,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       'd8642e4a6e3ee867fd8dfaf5bae632fbe24200f5',
       { wingetId: 'Tonec.InternetDownloadManager', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries IObit only after activating its Inno silent uninstall contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' iobit.uninstaller ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '943851a66f72cf115e2d97058a6415ee71e3f50f',
+      { wingetId: 'IObit.Uninstaller', status: 'failed' }
     )).toBe(false);
   });
 

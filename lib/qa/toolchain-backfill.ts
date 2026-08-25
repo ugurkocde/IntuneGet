@@ -210,7 +210,16 @@ const IDM_WINDOW_AUTOMATION_RELEASE_RETRY_TARGETS = [
   ...IDM_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IOBIT_INNO_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Re-run the exact failed IObit release with Inno Setup's documented silent
+  // removal contract, then carry every still-unconsumed bounded target.
+  'IObit.Uninstaller',
+  ...IDM_WINDOW_AUTOMATION_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'f7be39a95d529bc613f0ec8d4f2483762a5e02a2':
+    IOBIT_INNO_UNINSTALL_RELEASE_RETRY_TARGETS,
   '943851a66f72cf115e2d97058a6415ee71e3f50f':
     IDM_WINDOW_AUTOMATION_RELEASE_RETRY_TARGETS,
   'c649792a94f23b4c3fc04e07b81c4aa655887301':
