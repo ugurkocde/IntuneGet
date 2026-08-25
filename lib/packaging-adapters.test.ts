@@ -560,6 +560,20 @@ describe('application packaging adapters', () => {
     ).toBe('%SystemDrive%\\SWSetup\\HPImageAssistant');
     expect(
       applyApplicationPackagingAdapter(
+        'Autodesk.DesktopConnector',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      processesToClose: [
+        {
+          name: 'DesktopConnector.Applications.Tray',
+          description: 'Autodesk Desktop Connector',
+        },
+      ],
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+    expect(
+      applyApplicationPackagingAdapter(
         'Autodesk.LicensingService',
         DEFAULT_PSADT_CONFIG
       )

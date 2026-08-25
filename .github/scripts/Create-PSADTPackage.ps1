@@ -2283,6 +2283,15 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         ''
     )
 } elseif ($useRegistryUninstall) {
+    # A reviewed long-running bootstrapper can hand work to a detached child
+    # before its own process handle completes. Reuse the reviewed completion
+    # ceiling for exact ARP registration instead of reverting to the generic
+    # one-minute capture window after the parent exits.
+    $registryUninstallVerificationAttempts = if ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
+        [Math]::Max(30, $reviewedInstallCompletionTimeoutMinutes * 30)
+    } else {
+        30
+    }
     $lines += @(
         '    # Snapshot uninstall entries so the exact vendor entry created or updated by this installer can be reused later.'
         '    $preInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
@@ -2906,7 +2915,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         '    $candidateLocaleSuffixPattern = if ($configuredUninstallLocaleAgnosticName) {'
         '        ''\(\s*(?:(?:x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)\s+)?'' + [regex]::Escape($configuredUninstallLocaleHint) + ''\s*\)$'''
         '    } else { $null }'
-        '    foreach ($verificationAttempt in 1..30) {'
+        "    foreach (`$verificationAttempt in 1..$registryUninstallVerificationAttempts) {"
         '        $postInstallApplications = @(Get-ADTApplication -ErrorAction SilentlyContinue)'
         '        $changedApplications = @($postInstallApplications | Where-Object {'
         '            $candidateApplication = $_'
@@ -3090,7 +3099,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
     $lines += @(
         '        if ($selectedApplications.Count -eq 1) { break }'
         '        if ($multiProductInstallationVerified) { break }'
-        '        if ($verificationAttempt -lt 30) { Start-Sleep -Seconds 2 }'
+        "        if (`$verificationAttempt -lt $registryUninstallVerificationAttempts) { Start-Sleep -Seconds 2 }"
         '    }'
         '    if ($selectedApplications.Count -eq 1) {'
         '        $capturedUninstallKey = [string]$selectedApplications[0].PSChildName'

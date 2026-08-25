@@ -797,6 +797,23 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%SystemDrive%\\SWSetup\\HPImageAssistant',
   },
   {
+    // Desktop Connector is delivered by Autodesk ODIS. The signed bootstrapper
+    // can exit before ODIS creates the exact product registration, so the
+    // ordinary one-minute ARP capture races a still-running installation.
+    // Autodesk's current administrator sample also closes this exact tray
+    // process before install and removal. Keep the dynamic manifest product
+    // identity and registered ODIS uninstall command, but give registration
+    // the same reviewed completion window as the vendor installer.
+    wingetId: 'Autodesk.DesktopConnector',
+    requiredProcessesToClose: [
+      {
+        name: 'DesktopConnector.Applications.Tray',
+        description: 'Autodesk Desktop Connector',
+      },
+    ],
+    reviewedInstallCompletionTimeoutMinutes: 15,
+  },
+  {
     // Autodesk documents Desktop Licensing Service as a shared component that
     // does not appear in Programs and Features. Verify its dedicated payload
     // instead of trying to select one of the unrelated Autodesk ARP changes,

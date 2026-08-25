@@ -650,6 +650,39 @@ describe('PSADT QA package identity', () => {
     });
   });
 
+  it('binds the reviewed Autodesk Desktop Connector ODIS wait to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Autodesk.DesktopConnector',
+      displayName: 'Autodesk Desktop Connector',
+      publisher: 'Autodesk',
+      version: '2027.2.0.85',
+      architecture: 'x64',
+      installerSha256: 'f'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--quiet',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{0D3EBA46-5179-3ECC-9E63-8A0221EBFA9F}:Autodesk Desktop Connector',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+      psadtConfig: {
+        processesToClose: Array<{ name: string }>;
+        reviewedInstallCompletionTimeoutMinutes?: number;
+      };
+    };
+
+    expect(profile.psadtConfig.processesToClose.map(({ name }) => name)).toEqual([
+      'DesktopConnector.Applications.Tray',
+    ]);
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(profile.installer.uninstallCommand).toContain(
+      '{0D3EBA46-5179-3ECC-9E63-8A0221EBFA9F}'
+    );
+  });
+
   it('binds the bounded darktable installer wait to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'darktable.darktable',

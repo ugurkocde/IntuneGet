@@ -2002,6 +2002,35 @@ describe('PSADT registry uninstall identity contract', () => {
     30_000
   );
 
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'uses a reviewed bootstrapper completion window for exact ARP registration',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Autodesk Desktop Connector',
+        [],
+        { reviewedInstallCompletionTimeoutMinutes: 15 },
+        [],
+        'Autodesk.DesktopConnector',
+        'Autodesk Desktop Connector',
+        '2027.2.0.85',
+        'REGISTRY_UNINSTALL_PRODUCT:{0D3EBA46-5179-3ECC-9E63-8A0221EBFA9F}:Autodesk Desktop Connector',
+        '--quiet'
+      );
+
+      expect(generated).toContain(
+        'foreach ($verificationAttempt in 1..450)'
+      );
+      expect(generated).toContain(
+        'if ($verificationAttempt -lt 450) { Start-Sleep -Seconds 2 }'
+      );
+      expect(generated).toContain(
+        '$configuredMatches = @($postInstallApplications'
+      );
+    },
+    30_000
+  );
+
   it('parses and persists a manifest product code for multi-entry installers', () => {
     expect(packager).toContain(
       "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):(.+)$"
