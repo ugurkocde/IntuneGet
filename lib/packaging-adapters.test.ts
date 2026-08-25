@@ -1008,6 +1008,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('uses Total Commander\'s documented complete unattended uninstall mode', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'ghisler.totalcommander',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedUninstallArguments).toEqual(['/7']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+  });
+
   it('pins RobotStudio to its complete silent install and exact 2025.2 MSI identity', () => {
     const adapted = applyApplicationPackagingAdapter(
       'abb.robotstudio',

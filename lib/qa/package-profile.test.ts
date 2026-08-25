@@ -183,6 +183,29 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/headless']);
   });
 
+  it('binds Total Commander customer and QA packages to unattended removal', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Ghisler.TotalCommander',
+      displayName: 'Total Commander',
+      publisher: 'Ghisler',
+      version: '11.58',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/AHN*',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:Totalcmd64:Total Commander 64-bit (Remove or Repair)',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/7']);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['/7']);
+  });
+
   it('binds Postgres Pro 17 customer packages to the exact vendor lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'PostgresPro.Standard.17',

@@ -326,6 +326,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallArgumentsOverride: '/vADDLOCAL="ALL" /qn /norestart',
   },
   {
+    // Total Commander registers its exact tcunin64.exe/tcuninst.exe product
+    // uninstaller without arguments, which opens the interactive removal UI
+    // behind a non-interactive Intune session. Ghisler documents /0 through /7
+    // as the unattended uninstall modes; /7 removes the program, shortcuts,
+    // and settings. Append it only to the exact captured Total Commander ARP
+    // command so QA and customer packages share the supported lifecycle.
+    wingetId: 'Ghisler.TotalCommander',
+    reviewedUninstallArguments: ['/7'],
+  },
+  {
     // Apryse documents -q as the unattended Windows uninstall switch for the
     // install4j-based Xodo/PDF Studio family. The registered Xodo PDF Reader
     // command omits it, which leaves the confirmation flow waiting in a

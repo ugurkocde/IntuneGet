@@ -443,6 +443,37 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'appends Total Commander unattended removal to the exact captured product command',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Total Commander',
+        [],
+        { reviewedUninstallArguments: ['/7'] },
+        [],
+        'Ghisler.TotalCommander',
+        'Total Commander 64-bit (Remove or Repair)',
+        '11.58',
+        'REGISTRY_UNINSTALL_KEY:Totalcmd64:Total Commander 64-bit (Remove or Repair)',
+        '/AHN*'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain("$configuredProductCode = 'Totalcmd64'");
+      expect(uninstallFunction).toContain("$reviewedUninstallArguments = @('/7')");
+      expect(uninstallFunction).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+      expect(uninstallFunction).toContain(
+        'Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey }'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'appends FSLogix restart suppression to the exact captured Burn command',
     () => {
       const generated = generateRegistryUninstallPackage(
