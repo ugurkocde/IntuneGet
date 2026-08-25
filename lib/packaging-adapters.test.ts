@@ -1113,6 +1113,22 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('uses exact Microsoft Appx evidence for Windows App Runtime 1.3', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'microsoft.windowsappruntime.1.3',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      preserveVendorInstallationOnUninstall: true,
+      reviewedAppxInstallEvidence: {
+        packageName: 'Microsoft.WindowsAppRuntime.1.3',
+        publisherId: '8wekyb3d8bbwe',
+        minimumVersion: '3000.934.1904.0',
+      },
+    });
+  });
+
   it('uses reviewed multi-product evidence for the shared Visual C++ runtime bundle', () => {
     expect(
       applyApplicationPackagingAdapter('ABBODI1406.VCREDIST', DEFAULT_PSADT_CONFIG)

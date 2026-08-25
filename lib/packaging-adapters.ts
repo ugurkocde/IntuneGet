@@ -1013,6 +1013,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSuccessCodes: [1223],
   },
   {
+    // Windows App Runtime 1.3 is a shared MSIX framework. The 1.3.3 x64
+    // installer deploys Microsoft.WindowsAppRuntime.1.3 version
+    // 3000.934.1904.0 under Microsoft's publisher and does not create one
+    // authoritative ARP entry. Verify the exact framework identity and retain
+    // it when Intune relinquishes ownership so dependent apps are not broken.
+    wingetId: 'Microsoft.WindowsAppRuntime.1.3',
+    preserveVendorInstallationOnUninstall: true,
+    reviewedAppxInstallEvidence: {
+      packageName: 'Microsoft.WindowsAppRuntime.1.3',
+      publisherId: '8wekyb3d8bbwe',
+      minimumVersion: '3000.934.1904.0',
+    },
+  },
+  {
     // Windows App Runtime is a shared MSIX framework. Microsoft's package
     // identity is Microsoft.WindowsAppRuntime.1.8, and the 1.8.9 installer
     // deploys framework version 8000.879.2017.0 under Microsoft's publisher.

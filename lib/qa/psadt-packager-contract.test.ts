@@ -805,6 +805,55 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'verifies Windows App Runtime 1.3 with its exact shared Appx framework evidence',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Windows App Runtime',
+        [],
+        {
+          verifyInstall: true,
+          preserveVendorInstallationOnUninstall: true,
+          reviewedAppxInstallEvidence: {
+            packageName: 'Microsoft.WindowsAppRuntime.1.3',
+            publisherId: '8wekyb3d8bbwe',
+            minimumVersion: '3000.934.1904.0',
+          },
+        },
+        [],
+        'Microsoft.WindowsAppRuntime.1.3'
+      );
+      const installFunction = generated.slice(
+        generated.indexOf('function Install-ADTDeployment'),
+        generated.indexOf('function Uninstall-ADTDeployment')
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(installFunction).toContain(
+        "Get-AppxPackage -AllUsers -Name 'Microsoft.WindowsAppRuntime.1.3'"
+      );
+      expect(installFunction).toContain(
+        "[string]$_.PublisherId -eq '8wekyb3d8bbwe'"
+      );
+      expect(installFunction).toContain('[bool]$_.IsFramework');
+      expect(installFunction).toContain(
+        "[version]'3000.934.1904.0'"
+      );
+      expect(installFunction).not.toContain('$preInstallApplications');
+      expect(installFunction).not.toContain(
+        'Could not select one vendor uninstall entry'
+      );
+      expect(uninstallFunction).toContain(
+        'Retaining the shared vendor installation and removing only the IntuneGet management marker.'
+      );
+      expect(uninstallFunction).not.toContain('Start-ADTProcess @uninstallProcessParameters');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'rejects wildcard and unretained reviewed Appx evidence',
     () => {
       expect(() =>
