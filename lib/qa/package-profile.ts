@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '5636cda74d31de95d9ee5689050ba04e432ede61',
+  packagerCommit: '085de20195dacc66c0d465945f93c6a780cc14c4',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -386,6 +386,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // its exact captured uninstaller. Preserve every unrelated pass from the
   // Windows App Runtime identity release.
   '384d36477200c3410f47645e376fe2dfd3682a9e',
+  // Poly Lens 5.1 now captures the exact renamed Poly Studio ARP identity,
+  // while bounded zero-match diagnostics execute only on the fail-closed path.
+  // Preserve every unrelated pass from the Total Commander adapter release.
+  '5636cda74d31de95d9ee5689050ba04e432ede61',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

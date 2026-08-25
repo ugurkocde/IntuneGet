@@ -261,7 +261,17 @@ const TOTAL_COMMANDER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...WINDOWS_APP_RUNTIME_13_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const POLY_LENS_RENAMED_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 5.1 transitional MSI using HP's renamed Poly Studio ARP
+  // identity while retaining exact observed-key capture and removal.
+  'Poly.PolyLens',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...TOTAL_COMMANDER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '085de20195dacc66c0d465945f93c6a780cc14c4':
+    POLY_LENS_RENAMED_IDENTITY_RELEASE_RETRY_TARGETS,
   '5636cda74d31de95d9ee5689050ba04e432ede61':
     TOTAL_COMMANDER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   '384d36477200c3410f47645e376fe2dfd3682a9e':

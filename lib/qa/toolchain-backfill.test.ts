@@ -116,6 +116,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Poly.PolyLens',
       'Ghisler.TotalCommander',
       'Tricentis.NeoLoad',
       'Piriform.Recuva',
@@ -178,6 +179,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Poly.PolyLens',
         'Ghisler.TotalCommander',
         'Tricentis.NeoLoad',
         'Piriform.Recuva',
@@ -334,6 +336,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '384d36477200c3410f47645e376fe2dfd3682a9e',
       { wingetId: 'Ghisler.TotalCommander', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Poly Lens only after activating its renamed Poly Studio identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' poly.polylens ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '5636cda74d31de95d9ee5689050ba04e432ede61',
+      { wingetId: 'Poly.PolyLens', status: 'failed' }
     )).toBe(false);
   });
 
