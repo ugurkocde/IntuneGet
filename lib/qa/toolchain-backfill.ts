@@ -230,7 +230,16 @@ const AUTODESK_DESKTOP_CONNECTOR_ODIS_RELEASE_RETRY_TARGETS = [
   ...IOBIT_DETAIN_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS = [
+  // Re-run Egnyte with the vendor-required update-on-boot property when the
+  // managed package suppresses reboot, then carry every unconsumed retry.
+  'Egnyte.EgnyteDesktopApp',
+  ...AUTODESK_DESKTOP_CONNECTOR_ODIS_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9':
+    EGNYTE_UPDATE_ON_BOOT_RELEASE_RETRY_TARGETS,
   'b798917a85465cb2fe7b55582322d1e30b20e088':
     AUTODESK_DESKTOP_CONNECTOR_ODIS_RELEASE_RETRY_TARGETS,
   '3400509334e29c78e960ba3b05ba3e4bec408b87':

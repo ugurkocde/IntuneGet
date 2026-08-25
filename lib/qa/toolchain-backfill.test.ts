@@ -166,6 +166,7 @@ describe('QA toolchain targeted retries', () => {
       'Tonec.InternetDownloadManager',
       'IObit.Uninstaller',
       'Autodesk.DesktopConnector',
+      'Egnyte.EgnyteDesktopApp',
     ]));
     expect(targets).not.toContain('Acronis.CyberProtectHomeOffice');
     expect(targets).not.toContain('Tencent.QQ.NT');
@@ -224,6 +225,7 @@ describe('QA toolchain targeted retries', () => {
         'Tonec.InternetDownloadManager',
         'IObit.Uninstaller',
         'Autodesk.DesktopConnector',
+        'Egnyte.EgnyteDesktopApp',
       ])
     );
     expect(
@@ -286,6 +288,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '3400509334e29c78e960ba3b05ba3e4bec408b87',
       { wingetId: 'Autodesk.DesktopConnector', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Egnyte only after activating its update-on-boot contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' egnyte.egnytedesktopapp ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b798917a85465cb2fe7b55582322d1e30b20e088',
+      { wingetId: 'Egnyte.EgnyteDesktopApp', status: 'failed' }
     )).toBe(false);
   });
 

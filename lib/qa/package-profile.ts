@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b798917a85465cb2fe7b55582322d1e30b20e088',
+  packagerCommit: 'ab0fbf7d35ad601611d4d4ca1029df826dbdfde9',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -366,6 +366,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Desktop Connector now waits for its detached ODIS registration. Preserve
   // every package that already passed on the prior IObit detain release.
   '3400509334e29c78e960ba3b05ba3e4bec408b87',
+  // Egnyte now carries the vendor-required update-on-boot property whenever
+  // the managed package suppresses reboots. Preserve unrelated prior passes.
+  'b798917a85465cb2fe7b55582322d1e30b20e088',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
