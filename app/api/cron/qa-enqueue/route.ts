@@ -718,7 +718,10 @@ export async function GET(request: Request) {
       tested_at_utc: string;
       package_profile_sha256: string | null;
     }> = [];
-    let quarantinedInstallerTuples = new Set<string>();
+    let unavailableInstallerTuples = new Map<
+      string,
+      'HASH_MISMATCH' | 'MANIFEST_CHANGED'
+    >();
     if (supportedIds.length > 0) {
       const [recipeResult, policyResult, deployedResult, resultResult, healthResult] = await Promise.all([
         supabase
@@ -744,9 +747,11 @@ export async function GET(request: Request) {
           .in('winget_id', supportedIds),
         supabase
           .from('installer_health')
-          .select('winget_id, version, architecture, installer_url, expected_sha256')
+          .select(
+            'winget_id, version, architecture, installer_url, expected_sha256, status, reason_code, expires_at'
+          )
           .in('winget_id', supportedIds)
-          .eq('status', 'quarantined'),
+          .in('status', ['quarantined', 'error']),
       ]);
       if (recipeResult.error) {
         throw new Error(`Could not read optional QA recipes: ${recipeResult.error.message}`);
@@ -767,15 +772,25 @@ export async function GET(request: Request) {
       policies = policyResult.data || [];
       deployedApps = deployedResult.data || [];
       results = resultResult.data || [];
-      quarantinedInstallerTuples = new Set((healthResult.data || []).map((row) =>
-        installerTupleKey({
+      const observedAtMs = Date.parse(startedAt);
+      unavailableInstallerTuples = new Map((healthResult.data || []).flatMap((row) => {
+        const reasonCode = row.status === 'quarantined'
+          ? 'HASH_MISMATCH' as const
+          : row.status === 'error' &&
+              row.reason_code === 'MANIFEST_CHANGED' &&
+              typeof row.expires_at === 'string' &&
+              Date.parse(row.expires_at) > observedAtMs
+            ? 'MANIFEST_CHANGED' as const
+            : null;
+        if (!reasonCode) return [];
+        return [[installerTupleKey({
           wingetId: row.winget_id,
           version: row.version,
           architecture: row.architecture,
           installerUrl: row.installer_url,
           installerSha256: row.expected_sha256,
-        })
-      ));
+        }), reasonCode]];
+      }));
     }
 
     const priorities = new Map<string, number>();
@@ -792,10 +807,16 @@ export async function GET(request: Request) {
         priorities.set(wingetId, Math.max(priorities.get(wingetId) || 0, TARGETED_QA_PRIORITY));
       }
     }
+    const failedCatalogQaIds = new Set(
+      results
+        .filter((result) => result.outcome === 'Failed')
+        .map((result) => result.winget_id)
+    );
     supportedApps = supportedApps.filter((app) =>
       demandedIds.has(app.winget_id) ||
       backfillIds.has(app.winget_id) ||
-      catalogBackfillIdSet.has(app.winget_id)
+      catalogBackfillIdSet.has(app.winget_id) ||
+      (targetedIdSet.has(app.winget_id) && failedCatalogQaIds.has(app.winget_id))
     );
     targetedCount = supportedApps.filter((app) => targetedIdSet.has(app.winget_id)).length;
     for (const app of supportedApps) {
@@ -923,13 +944,14 @@ export async function GET(request: Request) {
             }
 
             const architecture = selectedForVm.architecture;
-            if (quarantinedInstallerTuples.has(installerTupleKey({
+            const unavailableReasonCode = unavailableInstallerTuples.get(installerTupleKey({
               wingetId: app.winget_id,
               version: resolution.version,
               architecture,
               installerUrl,
               installerSha256,
-            }))) {
+            }));
+            if (unavailableReasonCode) {
               await persistQaCatalogReconciliation(supabase!, {
                 wingetId: app.winget_id,
                 catalogVersion: app.latest_version!,
@@ -938,11 +960,12 @@ export async function GET(request: Request) {
                 observedLiveVersion: resolution.version,
               });
               summary.unavailable++;
-              structuredQaPollLog('info', 'qa_installer_hash_quarantined', {
+              structuredQaPollLog('info', 'qa_installer_source_quarantined', {
                 runId,
                 wingetId: app.winget_id,
                 version: resolution.version,
                 architecture,
+                preflightReasonCode: unavailableReasonCode,
               });
               return;
             }

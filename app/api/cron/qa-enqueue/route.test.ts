@@ -728,6 +728,48 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(resolveManifestMock).not.toHaveBeenCalled();
   });
 
+  it('allows a protected targeted rerun for a prior failed catalog package', async () => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{
+        winget_id: 'Failed.CatalogApp',
+        name: 'Failed Catalog App',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      deployedApps: [],
+      packageResults: [{
+        winget_id: 'Failed.CatalogApp',
+        tested_version: '1.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        outcome: 'Failed',
+        tested_at_utc: '2026-08-25T10:00:00.000Z',
+        package_profile_sha256: 'B'.repeat(64),
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest('?id=Failed.CatalogApp'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      checked: 1,
+      queued: 1,
+      targetedRequestedCount: 1,
+      targetedCount: 1,
+    });
+    expect(candidateInserts).toEqual([
+      expect.objectContaining({
+        winget_id: 'Failed.CatalogApp',
+        status: 'queued',
+        priority: 1_000,
+        demand_source: 'operator',
+      }),
+    ]);
+  });
+
   it('records a current-head reconciliation when the live installer manifest is unavailable', async () => {
     const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
       demandBackfillApps: ['Unavailable.App'],
@@ -812,6 +854,7 @@ describe('GET /api/cron/qa-enqueue', () => {
         architecture: 'x64',
         installer_url: 'https://example.com/setup.exe',
         expected_sha256: 'A'.repeat(64),
+        status: 'quarantined',
       }],
     });
     createServerClientMock.mockReturnValue(client);
@@ -829,6 +872,43 @@ describe('GET /api/cron/qa-enqueue', () => {
         catalog_version: '1.0.0',
         observed_live_version: '1.0.0',
         observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_hash_quarantined',
+      }),
+    ]);
+  });
+
+  it('keeps a fresh manifest-changed installer tuple out of the queue', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Changed.ManifestApp'],
+      supportedApps: [{
+        winget_id: 'Changed.ManifestApp',
+        name: 'Changed Manifest App',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      installerHealth: [{
+        winget_id: 'Changed.ManifestApp',
+        version: '1.0.0',
+        architecture: 'x64',
+        installer_url: 'https://example.com/setup.exe',
+        expected_sha256: 'A'.repeat(64),
+        status: 'error',
+        reason_code: 'MANIFEST_CHANGED',
+        expires_at: '2099-01-01T00:00:00.000Z',
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Changed.ManifestApp',
         reason_code: 'installer_hash_quarantined',
       }),
     ]);
