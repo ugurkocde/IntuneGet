@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f7be39a95d529bc613f0ec8d4f2483762a5e02a2',
+  packagerCommit: '3400509334e29c78e960ba3b05ba3e4bec408b87',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -356,6 +356,13 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // IDM's reviewed window sequence replaces its ineffective /S argument and
   // changes only that adapter's canonical profile. Preserve unrelated passes.
   'c649792a94f23b4c3fc04e07b81c4aa655887301',
+  // IDM's exact-process window automation changes only its previously failed
+  // lifecycle. Preserve every unrelated compatible pass from that release.
+  '943851a66f72cf115e2d97058a6415ee71e3f50f',
+  // IObit's first Inno-only correction changes only that app's failed removal
+  // path. Preserve every unrelated compatible pass while its vendor-specific
+  // detain switch becomes the current exact profile.
+  'f7be39a95d529bc613f0ec8d4f2483762a5e02a2',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -217,7 +217,15 @@ const IOBIT_INNO_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...IDM_WINDOW_AUTOMATION_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IOBIT_DETAIN_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Replace IObit's ineffective standard-only Inno attempt with the reviewed
+  // vendor-specific detain switch, then carry every unconsumed bounded target.
+  ...IOBIT_INNO_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3400509334e29c78e960ba3b05ba3e4bec408b87':
+    IOBIT_DETAIN_UNINSTALL_RELEASE_RETRY_TARGETS,
   'f7be39a95d529bc613f0ec8d4f2483762a5e02a2':
     IOBIT_INNO_UNINSTALL_RELEASE_RETRY_TARGETS,
   '943851a66f72cf115e2d97058a6415ee71e3f50f':
