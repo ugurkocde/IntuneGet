@@ -276,6 +276,13 @@ export interface PSADTConfig {
   // adapters are the only trusted source for this value.
   reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
 
+  // Internal exact ARP display identity for a reviewed package whose current
+  // vendor installer no longer registers the MSI ProductCode or catalog name
+  // published by WinGet. The shared packager still captures exactly one
+  // observed install delta and persists its exact registry key for removal.
+  // Application adapters are the only trusted source for this value.
+  reviewedRegistryUninstallDisplayName?: string;
+
   // Internal lifecycle contract for reviewed self-extracting packages that do
   // not register an application in Add/Remove Programs. The generated package
   // verifies this exact directory after install and removes it on uninstall.
@@ -416,6 +423,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   reviewedUninstallProcessGuard: undefined,
   reviewedUninstallServiceNames: undefined,
   reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
+  reviewedRegistryUninstallDisplayName: undefined,
 };
 
 /**

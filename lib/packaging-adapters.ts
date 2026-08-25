@@ -34,6 +34,7 @@ interface ApplicationPackagingAdapter {
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
   reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
+  reviewedRegistryUninstallDisplayName?: string;
   reviewedManagedInstallDirectory?: string;
   reviewedManagedInstallEvidenceFile?: string;
   reviewedManagedInstallCompletionProcess?: string;
@@ -386,6 +387,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // zero or multiple visible matches remain an ambiguity failure.
     wingetId: 'Surfshark.Surfshark',
     reviewedPreferVisiblePrimaryUninstallRegistration: true,
+  },
+  {
+    // HP replaced Poly Lens Desktop with Poly Studio Desktop in 5.1 while the
+    // old Poly.PolyLens WinGet entry remained mapped to the exact same MSI as
+    // Poly.PolyStudio. The transitional MSI does not retain its own published
+    // ProductCode or the old `Poly Lens` ARP name after its chained install.
+    // Capture the single observed `Poly Studio` registration instead; the
+    // generated package persists its exact key and command for safe removal.
+    wingetId: 'Poly.PolyLens',
+    reviewedRegistryUninstallDisplayName: 'Poly Studio',
   },
   {
     // TreeSize's dual-mode Inno installer defaults to the invoking account even
@@ -1524,6 +1535,7 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedPreferVisiblePrimaryUninstallRegistration &&
+      !config.reviewedRegistryUninstallDisplayName &&
       !config.reviewedInstallArgumentsOverride &&
       !config.reviewedArgumentlessInstall &&
       !config.reviewedInstallCompletionTimeoutMinutes &&
@@ -1545,6 +1557,7 @@ export function applyApplicationPackagingAdapter(
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
+      reviewedRegistryUninstallDisplayName: undefined,
       reviewedInstallArgumentsOverride: undefined,
       reviewedArgumentlessInstall: undefined,
       reviewedInstallCompletionTimeoutMinutes: undefined,
@@ -1629,6 +1642,14 @@ export function applyApplicationPackagingAdapter(
       normalizeReviewedDisplayNamePrefix(prefix, adapter.wingetId)
     );
 
+  const reviewedRegistryUninstallDisplayName =
+    adapter.reviewedRegistryUninstallDisplayName
+      ? normalizeReviewedDisplayNamePrefix(
+          adapter.reviewedRegistryUninstallDisplayName,
+          adapter.wingetId
+        )
+      : undefined;
+
   return {
     ...config,
     processesToClose,
@@ -1666,6 +1687,7 @@ export function applyApplicationPackagingAdapter(
       adapter.preserveVendorInstallationOnUninstall || undefined,
     reviewedPreferVisiblePrimaryUninstallRegistration:
       adapter.reviewedPreferVisiblePrimaryUninstallRegistration || undefined,
+    reviewedRegistryUninstallDisplayName,
     reviewedManagedInstallDirectory:
       adapter.reviewedManagedInstallDirectory || undefined,
     reviewedManagedInstallEvidenceFile:

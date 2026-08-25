@@ -206,6 +206,30 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/7']);
   });
 
+  it('binds legacy Poly Lens packages to the renamed Poly Studio ARP identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Poly.PolyLens',
+      displayName: 'Poly Lens',
+      publisher: 'Poly',
+      version: '5.1.0.1111',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'wix',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand:
+        'msiexec /x "{50E3D49D-AAA9-45B6-B16E-ED99645C8B71}" /qn /norestart',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedRegistryUninstallDisplayName?: string };
+    };
+
+    expect(profile.psadtConfig.reviewedRegistryUninstallDisplayName)
+      .toBe('Poly Studio');
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedRegistryUninstallDisplayName)
+      .toBe('Poly Studio');
+  });
+
   it('binds Postgres Pro 17 customer packages to the exact vendor lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'PostgresPro.Standard.17',

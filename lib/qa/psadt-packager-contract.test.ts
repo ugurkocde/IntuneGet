@@ -2594,6 +2594,25 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   });
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses a reviewed renamed ARP identity instead of a stale transitional MSI ProductCode',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'msi',
+        'Poly Lens',
+        [],
+        { reviewedRegistryUninstallDisplayName: 'Poly Studio' },
+        [],
+        'Poly.PolyLens'
+      );
+
+      expect(generated).toContain("$configuredUninstallProductCode = ''");
+      expect(generated).toContain("$configuredUninstallDisplayName = 'Poly Studio'");
+      expect(generated).toContain("$appName = 'Poly Studio'");
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'emits the reviewed visible-primary selector only when enabled',
     () => {
       const enabled = generateRegistryUninstallPackage(
@@ -2619,8 +2638,10 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
 
   it('logs bounded ARP identity metadata before rejecting an ambiguous install delta', () => {
     expect(packager).toContain(
-      'foreach ($ambiguousApplication in @($selectedApplications))'
+      '@($changedApplications | Select-Object -First 20)'
     );
+    expect(packager).toContain('foreach ($ambiguousApplication in $diagnosticApplications)');
+    expect(packager).toContain('ARP delta diagnostics truncated after');
     expect(packager).toContain(
       'Ambiguous vendor uninstall candidate: name=[$($ambiguousApplication.DisplayName)]; publisher=[$($ambiguousApplication.Publisher)]; version=[$($ambiguousApplication.DisplayVersion)]; key=[$($ambiguousApplication.PSChildName)]; windowsInstaller=[$([bool]$ambiguousApplication.WindowsInstaller)]; systemComponent=[$ambiguousSystemComponent]; uninstallLeaf=[$ambiguousUninstallLeaf].'
     );

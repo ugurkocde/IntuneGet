@@ -55,6 +55,21 @@ describe('application packaging adapters', () => {
     ).toBeUndefined();
   });
 
+  it('binds the legacy Poly Lens catalog ID to the renamed Poly Studio ARP identity', () => {
+    expect(
+      applyApplicationPackagingAdapter('Poly.PolyLens', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedRegistryUninstallDisplayName: 'customer override',
+      }).reviewedRegistryUninstallDisplayName
+    ).toBe('Poly Studio');
+    expect(
+      applyApplicationPackagingAdapter('Example.App', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedRegistryUninstallDisplayName: 'customer override',
+      }).reviewedRegistryUninstallDisplayName
+    ).toBeUndefined();
+  });
+
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
     expect(resolveApplicationUninstallCommand(
       'Google.Chrome.EXE',

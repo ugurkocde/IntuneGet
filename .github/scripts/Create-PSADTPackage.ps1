@@ -749,6 +749,20 @@ $preserveVendorInstallationOnUninstall = Get-StrictPSADTBoolean `
 $reviewedPreferVisiblePrimaryUninstallRegistration = Get-StrictPSADTBoolean `
     -Config $psadtConfig `
     -Name 'reviewedPreferVisiblePrimaryUninstallRegistration'
+$reviewedRegistryUninstallDisplayName = ''
+if ($psadtConfig.Contains('reviewedRegistryUninstallDisplayName') -and
+    $null -ne $psadtConfig['reviewedRegistryUninstallDisplayName']) {
+    if ($psadtConfig['reviewedRegistryUninstallDisplayName'] -isnot [string]) {
+        throw 'PSADT reviewedRegistryUninstallDisplayName must be a string.'
+    }
+    $reviewedRegistryUninstallDisplayName = [string]$psadtConfig['reviewedRegistryUninstallDisplayName']
+    if ([string]::IsNullOrWhiteSpace($reviewedRegistryUninstallDisplayName) -or
+        $reviewedRegistryUninstallDisplayName.Length -gt 128 -or
+        $reviewedRegistryUninstallDisplayName -match '[\x00-\x1f\x7f]') {
+        throw 'PSADT reviewedRegistryUninstallDisplayName must be a non-empty display name of at most 128 characters.'
+    }
+    $reviewedRegistryUninstallDisplayName = $reviewedRegistryUninstallDisplayName.Trim()
+}
 if ($reviewedRegistryInstallEvidenceConfigured -and
     -not $preserveVendorInstallationOnUninstall) {
     throw 'PSADT reviewedRegistryInstallEvidence requires preserveVendorInstallationOnUninstall.'
@@ -1497,6 +1511,16 @@ if ($fileExtension -eq '.msi') {
     } else {
         throw 'The MSI database did not expose a valid ProductCode; refusing ambiguous detection or removal.'
     }
+}
+
+# A reviewed rename adapter may deliberately replace a stale transitional MSI
+# ProductCode with the exact ARP display identity created by the vendor's
+# chained install. Ordinary MSI packages keep the database ProductCode above.
+if (-not [string]::IsNullOrWhiteSpace($reviewedRegistryUninstallDisplayName)) {
+    $useRegistryUninstall = $true
+    $registryUninstallProductCode = ''
+    $registryUninstallDisplayName = $reviewedRegistryUninstallDisplayName
+    Write-Host "Using reviewed registry display identity: $registryUninstallDisplayName"
 }
 
 $useManagedDirectoryLifecycle = -not [string]::IsNullOrWhiteSpace($reviewedManagedInstallDirectory)
@@ -3124,12 +3148,20 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         '    } elseif ($multiProductInstallationVerified) {'
         '        Write-ADTLogEntry -Message "Verified reviewed multi-product installation from $($reviewedMultiProductMatches.Count) matching vendor registrations." -Source ''Install-ADTDeployment'''
         '    } else {'
-        '        foreach ($ambiguousApplication in @($selectedApplications)) {'
+        '        $diagnosticApplications = if ($selectedApplications.Count -gt 0) {'
+        '            @($selectedApplications | Select-Object -First 20)'
+        '        } else {'
+        '            @($changedApplications | Select-Object -First 20)'
+        '        }'
+        '        foreach ($ambiguousApplication in $diagnosticApplications) {'
         '            $ambiguousSystemComponent = if ($ambiguousApplication.PSObject.Properties[''SystemComponent'']) { [bool]$ambiguousApplication.SystemComponent } else { $false }'
         '            $ambiguousUninstallLeaf = if (-not [string]::IsNullOrWhiteSpace([string]$ambiguousApplication.QuietUninstallStringFilePath)) {'
         '                Split-Path -Leaf ([string]$ambiguousApplication.QuietUninstallStringFilePath)'
         '            } else { Split-Path -Leaf ([string]$ambiguousApplication.UninstallStringFilePath) }'
         '            Write-ADTLogEntry -Message "Ambiguous vendor uninstall candidate: name=[$($ambiguousApplication.DisplayName)]; publisher=[$($ambiguousApplication.Publisher)]; version=[$($ambiguousApplication.DisplayVersion)]; key=[$($ambiguousApplication.PSChildName)]; windowsInstaller=[$([bool]$ambiguousApplication.WindowsInstaller)]; systemComponent=[$ambiguousSystemComponent]; uninstallLeaf=[$ambiguousUninstallLeaf]." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+        '        }'
+        '        if ($changedApplications.Count -gt $diagnosticApplications.Count) {'
+        '            Write-ADTLogEntry -Message "ARP delta diagnostics truncated after $($diagnosticApplications.Count) of $($changedApplications.Count) changed entries." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
         '        }'
         '        throw "Could not select one vendor uninstall entry. The installer changed $($changedApplications.Count) entries and $($selectedApplications.Count) matched the configured identity."'
         '    }'
