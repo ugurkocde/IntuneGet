@@ -1,11 +1,23 @@
 name: Resolve App Requests
 
-# Community app suggestions create app-request issues, but the catalog
-# ingests every package in the winget community repository automatically,
-# so a request is either already fulfilled (the id exists and will appear
-# within a day) or unfulfillable (the id does not exist in winget). This
-# workflow checks every open app-request issue against winget-pkgs and
-# resolves it either way, keeping the suggestion status in Supabase in sync.
+# Community app suggestions create app-request issues. This workflow keeps
+# them resolved without manual review by checking each open issue against
+# the actual state of the system, in precedence order:
+#
+#   1. curated_excluded_apps (permanent denylist, e.g. SourceForge
+#      installers that get rate limited in CI): close as rejected with
+#      the recorded reason.
+#   2. curated_apps: the app is in the catalog. If it also has a
+#      package_eligibility_blocks row it cannot be deployed, so close as
+#      rejected; otherwise close as fulfilled.
+#   3. winget-pkgs: the id exists upstream but has not been imported yet.
+#      Leave the issue open with a one-time "queued" comment; the weekly
+#      catalog sync imports the full winget index, after which the next
+#      run of this workflow closes the issue as fulfilled.
+#   4. Otherwise the id does not exist in winget, so the request is
+#      unfulfillable: close as rejected with correction guidance.
+#
+# Every resolution is synced back to the suggestion status in Supabase.
 
 on:
   schedule:
@@ -36,6 +48,26 @@ jobs:
             });
 
             core.info(`Found ${issues.length} open app-request issue(s)`);
+
+            const supabaseGet = async (path) => {
+              const url = process.env.SUPABASE_URL;
+              const key = process.env.SUPABASE_SERVICE_KEY;
+              if (!url || !key) {
+                throw new Error('Supabase secrets not configured');
+              }
+              for (let attempt = 1; attempt <= 3; attempt += 1) {
+                const response = await fetch(`${url}/rest/v1/${path}`, {
+                  signal: AbortSignal.timeout(15_000),
+                  headers: {
+                    apikey: key,
+                    Authorization: `Bearer ${key}`,
+                  },
+                });
+                if (response.ok) return response.json();
+                if (attempt === 3) throw new Error(`Supabase query failed with status ${response.status}`);
+                await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+              }
+            };
 
             const updateSuggestion = async (issueNumber, status) => {
               const url = process.env.SUPABASE_URL;
@@ -69,89 +101,146 @@ jobs:
               }
             };
 
+            // Post a comment only if no earlier comment carries the marker,
+            // so re-runs never spam the issue.
+            const commentOnce = async (issueNumber, marker, body) => {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              if (comments.some(item => item.body?.includes(marker))) return;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `<!-- ${marker} -->\n${body}`,
+              });
+            };
+
+            const RESOLUTION_MARKER = 'intuneget-app-request-resolution';
+            const QUEUED_MARKER = 'intuneget-app-request-queued';
+
+            const resolveIssue = async (issue, { status, stateReason, comment }) => {
+              await updateSuggestion(issue.number, status);
+              await commentOnce(issue.number, RESOLUTION_MARKER, comment);
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: stateReason,
+              });
+            };
+
             let resolutionFailures = 0;
             for (const issue of issues) {
               try {
-              const bodyMatch = (issue.body || '').match(/\*\*WinGet ID:\*\*\s*`([^`]+)`/);
-              const titleMatch = (issue.title || '').match(/^App Request:\s*(.+)$/);
-              const wingetId = (bodyMatch?.[1] || titleMatch?.[1] || '').trim();
+                const bodyMatch = (issue.body || '').match(/\*\*WinGet ID:\*\*\s*`([^`]+)`/);
+                const titleMatch = (issue.title || '').match(/^App Request:\s*(.+)$/);
+                const wingetId = (bodyMatch?.[1] || titleMatch?.[1] || '').trim();
 
-              if (!wingetId || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/.test(wingetId)) {
-                core.info(`#${issue.number}: could not extract a WinGet id, skipping`);
-                continue;
-              }
-
-              // Check the manifest directory in microsoft/winget-pkgs
-              const firstLetter = wingetId[0].toLowerCase();
-              const manifestPath = wingetId.split('.').join('/');
-              let exists = null;
-              try {
-                await github.rest.repos.getContent({
-                  owner: 'microsoft',
-                  repo: 'winget-pkgs',
-                  path: `manifests/${firstLetter}/${manifestPath}`,
-                });
-                exists = true;
-              } catch (error) {
-                if (error.status === 404) {
-                  exists = false;
-                } else {
-                  core.warning(`#${issue.number}: winget-pkgs check failed (${error.status}), skipping`);
+                if (!wingetId || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/.test(wingetId)) {
+                  core.info(`#${issue.number}: could not extract a WinGet id, skipping`);
                   continue;
                 }
-              }
+                const encodedId = encodeURIComponent(wingetId);
 
-              if (exists) {
-                const comment = [
-                  '<!-- intuneget-app-request-resolution -->',
-                  `\`${wingetId}\` exists in the winget community repository, and the IntuneGet catalog ingests every winget package automatically - new packages appear within a day of being added upstream. Search the catalog for it; if it is not there yet, it will be after the next sync.`,
-                  '',
-                  'Closing as fulfilled. If the app is still missing from the catalog after a couple of days, comment here and the issue can be reopened.',
-                ].join('\n');
-                await updateSuggestion(issue.number, 'implemented');
-                const comments = await github.paginate(github.rest.issues.listComments, {
-                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, per_page: 100,
-                });
-                if (!comments.some(item => item.body?.includes('intuneget-app-request-resolution'))) {
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body: comment,
+                // 1. Permanent denylist: the package can never enter the catalog.
+                const excludedRows = await supabaseGet(
+                  `curated_excluded_apps?select=winget_id,reason&winget_id=ilike.${encodedId}&limit=1`
+                );
+                if (excludedRows.length > 0) {
+                  const excluded = excludedRows[0];
+                  await resolveIssue(issue, {
+                    status: 'rejected',
+                    stateReason: 'not_planned',
+                    comment: [
+                      `IntuneGet cannot offer \`${excluded.winget_id}\`: ${excluded.reason}.`,
+                      '',
+                      'This package is permanently excluded from the catalog, so this request cannot be fulfilled. Closing as not planned.',
+                    ].join('\n'),
                   });
+                  core.info(`#${issue.number}: ${wingetId} is on the exclusion list, closed as not planned`);
+                  continue;
                 }
-                await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  state: 'closed',
-                  state_reason: 'completed',
-                });
-                core.info(`#${issue.number}: ${wingetId} exists - closed as fulfilled`);
-              } else {
-                const comment = [
-                  '<!-- intuneget-app-request-resolution -->',
-                  `No package with the id \`${wingetId}\` exists in the winget community repository (ids are case sensitive), so IntuneGet cannot package it - the catalog can only offer what winget provides.`,
-                  '',
-                  'To get this app into IntuneGet:',
-                  `1. Find the exact id with \`winget search <app name>\` and submit a new suggestion with that id, or`,
-                  '2. If the app is not in winget at all, submit a manifest to https://github.com/microsoft/winget-pkgs first - IntuneGet picks it up automatically once merged.',
-                ].join('\n');
-                await updateSuggestion(issue.number, 'rejected');
-                const comments = await github.paginate(github.rest.issues.listComments, {
-                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, per_page: 100,
-                });
-                if (!comments.some(item => item.body?.includes('intuneget-app-request-resolution'))) {
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body: comment,
+
+                // 2. Already in the catalog: fulfilled, unless deployment is blocked.
+                const catalogRows = await supabaseGet(
+                  `curated_apps?select=winget_id&winget_id=ilike.${encodedId}&limit=1`
+                );
+                if (catalogRows.length > 0) {
+                  const canonicalId = catalogRows[0].winget_id;
+                  const blockRows = await supabaseGet(
+                    `package_eligibility_blocks?select=winget_id&winget_id=eq.${encodeURIComponent(canonicalId)}&limit=1`
+                  );
+                  if (blockRows.length > 0) {
+                    await resolveIssue(issue, {
+                      status: 'rejected',
+                      stateReason: 'not_planned',
+                      comment: [
+                        `\`${canonicalId}\` is listed in the IntuneGet catalog but is not available for automated deployment, so this request cannot be fulfilled. Closing as not planned.`,
+                      ].join('\n'),
+                    });
+                    core.info(`#${issue.number}: ${canonicalId} is deployment blocked, closed as not planned`);
+                  } else {
+                    await resolveIssue(issue, {
+                      status: 'implemented',
+                      stateReason: 'completed',
+                      comment: [
+                        `\`${canonicalId}\` is available in the IntuneGet catalog now. Closing as fulfilled.`,
+                      ].join('\n'),
+                    });
+                    core.info(`#${issue.number}: ${canonicalId} is in the catalog, closed as fulfilled`);
+                  }
+                  continue;
+                }
+
+                // 3./4. Not in the catalog: does the id exist upstream at all?
+                const firstLetter = wingetId[0].toLowerCase();
+                const manifestPath = wingetId.split('.').join('/');
+                let existsUpstream = null;
+                try {
+                  await github.rest.repos.getContent({
+                    owner: 'microsoft',
+                    repo: 'winget-pkgs',
+                    path: `manifests/${firstLetter}/${manifestPath}`,
                   });
+                  existsUpstream = true;
+                } catch (error) {
+                  if (error.status === 404) {
+                    existsUpstream = false;
+                  } else {
+                    core.warning(`#${issue.number}: winget-pkgs check failed (${error.status}), skipping`);
+                    continue;
+                  }
                 }
-                await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  state: 'closed',
-                  state_reason: 'not_planned',
-                });
-                core.info(`#${issue.number}: ${wingetId} not found in winget-pkgs - closed as not planned`);
-              }
+
+                if (existsUpstream) {
+                  // Queued: the weekly catalog sync imports the full winget
+                  // index, so the app appears within a week. Leave the issue
+                  // open; a later run closes it once the app is in the catalog.
+                  await commentOnce(issue.number, QUEUED_MARKER, [
+                    `\`${wingetId}\` exists in the winget community repository and is queued for the IntuneGet catalog, which imports the full winget index on a weekly sync.`,
+                    '',
+                    'This issue stays open and closes automatically once the app is available in the catalog.',
+                  ].join('\n'));
+                  core.info(`#${issue.number}: ${wingetId} exists upstream, waiting for the next catalog sync`);
+                } else {
+                  await resolveIssue(issue, {
+                    status: 'rejected',
+                    stateReason: 'not_planned',
+                    comment: [
+                      `No package with the id \`${wingetId}\` exists in the winget community repository (ids are case sensitive), so IntuneGet cannot package it. The catalog can only offer what winget provides.`,
+                      '',
+                      'To get this app into IntuneGet:',
+                      `1. Find the exact id with \`winget search <app name>\` and submit a new suggestion with that id, or`,
+                      '2. If the app is not in winget at all, submit a manifest to https://github.com/microsoft/winget-pkgs first. IntuneGet picks it up automatically once merged.',
+                    ].join('\n'),
+                  });
+                  core.info(`#${issue.number}: ${wingetId} not found in winget-pkgs, closed as not planned`);
+                }
               } catch (error) {
                 core.warning(`#${issue.number}: resolution failed: ${error.message}`);
                 resolutionFailures += 1;

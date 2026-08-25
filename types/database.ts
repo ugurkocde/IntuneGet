@@ -372,6 +372,29 @@ export interface Database {
         >;
         Relationships: GenericRelationship[];
       };
+      curated_excluded_apps: {
+        Row: {
+          winget_id: string;
+          reason: string;
+          source: string;
+          excluded_at: string;
+          excluded_by: string | null;
+          notes: string | null;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['curated_excluded_apps']['Row'],
+          'source' | 'excluded_at' | 'excluded_by' | 'notes'
+        > & {
+          source?: string;
+          excluded_at?: string;
+          excluded_by?: string | null;
+          notes?: string | null;
+        };
+        Update: Partial<
+          Database['public']['Tables']['curated_excluded_apps']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
       package_eligibility_blocks: {
         Row: {
           winget_id: string;
