@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '54f0c26d3dbda39f78367178345c7d33eb214ec3',
+  packagerCommit: '0dfe1593dbf19ef43beceb2574c440287eaf1dc8',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -410,6 +410,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // instead of LocalSystem's systemprofile. Preserve every unrelated pass
   // from the Logitech LGS silent-uninstall release.
   '8127bf1923e4a4863758acdebbe7f28f6a999790',
+  // WowUp Beta now runs in the NSIS installer's intended signed-in user
+  // context. Preserve every unrelated pass from the Android Apps Manager
+  // user-scope release.
+  '54f0c26d3dbda39f78367178345c7d33eb214ec3',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

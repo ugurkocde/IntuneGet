@@ -301,7 +301,17 @@ const ANDROID_APPS_MANAGER_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...LOGITECH_LGS_SYSTEM_EXECUTION_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const WOWUP_BETA_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 2.21.0-beta.6 lifecycle in the NSIS installer's intended
+  // signed-in user context instead of LocalSystem's systemprofile.
+  'WowUp.Wowup.Beta',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...ANDROID_APPS_MANAGER_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '0dfe1593dbf19ef43beceb2574c440287eaf1dc8':
+    WOWUP_BETA_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '54f0c26d3dbda39f78367178345c7d33eb214ec3':
     ANDROID_APPS_MANAGER_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '8127bf1923e4a4863758acdebbe7f28f6a999790':

@@ -17,6 +17,17 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('softwareok.desktopok');
   });
 
+  it('retries WowUp Beta only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' wowup.wowup.beta ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '54f0c26d3dbda39f78367178345c7d33eb214ec3',
+      { wingetId: 'WowUp.Wowup.Beta', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries Android Apps Manager only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
