@@ -407,6 +407,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedRegistryUninstallDisplayName: 'jamovi',
   },
   {
+    // IrfanView registers iv_uninstall.exe without the vendor's case-sensitive
+    // unattended switch. Under LocalSystem the interactive command exits while
+    // IrfanView64 remains registered (QA run 32918339448). IrfanView's official
+    // FAQ documents `iv_uninstall.exe /silent` for unattended removal, so append
+    // that exact switch to the captured ARP command for QA and customer packages.
+    wingetId: 'IrfanSkiljan.IrfanView',
+    reviewedUninstallArguments: ['/silent'],
+  },
+  {
     // TreeSize's dual-mode Inno installer defaults to the invoking account even
     // when the catalog declares machine scope. Under LocalSystem that places the
     // app and its uninstaller below the 32-bit system profile, where silent

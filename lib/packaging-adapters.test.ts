@@ -79,6 +79,15 @@ describe('application packaging adapters', () => {
     ).toBe('jamovi');
   });
 
+  it('uses IrfanView\'s documented case-sensitive silent uninstall switch', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'irfanskILJan.irfanview',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['/silent']);
+  });
+
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
     expect(resolveApplicationUninstallCommand(
       'Google.Chrome.EXE',

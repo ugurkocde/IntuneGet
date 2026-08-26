@@ -252,6 +252,28 @@ describe('PSADT QA package identity', () => {
       .toBe('jamovi');
   });
 
+  it('binds IrfanView customer and QA packages to the documented silent uninstall', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'IrfanSkiljan.IrfanView',
+      displayName: 'IrfanView',
+      publisher: 'Irfan Skiljan',
+      version: '4.75',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/silent /desktop=1 /group=1 /allusers=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:IrfanView64:IrfanView',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/silent']);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['/silent']);
+  });
+
   it('binds Postgres Pro 17 customer packages to the exact vendor lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'PostgresPro.Standard.17',

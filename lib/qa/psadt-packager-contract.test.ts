@@ -2631,6 +2631,26 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'appends IrfanView\'s documented silent switch to its captured ARP command',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'IrfanView',
+        [],
+        { reviewedUninstallArguments: ['/silent'] },
+        [],
+        'IrfanSkiljan.IrfanView'
+      );
+
+      expect(generated).toContain("$reviewedUninstallArguments = @('/silent')");
+      expect(generated).toContain(
+        '$registeredUninstallArguments += $reviewedArgument'
+      );
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'emits the reviewed visible-primary selector only when enabled',
     () => {
       const enabled = generateRegistryUninstallPackage(
