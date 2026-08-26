@@ -1558,3 +1558,26 @@ describe('Ximalaya Live managed install block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('Q-Dir managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260826230401_block_qdir_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the repeatedly disproven vendor removal lifecycle', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'SoftwareOK.Q-Dir'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/33008768166'
+    );
+    expect(sql).toContain('two isolated LocalSystem lifecycle runs');
+    expect(sql).toContain('Press any key to exit');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});

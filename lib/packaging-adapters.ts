@@ -824,10 +824,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
-    wingetId: 'SoftwareOK.Q-Dir',
-    reviewedUninstallArguments: ['/silent', 'forall'],
-  },
-  {
     // Dell Optimizer's registered InstallShield helper exits without removing
     // the product even with Dell's documented switches. Invoke the original,
     // hash-verified Dell Update Package instead; Dell documents the

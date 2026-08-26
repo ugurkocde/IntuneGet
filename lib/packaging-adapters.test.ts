@@ -478,7 +478,7 @@ describe('application packaging adapters', () => {
     expect(
       applyApplicationPackagingAdapter('SoftwareOK.Q-Dir', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
-    ).toEqual(['/silent', 'forall']);
+    ).toEqual([]);
     expect(
       applyApplicationPackagingAdapter('Google.GoogleDrive', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
