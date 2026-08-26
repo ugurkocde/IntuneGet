@@ -277,7 +277,17 @@ const JAMOVI_REGISTERED_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...POLY_LENS_RENAMED_IDENTITY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IRFANVIEW_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 4.75 lifecycle with IrfanView's documented case-sensitive
+  // /silent switch appended to the exact captured iv_uninstall.exe command.
+  'IrfanSkiljan.IrfanView',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...JAMOVI_REGISTERED_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'b09111db20f3aa13aced140d1bddbc83c437d459':
+    IRFANVIEW_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   'e029c0e9f7884eb07ba8f277413298ec354fb597':
     JAMOVI_REGISTERED_IDENTITY_RELEASE_RETRY_TARGETS,
   '085de20195dacc66c0d465945f93c6a780cc14c4':

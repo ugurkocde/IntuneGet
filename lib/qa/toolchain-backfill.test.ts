@@ -116,6 +116,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'IrfanSkiljan.IrfanView',
       'Jamovi.Desktop.Current',
       'Poly.PolyLens',
       'Ghisler.TotalCommander',
@@ -180,6 +181,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'IrfanSkiljan.IrfanView',
         'Jamovi.Desktop.Current',
         'Poly.PolyLens',
         'Ghisler.TotalCommander',
@@ -360,6 +362,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '085de20195dacc66c0d465945f93c6a780cc14c4',
       { wingetId: 'Jamovi.Desktop.Current', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries IrfanView only after activating its documented silent uninstall', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' irfanskILJan.irfanview ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'e029c0e9f7884eb07ba8f277413298ec354fb597',
+      { wingetId: 'IrfanSkiljan.IrfanView', status: 'failed' }
     )).toBe(false);
   });
 

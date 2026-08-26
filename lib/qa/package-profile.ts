@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'e029c0e9f7884eb07ba8f277413298ec354fb597',
+  packagerCommit: 'b09111db20f3aa13aced140d1bddbc83c437d459',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -394,6 +394,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // the accompanying Visual C++ registrations outside the removal boundary.
   // Preserve every unrelated pass from the Poly Lens identity release.
   '085de20195dacc66c0d465945f93c6a780cc14c4',
+  // IrfanView now appends the vendor-documented, case-sensitive /silent switch
+  // to its exact captured iv_uninstall.exe command. Preserve every unrelated
+  // pass from the Jamovi registered-identity release.
+  'e029c0e9f7884eb07ba8f277413298ec354fb597',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
