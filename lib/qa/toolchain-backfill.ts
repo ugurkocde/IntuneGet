@@ -329,7 +329,16 @@ const SKETCHUPVIEWER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const QDIR_UNSUPPORTED_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Q-Dir is eligibility-blocked after two isolated runs disproved its exact
+  // registered removal command. Carry the remaining bounded retries without
+  // replaying the unsupported lifecycle.
+  ...SKETCHUPVIEWER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '12fed0efb16de79951e9d3761c737aa382560e12':
+    QDIR_UNSUPPORTED_UNINSTALL_RELEASE_RETRY_TARGETS,
   'ce809649aed63f1127aa256cbafb8d085e193951':
     SKETCHUPVIEWER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   // Ximalaya Live is eligibility-blocked after its exact user-scope /S

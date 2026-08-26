@@ -34,6 +34,17 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('ximalaya.ximalayalive');
   });
 
+  it('does not replay Q-Dir after activating its managed-uninstall block', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' softwareok.q-dir ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('softwareok.q-dir');
+  });
+
   it('does not replay DesktopOK after activating its managed-uninstall block', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

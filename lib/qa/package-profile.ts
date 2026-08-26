@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'ce809649aed63f1127aa256cbafb8d085e193951',
+  packagerCommit: '12fed0efb16de79951e9d3761c737aa382560e12',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -426,6 +426,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Viewer's silent removal are all catalog-ID-scoped adapters. Preserve every
   // unrelated compatible pass from the Ximalaya eligibility release.
   '3887e769d1e6bfdea2027b73c1e287203aa8f3f7',
+  // Q-Dir is now rejected by the shared eligibility gate after its exact
+  // registered command failed twice. Removing its unproven adapter does not
+  // invalidate any unrelated passing package profile.
+  'ce809649aed63f1127aa256cbafb8d085e193951',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
