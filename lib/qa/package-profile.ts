@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '3887e769d1e6bfdea2027b73c1e287203aa8f3f7',
+  packagerCommit: 'ce809649aed63f1127aa256cbafb8d085e193951',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -422,6 +422,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // unattended install failed. Preserve every compatible passing result from
   // the Switchbar user-scope release.
   '8dde5049437903912ac003cea71e2fef0e85e86c',
+  // SEGGER's observable install wait, SeqLens' user context, and SketchUp
+  // Viewer's silent removal are all catalog-ID-scoped adapters. Preserve every
+  // unrelated compatible pass from the Ximalaya eligibility release.
+  '3887e769d1e6bfdea2027b73c1e287203aa8f3f7',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

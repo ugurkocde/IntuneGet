@@ -317,7 +317,21 @@ const SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...WOWUP_BETA_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SKETCHUPVIEWER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry the failed Viewer 2022 lifecycle with the same reviewed -silent
+  // InstallShield removal mode already proven by SketchUp Pro 2022.
+  'Trimble.SketchUpViewer',
+  // Activate the two earlier catalog-scoped fixes that were intentionally held
+  // behind the prior immutable packager pin.
+  'SeqLens.SeqLens',
+  'Segger.EmbeddedStudioARM',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'ce809649aed63f1127aa256cbafb8d085e193951':
+    SKETCHUPVIEWER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   // Ximalaya Live is eligibility-blocked after its exact user-scope /S
   // lifecycle failed, so carry prior bounded targets without replaying it.
   '3887e769d1e6bfdea2027b73c1e287203aa8f3f7':

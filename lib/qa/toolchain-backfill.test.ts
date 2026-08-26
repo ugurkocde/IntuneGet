@@ -6,6 +6,23 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries the catalog-scoped August 26 packaging fixes only after activation', () => {
+    for (const wingetId of [
+      ' Trimble.SketchUpViewer ',
+      ' SeqLens.SeqLens ',
+      ' Segger.EmbeddedStudioARM ',
+    ]) {
+      expect(shouldRetryTerminalToolchainCandidate(
+        QA_PSADT_TOOLCHAIN.packagerCommit,
+        { wingetId, status: 'failed' }
+      )).toBe(true);
+      expect(shouldRetryTerminalToolchainCandidate(
+        '3887e769d1e6bfdea2027b73c1e287203aa8f3f7',
+        { wingetId, status: 'failed' }
+      )).toBe(false);
+    }
+  });
+
   it('does not replay eligibility-blocked Ximalaya Live', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
