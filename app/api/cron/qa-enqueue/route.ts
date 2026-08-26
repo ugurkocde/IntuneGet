@@ -1127,6 +1127,7 @@ export async function GET(request: Request) {
               if (existing && shouldReactivateSupersededCandidate(
                 existing.status,
                 existing.failure_summary,
+                packagingContract.valid,
               )) {
                 const { error: reactivateError } = await supabase!
                   .from('qa_candidates')

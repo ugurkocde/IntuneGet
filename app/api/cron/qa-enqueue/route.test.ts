@@ -378,16 +378,23 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-enqueue', () => {
-  it('keeps an exact quarantined installer tuple dormant until its identity changes', () => {
+  it('keeps quarantined and packaging-ineligible superseded tuples dormant', () => {
     expect(shouldReactivateSupersededCandidate(
       'superseded',
       'Installer source quarantined before QA: HASH_MISMATCH. Publisher bytes changed.',
+      true,
     )).toBe(false);
     expect(shouldReactivateSupersededCandidate(
       'superseded',
       'Superseded before dispatch: wrong-toolchain.',
+      true,
     )).toBe(true);
-    expect(shouldReactivateSupersededCandidate('queued', null)).toBe(false);
+    expect(shouldReactivateSupersededCandidate(
+      'superseded',
+      'Packaging preflight: explicit silent installer switches are required.',
+      false,
+    )).toBe(false);
+    expect(shouldReactivateSupersededCandidate('queued', null, true)).toBe(false);
   });
 
   it('does not poll or mutate the queue while maintenance is paused', async () => {

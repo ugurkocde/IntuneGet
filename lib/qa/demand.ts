@@ -297,7 +297,7 @@ export async function ensureQaDemand(
 
   if (
     existing.status === 'superseded' &&
-    !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary)
+    !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary, true)
   ) {
     return {
       identity,
