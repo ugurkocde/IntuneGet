@@ -808,6 +808,25 @@ describe('Canon printer driver managed install block migration contract', () => 
   });
 });
 
+describe('Wiimms ISO Tools managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260826140000_block_wiimm_iso_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the incomplete publisher lifecycle across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Wiimm.ISO'");
+    expect(sql).toContain('windows-uninstall.sh');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('darktable managed install block migration contract', () => {
   const sql = readFileSync(
     resolve(
