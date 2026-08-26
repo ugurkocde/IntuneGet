@@ -971,6 +971,33 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
   });
 
+  it('binds the bounded SEGGER installer wait to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Segger.EmbeddedStudioARM',
+      displayName: 'SEGGER Embedded Studio for ARM',
+      publisher: 'SEGGER',
+      version: '8.28',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--silent --accept-license',
+      uninstallCommand: 'REGISTRY_UNINSTALL:SEGGER Embedded Studio for ARM',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { silentArgs: string; uninstallCommand: string };
+      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+    };
+
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(profile.installer.silentArgs).toBe('--silent --accept-license');
+    expect(profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:SEGGER Embedded Studio for ARM'
+    );
+  });
+
   it('binds the bounded Webroot MSI wait to the QA execution profile', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Webroot.SecureAnywhere',

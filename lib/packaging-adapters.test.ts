@@ -421,6 +421,17 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('keeps the SEGGER Embedded Studio installer observable within a bounded wait', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'Segger.EmbeddedStudioARM',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('does not extend the blocked Acronis managed-uninstall lifecycle', () => {
     expect(
       applyApplicationPackagingAdapter(

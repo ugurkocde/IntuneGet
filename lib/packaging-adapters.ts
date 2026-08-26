@@ -300,6 +300,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallCompletionTimeoutMinutes: 15,
   },
   {
+    // SEGGER Embedded Studio's official unattended command created the full
+    // application tree and ARP registration during QA, but the vendor process
+    // remained quiet longer than the generic inactivity window. Preserve the
+    // official --silent --accept-license contract and make the shared PSADT
+    // wait observable and bounded for both QA and customer Intune packages.
+    wingetId: 'Segger.EmbeddedStudioARM',
+    reviewedInstallCompletionTimeoutMinutes: 15,
+  },
+  {
     // ZeeDrive's official MSI is a command wrapper that deliberately does not
     // register in Add/Remove Programs. Thinkscape documents COMMAND=Install,
     // versioned Program Files detection, and direct directory removal for its
