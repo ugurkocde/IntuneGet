@@ -17,6 +17,17 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('softwareok.desktopok');
   });
 
+  it('retries Logitech LGS only after activating its LocalSystem execution contract', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' logitech.lgs ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b09111db20f3aa13aced140d1bddbc83c437d459',
+      { wingetId: 'Logitech.LGS', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries RedisInsight only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
@@ -116,6 +127,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Logitech.LGS',
       'IrfanSkiljan.IrfanView',
       'Jamovi.Desktop.Current',
       'Poly.PolyLens',
@@ -181,6 +193,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Logitech.LGS',
         'IrfanSkiljan.IrfanView',
         'Jamovi.Desktop.Current',
         'Poly.PolyLens',

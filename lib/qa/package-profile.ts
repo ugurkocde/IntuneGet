@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b09111db20f3aa13aced140d1bddbc83c437d459',
+  packagerCommit: 'd019be69468b73ca47974c25e47932c589976624',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -398,6 +398,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // to its exact captured iv_uninstall.exe command. Preserve every unrelated
   // pass from the Jamovi registered-identity release.
   'e029c0e9f7884eb07ba8f277413298ec354fb597',
+  // Logitech LGS keeps selecting its trusted user-scoped WinGet bytes while
+  // executing the managed lifecycle as LocalSystem. Preserve every unrelated
+  // pass from the IrfanView silent-uninstall release.
+  'b09111db20f3aa13aced140d1bddbc83c437d459',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -285,7 +285,17 @@ const IRFANVIEW_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...JAMOVI_REGISTERED_IDENTITY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const LOGITECH_LGS_SYSTEM_EXECUTION_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 9.04.49 lifecycle while selecting the same trusted
+  // user-scoped catalog bytes and executing their /S contract as LocalSystem.
+  'Logitech.LGS',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...IRFANVIEW_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'd019be69468b73ca47974c25e47932c589976624':
+    LOGITECH_LGS_SYSTEM_EXECUTION_RELEASE_RETRY_TARGETS,
   'b09111db20f3aa13aced140d1bddbc83c437d459':
     IRFANVIEW_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
   'e029c0e9f7884eb07ba8f277413298ec354fb597':
