@@ -17,6 +17,17 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('softwareok.desktopok');
   });
 
+  it('retries Android Apps Manager only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' simsdev.androidappsmanager ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8127bf1923e4a4863758acdebbe7f28f6a999790',
+      { wingetId: 'SIMSDEV.AndroidAppsManager', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('carries the Logitech LGS retry into its exact silent uninstall release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

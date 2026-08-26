@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '8127bf1923e4a4863758acdebbe7f28f6a999790',
+  packagerCommit: '54f0c26d3dbda39f78367178345c7d33eb214ec3',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -406,6 +406,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // helper contract. Preserve every unrelated pass from the machine-scope
   // execution release.
   'd019be69468b73ca47974c25e47932c589976624',
+  // Android Apps Manager now runs in the publisher's current-user context
+  // instead of LocalSystem's systemprofile. Preserve every unrelated pass
+  // from the Logitech LGS silent-uninstall release.
+  '8127bf1923e4a4863758acdebbe7f28f6a999790',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -293,7 +293,17 @@ const LOGITECH_LGS_SYSTEM_EXECUTION_RELEASE_RETRY_TARGETS = [
   ...IRFANVIEW_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ANDROID_APPS_MANAGER_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 0.1.0 lifecycle in the Tauri NSIS installer's intended
+  // signed-in user context instead of LocalSystem's systemprofile.
+  'SIMSDEV.AndroidAppsManager',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...LOGITECH_LGS_SYSTEM_EXECUTION_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '54f0c26d3dbda39f78367178345c7d33eb214ec3':
+    ANDROID_APPS_MANAGER_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '8127bf1923e4a4863758acdebbe7f28f6a999790':
     LOGITECH_LGS_SYSTEM_EXECUTION_RELEASE_RETRY_TARGETS,
   'd019be69468b73ca47974c25e47932c589976624':
