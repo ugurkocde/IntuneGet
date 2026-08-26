@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('does not replay eligibility-blocked Ximalaya Live', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' ximalaya.ximalayalive ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('ximalaya.ximalayalive');
+  });
+
   it('does not replay DesktopOK after activating its managed-uninstall block', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

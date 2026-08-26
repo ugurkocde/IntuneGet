@@ -318,6 +318,10 @@ const SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  // Ximalaya Live is eligibility-blocked after its exact user-scope /S
+  // lifecycle failed, so carry prior bounded targets without replaying it.
+  '3887e769d1e6bfdea2027b73c1e287203aa8f3f7':
+    SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '8dde5049437903912ac003cea71e2fef0e85e86c':
     SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '0dfe1593dbf19ef43beceb2574c440287eaf1dc8':

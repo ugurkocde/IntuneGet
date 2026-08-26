@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '8dde5049437903912ac003cea71e2fef0e85e86c',
+  packagerCommit: '3887e769d1e6bfdea2027b73c1e287203aa8f3f7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -418,6 +418,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // context. Preserve every unrelated pass from the WowUp Beta user-scope
   // release.
   '0dfe1593dbf19ef43beceb2574c440287eaf1dc8',
+  // Ximalaya Live is blocked at the shared eligibility gate after its exact
+  // unattended install failed. Preserve every compatible passing result from
+  // the Switchbar user-scope release.
+  '8dde5049437903912ac003cea71e2fef0e85e86c',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
