@@ -116,6 +116,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'Jamovi.Desktop.Current',
       'Poly.PolyLens',
       'Ghisler.TotalCommander',
       'Tricentis.NeoLoad',
@@ -179,6 +180,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'Jamovi.Desktop.Current',
         'Poly.PolyLens',
         'Ghisler.TotalCommander',
         'Tricentis.NeoLoad',
@@ -347,6 +349,17 @@ describe('QA toolchain targeted retries', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '5636cda74d31de95d9ee5689050ba04e432ede61',
       { wingetId: 'Poly.PolyLens', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Jamovi only after activating its observed registered identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' jamovi.desktop.current ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '085de20195dacc66c0d465945f93c6a780cc14c4',
+      { wingetId: 'Jamovi.Desktop.Current', status: 'failed' }
     )).toBe(false);
   });
 

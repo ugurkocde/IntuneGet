@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '085de20195dacc66c0d465945f93c6a780cc14c4',
+  packagerCommit: 'e029c0e9f7884eb07ba8f277413298ec354fb597',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -390,6 +390,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // while bounded zero-match diagnostics execute only on the fail-closed path.
   // Preserve every unrelated pass from the Total Commander adapter release.
   '5636cda74d31de95d9ee5689050ba04e432ede61',
+  // Jamovi 2.7 captures the exact lowercase jamovi ARP identity while keeping
+  // the accompanying Visual C++ registrations outside the removal boundary.
+  // Preserve every unrelated pass from the Poly Lens identity release.
+  '085de20195dacc66c0d465945f93c6a780cc14c4',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -269,7 +269,17 @@ const POLY_LENS_RENAMED_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...TOTAL_COMMANDER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const JAMOVI_REGISTERED_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 2.7.18 lifecycle against the exact lowercase jamovi ARP
+  // identity while leaving the installer's Visual C++ registrations untouched.
+  'Jamovi.Desktop.Current',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...POLY_LENS_RENAMED_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'e029c0e9f7884eb07ba8f277413298ec354fb597':
+    JAMOVI_REGISTERED_IDENTITY_RELEASE_RETRY_TARGETS,
   '085de20195dacc66c0d465945f93c6a780cc14c4':
     POLY_LENS_RENAMED_IDENTITY_RELEASE_RETRY_TARGETS,
   '5636cda74d31de95d9ee5689050ba04e432ede61':
