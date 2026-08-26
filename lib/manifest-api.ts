@@ -177,10 +177,17 @@ async function fetchInstallerManifestFromGitHub(
   version: string
 ): Promise<Record<string, unknown> | null> {
   const { basePath } = getManifestPaths(wingetId);
-  const url = `${GITHUB_RAW_BASE}/${basePath}/${version}/${wingetId}.installer.yaml`;
+  const manifestPath = `${basePath}/${version}/${wingetId}.installer.yaml`
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  const url = `${GITHUB_API_BASE}/${manifestPath}?ref=master`;
 
   const response = await fetch(url, {
-    headers: githubReadHeaders('text/plain'),
+    headers: {
+      ...githubReadHeaders('application/vnd.github.raw+json'),
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
     cache: 'no-store',
   });
 

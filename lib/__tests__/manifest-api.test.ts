@@ -1032,6 +1032,25 @@ describe('getLiveInstallers trust semantics', () => {
     mockFetch.mockReset();
   });
 
+  it('uses the authenticated GitHub Contents API raw media endpoint', async () => {
+    mockFetch.mockResolvedValue(
+      yamlResponse('PackageIdentifier: Foo.Bar\nPackageVersion: 1.0+build\nInstallers: []\n')
+    );
+
+    await expect(getLiveInstallers('Foo.Bar', '1.0+build')).resolves.toEqual([]);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/f/Foo/Bar/1.0%2Bbuild/Foo.Bar.installer.yaml?ref=master',
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          Accept: 'application/vnd.github.raw+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        }),
+      })
+    );
+  });
+
   it('returns an empty list for an authoritative missing manifest', async () => {
     mockFetch.mockResolvedValue(notFound());
 
@@ -1178,7 +1197,7 @@ describe('getFullManifest description order', () => {
   it('prefers ShortDescription over Description, matching the catalog syncs', async () => {
     mockFetch.mockImplementation(async (input: unknown) => {
       const url = String(input);
-      if (url.endsWith('Foo.App.installer.yaml')) {
+      if (url.includes('Foo.App.installer.yaml')) {
         return yamlResponse(
           [
             'PackageIdentifier: Foo.App',
@@ -1208,9 +1227,10 @@ describe('getFullManifest description order', () => {
 
     // Common case stays at 3 parallel GitHub fetches (installer + en-US
     // locale + version manifest) with no extra DefaultLocale request
-    const githubCalls = mockFetch.mock.calls.filter((call) =>
-      String(call[0]).includes('raw.githubusercontent.com')
-    );
+    const githubCalls = mockFetch.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      return url.includes('api.github.com') || url.includes('raw.githubusercontent.com');
+    });
     expect(githubCalls).toHaveLength(3);
   });
 });
