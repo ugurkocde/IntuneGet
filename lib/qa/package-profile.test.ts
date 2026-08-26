@@ -666,6 +666,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps WowUp Beta out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'WowUp.Wowup.Beta',
+      displayName: 'WowUp',
+      publisher: 'WowUp',
+      version: '2.21.0-beta.6',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{B31CA559-50E4-54D8-A458-330E72A28314}:WowUp',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\WowUp_Wowup_Beta',
+      }),
+    ]);
+  });
+
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',

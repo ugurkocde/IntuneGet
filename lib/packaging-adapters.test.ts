@@ -260,6 +260,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' simsdev.androidappsmanager ', undefined)
     ).toBe('user');
+    expect(resolveApplicationInstallScope('WowUp.Wowup.Beta', 'machine')).toBe(
+      'user'
+    );
+    expect(
+      resolveApplicationInstallScope(' wowup.wowup.beta ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
       'user'
     );

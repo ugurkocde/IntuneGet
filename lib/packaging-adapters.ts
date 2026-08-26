@@ -182,6 +182,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // WowUp Beta's NSIS installer registers its application below the invoking
+    // account's LocalAppData even though WinGet omits Scope. Running it as
+    // LocalSystem records an uninstaller below systemprofile that is already
+    // unavailable by the managed removal cycle. Keep QA and customer packages
+    // in the intended signed-in user context instead.
+    // https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32948950629
+    wingetId: 'WowUp.Wowup.Beta',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.
