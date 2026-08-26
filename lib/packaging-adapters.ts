@@ -1309,6 +1309,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-silent'],
   },
   {
+    // SketchUp Viewer 2022 registers the same cached InstallShield removal
+    // contract as SketchUp Pro: -remove -runfromtemp without its unattended
+    // mode. QA run 32997644078 observed that command remained interactive under
+    // LocalSystem until the exact registration deadline. Reuse the proven
+    // SketchUp 2022 -silent removal argument for this specific catalog ID.
+    wingetId: 'Trimble.SketchUpViewer',
+    reviewedUninstallArguments: ['-silent'],
+  },
+  {
     // NeoLoad registers its install4j uninstaller without an unattended
     // argument. install4j documents -q for both installers and uninstallers;
     // append it to the exact captured registration instead of guessing a

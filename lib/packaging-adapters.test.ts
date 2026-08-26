@@ -502,6 +502,12 @@ describe('application packaging adapters', () => {
       ).reviewedUninstallArguments
     ).toEqual(['-silent']);
     expect(
+      applyApplicationPackagingAdapter(
+        'Trimble.SketchUpViewer',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['-silent']);
+    expect(
       applyApplicationPackagingAdapter('Tricentis.NeoLoad', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['-q']);
