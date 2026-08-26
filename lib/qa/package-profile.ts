@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd019be69468b73ca47974c25e47932c589976624',
+  packagerCommit: '8127bf1923e4a4863758acdebbe7f28f6a999790',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -402,6 +402,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // executing the managed lifecycle as LocalSystem. Preserve every unrelated
   // pass from the IrfanView silent-uninstall release.
   'b09111db20f3aa13aced140d1bddbc83c437d459',
+  // Logitech LGS now replaces the interactive mode in its exact captured ARP
+  // helper contract. Preserve every unrelated pass from the machine-scope
+  // execution release.
+  'd019be69468b73ca47974c25e47932c589976624',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

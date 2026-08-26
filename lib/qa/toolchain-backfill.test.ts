@@ -17,10 +17,14 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('softwareok.desktopok');
   });
 
-  it('retries Logitech LGS only after activating its LocalSystem execution contract', () => {
+  it('carries the Logitech LGS retry into its exact silent uninstall release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' logitech.lgs ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd019be69468b73ca47974c25e47932c589976624',
+      { wingetId: 'Logitech.LGS', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       'b09111db20f3aa13aced140d1bddbc83c437d459',
