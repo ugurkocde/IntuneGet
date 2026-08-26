@@ -230,6 +230,28 @@ describe('PSADT QA package identity', () => {
       .toBe('Poly Studio');
   });
 
+  it('binds Jamovi customer and QA packages to the observed jamovi ARP identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Jamovi.Desktop.Current',
+      displayName: 'Jamovi Desktop',
+      publisher: 'Jamovi',
+      version: '2.7.18.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Jamovi Desktop',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedRegistryUninstallDisplayName?: string };
+    };
+
+    expect(profile.psadtConfig.reviewedRegistryUninstallDisplayName).toBe('jamovi');
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedRegistryUninstallDisplayName)
+      .toBe('jamovi');
+  });
+
   it('binds Postgres Pro 17 customer packages to the exact vendor lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'PostgresPro.Standard.17',

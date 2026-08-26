@@ -70,6 +70,15 @@ describe('application packaging adapters', () => {
     ).toBeUndefined();
   });
 
+  it('binds Jamovi Desktop to its actual lowercase jamovi ARP identity', () => {
+    expect(
+      applyApplicationPackagingAdapter('Jamovi.Desktop.Current', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedRegistryUninstallDisplayName: 'customer override',
+      }).reviewedRegistryUninstallDisplayName
+    ).toBe('jamovi');
+  });
+
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
     expect(resolveApplicationUninstallCommand(
       'Google.Chrome.EXE',

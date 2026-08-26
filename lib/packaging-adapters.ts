@@ -399,6 +399,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedRegistryUninstallDisplayName: 'Poly Studio',
   },
   {
+    // The 2.7.18 NSIS installer registers its primary product as `jamovi`,
+    // despite the WinGet manifest declaring `Jamovi Desktop`. QA run
+    // 32913050396 observed that exact ARP identity alongside Visual C++ runtime
+    // changes, so capture only `jamovi` and keep every broader match fail-closed.
+    wingetId: 'Jamovi.Desktop.Current',
+    reviewedRegistryUninstallDisplayName: 'jamovi',
+  },
+  {
     // TreeSize's dual-mode Inno installer defaults to the invoking account even
     // when the catalog declares machine scope. Under LocalSystem that places the
     // app and its uninstaller below the 32-bit system profile, where silent

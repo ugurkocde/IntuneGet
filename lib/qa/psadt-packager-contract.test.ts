@@ -2613,6 +2613,24 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses Jamovi current installer registered identity instead of its stale catalog name',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'Jamovi Desktop',
+        [],
+        { reviewedRegistryUninstallDisplayName: 'jamovi' },
+        [],
+        'Jamovi.Desktop.Current'
+      );
+
+      expect(generated).toContain("$configuredUninstallDisplayName = 'jamovi'");
+      expect(generated).toContain("$appName = 'jamovi'");
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'emits the reviewed visible-primary selector only when enabled',
     () => {
       const enabled = generateRegistryUninstallPackage(
