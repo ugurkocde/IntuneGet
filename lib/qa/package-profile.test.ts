@@ -694,6 +694,35 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Switchbar out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'WebCatalogLtd.Switchbar',
+      displayName: 'Switchbar',
+      publisher: 'WebCatalog Ltd',
+      version: '32.6.0',
+      architecture: 'x86',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{B130AB35-9C9C-5FEC-A754-546F900521F2}:Switchbar',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\WebCatalogLtd_Switchbar',
+      }),
+    ]);
+  });
+
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',

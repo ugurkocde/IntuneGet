@@ -266,6 +266,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' wowup.wowup.beta ', undefined)
     ).toBe('user');
+    expect(
+      resolveApplicationInstallScope('WebCatalogLtd.Switchbar', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' webcatalogltd.switchbar ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
       'user'
     );

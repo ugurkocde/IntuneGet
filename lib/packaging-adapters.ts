@@ -192,6 +192,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Switchbar's NSIS installer also registers below the invoking account's
+    // LocalAppData while WinGet omits Scope. LocalSystem therefore captures an
+    // uninstaller below systemprofile that is unavailable by the managed
+    // removal cycle. Keep QA and customer packages in the signed-in user's
+    // context instead.
+    // https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32951625105
+    wingetId: 'WebCatalogLtd.Switchbar',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.
