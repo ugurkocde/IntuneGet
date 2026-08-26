@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createServerClientMock, dispatchQaCandidateMock } = vi.hoisted(() => ({
+const { createServerClientMock, dispatchQaCandidateMock, getGitHubActionsHealthMock } = vi.hoisted(() => ({
   createServerClientMock: vi.fn(),
   dispatchQaCandidateMock: vi.fn(),
+  getGitHubActionsHealthMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
+vi.mock('@/lib/qa/github-actions-health', () => ({
+  getGitHubActionsHealth: getGitHubActionsHealthMock,
+}));
 
 import { GET, maxDuration } from './route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
@@ -219,6 +223,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = 'test-cron-secret';
   dispatchQaCandidateMock.mockResolvedValue(undefined);
+  getGitHubActionsHealthMock.mockResolvedValue({ operational: true, status: 'operational' });
 });
 
 it('allows large installer preflight the same bounded window as customer packaging', () => {
@@ -263,6 +268,29 @@ describe('GET /api/cron/qa-dispatch', () => {
       success: true,
       dispatched: false,
       reason: 'packager_release_pending',
+    });
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reconcile or dispatch while GitHub Actions is unavailable', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds } = createSupabaseStub([row]);
+    createServerClientMock.mockReturnValue(client);
+    getGitHubActionsHealthMock.mockResolvedValue({
+      operational: false,
+      status: 'major_outage',
+    });
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      dispatched: false,
+      reason: 'github_actions_unavailable',
+      githubActionsStatus: 'major_outage',
     });
     expect(claimedIds).toEqual([]);
     expect(dispatchQaCandidateMock).not.toHaveBeenCalled();

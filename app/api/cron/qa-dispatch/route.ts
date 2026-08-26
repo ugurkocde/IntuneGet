@@ -6,6 +6,7 @@ import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipelin
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
+import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -61,6 +62,15 @@ export async function GET(request: Request) {
       success: true,
       dispatched: false,
       reason: 'packager_release_pending',
+    });
+  }
+  const githubActions = await getGitHubActionsHealth();
+  if (!githubActions.operational) {
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'github_actions_unavailable',
+      githubActionsStatus: githubActions.status,
     });
   }
   const now = new Date();
