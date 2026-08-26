@@ -1516,3 +1516,26 @@ describe('WinSCP Beta installer source block migration contract', () => {
     expect(sql).not.toContain("'WinSCP.WinSCP',");
   });
 });
+
+describe('Ximalaya Live managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260826124500_block_ximalaya_live_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the disproven unattended install across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'Ximalaya.XimalayaLive'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32956188340'
+    );
+    expect(sql).toContain('default Nullsoft /S argument');
+    expect(sql).toContain('added no uninstall registration');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
