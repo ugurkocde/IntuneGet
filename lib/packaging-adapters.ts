@@ -171,6 +171,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Android Apps Manager is built with Tauri v2 and does not override the
+    // NSIS install mode, so Tauri's current-user default applies. Its WinGet
+    // manifest omits Scope; running those bytes as LocalSystem installs below
+    // systemprofile and registers an uninstall.exe path that is unavailable by
+    // the managed removal cycle. Keep QA and customer packages in the intended
+    // signed-in user context instead.
+    // https://github.com/SimStm/android-apps-manager/blob/main/app/src-tauri/tauri.conf.json
+    wingetId: 'SIMSDEV.AndroidAppsManager',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.

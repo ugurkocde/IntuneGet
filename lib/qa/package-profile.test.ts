@@ -638,6 +638,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Android Apps Manager out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SIMSDEV.AndroidAppsManager',
+      displayName: 'Android Apps Manager',
+      publisher: 'SIMSDEV',
+      version: '0.1.0',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Android Apps Manager',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\SIMSDEV_AndroidAppsManager',
+      }),
+    ]);
+  });
+
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',

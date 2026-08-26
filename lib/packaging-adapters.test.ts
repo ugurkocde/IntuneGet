@@ -254,6 +254,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' y-aslant.elegantclipboard ', undefined)
     ).toBe('user');
+    expect(
+      resolveApplicationInstallScope('SIMSDEV.AndroidAppsManager', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' simsdev.androidappsmanager ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
       'user'
     );
