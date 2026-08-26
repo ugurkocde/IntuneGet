@@ -723,6 +723,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps SeqLens out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SeqLens.SeqLens',
+      displayName: 'SeqLens',
+      publisher: 'SeqLens',
+      version: '26.13.1',
+      architecture: 'x64',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{30843803-C83D-591B-931A-DD9E4FBAA77C}:SeqLens',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\SeqLens_SeqLens',
+      }),
+    ]);
+  });
+
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',

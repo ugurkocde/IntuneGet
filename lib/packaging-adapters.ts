@@ -202,6 +202,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // SeqLens' NSIS installer registers below the invoking account's
+    // LocalAppData even though WinGet omits Scope. Running it as LocalSystem
+    // records an uninstaller below systemprofile that is unavailable for the
+    // managed removal cycle. Keep QA and customer Intune packages in the
+    // intended signed-in user context instead.
+    // https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/32977854917
+    wingetId: 'SeqLens.SeqLens',
+    requiredInstallScope: 'user',
+  },
+  {
     // Zalo's NSIS bootstrapper is per-user even though its WinGet manifest
     // currently omits Scope. Under LocalSystem it registers a disposable
     // systemprofile path and leaves no usable vendor uninstaller.

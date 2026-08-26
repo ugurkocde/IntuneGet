@@ -272,6 +272,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' webcatalogltd.switchbar ', undefined)
     ).toBe('user');
+    expect(resolveApplicationInstallScope('SeqLens.SeqLens', 'machine')).toBe(
+      'user'
+    );
+    expect(resolveApplicationInstallScope(' seqlens.seqlens ', undefined)).toBe(
+      'user'
+    );
     expect(resolveApplicationInstallScope('AvaCC.AvaDesktop', 'machine')).toBe(
       'user'
     );
