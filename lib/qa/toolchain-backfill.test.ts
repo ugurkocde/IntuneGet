@@ -17,6 +17,17 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('softwareok.desktopok');
   });
 
+  it('retries Switchbar only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' webcatalogltd.switchbar ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0dfe1593dbf19ef43beceb2574c440287eaf1dc8',
+      { wingetId: 'WebCatalogLtd.Switchbar', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries WowUp Beta only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

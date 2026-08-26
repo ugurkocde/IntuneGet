@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '0dfe1593dbf19ef43beceb2574c440287eaf1dc8',
+  packagerCommit: '8dde5049437903912ac003cea71e2fef0e85e86c',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -414,6 +414,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // context. Preserve every unrelated pass from the Android Apps Manager
   // user-scope release.
   '54f0c26d3dbda39f78367178345c7d33eb214ec3',
+  // Switchbar now runs in the NSIS installer's intended signed-in user
+  // context. Preserve every unrelated pass from the WowUp Beta user-scope
+  // release.
+  '0dfe1593dbf19ef43beceb2574c440287eaf1dc8',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

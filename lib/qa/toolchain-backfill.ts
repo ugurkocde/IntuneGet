@@ -309,7 +309,17 @@ const WOWUP_BETA_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...ANDROID_APPS_MANAGER_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 32.6.0 lifecycle in the NSIS installer's intended
+  // signed-in user context instead of LocalSystem's systemprofile.
+  'WebCatalogLtd.Switchbar',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...WOWUP_BETA_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '8dde5049437903912ac003cea71e2fef0e85e86c':
+    SWITCHBAR_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '0dfe1593dbf19ef43beceb2574c440287eaf1dc8':
     WOWUP_BETA_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '54f0c26d3dbda39f78367178345c7d33eb214ec3':
