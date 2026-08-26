@@ -718,12 +718,32 @@ describe('PSADT QA package identity', () => {
     });
     const profile = normalized.identity.profile as {
       installer: { installScope: string; silentArgs: string };
-      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+      psadtConfig: {
+        reviewedInstallArgumentsOverride?: string;
+        reviewedExactUninstall?: {
+          executablePath: string;
+          arguments: string[];
+          completionTimeoutMinutes: number;
+        };
+      };
     };
 
     expect(profile.installer.installScope).toBe('machine');
     expect(profile.installer.silentArgs).toBe('/S');
     expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBeUndefined();
+    expect(profile.psadtConfig.reviewedExactUninstall).toEqual({
+      executablePath:
+        '%ProgramFiles%\\Logitech Gaming Software\\uninstallhlpr.exe',
+      arguments: [
+        '/bitness=x64',
+        '/silentmode=on',
+        '/langid=ENU',
+        '/downgrade=no',
+        '/firstRun=yes',
+        '/S',
+      ],
+      completionTimeoutMinutes: 5,
+    });
     expect(normalized.detectionRules).toEqual([
       expect.objectContaining({
         keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Logitech_LGS',

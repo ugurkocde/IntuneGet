@@ -3162,6 +3162,49 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'replaces Logitech LGS interactive mode with its reviewed silent helper contract',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        'Logitech Gaming Software',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath:
+              '%ProgramFiles%\\Logitech Gaming Software\\uninstallhlpr.exe',
+            arguments: [
+              '/bitness=x64',
+              '/silentmode=on',
+              '/langid=ENU',
+              '/downgrade=no',
+              '/firstRun=yes',
+              '/S',
+            ],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Logitech.LGS',
+        'Logitech Gaming Software',
+        '9.04.49',
+        'REGISTRY_UNINSTALL_KEY:Logitech Gaming Software:Logitech Gaming Software',
+        '/S'
+      );
+
+      expect(generated).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles%\\Logitech Gaming Software\\uninstallhlpr.exe')"
+      );
+      expect(generated).toContain(
+        "$registeredUninstallArguments = @('/bitness=x64', '/silentmode=on', '/langid=ENU', '/downgrade=no', '/firstRun=yes', '/S')"
+      );
+      expect(generated).not.toContain('/silentmode=off');
+      expect(generated).toContain(
+        'Waiting for vendor uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'stops the reviewed Azure Monitor Agent service before MSI removal',
     () => {
       const generated = generateRegistryUninstallPackage(

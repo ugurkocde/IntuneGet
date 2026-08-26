@@ -630,14 +630,31 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   {
     // WinGet publishes the legacy Logitech Gaming Software bootstrapper as a
     // user-scope NSIS package. In an isolated standard-user lifecycle, its
-    // documented /S invocation returned success without creating the exact
+    // catalog /S invocation returned success without creating the exact
     // Logitech Gaming Software registration or installing the product. Keep
     // selecting and attesting those user-scoped catalog bytes, but execute the
     // managed package in Intune's LocalSystem context so the silent installer
-    // can complete and leave a serviceable lifecycle for later removal.
+    // can complete. The resulting ARP command explicitly registers
+    // /silentmode=off; use the same captured helper contract with only that
+    // vendor mode inverted and NSIS /S retained. This prevents the interactive
+    // helper from remaining behind an invisible Intune session while keeping
+    // the exact ARP registration authoritative for completion.
     wingetId: 'Logitech.LGS',
     requiredInstallScope: 'machine',
     reviewedInstallerSelectionScope: 'user',
+    reviewedExactUninstall: {
+      executablePath:
+        '%ProgramFiles%\\Logitech Gaming Software\\uninstallhlpr.exe',
+      arguments: [
+        '/bitness=x64',
+        '/silentmode=on',
+        '/langid=ENU',
+        '/downgrade=no',
+        '/firstRun=yes',
+        '/S',
+      ],
+      completionTimeoutMinutes: 5,
+    },
   },
   {
     // Logitech publishes Presentation as a user-scope NSIS package, but the

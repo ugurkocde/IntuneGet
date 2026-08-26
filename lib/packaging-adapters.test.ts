@@ -323,10 +323,27 @@ describe('application packaging adapters', () => {
       'Logitech.LGS',
       'machine'
     )).toBe('user');
-    expect(
-      applyApplicationPackagingAdapter('Logitech.LGS', DEFAULT_PSADT_CONFIG)
-        .reviewedInstallArgumentsOverride
-    ).toBeUndefined();
+    const adapted = applyApplicationPackagingAdapter(
+      'Logitech.LGS',
+      DEFAULT_PSADT_CONFIG
+    );
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+    expect(adapted.reviewedExactUninstall).toEqual({
+      executablePath:
+        '%ProgramFiles%\\Logitech Gaming Software\\uninstallhlpr.exe',
+      arguments: [
+        '/bitness=x64',
+        '/silentmode=on',
+        '/langid=ENU',
+        '/downgrade=no',
+        '/firstRun=yes',
+        '/S',
+      ],
+      completionTimeoutMinutes: 5,
+    });
+    expect(adapted.reviewedExactUninstall?.arguments).not.toContain(
+      '/silentmode=off'
+    );
   });
 
   it('runs Logitech Presentation elevated without weakening catalog scope matching', () => {
