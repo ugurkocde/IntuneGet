@@ -628,6 +628,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     ],
   },
   {
+    // WinGet publishes the legacy Logitech Gaming Software bootstrapper as a
+    // user-scope NSIS package. In an isolated standard-user lifecycle, its
+    // documented /S invocation returned success without creating the exact
+    // Logitech Gaming Software registration or installing the product. Keep
+    // selecting and attesting those user-scoped catalog bytes, but execute the
+    // managed package in Intune's LocalSystem context so the silent installer
+    // can complete and leave a serviceable lifecycle for later removal.
+    wingetId: 'Logitech.LGS',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+  },
+  {
     // Logitech publishes Presentation as a user-scope NSIS package, but the
     // signed bootstrapper requests elevation even when /S is supplied. A
     // standard Intune user therefore receives an unserviceable UAC credential

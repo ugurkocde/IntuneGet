@@ -700,6 +700,37 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds Logitech LGS to LocalSystem while retaining its catalog installer contract', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Logitech.LGS',
+      displayName: 'Logitech Gaming Software',
+      publisher: 'Logitech',
+      version: '9.04.49',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:Logitech Gaming Software:Logitech Gaming Software',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.installer.silentArgs).toBe('/S');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBeUndefined();
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Logitech_LGS',
+      }),
+    ]);
+  });
+
   it('binds the reviewed Logitech G HUB lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Logitech.GHUB',

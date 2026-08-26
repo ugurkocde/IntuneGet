@@ -317,6 +317,18 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallerSelectionType('Example.App')).toBeUndefined();
   });
 
+  it('runs Logitech LGS elevated without weakening catalog scope matching', () => {
+    expect(resolveApplicationInstallScope('Logitech.LGS', 'user')).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope(
+      'Logitech.LGS',
+      'machine'
+    )).toBe('user');
+    expect(
+      applyApplicationPackagingAdapter('Logitech.LGS', DEFAULT_PSADT_CONFIG)
+        .reviewedInstallArgumentsOverride
+    ).toBeUndefined();
+  });
+
   it('runs Logitech Presentation elevated without weakening catalog scope matching', () => {
     expect(resolveApplicationInstallScope('Logitech.Presentation', 'user')).toBe('machine');
     expect(resolveApplicationInstallerSelectionScope(
