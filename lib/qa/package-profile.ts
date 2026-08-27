@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
+  packagerCommit: '43fbb6c586da8919c35c7409a38377b8188914c2',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -443,6 +443,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Registered PowerShell -File uninstall commands are now resolved through a
   // bounded inbox-host contract. Preserve every pass from the reboot release.
   '80675c437cc4fe894c8b65a08b8e98ed80a25138',
+  // MD Editor's reviewed scope adapter changes only its previously failing
+  // user-launched machine MSI. Preserve every unrelated compatible pass from
+  // the registered PowerShell uninstall release.
+  '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries MD Editor only after activating its machine-scope MSI adapter', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' rushabhpasad.mdeditor ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
+      { wingetId: 'rushabhpasad.MDEditor', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries NammaAgent only after activating registered PowerShell uninstall resolution', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

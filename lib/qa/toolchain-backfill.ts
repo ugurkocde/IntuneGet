@@ -368,7 +368,17 @@ const POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const MDEDITOR_MACHINE_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 1.1.0 lifecycle as LocalSystem because the exact Tauri
+  // WiX MSI is machine-scoped despite its user-labelled WinGet manifest.
+  'rushabhpasad.MDEditor',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '43fbb6c586da8919c35c7409a38377b8188914c2':
+    MDEDITOR_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
   '68a58563b15a5b09d32afa6a4d805e61a9e5635f':
     POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '80675c437cc4fe894c8b65a08b8e98ed80a25138':
