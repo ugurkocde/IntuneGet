@@ -6,19 +6,23 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries only the failed ROBOTC lifecycle on its wrapper uninstall release', () => {
+  it('does not retry ROBOTC after its managed-uninstall block release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' robomatter.robotc.legomindstorms ', status: 'failed' }
-    )).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(
-      '22f30aa42fc522cf00d0fa3f1561563d0d4372d5',
-      { wingetId: 'Robomatter.ROBOTC.LEGOMindstorms', status: 'failed' }
     )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '3a1a14e69d4d290515e8617339dab5717cc83629',
+      { wingetId: 'Robomatter.ROBOTC.LEGOMindstorms', status: 'failed' }
+    )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Unrelated.App', status: 'failed' }
     )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('robomatter.robotc.legomindstorms');
   });
 
   it('does not retry MD Editor after its managed install was disproven', () => {

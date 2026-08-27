@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '3a1a14e69d4d290515e8617339dab5717cc83629',
+  packagerCommit: '2b38ecc29469abcc4045cc7a1ff27229c196115b',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -465,6 +465,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // removal after the nested MSI HelpDocs action stalled. Preserve every
   // unrelated compatible pass from the MD Editor eligibility release.
   '22f30aa42fc522cf00d0fa3f1561563d0d4372d5',
+  // ROBOTC is now eligibility-blocked after direct exact MSI removal and its
+  // manifest-hashed InstallShield wrapper both timed out without removing the
+  // exact product registration. Preserve every unrelated compatible pass.
+  '3a1a14e69d4d290515e8617339dab5717cc83629',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
