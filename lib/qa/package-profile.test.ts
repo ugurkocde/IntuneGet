@@ -780,6 +780,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Brity Meeting out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SamsungSDS.BrityMeeting',
+      displayName: 'Brity Meeting',
+      publisher: 'SamsungSDS',
+      version: '2.7.26.07281',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '-s',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:SamsungBrityMeeting:Brity Meeting',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\SamsungSDS_BrityMeeting',
+      }),
+    ]);
+  });
+
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',

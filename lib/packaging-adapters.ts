@@ -267,6 +267,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Brity Meeting is an interactive desktop client whose WinGet manifest
+    // supplies -s but omits Scope. Under LocalSystem, QA run 33050008107 saw
+    // the installer exit 1 without creating its declared uninstall entry or
+    // any detectable application. Run the identical reviewed vendor command
+    // in the intended signed-in user context instead of systemprofile.
+    wingetId: 'SamsungSDS.BrityMeeting',
+    requiredInstallScope: 'user',
+  },
+  {
     // RedisInsight 3.4.2's tagged Electron Builder configuration explicitly
     // sets NSIS perMachine=false. WinGet omits Scope, so the generic machine
     // default installs below LocalSystem's disposable systemprofile and records

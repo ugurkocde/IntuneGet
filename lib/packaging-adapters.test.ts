@@ -312,6 +312,11 @@ describe('application packaging adapters', () => {
       ' seasaltai.seameetsnaprecorder ',
       undefined
     )).toBe('user');
+    expect(resolveApplicationInstallScope('SamsungSDS.BrityMeeting', 'machine')).toBe('user');
+    expect(resolveApplicationInstallScope(
+      ' samsungsds.britymeeting ',
+      undefined
+    )).toBe('user');
     expect(
       resolveApplicationInstallScope('RedisInsight.RedisInsight', 'machine')
     ).toBe('user');
