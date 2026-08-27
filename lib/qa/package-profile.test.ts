@@ -638,6 +638,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Luniq out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'saraansx.Luniq',
+      displayName: 'Luniq',
+      publisher: 'saraansx',
+      version: '2.0.1',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{75473D6D-5D57-5DE9-A4C2-E43CA90D272C}:Luniq',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\saraansx_Luniq',
+      }),
+    ]);
+  });
+
   it('keeps Android Apps Manager out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'SIMSDEV.AndroidAppsManager',

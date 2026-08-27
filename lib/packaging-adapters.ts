@@ -161,6 +161,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Luniq's published Electron Builder configuration sets NSIS perMachine to
+    // false and allowElevation to false. WinGet currently omits Scope, so the
+    // generic machine default installs below LocalSystem's systemprofile and
+    // captures an uninstaller path that is unavailable by the removal cycle.
+    // Keep QA and customer Intune packages in the vendor-supported user context.
+    // https://github.com/saraansx/Luniq-Music/blob/main/electron-builder.json
+    wingetId: 'saraansx.Luniq',
+    requiredInstallScope: 'user',
+  },
+  {
     // ElegantClipboard's tagged Tauri v2 configuration explicitly builds its
     // NSIS installer with installMode=currentUser, while the WinGet manifest
     // omits Scope. The generic machine default installs below LocalSystem's

@@ -284,6 +284,12 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope(' avacc.avadesktop ', undefined)).toBe(
       'user'
     );
+    expect(resolveApplicationInstallScope('saraansx.Luniq', 'machine')).toBe(
+      'user'
+    );
+    expect(resolveApplicationInstallScope(' saraansx.luniq ', undefined)).toBe(
+      'user'
+    );
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(
       resolveApplicationInstallScope(
