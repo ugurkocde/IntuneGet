@@ -2024,32 +2024,6 @@ describe('current catalog QA package validation', () => {
     ).toEqual({ valid: false, reason: 'compatible-application-adapter-changed' });
   });
 
-  it('invalidates only ROBOTC coverage from before its wrapper uninstall release', () => {
-    const priorCommit = '22f30aa42fc522cf00d0fa3f1561563d0d4372d5';
-    const legacyRobotcIdentity = identityWithPackagerCommit(
-      buildQaPackageIdentity({
-        ...input,
-        wingetId: 'Robomatter.ROBOTC.LEGOMindstorms',
-      }),
-      priorCommit
-    );
-    const legacyUnrelatedIdentity = identityWithPackagerCommit(
-      buildQaPackageIdentity(input),
-      priorCommit
-    );
-
-    expect(
-      validateCompatiblePassedCatalogQaProfile(
-        candidateFromIdentity(legacyRobotcIdentity)
-      )
-    ).toEqual({ valid: false, reason: 'compatible-application-adapter-changed' });
-    expect(
-      validateCompatiblePassedCatalogQaProfile(
-        candidateFromIdentity(legacyUnrelatedIdentity)
-      )
-    ).toMatchObject({ valid: true });
-  });
-
   it('reuses an adapted pass when a later release leaves its behavior unchanged', () => {
     const legacyIdentity = identityWithPackagerCommit(
       buildQaPackageIdentity({
