@@ -1606,3 +1606,28 @@ describe('MD Editor managed install block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('ROBOTC managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260828003000_block_robotc_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks both disproven ROBOTC removal strategies across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Robomatter.ROBOTC.LEGOMindstorms'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/33121783325'
+    );
+    expect(sql).toContain('two isolated LocalSystem lifecycle runs');
+    expect(sql).toContain('281-second no-activity timeout');
+    expect(sql).toContain('direct exact MSI removal');
+    expect(sql).toContain('manifest-hashed InstallShield wrapper');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});

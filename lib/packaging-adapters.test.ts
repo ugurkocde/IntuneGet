@@ -605,18 +605,6 @@ describe('application packaging adapters', () => {
     });
     expect(
       applyApplicationPackagingAdapter(
-        'Robomatter.ROBOTC.LEGOMindstorms',
-        DEFAULT_PSADT_CONFIG
-      )
-    ).toMatchObject({
-      reviewedExactUninstall: {
-        executablePath: '%PackageInstaller%',
-        arguments: ['/S', '/x', '/V/quiet', '/V/norestart'],
-        completionTimeoutMinutes: 10,
-      },
-    });
-    expect(
-      applyApplicationPackagingAdapter(
         'Dell.DisplayAndPeripheralManager',
         DEFAULT_PSADT_CONFIG
       )
