@@ -368,7 +368,17 @@ const POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ROBOTC_WRAPPER_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 4.56 lifecycle through the same manifest-hashed
+  // InstallShield wrapper after direct MSI removal stalled in HelpDocs.
+  'Robomatter.ROBOTC.LEGOMindstorms',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3a1a14e69d4d290515e8617339dab5717cc83629':
+    ROBOTC_WRAPPER_UNINSTALL_RELEASE_RETRY_TARGETS,
   '22f30aa42fc522cf00d0fa3f1561563d0d4372d5':
     POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '83c81768f8c1800a5296251e473b758c62ec9358':

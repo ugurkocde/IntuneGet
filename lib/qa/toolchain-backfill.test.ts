@@ -6,6 +6,21 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries only the failed ROBOTC lifecycle on its wrapper uninstall release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' robomatter.robotc.legomindstorms ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '22f30aa42fc522cf00d0fa3f1561563d0d4372d5',
+      { wingetId: 'Robomatter.ROBOTC.LEGOMindstorms', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

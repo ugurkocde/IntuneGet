@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '22f30aa42fc522cf00d0fa3f1561563d0d4372d5',
+  packagerCommit: '3a1a14e69d4d290515e8617339dab5717cc83629',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -461,6 +461,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // strategies failed before MSI product registration. Removing its disproven
   // adapter cannot invalidate a passing profile for any other application.
   '83c81768f8c1800a5296251e473b758c62ec9358',
+  // ROBOTC now re-enters its manifest-hashed InstallShield wrapper for silent
+  // removal after the nested MSI HelpDocs action stalled. Preserve every
+  // unrelated compatible pass from the MD Editor eligibility release.
+  '22f30aa42fc522cf00d0fa3f1561563d0d4372d5',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
