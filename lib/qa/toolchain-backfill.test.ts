@@ -25,6 +25,17 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('robomatter.robotc.legomindstorms');
   });
 
+  it('does not retry League LA1 after its managed-install block release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' RiotGames.LeagueOfLegends.LA1 ', status: 'failed' }
+    )).toBe(false);
+    expect(
+      terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)
+        .map((wingetId) => wingetId.toLowerCase())
+    ).not.toContain('riotgames.leagueoflegends.la1');
+  });
+
   it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

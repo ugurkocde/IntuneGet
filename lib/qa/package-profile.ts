@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '2b38ecc29469abcc4045cc7a1ff27229c196115b',
+  packagerCommit: '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -469,6 +469,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // manifest-hashed InstallShield wrapper both timed out without removing the
   // exact product registration. Preserve every unrelated compatible pass.
   '3a1a14e69d4d290515e8617339dab5717cc83629',
+  // League of Legends LA1 is now eligibility-blocked after its online Riot
+  // bootstrapper could not complete a bounded unattended lifecycle. Preserve
+  // every unrelated compatible pass from the ROBOTC eligibility release.
+  '2b38ecc29469abcc4045cc7a1ff27229c196115b',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
