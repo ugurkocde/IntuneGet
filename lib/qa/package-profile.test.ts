@@ -1295,6 +1295,38 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds MD Editor to the reviewed machine-wide public desktop contract', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'rushabhpasad.MDEditor',
+      displayName: 'MD Editor',
+      publisher: 'rpasad',
+      version: '1.1.0',
+      architecture: 'x64',
+      installerSha256: 'c'.repeat(64),
+      installerType: 'msi',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand:
+        'msiexec /x "{F55BC603-EAB6-45CB-B5D9-571FAF94490D}" /qn /norestart',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+      psadtConfig: { reviewedInstallArgumentsOverride?: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=1');
+    expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
+      '/qn /norestart ALLUSERS=1 DesktopFolder="C:\\Users\\Public\\Desktop"'
+    );
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      reviewedInstallArgumentsOverride:
+        '/qn /norestart ALLUSERS=1 DesktopFolder="C:\\Users\\Public\\Desktop"',
+    });
+  });
+
   it('binds WPS Office to the elevated managed deployment context', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Kingsoft.WPSOffice',

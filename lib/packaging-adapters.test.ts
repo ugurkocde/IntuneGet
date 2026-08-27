@@ -432,6 +432,15 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' rushabhpasad.mdeditor ', 'user')
     ).toBe('machine');
+    expect(
+      applyApplicationPackagingAdapter(
+        'rushabhpasad.MDEditor',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallArgumentsOverride:
+        '/qn /norestart ALLUSERS=1 DesktopFolder="C:\\Users\\Public\\Desktop"',
+    });
   });
 
   it('models Tor Browser as the vendor-documented extracted user folder', () => {
