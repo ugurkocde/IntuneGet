@@ -3397,6 +3397,11 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(packager).toContain(
       'continuing to wait for exact registration [$registeredUninstallRegistryKey] because a child process may still be working'
     );
+    for (const source of [packager, hostedPackager]) {
+      expect(source).toContain(
+        'The vendor uninstaller returned reboot-required exit code [$uninstallProcessExitCode]; the exact registration remains pending reboot.'
+      );
+    }
     expect(packager).not.toContain('TotalSeconds -ge 15');
   });
 
@@ -3427,6 +3432,11 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(packager).toContain(
       'The Burn uninstaller requested a reboot with exit code [$uninstallProcessExitCode].'
     );
+    for (const source of [packager, hostedPackager]) {
+      expect(source).toContain(
+        'The Burn uninstaller returned reboot-required exit code [$uninstallProcessExitCode]; the exact registration remains pending reboot.'
+      );
+    }
   });
 
   it('reuses only independently safe manifest switches for uninstall', () => {

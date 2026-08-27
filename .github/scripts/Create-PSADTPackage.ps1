@@ -3642,7 +3642,9 @@ if ($useManagedDirectoryLifecycle) {
             '        if ($remainingApplications.Count -eq 0) { break }'
             '        if ($verificationAttempt -lt 5) { Start-Sleep -Seconds 2 }'
             '    }'
-            '    if ($remainingApplications.Count -gt 0) {'
+            '    if ($remainingApplications.Count -gt 0 -and $uninstallProcessExitCode -in @(1641, 3010)) {'
+            '        Write-ADTLogEntry -Message "The Burn uninstaller returned reboot-required exit code [$uninstallProcessExitCode]; the exact registration remains pending reboot." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '    } elseif ($remainingApplications.Count -gt 0) {'
             '        throw "The captured Burn/MSI uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."'
             '    }'
         )
@@ -3868,7 +3870,9 @@ if ($useManagedDirectoryLifecycle) {
             '        if ($remainingApplications.Count -eq 0) { break }'
             '        if ($verificationAttempt -lt 5) { Start-Sleep -Seconds 2 }'
             '    }'
-            '    if ($remainingApplications.Count -gt 0) {'
+            '    if ($remainingApplications.Count -gt 0 -and $uninstallProcessExitCode -in @(1641, 3010)) {'
+            '        Write-ADTLogEntry -Message "The vendor uninstaller returned reboot-required exit code [$uninstallProcessExitCode]; the exact registration remains pending reboot." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '    } elseif ($remainingApplications.Count -gt 0) {'
             '        throw "The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."'
             '    }'
         )
