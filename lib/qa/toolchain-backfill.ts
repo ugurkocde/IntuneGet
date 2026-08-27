@@ -344,7 +344,17 @@ const SEAMEET_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...QDIR_UNSUPPORTED_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const BRITYMEETING_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 2.7.26.07281 lifecycle with the same vendor -s command in
+  // the desktop client's intended signed-in user context.
+  'SamsungSDS.BrityMeeting',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...SEAMEET_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '105adee4044b86a29f824581c8383cbd06101eae':
+    BRITYMEETING_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '8712fc3a1a0239d34083952cda0f0a6676d0bb18':
     SEAMEET_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '12fed0efb16de79951e9d3761c737aa382560e12':

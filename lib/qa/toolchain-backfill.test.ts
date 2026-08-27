@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Brity Meeting only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' samsungsds.britymeeting ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8712fc3a1a0239d34083952cda0f0a6676d0bb18',
+      { wingetId: 'SamsungSDS.BrityMeeting', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries SeaMeet Snap Recorder only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
