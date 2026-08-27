@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '43fbb6c586da8919c35c7409a38377b8188914c2',
+  packagerCommit: '0b1d12320b39afb69d1d1dac6db566b09ef9e2b7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -447,6 +447,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // user-launched machine MSI. Preserve every unrelated compatible pass from
   // the registered PowerShell uninstall release.
   '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
+  // MD Editor now supplies a deterministic public DesktopFolder to its Tauri
+  // MSI. Preserve every unrelated compatible pass from the scope release.
+  '43fbb6c586da8919c35c7409a38377b8188914c2',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
