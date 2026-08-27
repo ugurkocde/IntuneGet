@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f097b209eb78ec946e2963f96da254a52141eb08',
+  packagerCommit: '83c81768f8c1800a5296251e473b758c62ec9358',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -453,6 +453,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // MD Editor now excludes only the vendor MSI's broken shortcut feature.
   // Preserve every unrelated pass from the public-desktop release.
   '0b1d12320b39afb69d1d1dac6db566b09ef9e2b7',
+  // MD Editor now uses an explicit MSI feature allow-list because the vendor
+  // rewrites REMOVE=ShortcutsFeature to REMOVE=ALL during InstallValidate.
+  // Preserve every unrelated pass from the first no-shortcuts release.
+  'f097b209eb78ec946e2963f96da254a52141eb08',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -6,7 +6,7 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries MD Editor after activating its LocalSystem no-shortcuts adapter', () => {
+  it('retries MD Editor after activating its explicit MSI feature adapter', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' rushabhpasad.mdeditor ', status: 'failed' }
