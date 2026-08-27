@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries NammaAgent only after activating registered PowerShell uninstall resolution', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' santhoshreddy352.nammaagent ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '80675c437cc4fe894c8b65a08b8e98ed80a25138',
+      { wingetId: 'SanthoshReddy352.NammaAgent', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries Datto only after activating reboot-required uninstall handling', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

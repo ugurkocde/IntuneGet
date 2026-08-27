@@ -360,7 +360,17 @@ const REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...BRITYMEETING_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry NammaAgent now that its exact registered powershell -File
+  // uninstaller can be resolved below the captured install location.
+  'SanthoshReddy352.NammaAgent',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '68a58563b15a5b09d32afa6a4d805e61a9e5635f':
+    POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '80675c437cc4fe894c8b65a08b8e98ed80a25138':
     REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '105adee4044b86a29f824581c8383cbd06101eae':

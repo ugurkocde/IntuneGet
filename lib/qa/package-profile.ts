@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '80675c437cc4fe894c8b65a08b8e98ed80a25138',
+  packagerCommit: '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -440,6 +440,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Explicit reboot-required uninstall results can leave an exact registration
   // pending restart. Preserve every pass from the Brity Meeting release.
   '105adee4044b86a29f824581c8383cbd06101eae',
+  // Registered PowerShell -File uninstall commands are now resolved through a
+  // bounded inbox-host contract. Preserve every pass from the reboot release.
+  '80675c437cc4fe894c8b65a08b8e98ed80a25138',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
