@@ -865,6 +865,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // ROBOTC 4.56's MSI uninstall enters the vendor HelpDocs custom action,
+    // attempts nested Windows Installer work, and then stalls under
+    // non-interactive LocalSystem (QA run 33118297421). Re-enter the same
+    // manifest-hashed InstallShield launcher with its removal verb so the outer
+    // bootstrapper can coordinate that vendor lifecycle. The captured exact
+    // MSI registration remains the authoritative completion signal.
+    wingetId: 'Robomatter.ROBOTC.LEGOMindstorms',
+    reviewedExactUninstall: {
+      executablePath: '%PackageInstaller%',
+      arguments: ['/S', '/x', '/V/quiet', '/V/norestart'],
+      completionTimeoutMinutes: 10,
+    },
+  },
+  {
     // DDPM registers its private setup helper with interactive removal
     // arguments. Replaying that ARP command from Intune leaves the exact
     // product registration, services, and drivers installed. Stop the reviewed

@@ -1168,6 +1168,43 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'replays the hash-verified ROBOTC InstallShield wrapper for silent removal',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'ROBOTC for LEGO Mindstorms',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath: '%PackageInstaller%',
+            arguments: ['/S', '/x', '/V/quiet', '/V/norestart'],
+            completionTimeoutMinutes: 10,
+          },
+        },
+        [],
+        'Robomatter.ROBOTC.LEGOMindstorms'
+      );
+      const uninstallFunction = generated.slice(
+        generated.indexOf('function Uninstall-ADTDeployment'),
+        generated.indexOf('function Repair-ADTDeployment')
+      );
+
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallFile = Join-Path $adtSession.DirFiles 'setup.exe'"
+      );
+      expect(uninstallFunction).toContain(
+        "$registeredUninstallArguments = @('/S', '/x', '/V/quiet', '/V/norestart')"
+      );
+      expect(uninstallFunction).toContain(
+        '$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 10 }'
+      );
+      expect(uninstallFunction).toContain(
+        'Waiting for vendor uninstall registration [$registeredUninstallRegistryKey] to be removed.'
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'verifies and removes a reviewed self-extracted managed directory without ARP capture',
     () => {
       const generated = generateRegistryUninstallPackage(
