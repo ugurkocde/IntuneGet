@@ -514,16 +514,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // Its shortcut feature nevertheless combines per-user HKCU components with
     // a DesktopFolder component inside the per-machine package. Windows
     // Installer aborts in CostFinalize under LocalSystem before registration,
-    // even when DesktopFolder is redirected to the public desktop. Exclude only
-    // that broken feature; the Environment feature still installs the main
-    // binary while IntuneGet supplies deterministic detection and uninstall.
+    // even when DesktopFolder is redirected to the public desktop. Explicitly
+    // select the required parent, binary, and external features so MSI does not
+    // select the broken nested ShortcutsFeature. REMOVE=ShortcutsFeature is not
+    // valid here: this MSI rewrites it to REMOVE=ALL during InstallValidate.
     // https://github.com/rushabhpasad/md-editor/blob/v1.1.0/src-tauri/tauri.conf.json
     // https://github.com/tauri-apps/tauri/blob/tauri-v2.10.1/crates/tauri-bundler/src/bundle/windows/msi/main.wxs
     wingetId: 'rushabhpasad.MDEditor',
     requiredInstallScope: 'machine',
     reviewedInstallerSelectionScope: 'user',
     reviewedInstallArgumentsOverride:
-      '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature',
+      '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
   },
   {
     // WPS Office is cataloged as a per-user EXE, but the signed installer

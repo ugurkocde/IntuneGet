@@ -1319,11 +1319,11 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.installScope).toBe('machine');
     expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=1');
     expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
-      '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature'
+      '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External'
     );
     expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
       reviewedInstallArgumentsOverride:
-        '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature',
+        '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
     });
   });
 

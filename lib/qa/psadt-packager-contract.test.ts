@@ -1757,7 +1757,7 @@ describe('PSADT vendor argument contract', () => {
         [],
         {
           reviewedInstallArgumentsOverride:
-            '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature',
+            '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
         },
         [],
         'rushabhpasad.MDEditor',
@@ -1769,7 +1769,7 @@ describe('PSADT vendor argument contract', () => {
       );
 
       expect(generated).toContain(
-        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=1 REMOVE=ShortcutsFeature'"
+        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External'"
       );
       expect(generated).not.toContain('DesktopFolder=');
     }

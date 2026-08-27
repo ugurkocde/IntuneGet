@@ -439,7 +439,7 @@ describe('application packaging adapters', () => {
       )
     ).toMatchObject({
       reviewedInstallArgumentsOverride:
-        '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature',
+        '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
     });
   });
 
