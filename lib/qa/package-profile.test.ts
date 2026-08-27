@@ -1295,7 +1295,7 @@ describe('PSADT QA package identity', () => {
     );
   });
 
-  it('binds MD Editor to the reviewed machine-wide public desktop contract', () => {
+  it('binds MD Editor to the reviewed machine-wide no-shortcuts contract', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'rushabhpasad.MDEditor',
       displayName: 'MD Editor',
@@ -1319,11 +1319,11 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.installScope).toBe('machine');
     expect(profile.installer.silentArgs).toBe('/qn /norestart ALLUSERS=1');
     expect(profile.psadtConfig.reviewedInstallArgumentsOverride).toBe(
-      '/qn /norestart ALLUSERS=1 DesktopFolder="C:\\Users\\Public\\Desktop"'
+      '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature'
     );
     expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
       reviewedInstallArgumentsOverride:
-        '/qn /norestart ALLUSERS=1 DesktopFolder="C:\\Users\\Public\\Desktop"',
+        '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature',
     });
   });
 

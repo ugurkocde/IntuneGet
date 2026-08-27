@@ -511,19 +511,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // the tagged Tauri configuration builds every target and Tauri's WiX MSI
     // template hard-codes InstallScope="perMachine" under Program Files. A
     // standard-user launch therefore returns MSI 1603 before registration.
-    // Its desktop-shortcut component is nevertheless rooted at DesktopFolder;
-    // under LocalSystem the clean VM resolves that to a literal
-    // %USERPROFILE%\Desktop and CostFinalize returns 1603. Pin the directory to
-    // the Windows public desktop so the vendor's machine-wide shortcut remains
-    // visible to users and the same deterministic MSI contract is used by QA
-    // and customer packages.
+    // Its shortcut feature nevertheless combines per-user HKCU components with
+    // a DesktopFolder component inside the per-machine package. Windows
+    // Installer aborts in CostFinalize under LocalSystem before registration,
+    // even when DesktopFolder is redirected to the public desktop. Exclude only
+    // that broken feature; the Environment feature still installs the main
+    // binary while IntuneGet supplies deterministic detection and uninstall.
     // https://github.com/rushabhpasad/md-editor/blob/v1.1.0/src-tauri/tauri.conf.json
     // https://github.com/tauri-apps/tauri/blob/tauri-v2.10.1/crates/tauri-bundler/src/bundle/windows/msi/main.wxs
     wingetId: 'rushabhpasad.MDEditor',
     requiredInstallScope: 'machine',
     reviewedInstallerSelectionScope: 'user',
     reviewedInstallArgumentsOverride:
-      '/qn /norestart ALLUSERS=1 DesktopFolder="C:\\Users\\Public\\Desktop"',
+      '/qn /norestart ALLUSERS=1 REMOVE=ShortcutsFeature',
   },
   {
     // WPS Office is cataloged as a per-user EXE, but the signed installer
