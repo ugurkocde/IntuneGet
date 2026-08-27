@@ -777,6 +777,35 @@ describe('EXE product identity PSADT generation', () => {
     expect(deployScript).toContain('Close-ADTSession -ExitCode $script:UninstallRebootExitCode');
   });
 
+  it('resolves only bounded inbox PowerShell -File uninstall registrations', () => {
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      packagingJob({
+        display_name: 'Namma Agent',
+        installer_type: 'exe',
+        uninstall_command: 'REGISTRY_UNINSTALL:Namma Agent',
+      }),
+      'namma-agent.exe'
+    );
+
+    expect(uninstall).toContain(
+      "$isRegisteredPowerShellHost = $registeredUninstallLeaf -in @('powershell', 'powershell.exe')"
+    );
+    expect(uninstall).toContain('$powerShellFileSwitchIndexes.Count -ne 1');
+    expect(uninstall).toContain('[string]$registeredApplication.InstallLocation');
+    expect(uninstall).toContain('[Uri]::TryCreate($registeredPowerShellScript');
+    expect(uninstall).toContain('$registeredPowerShellScriptUri.IsFile');
+    expect(uninstall).toContain('[StringComparison]::OrdinalIgnoreCase');
+    expect(uninstall).toContain(
+      "$registeredUninstallFile = Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe'"
+    );
+    expect(uninstall).toContain(
+      'The registered PowerShell uninstall command contains an unsupported host switch'
+    );
+    expect(uninstall).not.toContain('Get-Command powershell');
+    expect(uninstall).not.toContain('[IO.Path]::IsPathFullyQualified');
+  });
+
   it('emits apostrophe-safe registry identity strings', () => {
     const job = packagingJob({
       display_name: "Contoso O'Brien Agent",

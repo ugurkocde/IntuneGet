@@ -1941,6 +1941,7 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         ${reviewedUninstallArgumentsBlock}
         $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile
         $isRegisteredMsiExec = $registeredUninstallLeaf -in @('msiexec', 'msiexec.exe')
+        $isRegisteredPowerShellHost = $registeredUninstallLeaf -in @('powershell', 'powershell.exe')
         if ($isRegisteredMsiExec) {
             $registeredMsiProductCode = if ($registeredUninstallRegistryKey -match '(?i)^\\{[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}\\}$') {
                 $registeredUninstallRegistryKey
@@ -1951,6 +1952,81 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
             }
             $registeredUninstallFile = Join-Path $env:SystemRoot 'System32\\msiexec.exe'
             $registeredUninstallArguments = @('/x', $registeredMsiProductCode, '/qn', '/norestart')
+        } elseif ($isRegisteredPowerShellHost) {
+            # Some vendors register an inbox PowerShell launcher instead of a literal EXE path.
+            # Resolve only a single -File command whose script is an existing .ps1 below the
+            # exact captured InstallLocation. Host-side switches are allowlisted so an ARP entry
+            # cannot turn this compatibility path into arbitrary -Command execution.
+            $powerShellFileSwitchIndexes = @(
+                for ($argumentIndex = 0; $argumentIndex -lt $registeredUninstallArguments.Count; $argumentIndex++) {
+                    if ([string]$registeredUninstallArguments[$argumentIndex] -ieq '-File') { $argumentIndex }
+                }
+            )
+            if ($powerShellFileSwitchIndexes.Count -ne 1 -or
+                $powerShellFileSwitchIndexes[0] + 1 -ge $registeredUninstallArguments.Count) {
+                throw "The registered PowerShell uninstall command must contain one exact -File script path."
+            }
+            $powerShellFileSwitchIndex = [int]$powerShellFileSwitchIndexes[0]
+            for ($argumentIndex = 0; $argumentIndex -lt $powerShellFileSwitchIndex; $argumentIndex++) {
+                $hostArgument = [string]$registeredUninstallArguments[$argumentIndex]
+                if ($hostArgument -in @('-NoProfile', '-NonInteractive', '-NoLogo')) { continue }
+                if ($hostArgument -ieq '-ExecutionPolicy') {
+                    $argumentIndex++
+                    if ($argumentIndex -ge $powerShellFileSwitchIndex -or
+                        [string]$registeredUninstallArguments[$argumentIndex] -ine 'Bypass') {
+                        throw "The registered PowerShell uninstall command contains an unsupported execution policy."
+                    }
+                    continue
+                }
+                if ($hostArgument -ieq '-WindowStyle') {
+                    $argumentIndex++
+                    if ($argumentIndex -ge $powerShellFileSwitchIndex -or
+                        [string]$registeredUninstallArguments[$argumentIndex] -ine 'Hidden') {
+                        throw "The registered PowerShell uninstall command contains an unsupported window style."
+                    }
+                    continue
+                }
+                throw "The registered PowerShell uninstall command contains an unsupported host switch: $hostArgument"
+            }
+            $registeredPowerShellScript = [Environment]::ExpandEnvironmentVariables(
+                [string]$registeredUninstallArguments[$powerShellFileSwitchIndex + 1]
+            )
+            $registeredInstallLocation = [Environment]::ExpandEnvironmentVariables(
+                [string]$registeredApplication.InstallLocation
+            )
+            $registeredInstallLocationUri = $null
+            if ([string]::IsNullOrWhiteSpace($registeredInstallLocation) -or
+                -not [Uri]::TryCreate($registeredInstallLocation, [UriKind]::Absolute, [ref]$registeredInstallLocationUri) -or
+                -not $registeredInstallLocationUri.IsFile -or
+                -not (Test-Path -LiteralPath $registeredInstallLocation -PathType Container)) {
+                throw "The registered PowerShell uninstall command does not expose an exact install location."
+            }
+            $registeredPowerShellScriptUri = $null
+            if ([string]::IsNullOrWhiteSpace($registeredPowerShellScript) -or
+                -not [Uri]::TryCreate($registeredPowerShellScript, [UriKind]::Absolute, [ref]$registeredPowerShellScriptUri) -or
+                -not $registeredPowerShellScriptUri.IsFile -or
+                [IO.Path]::GetExtension($registeredPowerShellScript) -ine '.ps1' -or
+                -not (Test-Path -LiteralPath $registeredPowerShellScript -PathType Leaf)) {
+                throw "The registered PowerShell uninstall script is missing or invalid."
+            }
+            $registeredInstallRoot = [IO.Path]::GetFullPath($registeredInstallLocation).TrimEnd([char[]]'\\/')
+            $registeredVolumeRoot = [IO.Path]::GetPathRoot($registeredInstallRoot).TrimEnd([char[]]'\\/')
+            if ($registeredInstallRoot -ieq $registeredVolumeRoot) {
+                throw "The registered PowerShell uninstall command exposes an unsafe volume-root install location."
+            }
+            $registeredPowerShellScript = [IO.Path]::GetFullPath($registeredPowerShellScript)
+            if (-not $registeredPowerShellScript.StartsWith(
+                $registeredInstallRoot + [IO.Path]::DirectorySeparatorChar,
+                [StringComparison]::OrdinalIgnoreCase
+            )) {
+                throw "The registered PowerShell uninstall script is outside the captured install location."
+            }
+            $registeredUninstallArguments[$powerShellFileSwitchIndex + 1] = $registeredPowerShellScript
+            $registeredUninstallFile = Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+            if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {
+                throw "The inbox Windows PowerShell host was not found."
+            }
+            Write-ADTLogEntry -Message "Resolved the registered PowerShell -File uninstaller below captured install location [$registeredInstallRoot]." -Source 'Uninstall-ADTDeployment'
         } else {
             if (-not (Test-Path -LiteralPath $registeredUninstallFile -PathType Leaf)) {
                 throw "The registered vendor uninstaller was not found: $registeredUninstallFile"

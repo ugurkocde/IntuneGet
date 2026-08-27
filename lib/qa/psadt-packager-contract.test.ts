@@ -2554,6 +2554,45 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('keeps registered PowerShell script uninstallers bounded in both customer packagers', () => {
+    for (const source of [packager, hostedPackager]) {
+      expect(source).toContain('$isRegisteredPowerShellHost');
+      expect(source).toContain('$powerShellFileSwitchIndexes.Count -ne 1');
+      expect(source).toContain('[string]$registeredApplication.InstallLocation');
+      expect(source).toContain('[Uri]::TryCreate($registeredPowerShellScript');
+      expect(source).toContain('$registeredPowerShellScriptUri.IsFile');
+      expect(source).toContain('[StringComparison]::OrdinalIgnoreCase');
+      expect(source.replaceAll('\\\\', '\\')).toContain(
+        'System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+      );
+      expect(source).toContain(
+        'The registered PowerShell uninstall command contains an unsupported host switch'
+      );
+      expect(source).not.toContain('Get-Command powershell');
+      expect(source).not.toContain('[IO.Path]::IsPathFullyQualified');
+    }
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits a parseable exact PowerShell -File uninstall contract',
+    () => {
+      const generated = generateRegistryUninstallPackage('exe', 'Namma Agent');
+
+      expect(generated).toContain(
+        "$isRegisteredPowerShellHost = $registeredUninstallLeaf -in @('powershell', 'powershell.exe')"
+      );
+      expect(generated).toContain(
+        "$registeredUninstallFile = Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe'"
+      );
+      expect(generated).toContain(
+        '$registeredPowerShellScript.StartsWith('
+      );
+      expect(generated).toContain(
+        'The registered PowerShell uninstall script is outside the captured install location.'
+      );
+    }
+  );
+
   it('never captures an unrelated background ARP change as the installed product', () => {
     expect(packager).not.toContain(
       'if ($selectedApplications.Count -eq 0 -and $changedApplications.Count -eq 1)'
