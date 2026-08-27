@@ -1749,33 +1749,6 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'excludes the broken MD Editor shortcut feature from the machine MSI',
-    () => {
-      const generated = generateRegistryUninstallPackage(
-        'msi',
-        'MD Editor',
-        [],
-        {
-          reviewedInstallArgumentsOverride:
-            '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
-        },
-        [],
-        'rushabhpasad.MDEditor',
-        'MD Editor',
-        '1.1.0',
-        'msiexec /x "{F55BC603-EAB6-45CB-B5D9-571FAF94490D}" /qn /norestart',
-        '/qn /norestart ALLUSERS=1',
-        'machine'
-      );
-
-      expect(generated).toContain(
-        "Start-ADTMsiProcess -Action 'Install' -FilePath 'setup.exe' -AdditionalArgumentList '/norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External'"
-      );
-      expect(generated).not.toContain('DesktopFolder=');
-    }
-  );
-
-  it.runIf(canRunWindowsPowerShellPackager)(
     'strips the complete MSI quiet token without leaking a trailing fragment',
     () => {
       const generated = generateRegistryUninstallPackage(

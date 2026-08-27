@@ -6,11 +6,11 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries MD Editor after activating its explicit MSI feature adapter', () => {
+  it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' rushabhpasad.mdeditor ', status: 'failed' }
-    )).toBe(true);
+    )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
       '68a58563b15a5b09d32afa6a4d805e61a9e5635f',
       { wingetId: 'rushabhpasad.MDEditor', status: 'failed' }

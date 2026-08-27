@@ -507,26 +507,6 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS',
   },
   {
-    // MD Editor's WinGet manifest labels the published MSI as per-user, but
-    // the tagged Tauri configuration builds every target and Tauri's WiX MSI
-    // template hard-codes InstallScope="perMachine" under Program Files. A
-    // standard-user launch therefore returns MSI 1603 before registration.
-    // Its shortcut feature nevertheless combines per-user HKCU components with
-    // a DesktopFolder component inside the per-machine package. Windows
-    // Installer aborts in CostFinalize under LocalSystem before registration,
-    // even when DesktopFolder is redirected to the public desktop. Explicitly
-    // select the required parent, binary, and external features so MSI does not
-    // select the broken nested ShortcutsFeature. REMOVE=ShortcutsFeature is not
-    // valid here: this MSI rewrites it to REMOVE=ALL during InstallValidate.
-    // https://github.com/rushabhpasad/md-editor/blob/v1.1.0/src-tauri/tauri.conf.json
-    // https://github.com/tauri-apps/tauri/blob/tauri-v2.10.1/crates/tauri-bundler/src/bundle/windows/msi/main.wxs
-    wingetId: 'rushabhpasad.MDEditor',
-    requiredInstallScope: 'machine',
-    reviewedInstallerSelectionScope: 'user',
-    reviewedInstallArgumentsOverride:
-      '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
-  },
-  {
     // WPS Office is cataloged as a per-user EXE, but the signed installer
     // elevates even with its exact -S switch. A standard-user launch therefore
     // ends at the unattended UAC boundary without creating the registered

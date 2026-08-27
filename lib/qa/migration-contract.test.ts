@@ -1581,3 +1581,28 @@ describe('Q-Dir managed uninstall block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('MD Editor managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260827180000_block_md_editor_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the disproven Tauri MSI lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'rushabhpasad.MDEditor'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/33100285782'
+    );
+    expect(sql).toContain('Four isolated LocalSystem strategies');
+    expect(sql).toContain('CostFinalize');
+    expect(sql).toContain('REMOVE=ALL');
+    expect(sql).toContain('ADDLOCAL=MainProgram,Environment,External');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});

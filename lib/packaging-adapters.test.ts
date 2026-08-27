@@ -419,30 +419,6 @@ describe('application packaging adapters', () => {
     });
   });
 
-  it('runs MD Editor\'s machine-scoped Tauri MSI as LocalSystem', () => {
-    expect(
-      resolveApplicationInstallScope('rushabhpasad.MDEditor', 'user')
-    ).toBe('machine');
-    expect(
-      resolveApplicationInstallerSelectionScope(
-        'rushabhpasad.MDEditor',
-        'machine'
-      )
-    ).toBe('user');
-    expect(
-      resolveApplicationInstallScope(' rushabhpasad.mdeditor ', 'user')
-    ).toBe('machine');
-    expect(
-      applyApplicationPackagingAdapter(
-        'rushabhpasad.MDEditor',
-        DEFAULT_PSADT_CONFIG
-      )
-    ).toMatchObject({
-      reviewedInstallArgumentsOverride:
-        '/qn /norestart ALLUSERS=1 ADDLOCAL=MainProgram,Environment,External',
-    });
-  });
-
   it('models Tor Browser as the vendor-documented extracted user folder', () => {
     expect(
       applyApplicationPackagingAdapter('TorProject.TorBrowser', DEFAULT_PSADT_CONFIG)
