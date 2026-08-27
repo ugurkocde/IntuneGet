@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '105adee4044b86a29f824581c8383cbd06101eae',
+  packagerCommit: '80675c437cc4fe894c8b65a08b8e98ed80a25138',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -437,6 +437,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Brity Meeting now runs in the desktop client's intended signed-in user
   // context. Preserve every unrelated pass from the SeaMeet user-scope release.
   '8712fc3a1a0239d34083952cda0f0a6676d0bb18',
+  // Explicit reboot-required uninstall results can leave an exact registration
+  // pending restart. Preserve every pass from the Brity Meeting release.
+  '105adee4044b86a29f824581c8383cbd06101eae',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

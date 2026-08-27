@@ -352,7 +352,17 @@ const BRITYMEETING_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...SEAMEET_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 3.0.18.24 lifecycle while preserving the vendor Burn
+  // uninstaller's explicit 3010 pending-reboot completion signal.
+  'Datto.WindowsAgent',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...BRITYMEETING_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '80675c437cc4fe894c8b65a08b8e98ed80a25138':
+    REBOOT_REQUIRED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '105adee4044b86a29f824581c8383cbd06101eae':
     BRITYMEETING_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '8712fc3a1a0239d34083952cda0f0a6676d0bb18':

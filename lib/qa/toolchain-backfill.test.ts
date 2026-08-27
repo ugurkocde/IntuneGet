@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Datto only after activating reboot-required uninstall handling', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' datto.windowsagent ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '105adee4044b86a29f824581c8383cbd06101eae',
+      { wingetId: 'Datto.WindowsAgent', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries Brity Meeting only after activating its reviewed user scope', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
