@@ -257,6 +257,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // SeaMeet Snap Recorder's Nullsoft installer writes its application and
+    // exact uninstall registration below the invoking account's LocalAppData,
+    // while its WinGet manifest omits Scope. Under LocalSystem, QA run
+    // 33046444278 captured a systemprofile uninstaller that was already absent
+    // by the managed removal cycle. Keep the shared customer package and QA
+    // lifecycle in the intended signed-in user context instead.
+    wingetId: 'SeasaltAI.SeaMeetSnapRecorder',
+    requiredInstallScope: 'user',
+  },
+  {
     // RedisInsight 3.4.2's tagged Electron Builder configuration explicitly
     // sets NSIS perMachine=false. WinGet omits Scope, so the generic machine
     // default installs below LocalSystem's disposable systemprofile and records

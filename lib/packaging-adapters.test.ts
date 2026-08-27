@@ -304,6 +304,14 @@ describe('application packaging adapters', () => {
       ' ultimategadgetlaboratories.uhkagent ',
       undefined
     )).toBe('user');
+    expect(resolveApplicationInstallScope(
+      'SeasaltAI.SeaMeetSnapRecorder',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope(
+      ' seasaltai.seameetsnaprecorder ',
+      undefined
+    )).toBe('user');
     expect(
       resolveApplicationInstallScope('RedisInsight.RedisInsight', 'machine')
     ).toBe('user');

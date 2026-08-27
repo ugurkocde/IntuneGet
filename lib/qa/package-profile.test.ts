@@ -751,6 +751,35 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps SeaMeet Snap Recorder out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SeasaltAI.SeaMeetSnapRecorder',
+      displayName: 'SeaMeet Snap Recorder',
+      publisher: 'SeasaltAI',
+      version: '3.6.2',
+      architecture: 'x64',
+      installerSha256: 'e'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:5fd06921-7b39-5610-a9f4-36171cefce37:SeaMeet Snap Recorder',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\SeasaltAI_SeaMeetSnapRecorder',
+      }),
+    ]);
+  });
+
   it('binds MiKTeX to its documented unattended integrated setup lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'MiKTeX.MiKTeX',
