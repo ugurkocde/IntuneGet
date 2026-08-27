@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries SeaMeet Snap Recorder only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' seasaltai.seameetsnaprecorder ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '12fed0efb16de79951e9d3761c737aa382560e12',
+      { wingetId: 'SeasaltAI.SeaMeetSnapRecorder', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries the catalog-scoped August 26 packaging fixes only after activation', () => {
     for (const wingetId of [
       ' Trimble.SketchUpViewer ',

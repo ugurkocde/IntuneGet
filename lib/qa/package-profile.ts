@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '12fed0efb16de79951e9d3761c737aa382560e12',
+  packagerCommit: '8712fc3a1a0239d34083952cda0f0a6676d0bb18',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -430,6 +430,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // registered command failed twice. Removing its unproven adapter does not
   // invalidate any unrelated passing package profile.
   'ce809649aed63f1127aa256cbafb8d085e193951',
+  // SeaMeet Snap Recorder now runs in the NSIS installer's intended signed-in
+  // user context. Preserve every unrelated pass from the Q-Dir eligibility
+  // release.
+  '12fed0efb16de79951e9d3761c737aa382560e12',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

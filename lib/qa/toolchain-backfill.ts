@@ -336,7 +336,17 @@ const QDIR_UNSUPPORTED_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...SKETCHUPVIEWER_SILENT_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SEAMEET_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 3.6.2 lifecycle in the NSIS installer's intended signed-in
+  // user context instead of LocalSystem's disposable systemprofile.
+  'SeasaltAI.SeaMeetSnapRecorder',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...QDIR_UNSUPPORTED_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '8712fc3a1a0239d34083952cda0f0a6676d0bb18':
+    SEAMEET_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '12fed0efb16de79951e9d3761c737aa382560e12':
     QDIR_UNSUPPORTED_UNINSTALL_RELEASE_RETRY_TARGETS,
   'ce809649aed63f1127aa256cbafb8d085e193951':
