@@ -272,6 +272,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' webcatalogltd.switchbar ', undefined)
     ).toBe('user');
+    expect(
+      resolveApplicationInstallScope('ITWCreativeWorks.Somiibo', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' itwcreativeworks.somiibo ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('SeqLens.SeqLens', 'machine')).toBe(
       'user'
     );

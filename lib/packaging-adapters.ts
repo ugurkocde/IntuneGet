@@ -217,6 +217,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Somiibo's NSIS installer registers its application below the invoking
+    // account's LocalAppData even though WinGet omits Scope. Isolated QA run
+    // 33164837340 captured an uninstaller below LocalSystem's systemprofile
+    // that was already unavailable by the managed removal cycle. Keep QA and
+    // customer Intune packages in the signed-in user's persistent profile.
+    wingetId: 'ITWCreativeWorks.Somiibo',
+    requiredInstallScope: 'user',
+  },
+  {
     // SeqLens' NSIS installer registers below the invoking account's
     // LocalAppData even though WinGet omits Scope. Running it as LocalSystem
     // records an uninstaller below systemprofile that is unavailable for the
