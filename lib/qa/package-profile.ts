@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'e139e4cc222576f34ca905b7180ac47ea548cbab',
+  packagerCommit: 'd2ee075ff3c717dbadef7fa2c5f480c33d256d4f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -501,6 +501,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // hosted by Windows PowerShell. Preserve every unrelated compatible pass
   // from the Somiibo user-scope release.
   '493b141d093be4d3fa25b550c41d47f7b9a91a67',
+  // TeamSpeak 6 Beta now executes its reviewed all-users WiX command as
+  // LocalSystem while retaining the exact user-scoped manifest bytes.
+  // Preserve every unrelated compatible pass from the UTF-8 packager release.
+  'e139e4cc222576f34ca905b7180ac47ea548cbab',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

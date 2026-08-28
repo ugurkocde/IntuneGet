@@ -1648,4 +1648,20 @@ describe('QA toolchain targeted retries', () => {
       '953d2ca467b8e800a143150871c5220682106aa2'
     )).not.toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
   });
+
+  it('retries Simple Hydraulic Calculator only with its exact NSIS release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      {
+        wingetId: 'igneus.simplehydrauliccalculator',
+        status: 'failed',
+      }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Igneus.SimpleHydraulicCalculator');
+    expect(terminalToolchainRetryTargets(
+      'e139e4cc222576f34ca905b7180ac47ea548cbab'
+    )).not.toContain('Igneus.SimpleHydraulicCalculator');
+  });
 });

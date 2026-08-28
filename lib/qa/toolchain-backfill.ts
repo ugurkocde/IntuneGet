@@ -473,7 +473,17 @@ const TEAMSPEAK6_MACHINE_SCOPE_RELEASE_RETRY_TARGETS = [
   ...TRUSTED_MSI_ARGUMENTS_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SIMPLE_HYDRAULIC_NSIS_UNINSTALL_RELEASE_RETRY_TARGETS = [
+  // Retry Simple Hydraulic Calculator after its exact NSIS uninstaller keeps
+  // the required in-place install-directory argument last.
+  'Igneus.SimpleHydraulicCalculator',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...TEAMSPEAK6_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'd2ee075ff3c717dbadef7fa2c5f480c33d256d4f':
+    SIMPLE_HYDRAULIC_NSIS_UNINSTALL_RELEASE_RETRY_TARGETS,
   'e139e4cc222576f34ca905b7180ac47ea548cbab':
     TEAMSPEAK6_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
   '953d2ca467b8e800a143150871c5220682106aa2':
