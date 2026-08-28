@@ -87,20 +87,30 @@ try {
         return , $apps
     }
 
+    # Intune's $filter support on this collection is uneven, and some tenants
+    # reject the isof() cast filter outright with 400 (observed Aug 2026 across
+    # a whole tenant batch). Try progressively simpler query shapes before
+    # failing a deployment over a query-shape limitation. The name-only shape
+    # can return non-Win32 apps; the detail fetch below verifies the type
+    # before an app can count as a duplicate.
+    $candidateFilters = @(
+        "$typeFilter and $nameFilter",
+        $nameFilter,
+        $typeFilter
+    )
     $allApps = $null
-    try {
-        $allApps = Get-CandidateApps -Filter "$typeFilter and $nameFilter"
-        Write-Host "Found $($allApps.Count) Win32 app(s) matching '$displayName'"
-    }
-    catch {
-        # Intune's $filter support on this collection is uneven. If the combined
-        # filter is rejected, fall back to the type-only enumeration rather than
-        # failing a deployment over a query-shape limitation.
-        $filterStatus = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
-        if ($filterStatus -ne 400) { throw }
-        Write-Host "::warning::Graph rejected the combined duplicate-check filter; falling back to a full Win32 enumeration"
-        $allApps = Get-CandidateApps -Filter $typeFilter
-        Write-Host "Found $($allApps.Count) Win32 app(s) in tenant"
+    foreach ($candidateFilter in $candidateFilters) {
+        try {
+            $allApps = Get-CandidateApps -Filter $candidateFilter
+            Write-Host "Found $($allApps.Count) candidate app(s) using filter [$candidateFilter]"
+            break
+        }
+        catch {
+            $filterStatus = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+            if ($filterStatus -ne 400) { throw }
+            if ($candidateFilter -eq $candidateFilters[-1]) { throw }
+            Write-Host "::warning::Graph rejected duplicate-check filter [$candidateFilter]; trying a simpler query shape"
+        }
     }
 
     $nameMatches = @($allApps | Where-Object { $_.displayName -ieq $displayName })
@@ -135,6 +145,13 @@ try {
         # Win32-only properties such as displayVersion and committedContentVersion.
         $detailUrl = "$baseUrl/$($app.id)"
         $appDetails = Invoke-GraphRequest -Uri $detailUrl -MaxRetries 3
+
+        # The name-only filter shape can surface Store or LOB apps that share a
+        # display name. Only a Win32 app can be a duplicate of this deployment.
+        if ($appDetails.'@odata.type' -ne '#microsoft.graph.win32LobApp') {
+            Write-Host "Ignoring non-Win32 app $($app.id) with matching name (type: $($appDetails.'@odata.type'))"
+            continue
+        }
 
         # Only committed, published apps are deployable duplicates. Failed or
         # partially-created apps from an earlier upload must not block a safe retry.
