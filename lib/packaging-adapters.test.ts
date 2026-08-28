@@ -307,6 +307,14 @@ describe('application packaging adapters', () => {
       ' barrycarlyon.barrycarlyonextensiontools ',
       undefined
     )).toBe('user');
+    expect(resolveApplicationInstallScope(
+      'ShatteredChaos.FightPlanner',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope(
+      ' shatteredchaos.fightplanner ',
+      undefined
+    )).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Youdao.YoudaoTranslate', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' youdao.youdaotranslate ', undefined)).toBe('user');
@@ -373,6 +381,17 @@ describe('application packaging adapters', () => {
     )).toBe('user');
     expect(resolveApplicationInstallerSelectionScope(
       'BarryCarlyon.BarryCarlyonExtensionTools',
+      'user'
+    )).toBe('machine');
+  });
+
+  it('keeps FightPlanner on its machine-labelled bytes while executing per-user', () => {
+    expect(resolveApplicationInstallScope(
+      'ShatteredChaos.FightPlanner',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope(
+      'ShatteredChaos.FightPlanner',
       'user'
     )).toBe('machine');
   });

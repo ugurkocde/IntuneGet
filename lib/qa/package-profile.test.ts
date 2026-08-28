@@ -864,6 +864,33 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps FightPlanner out of LocalSystem while retaining its machine-labelled installer', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'ShatteredChaos.FightPlanner',
+      displayName: 'FightPlanner',
+      publisher: 'ShatteredChaos',
+      version: '3.3.33',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:FightPlanner',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\ShatteredChaos_FightPlanner',
+      }),
+    ]);
+  });
+
   it('keeps Brity Meeting out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'SamsungSDS.BrityMeeting',

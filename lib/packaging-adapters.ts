@@ -280,6 +280,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'machine',
   },
   {
+    // FightPlanner is cataloged as a machine-scoped Nullsoft installer, but
+    // isolated LocalSystem QA run 33148960390 captured its application and
+    // uninstall registration below systemprofile LocalAppData. The registered
+    // uninstaller was already unavailable by managed removal. Keep selecting
+    // the exact machine-labelled bytes while executing the shared QA/customer
+    // package in the signed-in user's persistent profile.
+    wingetId: 'ShatteredChaos.FightPlanner',
+    requiredInstallScope: 'user',
+    reviewedInstallerSelectionScope: 'machine',
+  },
+  {
     // UHK Agent is built with Electron Builder's assisted NSIS profile
     // (oneClick: false) without perMachine. Electron Builder defaults that
     // profile to per-user installation. WinGet currently omits Scope, so the
