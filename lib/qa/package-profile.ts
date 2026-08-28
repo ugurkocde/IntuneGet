@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47',
+  packagerCommit: '3f417a26c57c689b57c9f50914f254c3898c3356',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -485,6 +485,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // reviewed machine-labelled manifest bytes. Preserve every unrelated
   // compatible pass from the BarryCarlyon user-scope release.
   'f47779dbec9572a0ad72e59413b81dee8e0d13f7',
+  // Olive now uses its source-defined Program Files payload and exact NSIS
+  // uninstaller without requiring an ARP registration. Preserve every
+  // unrelated compatible pass from the FightPlanner user-scope release.
+  '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -81,6 +81,21 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries Olive only after activating its reviewed non-ARP lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' oliveteam.olivevideoeditor ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47',
+      { wingetId: 'OliveTeam.OliveVideoEditor', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

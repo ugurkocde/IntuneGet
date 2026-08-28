@@ -400,7 +400,17 @@ const FIGHTPLANNER_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...BARRYCARLYON_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const OLIVE_NON_ARP_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 0.1.0 lifecycle against Olive's source-defined Program
+  // Files payload and exact NSIS uninstaller instead of unrelated ARP noise.
+  'OliveTeam.OliveVideoEditor',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...FIGHTPLANNER_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3f417a26c57c689b57c9f50914f254c3898c3356':
+    OLIVE_NON_ARP_RELEASE_RETRY_TARGETS,
   '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47':
     FIGHTPLANNER_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'f47779dbec9572a0ad72e59413b81dee8e0d13f7':
