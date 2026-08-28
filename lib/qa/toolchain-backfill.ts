@@ -376,7 +376,17 @@ const ROBOTC_WRAPPER_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ZOHO_MAIL_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 1.10.3 lifecycle in the per-profile context where the
+  // Nullsoft installer actually registers and retains its uninstaller.
+  'Zoho.Mail',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '3d10fde499ebe5f2987a44db5df35c3801a519ea':
+    ZOHO_MAIL_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf':
     POWERSHELL_REGISTERED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '2b38ecc29469abcc4045cc7a1ff27229c196115b':

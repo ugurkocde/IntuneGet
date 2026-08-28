@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf',
+  packagerCommit: '3d10fde499ebe5f2987a44db5df35c3801a519ea',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -473,6 +473,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // bootstrapper could not complete a bounded unattended lifecycle. Preserve
   // every unrelated compatible pass from the ROBOTC eligibility release.
   '2b38ecc29469abcc4045cc7a1ff27229c196115b',
+  // Zoho Mail now runs in the effective per-profile user context while keeping
+  // the reviewed machine-labelled manifest bytes. Preserve every unrelated
+  // compatible pass from the League eligibility release.
+  '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

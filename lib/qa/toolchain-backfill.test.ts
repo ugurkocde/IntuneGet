@@ -36,6 +36,21 @@ describe('QA toolchain targeted retries', () => {
     ).not.toContain('riotgames.leagueoflegends.la1');
   });
 
+  it('retries Zoho Mail only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' zoho.mail ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf',
+      { wingetId: 'Zoho.Mail', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
