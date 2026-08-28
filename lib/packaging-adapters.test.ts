@@ -1083,6 +1083,21 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual(['/DetainUninstall']);
   });
 
+  it('recovers iFun Screenshot only through its reviewed exact captured identity', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'iobit.ifunscreenshot',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedRecoverCapturedUninstallByExactIdentity).toBe(true);
+    expect(
+      applyApplicationPackagingAdapter('Example.App', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedRecoverCapturedUninstallByExactIdentity: true,
+      }).reviewedRecoverCapturedUninstallByExactIdentity
+    ).toBeUndefined();
+  });
+
   it('uses ZeeDrive\'s documented no-ARP Intune lifecycle', () => {
     expect(
       applyApplicationPackagingAdapter(

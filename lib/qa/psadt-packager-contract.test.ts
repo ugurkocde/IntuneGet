@@ -2714,6 +2714,22 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it('keeps replaced-key recovery opt-in, exact-name and publisher bound, and fail-closed', () => {
+    expect(packager).toContain(
+      "-Name 'reviewedRecoverCapturedUninstallByExactIdentity'"
+    );
+    expect(packager).toContain(
+      "Get-ADTApplication -Name $capturedUninstallName -NameMatch ''Exact''"
+    );
+    expect(packager).toContain(
+      '[string]::Equals([string]$_.Publisher, $expectedUninstallPublisher, [System.StringComparison]::OrdinalIgnoreCase)'
+    );
+    expect(packager).toContain(
+      'if ($capturedIdentityMatches.Count -eq 1) {'
+    );
+    expect(packager).toContain('refusing ambiguous recovery');
+  });
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'uses a reviewed renamed ARP identity instead of a stale transitional MSI ProductCode',
     () => {
@@ -2830,6 +2846,35 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         '$visiblePrimaryMatches = @($installedApps | Where-Object {'
       );
       expect(disabled).not.toContain('$visiblePrimaryMatches');
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'emits exact captured-identity recovery only when the reviewed adapter enables it',
+    () => {
+      const enabled = generateRegistryUninstallPackage(
+        'exe',
+        'iFun Screenshot',
+        [],
+        { reviewedRecoverCapturedUninstallByExactIdentity: true },
+        [],
+        'IObit.iFunScreenshot',
+        'iFun Screenshot',
+        '1.2.0.526',
+        'REGISTRY_UNINSTALL_KEY:iFun Screenshot_is1:iFun Screenshot'
+      );
+      const disabled = generateRegistryUninstallPackage('exe');
+
+      expect(enabled).toContain(
+        '$capturedUninstallName = [string]$markerValues.UninstallDisplayName'
+      );
+      expect(enabled).toContain("$expectedUninstallPublisher = 'IntuneGet'");
+      expect(enabled).toContain('$capturedIdentityMatches = @(');
+      expect(enabled).toContain(
+        'if ($capturedIdentityMatches.Count -eq 1) {'
+      );
+      expect(disabled).not.toContain('$capturedIdentityMatches');
     },
     30_000
   );

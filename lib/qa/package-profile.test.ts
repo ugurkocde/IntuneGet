@@ -1857,6 +1857,36 @@ describe('PSADT QA package identity', () => {
     ).toBe(true);
   });
 
+  it('binds iFun Screenshot exact captured-identity recovery to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'IObit.iFunScreenshot',
+      displayName: 'iFun Screenshot',
+      publisher: 'IObit',
+      version: '1.2.0.526',
+      architecture: 'x86',
+      installerSha256: 'e'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:iFun Screenshot_is1:iFun Screenshot',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: {
+        reviewedRecoverCapturedUninstallByExactIdentity?: boolean;
+      };
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      reviewedRecoverCapturedUninstallByExactIdentity: true,
+    });
+    expect(
+      profile.psadtConfig.reviewedRecoverCapturedUninstallByExactIdentity
+    ).toBe(true);
+  });
+
   it('binds reviewed .NET Framework registry evidence to the QA identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.DotNet.Framework.Runtime',

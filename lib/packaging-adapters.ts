@@ -35,6 +35,7 @@ interface ApplicationPackagingAdapter {
   uninstallCompletionTimeoutMinutes?: number;
   preserveVendorInstallationOnUninstall?: boolean;
   reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
+  reviewedRecoverCapturedUninstallByExactIdentity?: boolean;
   reviewedRegistryUninstallDisplayName?: string;
   reviewedManagedInstallDirectory?: string;
   reviewedManagedInstallEvidenceFile?: string;
@@ -915,6 +916,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     uninstallCompletionTimeoutMinutes: 3,
   },
   {
+    // iFun Screenshot's Inno bootstrapper initially registers the manifest ARP
+    // key, then replaces that key before a fresh LocalSystem removal starts.
+    // Recover only one visible non-MSI registration whose exact display name
+    // and publisher still match the identity observed during this installation.
+    // QA run 33185738401 proved the original key was gone while the app and one
+    // vendor registration remained. Broad name or publisher searches stay off.
+    wingetId: 'IObit.iFunScreenshot',
+    reviewedRecoverCapturedUninstallByExactIdentity: true,
+  },
+  {
     // IObit Uninstaller is published as an Inno Setup package, but its ARP
     // command contains only the uninstaller path. Standard Inno unattended
     // switches make the launcher exit without removing the product. IObit's
@@ -1763,6 +1774,7 @@ export function applyApplicationPackagingAdapter(
     if (
       !config.preserveVendorInstallationOnUninstall &&
       !config.reviewedPreferVisiblePrimaryUninstallRegistration &&
+      !config.reviewedRecoverCapturedUninstallByExactIdentity &&
       !config.reviewedRegistryUninstallDisplayName &&
       !config.reviewedInstallArgumentsOverride &&
       !config.reviewedArgumentlessInstall &&
@@ -1786,6 +1798,7 @@ export function applyApplicationPackagingAdapter(
       ...config,
       preserveVendorInstallationOnUninstall: undefined,
       reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
+      reviewedRecoverCapturedUninstallByExactIdentity: undefined,
       reviewedRegistryUninstallDisplayName: undefined,
       reviewedInstallArgumentsOverride: undefined,
       reviewedArgumentlessInstall: undefined,
@@ -1914,6 +1927,8 @@ export function applyApplicationPackagingAdapter(
       adapter.preserveVendorInstallationOnUninstall || undefined,
     reviewedPreferVisiblePrimaryUninstallRegistration:
       adapter.reviewedPreferVisiblePrimaryUninstallRegistration || undefined,
+    reviewedRecoverCapturedUninstallByExactIdentity:
+      adapter.reviewedRecoverCapturedUninstallByExactIdentity || undefined,
     reviewedRegistryUninstallDisplayName,
     reviewedManagedInstallDirectory:
       adapter.reviewedManagedInstallDirectory || undefined,

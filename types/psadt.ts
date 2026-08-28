@@ -276,6 +276,13 @@ export interface PSADTConfig {
   // adapters are the only trusted source for this value.
   reviewedPreferVisiblePrimaryUninstallRegistration?: boolean;
 
+  // Internal ARP recovery policy for a reviewed package whose vendor replaces
+  // its exact uninstall registry key after installation. The shared packager
+  // may recover only one visible non-MSI entry matching both the exact
+  // install-observed display name and the manifest publisher. Application
+  // adapters are the only trusted source for this value.
+  reviewedRecoverCapturedUninstallByExactIdentity?: boolean;
+
   // Internal exact ARP display identity for a reviewed package whose current
   // vendor installer no longer registers the MSI ProductCode or catalog name
   // published by WinGet. The shared packager still captures exactly one
@@ -434,6 +441,7 @@ export const DEFAULT_PSADT_CONFIG: PSADTConfig = {
   reviewedUninstallProcessGuard: undefined,
   reviewedUninstallServiceNames: undefined,
   reviewedPreferVisiblePrimaryUninstallRegistration: undefined,
+  reviewedRecoverCapturedUninstallByExactIdentity: undefined,
   reviewedRegistryUninstallDisplayName: undefined,
 };
 
