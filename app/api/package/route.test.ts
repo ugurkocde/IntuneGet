@@ -321,6 +321,17 @@ describe('POST /api/package (workflow dispatch)', () => {
           silentArgs: '/S',
         }];
       }
+      if (wingetId === 'TeamSpeakSystems.TeamSpeakClient.Beta.6') {
+        return [{
+          architecture: 'x64',
+          url: 'https://example.com/teamspeak-client.msi',
+          sha256: 'A'.repeat(64),
+          type: 'wix',
+          scope: 'user',
+          silentArgs: '/qn /norestart ALLUSERS=1',
+          productCode: '{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}',
+        }];
+      }
       if (wingetId === 'Opera.Opera') {
         return [
           {
@@ -624,6 +635,59 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({ installScope: 'user' }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
+  it('uses TeamSpeak 6 Beta all-users MSI scope for QA and customer packaging', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+          displayName: 'TeamSpeak 6 Beta',
+          version: '6.0.0-beta4.1',
+          installerType: 'wix',
+          installerUrl: 'https://example.com/teamspeak-client.msi',
+          installerSha256: 'A'.repeat(64),
+          installScope: 'user',
+          installCommand:
+            'msiexec /i "teamspeak-client.msi" /qn /norestart ALLUSERS=1',
+          uninstallCommand:
+            'msiexec /x "{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}" /qn /norestart',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({ installScope: 'machine' }),
+      expect.any(Array)
+    );
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        installScope: 'machine',
+        silentSwitches: '/qn /norestart ALLUSERS=1',
+      })
+    );
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      install_scope: 'machine',
+      install_command:
+        'msiexec /i "teamspeak-client.msi" /qn /norestart ALLUSERS=1',
+    }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        installScope: 'machine',
+        silentSwitches: '/qn /norestart ALLUSERS=1',
+      }),
       undefined,
       expect.any(Object)
     );

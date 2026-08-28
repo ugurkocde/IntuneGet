@@ -21,6 +21,37 @@ describe('buildQaCatalogTestConfig', () => {
     expect(config.successCodes).toEqual([1223]);
   });
 
+  it('normalizes TeamSpeak 6 Beta contradictory user manifest to machine QA', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+        name: 'TeamSpeak 6 Beta',
+        publisher: 'TeamSpeakSystems',
+        version: '6.0.0-beta4.1',
+      },
+      manifest: {
+        InstallerType: 'wix',
+        Scope: 'user',
+        InstallerSwitches: { Custom: 'ALLUSERS=1' },
+        ProductCode: '{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}',
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'wix',
+        Scope: 'user',
+        ProductCode: '{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}',
+      },
+    });
+
+    expect(config.scope).toBe('machine');
+    expect(config.silentArgs).toBe('/qn /norestart ALLUSERS=1');
+    expect(config.detectionRules[0]).toMatchObject({
+      keyPath:
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\TeamSpeakSystems_TeamSpeakClient_Beta_6',
+      detectionValue: '6.0.0-beta4.1',
+    });
+  });
+
   it('prefers installer-specific silent switches and product metadata', () => {
     const config = buildQaCatalogTestConfig({
       app: {

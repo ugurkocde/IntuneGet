@@ -310,6 +310,38 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.item.installCommand).toBe('"logitech-presentation.exe" /S');
   });
 
+  it('selects TeamSpeak 6 Beta user manifest bytes for all-users MSI execution', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x64',
+      url: 'https://example.test/teamspeak-client.msi',
+      sha256,
+      type: 'wix',
+      scope: 'user',
+      silentArgs: '/qn /norestart ALLUSERS=1',
+      productCode: '{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}',
+    } satisfies NormalizedInstaller]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+      displayName: 'TeamSpeak 6 Beta',
+      version: '6.0.0-beta4.1',
+      installScope: 'user',
+      installerType: 'wix',
+      installerUrl: 'https://example.test/teamspeak-client.msi',
+      installCommand: 'msiexec /i "teamspeak-client.msi" /qn /norestart ALLUSERS=1',
+      uninstallCommand:
+        'msiexec /x "{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}" /qn /norestart',
+    }));
+
+    expect(reconciled.item.installScope).toBe('machine');
+    expect(reconciled.item.installerUrl).toBe(
+      'https://example.test/teamspeak-client.msi'
+    );
+    expect(reconciled.item.installCommand).toBe(
+      'msiexec /i "teamspeak-client.msi" /qn /norestart ALLUSERS=1'
+    );
+  });
+
   it('selects NVM user bytes for reviewed LocalSystem execution', async () => {
     getLiveInstallersMock.mockResolvedValue([{
       architecture: 'x86',

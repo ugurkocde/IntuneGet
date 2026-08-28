@@ -1232,6 +1232,18 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('runs TeamSpeak 6 Beta all-users MSI contract as LocalSystem', () => {
+    expect(resolveApplicationInstallScope(
+      'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+      'user'
+    )).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope(
+      'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
+  });
+
   it('uses JetBrains silent mode with the exact dotPeek ARP command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'jetbrains.dotpeek',

@@ -608,6 +608,19 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'user',
   },
   {
+    // TeamSpeak 6 Beta's WinGet manifest declares Scope: user while its WiX
+    // command explicitly requests ALLUSERS=1 and its installation metadata
+    // targets Program Files. Running that contradictory contract as a standard
+    // user makes Windows Installer fail with 1603 before registering the
+    // product (QA run 33215101419). Keep selecting the exact user-scoped
+    // manifest entry, but execute its reviewed all-users MSI contract as
+    // LocalSystem so QA and customer Intune packages share the machine-wide
+    // lifecycle authored by the vendor command.
+    wingetId: 'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+  },
+  {
     // dotPeek registers a versioned JetBrains.Platform.Installer command with
     // /HostsToRemove and /PerMachine, but that command opens the interactive
     // removal path unless JetBrains' documented /Silent=True switch is also
