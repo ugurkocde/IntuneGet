@@ -2768,6 +2768,29 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'uses the observed QTTabBar nested-MSI ARP identity instead of its short catalog name',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'zip',
+        'QTTabBar',
+        [],
+        { reviewedRegistryUninstallDisplayName: 'QTTabBar 1.5.6.1 Beta(2024)' },
+        [],
+        'indiff.QTTabBar'
+      );
+
+      expect(generated).toContain(
+        "$configuredUninstallDisplayName = 'QTTabBar 1.5.6.1 Beta(2024)'"
+      );
+      expect(generated).toContain("$appName = 'QTTabBar 1.5.6.1 Beta(2024)'");
+      expect(generated).toContain(
+        'if ($selectedApplications.Count -eq 1) { break }'
+      );
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'writes UTF-8 BOM scripts when process and PowerShell locations differ',
     () => {
       const displayName = '班级优化大师';

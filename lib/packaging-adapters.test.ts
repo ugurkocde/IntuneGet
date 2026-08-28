@@ -79,6 +79,15 @@ describe('application packaging adapters', () => {
     ).toBe('jamovi');
   });
 
+  it('binds QTTabBar to the exact ARP identity registered by its nested MSI', () => {
+    expect(
+      applyApplicationPackagingAdapter('indiff.QTTabBar', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedRegistryUninstallDisplayName: 'customer override',
+      }).reviewedRegistryUninstallDisplayName
+    ).toBe('QTTabBar 1.5.6.1 Beta(2024)');
+  });
+
   it('uses IrfanView\'s documented case-sensitive silent uninstall switch', () => {
     expect(
       applyApplicationPackagingAdapter(

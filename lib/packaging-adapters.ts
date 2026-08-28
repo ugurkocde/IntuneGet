@@ -568,6 +568,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedRegistryUninstallDisplayName: 'jamovi',
   },
   {
+    // The 1.5.6-beta.1 catalog metadata calls the product `QTTabBar`, while the
+    // nested MSI registers `QTTabBar 1.5.6.1 Beta(2024)`. QA run 33202083278
+    // observed exactly one visible indiff MSI registration with that identity.
+    // Bind both QA and customer packages to the exact ARP name so the stable
+    // key and uninstall command can be captured without widening matching.
+    wingetId: 'indiff.QTTabBar',
+    reviewedRegistryUninstallDisplayName: 'QTTabBar 1.5.6.1 Beta(2024)',
+  },
+  {
     // IrfanView registers iv_uninstall.exe without the vendor's case-sensitive
     // unattended switch. Under LocalSystem the interactive command exits while
     // IrfanView64 remains registered (QA run 32918339448). IrfanView's official

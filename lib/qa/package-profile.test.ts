@@ -252,6 +252,29 @@ describe('PSADT QA package identity', () => {
       .toBe('jamovi');
   });
 
+  it('binds QTTabBar customer and QA packages to the observed nested-MSI ARP identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'indiff.QTTabBar',
+      displayName: 'QTTabBar',
+      publisher: 'indiff',
+      version: '1.5.6-beta.1',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'zip',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:QTTabBar',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedRegistryUninstallDisplayName?: string };
+    };
+
+    expect(profile.psadtConfig.reviewedRegistryUninstallDisplayName)
+      .toBe('QTTabBar 1.5.6.1 Beta(2024)');
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedRegistryUninstallDisplayName)
+      .toBe('QTTabBar 1.5.6.1 Beta(2024)');
+  });
+
   it('binds IrfanView customer and QA packages to the documented silent uninstall', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'IrfanSkiljan.IrfanView',
