@@ -297,6 +297,8 @@ describe('application packaging adapters', () => {
         'machine'
       )
     ).toBe('user');
+    expect(resolveApplicationInstallScope('Zoho.Mail', 'machine')).toBe('user');
+    expect(resolveApplicationInstallScope(' zoho.mail ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Youdao.YoudaoTranslate', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' youdao.youdaotranslate ', undefined)).toBe('user');
@@ -344,6 +346,14 @@ describe('application packaging adapters', () => {
     )).toBe('user');
     expect(resolveApplicationInstallerSelectionScope(
       'AppiumDevelopers.AppiumInspector',
+      'user'
+    )).toBe('machine');
+  });
+
+  it('keeps Zoho Mail on its machine-labelled manifest bytes while executing per-user', () => {
+    expect(resolveApplicationInstallScope('Zoho.Mail', 'machine')).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope(
+      'Zoho.Mail',
       'user'
     )).toBe('machine');
   });

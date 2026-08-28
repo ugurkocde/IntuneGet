@@ -257,6 +257,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'machine',
   },
   {
+    // Zoho Mail's WinGet manifest labels its Nullsoft installer as machine
+    // scope, but isolated QA run 33130665727 proved that it registers the app
+    // below the invoking account's LocalAppData. Under LocalSystem, the exact
+    // captured uninstaller resolves below systemprofile and is already absent
+    // by the managed removal cycle. Keep selecting the same machine-labelled
+    // bytes while executing the shared QA/customer package as the signed-in
+    // user, where the vendor's per-profile lifecycle can persist.
+    wingetId: 'Zoho.Mail',
+    requiredInstallScope: 'user',
+    reviewedInstallerSelectionScope: 'machine',
+  },
+  {
     // UHK Agent is built with Electron Builder's assisted NSIS profile
     // (oneClick: false) without perMachine. Electron Builder defaults that
     // profile to per-user installation. WinGet currently omits Scope, so the

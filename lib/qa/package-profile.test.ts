@@ -808,6 +808,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Zoho Mail out of LocalSystem while retaining its machine-labelled installer', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Zoho.Mail',
+      displayName: 'Zoho Mail - Desktop',
+      publisher: 'Zoho',
+      version: '1.10.3',
+      architecture: 'x64',
+      installerSha256: 'f'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{435BDA16-99FD-51D0-938D-C156968A2AA4}:Zoho Mail - Desktop',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\Zoho_Mail',
+      }),
+    ]);
+  });
+
   it('keeps Brity Meeting out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'SamsungSDS.BrityMeeting',
