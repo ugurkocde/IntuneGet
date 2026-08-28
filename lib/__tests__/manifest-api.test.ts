@@ -1065,6 +1065,55 @@ describe('getLiveInstallers trust semantics', () => {
     );
   });
 
+  it('falls back to an anonymous raw fetch when the Contents API is throttled', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.startsWith('https://api.github.com/')) {
+        return { ok: false, status: 403, text: async () => '' };
+      }
+      return yamlResponse(
+        'PackageIdentifier: Foo.Bar\nPackageVersion: 1.0.0\nInstallers: []\n'
+      );
+    });
+
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toEqual([]);
+
+    const rawCall = mockFetch.mock.calls.find((call) =>
+      String(call[0]).startsWith('https://raw.githubusercontent.com/')
+    );
+    expect(rawCall?.[0]).toBe(
+      'https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/f/Foo/Bar/1.0.0/Foo.Bar.installer.yaml'
+    );
+    const rawHeaders = (rawCall?.[1] as { headers?: Record<string, string> })?.headers;
+    expect(rawHeaders?.Authorization).toBeUndefined();
+  });
+
+  it('reports a retryable outage when both GitHub hosts fail', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403, text: async () => '' });
+
+    const attempt = getLiveInstallers('Foo.Down', '1.0.0');
+    await expect(attempt).rejects.toThrow('GitHub fetch error: 403');
+    await expect(attempt).rejects.toMatchObject({
+      name: 'GitHubUnavailableError',
+      status: 403,
+    });
+  });
+
+  it('does not treat a fallback 404 as an authoritative missing manifest', async () => {
+    mockFetch.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.startsWith('https://api.github.com/')) {
+        return { ok: false, status: 403, text: async () => '' };
+      }
+      return notFound();
+    });
+
+    await expect(getLiveInstallers('Foo.Ambiguous', '1.0.0')).rejects.toMatchObject({
+      name: 'GitHubUnavailableError',
+      status: 403,
+    });
+  });
+
   it('propagates network failures instead of creating a compatibility block', async () => {
     mockFetch.mockRejectedValue(new Error('network unavailable'));
 

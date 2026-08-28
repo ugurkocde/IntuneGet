@@ -5,7 +5,7 @@ import {
 import {
   InstallerPreflightError,
 } from '@/lib/installer-preflight';
-import { getLiveInstallers } from '@/lib/manifest-api';
+import { getLiveInstallers, GitHubUnavailableError } from '@/lib/manifest-api';
 import {
   resolveApplicationInstallScope,
   resolveApplicationInstallerSelectionScope,
@@ -133,7 +133,19 @@ export async function reconcileCatalogInstaller(
     item.wingetId,
     installScope,
   );
-  const trustedInstallers = await getLiveInstallers(item.wingetId, item.version);
+  let trustedInstallers: NormalizedInstaller[];
+  try {
+    trustedInstallers = await getLiveInstallers(item.wingetId, item.version);
+  } catch (error) {
+    if (error instanceof GitHubUnavailableError) {
+      throw new InstallerPreflightError(
+        'UPSTREAM_UNAVAILABLE',
+        `GitHub is temporarily unavailable, so the trusted manifest for ${item.wingetId} ${item.version} could not be verified. Please try again in a minute.`,
+        true,
+      );
+    }
+    throw error;
+  }
   if (trustedInstallers.length === 0) {
     throw new InstallerPreflightError(
       'MANIFEST_UNAVAILABLE',

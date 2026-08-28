@@ -172,16 +172,62 @@ export async function fetchAvailableVersionsLive(wingetId: string): Promise<stri
   }
 }
 
+/**
+ * Transient upstream failure (throttling, outage) while talking to GitHub.
+ * Distinct from an authoritative 404 so trust decisions stay strict while
+ * callers can surface a retryable error instead of a generic crash.
+ */
+export class GitHubUnavailableError extends Error {
+  constructor(public readonly status: number) {
+    super(`GitHub fetch error: ${status}`);
+    this.name = 'GitHubUnavailableError';
+  }
+}
+
+function installerManifestPath(wingetId: string, version: string): string {
+  const { basePath } = getManifestPaths(wingetId);
+  return `${basePath}/${version}/${wingetId}.installer.yaml`
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+}
+
+/**
+ * Anonymous fallback via the raw CDN. Separate host with separate limits
+ * from api.github.com, and winget-pkgs is public so no token is needed;
+ * omitting it also sidesteps token-scoped throttling. A fallback 404 is not
+ * authoritative (the primary already failed non-404), so every fallback
+ * failure reports the primary status as a retryable outage.
+ */
+async function fetchInstallerManifestFromRawFallback(
+  wingetId: string,
+  version: string,
+  primaryStatus: number
+): Promise<Record<string, unknown>> {
+  const url = `${GITHUB_RAW_BASE}/${installerManifestPath(wingetId, version)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { 'User-Agent': 'IntuneGet', Accept: 'text/plain' },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new GitHubUnavailableError(primaryStatus);
+  }
+
+  if (!response.ok) {
+    throw new GitHubUnavailableError(primaryStatus);
+  }
+
+  return YAML.parse(await response.text());
+}
+
 async function fetchInstallerManifestFromGitHub(
   wingetId: string,
   version: string
 ): Promise<Record<string, unknown> | null> {
-  const { basePath } = getManifestPaths(wingetId);
-  const manifestPath = `${basePath}/${version}/${wingetId}.installer.yaml`
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/');
-  const url = `${GITHUB_API_BASE}/${manifestPath}?ref=master`;
+  const url = `${GITHUB_API_BASE}/${installerManifestPath(wingetId, version)}?ref=master`;
 
   const response = await fetch(url, {
     headers: {
@@ -196,7 +242,10 @@ async function fetchInstallerManifestFromGitHub(
       console.warn(`Installer manifest not found: ${url}`);
       return null;
     }
-    throw new Error(`GitHub fetch error: ${response.status}`);
+    console.warn(
+      `GitHub Contents API returned ${response.status} for ${wingetId}@${version}, falling back to anonymous raw fetch`
+    );
+    return fetchInstallerManifestFromRawFallback(wingetId, version, response.status);
   }
 
   const yamlContent = await response.text();
