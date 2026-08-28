@@ -15,6 +15,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase';
 import { getLocaleDisplay } from '@/lib/locale-utils';
+import {
+  quotePostgrestLikePattern,
+  quotePostgrestValue,
+} from '@/lib/catalog/postgrest-filter';
 import type { LocaleVariant } from '@/types/winget';
 import type { CuratedAppMatch } from '@/lib/app-mappings';
 import type { InstallationSnapshot } from '@/lib/winget-api';
@@ -635,6 +639,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
 
     const normalizedSearch = term.toLowerCase().trim();
+    const searchPattern = quotePostgrestLikePattern(normalizedSearch);
     const supabase = createServerClient();
 
     try {
@@ -643,7 +648,11 @@ export class SupabaseCatalogSource implements CatalogSource {
         .select('winget_id, name, publisher, latest_version')
         .not('latest_version', 'is', null)
         .or(
-          `name.ilike.%${normalizedSearch}%,publisher.ilike.%${normalizedSearch}%,winget_id.ilike.%${normalizedSearch}%`
+          [
+            `name.ilike.${searchPattern}`,
+            `publisher.ilike.${searchPattern}`,
+            `winget_id.ilike.${searchPattern}`,
+          ].join(',')
         )
         .order('popularity_rank', { ascending: true, nullsFirst: false })
         .limit(10);
@@ -699,10 +708,12 @@ export class SupabaseCatalogSource implements CatalogSource {
     };
 
     // Build the OR conditions defensively: quote values so names containing
-    // spaces or parentheses (e.g. "Zoom Workplace (64-bit)") don't break the
+    // commas or parentheses (e.g. "Zoom Workplace (64-bit)") don't break the
     // PostgREST or() parser, and only filter on product code when one exists
-    // (eq.null would not match NULL rows anyway).
-    const quote = (v: string) => `"${v.replace(/"/g, '')}"`;
+    // (eq.null would not match NULL rows anyway). The shared helper escapes
+    // embedded quotes rather than stripping them, so a name carrying one is
+    // still matched exactly instead of silently missing its row.
+    const quote = quotePostgrestValue;
     const orConditions = [
       `sccm_display_name_normalized.eq.${quote(displayNameNormalized)}`,
       `sccm_ci_id.eq.${quote(ciId)}`,
@@ -798,12 +809,18 @@ export class SupabaseCatalogSource implements CatalogSource {
     term: string,
     limit: number
   ): Promise<{ winget_id: string; name: string }[]> {
+    const termPattern = quotePostgrestLikePattern(term);
     const supabase = createServerClient();
 
     const { data } = await supabase
       .from('curated_apps')
       .select('winget_id, name')
-      .or(`winget_id.ilike.%${term}%,name.ilike.%${term}%`)
+      .or(
+        [
+          `winget_id.ilike.${termPattern}`,
+          `name.ilike.${termPattern}`,
+        ].join(',')
+      )
       .eq('is_verified', true)
       .limit(limit);
 
