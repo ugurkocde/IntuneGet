@@ -49,6 +49,11 @@ interface ApplicationPackagingAdapter {
     arguments: readonly string[];
     completionTimeoutMinutes: number;
   }>;
+  reviewedArchiveUninstall?: Readonly<{
+    relativePath: string;
+    arguments: readonly string[];
+    completionTimeoutMinutes: number;
+  }>;
   reviewedMultiProductInstallDisplayNamePrefixes?: readonly string[];
   reviewedMultiProductInstallMinimumCount?: number;
   reviewedRegistryInstallEvidence?: Readonly<{
@@ -366,6 +371,20 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
       executablePath: '%ProgramW6432%\\Olive\\uninstall.exe',
       arguments: ['/S'],
       completionTimeoutMinutes: 5,
+    },
+  },
+  {
+    // Teradata documents silent suite removal through the suite-specific
+    // silent_uninstall.bat file shipped in the same Windows archive. The
+    // generic InstallShield ARP command is asynchronous and leaves the exact
+    // suite registration installed under LocalSystem. Retain the trusted
+    // archive in every PSADT package and execute the documented batch contract
+    // so QA and customer Intune deployments share the same lifecycle.
+    wingetId: 'Teradata.TTUOdbc',
+    reviewedArchiveUninstall: {
+      relativePath: 'TeradataODBC\\silent_uninstall.bat',
+      arguments: ['ALL'],
+      completionTimeoutMinutes: 15,
     },
   },
   {
@@ -1733,7 +1752,8 @@ export function applyApplicationPackagingAdapter(
       !config.reviewedManagedInstallCompletionProcess &&
       !config.reviewedManagedInstallCompletionTimeoutMinutes &&
       !config.reviewedManagedUninstall &&
-      !config.reviewedExactUninstall
+      !config.reviewedExactUninstall &&
+      !config.reviewedArchiveUninstall
     ) return config;
     return {
       ...config,
@@ -1757,6 +1777,7 @@ export function applyApplicationPackagingAdapter(
       reviewedManagedInstallCompletionTimeoutMinutes: undefined,
       reviewedManagedUninstall: undefined,
       reviewedExactUninstall: undefined,
+      reviewedArchiveUninstall: undefined,
     };
   }
 
@@ -1892,6 +1913,14 @@ export function applyApplicationPackagingAdapter(
           arguments: [...adapter.reviewedExactUninstall.arguments],
           completionTimeoutMinutes:
             adapter.reviewedExactUninstall.completionTimeoutMinutes,
+        }
+      : undefined,
+    reviewedArchiveUninstall: adapter.reviewedArchiveUninstall
+      ? {
+          relativePath: adapter.reviewedArchiveUninstall.relativePath,
+          arguments: [...adapter.reviewedArchiveUninstall.arguments],
+          completionTimeoutMinutes:
+            adapter.reviewedArchiveUninstall.completionTimeoutMinutes,
         }
       : undefined,
     reviewedMultiProductInstallDisplayNamePrefixes,

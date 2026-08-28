@@ -1167,6 +1167,40 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
   });
 
+  it('binds Teradata silent archive removal to customer and QA package identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Teradata.TTUOdbc',
+      displayName: 'Teradata ODBC Driver',
+      publisher: 'Teradata Corporation',
+      version: '20.00.38.00',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: 'TeradataODBC\\TTUSuiteSilent.exe',
+      silentSwitches:
+        '/silent ALLARGS="{F075B63A-C629-41F8-BA56-33D9940F2000} 20.00 "ALL" ODBC"',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{F075B63A-C629-41F8-BA56-33D9940F2000}:Teradata ODBC Driver',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedContract = {
+      relativePath: 'TeradataODBC\\silent_uninstall.bat',
+      arguments: ['ALL'],
+      completionTimeoutMinutes: 15,
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedArchiveUninstall?: typeof expectedContract };
+    };
+
+    expect(profile.psadtConfig.reviewedArchiveUninstall).toEqual(expectedContract);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedArchiveUninstall).toEqual(
+      expectedContract
+    );
+  });
+
   it('binds the bounded SEGGER installer wait to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Segger.EmbeddedStudioARM',

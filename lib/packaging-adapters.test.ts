@@ -497,6 +497,18 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('uses Teradata\'s suite-specific silent archive removal contract', () => {
+    expect(
+      applyApplicationPackagingAdapter('Teradata.TTUOdbc', DEFAULT_PSADT_CONFIG)
+    ).toMatchObject({
+      reviewedArchiveUninstall: {
+        relativePath: 'TeradataODBC\\silent_uninstall.bat',
+        arguments: ['ALL'],
+        completionTimeoutMinutes: 15,
+      },
+    });
+  });
+
   it('keeps the darktable NSIS extraction observable within a bounded wait', () => {
     expect(
       applyApplicationPackagingAdapter('darktable.darktable', DEFAULT_PSADT_CONFIG)
@@ -1395,6 +1407,11 @@ describe('application packaging adapters', () => {
         arguments: ['/quiet'],
         completionTimeoutMinutes: 5,
       },
+      reviewedArchiveUninstall: {
+        relativePath: 'Example\\silent_uninstall.bat',
+        arguments: ['ALL'],
+        completionTimeoutMinutes: 5,
+      },
     });
 
     expect(adapted.preserveVendorInstallationOnUninstall).toBeUndefined();
@@ -1410,6 +1427,7 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedManagedInstallCompletionTimeoutMinutes).toBeUndefined();
     expect(adapted.reviewedManagedUninstall).toBeUndefined();
     expect(adapted.reviewedExactUninstall).toBeUndefined();
+    expect(adapted.reviewedArchiveUninstall).toBeUndefined();
   });
 
   it('preserves and deduplicates reviewed install arguments case-insensitively', () => {

@@ -30,6 +30,14 @@ const reviewedWindowAutomationHelper = readFileSync(
   'utf8'
 );
 
+const reviewedArchiveUninstallHelper = readFileSync(
+  resolve(
+    process.cwd(),
+    '.github/scripts/Invoke-IntuneGetReviewedArchiveUninstall.ps1'
+  ),
+  'utf8'
+);
+
 const packagerPath = resolve(
   process.cwd(),
   '.github/scripts/Create-PSADTPackage.ps1'
@@ -257,6 +265,66 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'executes a reviewed archive batch from a confined temporary extraction',
+    () => {
+      const fixtureRoot = mkdtempSync(
+        join(tmpdir(), 'intuneget-archive-uninstall-helper-')
+      );
+      try {
+        const archiveContent = join(fixtureRoot, 'archive', 'TeradataODBC');
+        mkdirSync(archiveContent, { recursive: true });
+        writeFileSync(
+          join(archiveContent, 'silent_uninstall.bat'),
+          '@echo off\r\necho reviewed-archive-uninstall-ok\r\nexit /b 0\r\n'
+        );
+        const archivePath = join(fixtureRoot, 'setup.zip');
+        const compression = spawnSync(
+          'pwsh',
+          [
+            '-NoProfile',
+            '-Command',
+            "Compress-Archive -Path (Join-Path $env:ARCHIVE_SOURCE '*') -DestinationPath $env:ARCHIVE_DESTINATION -Force",
+          ],
+          {
+            encoding: 'utf8',
+            env: {
+              ...process.env,
+              ARCHIVE_SOURCE: join(fixtureRoot, 'archive'),
+              ARCHIVE_DESTINATION: archivePath,
+            },
+          }
+        );
+        expect(compression.status).toBe(0);
+
+        const helperPath = join(
+          fixtureRoot,
+          'Invoke-IntuneGetReviewedArchiveUninstall.ps1'
+        );
+        writeFileSync(helperPath, reviewedArchiveUninstallHelper);
+        writeFileSync(
+          join(fixtureRoot, 'ReviewedArchiveUninstall.json'),
+          JSON.stringify({
+            relativePath: 'TeradataODBC\\silent_uninstall.bat',
+            arguments: ['ALL'],
+          })
+        );
+        const result = spawnSync(
+          'pwsh',
+          ['-NoProfile', '-File', helperPath, '-ArchivePath', archivePath],
+          { encoding: 'utf8' }
+        );
+
+        expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+        expect(`${result.stdout}\n${result.stderr}`).toContain(
+          'reviewed-archive-uninstall-ok'
+        );
+      } finally {
+        rmSync(fixtureRoot, { recursive: true, force: true });
+      }
+    }
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'loads the reviewed window-control native helper and fails closed without a matching button',
     () => {
@@ -3136,6 +3204,70 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       );
       expect(generated).not.toContain(
         "Start-ADTProcess -FilePath $nestedInstallerPath -ArgumentList '/exenoui /qb! REBOOT=ReallySuppress' -WindowStyle Hidden -WaitForMsiExec -Timeout"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'packages Teradata vendor-documented silent archive removal for QA and customers',
+    () => {
+      const reviewedArchiveUninstall = {
+        relativePath: 'TeradataODBC\\silent_uninstall.bat',
+        arguments: ['ALL'],
+        completionTimeoutMinutes: 15,
+      };
+      const generated = generateRegistryUninstallPackage(
+        'zip',
+        'Teradata ODBC Driver',
+        [],
+        { reviewedArchiveUninstall },
+        [],
+        'Teradata.TTUOdbc',
+        'Teradata ODBC Driver',
+        '20.00.38.00',
+        'REGISTRY_UNINSTALL_PRODUCT:{F075B63A-C629-41F8-BA56-33D9940F2000}:Teradata ODBC Driver',
+        '/silent ALLARGS="{F075B63A-C629-41F8-BA56-33D9940F2000} 20.00 "ALL" ODBC"',
+        'machine',
+        'exe',
+        'TeradataODBC\\TTUSuiteSilent.exe',
+        (packageDirectory) => {
+          const helperPath = join(
+            packageDirectory,
+            'SupportFiles',
+            'Invoke-IntuneGetReviewedArchiveUninstall.ps1'
+          );
+          const configPath = join(
+            packageDirectory,
+            'SupportFiles',
+            'ReviewedArchiveUninstall.json'
+          );
+          expect(existsSync(helperPath)).toBe(true);
+          expect(readFileSync(helperPath, 'utf8')).toBe(reviewedArchiveUninstallHelper);
+          expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({
+            relativePath: reviewedArchiveUninstall.relativePath,
+            arguments: reviewedArchiveUninstall.arguments,
+          });
+          expect(existsSync(join(packageDirectory, 'Files', 'setup.zip'))).toBe(true);
+        }
+      );
+
+      expect(generated).toContain(
+        "$reviewedArchiveUninstallScript = Join-Path $adtSession.DirSupportFiles 'Invoke-IntuneGetReviewedArchiveUninstall.ps1'"
+      );
+      expect(generated).toContain(
+        "$reviewedArchivePath = Join-Path $adtSession.DirFiles 'setup.zip'"
+      );
+      expect(generated).toContain(
+        "$registeredUninstallFile = Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe'"
+      );
+      expect(generated).toContain(
+        "'-File', $reviewedArchiveUninstallScript, '-ArchivePath', $reviewedArchivePath"
+      );
+      expect(generated).toContain(
+        '$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 15 }'
+      );
+      expect(generated).toContain(
+        '} elseif ($isRegisteredPowerShellHost -and -not $useReviewedExactUninstall) {'
       );
     }
   );

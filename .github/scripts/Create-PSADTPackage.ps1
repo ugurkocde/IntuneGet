@@ -974,6 +974,68 @@ if ($psadtConfig.Contains('reviewedExactUninstall') -and
     $reviewedExactUninstallConfigured = $true
 }
 
+$reviewedArchiveUninstallConfigured = $false
+$reviewedArchiveUninstallRelativePath = ''
+$reviewedArchiveUninstallArguments = @()
+$reviewedArchiveUninstallTimeoutMinutes = 0
+if ($psadtConfig.Contains('reviewedArchiveUninstall') -and
+    $null -ne $psadtConfig['reviewedArchiveUninstall']) {
+    $rawArchiveUninstall = $psadtConfig['reviewedArchiveUninstall']
+    if ($rawArchiveUninstall -isnot [System.Collections.IDictionary]) {
+        throw 'PSADT reviewedArchiveUninstall must be an object.'
+    }
+    $reviewedArchiveUninstallRelativePath = ([string]$rawArchiveUninstall['relativePath']).Trim() -replace '/', '\'
+    $archiveUninstallPathSegments = @($reviewedArchiveUninstallRelativePath -split '\\')
+    if ([string]::IsNullOrWhiteSpace($reviewedArchiveUninstallRelativePath) -or
+        $reviewedArchiveUninstallRelativePath.Length -gt 260 -or
+        [System.IO.Path]::IsPathRooted($reviewedArchiveUninstallRelativePath) -or
+        $reviewedArchiveUninstallRelativePath.StartsWith('\') -or
+        $archiveUninstallPathSegments -contains '..' -or
+        $reviewedArchiveUninstallRelativePath.Contains(':') -or
+        $reviewedArchiveUninstallRelativePath -notmatch '(?i)\.bat$' -or
+        $reviewedArchiveUninstallRelativePath -match '[*?"<>|\x00-\x1f]') {
+        throw 'PSADT reviewedArchiveUninstall.relativePath must be a safe relative batch-file path.'
+    }
+    $rawArchiveUninstallArguments = $rawArchiveUninstall['arguments']
+    if ($rawArchiveUninstallArguments -is [string] -or
+        $rawArchiveUninstallArguments -isnot [System.Collections.IEnumerable]) {
+        throw 'PSADT reviewedArchiveUninstall.arguments must be an array.'
+    }
+    foreach ($rawArchiveUninstallArgument in @($rawArchiveUninstallArguments)) {
+        if ($rawArchiveUninstallArgument -isnot [string]) {
+            throw 'Every PSADT reviewed archive uninstall argument must be a string.'
+        }
+        $archiveUninstallArgument = $rawArchiveUninstallArgument.Trim()
+        if ([string]::IsNullOrWhiteSpace($archiveUninstallArgument) -or
+            $archiveUninstallArgument.Length -gt 128 -or
+            $archiveUninstallArgument -notmatch '^[A-Za-z0-9._:=,+{}-]+$') {
+            throw 'Every PSADT reviewed archive uninstall argument must be a bounded safe token.'
+        }
+        $reviewedArchiveUninstallArguments += $archiveUninstallArgument
+    }
+    if ($reviewedArchiveUninstallArguments.Count -gt 20) {
+        throw 'PSADT reviewedArchiveUninstall.arguments must contain at most 20 entries.'
+    }
+    $rawArchiveUninstallTimeoutMinutes = $rawArchiveUninstall['completionTimeoutMinutes']
+    if (($rawArchiveUninstallTimeoutMinutes -isnot [byte] -and
+         $rawArchiveUninstallTimeoutMinutes -isnot [int16] -and
+         $rawArchiveUninstallTimeoutMinutes -isnot [int32] -and
+         $rawArchiveUninstallTimeoutMinutes -isnot [int64]) -or
+        [int]$rawArchiveUninstallTimeoutMinutes -lt 1 -or
+        [int]$rawArchiveUninstallTimeoutMinutes -gt 60) {
+        throw 'PSADT reviewedArchiveUninstall.completionTimeoutMinutes must be an integer from 1 to 60.'
+    }
+    $reviewedArchiveUninstallTimeoutMinutes = [int]$rawArchiveUninstallTimeoutMinutes
+    $reviewedArchiveUninstallConfigured = $true
+}
+if ($reviewedExactUninstallConfigured -and $reviewedArchiveUninstallConfigured) {
+    throw 'PSADT reviewed exact and archive uninstall contracts are mutually exclusive.'
+}
+if ($reviewedArchiveUninstallConfigured) {
+    # Both trusted override types share the generated registry-removal wait.
+    $reviewedExactUninstallTimeoutMinutes = $reviewedArchiveUninstallTimeoutMinutes
+}
+
 function ConvertTo-PSADTConfigValue {
     param(
         [AllowNull()][string]$Value,
@@ -1584,6 +1646,35 @@ if ($reviewedUninstallWindowAutomationConfigured) {
     }
     Copy-Item -LiteralPath $windowAutomationHelperSource -Destination (Join-Path $supportFilesDir 'Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1') -Force
     Write-Host "Embedded reviewed uninstall window automation for: $windowAutomationProcessName"
+}
+
+if ($reviewedArchiveUninstallConfigured) {
+    if ($IsUserScope -or
+        $installerTypeLower -ne 'zip' -or
+        $fileExtension -ne '.zip' -or
+        -not $useRegistryUninstall -or
+        $registeredInstallerTypeLower -in @('msi', 'wix', 'burn') -or
+        -not [string]::IsNullOrWhiteSpace($customUninstallCommand) -or
+        $preserveVendorInstallationOnUninstall) {
+        throw 'PSADT reviewedArchiveUninstall requires a machine-scope registry EXE lifecycle sourced from a ZIP archive.'
+    }
+
+    $supportFilesDir = Join-Path $packageDir 'SupportFiles'
+    $null = New-Item -ItemType Directory -Path $supportFilesDir -Force
+    $archiveUninstallConfigPath = Join-Path $supportFilesDir 'ReviewedArchiveUninstall.json'
+    [ordered]@{
+        relativePath = $reviewedArchiveUninstallRelativePath
+        arguments = @($reviewedArchiveUninstallArguments)
+    } |
+        ConvertTo-Json -Depth 3 |
+        Set-Content -LiteralPath $archiveUninstallConfigPath -Encoding UTF8
+
+    $archiveUninstallHelperSource = Join-Path $PSScriptRoot 'Invoke-IntuneGetReviewedArchiveUninstall.ps1'
+    if (-not (Test-Path -LiteralPath $archiveUninstallHelperSource -PathType Leaf)) {
+        throw 'The reviewed archive uninstall helper source is missing.'
+    }
+    Copy-Item -LiteralPath $archiveUninstallHelperSource -Destination (Join-Path $supportFilesDir 'Invoke-IntuneGetReviewedArchiveUninstall.ps1') -Force
+    Write-Host "Embedded reviewed archive uninstall contract for: $reviewedArchiveUninstallRelativePath"
 }
 
 if ($useRegistryUninstall) {
@@ -3363,6 +3454,24 @@ if ($reviewedExactUninstallConfigured) {
         '    $isAdobeCreativeCloudUninstall = $false'
         '    Write-ADTLogEntry -Message "Using the reviewed exact vendor uninstall command [$registeredUninstallFile]." -Source ''Uninstall-ADTDeployment'''
     )
+} elseif ($reviewedArchiveUninstallConfigured) {
+    $reviewedExactUninstallOverrideLines += @(
+        '    $useReviewedExactUninstall = $true'
+        '    $reviewedArchiveUninstallScript = Join-Path $adtSession.DirSupportFiles ''Invoke-IntuneGetReviewedArchiveUninstall.ps1'''
+        "    `$reviewedArchivePath = Join-Path `$adtSession.DirFiles '$installerFileNameSingleQuoteEscaped'"
+        '    if (-not (Test-Path -LiteralPath $reviewedArchiveUninstallScript -PathType Leaf)) {'
+        '        throw "The reviewed archive uninstall helper was not found: $reviewedArchiveUninstallScript"'
+        '    }'
+        '    if (-not (Test-Path -LiteralPath $reviewedArchivePath -PathType Leaf)) {'
+        '        throw "The retained vendor archive was not found: $reviewedArchivePath"'
+        '    }'
+        '    $registeredUninstallFile = Join-Path $env:SystemRoot ''System32\WindowsPowerShell\v1.0\powershell.exe'''
+        '    [string[]]$registeredUninstallArguments = @(''-NoLogo'', ''-NoProfile'', ''-NonInteractive'', ''-ExecutionPolicy'', ''Bypass'', ''-File'', $reviewedArchiveUninstallScript, ''-ArchivePath'', $reviewedArchivePath)'
+        '    $hasQuietUninstall = $true'
+        '    $isVivaldiUninstall = $false'
+        '    $isAdobeCreativeCloudUninstall = $false'
+        '    Write-ADTLogEntry -Message "Using the reviewed packaged archive uninstall command [$reviewedArchiveUninstallScript]." -Source ''Uninstall-ADTDeployment'''
+    )
 }
 $reviewedUninstallWindowAutomationLines = @(
     '        $uninstallHandle = Start-ADTProcess @uninstallProcessParameters'
@@ -3801,7 +3910,7 @@ if ($useManagedDirectoryLifecycle) {
             '            }'
             '            $registeredUninstallFile = Join-Path $env:SystemRoot ''System32\msiexec.exe'''
             '            $registeredUninstallArguments = @(''/x'', $registeredMsiProductCode, ''/qn'', ''/norestart'')'
-            '        } elseif ($isRegisteredPowerShellHost) {'
+            '        } elseif ($isRegisteredPowerShellHost -and -not $useReviewedExactUninstall) {'
             '            # Some vendors register an inbox PowerShell launcher instead of a literal EXE path.'
             '            # Resolve only a single -File command whose script is an existing .ps1 below the'
             '            # exact captured InstallLocation. Host-side switches are allowlisted so an ARP entry'

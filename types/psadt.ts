@@ -309,6 +309,17 @@ export interface PSADTConfig {
     completionTimeoutMinutes: number;
   };
 
+  // Internal exact-command contract for a reviewed ZIP package whose vendor
+  // ships a suite-specific silent uninstall batch file in the signed archive.
+  // The shared packager extracts the retained archive to a bounded temporary
+  // directory and invokes only this validated relative path. Application
+  // adapters are the only trusted source for this value.
+  reviewedArchiveUninstall?: {
+    relativePath: string;
+    arguments: string[];
+    completionTimeoutMinutes: number;
+  };
+
   // Internal install-evidence contract for reviewed bundles that intentionally
   // install several independently registered products. The generated package
   // requires multiple matching ARP entries instead of weakening the ordinary

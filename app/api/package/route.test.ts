@@ -709,6 +709,50 @@ describe('POST /api/package (workflow dispatch)', () => {
     });
   });
 
+  it('applies the reviewed Teradata archive uninstall to QA and customer packaging', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Teradata.TTUOdbc',
+          displayName: 'Teradata ODBC Driver',
+          installerType: 'zip',
+          installerUrl: 'https://example.com/TeradataODBC.zip',
+          installCommand: 'TeradataODBC\\TTUSuiteSilent.exe /silent',
+          uninstallCommand:
+            'REGISTRY_UNINSTALL_PRODUCT:{F075B63A-C629-41F8-BA56-33D9940F2000}:Teradata ODBC Driver',
+          nestedInstallerType: 'exe',
+          nestedInstallerPath: 'TeradataODBC\\TTUSuiteSilent.exe',
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const expectedContract = {
+      reviewedArchiveUninstall: {
+        relativePath: 'TeradataODBC\\silent_uninstall.bat',
+        arguments: ['ALL'],
+        completionTimeoutMinutes: 15,
+      },
+    };
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
+      expectedContract
+    );
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(
+      expectedContract
+    );
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      psadtConfig: expectedContract,
+    });
+  });
+
   it('adds a usable Build Tools workload to QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

@@ -240,6 +240,39 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       .toMatchObject({ reviewedUninstallArguments: ['/S'] });
   });
 
+  it('dispatches Teradata silent archive removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Teradata.TTUOdbc',
+      displayName: 'Teradata ODBC Driver',
+      publisher: 'Teradata Corporation',
+      version: '20.00.38.00',
+      architecture: 'x64',
+      installerUrl: 'https://example.com/TeradataODBC.zip',
+      installerSha256: 'D'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'zip',
+      nestedInstallerType: 'exe',
+      nestedInstallerPath: 'TeradataODBC\\TTUSuiteSilent.exe',
+      silentSwitches: '/silent',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{F075B63A-C629-41F8-BA56-33D9940F2000}:Teradata ODBC Driver',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedArchiveUninstall: {
+        relativePath: 'TeradataODBC\\silent_uninstall.bat',
+        arguments: ['ALL'],
+        completionTimeoutMinutes: 15,
+      },
+    });
+  });
+
   it('dispatches the observable Webroot MSI lifecycle through the customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
