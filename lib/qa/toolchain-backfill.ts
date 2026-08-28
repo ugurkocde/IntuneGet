@@ -440,7 +440,18 @@ const IOBIT_CAPTURED_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...PSADT_UTF8_BOM_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IOBIT_OBSERVED_PUBLISHER_RELEASE_RETRY_TARGETS = [
+  // Retry iFun Screenshot after its generated PSADT package persists the
+  // publisher from the exact ARP entry observed during installation. The
+  // replacement key must match that exact observed name and publisher.
+  'IObit.iFunScreenshot',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...IOBIT_CAPTURED_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '8e2e4217be6bd233907b879cc8c1c53c18fdf918':
+    IOBIT_OBSERVED_PUBLISHER_RELEASE_RETRY_TARGETS,
   '4d9de9f4e1650f4ee5e9d428db88744a6f5e491a':
     IOBIT_CAPTURED_IDENTITY_RELEASE_RETRY_TARGETS,
   '6d2de2aff5f192fe397a4ca2f53fb3f941d797d3':

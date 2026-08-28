@@ -1596,4 +1596,14 @@ describe('QA toolchain targeted retries', () => {
       { wingetId: 'Unrelated.App', status: 'superseded' }
     )).toBe(true);
   });
+
+  it('retries iFun Screenshot with the install-observed publisher release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'iobit.ifunscreenshot', status: 'failed' }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      '4d9de9f4e1650f4ee5e9d428db88744a6f5e491a'
+    )).toContain('IObit.iFunScreenshot');
+  });
 });
