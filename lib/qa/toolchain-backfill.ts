@@ -432,7 +432,17 @@ const PSADT_UTF8_BOM_RELEASE_RETRY_TARGETS = [
   ...SOMIIBO_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const IOBIT_CAPTURED_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry iFun Screenshot after its reviewed adapter can recover the single
+  // exact name-and-publisher ARP identity that replaces the captured Inno key.
+  'IObit.iFunScreenshot',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...PSADT_UTF8_BOM_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '4d9de9f4e1650f4ee5e9d428db88744a6f5e491a':
+    IOBIT_CAPTURED_IDENTITY_RELEASE_RETRY_TARGETS,
   '6d2de2aff5f192fe397a4ca2f53fb3f941d797d3':
     PSADT_UTF8_BOM_RELEASE_RETRY_TARGETS,
   'c2cd8a1db09d584e6f59e7e46cfe6bb6e39f82fd':

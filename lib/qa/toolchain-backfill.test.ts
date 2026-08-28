@@ -141,6 +141,21 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries iFun Screenshot only after activating exact captured-identity recovery', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' iobit.ifunscreenshot ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '6d2de2aff5f192fe397a4ca2f53fb3f941d797d3',
+      { wingetId: 'IObit.iFunScreenshot', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
