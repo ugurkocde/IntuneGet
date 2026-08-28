@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '3f417a26c57c689b57c9f50914f254c3898c3356',
+  packagerCommit: 'c96b0c7605388a652d05e226bb566d6e62f3c268',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -489,6 +489,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // uninstaller without requiring an ARP registration. Preserve every
   // unrelated compatible pass from the FightPlanner user-scope release.
   '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47',
+  // Teradata ODBC now uses the vendor-documented silent uninstall batch from
+  // its retained trusted archive. Preserve every unrelated compatible pass
+  // from the Olive non-ARP release.
+  '3f417a26c57c689b57c9f50914f254c3898c3356',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
