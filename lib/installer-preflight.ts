@@ -4,6 +4,7 @@ import { getLiveInstallers } from '@/lib/manifest-api';
 import {
   hashRemoteInstaller,
   hashesEqual,
+  InstallerDownloadDeadlineError,
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
 import { normalizeQaInstallerType } from '@/lib/qa/candidate';
@@ -372,7 +373,13 @@ async function performLivePreflight(
 
     const normalized = error instanceof InstallerPreflightError
       ? error
-      : new InstallerPreflightError(
+      : error instanceof InstallerDownloadDeadlineError
+        ? new InstallerPreflightError(
+            'PREFLIGHT_DEADLINE_EXCEEDED',
+            error.message,
+            true,
+          )
+        : new InstallerPreflightError(
           'PREFLIGHT_UNAVAILABLE',
           error instanceof Error ? error.message : 'Installer verification failed',
           true,

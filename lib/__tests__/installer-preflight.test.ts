@@ -23,6 +23,7 @@ import {
   InstallerPreflightError,
   resetInstallerPreflightStateForTests,
 } from '@/lib/installer-preflight';
+import { InstallerDownloadDeadlineError } from '@/lib/installer-download';
 
 const expectedSha256 = 'a'.repeat(64).toUpperCase();
 const actualSha256 = 'b'.repeat(64).toUpperCase();
@@ -261,6 +262,16 @@ describe('installer dispatch preflight', () => {
     });
 
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps the hard download deadline to a retryable preflight result', async () => {
+    hashRemoteInstallerMock.mockRejectedValueOnce(new InstallerDownloadDeadlineError(240_000));
+
+    await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
+      code: 'PREFLIGHT_DEADLINE_EXCEEDED',
+      retryable: true,
+      message: 'Installer verification exceeded the 240000ms wall-clock deadline',
+    });
   });
 
   it('caches manifest drift as a deterministic tuple error', async () => {

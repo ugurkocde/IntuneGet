@@ -6,6 +6,7 @@ import * as https from 'node:https';
 
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_TOTAL_TIMEOUT_MS = 240_000;
 const MAX_REDIRECTS = 5;
 const DEFAULT_RANGE_CHUNK_BYTES = 1024 * 1024;
 const RANGE_DOWNLOAD_CONCURRENCY = 4;
@@ -21,6 +22,36 @@ export interface InstallerHashResult {
   bytes: number;
   finalUrl: string;
   verificationMethod?: 'content-hash' | 'publisher-checksum';
+}
+
+export class InstallerDownloadDeadlineError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Installer verification exceeded the ${timeoutMs}ms wall-clock deadline`);
+    this.name = 'InstallerDownloadDeadlineError';
+  }
+}
+
+export async function withInstallerDownloadDeadline<T>(
+  timeoutMs: number,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError('Installer verification deadline must be a positive number');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  timer.unref?.();
+  try {
+    return await operation(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new InstallerDownloadDeadlineError(timeoutMs);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 interface ByteRange {
@@ -195,6 +226,7 @@ async function readRangeMetadata(
   redirectsRemaining: number,
   maxBytes: number,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<RangeMetadata> {
   const resolved = await resolvePublicAddress(url.hostname);
   const headers = {
@@ -228,6 +260,7 @@ async function readRangeMetadata(
           redirectsRemaining - 1,
           maxBytes,
           timeoutMs,
+          signal,
         ).then(resolve, reject);
         return;
       }
@@ -271,6 +304,7 @@ async function readRangeMetadata(
       path: `${url.pathname}${url.search}`,
       method: 'HEAD',
       headers,
+      signal,
     };
     const request = url.protocol === 'https:'
       ? https.request({ ...commonOptions, servername: url.hostname }, onResponse)
@@ -290,6 +324,7 @@ async function downloadInstallerRange(
   totalBytes: number,
   validator: string,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<Buffer> {
   const resolved = await resolvePublicAddress(url.hostname);
   const expectedBytes = range.end - range.start + 1;
@@ -353,6 +388,7 @@ async function downloadInstallerRange(
       path: `${url.pathname}${url.search}`,
       method: 'GET',
       headers,
+      signal,
     };
     const request = url.protocol === 'https:'
       ? https.request({ ...commonOptions, servername: url.hostname }, onResponse)
@@ -372,11 +408,12 @@ async function downloadInstallerRangeWithRetry(
   totalBytes: number,
   validator: string,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<Buffer> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= RANGE_DOWNLOAD_ATTEMPTS; attempt += 1) {
     try {
-      return await downloadInstallerRange(url, range, totalBytes, validator, timeoutMs);
+      return await downloadInstallerRange(url, range, totalBytes, validator, timeoutMs, signal);
     } catch (error) {
       lastError = error;
     }
@@ -388,6 +425,7 @@ async function readPublisherChecksum(
   url: URL,
   redirectsRemaining: number,
   trustedHostname: string,
+  signal: AbortSignal,
 ): Promise<string> {
   const resolved = await resolvePublicAddress(url.hostname);
   const headers = {
@@ -427,6 +465,7 @@ async function readPublisherChecksum(
           redirectUrl,
           redirectsRemaining - 1,
           trustedHostname,
+          signal,
         ).then(resolve, reject);
         return;
       }
@@ -467,6 +506,7 @@ async function readPublisherChecksum(
       method: 'GET',
       headers,
       servername: url.hostname,
+      signal,
     }, onResponse);
     request.setTimeout(PUBLISHER_CHECKSUM_TIMEOUT_MS, () => {
       request.destroy(new Error(
@@ -483,6 +523,7 @@ async function attestInstallerWithPublisherChecksum(
   checksumUrl: URL,
   maxBytes: number,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<InstallerHashResult> {
   const trustedHostname = installerUrl.hostname.toLowerCase();
   const metadata = await readRangeMetadata(
@@ -490,6 +531,7 @@ async function attestInstallerWithPublisherChecksum(
     MAX_REDIRECTS,
     maxBytes,
     timeoutMs,
+    signal,
   );
   if (
     metadata.finalUrl.hostname.toLowerCase() !== trustedHostname ||
@@ -508,6 +550,7 @@ async function attestInstallerWithPublisherChecksum(
     checksumUrl,
     MAX_REDIRECTS,
     trustedHostname,
+    signal,
   );
   const filename = installerUrl.pathname.split('/').at(-1) || '';
   const sha256 = parsePublisherChecksum(checksumContent, filename);
@@ -523,6 +566,7 @@ async function attestInstallerWithPublisherChecksum(
       totalBytes,
       metadata.validator,
       timeoutMs,
+      signal,
     ),
     downloadInstallerRangeWithRetry(
       metadata.finalUrl,
@@ -533,6 +577,7 @@ async function attestInstallerWithPublisherChecksum(
       totalBytes,
       metadata.validator,
       timeoutMs,
+      signal,
     ),
   ]);
 
@@ -549,15 +594,22 @@ async function hashUrlInRanges(
   redirectsRemaining: number,
   maxBytes: number,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<InstallerHashResult> {
-  const metadata = await readRangeMetadata(url, redirectsRemaining, maxBytes, timeoutMs);
+  const metadata = await readRangeMetadata(
+    url,
+    redirectsRemaining,
+    maxBytes,
+    timeoutMs,
+    signal,
+  );
   if (
     !metadata.acceptsRanges ||
     metadata.totalBytes === null ||
     !metadata.validator ||
     metadata.totalBytes <= DEFAULT_RANGE_CHUNK_BYTES
   ) {
-    return hashUrl(metadata.finalUrl, redirectsRemaining, maxBytes, timeoutMs);
+    return hashUrl(metadata.finalUrl, redirectsRemaining, maxBytes, timeoutMs, signal);
   }
 
   const totalBytes = metadata.totalBytes;
@@ -574,6 +626,7 @@ async function hashUrlInRanges(
           totalBytes,
           validator,
           timeoutMs,
+          signal,
         )
       ),
     );
@@ -596,6 +649,7 @@ async function hashUrl(
   redirectsRemaining: number,
   maxBytes: number,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<InstallerHashResult> {
   const resolved = await resolvePublicAddress(url.hostname);
   const headers = {
@@ -624,7 +678,13 @@ async function hashUrl(
           return;
         }
 
-        hashUrl(redirectUrl, redirectsRemaining - 1, maxBytes, timeoutMs).then(resolve, reject);
+        hashUrl(
+          redirectUrl,
+          redirectsRemaining - 1,
+          maxBytes,
+          timeoutMs,
+          signal,
+        ).then(resolve, reject);
         return;
       }
 
@@ -670,6 +730,7 @@ async function hashUrl(
       path: `${url.pathname}${url.search}`,
       method: 'GET',
       headers,
+      signal,
     };
 
     const request = url.protocol === 'https:'
@@ -686,23 +747,27 @@ async function hashUrl(
 
 export async function hashRemoteInstaller(
   installerUrl: string,
-  options?: { maxBytes?: number; timeoutMs?: number },
+  options?: { maxBytes?: number; timeoutMs?: number; totalTimeoutMs?: number },
 ): Promise<InstallerHashResult> {
   const url = validateUrl(installerUrl);
   const maxBytes = options?.maxBytes ?? parseMaximumBytes();
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const totalTimeoutMs = options?.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
   const publisherChecksumUrl = publisherChecksumUrlForInstaller(installerUrl);
-  if (publisherChecksumUrl) {
-    return attestInstallerWithPublisherChecksum(
-      url,
-      validateUrl(publisherChecksumUrl),
-      maxBytes,
-      timeoutMs,
-    );
-  }
-  return shouldUseRangedInstallerHash(installerUrl)
-    ? hashUrlInRanges(url, MAX_REDIRECTS, maxBytes, timeoutMs)
-    : hashUrl(url, MAX_REDIRECTS, maxBytes, timeoutMs);
+  return withInstallerDownloadDeadline(totalTimeoutMs, (signal) => {
+    if (publisherChecksumUrl) {
+      return attestInstallerWithPublisherChecksum(
+        url,
+        validateUrl(publisherChecksumUrl),
+        maxBytes,
+        timeoutMs,
+        signal,
+      );
+    }
+    return shouldUseRangedInstallerHash(installerUrl)
+      ? hashUrlInRanges(url, MAX_REDIRECTS, maxBytes, timeoutMs, signal)
+      : hashUrl(url, MAX_REDIRECTS, maxBytes, timeoutMs, signal);
+  });
 }
 
 export function hashesEqual(left: string, right: string): boolean {

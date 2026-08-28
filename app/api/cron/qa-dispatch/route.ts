@@ -334,6 +334,17 @@ export async function GET(request: Request) {
             exhausted,
           };
           console.warn('QA installer preflight deferred', lastInstallerUnavailable);
+          if (error.code === 'PREFLIGHT_DEADLINE_EXCEEDED') {
+            return NextResponse.json({
+              success: true,
+              dispatched: false,
+              reason: 'installer_unavailable',
+              reconciled,
+              scanned,
+              superseded,
+              installerUnavailable: lastInstallerUnavailable,
+            });
+          }
           // A transient publisher/CDN response must not block unrelated apps.
           // Move the candidate behind the current queue (or terminate after the
           // bounded retry limit) and continue within this dispatch tick.

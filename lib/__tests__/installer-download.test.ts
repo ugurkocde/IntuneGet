@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildByteRanges,
   hashesEqual,
@@ -8,9 +8,30 @@ import {
   parsePublisherChecksum,
   publisherChecksumUrlForInstaller,
   shouldUseRangedInstallerHash,
+  withInstallerDownloadDeadline,
 } from '@/lib/installer-download';
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('installer download safety helpers', () => {
+  it('enforces a wall-clock deadline even while an operation remains active', async () => {
+    vi.useFakeTimers();
+    const result = withInstallerDownloadDeadline(25, (signal) =>
+      new Promise<never>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      })
+    );
+
+    const assertion = expect(result).rejects.toMatchObject({
+      name: 'InstallerDownloadDeadlineError',
+      message: 'Installer verification exceeded the 25ms wall-clock deadline',
+    });
+    await vi.advanceTimersByTimeAsync(25);
+    await assertion;
+  });
+
   it('rejects private and reserved network addresses', () => {
     expect(isPublicIpAddress('127.0.0.1')).toBe(false);
     expect(isPublicIpAddress('10.0.0.10')).toBe(false);

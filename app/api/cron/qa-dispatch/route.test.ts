@@ -508,6 +508,46 @@ describe('GET /api/cron/qa-dispatch', () => {
     }));
   });
 
+  it('returns after a preflight wall-clock deadline so Vercel can release the claim', async () => {
+    const unavailable = candidate('catalog-default');
+    unavailable.id = testUuid(54);
+    const waiting = candidate('catalog-default');
+    waiting.id = testUuid(55);
+    const { client, claimedIds, rollbackIds, rollbackPayloads } = createSupabaseStub([
+      unavailable,
+      waiting,
+    ]);
+    createServerClientMock.mockReturnValue(client);
+    dispatchQaCandidateMock.mockRejectedValueOnce(new InstallerPreflightError(
+      'PREFLIGHT_DEADLINE_EXCEEDED',
+      'Installer verification exceeded the wall-clock deadline',
+      true,
+    ));
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      dispatched: false,
+      reason: 'installer_unavailable',
+      installerUnavailable: {
+        candidateId: unavailable.id,
+        code: 'PREFLIGHT_DEADLINE_EXCEEDED',
+        attempts: 1,
+        exhausted: false,
+      },
+    });
+    expect(claimedIds).toEqual([unavailable.id]);
+    expect(rollbackIds).toEqual([unavailable.id]);
+    expect(rollbackPayloads).toContainEqual(expect.objectContaining({
+      status: 'queued',
+      attempts: 1,
+      dispatched_at: null,
+    }));
+    expect(dispatchQaCandidateMock).toHaveBeenCalledTimes(1);
+  });
+
   it('terminates an exhausted installer preflight retry and continues dispatching', async () => {
     const unavailable = candidate('catalog-default');
     unavailable.id = testUuid(52);
