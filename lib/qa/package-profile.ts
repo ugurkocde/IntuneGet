@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '493b141d093be4d3fa25b550c41d47f7b9a91a67',
+  packagerCommit: 'c2cd8a1db09d584e6f59e7e46cfe6bb6e39f82fd',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -497,6 +497,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // LocalSystem's disposable systemprofile. Preserve every unrelated
   // compatible pass from the Teradata archive-uninstall release.
   'c96b0c7605388a652d05e226bb566d6e62f3c268',
+  // Generated deployment scripts now retain non-ASCII catalog identities when
+  // hosted by Windows PowerShell. Preserve every unrelated compatible pass
+  // from the Somiibo user-scope release.
+  '493b141d093be4d3fa25b550c41d47f7b9a91a67',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -424,7 +424,17 @@ const SOMIIBO_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...TERADATA_ARCHIVE_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const PSADT_UTF8_BOM_RELEASE_RETRY_TARGETS = [
+  // Retry the failed Seewo lifecycle with its Chinese ARP identity preserved
+  // exactly when Invoke-AppDeployToolkit.exe hosts Windows PowerShell.
+  'Seewo.EasiCare',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...SOMIIBO_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'c2cd8a1db09d584e6f59e7e46cfe6bb6e39f82fd':
+    PSADT_UTF8_BOM_RELEASE_RETRY_TARGETS,
   '493b141d093be4d3fa25b550c41d47f7b9a91a67':
     SOMIIBO_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'c96b0c7605388a652d05e226bb566d6e62f3c268':
