@@ -69,6 +69,9 @@ const categoryHints: Record<string, { message: string; showReVerify?: boolean }>
   intune_api: {
     message: 'The Intune API returned an error. This could be a temporary issue with Microsoft services.',
   },
+  tenant_config: {
+    message: 'Microsoft Intune does not appear to be set up in this tenant. Confirm the tenant has an Intune license and the MDM authority is set to Intune, then deploy again.',
+  },
   system: {
     message: 'An unexpected system error occurred. Please try again or contact support if the issue persists.',
   },
@@ -106,6 +109,7 @@ const errorCodeMessages: Record<string, string> = {
   INTUNE_COMMIT_FAILED: 'Failed to commit the uploaded file to Intune',
   WORKFLOW_DISPATCH_FAILED: 'The packaging workflow could not be started. No upload was performed.',
   DUPLICATE_CHECK_FAILED: 'Intune could not confirm whether this app already exists. Retry when Microsoft Graph is available.',
+  TENANT_NOT_INTUNE_PROVISIONED: 'This tenant rejected Intune API requests as not applicable. Intune is likely unlicensed here or the MDM authority is not set.',
   UNEXPECTED_ERROR: 'An unexpected error occurred during the pipeline',
 };
 

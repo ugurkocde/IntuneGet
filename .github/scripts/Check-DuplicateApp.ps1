@@ -108,6 +108,11 @@ try {
         catch {
             $filterStatus = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
             if ($filterStatus -ne 400) { throw }
+            # "Request not applicable to target tenant" means Intune itself is
+            # not usable in this tenant (no Intune license or MDM authority not
+            # set). Every deviceAppManagement request fails the same way, so
+            # trying simpler query shapes is pointless.
+            if ([string]$_.ErrorDetails.Message -match 'not applicable to target tenant') { throw }
             if ($candidateFilter -eq $candidateFilters[-1]) { throw }
             Write-Host "::warning::Graph rejected duplicate-check filter [$candidateFilter]; trying a simpler query shape"
         }
@@ -209,17 +214,26 @@ try {
 }
 catch {
     $errorMessage = $_.Exception.Message
+    $errorBody = [string]$_.ErrorDetails.Message
+    # Intune's signature error for a tenant where Intune is not usable at all
+    # (no Intune license or MDM authority never set). Retrying cannot succeed,
+    # so tell the customer what to fix instead of blaming Graph availability.
+    $tenantNotProvisioned = $errorBody -match 'not applicable to target tenant'
     Write-Host "::error::Duplicate check failed: $errorMessage"
     Send-Callback -Body @{
         jobId = $env:JOB_ID
         status = "failed"
-        message = "Could not verify whether this app already exists in Intune. Retry when Microsoft Graph is available."
+        message = if ($tenantNotProvisioned) {
+            "Microsoft Intune does not appear to be set up in this tenant. Confirm the tenant has an Intune license and the MDM authority is set to Intune, then deploy again."
+        } else {
+            "Could not verify whether this app already exists in Intune. Retry when Microsoft Graph is available."
+        }
         progress = 0
         errorStage = "upload"
-        errorCategory = "intune_api"
-        errorCode = "DUPLICATE_CHECK_FAILED"
+        errorCategory = if ($tenantNotProvisioned) { "tenant_config" } else { "intune_api" }
+        errorCode = if ($tenantNotProvisioned) { "TENANT_NOT_INTUNE_PROVISIONED" } else { "DUPLICATE_CHECK_FAILED" }
         errorDetails = @{ operation = "duplicate_check"; error = $errorMessage }
-        retryable = $true
+        retryable = -not $tenantNotProvisioned
         runId = "$env:GITHUB_RUN_ID"
         runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
     } -CallbackUrl $env:CALLBACK_URL -CallbackSecret $env:CALLBACK_SECRET -MaxRetries 5 | Out-Null
