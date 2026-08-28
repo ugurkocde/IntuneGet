@@ -392,7 +392,17 @@ const BARRYCARLYON_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...ZOHO_MAIL_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const FIGHTPLANNER_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 3.3.33 lifecycle in the signed-in user's profile where
+  // the Nullsoft uninstaller is registered and retained for managed removal.
+  'ShatteredChaos.FightPlanner',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...BARRYCARLYON_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '7bf6273c67d66a0d2a27e52d4fd4976b056d2f47':
+    FIGHTPLANNER_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'f47779dbec9572a0ad72e59413b81dee8e0d13f7':
     BARRYCARLYON_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '3d10fde499ebe5f2987a44db5df35c3801a519ea':

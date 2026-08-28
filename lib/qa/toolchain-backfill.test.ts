@@ -66,6 +66,21 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('retries FightPlanner only after activating its reviewed user scope', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' shatteredchaos.fightplanner ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f47779dbec9572a0ad72e59413b81dee8e0d13f7',
+      { wingetId: 'ShatteredChaos.FightPlanner', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('does not retry MD Editor after its managed install was disproven', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
