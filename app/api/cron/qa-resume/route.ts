@@ -7,7 +7,9 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { ensureQaDemand } from '@/lib/qa/demand';
+import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import type { Win32CartItem } from '@/types/upload';
+import type { Json } from '@/types/database';
 
 const RESUME_BATCH_SIZE = 25;
 
@@ -37,6 +39,7 @@ export async function GET(request: Request) {
   let waiting = 0;
 
   for (const job of jobs || []) {
+    let item = job.package_config as unknown as Win32CartItem;
     let candidate: {
       id: string;
       status: string;
@@ -58,27 +61,49 @@ export async function GET(request: Request) {
     let appVersionAlreadyPassed = false;
 
     if (!candidate || candidateStatus === 'superseded') {
-      const item = job.package_config as unknown as Win32CartItem;
-      const installerType = job.installer_type || item.installerType;
+      // A waiting job can outlive the catalog metadata and packager revision
+      // that created it. Reconcile the exact version against the trusted live
+      // manifest before rebuilding QA demand, then persist that refreshed
+      // execution input so the eventual customer package uses the same
+      // installer command that passed in the VM. Explicit PSADT command
+      // overrides remain authoritative inside reconcileCatalogInstaller.
+      if (item.sourceType !== 'custom') {
+        const reconciled = await reconcileCatalogInstaller({
+          ...item,
+          wingetId: job.winget_id,
+          displayName: job.display_name || item.displayName,
+          publisher: job.publisher || item.publisher,
+          version: job.version,
+          architecture: (job.architecture || item.architecture) as Win32CartItem['architecture'],
+          installerUrl: job.installer_url || item.installerUrl,
+          installerSha256: job.installer_sha256 || item.installerSha256,
+          installerType: (job.installer_type || item.installerType) as Win32CartItem['installerType'],
+          installCommand: job.install_command || item.installCommand,
+          uninstallCommand: job.uninstall_command || item.uninstallCommand,
+          installScope: (job.install_scope || item.installScope) as Win32CartItem['installScope'],
+        });
+        item = reconciled.item;
+      }
+      const installerType = item.installerType || job.installer_type || 'exe';
       const demand = await ensureQaDemand(supabase, {
         wingetId: job.winget_id,
-        displayName: job.display_name,
-        publisher: job.publisher || item.publisher || 'Unknown Publisher',
+        displayName: item.displayName || job.display_name,
+        publisher: item.publisher || job.publisher || 'Unknown Publisher',
         version: job.version,
-        architecture: job.architecture || item.architecture,
-        installerUrl: job.installer_url || item.installerUrl,
-        installerSha256: job.installer_sha256 || item.installerSha256 || '',
+        architecture: item.architecture || job.architecture || 'x64',
+        installerUrl: item.installerUrl || job.installer_url || '',
+        installerSha256: item.installerSha256 || job.installer_sha256 || '',
         installerType,
         nestedInstallerType: item.nestedInstallerType,
         nestedInstallerPath: item.nestedInstallerPath,
         silentSwitches: extractSilentSwitches(
-          job.install_command || item.installCommand,
+          item.installCommand || job.install_command || '',
           installerType,
           item.nestedInstallerType
         ),
         installerSuccessCodes: item.installerSuccessCodes,
-        uninstallCommand: job.uninstall_command || item.uninstallCommand,
-        installScope: job.install_scope || item.installScope,
+        uninstallCommand: item.uninstallCommand || job.uninstall_command || '',
+        installScope: item.installScope || job.install_scope || 'machine',
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
         detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
         priority: 2000,
@@ -95,6 +120,13 @@ export async function GET(request: Request) {
           execution_profile_sha256: demand.identity.executionProfileSha256,
           presentation_profile_sha256: demand.identity.presentationProfileSha256,
           qa_requested_at: new Date().toISOString(),
+          package_config: item as unknown as Json,
+          installer_url: item.installerUrl || job.installer_url,
+          installer_sha256: item.installerSha256 || job.installer_sha256,
+          installer_type: item.installerType || job.installer_type,
+          install_command: item.installCommand || job.install_command,
+          uninstall_command: item.uninstallCommand || job.uninstall_command,
+          install_scope: item.installScope || job.install_scope,
           status_message: demand.state === 'waiting'
             ? 'Running an isolated installation test to make sure this app works before deployment'
             : job.status_message,
@@ -174,33 +206,32 @@ export async function GET(request: Request) {
     }
 
     try {
-      const item = job.package_config as unknown as Win32CartItem;
-      const installerSha256 = job.installer_sha256 || '';
+      const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
       const workflowInputs: WorkflowInputs = {
         jobId: job.id,
         tenantId: job.tenant_id || '',
         wingetId: job.winget_id,
-        displayName: job.display_name,
+        displayName: item.displayName || job.display_name,
         description: buildIntuneAppDescription({
           description: item.description,
           fallback: `Deployed via IntuneGet from Winget: ${job.winget_id}`,
         }),
-        publisher: job.publisher || item.publisher || 'Unknown Publisher',
+        publisher: item.publisher || job.publisher || 'Unknown Publisher',
         version: job.version,
-        architecture: job.architecture || item.architecture,
-        installerUrl: job.installer_url || item.installerUrl,
+        architecture: item.architecture || job.architecture || 'x64',
+        installerUrl: item.installerUrl || job.installer_url || '',
         installerSha256,
         hashValidationMode: 'strict',
-        installerType: job.installer_type || item.installerType,
+        installerType: item.installerType || job.installer_type || 'exe',
         nestedInstallerType: item.nestedInstallerType,
         nestedInstallerPath: item.nestedInstallerPath,
         silentSwitches: extractSilentSwitches(
-          job.install_command || item.installCommand,
-          job.installer_type || item.installerType,
+          item.installCommand || job.install_command || '',
+          item.installerType || job.installer_type,
           item.nestedInstallerType
         ),
         installerSuccessCodes: item.installerSuccessCodes,
-        uninstallCommand: job.uninstall_command || item.uninstallCommand,
+        uninstallCommand: item.uninstallCommand || job.uninstall_command || '',
         callbackUrl,
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
         detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
@@ -209,7 +240,7 @@ export async function GET(request: Request) {
         categories: item.categories ? JSON.stringify(item.categories) : undefined,
         espProfiles: item.espProfiles ? JSON.stringify(item.espProfiles) : undefined,
         relationships: item.relationships?.length ? JSON.stringify(item.relationships) : undefined,
-        installScope: (job.install_scope || item.installScope) === 'user' ? 'user' : 'machine',
+        installScope: (item.installScope || job.install_scope) === 'user' ? 'user' : 'machine',
         forceCreate: item.forceCreate,
         sourceType: item.sourceType,
       };

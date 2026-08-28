@@ -5,12 +5,14 @@ const {
   getFeatureFlagsMock,
   handleAutoUpdateJobCompletionMock,
   ensureQaDemandMock,
+  reconcileCatalogInstallerMock,
   triggerPackagingWorkflowMock,
 } = vi.hoisted(() => ({
   createServerClientMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
   handleAutoUpdateJobCompletionMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
+  reconcileCatalogInstallerMock: vi.fn(),
   triggerPackagingWorkflowMock: vi.fn(),
 }));
 
@@ -22,6 +24,9 @@ vi.mock('@/lib/auto-update/cleanup', () => ({
   handleAutoUpdateJobCompletion: handleAutoUpdateJobCompletionMock,
 }));
 vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: ensureQaDemandMock }));
+vi.mock('@/lib/catalog-installer-reconciliation', () => ({
+  reconcileCatalogInstaller: reconcileCatalogInstallerMock,
+}));
 
 import { GET } from './route';
 
@@ -40,6 +45,10 @@ describe('GET /api/cron/qa-resume', () => {
     vi.clearAllMocks();
     process.env.CRON_SECRET = 'secret';
     getFeatureFlagsMock.mockReturnValue({ localPackager: true });
+    reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
+      item,
+      trustedInstallers: [],
+    }));
   });
 
   it('atomically releases a waiting local-packager job after an exact QA pass', async () => {
@@ -211,6 +220,107 @@ describe('GET /api/cron/qa-resume', () => {
       qa_candidate_id: 'candidate-current',
       execution_profile_sha256: 'B'.repeat(64),
       presentation_profile_sha256: 'D'.repeat(64),
+    }));
+  });
+
+  it('refreshes trusted manifest switches before rebuilding superseded customer QA demand', async () => {
+    const oldCommand = 'msiexec /i Macabacus-9.9.2.msi /qn /norestart';
+    const refreshedCommand =
+      'msiexec /i Macabacus-9.9.2.msi /qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1';
+    const job = {
+      id: 'job-stale-manifest-command',
+      qa_candidate_id: 'candidate-stale-toolchain',
+      execution_profile_sha256: 'A'.repeat(64),
+      status_message: 'Waiting',
+      created_at: '2026-08-28T20:00:00Z',
+      winget_id: 'Macabacus.Macabacus',
+      display_name: 'Macabacus',
+      publisher: 'Macabacus',
+      version: '9.9.2',
+      architecture: 'x64',
+      installer_url: 'https://example.test/Macabacus-9.9.2.msi',
+      installer_sha256: 'C'.repeat(64),
+      installer_type: 'wix',
+      install_command: oldCommand,
+      uninstall_command: 'msiexec /x {11111111-1111-1111-1111-111111111111} /qn',
+      install_scope: 'machine',
+      package_config: {
+        wingetId: 'Macabacus.Macabacus',
+        displayName: 'Macabacus',
+        publisher: 'Macabacus',
+        version: '9.9.2',
+        architecture: 'x64',
+        installerUrl: 'https://example.test/Macabacus-9.9.2.msi',
+        installerSha256: 'C'.repeat(64),
+        installerType: 'wix',
+        installCommand: oldCommand,
+        uninstallCommand: 'msiexec /x {11111111-1111-1111-1111-111111111111} /qn',
+        installScope: 'machine',
+        sourceType: 'winget',
+        psadtConfig: {},
+        detectionRules: [],
+      },
+      is_auto_update: false,
+    };
+    reconcileCatalogInstallerMock.mockResolvedValue({
+      item: {
+        ...job.package_config,
+        installCommand: refreshedCommand,
+      },
+      trustedInstallers: [],
+    });
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'waiting',
+      candidateId: 'candidate-current-manifest',
+      identity: {
+        executionProfileSha256: 'B'.repeat(64),
+        presentationProfileSha256: 'D'.repeat(64),
+      },
+    });
+    const relinkUpdate = chain({ data: null, error: null });
+    let packagingCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          packagingCall++;
+          if (packagingCall === 1) return chain({ data: [job], error: null });
+          return relinkUpdate;
+        }
+        if (table === 'qa_candidates') {
+          return chain({
+            data: {
+              id: 'candidate-stale-toolchain',
+              status: 'superseded',
+              failure_summary: null,
+              package_profile_sha256: 'A'.repeat(64),
+            },
+            error: null,
+          });
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    };
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 1 });
+    expect(reconcileCatalogInstallerMock).toHaveBeenCalledWith(expect.objectContaining({
+      wingetId: 'Macabacus.Macabacus',
+      version: '9.9.2',
+      installCommand: oldCommand,
+    }));
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(client, expect.objectContaining({
+      silentSwitches: '/qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1',
+    }));
+    expect(relinkUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      qa_candidate_id: 'candidate-current-manifest',
+      install_command: refreshedCommand,
+      package_config: expect.objectContaining({ installCommand: refreshedCommand }),
     }));
   });
 
