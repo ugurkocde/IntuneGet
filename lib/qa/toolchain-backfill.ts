@@ -449,7 +449,17 @@ const IOBIT_OBSERVED_PUBLISHER_RELEASE_RETRY_TARGETS = [
   ...IOBIT_CAPTURED_IDENTITY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const QTTABBAR_OBSERVED_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry QTTabBar after its reviewed adapter can match the exact ARP display
+  // name observed during installation and remove that same registered product.
+  'indiff.QTTabBar',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...IOBIT_OBSERVED_PUBLISHER_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'ac0ccd9c0bd0c400a82cf2a0c729804e4c4c4162':
+    QTTABBAR_OBSERVED_IDENTITY_RELEASE_RETRY_TARGETS,
   '8e2e4217be6bd233907b879cc8c1c53c18fdf918':
     IOBIT_OBSERVED_PUBLISHER_RELEASE_RETRY_TARGETS,
   '4d9de9f4e1650f4ee5e9d428db88744a6f5e491a':

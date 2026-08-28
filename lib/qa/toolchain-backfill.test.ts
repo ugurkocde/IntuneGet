@@ -1606,4 +1606,17 @@ describe('QA toolchain targeted retries', () => {
       '4d9de9f4e1650f4ee5e9d428db88744a6f5e491a'
     )).toContain('IObit.iFunScreenshot');
   });
+
+  it('retries QTTabBar with the install-observed ARP identity release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'indiff.qttabbar', status: 'failed' }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('indiff.QTTabBar');
+    expect(terminalToolchainRetryTargets(
+      '8e2e4217be6bd233907b879cc8c1c53c18fdf918'
+    )).not.toContain('indiff.QTTabBar');
+  });
 });
