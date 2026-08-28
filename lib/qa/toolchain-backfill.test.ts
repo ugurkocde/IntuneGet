@@ -1619,4 +1619,17 @@ describe('QA toolchain targeted retries', () => {
       '8e2e4217be6bd233907b879cc8c1c53c18fdf918'
     )).not.toContain('indiff.QTTabBar');
   });
+
+  it('retries Macabacus with the trusted MSI argument release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'macabacus.macabacus', status: 'failed' }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Macabacus.Macabacus');
+    expect(terminalToolchainRetryTargets(
+      'ac0ccd9c0bd0c400a82cf2a0c729804e4c4c4162'
+    )).not.toContain('Macabacus.Macabacus');
+  });
 });

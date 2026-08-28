@@ -457,7 +457,17 @@ const QTTABBAR_OBSERVED_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...IOBIT_OBSERVED_PUBLISHER_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const TRUSTED_MSI_ARGUMENTS_RELEASE_RETRY_TARGETS = [
+  // Retry Macabacus after the shared customer and QA paths preserve its
+  // architecture-specific Office and EULA MSI properties from WinGet.
+  'Macabacus.Macabacus',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...QTTABBAR_OBSERVED_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '953d2ca467b8e800a143150871c5220682106aa2':
+    TRUSTED_MSI_ARGUMENTS_RELEASE_RETRY_TARGETS,
   'ac0ccd9c0bd0c400a82cf2a0c729804e4c4c4162':
     QTTABBAR_OBSERVED_IDENTITY_RELEASE_RETRY_TARGETS,
   '8e2e4217be6bd233907b879cc8c1c53c18fdf918':
