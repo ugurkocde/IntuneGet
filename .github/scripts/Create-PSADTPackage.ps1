@@ -4306,8 +4306,11 @@ $scriptContent = $lines -join "`r`n"
 # script without a BOM as the active ANSI code page. Preserve non-ASCII catalog
 # identities so registry capture, detection, and uninstall compare the exact
 # vendor display name that was embedded at package creation time.
+$deploymentScriptPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath(
+    (Join-Path $packageDir 'Invoke-AppDeployToolkit.ps1')
+)
 [System.IO.File]::WriteAllText(
-    (Join-Path $packageDir 'Invoke-AppDeployToolkit.ps1'),
+    $deploymentScriptPath,
     $scriptContent,
     [System.Text.UTF8Encoding]::new($true)
 )

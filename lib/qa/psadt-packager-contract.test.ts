@@ -65,7 +65,8 @@ function generateRegistryUninstallPackage(
   installScope: 'machine' | 'user' = 'machine',
   nestedInstallerType = '',
   nestedInstallerPath = '',
-  verifyPackage?: (packageDirectory: string) => void
+  verifyPackage?: (packageDirectory: string) => void,
+  divergeProcessDirectory = false
 ): string {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-psadt-packager-'));
 
@@ -100,8 +101,15 @@ function generateRegistryUninstallPackage(
       }
     }
 
-    const result = spawnSync('pwsh', ['-NoProfile', '-File', packagerPath], {
-      cwd: fixtureRoot,
+    const packagerArguments = divergeProcessDirectory
+      ? [
+          '-NoProfile',
+          '-Command',
+          '[Environment]::CurrentDirectory = $env:PACKAGER_PROCESS_DIRECTORY; Set-Location -LiteralPath $env:GITHUB_WORKSPACE; & $env:PACKAGER_SCRIPT_PATH',
+        ]
+      : ['-NoProfile', '-File', packagerPath];
+    const result = spawnSync('pwsh', packagerArguments, {
+      cwd: divergeProcessDirectory ? process.cwd() : fixtureRoot,
       encoding: 'utf8',
       env: {
         ...process.env,
@@ -122,6 +130,12 @@ function generateRegistryUninstallPackage(
         INPUT_UNINSTALL_COMMAND: uninstallCommand,
         INSTALLER_PATH: installerPath,
         INSTALLER_FILENAME: installerFileName,
+        ...(divergeProcessDirectory
+          ? {
+              PACKAGER_PROCESS_DIRECTORY: process.cwd(),
+              PACKAGER_SCRIPT_PATH: packagerPath,
+            }
+          : {}),
         ...(packageDependencies.length > 0
           ? { DEPENDENCIES_PATH: dependencyPath }
           : {}),
@@ -2738,7 +2752,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'writes generated deployment scripts as UTF-8 with BOM for Windows PowerShell',
+    'writes UTF-8 BOM scripts when process and PowerShell locations differ',
     () => {
       const displayName = '班级优化大师';
       const generated = generateRegistryUninstallPackage(
@@ -2764,7 +2778,8 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
             0xbb,
             0xbf,
           ]);
-        }
+        },
+        true
       );
 
       expect(generated).toContain(
