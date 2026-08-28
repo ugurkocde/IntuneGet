@@ -332,6 +332,17 @@ describe('POST /api/package (workflow dispatch)', () => {
           productCode: '{7BC5AB94-97F7-480C-A8A0-3D334A3A56DC}',
         }];
       }
+      if (wingetId === 'Igneus.SimpleHydraulicCalculator') {
+        return [{
+          architecture: 'x86',
+          url: 'https://example.com/shc2_setup.exe',
+          sha256: 'A'.repeat(64),
+          type: 'nullsoft',
+          scope: 'machine',
+          silentArgs: '/S',
+          productCode: 'Simple Hydraulic Calculator',
+        }];
+      }
       if (wingetId === 'Opera.Opera') {
         return [
           {
@@ -691,6 +702,52 @@ describe('POST /api/package (workflow dispatch)', () => {
       undefined,
       expect.any(Object)
     );
+  });
+
+  it('applies the Simple Hydraulic Calculator NSIS removal to QA and customer packaging', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Igneus.SimpleHydraulicCalculator',
+          displayName: 'Simple Hydraulic Calculator',
+          publisher: 'Igneus',
+          version: '2.3.9',
+          architecture: 'x86',
+          installerType: 'nullsoft',
+          installerUrl: 'https://example.com/shc2_setup.exe',
+          installCommand: 'shc2_setup.exe /S',
+          uninstallCommand:
+            'REGISTRY_UNINSTALL_KEY:Simple Hydraulic Calculator:Simple Hydraulic Calculator',
+          psadtConfig: { ...DEFAULT_PSADT_CONFIG },
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const expectedAdapter = {
+      reviewedExactUninstall: {
+        executablePath:
+          '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
+        arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+        completionTimeoutMinutes: 5,
+      },
+    };
+    expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
+      expectedAdapter
+    );
+    expect(JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)).toMatchObject(
+      expectedAdapter
+    );
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      psadtConfig: expectedAdapter,
+    });
   });
 
   it('rebuilds machine-scope commands before both QA and customer packaging', async () => {

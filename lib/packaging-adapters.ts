@@ -621,6 +621,22 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'user',
   },
   {
+    // Simple Hydraulic Calculator registers a small NSIS bootstrap uninstaller
+    // that returns immediately for a bare /S invocation without removing the
+    // application (QA runs 33219132479 and 33220015102). NSIS requires the
+    // special _?= install-directory argument to remain last when the
+    // uninstaller must execute in place. Bind that exact machine-wide command
+    // to both QA and customer packages while retaining the captured ARP key as
+    // authoritative completion evidence.
+    wingetId: 'Igneus.SimpleHydraulicCalculator',
+    reviewedExactUninstall: {
+      executablePath:
+        '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
+      arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // dotPeek registers a versioned JetBrains.Platform.Installer command with
     // /HostsToRemove and /PerMachine, but that command opens the interactive
     // removal path unless JetBrains' documented /Silent=True switch is also

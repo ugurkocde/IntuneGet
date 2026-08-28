@@ -52,6 +52,31 @@ describe('buildQaCatalogTestConfig', () => {
     });
   });
 
+  it('adds the Simple Hydraulic Calculator exact NSIS removal to catalog QA', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Igneus.SimpleHydraulicCalculator',
+        name: 'Simple Hydraulic Calculator',
+        publisher: 'Igneus',
+        version: '2.3.9',
+      },
+      manifest: { InstallerType: 'nullsoft', Scope: 'machine' },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'nullsoft',
+        Scope: 'machine',
+        ProductCode: 'Simple Hydraulic Calculator',
+      },
+    });
+
+    expect(config.psadtConfig.reviewedExactUninstall).toEqual({
+      executablePath:
+        '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
+      arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+      completionTimeoutMinutes: 5,
+    });
+  });
+
   it('prefers installer-specific silent switches and product metadata', () => {
     const config = buildQaCatalogTestConfig({
       app: {

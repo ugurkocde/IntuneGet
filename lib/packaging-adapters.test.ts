@@ -1244,6 +1244,23 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
   });
 
+  it('runs the Simple Hydraulic Calculator NSIS uninstaller in place', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'igneus.simplehydrauliccalculator',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedExactUninstall).toEqual({
+      executablePath:
+        '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
+      arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+      completionTimeoutMinutes: 5,
+    });
+    expect(adapted.reviewedExactUninstall?.arguments.at(-1)).toBe(
+      '_?=%ProgramFiles(x86)%\\Igneus\\SHC'
+    );
+  });
+
   it('uses JetBrains silent mode with the exact dotPeek ARP command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'jetbrains.dotpeek',

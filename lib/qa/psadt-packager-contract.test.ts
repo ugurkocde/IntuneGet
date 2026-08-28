@@ -3439,6 +3439,39 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps the Simple Hydraulic Calculator NSIS install directory argument last',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        'Simple Hydraulic Calculator',
+        [],
+        {
+          reviewedExactUninstall: {
+            executablePath:
+              '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
+            arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+            completionTimeoutMinutes: 5,
+          },
+        },
+        [],
+        'Igneus.SimpleHydraulicCalculator',
+        'Simple Hydraulic Calculator',
+        '2.3.9',
+        'REGISTRY_UNINSTALL_KEY:Simple Hydraulic Calculator:Simple Hydraulic Calculator',
+        '/S'
+      );
+
+      expect(generated).toContain(
+        "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe')"
+      );
+      expect(generated).toContain(
+        "$registeredUninstallArguments = @('/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC')"
+      );
+      expect(generated).not.toContain("$registeredUninstallArguments = @('/S')");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'uses Logi Bolt /silent instead of the generic Nullsoft /S fallback',
     () => {
       const generated = generateRegistryUninstallPackage(
