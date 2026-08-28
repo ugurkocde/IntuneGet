@@ -126,7 +126,7 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries Seewo only after activating UTF-8 BOM deployment scripts', () => {
+  it('retries Seewo after activating resolved UTF-8 BOM deployment output', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' seewo.easicare ', status: 'failed' }
