@@ -299,6 +299,14 @@ describe('application packaging adapters', () => {
     ).toBe('user');
     expect(resolveApplicationInstallScope('Zoho.Mail', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' zoho.mail ', undefined)).toBe('user');
+    expect(resolveApplicationInstallScope(
+      'BarryCarlyon.BarryCarlyonExtensionTools',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope(
+      ' barrycarlyon.barrycarlyonextensiontools ',
+      undefined
+    )).toBe('user');
     expect(resolveApplicationInstallScope(' vngcorp.zalo ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Youdao.YoudaoTranslate', 'machine')).toBe('user');
     expect(resolveApplicationInstallScope(' youdao.youdaotranslate ', undefined)).toBe('user');
@@ -354,6 +362,17 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope('Zoho.Mail', 'machine')).toBe('user');
     expect(resolveApplicationInstallerSelectionScope(
       'Zoho.Mail',
+      'user'
+    )).toBe('machine');
+  });
+
+  it('keeps BarryCarlyon Extension Tools on its machine-labelled bytes while executing per-user', () => {
+    expect(resolveApplicationInstallScope(
+      'BarryCarlyon.BarryCarlyonExtensionTools',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallerSelectionScope(
+      'BarryCarlyon.BarryCarlyonExtensionTools',
       'user'
     )).toBe('machine');
   });

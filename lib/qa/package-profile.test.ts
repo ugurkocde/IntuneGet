@@ -836,6 +836,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps BarryCarlyon Extension Tools out of LocalSystem while retaining its machine-labelled installer', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'BarryCarlyon.BarryCarlyonExtensionTools',
+      displayName: 'BarryCarlyon Extension Tools',
+      publisher: 'BarryCarlyon',
+      version: '1.4.0',
+      architecture: 'x64',
+      installerSha256: 'a'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:BarryCarlyon Extension Tools',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\BarryCarlyon_BarryCarlyonExtensionTools',
+      }),
+    ]);
+  });
+
   it('keeps Brity Meeting out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'SamsungSDS.BrityMeeting',

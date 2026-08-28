@@ -269,6 +269,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallerSelectionScope: 'machine',
   },
   {
+    // BarryCarlyon Extension Tools is cataloged as a machine-scoped Nullsoft
+    // installer, but isolated LocalSystem QA run 33145440547 captured its
+    // application and uninstall registration below systemprofile LocalAppData.
+    // The registered uninstaller was already unavailable by managed removal.
+    // Keep selecting the exact machine-labelled bytes while executing the
+    // shared QA/customer package in the signed-in user's persistent profile.
+    wingetId: 'BarryCarlyon.BarryCarlyonExtensionTools',
+    requiredInstallScope: 'user',
+    reviewedInstallerSelectionScope: 'machine',
+  },
+  {
     // UHK Agent is built with Electron Builder's assisted NSIS profile
     // (oneClick: false) without perMachine. Electron Builder defaults that
     // profile to per-user installation. WinGet currently omits Scope, so the
