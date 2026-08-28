@@ -51,6 +51,20 @@ describe('extractSilentSwitches', () => {
     )).toBe('/qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1');
   });
 
+  it('keeps MSI properties that appear before the quiet switch', () => {
+    expect(extractSilentSwitches(
+      'msiexec /i "Macabacus-9.9.2.msi" EULA=1 /qn',
+      'wix'
+    )).toBe('EULA=1 /qn');
+  });
+
+  it('keeps an empty MSI property value before later switches', () => {
+    expect(extractSilentSwitches(
+      'msiexec.exe /i "dual-purpose.msi" MSIINSTALLPERUSER="" ALLUSERS=2 /qn',
+      'msi'
+    )).toBe('MSIINSTALLPERUSER="" ALLUSERS=2 /qn');
+  });
+
   it('fails closed for an archive with no nested installer type', () => {
     expect(extractSilentSwitches(
       'Expand-Archive -Path "app.zip" -DestinationPath "%ProgramFiles%\\App" -Force',

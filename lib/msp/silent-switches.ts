@@ -55,7 +55,12 @@ export function extractSilentSwitches(
   // tokens. The executable token and MSI action target were removed above, so
   // everything remaining belongs to the vendor's install contract.
   cleaned = cleaned.trim();
-  if (/^(?:\/\S+|-{1,2}\S+)/.test(cleaned) && cleaned !== '-DeploymentType') {
+  const beginsWithVendorSwitch = /^(?:\/\S+|-{1,2}\S+)/.test(cleaned);
+  const beginsWithMsiProperty = /^[A-Za-z_][A-Za-z0-9_.-]*=(?:"[^"]*"|\S+)(?:\s|$)/.test(cleaned);
+  if (
+    (beginsWithVendorSwitch && cleaned !== '-DeploymentType') ||
+    (['msi', 'wix'].includes(effectiveType) && beginsWithMsiProperty)
+  ) {
     return cleaned;
   }
 
