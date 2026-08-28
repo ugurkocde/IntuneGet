@@ -1654,6 +1654,48 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds Olive to its exact machine-wide non-ARP lifecycle for customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'OliveTeam.OliveVideoEditor',
+      displayName: 'Olive Video Editor',
+      publisher: 'Olive Team',
+      version: '0.1.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Olive Video Editor',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = {
+      reviewedManagedInstallDirectory: '%ProgramW6432%\\Olive',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramW6432%\\Olive\\olive-editor.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 5,
+      reviewedManagedUninstall: {
+        executablePath: '%ProgramW6432%\\Olive\\uninstall.exe',
+        arguments: ['/S'],
+        completionTimeoutMinutes: 5,
+      },
+    };
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\OliveTeam_OliveVideoEditor',
+      }),
+    ]);
+  });
+
   it('binds the Visual Studio 2022 Build Tools x86 instance root to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.VisualStudio.2022.BuildTools',

@@ -351,6 +351,24 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedManagedInstallDirectory: '%USERPROFILE%\\Desktop\\Tor Browser',
   },
   {
+    // Olive 0.1.x's official NSIS source installs the x64 payload directly to
+    // $PROGRAMFILES64\Olive and writes $INSTDIR\uninstall.exe, but deliberately
+    // creates no Add/Remove Programs registration. Verify the exact application
+    // binary and invoke that exact vendor uninstaller instead of attempting to
+    // select unrelated ARP changes made while the installer is running.
+    wingetId: 'OliveTeam.OliveVideoEditor',
+    requiredInstallScope: 'machine',
+    reviewedManagedInstallDirectory: '%ProgramW6432%\\Olive',
+    reviewedManagedInstallEvidenceFile:
+      '%ProgramW6432%\\Olive\\olive-editor.exe',
+    reviewedManagedInstallCompletionTimeoutMinutes: 5,
+    reviewedManagedUninstall: {
+      executablePath: '%ProgramW6432%\\Olive\\uninstall.exe',
+      arguments: ['/S'],
+      completionTimeoutMinutes: 5,
+    },
+  },
+  {
     // darktable's official CPack/NSIS installer writes its ARP registration
     // only after the complete application tree has been extracted. The signed
     // 5.6.0 package can therefore remain quiet longer than the generic QA

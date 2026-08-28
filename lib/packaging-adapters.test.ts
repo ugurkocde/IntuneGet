@@ -475,6 +475,28 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('models Olive as the vendor-defined machine-wide non-ARP lifecycle', () => {
+    expect(
+      resolveApplicationInstallScope('OliveTeam.OliveVideoEditor', 'user')
+    ).toBe('machine');
+    expect(
+      applyApplicationPackagingAdapter(
+        'OliveTeam.OliveVideoEditor',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedManagedInstallDirectory: '%ProgramW6432%\\Olive',
+      reviewedManagedInstallEvidenceFile:
+        '%ProgramW6432%\\Olive\\olive-editor.exe',
+      reviewedManagedInstallCompletionTimeoutMinutes: 5,
+      reviewedManagedUninstall: {
+        executablePath: '%ProgramW6432%\\Olive\\uninstall.exe',
+        arguments: ['/S'],
+        completionTimeoutMinutes: 5,
+      },
+    });
+  });
+
   it('keeps the darktable NSIS extraction observable within a bounded wait', () => {
     expect(
       applyApplicationPackagingAdapter('darktable.darktable', DEFAULT_PSADT_CONFIG)
