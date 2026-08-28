@@ -153,11 +153,24 @@ describe('buildCustomAppCartItem', () => {
     expect(burnItem.installCommand).toBe(`"setup.exe" ${CUSTOM_SILENT_SWITCH_DEFAULTS.burn}`);
   });
 
-  it('should build an msiexec install command for MSI installers', () => {
+  it('should build an msiexec command with the supplied MSI switches', () => {
     const item = buildCustomAppCartItem(
       validInput({ installerType: 'msi', installerUrl: 'https://example.com/app.msi' })
     );
-    expect(item.installCommand).toBe('msiexec /i "app.msi" /qn ALLUSERS=1 /norestart');
+    expect(item.installCommand).toBe(
+      'msiexec /i "app.msi" /vendor-silent ALLUSERS=1'
+    );
+  });
+
+  it('should use the managed MSI defaults when no switches are supplied', () => {
+    const item = buildCustomAppCartItem(validInput({
+      installerType: 'msi',
+      installerUrl: 'https://example.com/app.msi',
+      silentSwitches: '',
+    }));
+    expect(item.installCommand).toBe(
+      'msiexec /i "app.msi" /qn /norestart ALLUSERS=1'
+    );
   });
 
   it('should prefer user-provided silent switches over the defaults', () => {

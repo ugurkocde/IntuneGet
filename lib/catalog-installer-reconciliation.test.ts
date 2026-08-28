@@ -209,10 +209,36 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.item.installerType).toBe('msi');
     expect(reconciled.item.installerUrl).toBe('https://example.test/wsainstall.msi');
     expect(reconciled.item.installCommand).toBe(
-      'msiexec /i "wsainstall.msi" /qn ALLUSERS=1 /norestart'
+      'msiexec /i "wsainstall.msi" /qn /norestart ALLUSERS=1'
     );
     expect(reconciled.item.uninstallCommand).toBe(
       'REGISTRY_UNINSTALL:Webroot SecureAnywhere'
+    );
+  });
+
+  it('keeps vendor-required MSI properties when rebuilding a customer package', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x64',
+      url: 'https://downloads.example.test/Macabacus-9.9.2.msi',
+      sha256,
+      type: 'wix',
+      silentArgs: '/qn /norestart OFFICE2016X64FOUND=1 EULA=1',
+      productCode: '{0B0CCAB5-2957-4FB4-9F55-EAEE1A613023}',
+    }] satisfies NormalizedInstaller[]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'Macabacus.Macabacus',
+      displayName: 'Macabacus',
+      version: '9.9.2',
+      installerType: 'wix',
+      installerUrl: 'https://downloads.example.test/Macabacus-9.9.2.msi',
+      installCommand: 'msiexec /i "Macabacus-9.9.2.msi" /qn ALLUSERS=1 /norestart',
+      uninstallCommand:
+        'msiexec /x "{0B0CCAB5-2957-4FB4-9F55-EAEE1A613023}" /qn /norestart',
+    }));
+
+    expect(reconciled.item.installCommand).toBe(
+      'msiexec /i "Macabacus-9.9.2.msi" /qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1'
     );
   });
 

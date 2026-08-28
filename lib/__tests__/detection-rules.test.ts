@@ -570,6 +570,34 @@ describe('generateInstallCommand', () => {
     expect(command).toContain('ALLUSERS=""');
   });
 
+  it('preserves trusted WinGet custom properties in an MSI install command', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://downloads.example.com/Macabacus-9.9.2.msi',
+      sha256: 'abc123',
+      type: 'wix',
+      silentArgs: '/qn /norestart OFFICE2016X64FOUND=1 EULA=1',
+    };
+
+    expect(generateInstallCommand(installer, 'machine')).toBe(
+      'msiexec /i "Macabacus-9.9.2.msi" /qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1'
+    );
+  });
+
+  it('does not override a manifest-owned MSI scope property', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/installer.msi',
+      sha256: 'abc123',
+      type: 'msi',
+      silentArgs: '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=""',
+    };
+
+    expect(generateInstallCommand(installer, 'machine')).toBe(
+      'msiexec /i "installer.msi" /qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=""'
+    );
+  });
+
   it('should generate MSIX install command', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',

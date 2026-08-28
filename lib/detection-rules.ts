@@ -305,6 +305,19 @@ function generateMsixDetectionScript(
 /**
  * Generate install command based on installer type
  */
+function appendMsiInstallScope(
+  silentArgs: string,
+  scope: WingetScope
+): string {
+  const normalizedArgs = silentArgs.trim() || '/qn /norestart';
+  if (/(?:^|\s)ALLUSERS\s*=/i.test(normalizedArgs)) {
+    return normalizedArgs;
+  }
+
+  const scopeProperty = scope === 'user' ? 'ALLUSERS=""' : 'ALLUSERS=1';
+  return `${normalizedArgs} ${scopeProperty}`;
+}
+
 export function generateInstallCommand(
   installer: NormalizedInstaller,
   scope: WingetScope = 'machine'
@@ -317,9 +330,10 @@ export function generateInstallCommand(
 
   switch (installer.type) {
     case 'msi':
-    case 'wix':
-      const msiScope = scope === 'user' ? 'ALLUSERS=""' : 'ALLUSERS=1';
-      return `msiexec /i "${installerName}" /qn ${msiScope} /norestart`;
+    case 'wix': {
+      const msiArgs = appendMsiInstallScope(silentArgs, scope);
+      return `msiexec /i "${installerName}" ${msiArgs}`.trim();
+    }
 
     case 'msix':
     case 'appx':
@@ -350,8 +364,8 @@ export function generateInstallCommand(
         switch (installer.nestedInstallerType) {
           case 'msi':
           case 'wix': {
-            const nestedMsiScope = scope === 'user' ? 'ALLUSERS=""' : 'ALLUSERS=1';
-            return `msiexec /i "${nestedPath}" ${silentArgs} ${nestedMsiScope}`.trim();
+            const nestedMsiArgs = appendMsiInstallScope(silentArgs, scope);
+            return `msiexec /i "${nestedPath}" ${nestedMsiArgs}`.trim();
           }
           case 'msix':
           case 'appx':

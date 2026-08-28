@@ -671,6 +671,58 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
+  it('passes trusted vendor MSI properties to both QA and customer packaging', async () => {
+    const installerUrl = 'https://downloads.example.com/Macabacus-9.9.2.msi';
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: installerUrl,
+      sha256: 'A'.repeat(64),
+      type: 'wix',
+      silentArgs: '/qn /norestart OFFICE2016X64FOUND=1 EULA=1',
+      productCode: '{0B0CCAB5-2957-4FB4-9F55-EAEE1A613023}',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Macabacus.Macabacus',
+          displayName: 'Macabacus',
+          version: '9.9.2',
+          installerType: 'wix',
+          installerUrl,
+          installerSha256: 'A'.repeat(64),
+          installScope: 'machine',
+          installCommand: 'msiexec /i "Macabacus-9.9.2.msi" /qn ALLUSERS=1 /norestart',
+          uninstallCommand:
+            'msiexec /x "{0B0CCAB5-2957-4FB4-9F55-EAEE1A613023}" /qn /norestart',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const expectedSilentSwitches =
+      '/qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1';
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ silentSwitches: expectedSilentSwitches })
+    );
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      install_command:
+        'msiexec /i "Macabacus-9.9.2.msi" /qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1',
+    }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({ silentSwitches: expectedSilentSwitches }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
   it('applies the reviewed Opera immediate-uninstall contract to QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

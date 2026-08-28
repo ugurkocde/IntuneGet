@@ -36,6 +36,7 @@ export function extractSilentSwitches(
   // Strip executable path first (handles paths with hyphens like "7z2501-x64.exe")
   // This removes everything up to and including common installer extensions
   let cleaned = installCommand
+    .replace(/^msiexec(?:\.exe)?\s+/i, '') // Remove Windows Installer launcher with or without .exe
     .replace(/^"[^"]+"\s*/, '') // Remove quoted paths like "C:\path\installer.exe"
     .replace(/^\S+\.(exe|msi|msix|appx)\s*/i, ''); // Remove unquoted paths ending in installer extensions
 

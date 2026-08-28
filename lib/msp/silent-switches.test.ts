@@ -44,6 +44,13 @@ describe('extractSilentSwitches', () => {
     )).toBe('/qn REBOOT=ReallySuppress ALLUSERS=1');
   });
 
+  it('keeps architecture-specific vendor MSI properties for packaging', () => {
+    expect(extractSilentSwitches(
+      'msiexec /i "Macabacus-9.9.2.msi" /qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1',
+      'wix'
+    )).toBe('/qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1');
+  });
+
   it('fails closed for an archive with no nested installer type', () => {
     expect(extractSilentSwitches(
       'Expand-Archive -Path "app.zip" -DestinationPath "%ProgramFiles%\\App" -Force',
