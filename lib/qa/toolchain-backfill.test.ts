@@ -1632,4 +1632,20 @@ describe('QA toolchain targeted retries', () => {
       'ac0ccd9c0bd0c400a82cf2a0c729804e4c4c4162'
     )).not.toContain('Macabacus.Macabacus');
   });
+
+  it('retries TeamSpeak 6 Beta with the reviewed machine-scope release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      {
+        wingetId: 'teamspeaksystems.teamspeakclient.beta.6',
+        status: 'failed',
+      }
+    )).toBe(true);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
+    expect(terminalToolchainRetryTargets(
+      '953d2ca467b8e800a143150871c5220682106aa2'
+    )).not.toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
+  });
 });

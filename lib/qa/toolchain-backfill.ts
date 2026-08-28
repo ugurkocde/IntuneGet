@@ -465,7 +465,17 @@ const TRUSTED_MSI_ARGUMENTS_RELEASE_RETRY_TARGETS = [
   ...QTTABBAR_OBSERVED_IDENTITY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const TEAMSPEAK6_MACHINE_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry TeamSpeak 6 Beta after the reviewed adapter keeps its user-scoped
+  // WinGet bytes but executes the manifest's ALLUSERS=1 WiX contract as SYSTEM.
+  'TeamSpeakSystems.TeamSpeakClient.Beta.6',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...TRUSTED_MSI_ARGUMENTS_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'e139e4cc222576f34ca905b7180ac47ea548cbab':
+    TEAMSPEAK6_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
   '953d2ca467b8e800a143150871c5220682106aa2':
     TRUSTED_MSI_ARGUMENTS_RELEASE_RETRY_TARGETS,
   'ac0ccd9c0bd0c400a82cf2a0c729804e4c4c4162':
