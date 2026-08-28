@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '3d10fde499ebe5f2987a44db5df35c3801a519ea',
+  packagerCommit: 'f47779dbec9572a0ad72e59413b81dee8e0d13f7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -477,6 +477,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // the reviewed machine-labelled manifest bytes. Preserve every unrelated
   // compatible pass from the League eligibility release.
   '89c8a2c5ef6b2358e50984fc8357e3f56ffcc5cf',
+  // BarryCarlyon Extension Tools now runs in the signed-in user's profile
+  // while retaining the reviewed machine-labelled manifest bytes. Preserve
+  // every unrelated compatible pass from the Zoho Mail user-scope release.
+  '3d10fde499ebe5f2987a44db5df35c3801a519ea',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
