@@ -2738,6 +2738,44 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'writes generated deployment scripts as UTF-8 with BOM for Windows PowerShell',
+    () => {
+      const displayName = '班级优化大师';
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft',
+        displayName,
+        [],
+        {},
+        [],
+        'Seewo.EasiCare',
+        displayName,
+        '2.1.0.1428',
+        `REGISTRY_UNINSTALL:${displayName}`,
+        '/S',
+        'machine',
+        '',
+        '',
+        (packageDirectory) => {
+          const scriptBytes = readFileSync(
+            join(packageDirectory, 'Invoke-AppDeployToolkit.ps1')
+          );
+          expect(Array.from(scriptBytes.subarray(0, 3))).toEqual([
+            0xef,
+            0xbb,
+            0xbf,
+          ]);
+        }
+      );
+
+      expect(generated).toContain(
+        `$configuredUninstallDisplayName = '${displayName}'`
+      );
+      expect(generated).toContain(`$appName = '${displayName}'`);
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'appends IrfanView\'s documented silent switch to its captured ARP command',
     () => {
       const generated = generateRegistryUninstallPackage(

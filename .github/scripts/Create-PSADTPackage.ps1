@@ -4302,5 +4302,13 @@ $lines += @(
 )
 
 $scriptContent = $lines -join "`r`n"
-Set-Content -Path "$packageDir\Invoke-AppDeployToolkit.ps1" -Value $scriptContent -Encoding UTF8
+# Invoke-AppDeployToolkit.exe can host Windows PowerShell, which treats a UTF-8
+# script without a BOM as the active ANSI code page. Preserve non-ASCII catalog
+# identities so registry capture, detection, and uninstall compare the exact
+# vendor display name that was embedded at package creation time.
+[System.IO.File]::WriteAllText(
+    (Join-Path $packageDir 'Invoke-AppDeployToolkit.ps1'),
+    $scriptContent,
+    [System.Text.UTF8Encoding]::new($true)
+)
 Write-Host "Generated PSADT v4 deployment script"
