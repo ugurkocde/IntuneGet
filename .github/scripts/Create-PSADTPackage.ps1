@@ -2403,6 +2403,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         '    # Verify the adapter-reviewed Windows runtime signal instead of guessing an ARP identity.'
         '    $capturedUninstallKey = $null'
         '    $capturedUninstallName = $null'
+        '    $capturedUninstallPublisher = $null'
         '    $reviewedRegistryInstallationVerified = $false'
         '    function Test-IntuneGetReviewedRegistryInstallEvidence {'
         '        try {'
@@ -2434,6 +2435,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         "    `$configuredUninstallLocaleHint = '$registryUninstallLocaleHintEscaped'"
         '    $capturedUninstallKey = $null'
         '    $capturedUninstallName = $null'
+        '    $capturedUninstallPublisher = $null'
         '    $multiProductInstallationVerified = $false'
         ''
     )
@@ -3238,6 +3240,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
         '    if ($selectedApplications.Count -eq 1) {'
         '        $capturedUninstallKey = [string]$selectedApplications[0].PSChildName'
         '        $capturedUninstallName = [string]$selectedApplications[0].DisplayName'
+        '        $capturedUninstallPublisher = [string]$selectedApplications[0].Publisher'
         '        Write-ADTLogEntry -Message "Captured vendor uninstall entry [$capturedUninstallName] ($capturedUninstallKey)." -Source ''Install-ADTDeployment'''
         '    } elseif ($multiProductInstallationVerified) {'
         '        Write-ADTLogEntry -Message "Verified reviewed multi-product installation from $($reviewedMultiProductMatches.Count) matching vendor registrations." -Source ''Install-ADTDeployment'''
@@ -3343,11 +3346,13 @@ $machineUninstallMarkerLines = @()
 if ($useRegistryUninstall) {
     $userUninstallMarkerLines = @(
         '            if ($capturedUninstallKey) { Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''UninstallRegistryKey'' -Value $capturedUninstallKey -Type String -SID $_.SID }',
-        '            if ($capturedUninstallName) { Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''UninstallDisplayName'' -Value $capturedUninstallName -Type String -SID $_.SID }'
+        '            if ($capturedUninstallName) { Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''UninstallDisplayName'' -Value $capturedUninstallName -Type String -SID $_.SID }',
+        '            if ($capturedUninstallPublisher) { Set-ADTRegistryKey -LiteralPath ''HKCU\' + $registryMarkerPathEscaped + '\' + $sanitizedWingetId + ''' -Name ''UninstallPublisher'' -Value $capturedUninstallPublisher -Type String -SID $_.SID }'
     )
     $machineUninstallMarkerLines = @(
         '        if ($capturedUninstallKey) { Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallRegistryKey'' -Value $capturedUninstallKey -Type String }',
-        '        if ($capturedUninstallName) { Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallDisplayName'' -Value $capturedUninstallName -Type String }'
+        '        if ($capturedUninstallName) { Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallDisplayName'' -Value $capturedUninstallName -Type String }',
+        '        if ($capturedUninstallPublisher) { Set-ADTRegistryKey -LiteralPath $regPath -Name ''UninstallPublisher'' -Value $capturedUninstallPublisher -Type String }'
     )
 }
 if ($IsUserScope) {
@@ -3573,6 +3578,7 @@ if ($useManagedDirectoryLifecycle) {
         '    $markerValues = Get-ItemProperty -LiteralPath $markerProviderPath -ErrorAction SilentlyContinue'
         '    $capturedUninstallKey = [string]$markerValues.UninstallRegistryKey'
         '    $capturedUninstallName = [string]$markerValues.UninstallDisplayName'
+        '    $capturedUninstallPublisher = [string]$markerValues.UninstallPublisher'
         "    `$expectedUninstallPublisher = '$publisherSingleQuoteEscaped'"
         '    $installedApps = if ($capturedUninstallKey) {'
         '        Write-ADTLogEntry -Message "Searching for captured vendor uninstall entry: $capturedUninstallKey" -Source ''Uninstall-ADTDeployment'''
@@ -3609,20 +3615,21 @@ if ($useManagedDirectoryLifecycle) {
     )
     if ($reviewedRecoverCapturedUninstallByExactIdentity) {
         $lines += @(
-            '    if ($installedApps.Count -eq 0 -and $capturedUninstallKey -and $capturedUninstallName -and $expectedUninstallPublisher) {'
+            '    $recoveryUninstallPublisher = if (-not [string]::IsNullOrWhiteSpace($capturedUninstallPublisher)) { $capturedUninstallPublisher } else { $expectedUninstallPublisher }'
+            '    if ($installedApps.Count -eq 0 -and $capturedUninstallKey -and $capturedUninstallName -and $recoveryUninstallPublisher) {'
             '        # This reviewed vendor replaces its ARP key after install. Recover only the exact observed'
-            '        # name and manifest publisher, require one visible non-MSI entry, and otherwise fail closed.'
+            '        # name and observed publisher, require one visible non-MSI entry, and otherwise fail closed.'
             '        $capturedIdentityMatches = @(Get-ADTApplication -Name $capturedUninstallName -NameMatch ''Exact'' | Where-Object {'
             '            $systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']'
             '            $isVisibleApplication = -not $systemComponentProperty -or -not [bool]$systemComponentProperty.Value'
             '            $isVisibleApplication -and'
             '                -not $_.WindowsInstaller -and'
             '                [string]::Equals([string]$_.DisplayName, $capturedUninstallName, [System.StringComparison]::OrdinalIgnoreCase) -and'
-            '                [string]::Equals([string]$_.Publisher, $expectedUninstallPublisher, [System.StringComparison]::OrdinalIgnoreCase)'
+            '                [string]::Equals([string]$_.Publisher, $recoveryUninstallPublisher, [System.StringComparison]::OrdinalIgnoreCase)'
             '        })'
             '        if ($capturedIdentityMatches.Count -eq 1) {'
             '            $installedApps = $capturedIdentityMatches'
-            '            Write-ADTLogEntry -Message "Recovered replaced vendor uninstall entry [$($installedApps[0].PSChildName)] from captured key [$capturedUninstallKey] using exact name and publisher identity." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
+            '            Write-ADTLogEntry -Message "Recovered replaced vendor uninstall entry [$($installedApps[0].PSChildName)] from captured key [$capturedUninstallKey] using exact observed name and publisher identity." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
             '        } elseif ($capturedIdentityMatches.Count -gt 0) {'
             '            Write-ADTLogEntry -Message "Found $($capturedIdentityMatches.Count) exact captured-name and publisher matches; refusing ambiguous recovery." -Severity ''Warning'' -Source ''Uninstall-ADTDeployment'''
             '        }'

@@ -2722,7 +2722,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       "Get-ADTApplication -Name $capturedUninstallName -NameMatch ''Exact''"
     );
     expect(packager).toContain(
-      '[string]::Equals([string]$_.Publisher, $expectedUninstallPublisher, [System.StringComparison]::OrdinalIgnoreCase)'
+      '[string]::Equals([string]$_.Publisher, $recoveryUninstallPublisher, [System.StringComparison]::OrdinalIgnoreCase)'
     );
     expect(packager).toContain(
       'if ($capturedIdentityMatches.Count -eq 1) {'
@@ -2869,8 +2869,23 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       expect(enabled).toContain(
         '$capturedUninstallName = [string]$markerValues.UninstallDisplayName'
       );
+      expect(enabled).toContain(
+        '$capturedUninstallPublisher = [string]$markerValues.UninstallPublisher'
+      );
+      expect(enabled).toContain(
+        '$capturedUninstallPublisher = [string]$selectedApplications[0].Publisher'
+      );
+      expect(enabled).toContain(
+        "-Name 'UninstallPublisher' -Value $capturedUninstallPublisher"
+      );
       expect(enabled).toContain("$expectedUninstallPublisher = 'IntuneGet'");
+      expect(enabled).toContain(
+        '$recoveryUninstallPublisher = if (-not [string]::IsNullOrWhiteSpace($capturedUninstallPublisher))'
+      );
       expect(enabled).toContain('$capturedIdentityMatches = @(');
+      expect(enabled).toContain(
+        '[string]::Equals([string]$_.Publisher, $recoveryUninstallPublisher, [System.StringComparison]::OrdinalIgnoreCase)'
+      );
       expect(enabled).toContain(
         'if ($capturedIdentityMatches.Count -eq 1) {'
       );

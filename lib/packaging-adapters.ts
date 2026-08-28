@@ -919,9 +919,10 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     // iFun Screenshot's Inno bootstrapper initially registers the manifest ARP
     // key, then replaces that key before a fresh LocalSystem removal starts.
     // Recover only one visible non-MSI registration whose exact display name
-    // and publisher still match the identity observed during this installation.
-    // QA run 33185738401 proved the original key was gone while the app and one
-    // vendor registration remained. Broad name or publisher searches stay off.
+    // and publisher still match the ARP identity observed during this install.
+    // QA run 33189870114 proved the original key was gone and the manifest
+    // publisher did not identify the replacement. Broad name/publisher searches
+    // stay off; the generated package persists the observed publisher instead.
     wingetId: 'IObit.iFunScreenshot',
     reviewedRecoverCapturedUninstallByExactIdentity: true,
   },
