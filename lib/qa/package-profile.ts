@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c96b0c7605388a652d05e226bb566d6e62f3c268',
+  packagerCommit: '493b141d093be4d3fa25b550c41d47f7b9a91a67',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -493,6 +493,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // its retained trusted archive. Preserve every unrelated compatible pass
   // from the Olive non-ARP release.
   '3f417a26c57c689b57c9f50914f254c3898c3356',
+  // Somiibo now runs in the signed-in user's persistent profile instead of
+  // LocalSystem's disposable systemprofile. Preserve every unrelated
+  // compatible pass from the Teradata archive-uninstall release.
+  'c96b0c7605388a652d05e226bb566d6e62f3c268',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

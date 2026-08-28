@@ -416,7 +416,17 @@ const TERADATA_ARCHIVE_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...OLIVE_NON_ARP_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SOMIIBO_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry the failed 1.2.32 lifecycle in the signed-in user's profile where
+  // its LocalAppData NSIS uninstaller remains available for managed removal.
+  'ITWCreativeWorks.Somiibo',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...TERADATA_ARCHIVE_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '493b141d093be4d3fa25b550c41d47f7b9a91a67':
+    SOMIIBO_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'c96b0c7605388a652d05e226bb566d6e62f3c268':
     TERADATA_ARCHIVE_UNINSTALL_RELEASE_RETRY_TARGETS,
   '3f417a26c57c689b57c9f50914f254c3898c3356':
