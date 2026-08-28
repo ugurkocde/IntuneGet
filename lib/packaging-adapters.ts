@@ -1,3 +1,4 @@
+import { sanitizeProcessesToClose } from '@/types/psadt';
 import type { ProcessToClose, PSADTConfig } from '@/types/psadt';
 import type { WingetInstallerType, WingetScope } from '@/types/winget';
 
@@ -1740,6 +1741,23 @@ export function applyApplicationPackagingAdapter(
   config: PSADTConfig
 ): PSADTConfig {
   const adapter = applicationPackagingAdapter(wingetId);
+  // The packaging pipeline rejects close-process entries without an executable
+  // name. Validate for every app here, not just adapter apps, so a bad config
+  // fails at dispatch with a clear per-app error instead of minutes later
+  // inside the packaging workflow.
+  const { processes: keptProcesses, invalid: invalidProcesses } =
+    sanitizeProcessesToClose(config.processesToClose);
+  if (invalidProcesses.length > 0) {
+    const labels = invalidProcesses
+      .map((process) => process.description?.trim() || 'unnamed entry')
+      .join(', ');
+    throw new Error(
+      `A process to close for ${wingetId} is missing its executable name (${labels}). Edit the app configuration and set the process name or remove the entry.`
+    );
+  }
+  if (keptProcesses.length !== (config.processesToClose || []).length) {
+    config = { ...config, processesToClose: keptProcesses };
+  }
   if (!adapter) {
     // These internal lifecycle fields are never accepted from customer config.
     if (
@@ -1790,13 +1808,10 @@ export function applyApplicationPackagingAdapter(
     };
   }
 
-  const processesToClose = (config.processesToClose || []).map((process) => {
-    const name = normalizeProcessName(process.name);
-    if (!name) {
-      throw new Error(`Invalid empty PSADT process name for ${adapter.wingetId}`);
-    }
-    return { ...process, name };
-  });
+  const processesToClose = keptProcesses.map((process) => ({
+    ...process,
+    name: normalizeProcessName(process.name),
+  }));
   const configuredNames = new Set(
     processesToClose.map(({ name }) => name.toLowerCase())
   );

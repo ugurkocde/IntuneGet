@@ -62,7 +62,7 @@ import type {
 import type { CartItem, IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship } from '@/types/intune';
 import type { EspProfileSelection } from '@/types/esp';
-import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose } from '@/types/psadt';
+import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose, sanitizeProcessesToClose } from '@/types/psadt';
 import { useCartStore, createStoreCartItem } from '@/stores/cart-store';
 import { useUserSettings } from '@/components/providers/UserSettingsProvider';
 import { useUpdateAppSettings } from '@/hooks/use-update-app-settings';
@@ -220,6 +220,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStoreApp ? 'assignment' : 'detection');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [processesError, setProcessesError] = useState<string | null>(null);
   const [addedToCartSuccess, setAddedToCartSuccess] = useState(false);
   const [configMode, setConfigMode] = useState<'quick' | 'advanced'>('quick');
 
@@ -409,6 +410,20 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     if (!isStoreApp && isFetchingVersionInstallers) return;
     if (!isStoreApp && inCart) return;
 
+    // The packaging pipeline rejects close-process entries without an
+    // executable name, so block adding to cart instead of storing a config
+    // that fails minutes later during packaging.
+    const sanitizedProcesses = isStoreApp
+      ? null
+      : sanitizeProcessesToClose(config.processesToClose);
+    if (sanitizedProcesses && sanitizedProcesses.invalid.length > 0) {
+      setProcessesError(
+        'Each process to close needs an executable name, for example chrome. Fill in the process name or remove the row.'
+      );
+      setExpandedSection('behavior');
+      return;
+    }
+
     setIsAddingToCart(true);
     try {
       if (isStoreApp) {
@@ -463,7 +478,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           installCommand: config.installCommand || generateInstallCommand(selectedInstaller!, selectedScope),
           uninstallCommand: config.uninstallCommand || generateUninstallCommand(selectedInstaller!, pkg.name),
           detectionRules: config.detectionRules,
-          psadtConfig: config,
+          psadtConfig: sanitizedProcesses
+            ? { ...config, processesToClose: sanitizedProcesses.processes }
+            : config,
           assignments: assignments.length > 0 ? assignments : undefined,
           requirementRules: buildCartItemRequirementRules(
             displayName,
@@ -527,6 +544,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const removeProcess = (index: number) => {
+    setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
       processesToClose: prev.processesToClose.filter((_, i) => i !== index),
@@ -534,6 +552,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   };
 
   const updateProcess = (index: number, updates: Partial<ProcessToClose>) => {
+    setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
       processesToClose: prev.processesToClose.map((p, i) =>
@@ -1022,7 +1041,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                               value={process.name}
                               onChange={(e) => updateProcess(index, { name: e.target.value })}
                               placeholder="Process name (e.g., chrome)"
-                              className="flex-1 px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm"
+                              className={cn(
+                                'flex-1 px-3 py-2 bg-bg-elevated border rounded-lg text-text-primary text-sm',
+                                processesError && !process.name.trim() && process.description.trim()
+                                  ? 'border-red-500/60'
+                                  : 'border-overlay/15'
+                              )}
                             />
                             <input
                               type="text"
@@ -1039,6 +1063,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                             </button>
                           </div>
                         ))
+                      )}
+                      {processesError && (
+                        <p className="text-red-400 text-sm">{processesError}</p>
                       )}
                     </div>
                   </div>

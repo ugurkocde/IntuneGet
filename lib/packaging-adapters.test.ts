@@ -1684,4 +1684,59 @@ describe('application packaging adapters', () => {
     const config = { ...DEFAULT_PSADT_CONFIG, processesToClose: [] };
     expect(applyApplicationPackagingAdapter('Example.StreamDeck', config)).toBe(config);
   });
+
+  it('rejects a close-process entry without an executable name for apps without an adapter', () => {
+    const config = {
+      ...DEFAULT_PSADT_CONFIG,
+      processesToClose: [
+        { name: '', description: 'Git' },
+        { name: '', description: 'Git Bash' },
+      ],
+    };
+
+    expect(() => applyApplicationPackagingAdapter('Git.Git', config)).toThrow(
+      'A process to close for Git.Git is missing its executable name (Git, Git Bash)'
+    );
+  });
+
+  it('rejects a name that is only a .exe suffix', () => {
+    const config = {
+      ...DEFAULT_PSADT_CONFIG,
+      processesToClose: [{ name: '.exe', description: 'Broken entry' }],
+    };
+
+    expect(() => applyApplicationPackagingAdapter('Git.Git', config)).toThrow(
+      'missing its executable name'
+    );
+  });
+
+  it('drops fully empty close-process rows for apps without an adapter', () => {
+    const config = {
+      ...DEFAULT_PSADT_CONFIG,
+      processesToClose: [
+        { name: 'git', description: 'Git' },
+        { name: '', description: '' },
+        { name: '   ', description: '' },
+      ],
+    };
+
+    const adapted = applyApplicationPackagingAdapter('Git.Git', config);
+
+    expect(adapted.processesToClose).toEqual([{ name: 'git', description: 'Git' }]);
+  });
+
+  it('keeps valid close-process rows byte-identical for apps without an adapter', () => {
+    const config = {
+      ...DEFAULT_PSADT_CONFIG,
+      processesToClose: [{ name: 'notepad++.exe', description: 'Notepad++' }],
+    };
+
+    const adapted = applyApplicationPackagingAdapter('Notepad++.Notepad++', config);
+
+    expect(adapted).toBe(config);
+    expect(adapted.processesToClose[0]).toEqual({
+      name: 'notepad++.exe',
+      description: 'Notepad++',
+    });
+  });
 });

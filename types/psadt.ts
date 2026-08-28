@@ -519,3 +519,30 @@ export function getDefaultProcessesToClose(
 
   return processes;
 }
+
+/**
+ * The packaging pipeline rejects close-process entries without an executable
+ * name, so validate before save or dispatch: drop rows with no content at
+ * all, and report rows that still lack a usable name (for example a filled
+ * description with an empty name) so callers can block instead of shipping a
+ * config the packager will fail on. Kept rows are returned unchanged; the
+ * packager itself trims and strips a trailing .exe, and rewriting names here
+ * would needlessly change QA execution-profile hashes.
+ */
+export function sanitizeProcessesToClose(
+  processes: ProcessToClose[] | undefined
+): { processes: ProcessToClose[]; invalid: ProcessToClose[] } {
+  const kept: ProcessToClose[] = [];
+  const invalid: ProcessToClose[] = [];
+  for (const process of processes || []) {
+    const name = (process.name || '').trim().replace(/\.exe$/i, '');
+    const description = (process.description || '').trim();
+    if (!name && !description) continue;
+    if (!name) {
+      invalid.push(process);
+      continue;
+    }
+    kept.push(process);
+  }
+  return { processes: kept, invalid };
+}

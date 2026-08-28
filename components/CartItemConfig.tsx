@@ -43,6 +43,7 @@ import type { CartItem, StoreCartItem, IntuneAppCategorySelection, PackageAssign
 import type { EspProfileSelection } from '@/types/esp';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 import type { AppRelationship, MsiDetectionRule } from '@/types/intune';
+import { sanitizeProcessesToClose } from '@/types/psadt';
 import type {
   PSADTConfig,
   ProcessToClose,
@@ -124,6 +125,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   // UI state
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStore ? 'assignment' : 'behavior');
   const [isSaving, setIsSaving] = useState(false);
+  const [processesError, setProcessesError] = useState<string | null>(null);
 
   const modalRef = useFocusTrap<HTMLDivElement>();
 
@@ -173,6 +175,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   };
 
   const removeProcess = (index: number) => {
+    setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
       processesToClose: prev.processesToClose.filter((_, i) => i !== index),
@@ -180,6 +183,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   };
 
   const updateProcess = (index: number, updates: Partial<ProcessToClose>) => {
+    setProcessesError(null);
     setConfig((prev) => ({
       ...prev,
       processesToClose: prev.processesToClose.map((p, i) =>
@@ -193,6 +197,20 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   };
 
   const handleSave = async () => {
+    // The packaging pipeline rejects close-process entries without an
+    // executable name, so block the save instead of storing a config that
+    // fails minutes later during packaging.
+    const sanitizedProcesses = isWin32
+      ? sanitizeProcessesToClose(config.processesToClose)
+      : null;
+    if (sanitizedProcesses && sanitizedProcesses.invalid.length > 0) {
+      setProcessesError(
+        'Each process to close needs an executable name, for example chrome. Fill in the process name or remove the row.'
+      );
+      setExpandedSection('behavior');
+      return;
+    }
+
     setIsSaving(true);
     try {
       if (isStore) {
@@ -220,7 +238,9 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
 
         updateItem(item.id, {
           installScope: selectedScope,
-          psadtConfig: config,
+          psadtConfig: sanitizedProcesses
+            ? { ...config, processesToClose: sanitizedProcesses.processes }
+            : config,
           assignments: assignments.length > 0 ? assignments : undefined,
           categories: categories.length > 0 ? categories : undefined,
           espProfiles: espProfiles.length > 0 ? espProfiles : undefined,
@@ -451,7 +471,12 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                               value={process.name}
                               onChange={(e) => updateProcess(index, { name: e.target.value })}
                               placeholder="Process name (e.g., chrome)"
-                              className="flex-1 px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm"
+                              className={cn(
+                                'flex-1 px-3 py-2 bg-bg-elevated border rounded-lg text-text-primary text-sm',
+                                processesError && !process.name.trim() && process.description.trim()
+                                  ? 'border-red-500/60'
+                                  : 'border-overlay/15'
+                              )}
                             />
                             <input
                               type="text"
@@ -468,6 +493,9 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                             </button>
                           </div>
                         ))
+                      )}
+                      {processesError && (
+                        <p className="text-red-400 text-sm">{processesError}</p>
                       )}
                     </div>
                   </div>
