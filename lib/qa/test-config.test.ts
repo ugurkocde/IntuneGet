@@ -72,7 +72,7 @@ describe('buildQaCatalogTestConfig', () => {
     expect(config.psadtConfig.reviewedExactUninstall).toEqual({
       executablePath:
         '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
-      arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+      arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
       completionTimeoutMinutes: 5,
     });
   });

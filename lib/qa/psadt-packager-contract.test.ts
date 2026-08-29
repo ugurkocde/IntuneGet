@@ -3439,7 +3439,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'keeps the Simple Hydraulic Calculator NSIS install directory argument last',
+    'emits the Simple Hydraulic Calculator NSIS command as one raw argument-list element',
     () => {
       const generated = generateRegistryUninstallPackage(
         'nullsoft',
@@ -3449,7 +3449,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
           reviewedExactUninstall: {
             executablePath:
               '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
-            arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+            arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
             completionTimeoutMinutes: 5,
           },
         },
@@ -3465,9 +3465,11 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         "[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe')"
       );
       expect(generated).toContain(
+        "$registeredUninstallArguments = @('/S _?=%ProgramFiles(x86)%\\Igneus\\SHC')"
+      );
+      expect(generated).not.toContain(
         "$registeredUninstallArguments = @('/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC')"
       );
-      expect(generated).not.toContain("$registeredUninstallArguments = @('/S')");
     }
   );
 

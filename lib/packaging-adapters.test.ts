@@ -1253,12 +1253,10 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedExactUninstall).toEqual({
       executablePath:
         '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
-      arguments: ['/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC'],
+      arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
       completionTimeoutMinutes: 5,
     });
-    expect(adapted.reviewedExactUninstall?.arguments.at(-1)).toBe(
-      '_?=%ProgramFiles(x86)%\\Igneus\\SHC'
-    );
+    expect(adapted.reviewedExactUninstall?.arguments).toHaveLength(1);
   });
 
   it('uses JetBrains silent mode with the exact dotPeek ARP command', () => {
