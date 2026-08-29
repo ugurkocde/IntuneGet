@@ -1671,6 +1671,16 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Greenshot',
     registeredRegistryKey: 'Greenshot_is1',
   },
+  // IJe's catalog name is `IJe Programming Language`, but its Inno installer
+  // registers the versioned display name `IJe version 1.0.1` below a stable
+  // AppId-derived `_is1` key. QA run 33227580169 observed exactly that one
+  // visible IJe Team registration. Bind the immutable key so capture,
+  // detection, and removal never rely on the versioned catalog/display rename.
+  'ije.ije': {
+    generatedDisplayName: 'IJe Programming Language',
+    registeredDisplayName: 'IJe version 1.0.1',
+    registeredRegistryKey: '{C626C8D8-8095-4654-8C2A-851532029011}_is1',
+  },
   // FSLogix is distributed as a ZIP containing Microsoft's Burn-style EXE.
   // WinGet publishes `Microsoft FSLogix Apps` in ProductCode, but the bundle
   // creates a generated GUID ARP key with that value as its DisplayName. Bind

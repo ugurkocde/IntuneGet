@@ -138,6 +138,19 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses IJe\'s stable Inno registry key despite its versioned ARP name', () => {
+    expect(resolveApplicationUninstallCommand(
+      'IJe.IJe',
+      'REGISTRY_UNINSTALL:IJe Programming Language'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:{C626C8D8-8095-4654-8C2A-851532029011}_is1:IJe version 1.0.1'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'ije.ije',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses FSLogix\'s registered bundle display identity', () => {
     expect(resolveApplicationUninstallCommand(
       'Microsoft.FSLogix',
