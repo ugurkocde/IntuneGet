@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '24ee5fb123c9817f4d2dabcbe11817472c82d1e1',
+  packagerCommit: '617c3f8801dac600fd86c4c743aa2b44a1a5061b',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -517,6 +517,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // uninstall key. Preserve every unrelated compatible pass from the bounded
   // Simple Hydraulic Calculator confirmation release.
   '5fcfe713cc45fa1c458acf895ec8827b94166dc4',
+  // Ente Photos now runs in Electron Builder's per-user NSIS context instead
+  // of LocalSystem's disposable systemprofile. Preserve every unrelated pass
+  // from the IJe registered-identity release.
+  '24ee5fb123c9817f4d2dabcbe11817472c82d1e1',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

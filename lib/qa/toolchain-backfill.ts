@@ -482,7 +482,17 @@ const SIMPLE_HYDRAULIC_NSIS_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...TEAMSPEAK6_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ENTE_PHOTOS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry Ente Photos in the vendor-configured per-user NSIS context after
+  // LocalSystem installed it below the disposable systemprofile.
+  'ente-io.photos-desktop',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...SIMPLE_HYDRAULIC_NSIS_UNINSTALL_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '617c3f8801dac600fd86c4c743aa2b44a1a5061b':
+    ENTE_PHOTOS_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '24ee5fb123c9817f4d2dabcbe11817472c82d1e1':
     SIMPLE_HYDRAULIC_NSIS_UNINSTALL_RELEASE_RETRY_TARGETS,
   '5fcfe713cc45fa1c458acf895ec8827b94166dc4':
