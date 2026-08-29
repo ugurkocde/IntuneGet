@@ -1679,3 +1679,28 @@ describe('DirPrintOK managed uninstall block migration contract', () => {
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('Maestro Arsoppgjor managed install block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260829064000_block_maestro_aarsoppgjoer_unsupported_managed_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the non-registering LocalSystem install across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_install'");
+    expect(sql).toContain("'MaestroSoft.MaestroAarsoppgjoer.2025'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/33238254434'
+    );
+    expect(sql).toContain('Two isolated PSADT runs');
+    expect(sql).toContain('38.05.21 and 38.05.22');
+    expect(sql).toContain('Microsoft Edge/WebView2 registrations');
+    expect(sql).toContain('managed detection or removal');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
