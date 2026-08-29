@@ -1649,7 +1649,7 @@ describe('QA toolchain targeted retries', () => {
     )).not.toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
   });
 
-  it('retries Simple Hydraulic Calculator only with its exact NSIS release', () => {
+  it('retries Simple Hydraulic Calculator with its bounded confirmation release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       {
@@ -1659,6 +1659,9 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
     expect(terminalToolchainRetryTargets(
       QA_PSADT_TOOLCHAIN.packagerCommit
+    )).toContain('Igneus.SimpleHydraulicCalculator');
+    expect(terminalToolchainRetryTargets(
+      '5998b0deba83c1e274e8a4249a7962f67dcb6073'
     )).toContain('Igneus.SimpleHydraulicCalculator');
     expect(terminalToolchainRetryTargets(
       'e139e4cc222576f34ca905b7180ac47ea548cbab'

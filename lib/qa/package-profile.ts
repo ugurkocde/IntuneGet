@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '5998b0deba83c1e274e8a4249a7962f67dcb6073',
+  packagerCommit: '5fcfe713cc45fa1c458acf895ec8827b94166dc4',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -509,6 +509,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // install-directory context. Preserve every unrelated compatible pass from
   // the TeamSpeak machine-scope release.
   'd2ee075ff3c717dbadef7fa2c5f480c33d256d4f',
+  // Simple Hydraulic Calculator now emits the required NSIS install-directory
+  // tail as one unquoted raw command-line element. Preserve every unrelated
+  // compatible pass from the first exact-uninstaller release.
+  '5998b0deba83c1e274e8a4249a7962f67dcb6073',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
