@@ -1655,3 +1655,27 @@ describe('League of Legends LA1 managed install block migration contract', () =>
     expect(sql).toContain("status in ('queued', 'failed', 'error')");
   });
 });
+
+describe('DirPrintOK managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260829014500_block_dirprintok_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the unsupported vendor removal lifecycle across packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'SoftwareOK.DirPrintOK'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/33226086539'
+    );
+    expect(sql).toContain('exact registered command');
+    expect(sql).toContain('Press any key to exit');
+    expect(sql).toContain('bounded five-minute');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
