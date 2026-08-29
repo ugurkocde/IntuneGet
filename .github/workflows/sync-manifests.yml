@@ -641,10 +641,19 @@ jobs:
             let allNewVersions = [], unavailableItems = [], failedItems = [];
 
             if (fs.existsSync(resultsDir)) {
-              const dirs = fs.readdirSync(resultsDir);
-              for (const dir of dirs) {
-                const filePath = path.join(resultsDir, dir, 'sync-results.json');
-                if (fs.existsSync(filePath)) {
+              // download-artifact places each artifact in its own subdirectory
+              // when a pattern matches several, but extracts FLAT into the
+              // target path when the pattern matches exactly one (observed on
+              // run 33243208914: a single-shard manual run produced
+              // results/sync-results.json and the subdirectory scan found 0
+              // shards). Accept both layouts.
+              const shardFiles = fs.readdirSync(resultsDir)
+                .map((entry) => path.join(resultsDir, entry, 'sync-results.json'))
+                .filter((filePath) => fs.existsSync(filePath));
+              const flatFile = path.join(resultsDir, 'sync-results.json');
+              if (shardFiles.length === 0 && fs.existsSync(flatFile)) shardFiles.push(flatFile);
+              for (const filePath of shardFiles) {
+                {
                   const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                   totalSynced += data.synced || 0;
                   totalFailed += data.failed || 0;
