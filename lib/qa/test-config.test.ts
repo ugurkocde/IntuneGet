@@ -745,6 +745,44 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
+  it('tests Ente Photos in user context when its Electron Builder manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'ente-io.photos-desktop',
+        name: 'Ente Photos',
+        publisher: 'Ente',
+        version: '1.7.27',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        ProductCode: 'fb682768-51c6-5397-92da-171dc1777808',
+        AppsAndFeaturesEntries: [
+          {
+            DisplayName: 'ente 1.7.27',
+            Publisher: 'Ente',
+            ProductCode: 'fb682768-51c6-5397-92da-171dc1777808',
+          },
+        ],
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{FB682768-51C6-5397-92DA-171DC1777808}:Ente Photos'
+    );
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\ente_io_photos_desktop',
+      }),
+    ]);
+  });
+
   it('tests Youdao in user context when its NSIS manifest omits scope', () => {
     const config = buildQaCatalogTestConfig({
       app: {

@@ -651,6 +651,59 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
+  it('uses Ente Photos user scope consistently for customer PSADT packaging and QA', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: 'https://example.com/setup.exe',
+      sha256: 'A'.repeat(64),
+      type: 'nullsoft',
+      silentArgs: '/S',
+      productCode: 'fb682768-51c6-5397-92da-171dc1777808',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'ente-io.photos-desktop',
+          displayName: 'Ente Photos',
+          version: '1.7.27',
+          installerType: 'nullsoft',
+          installScope: 'machine',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'ente-io.photos-desktop',
+        installScope: 'user',
+      }),
+      expect.any(Array)
+    );
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ installScope: 'user' })
+    );
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ install_scope: 'user' })
+    );
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'ente-io.photos-desktop',
+        installScope: 'user',
+      }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
   it('uses TeamSpeak 6 Beta all-users MSI scope for QA and customer packaging', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',

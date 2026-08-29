@@ -178,6 +178,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Ente Photos 1.7.27 is built with Electron Builder's one-click NSIS
+    // target and does not enable perMachine. Electron Builder therefore uses
+    // its per-user default. WinGet omits Scope; running the same installer as
+    // LocalSystem placed its registration below systemprofile and the captured
+    // uninstaller was unavailable by the removal cycle. Keep both QA and the
+    // shared customer PSADT package in the vendor-supported user context.
+    // https://github.com/ente/ente/blob/photos-desktop-v1.7.27/desktop/electron-builder.yml
+    wingetId: 'ente-io.photos-desktop',
+    requiredInstallScope: 'user',
+  },
+  {
     // ElegantClipboard's tagged Tauri v2 configuration explicitly builds its
     // NSIS installer with installMode=currentUser, while the WinGet manifest
     // omits Scope. The generic machine default installs below LocalSystem's
