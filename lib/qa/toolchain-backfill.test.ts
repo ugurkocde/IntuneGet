@@ -1649,6 +1649,16 @@ describe('QA toolchain targeted retries', () => {
     )).not.toContain('TeamSpeakSystems.TeamSpeakClient.Beta.6');
   });
 
+  it('does not automatically retry the security-gated IJe installer', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ije.ije', status: 'failed' }
+    )).toBe(false);
+    expect(terminalToolchainRetryTargets(
+      QA_PSADT_TOOLCHAIN.packagerCommit
+    )).not.toContain('IJe.IJe');
+  });
+
   it('retries Simple Hydraulic Calculator with its bounded confirmation release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
