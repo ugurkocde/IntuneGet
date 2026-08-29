@@ -3439,8 +3439,9 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
-    'emits the Simple Hydraulic Calculator NSIS command as one raw argument-list element',
+    'emits the Simple Hydraulic Calculator raw NSIS command and bounded confirmation automation',
     () => {
+      let embeddedAutomation: unknown;
       const generated = generateRegistryUninstallPackage(
         'nullsoft',
         'Simple Hydraulic Calculator',
@@ -3452,13 +3453,36 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
             arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
             completionTimeoutMinutes: 5,
           },
+          reviewedUninstallWindowAutomation: {
+            processName: 'shc2uninstall.exe',
+            steps: [
+              {
+                windowText: 'Simple Hydraulic Calculator',
+                buttonIndex: 1,
+                timeoutSeconds: 60,
+              },
+            ],
+          },
         },
         [],
         'Igneus.SimpleHydraulicCalculator',
         'Simple Hydraulic Calculator',
         '2.3.9',
         'REGISTRY_UNINSTALL_KEY:Simple Hydraulic Calculator:Simple Hydraulic Calculator',
-        '/S'
+        '/S',
+        'machine',
+        '',
+        '',
+        (packageDirectory) => {
+          embeddedAutomation = JSON.parse(readFileSync(
+            join(
+              packageDirectory,
+              'SupportFiles',
+              'ReviewedUninstallWindowAutomation.json'
+            ),
+            'utf8'
+          ));
+        }
       );
 
       expect(generated).toContain(
@@ -3470,6 +3494,19 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
       expect(generated).not.toContain(
         "$registeredUninstallArguments = @('/S', '_?=%ProgramFiles(x86)%\\Igneus\\SHC')"
       );
+      expect(generated).toContain(
+        'Starting reviewed window automation for the exact vendor uninstaller.'
+      );
+      expect(embeddedAutomation).toEqual({
+        processName: 'shc2uninstall.exe',
+        steps: [
+          {
+            windowText: 'Simple Hydraulic Calculator',
+            buttonIndex: 1,
+            timeoutSeconds: 60,
+          },
+        ],
+      });
     }
   );
 

@@ -1257,6 +1257,16 @@ describe('application packaging adapters', () => {
       completionTimeoutMinutes: 5,
     });
     expect(adapted.reviewedExactUninstall?.arguments).toHaveLength(1);
+    expect(adapted.reviewedUninstallWindowAutomation).toEqual({
+      processName: 'shc2uninstall.exe',
+      steps: [
+        {
+          windowText: 'Simple Hydraulic Calculator',
+          buttonIndex: 1,
+          timeoutSeconds: 60,
+        },
+      ],
+    });
   });
 
   it('uses JetBrains silent mode with the exact dotPeek ARP command', () => {

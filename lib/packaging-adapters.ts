@@ -622,20 +622,32 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   },
   {
     // Simple Hydraulic Calculator registers a small NSIS bootstrap uninstaller
-    // that returns immediately for a bare /S invocation without removing the
-    // application (QA runs 33219132479 and 33220015102). NSIS requires the
-    // special _?= install-directory tail to remain last and unquoted. PSADT
-    // quotes a multi-item argument array when this path contains spaces, so
-    // keep the complete vendor command line in one element; PSADT 4.1.8 passes
-    // a single element through verbatim. Bind that exact machine-wide command
-    // to both QA and customer packages while retaining the captured ARP key as
-    // authoritative completion evidence.
+    // that does not complete for a bare /S invocation (QA runs 33219132479 and
+    // 33220015102). NSIS requires the special _?= install-directory tail to
+    // remain last and unquoted. PSADT quotes a multi-item argument array when
+    // this path contains spaces, so keep the complete vendor command line in
+    // one element; PSADT 4.1.8 passes a single element through verbatim. Even
+    // with that exact command the vendor process remains blocked behind its
+    // product-specific confirmation in session 0 (run 33223161038). Drive only
+    // the first button on a window that contains the exact product name and is
+    // owned by the newly started, path-verified uninstaller. The captured ARP
+    // key remains the authoritative completion signal for QA and customers.
     wingetId: 'Igneus.SimpleHydraulicCalculator',
     reviewedExactUninstall: {
       executablePath:
         '%ProgramFiles(x86)%\\Igneus\\SHC\\shc2uninstall.exe',
       arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
       completionTimeoutMinutes: 5,
+    },
+    reviewedUninstallWindowAutomation: {
+      processName: 'shc2uninstall.exe',
+      steps: [
+        {
+          windowText: 'Simple Hydraulic Calculator',
+          buttonIndex: 1,
+          timeoutSeconds: 60,
+        },
+      ],
     },
   },
   {

@@ -738,6 +738,16 @@ describe('POST /api/package (workflow dispatch)', () => {
         arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
         completionTimeoutMinutes: 5,
       },
+      reviewedUninstallWindowAutomation: {
+        processName: 'shc2uninstall.exe',
+        steps: [
+          {
+            windowText: 'Simple Hydraulic Calculator',
+            buttonIndex: 1,
+            timeoutSeconds: 60,
+          },
+        ],
+      },
     };
     expect(JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)).toMatchObject(
       expectedAdapter

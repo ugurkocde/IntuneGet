@@ -75,6 +75,16 @@ describe('buildQaCatalogTestConfig', () => {
       arguments: ['/S _?=%ProgramFiles(x86)%\\Igneus\\SHC'],
       completionTimeoutMinutes: 5,
     });
+    expect(config.psadtConfig.reviewedUninstallWindowAutomation).toEqual({
+      processName: 'shc2uninstall.exe',
+      steps: [
+        {
+          windowText: 'Simple Hydraulic Calculator',
+          buttonIndex: 1,
+          timeoutSeconds: 60,
+        },
+      ],
+    });
   });
 
   it('prefers installer-specific silent switches and product metadata', () => {
