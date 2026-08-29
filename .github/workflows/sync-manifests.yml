@@ -604,6 +604,15 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      # The aggregate step imports lib/winget-sync-resolution.mjs, which
+      # depends on the yaml package. Without installed dependencies the
+      # import fails with ERR_MODULE_NOT_FOUND, the summary job goes red
+      # even when every sync shard succeeded, and the snapshot job (which
+      # requires summary success) never rebuilds the self-hosted catalog.
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
 
       - name: Download all shard results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
