@@ -633,6 +633,36 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('normalizes zyfun to the same user-scoped customer and QA identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'HiramWong.zyfun',
+      displayName: 'zyfun',
+      publisher: 'HiramWong',
+      version: '3.4.7',
+      architecture: 'x64',
+      installerSha256: '5'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{1CF4E394-3CB1-57F9-A0E2-D9ADD46AD139}:zyfun',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(profile.installer.silentArgs).toBe('/S');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\HiramWong_zyfun',
+      }),
+    ]);
+  });
+
   it('keeps ElegantClipboard out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Y-ASLant.ElegantClipboard',

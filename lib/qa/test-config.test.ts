@@ -783,6 +783,45 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
+  it('tests zyfun in user context when its Electron Builder manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'HiramWong.zyfun',
+        name: 'zyfun',
+        publisher: 'HiramWong',
+        version: '3.4.7',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        ProductCode: '1cf4e394-3cb1-57f9-a0e2-d9add46ad139',
+        AppsAndFeaturesEntries: [
+          {
+            DisplayName: 'zyfun',
+            Publisher: 'HiramWong',
+            ProductCode: '1cf4e394-3cb1-57f9-a0e2-d9add46ad139',
+          },
+        ],
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.silentArgs).toBe('/S');
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{1CF4E394-3CB1-57F9-A0E2-D9ADD46AD139}:zyfun'
+    );
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\HiramWong_zyfun',
+      }),
+    ]);
+  });
+
   it('tests Youdao in user context when its NSIS manifest omits scope', () => {
     const config = buildQaCatalogTestConfig({
       app: {

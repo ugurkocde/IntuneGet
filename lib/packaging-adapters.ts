@@ -189,6 +189,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // zyfun is built with Electron Builder's NSIS target and does not enable
+    // perMachine. Electron Builder therefore uses its per-user default. WinGet
+    // omits Scope; running the same installer as LocalSystem placed its ARP
+    // registration below systemprofile and the captured uninstaller path was
+    // unavailable by the managed removal cycle. Keep QA, catalog packages, and
+    // customer uploads in the vendor-supported signed-in user context.
+    // https://github.com/Hiram-Wong/zyfun/blob/main/electron-builder.yml
+    wingetId: 'HiramWong.zyfun',
+    requiredInstallScope: 'user',
+  },
+  {
     // ElegantClipboard's tagged Tauri v2 configuration explicitly builds its
     // NSIS installer with installMode=currentUser, while the WinGet manifest
     // omits Scope. The generic machine default installs below LocalSystem's

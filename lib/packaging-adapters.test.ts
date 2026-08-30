@@ -324,6 +324,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' ENTE-IO.PHOTOS-DESKTOP ', undefined)
     ).toBe('user');
+    expect(resolveApplicationInstallScope('HiramWong.zyfun', 'machine')).toBe(
+      'user'
+    );
+    expect(
+      resolveApplicationInstallScope(' hiramwong.zyfun ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(
       resolveApplicationInstallScope(
