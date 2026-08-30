@@ -6,6 +6,21 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries UniFi OS Server only after activating its machine-wide lifecycle', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' UBIQUITI.UNIFIOSSERVER ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '772c3aae1cc5b4f13219c216bfc1220cab2bbd23',
+      { wingetId: 'Ubiquiti.UniFiOSServer', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries AionUi Community only after activating its exact upstream identity', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

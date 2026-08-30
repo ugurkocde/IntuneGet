@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '772c3aae1cc5b4f13219c216bfc1220cab2bbd23',
+  packagerCommit: 'de218619eb0dafb2029f777f47ee6852612527f9',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -537,6 +537,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Electron Builder ARP identity. Preserve every unrelated compatible pass
   // from the G.SKILL registered-identity release.
   'd7d0c2dc287851f151cc037022137bb3506f368d',
+  // UniFi OS Server now uses Electron Builder's machine-wide lifecycle under
+  // LocalSystem. Preserve every unrelated compatible pass from the AionUi
+  // registered-identity release.
+  '772c3aae1cc5b4f13219c216bfc1220cab2bbd23',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

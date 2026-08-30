@@ -522,7 +522,17 @@ const AIONUI_COMMUNITY_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...GSKILL_TRIDENT_Z_IDENTITY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry UniFi OS Server with Electron Builder's machine-wide /allusers mode
+  // so LocalSystem installation and removal use the same registered path.
+  'Ubiquiti.UniFiOSServer',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...AIONUI_COMMUNITY_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'de218619eb0dafb2029f777f47ee6852612527f9':
+    UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
   '772c3aae1cc5b4f13219c216bfc1220cab2bbd23':
     AIONUI_COMMUNITY_IDENTITY_RELEASE_RETRY_TARGETS,
   'd7d0c2dc287851f151cc037022137bb3506f368d':
