@@ -57,7 +57,11 @@ const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
 // deployed-app demand per poll to avoid spending hours reclassifying known
 // payloads three at a time.
 const DEMAND_BACKFILL_BATCH_SIZE = 20;
-const IDLE_CATALOG_BACKFILL_BATCH_SIZE = 3;
+// Many catalog rows cannot currently resolve to a trusted Windows installer.
+// Probe enough idle candidates to keep the serialized VM supplied, while the
+// loop below still resolves manifests in bounded groups of BATCH_SIZE and the
+// database continues to enforce a single active lifecycle.
+const IDLE_CATALOG_BACKFILL_BATCH_SIZE = 20;
 const MAX_TARGETED_PACKAGE_IDS = 20;
 const TARGETED_QA_PRIORITY = 1_000;
 

@@ -468,7 +468,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     ]);
     expect(rpcCalls).toEqual([
       { name: 'qa_missing_demand_backfill_ids', args: { p_limit: 20 } },
-      { name: 'qa_idle_catalog_backfill_ids', args: { p_limit: 3 } },
+      { name: 'qa_idle_catalog_backfill_ids', args: { p_limit: 20 } },
     ]);
     expect(pollRunUpdates).toEqual([
       expect.objectContaining({
@@ -554,7 +554,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(rpcCalls).toContainEqual({
       name: 'qa_idle_catalog_backfill_ids',
-      args: { p_limit: 3 },
+      args: { p_limit: 20 },
     });
     expect(candidateInserts[0]).toMatchObject({
       winget_id: 'Missing.App',
@@ -602,7 +602,7 @@ describe('GET /api/cron/qa-enqueue', () => {
     });
     expect(rpcCalls).toContainEqual({
       name: 'qa_idle_catalog_backfill_ids',
-      args: { p_limit: 3 },
+      args: { p_limit: 20 },
     });
     expect(candidateInserts).toEqual([
       expect.objectContaining({
