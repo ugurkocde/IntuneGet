@@ -6,6 +6,21 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries AionUi Community only after activating its exact upstream identity', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' LUMYSIA.AIONUICOMMUNITY ', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd7d0c2dc287851f151cc037022137bb3506f368d',
+      { wingetId: 'Lumysia.AionUiCommunity', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries G.SKILL Trident Z only after activating its exact Inno identity', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

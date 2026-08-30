@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd7d0c2dc287851f151cc037022137bb3506f368d',
+  packagerCommit: '772c3aae1cc5b4f13219c216bfc1220cab2bbd23',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -533,6 +533,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // registry key observed during installation. Preserve every unrelated pass
   // from the zyfun all-users release.
   'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272',
+  // AionUi Community now binds its catalog title to the exact upstream
+  // Electron Builder ARP identity. Preserve every unrelated compatible pass
+  // from the G.SKILL registered-identity release.
+  'd7d0c2dc287851f151cc037022137bb3506f368d',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

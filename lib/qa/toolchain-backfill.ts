@@ -514,7 +514,17 @@ const GSKILL_TRIDENT_Z_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...ZYFUN_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const AIONUI_COMMUNITY_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry AionUi Community after binding the catalog label to the exact
+  // upstream Electron Builder `AionUi` uninstall identity.
+  'Lumysia.AionUiCommunity',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...GSKILL_TRIDENT_Z_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '772c3aae1cc5b4f13219c216bfc1220cab2bbd23':
+    AIONUI_COMMUNITY_IDENTITY_RELEASE_RETRY_TARGETS,
   'd7d0c2dc287851f151cc037022137bb3506f368d':
     GSKILL_TRIDENT_Z_IDENTITY_RELEASE_RETRY_TARGETS,
   'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272':
