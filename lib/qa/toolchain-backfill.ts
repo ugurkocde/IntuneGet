@@ -530,7 +530,18 @@ const UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS = [
   ...AIONUI_COMMUNITY_IDENTITY_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const SERVICE_FABRIC_RUNTIME_OFFICIAL_ARGS_RELEASE_RETRY_TARGETS = [
+  // Retry Service Fabric Runtime with Microsoft's complete documented
+  // /accepteula contract instead of the extra generic WinGet switches that
+  // made the signed bootstrapper exit before creating its vendor identity.
+  'Microsoft.ServiceFabricRuntime',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'f48e73742c96773e2b4c8c2fed200363c7b5a805':
+    SERVICE_FABRIC_RUNTIME_OFFICIAL_ARGS_RELEASE_RETRY_TARGETS,
   'de218619eb0dafb2029f777f47ee6852612527f9':
     UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
   '772c3aae1cc5b4f13219c216bfc1220cab2bbd23':

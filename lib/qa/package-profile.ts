@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'de218619eb0dafb2029f777f47ee6852612527f9',
+  packagerCommit: 'f48e73742c96773e2b4c8c2fed200363c7b5a805',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -541,6 +541,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // LocalSystem. Preserve every unrelated compatible pass from the AionUi
   // registered-identity release.
   '772c3aae1cc5b4f13219c216bfc1220cab2bbd23',
+  // Service Fabric Runtime now uses Microsoft's complete documented
+  // /accepteula install contract. Preserve every unrelated compatible pass
+  // from the UniFi OS Server machine-scope release.
+  'de218619eb0dafb2029f777f47ee6852612527f9',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
