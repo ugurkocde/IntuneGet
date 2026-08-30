@@ -506,7 +506,17 @@ const ZYFUN_MACHINE_SCOPE_RELEASE_RETRY_TARGETS = [
   ...MAXTO_USER_INSTALLER_HEARTBEAT_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const GSKILL_TRIDENT_Z_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry G.SKILL Trident Z after binding capture, verification, and removal
+  // to the exact visible Inno AppId key observed among four changed ARP entries.
+  'GSKILL.TridentZLightingControl',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...ZYFUN_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'd7d0c2dc287851f151cc037022137bb3506f368d':
+    GSKILL_TRIDENT_Z_IDENTITY_RELEASE_RETRY_TARGETS,
   'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272':
     ZYFUN_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
   // The user-scope strategy reached the normal user but stalled on zyfun's

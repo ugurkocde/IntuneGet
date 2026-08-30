@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272',
+  packagerCommit: 'd7d0c2dc287851f151cc037022137bb3506f368d',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -529,6 +529,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Preserve every unrelated pass from that user-scope release while the
   // current release switches only zyfun to its documented all-users mode.
   'f1664e5b6c12d95c6ecde7b0999bb75582307f11',
+  // G.SKILL Trident Z now binds its catalog title to the exact visible Inno
+  // registry key observed during installation. Preserve every unrelated pass
+  // from the zyfun all-users release.
+  'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
