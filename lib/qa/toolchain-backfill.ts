@@ -490,7 +490,17 @@ const ENTE_PHOTOS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...SIMPLE_HYDRAULIC_NSIS_UNINSTALL_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const MAXTO_USER_INSTALLER_HEARTBEAT_RELEASE_RETRY_TARGETS = [
+  // Retry MaxTo after its reviewed per-user Velopack wait emits bounded PSADT
+  // heartbeats instead of being terminated by the generic inactivity ceiling.
+  'Domino.MaxTo',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...ENTE_PHOTOS_USER_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'd918567cb0990e546fbf92c528bbb0bf91c73525':
+    MAXTO_USER_INSTALLER_HEARTBEAT_RELEASE_RETRY_TARGETS,
   '617c3f8801dac600fd86c4c743aa2b44a1a5061b':
     ENTE_PHOTOS_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '24ee5fb123c9817f4d2dabcbe11817472c82d1e1':
