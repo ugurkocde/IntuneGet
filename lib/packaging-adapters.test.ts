@@ -79,6 +79,15 @@ describe('application packaging adapters', () => {
     ).toBe('jamovi');
   });
 
+  it('binds AionUi Community to the upstream AionUi ARP identity', () => {
+    expect(
+      applyApplicationPackagingAdapter('Lumysia.AionUiCommunity', {
+        ...DEFAULT_PSADT_CONFIG,
+        reviewedRegistryUninstallDisplayName: 'customer override',
+      }).reviewedRegistryUninstallDisplayName
+    ).toBe('AionUi');
+  });
+
   it('binds QTTabBar to the exact ARP identity registered by its nested MSI', () => {
     expect(
       applyApplicationPackagingAdapter('indiff.QTTabBar', {

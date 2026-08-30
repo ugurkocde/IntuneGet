@@ -252,6 +252,28 @@ describe('PSADT QA package identity', () => {
       .toBe('jamovi');
   });
 
+  it('binds AionUi Community customer and QA packages to the upstream AionUi ARP identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Lumysia.AionUiCommunity',
+      displayName: 'AionUi Community',
+      publisher: 'Lumysia',
+      version: '2.1.53',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:AionUi Community',
+      installScope: 'user',
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedRegistryUninstallDisplayName?: string };
+    };
+
+    expect(profile.psadtConfig.reviewedRegistryUninstallDisplayName).toBe('AionUi');
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedRegistryUninstallDisplayName)
+      .toBe('AionUi');
+  });
+
   it('binds QTTabBar customer and QA packages to the observed nested-MSI ARP identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'indiff.QTTabBar',

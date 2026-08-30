@@ -602,6 +602,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedRegistryUninstallDisplayName: 'jamovi',
   },
   {
+    // AionUi Community 2.1.53 is rebuilt from the exact upstream AionUi tag,
+    // whose Electron Builder configuration fixes `productName` and
+    // `uninstallDisplayName` to `AionUi`. The community WinGet entry instead
+    // uses `AionUi Community` as its catalog title. QA run 33323249252 observed
+    // one added ARP entry but correctly refused to capture it through the
+    // mismatched catalog name. Bind QA and customer packages to the exact,
+    // vendor-defined `AionUi` identity while every broader match stays closed.
+    // https://github.com/iOfficeAI/AionUi/blob/v2.1.53/packages/desktop/electron-builder.yml
+    wingetId: 'Lumysia.AionUiCommunity',
+    reviewedRegistryUninstallDisplayName: 'AionUi',
+  },
+  {
     // The 1.5.6-beta.1 catalog metadata calls the product `QTTabBar`, while the
     // nested MSI registers `QTTabBar 1.5.6.1 Beta(2024)`. QA run 33202083278
     // observed exactly one visible indiff MSI registration with that identity.
