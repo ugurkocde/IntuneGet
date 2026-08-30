@@ -633,7 +633,7 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
-  it('normalizes zyfun to the same user-scoped customer and QA identity', () => {
+  it('normalizes zyfun to the same all-users customer and QA identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'HiramWong.zyfun',
       displayName: 'zyfun',
@@ -651,14 +651,16 @@ describe('PSADT QA package identity', () => {
     });
     const profile = normalized.identity.profile as {
       installer: { installScope: string; silentArgs: string };
+      psadtConfig: { reviewedInstallArguments?: string[] };
     };
 
-    expect(profile.installer.installScope).toBe('user');
+    expect(profile.installer.installScope).toBe('machine');
     expect(profile.installer.silentArgs).toBe('/S');
+    expect(profile.psadtConfig.reviewedInstallArguments).toEqual(['/allusers']);
     expect(normalized.detectionRules).toEqual([
       expect.objectContaining({
         keyPath:
-          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\HiramWong_zyfun',
+          'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\HiramWong_zyfun',
       }),
     ]);
   });

@@ -324,12 +324,6 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' ENTE-IO.PHOTOS-DESKTOP ', undefined)
     ).toBe('user');
-    expect(resolveApplicationInstallScope('HiramWong.zyfun', 'machine')).toBe(
-      'user'
-    );
-    expect(
-      resolveApplicationInstallScope(' hiramwong.zyfun ', undefined)
-    ).toBe('user');
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(
       resolveApplicationInstallScope(
@@ -393,6 +387,23 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationInstallScope(' torproject.torbrowser ', undefined)).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
     expect(resolveApplicationInstallScope('Example.App', 'machine')).toBe('machine');
+  });
+
+  it('runs zyfun assisted NSIS all-users so its VC++ prerequisite can complete', () => {
+    expect(resolveApplicationInstallScope('HiramWong.zyfun', 'user')).toBe(
+      'machine'
+    );
+    expect(
+      resolveApplicationInstallScope(' hiramwong.zyfun ', undefined)
+    ).toBe('machine');
+    expect(
+      applyApplicationPackagingAdapter(
+        'HiramWong.zyfun',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallArguments: ['/allusers'],
+    });
   });
 
   it('keeps Appium Inspector on its machine-labelled manifest bytes while executing per-user', () => {

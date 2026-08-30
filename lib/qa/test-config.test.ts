@@ -783,7 +783,7 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
-  it('tests zyfun in user context when its Electron Builder manifest omits scope', () => {
+  it('tests zyfun in machine context with Electron Builder all-users mode', () => {
     const config = buildQaCatalogTestConfig({
       app: {
         wingetId: 'HiramWong.zyfun',
@@ -809,15 +809,16 @@ describe('buildQaCatalogTestConfig', () => {
       },
     });
 
-    expect(config.scope).toBe('user');
+    expect(config.scope).toBe('machine');
     expect(config.silentArgs).toBe('/S');
+    expect(config.psadtConfig.reviewedInstallArguments).toEqual(['/allusers']);
     expect(config.uninstallCommand).toBe(
       'REGISTRY_UNINSTALL_PRODUCT:{1CF4E394-3CB1-57F9-A0E2-D9ADD46AD139}:zyfun'
     );
     expect(config.detectionRules).toEqual([
       expect.objectContaining({
         keyPath:
-          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\HiramWong_zyfun',
+          'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\HiramWong_zyfun',
       }),
     ]);
   });

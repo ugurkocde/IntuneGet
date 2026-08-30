@@ -189,15 +189,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
-    // zyfun is built with Electron Builder's NSIS target and does not enable
-    // perMachine. Electron Builder therefore uses its per-user default. WinGet
-    // omits Scope; running the same installer as LocalSystem placed its ARP
-    // registration below systemprofile and the captured uninstaller path was
-    // unavailable by the managed removal cycle. Keep QA, catalog packages, and
-    // customer uploads in the vendor-supported signed-in user context.
-    // https://github.com/Hiram-Wong/zyfun/blob/main/electron-builder.yml
+    // zyfun 3.4.7 uses Electron Builder's assisted NSIS mode and a custom
+    // installer hook that installs the machine-wide VC++ runtime when missing.
+    // Its default current-user silent path can therefore wait indefinitely on
+    // prerequisite elevation. Electron Builder 26.8.1 explicitly accepts
+    // /allusers for this assisted mode; run the signed installer as LocalSystem
+    // so the prerequisite and app both complete in a serviceable machine scope.
+    // https://github.com/Hiram-Wong/zyfun/blob/v3.4.7/electron-builder.yml
+    // https://github.com/Hiram-Wong/zyfun/blob/v3.4.7/build/nsis-installer.nsh
+    // https://github.com/electron-userland/electron-builder/blob/electron-builder%4026.8.1/packages/app-builder-lib/templates/nsis/assistedInstaller.nsh
     wingetId: 'HiramWong.zyfun',
-    requiredInstallScope: 'user',
+    requiredInstallScope: 'machine',
+    reviewedInstallArguments: ['/allusers'],
   },
   {
     // ElegantClipboard's tagged Tauri v2 configuration explicitly builds its

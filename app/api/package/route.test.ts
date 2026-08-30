@@ -704,7 +704,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
-  it('uses zyfun user scope consistently for customer PSADT packaging and QA', async () => {
+  it('uses zyfun all-users mode consistently for customer PSADT packaging and QA', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
       url: 'https://example.com/zyfun-setup.exe',
@@ -736,26 +736,36 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
       expect.objectContaining({
         wingetId: 'HiramWong.zyfun',
-        installScope: 'user',
+        installScope: 'machine',
       }),
       expect.any(Array)
     );
     expect(ensureQaDemandMock).toHaveBeenCalledWith(
       undefined,
-      expect.objectContaining({ installScope: 'user' })
+      expect.objectContaining({ installScope: 'machine' })
     );
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ install_scope: 'user' })
+      expect.objectContaining({ install_scope: 'machine' })
     );
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         wingetId: 'HiramWong.zyfun',
-        installScope: 'user',
+        installScope: 'machine',
         silentSwitches: '/S',
       }),
       undefined,
       expect.any(Object)
     );
+    const expectedAdapter = { reviewedInstallArguments: ['/allusers'] };
+    expect(
+      JSON.parse(ensureQaDemandMock.mock.calls[0][1].psadtConfig)
+    ).toMatchObject(expectedAdapter);
+    expect(
+      JSON.parse(triggerPackagingWorkflowMock.mock.calls[0][0].psadtConfig)
+    ).toMatchObject(expectedAdapter);
+    expect(createMock.mock.calls[0][0].package_config).toMatchObject({
+      psadtConfig: expectedAdapter,
+    });
   });
 
   it('uses TeamSpeak 6 Beta all-users MSI scope for QA and customer packaging', async () => {
