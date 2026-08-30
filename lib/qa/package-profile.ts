@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd918567cb0990e546fbf92c528bbb0bf91c73525',
+  packagerCommit: 'f1664e5b6c12d95c6ecde7b0999bb75582307f11',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -521,6 +521,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // of LocalSystem's disposable systemprofile. Preserve every unrelated pass
   // from the IJe registered-identity release.
   '24ee5fb123c9817f4d2dabcbe11817472c82d1e1',
+  // MaxTo now uses a reviewed bounded installer heartbeat while retaining its
+  // vendor-supported per-user lifecycle. Preserve every unrelated pass from
+  // the Ente Photos user-scope release.
+  'd918567cb0990e546fbf92c528bbb0bf91c73525',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

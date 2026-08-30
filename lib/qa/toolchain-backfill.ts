@@ -498,7 +498,17 @@ const MAXTO_USER_INSTALLER_HEARTBEAT_RELEASE_RETRY_TARGETS = [
   ...ENTE_PHOTOS_USER_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ZYFUN_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry zyfun in Electron Builder's vendor-supported per-user context so
+  // the exact captured ARP identity remains available for managed removal.
+  'HiramWong.zyfun',
+  // Carry every still-unconsumed targeted retry across the atomic pin.
+  ...MAXTO_USER_INSTALLER_HEARTBEAT_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'f1664e5b6c12d95c6ecde7b0999bb75582307f11':
+    ZYFUN_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'd918567cb0990e546fbf92c528bbb0bf91c73525':
     MAXTO_USER_INSTALLER_HEARTBEAT_RELEASE_RETRY_TARGETS,
   '617c3f8801dac600fd86c4c743aa2b44a1a5061b':
