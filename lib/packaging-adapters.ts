@@ -870,6 +870,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallServiceNames: ['AzureMonitorAgent'],
   },
   {
+    // Microsoft documents /accepteula as the complete Service Fabric Runtime
+    // command-line install contract. The WinGet manifest's additional
+    // /quiet /qn switches make the signed 11.3.475.1 bootstrapper exit 1 before
+    // it creates an exact vendor identity (isolated QA run 33341797950).
+    // Replace that manifest command for both QA and customer PSADT packages.
+    // https://learn.microsoft.com/azure/service-fabric/service-fabric-get-started
+    wingetId: 'Microsoft.ServiceFabricRuntime',
+    reviewedInstallArgumentsOverride: '/accepteula',
+  },
+  {
     // Logi Bolt's dedicated uninstaller is not a conventional NSIS helper:
     // the generic /S fallback returns while leaving the exact LogiBolt ARP
     // registration installed. Its unattended removal verb is /silent. Bind

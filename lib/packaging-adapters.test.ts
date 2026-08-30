@@ -1201,6 +1201,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual([]);
   });
 
+  it('uses Microsoft\'s documented Service Fabric runtime install contract', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'Microsoft.ServiceFabricRuntime',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe('/accepteula');
+    expect(adapted.reviewedUninstallArguments).toEqual([]);
+  });
+
   it('uses PDFsam\'s documented managed MSI command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'PDFsam.PDFsam',
