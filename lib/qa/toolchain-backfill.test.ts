@@ -6,13 +6,13 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries zyfun only after activating its reviewed user scope', () => {
+  it('retries zyfun only after activating reviewed all-users mode', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: ' HIRAMWONG.ZYFUN ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      'd918567cb0990e546fbf92c528bbb0bf91c73525',
+      'f1664e5b6c12d95c6ecde7b0999bb75582307f11',
       { wingetId: 'HiramWong.zyfun', status: 'failed' }
     )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(

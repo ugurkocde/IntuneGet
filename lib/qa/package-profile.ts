@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f1664e5b6c12d95c6ecde7b0999bb75582307f11',
+  packagerCommit: 'b62b2c4b3b8ccaa3497ff69661bf796af5a2e272',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -525,6 +525,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // vendor-supported per-user lifecycle. Preserve every unrelated pass from
   // the Ente Photos user-scope release.
   'd918567cb0990e546fbf92c528bbb0bf91c73525',
+  // zyfun's first repair moved its assisted NSIS setup out of systemprofile.
+  // Preserve every unrelated pass from that user-scope release while the
+  // current release switches only zyfun to its documented all-users mode.
+  'f1664e5b6c12d95c6ecde7b0999bb75582307f11',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
