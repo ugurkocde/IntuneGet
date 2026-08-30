@@ -1705,6 +1705,16 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Greenshot',
     registeredRegistryKey: 'Greenshot_is1',
   },
+  // G.SKILL's ZIP-wrapped Inno installer registers the visible application as
+  // `Trident Z Lighting Control` from publisher `ENG`, not the catalog title
+  // `G.SKILL Trident Z Lighting Control`. QA run 33316792996 also observed
+  // three unrelated/hidden ARP changes, so bind the stable Inno AppId key and
+  // never guess among the install delta when capturing customer removal.
+  'gskill.tridentzlightingcontrol': {
+    generatedDisplayName: 'G.SKILL Trident Z Lighting Control',
+    registeredDisplayName: 'Trident Z Lighting Control',
+    registeredRegistryKey: '{97CD7AFC-0ED3-41B8-9CCD-22717E8631D0}_is1',
+  },
   // IJe's catalog name is `IJe Programming Language`, but its Inno installer
   // registers the versioned display name `IJe version 1.0.1` below a stable
   // AppId-derived `_is1` key. QA run 33227580169 observed exactly that one

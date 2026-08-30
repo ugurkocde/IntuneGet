@@ -138,6 +138,19 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses G.SKILL Trident Z\'s exact vendor Inno registry identity', () => {
+    expect(resolveApplicationUninstallCommand(
+      'GSKILL.TridentZLightingControl',
+      'REGISTRY_UNINSTALL:G.SKILL Trident Z Lighting Control'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:{97CD7AFC-0ED3-41B8-9CCD-22717E8631D0}_is1:Trident Z Lighting Control'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'gskill.tridentzlightingcontrol',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses IJe\'s stable Inno registry key despite its versioned ARP name', () => {
     expect(resolveApplicationUninstallCommand(
       'IJe.IJe',

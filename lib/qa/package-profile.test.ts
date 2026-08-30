@@ -324,6 +324,29 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/S']);
   });
 
+  it('binds G.SKILL Trident Z customer and QA packages to one exact Inno key', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'GSKILL.TridentZLightingControl',
+      displayName: 'G.SKILL Trident Z Lighting Control',
+      publisher: 'GSKILL',
+      version: '1.00.38',
+      architecture: 'x86',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'zip',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:G.SKILL Trident Z Lighting Control',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+    };
+
+    expect(normalized.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{97CD7AFC-0ED3-41B8-9CCD-22717E8631D0}_is1:Trident Z Lighting Control'
+    );
+    expect(profile.installer.uninstallCommand).toBe(normalized.uninstallCommand);
+  });
+
   it('binds IDM reviewed window automation to customer and QA package identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Tonec.InternetDownloadManager',

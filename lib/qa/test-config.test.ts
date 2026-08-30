@@ -192,6 +192,35 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
+  it('binds G.SKILL Trident Z QA to its observed visible Inno identity', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'GSKILL.TridentZLightingControl',
+        name: 'G.SKILL Trident Z Lighting Control',
+        publisher: 'GSKILL',
+        version: '1.00.38',
+      },
+      manifest: {
+        InstallerType: 'zip',
+        NestedInstallerType: 'inno',
+        ProductCode: 'G.SKILL Trident Z Lighting Control',
+        InstallerSwitches: {
+          Silent: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+        },
+      },
+      installer: {
+        Architecture: 'x86',
+        InstallerType: 'zip',
+        NestedInstallerType: 'inno',
+        ProductCode: 'G.SKILL Trident Z Lighting Control',
+      },
+    });
+
+    expect(config.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{97CD7AFC-0ED3-41B8-9CCD-22717E8631D0}_is1:Trident Z Lighting Control'
+    );
+  });
+
   it.each([
     ['inno', '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'],
     ['nullsoft', '/S'],
