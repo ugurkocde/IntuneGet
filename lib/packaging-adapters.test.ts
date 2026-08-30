@@ -1427,6 +1427,16 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedUninstallArguments).toEqual(['/allusers', '/S']);
   });
 
+  it('selects UniFi OS Server all-users mode for the full Intune lifecycle', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'ubiquiti.unifiosserver',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(adapted.reviewedInstallArgumentsOverride).toBe('/S /allusers');
+    expect(adapted.reviewedUninstallArguments).toEqual(['/allusers', '/S']);
+  });
+
   it('replaces Bitvise generic switches with its documented unattended mode', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Bitvise.SSH.Client',

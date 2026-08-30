@@ -749,6 +749,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/allusers', '/S'],
   },
   {
+    // UniFi OS Server uses Electron Builder's assisted installer mode. Under
+    // Intune's LocalSystem account, a bare /S installs into the system profile
+    // and registers an uninstaller there. Force Electron Builder's documented
+    // all-users mode so installation and removal share the machine-wide path.
+    wingetId: 'Ubiquiti.UniFiOSServer',
+    reviewedInstallArgumentsOverride: '/S /allusers',
+    reviewedUninstallArguments: ['/allusers', '/S'],
+  },
+  {
     // Google documents that Drive for desktop must be removed through its
     // versioned registered uninstaller with both --silent and --force_stop.
     // The latter is required whenever Drive is running; without it the helper
