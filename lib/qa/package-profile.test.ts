@@ -1184,6 +1184,31 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds MaxTo user scope and its bounded Velopack wait to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Domino.MaxTo',
+      displayName: 'MaxTo',
+      publisher: 'Domino',
+      version: '3.0.1',
+      architecture: 'x64',
+      installerSha256: '6'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:MaxTo:MaxTo',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(profile.installer.silentArgs).toBe('--silent');
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+  });
+
   it('binds the bounded FlashPrint nested EXE wait to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Flashforge.FlashPrint',

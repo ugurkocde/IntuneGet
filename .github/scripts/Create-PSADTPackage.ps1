@@ -2893,8 +2893,46 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     ''
                     '    try {'
                     '        Write-ADTLogEntry -Message "Running per-user installer from user temp directory" -Severity ''Info'' -Source ''Install-ADTDeployment'''
-                    '        # Use -UseShellExecute for shell context which inherits environment variables'
-                    "        Start-ADTProcess -FilePath `$installerDest$installerArgumentListFragment -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                )
+                if ($reviewedInstallCompletionTimeoutMinutes -gt 0) {
+                    $lines += @(
+                        '        # Keep the reviewed per-user installer observable while preserving its shell environment.'
+                        "        `$installDeadline = [DateTime]::UtcNow.AddMinutes($reviewedInstallCompletionTimeoutMinutes)"
+                        "        `$installHandle = Start-ADTProcess -FilePath `$installerDest$installerArgumentListFragment -UseShellExecute -WaitForMsiExec -NoWait -PassThru"
+                        '        $nextInstallProgressLog = [DateTime]::UtcNow'
+                        '        while (-not $installHandle.Task.IsCompleted) {'
+                        '            if ([DateTime]::UtcNow -ge $installDeadline) {'
+                        '                try {'
+                        '                    if (-not $installHandle.Process.HasExited) {'
+                        '                        $installHandle.Process.Kill($true)'
+                        '                        $installHandle.Process.WaitForExit()'
+                        '                    }'
+                        '                } catch {'
+                        '                    Write-ADTLogEntry -Message "Could not stop the reviewed per-user vendor installer after its bounded timeout: $_" -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+                        '                }'
+                        "                throw 'The reviewed per-user vendor installer did not complete within $reviewedInstallCompletionTimeoutMinutes minutes.'"
+                        '            }'
+                        '            if ([DateTime]::UtcNow -ge $nextInstallProgressLog) {'
+                        '                Write-ADTLogEntry -Message "The reviewed per-user vendor installer is still working." -Source ''Install-ADTDeployment'''
+                        '                $nextInstallProgressLog = [DateTime]::UtcNow.AddSeconds(15)'
+                        '            }'
+                        '            Start-Sleep -Seconds 5'
+                        '        }'
+                        '        $installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+                        '        if ($installProcessExitCode -in @(1641, 3010)) {'
+                        '            $script:InstallRebootExitCode = 3010'
+                        '            Write-ADTLogEntry -Message "The reviewed per-user vendor installer requested a reboot with exit code [$installProcessExitCode]." -Severity ''Warning'' -Source ''Install-ADTDeployment'''
+                        '        } elseif ($installProcessExitCode -ne 0) {'
+                        '            throw "The reviewed per-user vendor installer exited with code [$installProcessExitCode]."'
+                        '        }'
+                    )
+                } else {
+                    $lines += @(
+                        '        # Use -UseShellExecute for shell context which inherits environment variables'
+                        "        Start-ADTProcess -FilePath `$installerDest$installerArgumentListFragment -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+                    )
+                }
+                $lines += @(
                     '    }'
                     '    finally {'
                     '        # Cleanup temp directory'

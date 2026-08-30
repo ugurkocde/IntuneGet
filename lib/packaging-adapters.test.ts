@@ -1328,6 +1328,16 @@ describe('application packaging adapters', () => {
     );
   });
 
+  it('keeps MaxTo in user scope with a reviewed observable installer wait', () => {
+    const adapted = applyApplicationPackagingAdapter(
+      'domino.maxto',
+      DEFAULT_PSADT_CONFIG
+    );
+
+    expect(resolveApplicationInstallScope('Domino.MaxTo', 'machine')).toBe('user');
+    expect(adapted.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+  });
+
   it('uses Mozilla NSIS silent mode with the exact Zen Browser ARP command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'zen-team.zen-browser',

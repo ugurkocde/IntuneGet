@@ -432,6 +432,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedInstallCompletionTimeoutMinutes: 15,
   },
   {
+    // MaxTo 3 uses Velopack's documented per-user Setup.exe contract. Its
+    // --silent installation can remain quiet beyond the generic QA inactivity
+    // window while app hooks finish. Keep that vendor command and user scope,
+    // but opt the shared QA/customer package into the observable, bounded wait.
+    wingetId: 'Domino.MaxTo',
+    requiredInstallScope: 'user',
+    reviewedInstallCompletionTimeoutMinutes: 15,
+  },
+  {
     // SEGGER Embedded Studio's official unattended command created the full
     // application tree and ARP registration during QA, but the vendor process
     // remained quiet longer than the generic inactivity window. Preserve the

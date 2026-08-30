@@ -3185,6 +3185,49 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps the reviewed MaxTo per-user installer observable and bounded',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe',
+        'MaxTo',
+        [],
+        { reviewedInstallCompletionTimeoutMinutes: 15 },
+        [],
+        'Domino.MaxTo',
+        'MaxTo',
+        '3.0.1',
+        'REGISTRY_UNINSTALL_KEY:MaxTo:MaxTo',
+        '--silent',
+        'user'
+      );
+
+      expect(generated).toContain(
+        '$installDeadline = [DateTime]::UtcNow.AddMinutes(15)'
+      );
+      expect(generated).toContain(
+        "Start-ADTProcess -FilePath $installerDest -ArgumentList '--silent' -UseShellExecute -WaitForMsiExec -NoWait -PassThru"
+      );
+      expect(generated).toContain(
+        'Write-ADTLogEntry -Message "The reviewed per-user vendor installer is still working."'
+      );
+      expect(generated).toContain(
+        '$installProcessExitCode = $installHandle.Task.GetAwaiter().GetResult().ExitCode'
+      );
+      expect(generated).toContain(
+        "throw 'The reviewed per-user vendor installer did not complete within 15 minutes.'"
+      );
+      expect(generated).toContain('$installHandle.Process.Kill($true)');
+      expect(generated).toContain('$installHandle.Process.WaitForExit()');
+      expect(generated).toContain(
+        'Remove-Item -Path $userTempDir -Recurse -Force -ErrorAction SilentlyContinue'
+      );
+      expect(generated).not.toContain(
+        "Start-ADTProcess -FilePath $installerDest -ArgumentList '--silent' -UseShellExecute -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15)"
+      );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'keeps the reviewed Logitech G HUB bootstrapper observable and removes it silently',
     () => {
       const generated = generateRegistryUninstallPackage(
