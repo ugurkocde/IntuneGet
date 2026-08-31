@@ -897,6 +897,32 @@ describe('Kangaroo machine-scope system-profile block contract', () => {
   });
 });
 
+describe('Crypt missing install identity block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831173000_block_crypt_missing_install_identity.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact payload without an authoritative lifecycle', () => {
+    expect(sql).toContain("'TheCryptTeam.Crypt'");
+    expect(sql).toContain("'1.6.0'");
+    expect(sql).toContain("'x64'");
+    expect(sql).toContain(
+      "'816DE63CB4F8E09C76B932EED6E92577CFCF97BD8FA9D29937BE88EBA49C9CC5'"
+    );
+    expect(sql).toContain("'missing_authoritative_install_identity'");
+    expect(sql).toContain('WebView2 runtime registration');
+    expect(sql).toContain('safe removal are impossible');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(
