@@ -6,14 +6,26 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries Quassel only after activating its exact uninstall identity', () => {
-    const wingetId = 'Quassel.QuasselIRC';
+  it('retries Retoolkit only after activating bounded install heartbeats', () => {
+    const wingetId = 'mentebinaria.retoolkit';
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      'b1f9ded94342bd3e27fe17b50e17f5b9474c01a3',
+      '738d9f19baa44d2e1f0cf49c4fea5658915cefc9',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the exhausted Quassel retry scoped to its release', () => {
+    const wingetId = 'Quassel.QuasselIRC';
+    expect(shouldRetryTerminalToolchainCandidate(
+      '738d9f19baa44d2e1f0cf49c4fea5658915cefc9',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
     )).toBe(false);
   });
@@ -584,6 +596,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'mentebinaria.retoolkit',
       'HiramWong.zyfun',
       'Domino.MaxTo',
       'Logitech.LGS',
@@ -652,6 +665,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'mentebinaria.retoolkit',
         'HiramWong.zyfun',
         'Logitech.LGS',
         'IrfanSkiljan.IrfanView',
