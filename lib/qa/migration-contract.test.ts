@@ -846,6 +846,31 @@ describe('Divoom expired signing certificate block contract', () => {
   });
 });
 
+describe('WeSing user-scope elevation block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831162000_block_wesing_user_scope_elevation.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact rejected standard-user payload', () => {
+    expect(sql).toContain("'Tencent.WeSingLiveAssistant'");
+    expect(sql).toContain("'0.0.0.0'");
+    expect(sql).toContain("'x86'");
+    expect(sql).toContain(
+      "'0D009D4ACEB24BDC8220357E972B4D17B0B9D5BFA8B1E637EBC87BF8C5FADDCC'"
+    );
+    expect(sql).toContain("'user_scope_elevation_required'");
+    expect(sql).toContain('ERROR_CANCELLED');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(
