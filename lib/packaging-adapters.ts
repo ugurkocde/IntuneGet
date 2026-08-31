@@ -126,6 +126,7 @@ const VISUAL_STUDIO_MANAGED_INSTALL_PATHS = {
 
 const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
   'Microsoft.SQLServerManagementStudio.21',
+  'Microsoft.SQLServerManagementStudio.21.Preview',
   'Microsoft.SQLServerManagementStudio.22',
   'Microsoft.SQLServerManagementStudio.22.Preview',
 ] as const;

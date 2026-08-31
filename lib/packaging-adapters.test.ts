@@ -1611,6 +1611,7 @@ describe('application packaging adapters', () => {
 
   it.each([
     'Microsoft.SQLServerManagementStudio.21',
+    'Microsoft.SQLServerManagementStudio.21.Preview',
     'Microsoft.SQLServerManagementStudio.22',
     'Microsoft.SQLServerManagementStudio.22.Preview',
   ])('applies the Visual Studio Installer lifecycle to %s', (wingetId) => {

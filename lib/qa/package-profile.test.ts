@@ -1808,6 +1808,34 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig).toMatchObject(expectedConfig);
   });
 
+  it('binds SSMS 21 Preview to the unattended Visual Studio Installer removal lifecycle', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview',
+      displayName: 'Microsoft SQL Server Management Studio 21 Preview',
+      publisher: 'Microsoft',
+      version: '21.0.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '--quiet --norestart --wait',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL:Microsoft SQL Server Management Studio 21 Preview',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = {
+      reviewedUninstallArguments: ['--quiet', '--norestart', '--noweb'],
+      uninstallCompletionTimeoutMinutes: 15,
+    };
+    const profile = normalized.identity.profile as {
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+  });
+
   it('binds the Tor Browser extracted-folder lifecycle to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'TorProject.TorBrowser',
