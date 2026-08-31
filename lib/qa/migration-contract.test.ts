@@ -976,6 +976,35 @@ describe('Y8 Browser machine-scope system-profile block contract', () => {
   });
 });
 
+describe('Retoolkit machine-scope system-profile block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260901004000_block_retoolkit_system_profile_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact payload with an unusable machine lifecycle', () => {
+    expect(sql).toContain("'mentebinaria.retoolkit'");
+    expect(sql).toContain("'2023.05'");
+    expect(sql).toContain("'x64'");
+    expect(sql).toContain(
+      "'1EB3511E8B816641D3EE6686BFC61329B54532BFD5CD8A65AA20F154EE55D120'"
+    );
+    expect(sql).toContain("'machine_scope_system_profile_install'");
+    expect(sql).toContain('LocalSystem profile');
+    expect(sql).toContain('reviewed 45-minute ceiling');
+    expect(sql).toContain('33428216044');
+    expect(sql).toContain('33434832863');
+    expect(sql).toContain('33441897643');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(
