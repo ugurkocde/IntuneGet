@@ -884,6 +884,47 @@ describe('GET /api/cron/qa-enqueue', () => {
     ]);
   });
 
+  it('keeps an exact VirusTotal-flagged installer dormant across package profile changes', async () => {
+    const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
+      demandBackfillApps: ['Flagged.App'],
+      supportedApps: [{
+        winget_id: 'Flagged.App',
+        name: 'Flagged',
+        publisher: 'Contoso',
+        latest_version: '1.0.0',
+      }],
+      packageResults: [{
+        winget_id: 'Flagged.App',
+        tested_version: '1.0.0',
+        architecture: 'x64',
+        installer_sha256: 'A'.repeat(64),
+        outcome: 'Failed',
+        tested_at_utc: '2026-08-30T12:00:00.000Z',
+        package_profile_sha256: 'B'.repeat(64),
+        virustotal_malicious: 2,
+      }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ checked: 1, queued: 0, unavailable: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveDependenciesMock).not.toHaveBeenCalled();
+    expect(catalogReconciliations).toEqual([
+      expect.objectContaining({
+        winget_id: 'Flagged.App',
+        catalog_version: '1.0.0',
+        observed_live_version: '1.0.0',
+        observed_head_sha: 'b'.repeat(40),
+        reason_code: 'installer_hash_quarantined',
+      }),
+    ]);
+  });
+
   it('keeps a fresh manifest-changed installer tuple out of the queue', async () => {
     const { client, candidateInserts, catalogReconciliations } = createSupabaseStub({
       demandBackfillApps: ['Changed.ManifestApp'],

@@ -89,6 +89,20 @@ function installerTupleKey(input: {
   ].join('\0');
 }
 
+function packagePayloadKey(input: {
+  wingetId: string;
+  version: string;
+  architecture: string;
+  installerSha256: string;
+}): string {
+  return [
+    input.wingetId.trim().toLowerCase(),
+    input.version.trim(),
+    input.architecture.trim().toLowerCase(),
+    input.installerSha256.trim().toUpperCase(),
+  ].join('|');
+}
+
 function targetedPackageIds(request: Request): string[] {
   const url = new URL(request.url);
   const values = [
@@ -721,6 +735,7 @@ export async function GET(request: Request) {
       outcome: string;
       tested_at_utc: string;
       package_profile_sha256: string | null;
+      virustotal_malicious: number | null;
     }> = [];
     let unavailableInstallerTuples = new Map<
       string,
@@ -746,7 +761,7 @@ export async function GET(request: Request) {
         supabase
           .from('qa_package_results')
           .select(
-            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, package_profile_sha256'
+            'winget_id, tested_version, architecture, installer_sha256, outcome, tested_at_utc, package_profile_sha256, virustotal_malicious'
           )
           .in('winget_id', supportedIds),
         supabase
@@ -841,14 +856,19 @@ export async function GET(request: Request) {
     ).length;
     const recipeById = new Map(recipes.map((row) => [row.winget_id, row]));
     const passedResultByPayload = new Map<string, (typeof results)[number]>();
+    const securityFlaggedPayloads = new Set<string>();
     for (const result of results) {
-      if (result.outcome !== 'Passed' || !result.installer_sha256) continue;
-      const key = [
-        result.winget_id.toLowerCase(),
-        result.tested_version,
-        result.architecture.toLowerCase(),
-        result.installer_sha256.toUpperCase(),
-      ].join('|');
+      if (!result.installer_sha256) continue;
+      const key = packagePayloadKey({
+        wingetId: result.winget_id,
+        version: result.tested_version,
+        architecture: result.architecture,
+        installerSha256: result.installer_sha256,
+      });
+      if ((result.virustotal_malicious || 0) >= 1) {
+        securityFlaggedPayloads.add(key);
+      }
+      if (result.outcome !== 'Passed') continue;
       const existing = passedResultByPayload.get(key);
       if (!existing || result.tested_at_utc > existing.tested_at_utc) {
         passedResultByPayload.set(key, result);
@@ -948,6 +968,30 @@ export async function GET(request: Request) {
             }
 
             const architecture = selectedForVm.architecture;
+            const payloadKey = packagePayloadKey({
+              wingetId: app.winget_id,
+              version: resolution.version,
+              architecture,
+              installerSha256,
+            });
+            if (securityFlaggedPayloads.has(payloadKey)) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'installer_hash_quarantined',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
+              structuredQaPollLog('info', 'qa_installer_security_quarantined', {
+                runId,
+                wingetId: app.winget_id,
+                version: resolution.version,
+                architecture,
+                installerSha256,
+              });
+              return;
+            }
             const unavailableReasonCode = unavailableInstallerTuples.get(installerTupleKey({
               wingetId: app.winget_id,
               version: resolution.version,
@@ -1058,12 +1102,6 @@ export async function GET(request: Request) {
             testConfig.packageProfileSha256 = packageIdentity.packageProfileSha256;
             testConfig.psadtConfigSha256 = packageIdentity.psadtConfigSha256;
             testConfig.detectionRulesSha256 = packageIdentity.detectionRulesSha256;
-            const payloadKey = [
-              app.winget_id.toLowerCase(),
-              resolution.version,
-              architecture.toLowerCase(),
-              installerSha256,
-            ].join('|');
             const previous = passedResultByPayload.get(payloadKey);
             // A successful QA run qualifies the immutable installer payload.
             // Presentation-only PSADT profile changes must not schedule the same
