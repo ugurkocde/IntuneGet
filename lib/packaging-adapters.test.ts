@@ -620,7 +620,7 @@ describe('application packaging adapters', () => {
         DEFAULT_PSADT_CONFIG
       )
     ).toMatchObject({
-      reviewedInstallCompletionTimeoutMinutes: 15,
+      reviewedInstallCompletionTimeoutMinutes: 30,
     });
   });
 
