@@ -566,7 +566,19 @@ const ARES_COMMANDER_INSTALL_HEARTBEAT_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const RECEITANET_WATCHBP_RELEASE_RETRY_TARGETS = [
+  // Retry ReceitanetBX with its vendor-declared silent uninstall mode and
+  // WatchBP Analyzer with machine-context execution of the trusted manifest.
+  'ReceitaFederaldoBrasil.ReceitanetBX',
+  'Microlife.WatchBPAnalyzer',
+  // ARES Commander exhausted its reviewed retry at the prior pin; carry every
+  // older still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '450123ff0f740dce8a4f7deee067dadd18739134':
+    RECEITANET_WATCHBP_RELEASE_RETRY_TARGETS,
   '02334f8bff1ee97e68c81ef44fd4ed256df81397':
     ARES_COMMANDER_INSTALL_HEARTBEAT_RELEASE_RETRY_TARGETS,
   '2a1930a201bef41c313606cf44ecd71ce1238c7a':

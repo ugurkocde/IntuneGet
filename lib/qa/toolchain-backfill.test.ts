@@ -6,13 +6,27 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries ARES Commander only after activating bounded install heartbeats', () => {
+  it.each([
+    'ReceitaFederaldoBrasil.ReceitanetBX',
+    'Microlife.WatchBPAnalyzer',
+  ])('retries %s only after activating its reviewed lifecycle repair', (wingetId) => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '02334f8bff1ee97e68c81ef44fd4ed256df81397',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries ARES Commander only after activating bounded install heartbeats', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '02334f8bff1ee97e68c81ef44fd4ed256df81397',
       { wingetId: ' GRAEBERT.ARESCOMMANDER.2022 ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      '2a1930a201bef41c313606cf44ecd71ce1238c7a',
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Graebert.AresCommander.2022', status: 'failed' }
     )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(

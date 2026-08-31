@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '02334f8bff1ee97e68c81ef44fd4ed256df81397',
+  packagerCommit: '450123ff0f740dce8a4f7deee067dadd18739134',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -557,6 +557,11 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // bootstrapper completes. Preserve every unrelated compatible pass from the
   // SSMS 21 Preview unattended-uninstall release.
   '2a1930a201bef41c313606cf44ecd71ce1238c7a',
+  // ReceitanetBX now uses the vendor-declared silent uninstall mode, and
+  // WatchBP Analyzer executes its trusted user-scoped installer bytes as
+  // LocalSystem. Preserve every unrelated compatible pass from the ARES
+  // Commander install-heartbeat release.
+  '02334f8bff1ee97e68c81ef44fd4ed256df81397',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
