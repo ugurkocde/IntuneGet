@@ -1048,6 +1048,29 @@ describe('Open Live Writer unsupported managed install block migration contract'
   });
 });
 
+describe('.NET Native Runtime AppX framework managed uninstall block migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831011500_block_dotnet_native_runtime_unsupported_managed_uninstall.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks the dependency-bound framework across customer packaging and QA', () => {
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain("'Microsoft.DotNet.Native.Runtime'");
+    expect(sql).toContain(
+      'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/33346306805'
+    );
+    expect(sql).toContain('0x80073CF3 dependency/conflict validation');
+    expect(sql).toContain('package remains detected');
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("status = 'superseded'");
+    expect(sql).toContain("status in ('queued', 'failed', 'error')");
+  });
+});
+
 describe('ReSharper EAP host-dependent install block migration contract', () => {
   const sql = readFileSync(
     resolve(
