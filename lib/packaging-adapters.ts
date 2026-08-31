@@ -1598,6 +1598,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/mode', 'silent'],
   },
   {
+    // MPLAB XC16 is built with VMware InstallBuilder and registers the exact
+    // versioned `Uninstall-xc16-<version>.exe` without unattended arguments.
+    // Production QA run 33384127456 observed that argumentless command exited
+    // after roughly ten seconds while leaving the exact ARP registration in
+    // place. InstallBuilder documents `--mode unattended` for automated
+    // uninstallation, so append only that vendor-family mode to the captured
+    // versioned command rather than guessing or replacing its path.
+    // https://releases.installbuilder.com/installbuilder/docs/installbuilder-userguide.html
+    wingetId: 'Microchip.MPLABXC16CCompiler',
+    reviewedUninstallArguments: ['--mode', 'unattended'],
+  },
+  {
     // Microlife publishes WatchBP Analyzer as a user-scope Nullsoft package,
     // but its installer raises an elevation request even with /S. Isolated QA
     // run 33374926585 therefore failed before registration in the standard-user

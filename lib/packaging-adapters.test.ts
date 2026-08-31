@@ -716,6 +716,12 @@ describe('application packaging adapters', () => {
     ).toEqual(['/mode', 'silent']);
     expect(
       applyApplicationPackagingAdapter(
+        'Microchip.MPLABXC16CCompiler',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['--mode', 'unattended']);
+    expect(
+      applyApplicationPackagingAdapter(
         'Atlassian.ServiceManagementLTS',
         DEFAULT_PSADT_CONFIG
       ).reviewedUninstallArguments
