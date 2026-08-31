@@ -310,6 +310,35 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.item.installCommand).toBe('"logitech-presentation.exe" /S');
   });
 
+  it('selects WatchBP Analyzer user bytes for reviewed LocalSystem execution', async () => {
+    getLiveInstallersMock.mockResolvedValue([{
+      architecture: 'x64',
+      url: 'https://example.test/watchbp-analyzer.exe',
+      sha256,
+      type: 'nullsoft',
+      scope: 'user',
+      silentArgs: '/S',
+      productCode: 'WatchBP Analyzer',
+    } satisfies NormalizedInstaller]);
+
+    const reconciled = await reconcileCatalogInstaller(operaItem({
+      wingetId: 'Microlife.WatchBPAnalyzer',
+      displayName: 'WatchBP Analyzer',
+      version: '1.7.3.1',
+      architecture: 'x64',
+      installScope: 'user',
+      installerUrl: 'https://example.test/watchbp-analyzer.exe',
+      installCommand: '"watchbp-analyzer.exe" /S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:WatchBP Analyzer:WatchBP Analyzer',
+    }));
+
+    expect(reconciled.item.installScope).toBe('machine');
+    expect(reconciled.item.installerUrl).toBe(
+      'https://example.test/watchbp-analyzer.exe'
+    );
+    expect(reconciled.item.installCommand).toBe('"watchbp-analyzer.exe" /S');
+  });
+
   it('selects TeamSpeak 6 Beta user manifest bytes for all-users MSI execution', async () => {
     getLiveInstallersMock.mockResolvedValue([{
       architecture: 'x64',

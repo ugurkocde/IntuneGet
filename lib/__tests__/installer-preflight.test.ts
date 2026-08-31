@@ -151,6 +151,29 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts WatchBP Analyzer user manifest bytes for reviewed SYSTEM execution', async () => {
+    const watchBpRequest = {
+      ...request,
+      wingetId: 'Microlife.WatchBPAnalyzer',
+      architecture: 'x64',
+      installerUrl: 'https://example.test/watchbp-analyzer.exe',
+      installerType: 'nullsoft',
+    };
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: watchBpRequest.installerUrl,
+      sha256: expectedSha256,
+      type: 'nullsoft',
+      scope: 'user',
+    }]);
+
+    await expect(enforceInstallerPreflight(watchBpRequest)).resolves.toMatchObject({
+      status: 'healthy',
+      source: 'live',
+    });
+    expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts NVM user manifest bytes for reviewed SYSTEM execution', async () => {
     const nvmRequest = {
       ...request,
