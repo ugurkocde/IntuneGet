@@ -327,6 +327,7 @@ export interface Database {
           block_code:
             | 'user_scope_machine_dependencies'
             | 'user_scope_elevation_required'
+            | 'machine_scope_system_profile_install'
             | 'trusted_installer_tuple_unavailable'
             | 'unsupported_dependency_shape'
             | 'expired_signing_certificate'

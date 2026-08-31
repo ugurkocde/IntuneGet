@@ -871,6 +871,32 @@ describe('WeSing user-scope elevation block contract', () => {
   });
 });
 
+describe('Kangaroo machine-scope system-profile block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831165500_block_kangaroo_system_profile_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact unusable machine-scope payload', () => {
+    expect(sql).toContain("'Taozuhong.KangarooMultiple'");
+    expect(sql).toContain("'9.7.1.801'");
+    expect(sql).toContain("'x64'");
+    expect(sql).toContain(
+      "'EFFD25236CD45111EB28E075C2AF4CD1CF9DEF23B9DEB2F728B355D8C62710E2'"
+    );
+    expect(sql).toContain("'machine_scope_system_profile_install'");
+    expect(sql).toContain('LocalSystem');
+    expect(sql).toContain('missing uninstaller');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(
