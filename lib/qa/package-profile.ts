@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '92ddbf527ab5e698bb81937b97efc96523622a96',
+  packagerCommit: 'aafd4a7dd0787ea603c1c53bb8166369f81e39a7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -562,6 +562,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // LocalSystem. Preserve every unrelated compatible pass from the ARES
   // Commander install-heartbeat release.
   '02334f8bff1ee97e68c81ef44fd4ed256df81397',
+  // Retoolkit's 30-minute ceiling changes only its previously failing long
+  // installer path. Preserve every unrelated compatible pass from the first
+  // Retoolkit heartbeat release.
+  '92ddbf527ab5e698bb81937b97efc96523622a96',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

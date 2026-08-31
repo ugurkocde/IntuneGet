@@ -6,10 +6,14 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries Retoolkit only after activating bounded install heartbeats', () => {
+  it('retries Retoolkit after activating the extended bounded install wait', () => {
     const wingetId = 'mentebinaria.retoolkit';
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '92ddbf527ab5e698bb81937b97efc96523622a96',
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
