@@ -949,6 +949,33 @@ describe('StudioTrans machine-scope system-profile block contract', () => {
   });
 });
 
+describe('Y8 Browser machine-scope system-profile block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831191500_block_y8browser_system_profile_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact payload with an unusable machine lifecycle', () => {
+    expect(sql).toContain("'Y8Games.Y8Browser'");
+    expect(sql).toContain("'1.0.11'");
+    expect(sql).toContain("'x86'");
+    expect(sql).toContain(
+      "'AE0FA64D18AE2423939AC7015A2CC2F6BC781DAD57760B1FED60BD76609991C8'"
+    );
+    expect(sql).toContain("'machine_scope_system_profile_install'");
+    expect(sql).toContain('LocalSystem profile');
+    expect(sql).toContain('missing vendor uninstaller');
+    expect(sql).toContain('33417125026');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(
