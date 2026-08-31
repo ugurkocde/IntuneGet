@@ -1261,6 +1261,35 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds the bounded ARES Commander installer wait to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Graebert.AresCommander.2022',
+      displayName: 'ARES Commander 2022',
+      publisher: 'Graebert',
+      version: '21.3.4329',
+      architecture: 'x64',
+      installerSha256: '4'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL:ARES Commander 2022',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = { reviewedInstallCompletionTimeoutMinutes: 15 };
+    const profile = normalized.identity.profile as {
+      installer: { silentArgs: string; uninstallCommand: string };
+      psadtConfig: typeof expectedConfig;
+    };
+
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(profile.psadtConfig).toMatchObject(expectedConfig);
+    expect(profile.installer.silentArgs).toBe('/silent');
+    expect(profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL:ARES Commander 2022'
+    );
+  });
+
   it('binds MaxTo user scope and its bounded Velopack wait to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Domino.MaxTo',

@@ -425,6 +425,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // ARES Commander 2022's signed 578 MB bootstrapper keeps its MSI
+    // transaction alive without PSADT log activity beyond the generic QA
+    // inactivity window. Production QA run 33353784275 observed the exact MSI
+    // registration while that transaction still owned Windows Installer. Keep
+    // the manifest-provided /silent contract and exact ARP lifecycle, but make
+    // the shared customer and QA wait observable and bounded.
+    wingetId: 'Graebert.AresCommander.2022',
+    reviewedInstallCompletionTimeoutMinutes: 15,
+  },
+  {
     // darktable's official CPack/NSIS installer writes its ARP registration
     // only after the complete application tree has been extracted. The signed
     // 5.6.0 package can therefore remain quiet longer than the generic QA

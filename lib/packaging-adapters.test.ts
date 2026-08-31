@@ -590,6 +590,17 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('keeps the ARES Commander bootstrapper observable within a bounded wait', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'Graebert.AresCommander.2022',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('keeps the FlashPrint bootstrapper observable within a bounded wait', () => {
     expect(
       applyApplicationPackagingAdapter(
