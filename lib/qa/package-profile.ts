@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '2a1930a201bef41c313606cf44ecd71ce1238c7a',
+  packagerCommit: '02334f8bff1ee97e68c81ef44fd4ed256df81397',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -553,6 +553,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // uninstall lifecycle. Preserve every unrelated compatible pass from the
   // nested AppX lifecycle release.
   '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
+  // ARES Commander 2022 now emits bounded progress heartbeats while its signed
+  // bootstrapper completes. Preserve every unrelated compatible pass from the
+  // SSMS 21 Preview unattended-uninstall release.
+  '2a1930a201bef41c313606cf44ecd71ce1238c7a',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

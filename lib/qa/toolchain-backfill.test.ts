@@ -6,18 +6,29 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries SSMS 21 Preview only after activating its unattended uninstall lifecycle', () => {
+  it('retries ARES Commander only after activating bounded install heartbeats', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
-      { wingetId: ' MICROSOFT.SQLSERVERMANAGEMENTSTUDIO.21.PREVIEW ', status: 'failed' }
+      { wingetId: ' GRAEBERT.ARESCOMMANDER.2022 ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
-      { wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview', status: 'failed' }
+      '2a1930a201bef41c313606cf44ecd71ce1238c7a',
+      { wingetId: 'Graebert.AresCommander.2022', status: 'failed' }
     )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Unrelated.App', status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the exhausted SSMS 21 Preview retry scoped to its release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '2a1930a201bef41c313606cf44ecd71ce1238c7a',
+      { wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview', status: 'failed' }
     )).toBe(false);
   });
 

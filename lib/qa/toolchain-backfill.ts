@@ -557,7 +557,18 @@ const SSMS_21_PREVIEW_UNATTENDED_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ARES_COMMANDER_INSTALL_HEARTBEAT_RELEASE_RETRY_TARGETS = [
+  // Retry ARES Commander 2022 with bounded install-progress heartbeats so its
+  // long-running signed bootstrapper is not mistaken for an inactive guest.
+  'Graebert.AresCommander.2022',
+  // SSMS 21 Preview exhausted its reviewed retry at the prior pin; carry every
+  // older still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '02334f8bff1ee97e68c81ef44fd4ed256df81397':
+    ARES_COMMANDER_INSTALL_HEARTBEAT_RELEASE_RETRY_TARGETS,
   '2a1930a201bef41c313606cf44ecd71ce1238c7a':
     SSMS_21_PREVIEW_UNATTENDED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e':
