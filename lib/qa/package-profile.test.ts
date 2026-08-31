@@ -1109,6 +1109,59 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('binds WatchBP Analyzer elevation handling to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Microlife.WatchBPAnalyzer',
+      displayName: 'WatchBP Analyzer',
+      publisher: 'Microlife',
+      version: '1.7.3.1',
+      architecture: 'x64',
+      installerSha256: 'a'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:WatchBP Analyzer:WatchBP Analyzer',
+      installScope: 'user',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string; silentArgs: string };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.installer.silentArgs).toBe('/S');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Microlife_WatchBPAnalyzer',
+      }),
+    ]);
+  });
+
+  it('binds ReceitanetBX silent removal to customer and QA packaging', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'ReceitaFederaldoBrasil.ReceitanetBX',
+      displayName: 'Receitanet BX',
+      publisher: 'Receita Federal do Brasil',
+      version: '1.10.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'exe',
+      silentSwitches: '/mode silent',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_KEY:EC016E3C-26D1-4DC8-9D8A-6AC06B3005A5:Receitanet BX',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      psadtConfig: { reviewedUninstallArguments?: string[] };
+    };
+
+    expect(profile.psadtConfig.reviewedUninstallArguments).toEqual(['/mode', 'silent']);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['/mode', 'silent']);
+  });
+
   it('binds Logitech LGS to LocalSystem while retaining its catalog installer contract', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Logitech.LGS',

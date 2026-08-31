@@ -524,6 +524,18 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('runs WatchBP Analyzer elevated without weakening catalog scope matching', () => {
+    expect(resolveApplicationInstallScope(
+      'Microlife.WatchBPAnalyzer',
+      'user'
+    )).toBe('machine');
+    expect(resolveApplicationInstallerSelectionScope(
+      'Microlife.WatchBPAnalyzer',
+      'machine'
+    )).toBe('user');
+    expect(resolveApplicationInstallScope('Example.App', 'user')).toBe('user');
+  });
+
   it('runs NVM for Windows elevated from a deterministic machine directory', () => {
     expect(resolveApplicationInstallScope('CoreyButler.NVMforWindows', 'user')).toBe(
       'machine'
@@ -696,6 +708,12 @@ describe('application packaging adapters', () => {
       applyApplicationPackagingAdapter('Tricentis.NeoLoad', DEFAULT_PSADT_CONFIG)
         .reviewedUninstallArguments
     ).toEqual(['-q']);
+    expect(
+      applyApplicationPackagingAdapter(
+        'ReceitaFederaldoBrasil.ReceitanetBX',
+        DEFAULT_PSADT_CONFIG
+      ).reviewedUninstallArguments
+    ).toEqual(['/mode', 'silent']);
     expect(
       applyApplicationPackagingAdapter(
         'Atlassian.ServiceManagementLTS',

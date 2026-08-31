@@ -1587,6 +1587,28 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // Receita Federal publishes /mode silent for the exact ReceitanetBX
+    // executable. Isolated QA run 33369272908 proved installation and exact
+    // ARP capture, but the captured vendor uninstaller omitted that mode,
+    // printed an interactive key prompt, and retained its exact registration.
+    // Append only the publisher-declared silent mode to that captured command;
+    // the exact registry identity remains authoritative for completion.
+    // https://github.com/microsoft/winget-pkgs/blob/master/manifests/r/ReceitaFederaldoBrasil/ReceitanetBX/1.10.0/ReceitaFederaldoBrasil.ReceitanetBX.installer.yaml
+    wingetId: 'ReceitaFederaldoBrasil.ReceitanetBX',
+    reviewedUninstallArguments: ['/mode', 'silent'],
+  },
+  {
+    // Microlife publishes WatchBP Analyzer as a user-scope Nullsoft package,
+    // but its installer raises an elevation request even with /S. Isolated QA
+    // run 33374926585 therefore failed before registration in the standard-user
+    // context. Keep selecting and attesting the exact published user-scoped
+    // bytes while executing the managed lifecycle as LocalSystem.
+    // https://github.com/microsoft/winget-pkgs/blob/master/manifests/m/Microlife/WatchBPAnalyzer/1.7.3.1/Microlife.WatchBPAnalyzer.installer.yaml
+    wingetId: 'Microlife.WatchBPAnalyzer',
+    requiredInstallScope: 'machine',
+    reviewedInstallerSelectionScope: 'user',
+  },
+  {
     // Webroot publishes both an MSI and a machine-scoped EXE. The EXE's
     // registered WRUNINST removal route is interactive, while the MSI has the
     // standard unattended Windows Installer lifecycle required by Intune.
