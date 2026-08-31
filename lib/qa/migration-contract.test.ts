@@ -923,6 +923,32 @@ describe('Crypt missing install identity block contract', () => {
   });
 });
 
+describe('StudioTrans machine-scope system-profile block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831182500_block_studiotrans_system_profile_install.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact payload with an unusable machine lifecycle', () => {
+    expect(sql).toContain("'xinpianchang.StudioTrans'");
+    expect(sql).toContain("'1.2.4'");
+    expect(sql).toContain("'x64'");
+    expect(sql).toContain(
+      "'67E5BD9AB9774F386BFD4EBE06FC4A3F06EC00E0B8AF68A48FBF5CCB8E0ADD85'"
+    );
+    expect(sql).toContain("'machine_scope_system_profile_install'");
+    expect(sql).toContain('LocalSystem profile');
+    expect(sql).toContain('missing uninstaller');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(
