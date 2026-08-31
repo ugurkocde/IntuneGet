@@ -613,6 +613,17 @@ describe('application packaging adapters', () => {
     });
   });
 
+  it('keeps the Retoolkit component bundle observable within a bounded wait', () => {
+    expect(
+      applyApplicationPackagingAdapter(
+        'mentebinaria.retoolkit',
+        DEFAULT_PSADT_CONFIG
+      )
+    ).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('keeps the ARES Commander bootstrapper observable within a bounded wait', () => {
     expect(
       applyApplicationPackagingAdapter(

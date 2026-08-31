@@ -1391,6 +1391,38 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
   });
 
+  it('binds the bounded Retoolkit component wait to customer and QA packaging', () => {
+    const silentSwitches =
+      '/VERYSILENT /NORESTART /COMPONENTS="*android,*debuggers,*utilities,!network\\\\nmap"';
+    const uninstallCommand =
+      "REGISTRY_UNINSTALL_KEY:{BB46345D-F5E9-408E-AA39-64A5EDD92E30}_is1:Reverse Engineer's Toolkit (retoolkit)";
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'mentebinaria.retoolkit',
+      displayName: "Reverse Engineer's Toolkit (retoolkit)",
+      publisher: 'mentebinaria',
+      version: '2023.05',
+      architecture: 'x64',
+      installerSha256: '1'.repeat(64),
+      installerType: 'inno',
+      silentSwitches,
+      uninstallCommand,
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { silentArgs: string; uninstallCommand: string };
+      psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
+    };
+
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
+    expect(profile.installer.silentArgs).toBe(silentSwitches);
+    expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
+      reviewedInstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('binds the bounded FlashPrint nested EXE wait to customer and QA packaging', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Flashforge.FlashPrint',
