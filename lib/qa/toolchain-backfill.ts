@@ -585,7 +585,18 @@ const MPLAB_XC16_UNATTENDED_UNINSTALL_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const QUASSEL_EXACT_UNINSTALL_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry Quassel with its observed exact NSIS ARP key/display name while the
+  // captured vendor-created uninstaller remains authoritative for removal.
+  'Quassel.QuasselIRC',
+  // MPLAB XC16 exhausted its reviewed retry at the prior pin; carry every
+  // older still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '738d9f19baa44d2e1f0cf49c4fea5658915cefc9':
+    QUASSEL_EXACT_UNINSTALL_IDENTITY_RELEASE_RETRY_TARGETS,
   'b1f9ded94342bd3e27fe17b50e17f5b9474c01a3':
     MPLAB_XC16_UNATTENDED_UNINSTALL_RELEASE_RETRY_TARGETS,
   '450123ff0f740dce8a4f7deee067dadd18739134':

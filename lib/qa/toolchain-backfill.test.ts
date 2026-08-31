@@ -6,14 +6,26 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries MPLAB XC16 only after activating its unattended uninstall repair', () => {
-    const wingetId = 'Microchip.MPLABXC16CCompiler';
+  it('retries Quassel only after activating its exact uninstall identity', () => {
+    const wingetId = 'Quassel.QuasselIRC';
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      '450123ff0f740dce8a4f7deee067dadd18739134',
+      'b1f9ded94342bd3e27fe17b50e17f5b9474c01a3',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the exhausted MPLAB XC16 retry scoped to its release', () => {
+    const wingetId = 'Microchip.MPLABXC16CCompiler';
+    expect(shouldRetryTerminalToolchainCandidate(
+      'b1f9ded94342bd3e27fe17b50e17f5b9474c01a3',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
     )).toBe(false);
   });
