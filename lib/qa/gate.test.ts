@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QaResultRow } from '@/types/qa';
 
-const { getQaResultMock, getPackageResultMock, packageEqMock } = vi.hoisted(() => ({
+const {
+  getQaResultMock,
+  getPackageCompatibilityBlockMock,
+  getPackageResultMock,
+  packageEqMock,
+} = vi.hoisted(() => ({
   getQaResultMock: vi.fn(),
+  getPackageCompatibilityBlockMock: vi.fn(),
   getPackageResultMock: vi.fn(),
   packageEqMock: vi.fn(),
 }));
@@ -26,8 +32,21 @@ vi.mock('@/lib/supabase', () => ({
     },
   }),
 }));
+vi.mock('@/lib/package-eligibility', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/package-eligibility')>();
+  return {
+    ...original,
+    getPackageCompatibilityBlock: getPackageCompatibilityBlockMock,
+  };
+});
 
-import { enforceQaGate, QaGateError, QaGateNotPassedError, QaSecurityGateError } from './gate';
+import {
+  enforceQaGate,
+  QaCompatibilityGateError,
+  QaGateError,
+  QaGateNotPassedError,
+  QaSecurityGateError,
+} from './gate';
 
 const installerSha256 = 'A'.repeat(64);
 const packageProfileSha256 = 'B'.repeat(64);
@@ -71,6 +90,8 @@ const failedRow = {
 describe('enforceQaGate', () => {
   beforeEach(() => {
     getQaResultMock.mockReset();
+    getPackageCompatibilityBlockMock.mockReset();
+    getPackageCompatibilityBlockMock.mockResolvedValue(null);
     getPackageResultMock.mockReset();
     packageEqMock.mockReset();
   });
@@ -166,6 +187,27 @@ describe('enforceQaGate', () => {
         qaOverride: true,
       })
     ).rejects.toBeInstanceOf(QaSecurityGateError);
+  });
+
+  it('does not allow a QA override to bypass an exact compatibility block', async () => {
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.42.0',
+      architecture: 'x64',
+      installerSha256,
+      code: 'expired_signing_certificate',
+      detail: 'The signing certificate is expired.',
+    });
+
+    await expect(enforceQaGate({
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.42.0',
+      architecture: 'x64',
+      installerSha256,
+      qaOverride: true,
+    })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+
+    expect(getPackageResultMock).not.toHaveBeenCalled();
   });
 
   it('blocks a flagged current version even when its installation test passed', async () => {

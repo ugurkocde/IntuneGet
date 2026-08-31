@@ -3,8 +3,13 @@ import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
 
-const { resolveWingetPackageDependenciesMock, getPackageEligibilityBlocksMock } = vi.hoisted(() => ({
+const {
+  resolveWingetPackageDependenciesMock,
+  getPackageCompatibilityBlockMock,
+  getPackageEligibilityBlocksMock,
+} = vi.hoisted(() => ({
   resolveWingetPackageDependenciesMock: vi.fn(),
+  getPackageCompatibilityBlockMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
 }));
 
@@ -20,6 +25,7 @@ vi.mock('@/lib/package-eligibility', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/package-eligibility')>();
   return {
     ...original,
+    getPackageCompatibilityBlock: getPackageCompatibilityBlockMock,
     getPackageEligibilityBlocks: getPackageEligibilityBlocksMock,
   };
 });
@@ -68,6 +74,8 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);
     getPackageEligibilityBlocksMock.mockReset();
     getPackageEligibilityBlocksMock.mockResolvedValue([]);
+    getPackageCompatibilityBlockMock.mockReset();
+    getPackageCompatibilityBlockMock.mockResolvedValue(null);
   });
 
   it('does not queue or resolve dependencies for a retired catalog app', async () => {
@@ -101,6 +109,38 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     });
     expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
     expect(getPackageEligibilityBlocksMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('blocks an exact reviewed installer tuple before resolving dependencies', async () => {
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.42.0',
+      architecture: 'x64',
+      installerSha256: 'A'.repeat(64),
+      code: 'expired_signing_certificate',
+      detail: 'The signing certificate is expired.',
+    });
+    const client = { from: vi.fn() };
+
+    const result = await ensureQaDemand(client as never, {
+      ...demandInput(),
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.42.0',
+    });
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, {
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.42.0',
+      architecture: 'x64',
+      installerSha256: 'A'.repeat(64),
+    });
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalled();
   });
 

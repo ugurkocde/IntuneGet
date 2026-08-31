@@ -13,8 +13,23 @@ export interface PackageEligibilityBlock {
   code: PackageEligibilityBlockCode;
 }
 
+export type PackageCompatibilityBlockCode =
+  Database['public']['Tables']['qa_package_blocks']['Row']['block_code'];
+
+export interface PackageCompatibilityBlock {
+  wingetId: string;
+  version: string;
+  architecture: 'x64' | 'x86' | 'arm64';
+  installerSha256: string;
+  code: PackageCompatibilityBlockCode;
+  detail: string;
+}
+
 export const PACKAGE_UNAVAILABLE_MESSAGE =
   'This app is not available for automated deployment.';
+
+export const PACKAGE_VERSION_UNAVAILABLE_MESSAGE =
+  'This app version is not available for automated deployment.';
 
 export interface CatalogExclusion {
   wingetId: string;
@@ -69,4 +84,53 @@ export async function getPackageEligibilityBlocks(
     wingetId: row.winget_id,
     code: row.block_code,
   }));
+}
+
+/**
+ * Look up a reviewed compatibility block for one immutable installer payload.
+ * Exact tuple matching prevents a bad vendor release from reaching either QA
+ * or customer packaging without disabling a future corrected release.
+ */
+export async function getPackageCompatibilityBlock(
+  supabase: SupabaseClient<Database>,
+  input: {
+    wingetId: string;
+    version: string;
+    architecture: string;
+    installerSha256: string;
+  }
+): Promise<PackageCompatibilityBlock | null> {
+  const architecture = input.architecture.trim().toLowerCase();
+  const installerSha256 = input.installerSha256.trim().toUpperCase();
+  if (
+    !input.wingetId.trim() ||
+    !input.version.trim() ||
+    !['x64', 'x86', 'arm64'].includes(architecture) ||
+    !/^[A-F0-9]{64}$/.test(installerSha256)
+  ) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('qa_package_blocks')
+    .select('winget_id, version, architecture, installer_sha256, block_code, detail')
+    .eq('winget_id', input.wingetId.trim())
+    .eq('version', input.version.trim())
+    .eq('architecture', architecture as 'x64' | 'x86' | 'arm64')
+    .eq('installer_sha256', installerSha256)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Could not verify package compatibility: ${error.message}`);
+  }
+
+  return data
+    ? {
+        wingetId: data.winget_id,
+        version: data.version,
+        architecture: data.architecture,
+        installerSha256: data.installer_sha256,
+        code: data.block_code,
+        detail: data.detail,
+      }
+    : null;
 }

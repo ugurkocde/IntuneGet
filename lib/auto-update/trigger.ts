@@ -46,7 +46,8 @@ interface TriggerResult {
   code?:
     | 'QA_FAILED_CURRENT_VERSION'
     | 'QA_NOT_PASSED_CURRENT_VERSION'
-    | 'QA_SECURITY_FLAGGED_CURRENT_VERSION';
+    | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
+    | 'QA_PACKAGE_COMPATIBILITY_BLOCKED';
 }
 
 export interface UpdateInfo {

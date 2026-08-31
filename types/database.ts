@@ -329,6 +329,7 @@ export interface Database {
             | 'user_scope_elevation_required'
             | 'trusted_installer_tuple_unavailable'
             | 'unsupported_dependency_shape'
+            | 'expired_signing_certificate'
             | 'unreviewed_dependency';
           detail: string;
           observed_at: string;

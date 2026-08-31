@@ -17,8 +17,10 @@ import type { Json } from '@/types/database';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { resolveApplicationInstallScope } from '@/lib/packaging-adapters';
 import {
+  getPackageCompatibilityBlock,
   getPackageEligibilityBlocks,
   PACKAGE_UNAVAILABLE_MESSAGE,
+  PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
 import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
 
@@ -74,6 +76,20 @@ export async function ensureQaDemand(
       candidateId: null,
       state: 'failed',
       failureSummary: PACKAGE_UNAVAILABLE_MESSAGE,
+    };
+  }
+  const compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
+    wingetId: input.wingetId,
+    version: input.version,
+    architecture: input.architecture || 'x64',
+    installerSha256: input.installerSha256,
+  });
+  if (compatibilityBlock) {
+    return {
+      identity: normalizeQaWorkflowPackageInput(baseResolvedInput).identity,
+      candidateId: null,
+      state: 'failed',
+      failureSummary: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
     };
   }
   // Resolve at the QA-demand boundary as well as at final packaging dispatch.

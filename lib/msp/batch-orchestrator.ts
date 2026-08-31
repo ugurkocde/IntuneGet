@@ -18,7 +18,12 @@ import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { queueWebhookDelivery } from '@/lib/msp/webhook-service';
 import { createAuditLog } from '@/lib/audit-logger';
-import { describeQaGateError, enforceQaGate, QaGateError } from '@/lib/qa/gate';
+import {
+  describeQaGateError,
+  enforceQaGate,
+  isQaGateError,
+  type AnyQaGateError,
+} from '@/lib/qa/gate';
 import { normalizeInstaller } from '@/lib/manifest-api';
 import { selectTrustedCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import type { WingetInstaller } from '@/types/winget';
@@ -271,16 +276,17 @@ async function startBatchItems(batchId: string): Promise<number> {
 
   // Evaluate the package tuple once before processing tenants. This avoids
   // creating one misleading job per tenant for a known current QA failure.
-  let qaGateError: QaGateError | null = null;
+  let qaGateError: AnyQaGateError | null = null;
   if (installerDetails) {
     try {
       await enforceQaGate({
         wingetId: batch.winget_id,
         version: batch.version,
         architecture: installerDetails.architecture,
+        installerSha256: installerDetails.installer_sha256,
       });
     } catch (error) {
-      if (error instanceof QaGateError) qaGateError = error;
+      if (isQaGateError(error)) qaGateError = error;
       else throw error;
     }
   }
@@ -404,7 +410,7 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       started++;
     } catch (err) {
-      const isQaSkip = err instanceof QaGateError;
+      const isQaSkip = isQaGateError(err);
       const msg = isQaSkip
         ? describeQaGateError(err)
         : err instanceof Error ? err.message : 'Failed to trigger packaging workflow';

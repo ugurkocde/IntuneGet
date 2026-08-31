@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   getCatalogExclusion,
+  getPackageCompatibilityBlock,
   getPackageEligibilityBlocks,
 } from '@/lib/package-eligibility';
 
@@ -28,6 +29,17 @@ function singleRowQuery(result: { data: unknown; error: { message: string } | nu
   builder.select.mockReturnValue(builder);
   builder.ilike.mockReturnValue(builder);
   builder.limit.mockReturnValue(builder);
+  return builder;
+}
+
+function exactTupleQuery(result: { data: unknown; error: { message: string } | null }) {
+  const builder = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+  };
+  builder.select.mockReturnValue(builder);
+  builder.eq.mockReturnValue(builder);
   return builder;
 }
 
@@ -115,5 +127,55 @@ describe('getPackageEligibilityBlocks', () => {
     await expect(
       getPackageEligibilityBlocks(client as never, ['Example.App'])
     ).rejects.toThrow('Could not verify package availability: database unavailable');
+  });
+});
+
+describe('getPackageCompatibilityBlock', () => {
+  it('matches the exact app, version, architecture, and installer hash', async () => {
+    const installerSha256 = 'A'.repeat(64);
+    const builder = exactTupleQuery({
+      data: {
+        winget_id: 'r12f.DivoomGateway',
+        version: '0.1.42.0',
+        architecture: 'x64',
+        installer_sha256: installerSha256,
+        block_code: 'expired_signing_certificate',
+        detail: 'The signing certificate is expired.',
+      },
+      error: null,
+    });
+    const client = { from: vi.fn(() => builder) };
+
+    const result = await getPackageCompatibilityBlock(client as never, {
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.42.0',
+      architecture: 'X64',
+      installerSha256: installerSha256.toLowerCase(),
+    });
+
+    expect(client.from).toHaveBeenCalledWith('qa_package_blocks');
+    expect(builder.eq).toHaveBeenCalledWith('winget_id', 'r12f.DivoomGateway');
+    expect(builder.eq).toHaveBeenCalledWith('version', '0.1.42.0');
+    expect(builder.eq).toHaveBeenCalledWith('architecture', 'x64');
+    expect(builder.eq).toHaveBeenCalledWith('installer_sha256', installerSha256);
+    expect(result).toMatchObject({
+      version: '0.1.42.0',
+      code: 'expired_signing_certificate',
+    });
+  });
+
+  it('returns null for a future version that has no exact block', async () => {
+    const builder = exactTupleQuery({ data: null, error: null });
+    const client = { from: vi.fn(() => builder) };
+
+    await expect(getPackageCompatibilityBlock(client as never, {
+      wingetId: 'r12f.DivoomGateway',
+      version: '0.1.43.0',
+      architecture: 'x64',
+      installerSha256: 'B'.repeat(64),
+    })).resolves.toBeNull();
+
+    expect(builder.eq).toHaveBeenCalledWith('version', '0.1.43.0');
+    expect(builder.eq).toHaveBeenCalledWith('installer_sha256', 'B'.repeat(64));
   });
 });

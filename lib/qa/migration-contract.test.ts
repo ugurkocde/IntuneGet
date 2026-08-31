@@ -821,6 +821,31 @@ describe('QA package compatibility block expansion contract', () => {
   });
 });
 
+describe('Divoom expired signing certificate block contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831152500_block_divoom_expired_signing_certificate.sql'
+    ),
+    'utf8'
+  );
+
+  it('blocks only the exact rejected vendor payload', () => {
+    expect(sql).toContain("'r12f.DivoomGateway'");
+    expect(sql).toContain("'0.1.42.0'");
+    expect(sql).toContain("'x64'");
+    expect(sql).toContain(
+      "'3C76B4F9B0539A6C617E424A333F857B61402BD001FCECB8E325D0134CD3C16A'"
+    );
+    expect(sql).toContain("'expired_signing_certificate'");
+    expect(sql).toContain('0x800B0101');
+    expect(sql).toContain(
+      'on conflict (winget_id, version, architecture, installer_sha256) do update'
+    );
+    expect(sql).not.toContain('update public.curated_apps');
+  });
+});
+
 describe('unsupported dependency shape compatibility block contract', () => {
   const sql = readFileSync(
     resolve(

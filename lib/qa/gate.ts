@@ -1,6 +1,10 @@
 import { getCatalogSource } from '@/lib/catalog';
 import { classifyQaFailure } from '@/lib/qa/classify';
 import { createServerClient } from '@/lib/supabase';
+import {
+  getPackageCompatibilityBlock,
+  type PackageCompatibilityBlockCode,
+} from '@/lib/package-eligibility';
 import type { QaClassification } from '@/types/qa';
 
 export class QaGateError extends Error {
@@ -67,17 +71,44 @@ export class QaSecurityGateError extends Error {
   }
 }
 
-export type AnyQaGateError = QaGateError | QaGateNotPassedError | QaSecurityGateError;
+export class QaCompatibilityGateError extends Error {
+  readonly code = 'QA_PACKAGE_COMPATIBILITY_BLOCKED' as const;
+
+  constructor(
+    readonly details: {
+      wingetId: string;
+      version: string;
+      architecture: string;
+      installerSha256: string;
+      blockCode: PackageCompatibilityBlockCode;
+    }
+  ) {
+    super(
+      `Automated deployment is unavailable for ${details.wingetId} ${details.version} (${details.architecture})`
+    );
+    this.name = 'QaCompatibilityGateError';
+  }
+}
+
+export type AnyQaGateError =
+  | QaGateError
+  | QaGateNotPassedError
+  | QaSecurityGateError
+  | QaCompatibilityGateError;
 
 export function isQaGateError(error: unknown): error is AnyQaGateError {
   return (
     error instanceof QaGateError ||
     error instanceof QaGateNotPassedError ||
-    error instanceof QaSecurityGateError
+    error instanceof QaSecurityGateError ||
+    error instanceof QaCompatibilityGateError
   );
 }
 
 export function describeQaGateError(error: AnyQaGateError): string {
+  if (error instanceof QaCompatibilityGateError) {
+    return `${error.message}. This exact installer release has a reviewed compatibility block; a future corrected vendor release remains eligible for QA.`;
+  }
   if (error instanceof QaSecurityGateError) {
     return `${error.message}. Packaging is blocked for this version until the finding is reviewed. Earlier versions with a clean verdict remain available.`;
   }
@@ -108,6 +139,26 @@ export async function enforceQaGate(input: {
   const architecture = (input.architecture || 'x64').toLowerCase();
   const installerSha256 = input.installerSha256?.trim().toUpperCase() || '';
   const packageProfileSha256 = input.packageProfileSha256?.trim().toUpperCase() || '';
+
+  // Reviewed exact-payload compatibility blocks cannot be bypassed. These are
+  // upstream or platform safety boundaries, not ordinary QA failures.
+  if (installerSha256) {
+    const compatibilityBlock = await getPackageCompatibilityBlock(createServerClient(), {
+      wingetId: input.wingetId,
+      version: input.version,
+      architecture,
+      installerSha256,
+    });
+    if (compatibilityBlock) {
+      throw new QaCompatibilityGateError({
+        wingetId: input.wingetId,
+        version: input.version,
+        architecture,
+        installerSha256,
+        blockCode: compatibilityBlock.code,
+      });
+    }
+  }
 
   // Security gate: a malicious VirusTotal verdict for this exact installer
   // blocks packaging even when the installability gate is overridden.
