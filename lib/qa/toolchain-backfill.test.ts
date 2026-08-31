@@ -6,16 +6,28 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it.each([
-    'ReceitaFederaldoBrasil.ReceitanetBX',
-    'Microlife.WatchBPAnalyzer',
-  ])('retries %s only after activating its reviewed lifecycle repair', (wingetId) => {
+  it('retries MPLAB XC16 only after activating its unattended uninstall repair', () => {
+    const wingetId = 'Microchip.MPLABXC16CCompiler';
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      '02334f8bff1ee97e68c81ef44fd4ed256df81397',
+      '450123ff0f740dce8a4f7deee067dadd18739134',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it.each([
+    'ReceitaFederaldoBrasil.ReceitanetBX',
+    'Microlife.WatchBPAnalyzer',
+  ])('keeps the exhausted %s retry scoped to its release', (wingetId) => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '450123ff0f740dce8a4f7deee067dadd18739134',
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId, status: 'failed' }
     )).toBe(false);
   });
