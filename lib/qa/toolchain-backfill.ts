@@ -614,7 +614,20 @@ const RETOOLKIT_EXTENDED_INSTALL_WAIT_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const RETOOLKIT_45_MINUTE_INSTALL_WAIT_RELEASE_RETRY_TARGETS = [
+  // The exact LocalSystem lifecycle proved the vendor process still active at
+  // the 30-minute ceiling, while its exact ARP entry appeared shortly after and
+  // its registered uninstaller removed it cleanly. Retry only Retoolkit with
+  // the observable, fail-closed 45-minute ceiling.
+  'mentebinaria.retoolkit',
+  // Retoolkit exhausted its 30-minute retry at the prior pin; carry every older
+  // still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '96c197e74589388d9091d89e1385bbbd318f7bf8':
+    RETOOLKIT_45_MINUTE_INSTALL_WAIT_RELEASE_RETRY_TARGETS,
   'aafd4a7dd0787ea603c1c53bb8166369f81e39a7':
     RETOOLKIT_EXTENDED_INSTALL_WAIT_RELEASE_RETRY_TARGETS,
   '92ddbf527ab5e698bb81937b97efc96523622a96':
