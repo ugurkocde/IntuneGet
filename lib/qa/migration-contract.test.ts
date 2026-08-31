@@ -8,6 +8,7 @@ const migrationPaths = [
   'supabase/migrations/20260808193500_qa_candidate_catalog_promotion.sql',
   'supabase/migrations/20260808194800_harden_qa_catalog_promotion_order.sql',
   'supabase/migrations/20260815004500_preserve_deployment_config_qa_retries.sql',
+  'supabase/migrations/20260831111500_pause_qa_pipeline_on_failed_lifecycle.sql',
 ];
 
 describe.each(migrationPaths)('QA candidate migration contract: %s', (migrationPath) => {
@@ -75,6 +76,52 @@ describe('QA exact deployment-config retry migration contract', () => {
   it('continues to restrict catalog promotion to catalog-default candidates', () => {
     expect(sql).toContain("candidate.test_config->>'profileKind' = 'catalog-default'");
     expect(sql).toContain('insert into public.version_history');
+  });
+});
+
+describe('QA failed-lifecycle fail-close migration contract', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260831111500_pause_qa_pipeline_on_failed_lifecycle.sql'
+    ),
+    'utf8'
+  );
+
+  it('atomically pauses the global dispatcher after a genuine failed lifecycle', () => {
+    const terminalUpdate = sql.indexOf('update public.qa_candidates');
+    const changedGuard = sql.indexOf('if changed <> 1 then');
+    const failureGuard = sql.indexOf("if normalized_outcome = 'failed' then");
+    const pauseUpdate = sql.indexOf('update public.qa_pipeline_control');
+
+    expect(terminalUpdate).toBeGreaterThan(-1);
+    expect(changedGuard).toBeGreaterThan(terminalUpdate);
+    expect(failureGuard).toBeGreaterThan(changedGuard);
+    expect(pauseUpdate).toBeGreaterThan(failureGuard);
+    expect(sql).toContain("where id = 'global'");
+    expect(sql).toContain('and paused = false');
+    expect(sql).toContain("updated_by = 'qa-result-fail-close'");
+    expect(sql).toContain("coalesce(nullif(p_summary, ''), 'No summary provided.')");
+    expect(sql).toContain("raise exception 'Global QA pipeline control is missing or could not be paused'");
+  });
+
+  it('does not pause retries, infrastructure errors, or passed lifecycles', () => {
+    const failureBlock = sql.slice(
+      sql.indexOf("if normalized_outcome = 'failed' then"),
+      sql.indexOf('-- Only catalog-default candidates')
+    );
+
+    expect(failureBlock).toContain('update public.qa_pipeline_control');
+    expect(failureBlock).not.toContain("normalized_outcome = 'retry'");
+    expect(failureBlock).not.toContain("normalized_outcome = 'error'");
+    expect(failureBlock).not.toContain("normalized_outcome = 'passed'");
+  });
+
+  it('preserves the exact catalog promotion and deployment-config retry contracts', () => {
+    expect(sql).toContain("candidate.test_config->>'profileKind' = 'catalog-default'");
+    expect(sql).toContain('insert into public.version_history');
+    expect(sql).toContain("when normalized_outcome = 'retry' and attempts < 2 then 'queued'");
+    expect(sql).toContain("when normalized_outcome = 'retry' then 'error'");
   });
 });
 
