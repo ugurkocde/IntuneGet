@@ -1880,6 +1880,16 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'MSYS2 Installer',
     registeredDisplayName: 'MSYS2',
   },
+  // Quassel's WinGet ProductCode omits the space used by the application's
+  // actual NSIS ARP identity, and the registered build version is a Git
+  // revision instead of the manifest version. Bind the observed stable key so
+  // unrelated Edge servicing cannot enter capture selection while the exact
+  // vendor-created uninstaller remains authoritative for removal.
+  'quassel.quasselirc': {
+    generatedDisplayName: 'QuasselIRC',
+    registeredDisplayName: 'Quassel IRC',
+    registeredRegistryKey: 'Quassel IRC',
+  },
 };
 
 export function resolveApplicationUninstallCommand(

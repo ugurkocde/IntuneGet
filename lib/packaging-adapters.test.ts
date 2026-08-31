@@ -291,6 +291,17 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('uses Quassel IRC\'s exact NSIS registry identity', () => {
+    expect(resolveApplicationUninstallCommand(
+      'Quassel.QuasselIRC',
+      'REGISTRY_UNINSTALL:QuasselIRC'
+    )).toBe('REGISTRY_UNINSTALL_KEY:Quassel IRC:Quassel IRC');
+    expect(resolveApplicationUninstallCommand(
+      'quassel.quasselirc',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
     expect(
       resolveApplicationInstallScope('Y-ASLant.ElegantClipboard', 'machine')

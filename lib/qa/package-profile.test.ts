@@ -346,6 +346,29 @@ describe('PSADT QA package identity', () => {
       .toEqual(['/S']);
   });
 
+  it('binds Quassel customer and QA packages to the exact NSIS registry identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Quassel.QuasselIRC',
+      displayName: 'QuasselIRC',
+      publisher: 'Quassel Project',
+      version: '0.14.0',
+      architecture: 'x64',
+      installerSha256: 'b'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:QuasselIRC',
+      installScope: 'machine',
+    });
+    const profile = normalized.identity.profile as {
+      installer: { uninstallCommand: string };
+    };
+
+    expect(normalized.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:Quassel IRC:Quassel IRC'
+    );
+    expect(profile.installer.uninstallCommand).toBe(normalized.uninstallCommand);
+  });
+
   it('binds G.SKILL Trident Z customer and QA packages to one exact Inno key', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'GSKILL.TridentZLightingControl',
