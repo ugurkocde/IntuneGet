@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
+  packagerCommit: '2a1930a201bef41c313606cf44ecd71ce1238c7a',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -549,6 +549,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // launching the package as a Win32 executable. Preserve every unrelated
   // compatible pass from the Service Fabric Runtime release.
   'f48e73742c96773e2b4c8c2fed200363c7b5a805',
+  // SSMS 21 Preview now uses the reviewed unattended Visual Studio Installer
+  // uninstall lifecycle. Preserve every unrelated compatible pass from the
+  // nested AppX lifecycle release.
+  '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

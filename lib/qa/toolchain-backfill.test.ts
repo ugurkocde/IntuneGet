@@ -6,19 +6,30 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries .NET Native Runtime only after activating its nested AppX lifecycle', () => {
+  it('retries SSMS 21 Preview only after activating its unattended uninstall lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
-      { wingetId: ' MICROSOFT.DOTNET.NATIVE.RUNTIME ', status: 'failed' }
+      { wingetId: ' MICROSOFT.SQLSERVERMANAGEMENTSTUDIO.21.PREVIEW ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      'f48e73742c96773e2b4c8c2fed200363c7b5a805',
-      { wingetId: 'Microsoft.DotNet.Native.Runtime', status: 'failed' }
+      '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
+      { wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview', status: 'failed' }
     )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Unrelated.App', status: 'failed' }
     )).toBe(false);
+  });
+
+  it('does not replay the exhausted .NET Native Runtime retry at the next pin', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.DotNet.Native.Runtime', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
+      { wingetId: ' MICROSOFT.DOTNET.NATIVE.RUNTIME ', status: 'failed' }
+    )).toBe(true);
   });
 
   it('does not replay the exhausted Service Fabric Runtime retry at the next pin', () => {
