@@ -4034,7 +4034,8 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     expect(repairedRegistryBranchIndex).toBeGreaterThan(repairIndex);
     expect(unresolvedSentinelIndex).toBeGreaterThan(repairedRegistryBranchIndex);
     expect(packager).toContain("$msixPackageName -notmatch '^[A-Za-z0-9.-]+$'");
-    expect(packager).toContain("$installerTypeLower -in @('msix', 'appx') -and");
+    expect(packager).toContain("$usesAppxLifecycle = $installerTypeLower -in @('msix', 'appx') -or");
+    expect(packager).toContain("$NestedInstallerType.Trim().ToLowerInvariant() -in @('msix', 'appx')");
     expect(packager).toContain('[string]::IsNullOrWhiteSpace($msixPackageName) -and');
     expect(packager).toContain('[string]::IsNullOrWhiteSpace($customUninstallCommand)');
   });
@@ -4046,6 +4047,42 @@ describe('PSADT nested archive contract', () => {
       'Zip package declares a nested installer path but no nested installer type; refusing unsafe default execution.'
     );
   });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'provisions a nested AppX with its exact package identity',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'zip',
+        'Microsoft .NET Native Runtime',
+        [],
+        {},
+        [],
+        'Microsoft.DotNet.Native.Runtime',
+        'Microsoft .NET Native Runtime',
+        '2.2.28604.0',
+        'MSIX_UNINSTALL:Microsoft.NET.Native.Runtime.2.2',
+        '',
+        'machine',
+        'msix',
+        'Dependencies\\x64\\Microsoft.NET.Native.Runtime.2.2.appx'
+      );
+
+      expect(generated).toContain('$msixPath = $nestedInstallerPath');
+      expect(generated).toContain(
+        "Add-AppxProvisionedPackage -Online -PackagePath $packagePath -SkipLicense"
+      );
+      expect(generated).toContain(
+        "$packageName = 'Microsoft.NET.Native.Runtime.2.2'"
+      );
+      expect(generated).toContain(
+        'Remove-AppxProvisionedPackage -Online -PackageName $provPackage.PackageName'
+      );
+      expect(generated).not.toContain(
+        'Start-ADTProcess -FilePath $nestedInstallerPath'
+      );
+    },
+    30_000
+  );
 });
 
 describe('PSADT MSIX scope contract', () => {
@@ -4062,6 +4099,9 @@ describe('PSADT MSIX scope contract', () => {
     expect(packager).toContain('MSIX/APPX provisioning is still in progress');
     expect(packager).toContain('Receive-Job -Job $provisioningJob -ErrorAction Stop');
     expect(packager).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers');
+    expect(packager).toContain(
+      'Machine-scoped MSIX/APPX removal verification failed for exact package identity'
+    );
     expect(packager).toContain('if ($IsUserScope)');
   });
 });

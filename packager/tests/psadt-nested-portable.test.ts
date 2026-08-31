@@ -1144,6 +1144,45 @@ describe('self-hosted MSIX PSADT generation', () => {
     expect(uninstall).toContain('Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers');
   });
 
+  it('uses the MSIX lifecycle for a ZIP-wrapped AppX payload', () => {
+    const job = packagingJob({
+      winget_id: 'Microsoft.DotNet.Native.Runtime',
+      display_name: 'Microsoft .NET Native Runtime',
+      version: '2.2.28604.0',
+      installer_type: 'zip',
+      installer_url: 'https://example.com/Dependencies.zip',
+      uninstall_command: 'MSIX_UNINSTALL:Microsoft.NET.Native.Runtime.2.2',
+      install_scope: 'machine',
+      package_config: {
+        nestedInstallerType: 'msix',
+        nestedInstallerPath:
+          'Dependencies\\x64\\Microsoft.NET.Native.Runtime.2.2.appx',
+        psadtConfig: {},
+      },
+    });
+    const install = generator.getInstallCommand.call(
+      generator,
+      job,
+      'Dependencies.zip',
+      ''
+    );
+    const uninstall = generator.getUninstallCommand.call(
+      generator,
+      job,
+      'Dependencies.zip'
+    );
+
+    expect(install).toContain('$msixPath = $nestedInstallerPath');
+    expect(install).toContain('Add-AppxProvisionedPackage -Online');
+    expect(install).not.toContain('Start-ADTProcess -FilePath $nestedInstallerPath');
+    expect(uninstall).toContain(
+      "Get-AppxPackage -Name 'Microsoft.NET.Native.Runtime.2.2' -AllUsers"
+    );
+    expect(uninstall).toContain(
+      'Machine-scoped MSIX/APPX removal verification failed for exact package identity'
+    );
+  });
+
   it('refuses a display-name fallback that is not an exact package identity', () => {
     const job = msixJob('user');
     job.uninstall_command = 'MSIX_UNINSTALL:Windows Terminal';

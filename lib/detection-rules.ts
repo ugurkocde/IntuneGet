@@ -44,7 +44,14 @@ export function generateDetectionRules(
   version?: string,
   markerPath?: string
 ): DetectionRule[] {
-  switch (installer.type) {
+  // A ZIP is only the transport when WinGet declares a nested installer. Use
+  // the nested engine for lifecycle-specific detection so an archived AppX is
+  // verified by its package identity rather than by our wrapper marker alone.
+  const effectiveInstallerType = installer.type === 'zip' && installer.nestedInstallerType
+    ? installer.nestedInstallerType
+    : installer.type;
+
+  switch (effectiveInstallerType) {
     case 'msi':
     case 'wix':
       // MSI: Prefer registry marker (product codes go stale across versions),
@@ -431,6 +438,14 @@ export function generateUninstallCommand(
       return 'MSIX_UNINSTALL:{PACKAGE_NAME}';
 
     case 'zip':
+      // Archived MSIX/APPX packages retain their package family identity. A
+      // display name is not a safe substitute for provisioning or removal.
+      if (['msix', 'appx'].includes(installer.nestedInstallerType || '')) {
+        if (installer.packageFamilyName) {
+          return `MSIX_UNINSTALL:${installer.packageFamilyName.split('_')[0]}`;
+        }
+        return 'MSIX_UNINSTALL:{PACKAGE_NAME}';
+      }
       // Archive packages execute their nested installer, so a nested MSI/WiX
       // ProductCode is the authoritative installed-product identity. Preserve
       // it for post-install capture and removal instead of falling back to a

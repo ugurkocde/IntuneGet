@@ -375,6 +375,31 @@ describe('generateDetectionRules', () => {
       expect(rules[0].type).toBe('script');
     });
 
+    it('should detect a ZIP-wrapped AppX by its package family identity', () => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64',
+        url: 'https://example.com/dependencies.zip',
+        sha256: 'abc123',
+        type: 'zip',
+        nestedInstallerType: 'msix',
+        nestedInstallerPath: 'Dependencies\\x64\\Microsoft.NET.Native.Runtime.2.2.appx',
+        packageFamilyName: 'Microsoft.NET.Native.Runtime.2.2_8wekyb3d8bbwe',
+      };
+
+      const rules = generateDetectionRules(
+        installer,
+        'Microsoft .NET Native Runtime',
+        'Microsoft.DotNet.Native.Runtime',
+        '2.2.28604.0'
+      );
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0].type).toBe('script');
+      expect((rules[0] as ScriptDetectionRule).scriptContent).toContain(
+        'Get-AppxPackage -Name "Microsoft.NET.Native.Runtime.2.2" -AllUsers'
+      );
+    });
+
     it('should query the current user and fall back only when running as SYSTEM', () => {
       const installer: NormalizedInstaller = {
         architecture: 'x64',
@@ -941,6 +966,22 @@ describe('generateUninstallCommand', () => {
     ).toBe(
       'REGISTRY_UNINSTALL_PRODUCT:{77B5BCDC-5496-48DA-8B16-5EE2AF08CA31}:BankID säkerhetsprogram'
     );
+  });
+
+  it('should preserve a nested AppX package identity for archive packages', () => {
+    const installer: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/dependencies.zip',
+      sha256: 'abc123',
+      type: 'zip',
+      nestedInstallerType: 'msix',
+      nestedInstallerPath: 'Dependencies\\x64\\Microsoft.NET.Native.Runtime.2.2.appx',
+      packageFamilyName: 'Microsoft.NET.Native.Runtime.2.2_8wekyb3d8bbwe',
+    };
+
+    expect(
+      generateUninstallCommand(installer, 'Microsoft .NET Native Runtime')
+    ).toBe('MSIX_UNINSTALL:Microsoft.NET.Native.Runtime.2.2');
   });
 
   it('should canonicalize a braceless product code and reject malformed GUID shapes', () => {

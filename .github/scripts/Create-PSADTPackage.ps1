@@ -1717,7 +1717,11 @@ if ($useRegistryUninstall) {
     Write-Host "Using portable uninstall (folder removal)"
 }
 
-if ($installerTypeLower -in @('msix', 'appx') -and
+$usesAppxLifecycle = $installerTypeLower -in @('msix', 'appx') -or
+    ($installerTypeLower -eq 'zip' -and
+     -not [string]::IsNullOrWhiteSpace($NestedInstallerType) -and
+     $NestedInstallerType.Trim().ToLowerInvariant() -in @('msix', 'appx'))
+if ($usesAppxLifecycle -and
     [string]::IsNullOrWhiteSpace($msixPackageName) -and
     ([string]::IsNullOrWhiteSpace($customInstallCommand) -or [string]::IsNullOrWhiteSpace($customUninstallCommand))) {
     throw "The MSIX/APPX package identity is missing; refusing to generate install or uninstall commands from a display-name guess."
@@ -2770,6 +2774,67 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                                 $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath -AdditionalArgumentList '$msiProperties'"
                             } else {
                                 $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath"
+                            }
+                        }
+                        { $_ -in 'msix', 'appx' } {
+                            if ($IsUserScope) {
+                                $nestedExecuteLine = @(
+                                    '        $msixPath = $nestedInstallerPath'
+                                    "        `$packageName = '$msixPackageName'"
+                                    "        `$targetVersion = '$versionSingleQuoteEscaped'"
+                                    '        Write-ADTLogEntry -Message "Registering nested user-scoped MSIX/APPX package: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                                    '        $existingPackage = Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1'
+                                    '        $shouldInstallPackage = $true'
+                                    '        if ($existingPackage) {'
+                                    '            try { $shouldInstallPackage = [version]$existingPackage.Version -lt [version]$targetVersion }'
+                                    '            catch { $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion }'
+                                    '        }'
+                                    '        if ($shouldInstallPackage) {'
+                                    '            Add-AppxPackage -Path $msixPath -ForceApplicationShutdown -ErrorAction Stop'
+                                    '        } else {'
+                                    '            Write-ADTLogEntry -Message "Nested MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                                    '        }'
+                                )
+                            } else {
+                                $nestedExecuteLine = @(
+                                    '        $msixPath = $nestedInstallerPath'
+                                    "        `$packageName = '$msixPackageName'"
+                                    "        `$targetVersion = '$versionSingleQuoteEscaped'"
+                                    '        Write-ADTLogEntry -Message "Provisioning nested machine-scoped MSIX/APPX package for all users: $msixPath" -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                                    '        $existingPackage = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $packageName } | Sort-Object Version -Descending | Select-Object -First 1'
+                                    '        $shouldInstallPackage = $true'
+                                    '        if ($existingPackage) {'
+                                    '            try { $shouldInstallPackage = [version]$existingPackage.Version -lt [version]$targetVersion }'
+                                    '            catch { $shouldInstallPackage = [string]$existingPackage.Version -ne $targetVersion }'
+                                    '        }'
+                                    '        if ($shouldInstallPackage) {'
+                                    '            $provisioningJob = Start-Job -ScriptBlock {'
+                                    '                param([string]$packagePath)'
+                                    '                $ErrorActionPreference = ''Stop'''
+                                    '                Add-AppxProvisionedPackage -Online -PackagePath $packagePath -SkipLicense -ErrorAction Stop | Out-Null'
+                                    '            } -ArgumentList $msixPath'
+                                    '            try {'
+                                    '                while ($provisioningJob.State -eq ''Running'') {'
+                                    '                    $null = Wait-Job -Job $provisioningJob -Timeout 30'
+                                    '                    if ($provisioningJob.State -eq ''Running'') {'
+                                    '                        Write-ADTLogEntry -Message "Nested machine-scoped MSIX/APPX provisioning is still in progress for [$packageName]." -Severity ''Info'' -Source ''Install-ADTDeployment'''
+                                    '                    }'
+                                    '                }'
+                                    '                if ($provisioningJob.State -ne ''Completed'') {'
+                                    '                    $provisioningFailure = $provisioningJob.ChildJobs | Select-Object -First 1 -ExpandProperty JobStateInfo | Select-Object -ExpandProperty Reason'
+                                    '                    if ($provisioningFailure) { throw $provisioningFailure }'
+                                    '                    throw "Nested machine-scoped MSIX/APPX provisioning failed with job state [$($provisioningJob.State)]."'
+                                    '                }'
+                                    '                Receive-Job -Job $provisioningJob -ErrorAction Stop | Out-Null'
+                                    '            }'
+                                    '            finally {'
+                                    '                if ($provisioningJob.State -eq ''Running'') { Stop-Job -Job $provisioningJob -ErrorAction SilentlyContinue }'
+                                    '                Remove-Job -Job $provisioningJob -Force -ErrorAction SilentlyContinue'
+                                    '            }'
+                                    '        } else {'
+                                    '            Write-ADTLogEntry -Message "Nested provisioned MSIX/APPX package [$packageName] version [$($existingPackage.Version)] already satisfies target [$targetVersion]." -Severity ''Success'' -Source ''Install-ADTDeployment'''
+                                    '        }'
+                                )
                             }
                         }
                         default {
@@ -4149,6 +4214,10 @@ if ($useManagedDirectoryLifecycle) {
             '            Write-ADTLogEntry -Message "Removing current-user package: $($pkg.PackageFullName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
             '            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop'
             '        }'
+            '        $remainingPackages = @(Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue)'
+            '        if ($remainingPackages.Count -gt 0) {'
+            '            throw "User-scoped MSIX/APPX removal verification failed for exact package identity [$packageName]."'
+            '        }'
             '        Write-ADTLogEntry -Message "User-scoped MSIX package removal completed" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
             '    } catch {'
             '        Write-ADTLogEntry -Message "Failed to remove user-scoped MSIX package: $_" -Severity ''Error'' -Source ''Uninstall-ADTDeployment'''
@@ -4171,6 +4240,11 @@ if ($useManagedDirectoryLifecycle) {
             '        foreach ($pkg in @($packages)) {'
             '            Write-ADTLogEntry -Message "Removing installed package: $($pkg.PackageFullName)" -Severity ''Info'' -Source ''Uninstall-ADTDeployment'''
             '            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop'
+            '        }'
+            '        $remainingProvPackages = @(Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $packageName })'
+            '        $remainingPackages = @(Get-AppxPackage -Name $packageName -AllUsers -ErrorAction SilentlyContinue)'
+            '        if ($remainingProvPackages.Count -gt 0 -or $remainingPackages.Count -gt 0) {'
+            '            throw "Machine-scoped MSIX/APPX removal verification failed for exact package identity [$packageName]."'
             '        }'
             '        Write-ADTLogEntry -Message "Machine-scoped MSIX package removal completed" -Severity ''Success'' -Source ''Uninstall-ADTDeployment'''
             '    } catch {'

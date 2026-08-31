@@ -661,6 +661,43 @@ describe('buildQaCatalogTestConfig', () => {
     );
   });
 
+  it('uses the root package identity for a machine-scoped nested AppX lifecycle', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'Microsoft.DotNet.Native.Runtime',
+        name: 'Microsoft .NET Native Runtime',
+        publisher: 'Microsoft',
+        version: '2.2.28604.0',
+      },
+      manifest: {
+        InstallerType: 'zip',
+        NestedInstallerType: 'msix',
+        Scope: 'machine',
+        PackageFamilyName: 'Microsoft.NET.Native.Runtime.2.2_8wekyb3d8bbwe',
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'zip',
+        NestedInstallerFiles: [{
+          RelativeFilePath: 'Dependencies\\x64\\Microsoft.NET.Native.Runtime.2.2.appx',
+        }],
+      },
+    });
+
+    expect(config.nestedInstallerType).toBe('msix');
+    expect(config.uninstallCommand).toBe(
+      'MSIX_UNINSTALL:Microsoft.NET.Native.Runtime.2.2'
+    );
+    expect(config.detectionRules[0]).toMatchObject({ type: 'script' });
+    const script = 'scriptContent' in config.detectionRules[0]
+      ? config.detectionRules[0].scriptContent
+      : '';
+    expect(script).toContain(
+      'Get-AppxPackage -Name "Microsoft.NET.Native.Runtime.2.2" -AllUsers'
+    );
+    expect(script).toContain('Get-AppxProvisionedPackage -Online');
+  });
+
   it('does not include the disproven Stream Deck uninstall guard in the catalog profile', () => {
     const config = buildQaCatalogTestConfig({
       app: {

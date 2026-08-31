@@ -1410,7 +1410,11 @@ ${steps}
     return match?.[1] || null;
   }
 
-  private getMsixInstallCommand(job: PackagingJob, fileName: string): string {
+  private getMsixInstallCommand(
+    job: PackagingJob,
+    fileName: string,
+    resolvedPathExpression?: string
+  ): string {
     const packageName = this.getMsixPackageName(job);
     if (!packageName) {
       return 'throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous deployment."';
@@ -1418,7 +1422,10 @@ ${steps}
 
     const escapedFileName = fileName.replace(/'/g, "''");
     const escapedVersion = job.version.replace(/'/g, "''");
-    const common = `$msixPath = Join-Path $adtSession.DirFiles '${escapedFileName}'
+    const msixPathLine = resolvedPathExpression
+      ? `$msixPath = ${resolvedPathExpression}`
+      : `$msixPath = Join-Path $adtSession.DirFiles '${escapedFileName}'`;
+    const common = `${msixPathLine}
     $packageName = '${packageName}'
     $targetVersion = '${escapedVersion}'`;
 
@@ -1499,6 +1506,8 @@ ${steps}
       executeLine = msiProperties
         ? `Start-ADTMsiProcess -Action 'Install' -FilePath $nestedInstallerPath -AdditionalArgumentList '${msiProperties}'`
         : `Start-ADTMsiProcess -Action 'Install' -FilePath $nestedInstallerPath`;
+    } else if (nestedType === 'msix' || nestedType === 'appx') {
+      executeLine = this.getMsixInstallCommand(job, '', '$nestedInstallerPath');
     } else {
       const reviewedTimeout = this.getReviewedInstallCompletionTimeoutMinutes(job);
       if (job.install_scope !== 'user' && reviewedTimeout) {
@@ -1637,6 +1646,10 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         return `$packages = Get-AppxPackage -Name '${packageName}' -ErrorAction SilentlyContinue
     foreach ($pkg in @($packages)) {
         Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+    }
+    $remainingPackages = @(Get-AppxPackage -Name '${packageName}' -ErrorAction SilentlyContinue)
+    if ($remainingPackages.Count -gt 0) {
+        throw "User-scoped MSIX/APPX removal verification failed for exact package identity [${packageName}]."
     }`;
       }
       return `$provPackages = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq '${packageName}' }
@@ -1646,6 +1659,11 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
     $packages = Get-AppxPackage -Name '${packageName}' -AllUsers -ErrorAction SilentlyContinue
     foreach ($pkg in @($packages)) {
         Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop
+    }
+    $remainingProvPackages = @(Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq '${packageName}' })
+    $remainingPackages = @(Get-AppxPackage -Name '${packageName}' -AllUsers -ErrorAction SilentlyContinue)
+    if ($remainingProvPackages.Count -gt 0 -or $remainingPackages.Count -gt 0) {
+        throw "Machine-scoped MSIX/APPX removal verification failed for exact package identity [${packageName}]."
     }`;
     }
 
