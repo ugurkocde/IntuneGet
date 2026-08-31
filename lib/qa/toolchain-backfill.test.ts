@@ -6,19 +6,30 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
-  it('retries Service Fabric Runtime only after activating its official install contract', () => {
+  it('retries .NET Native Runtime only after activating its nested AppX lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
-      { wingetId: ' MICROSOFT.SERVICEFABRICRUNTIME ', status: 'failed' }
+      { wingetId: ' MICROSOFT.DOTNET.NATIVE.RUNTIME ', status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
-      'de218619eb0dafb2029f777f47ee6852612527f9',
-      { wingetId: 'Microsoft.ServiceFabricRuntime', status: 'failed' }
+      'f48e73742c96773e2b4c8c2fed200363c7b5a805',
+      { wingetId: 'Microsoft.DotNet.Native.Runtime', status: 'failed' }
     )).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Unrelated.App', status: 'failed' }
     )).toBe(false);
+  });
+
+  it('does not replay the exhausted Service Fabric Runtime retry at the next pin', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Microsoft.ServiceFabricRuntime', status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f48e73742c96773e2b4c8c2fed200363c7b5a805',
+      { wingetId: ' MICROSOFT.SERVICEFABRICRUNTIME ', status: 'failed' }
+    )).toBe(true);
   });
 
   it('retries UniFi OS Server only after activating its machine-wide lifecycle', () => {

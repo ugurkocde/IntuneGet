@@ -539,7 +539,18 @@ const SERVICE_FABRIC_RUNTIME_OFFICIAL_ARGS_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const NESTED_APPX_LIFECYCLE_RELEASE_RETRY_TARGETS = [
+  // Retry .NET Native Runtime through the supported AppX lifecycle instead
+  // of executing its nested .appx payload as a Win32 process.
+  'Microsoft.DotNet.Native.Runtime',
+  // Service Fabric Runtime exhausted its reviewed retry at the prior pin;
+  // carry every older still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e':
+    NESTED_APPX_LIFECYCLE_RELEASE_RETRY_TARGETS,
   'f48e73742c96773e2b4c8c2fed200363c7b5a805':
     SERVICE_FABRIC_RUNTIME_OFFICIAL_ARGS_RELEASE_RETRY_TARGETS,
   'de218619eb0dafb2029f777f47ee6852612527f9':

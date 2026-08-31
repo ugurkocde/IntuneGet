@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f48e73742c96773e2b4c8c2fed200363c7b5a805',
+  packagerCommit: '122aa9726cd4e8ab028f3953f0a9ebac452fcb8e',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -545,6 +545,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // /accepteula install contract. Preserve every unrelated compatible pass
   // from the UniFi OS Server machine-scope release.
   'de218619eb0dafb2029f777f47ee6852612527f9',
+  // Nested AppX payloads now use the supported AppX lifecycle instead of
+  // launching the package as a Win32 executable. Preserve every unrelated
+  // compatible pass from the Service Fabric Runtime release.
+  'f48e73742c96773e2b4c8c2fed200363c7b5a805',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
