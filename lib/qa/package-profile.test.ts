@@ -1415,11 +1415,11 @@ describe('PSADT QA package identity', () => {
       psadtConfig: { reviewedInstallCompletionTimeoutMinutes?: number };
     };
 
-    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(30);
+    expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(45);
     expect(profile.installer.silentArgs).toBe(silentSwitches);
     expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
     expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject({
-      reviewedInstallCompletionTimeoutMinutes: 30,
+      reviewedInstallCompletionTimeoutMinutes: 45,
     });
   });
 

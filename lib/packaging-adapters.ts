@@ -448,15 +448,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
   },
   {
     // Retoolkit's official Inno package installs a large, explicitly selected
-    // reverse-engineering toolset. Isolated LocalSystem QA run 33428216044
-    // showed that the exact vendor process was still active at 15 minutes and
-    // completed its ARP registration roughly 2.5 minutes later; its registered
-    // uninstaller then removed the app cleanly. Preserve WinGet's /VERYSILENT
-    // component contract and use the existing reviewed 30-minute ceiling to
-    // leave bounded headroom on slower Intune devices while keeping QA and
-    // customer packages observable and fail closed.
+    // reverse-engineering toolset. Isolated LocalSystem QA runs 33428216044 and
+    // 33434832863 showed the exact vendor process active at the reviewed 15- and
+    // 30-minute ceilings respectively. In both cases its exact ARP entry appeared
+    // shortly after the timeout and its registered uninstaller removed the app
+    // cleanly. Preserve WinGet's /VERYSILENT component contract and use a
+    // reviewed 45-minute ceiling to leave bounded headroom on slower Intune
+    // devices while keeping QA and customer packages observable and fail closed.
     wingetId: 'mentebinaria.retoolkit',
-    reviewedInstallCompletionTimeoutMinutes: 30,
+    reviewedInstallCompletionTimeoutMinutes: 45,
   },
   {
     // FlashPrint 5.8.3 is distributed as a ZIP containing an Advanced
