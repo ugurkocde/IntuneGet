@@ -616,6 +616,55 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     expect(storedConfig.installScope).toBe('machine');
   });
 
+  it('uses Notesnook user scope for auto-update QA and packaging without mutating stored configuration', async () => {
+    const supabase = createSupabaseMock({});
+    const trigger = makeTrigger(supabase);
+    const storedConfig: DeploymentConfig = {
+      displayName: 'Notesnook',
+      publisher: 'Streetwriters',
+      architecture: 'x64',
+      installerType: 'nullsoft',
+      installCommand: 'notesnook_win_x64.exe /S',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{A05A6719-4910-5E6C-A2AA-9AF71CD1063B}:Notesnook',
+      installScope: 'machine',
+      detectionRules: [],
+      psadtConfig: DEFAULT_PSADT_CONFIG,
+    };
+    const policy = makePolicy(storedConfig);
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never)
+      .mockResolvedValue({ id: 'history-notesnook' } as never);
+    const createPackagingJobSpy = vi.spyOn(trigger as never, 'createPackagingJob' as never)
+      .mockResolvedValue({ id: 'job-notesnook' } as never);
+    vi.spyOn(trigger as never, 'updateHistoryRecord' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'updatePolicyTracking' as never).mockResolvedValue(undefined as never);
+
+    const result = await trigger.triggerAutoUpdate(policy, {
+      ...UPDATE_INFO,
+      wingetId: 'Streetwriters.Notesnook',
+      displayName: 'Notesnook',
+      installerType: 'nullsoft',
+      installScope: 'machine',
+    }, { skipRateLimits: true });
+
+    expect(result).toMatchObject({ success: true, packagingJobId: 'job-notesnook' });
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ installScope: 'user' })
+    );
+    const effectivePolicy = createPackagingJobSpy.mock.calls[0][0] as AppUpdatePolicy;
+    expect((effectivePolicy.deployment_config as DeploymentConfig).installScope).toBe('user');
+    const effectiveUpdate = createPackagingJobSpy.mock.calls[0][1] as { installScope?: string };
+    expect(effectiveUpdate.installScope).toBe('user');
+    expect(storedConfig.installScope).toBe('machine');
+  });
+
   describe('ensurePsadtConfig', () => {
     it('backfills psadtConfig from the most recent packaging job and persists it', async () => {
       const updateSpy = vi.fn();

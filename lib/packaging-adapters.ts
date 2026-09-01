@@ -271,6 +271,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Notesnook's official Electron Builder configuration uses one-click NSIS
+    // without enabling perMachine. Its WinGet manifest omits Scope, so the
+    // generic machine default registers an uninstaller below LocalSystem's
+    // disposable systemprofile. Keep QA, portal packages, and auto-updates in
+    // the vendor-supported signed-in user context.
+    // https://github.com/streetwriters/notesnook/blob/v3.4.5/apps/desktop/electron-builder.config.js
+    wingetId: 'Streetwriters.Notesnook',
+    requiredInstallScope: 'user',
+  },
+  {
     // Youdao's signed NSIS installer requests `asInvoker` and its WinGet
     // manifest omits Scope. Treating that omission as machine scope launches
     // the per-user bootstrapper under LocalSystem, where it exits immediately

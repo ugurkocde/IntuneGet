@@ -359,6 +359,12 @@ describe('application packaging adapters', () => {
     ).toBe('user');
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(
+      resolveApplicationInstallScope('Streetwriters.Notesnook', 'machine')
+    ).toBe('user');
+    expect(
+      resolveApplicationInstallScope(' streetwriters.notesnook ', undefined)
+    ).toBe('user');
+    expect(
       resolveApplicationInstallScope(
         'AppiumDevelopers.AppiumInspector',
         'machine'

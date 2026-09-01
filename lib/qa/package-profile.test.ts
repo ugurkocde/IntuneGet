@@ -1391,6 +1391,36 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig.reviewedInstallCompletionTimeoutMinutes).toBe(15);
   });
 
+  it('binds Notesnook user scope to customer and QA packaging without changing its vendor commands', () => {
+    const uninstallCommand =
+      'REGISTRY_UNINSTALL_PRODUCT:{A05A6719-4910-5E6C-A2AA-9AF71CD1063B}:Notesnook';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Streetwriters.Notesnook',
+      displayName: 'Notesnook',
+      publisher: 'Streetwriters',
+      version: '3.4.5',
+      architecture: 'x64',
+      installerSha256: '1C487EAB412C101D6F82D3E1718BB3D9CF13508A664ABDDD8CA7247A594DC6FA',
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand,
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: {
+        installScope: string;
+        silentArgs: string;
+        uninstallCommand: string;
+      };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(profile.installer.silentArgs).toBe('/S');
+    expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
+  });
+
   it('binds the bounded Retoolkit component wait to customer and QA packaging', () => {
     const silentSwitches =
       '/VERYSILENT /NORESTART /COMPONENTS="*android,*debuggers,*utilities,!network\\\\nmap"';

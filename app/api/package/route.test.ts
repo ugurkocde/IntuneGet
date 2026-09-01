@@ -651,6 +651,59 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
+  it('uses Notesnook user scope consistently for customer PSADT packaging and QA', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: 'https://github.com/streetwriters/notesnook/releases/download/v3.4.5/notesnook_win_x64.exe',
+      sha256: 'A'.repeat(64),
+      type: 'nullsoft',
+      silentArgs: '/S',
+      productCode: 'a05a6719-4910-5e6c-a2aa-9af71cd1063b',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'Streetwriters.Notesnook',
+          displayName: 'Notesnook',
+          version: '3.4.5',
+          installerType: 'nullsoft',
+          installScope: 'machine',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'Streetwriters.Notesnook',
+        installScope: 'user',
+      }),
+      expect.any(Array)
+    );
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ installScope: 'user' })
+    );
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ install_scope: 'user' })
+    );
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'Streetwriters.Notesnook',
+        installScope: 'user',
+      }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
   it('uses Ente Photos user scope consistently for customer PSADT packaging and QA', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
