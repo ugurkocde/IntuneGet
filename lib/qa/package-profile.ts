@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '96c197e74589388d9091d89e1385bbbd318f7bf8',
+  packagerCommit: '52e078efa416c2de3edbbe23eecd62079ce04223',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -569,6 +569,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Retoolkit's 45-minute ceiling changes only its still-failing long installer
   // path. Preserve every unrelated compatible pass from the 30-minute release.
   'aafd4a7dd0787ea603c1c53bb8166369f81e39a7',
+  // Notesnook now runs in the vendor-supported signed-in user context. Preserve
+  // every unrelated compatible pass from the Retoolkit 45-minute release.
+  '96c197e74589388d9091d89e1385bbbd318f7bf8',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

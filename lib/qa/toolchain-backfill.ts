@@ -625,7 +625,19 @@ const RETOOLKIT_45_MINUTE_INSTALL_WAIT_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const NOTESNOOK_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry Notesnook in the persistent signed-in user profile used by its
+  // official per-user Electron/NSIS lifecycle. The prior machine default
+  // registered its uninstaller below LocalSystem's disposable systemprofile.
+  'Streetwriters.Notesnook',
+  // Retoolkit exhausted its 45-minute retry at the prior pin; carry every
+  // older still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '52e078efa416c2de3edbbe23eecd62079ce04223':
+    NOTESNOOK_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '96c197e74589388d9091d89e1385bbbd318f7bf8':
     RETOOLKIT_45_MINUTE_INSTALL_WAIT_RELEASE_RETRY_TARGETS,
   'aafd4a7dd0787ea603c1c53bb8166369f81e39a7':

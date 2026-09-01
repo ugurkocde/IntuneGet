@@ -9,7 +9,7 @@ describe('QA toolchain targeted retries', () => {
   it('retries Retoolkit after activating the 45-minute bounded install wait', () => {
     const wingetId = 'mentebinaria.retoolkit';
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '96c197e74589388d9091d89e1385bbbd318f7bf8',
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
@@ -22,6 +22,22 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '738d9f19baa44d2e1f0cf49c4fea5658915cefc9',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries Notesnook only after activating its per-user lifecycle', () => {
+    const wingetId = ' streetwriters.notesnook ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '96c197e74589388d9091d89e1385bbbd318f7bf8',
       { wingetId, status: 'failed' }
     )).toBe(false);
   });
@@ -604,7 +620,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
-      'mentebinaria.retoolkit',
+      'Streetwriters.Notesnook',
       'HiramWong.zyfun',
       'Domino.MaxTo',
       'Logitech.LGS',
@@ -673,7 +689,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
-        'mentebinaria.retoolkit',
+        'Streetwriters.Notesnook',
         'HiramWong.zyfun',
         'Logitech.LGS',
         'IrfanSkiljan.IrfanView',
