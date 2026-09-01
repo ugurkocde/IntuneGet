@@ -190,6 +190,16 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // Arvis 0.14.6 is built with Electron Builder's default one-click NSIS
+    // target and does not enable perMachine. WinGet omits Scope, so the generic
+    // machine default installs below LocalSystem's disposable systemprofile and
+    // captures an uninstaller path that is unavailable by the removal cycle.
+    // Keep QA and customer Intune packages in the vendor-supported user context.
+    // https://github.com/jopemachine/arvis/blob/v0.14.6/package.json
+    wingetId: 'jopemachine.Arvis',
+    requiredInstallScope: 'user',
+  },
+  {
     // zyfun 3.4.7 uses Electron Builder's assisted NSIS mode and a custom
     // installer hook that installs the machine-wide VC++ runtime when missing.
     // Its default current-user silent path can therefore wait indefinitely on

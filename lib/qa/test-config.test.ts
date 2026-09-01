@@ -849,6 +849,34 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
+  it('tests Arvis in user context when its Electron Builder manifest omits scope', () => {
+    const config = buildQaCatalogTestConfig({
+      app: {
+        wingetId: 'jopemachine.Arvis',
+        name: 'Arvis',
+        publisher: 'jopemachine',
+        version: '0.14.6',
+      },
+      manifest: {
+        InstallerType: 'nullsoft',
+        AppsAndFeaturesEntries: [{ DisplayName: 'Arvis 0.14.6' }],
+      },
+      installer: {
+        Architecture: 'x64',
+        InstallerType: 'nullsoft',
+        InstallerSwitches: { Silent: '/S' },
+      },
+    });
+
+    expect(config.scope).toBe('user');
+    expect(config.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\jopemachine_Arvis',
+      }),
+    ]);
+  });
+
   it('tests zyfun in machine context with Electron Builder all-users mode', () => {
     const config = buildQaCatalogTestConfig({
       app: {

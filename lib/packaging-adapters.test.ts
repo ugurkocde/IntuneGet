@@ -383,6 +383,12 @@ describe('application packaging adapters', () => {
     expect(
       resolveApplicationInstallScope(' ENTE-IO.PHOTOS-DESKTOP ', undefined)
     ).toBe('user');
+    expect(resolveApplicationInstallScope('jopemachine.Arvis', 'machine')).toBe(
+      'user'
+    );
+    expect(
+      resolveApplicationInstallScope(' JOPEMACHINE.ARVIS ', undefined)
+    ).toBe('user');
     expect(resolveApplicationInstallScope('VNGCorp.Zalo', 'machine')).toBe('user');
     expect(
       resolveApplicationInstallScope('Streetwriters.Notesnook', 'machine')

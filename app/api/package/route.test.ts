@@ -757,6 +757,58 @@ describe('POST /api/package (workflow dispatch)', () => {
     );
   });
 
+  it('uses Arvis user scope consistently for customer PSADT packaging and QA', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([{
+      architecture: 'x64',
+      url: 'https://example.com/arvis-setup.exe',
+      sha256: 'A'.repeat(64),
+      type: 'nullsoft',
+      silentArgs: '/S',
+    }]);
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [makeWin32Item({
+          wingetId: 'jopemachine.Arvis',
+          displayName: 'Arvis',
+          version: '0.14.6',
+          installerType: 'nullsoft',
+          installScope: 'machine',
+        })],
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'jopemachine.Arvis',
+        installScope: 'user',
+      }),
+      expect.any(Array)
+    );
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ installScope: 'user' })
+    );
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ install_scope: 'user' })
+    );
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wingetId: 'jopemachine.Arvis',
+        installScope: 'user',
+      }),
+      undefined,
+      expect.any(Object)
+    );
+  });
+
   it('uses zyfun all-users mode consistently for customer PSADT packaging and QA', async () => {
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',

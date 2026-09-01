@@ -789,6 +789,34 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('keeps Arvis out of LocalSystem when WinGet omits its scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'jopemachine.Arvis',
+      displayName: 'Arvis',
+      publisher: 'jopemachine',
+      version: '0.14.6',
+      architecture: 'x64',
+      installerSha256: 'd'.repeat(64),
+      installerType: 'nullsoft',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Arvis',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: { installScope: string };
+    };
+
+    expect(profile.installer.installScope).toBe('user');
+    expect(normalized.detectionRules).toEqual([
+      expect.objectContaining({
+        keyPath:
+          'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\jopemachine_Arvis',
+      }),
+    ]);
+  });
+
   it('keeps Android Apps Manager out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'SIMSDEV.AndroidAppsManager',
