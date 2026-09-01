@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '52e078efa416c2de3edbbe23eecd62079ce04223',
+  packagerCommit: '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -572,6 +572,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Notesnook now runs in the vendor-supported signed-in user context. Preserve
   // every unrelated compatible pass from the Retoolkit 45-minute release.
   '96c197e74589388d9091d89e1385bbbd318f7bf8',
+  // DSH Desktop now binds WinGet's braced ProductCode to the exact unbraced
+  // NSIS registry key observed in QA. Preserve every unrelated compatible pass
+  // from the Notesnook user-scope release.
+  '52e078efa416c2de3edbbe23eecd62079ce04223',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

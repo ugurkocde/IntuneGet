@@ -635,7 +635,19 @@ const NOTESNOOK_USER_SCOPE_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const DSH_DESKTOP_EXACT_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry only the DSH Desktop tuple that exposed WinGet's display-name typo
+  // and braced ProductCode mismatch. The reviewed adapter binds the observed
+  // unbraced NSIS key without selecting the unrelated Edge ARP update.
+  'JustGenius-s.DSHDesktop',
+  // Notesnook passed its user-scope retry at the prior pin; carry every older
+  // still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc':
+    DSH_DESKTOP_EXACT_IDENTITY_RELEASE_RETRY_TARGETS,
   '52e078efa416c2de3edbbe23eecd62079ce04223':
     NOTESNOOK_USER_SCOPE_RELEASE_RETRY_TARGETS,
   '96c197e74589388d9091d89e1385bbbd318f7bf8':

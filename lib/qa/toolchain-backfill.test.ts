@@ -33,11 +33,27 @@ describe('QA toolchain targeted retries', () => {
   it('retries Notesnook only after activating its per-user lifecycle', () => {
     const wingetId = ' streetwriters.notesnook ';
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '52e078efa416c2de3edbbe23eecd62079ce04223',
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '96c197e74589388d9091d89e1385bbbd318f7bf8',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries DSH Desktop only after activating its exact NSIS identity', () => {
+    const wingetId = ' justgenius-s.dshdesktop ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '52e078efa416c2de3edbbe23eecd62079ce04223',
       { wingetId, status: 'failed' }
     )).toBe(false);
   });
@@ -620,7 +636,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
-      'Streetwriters.Notesnook',
+      'JustGenius-s.DSHDesktop',
       'HiramWong.zyfun',
       'Domino.MaxTo',
       'Logitech.LGS',
@@ -689,7 +705,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
-        'Streetwriters.Notesnook',
+        'JustGenius-s.DSHDesktop',
         'HiramWong.zyfun',
         'Logitech.LGS',
         'IrfanSkiljan.IrfanView',
