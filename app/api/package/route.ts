@@ -39,6 +39,7 @@ import {
 } from '@/lib/installer-preflight';
 import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import { ensureQaDemand } from '@/lib/qa/demand';
+import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import {
   applyApplicationPackagingAdapter,
   resolveApplicationInstallScope,
@@ -600,10 +601,11 @@ export async function POST(request: NextRequest) {
                   priority: 2000,
                   demandSource: 'customer',
                 });
+            const qaDeferred = qaDemand?.state === 'waiting' && isDeferredCustomerQaEnabled();
             // Self-hosted installs have no QA pipeline, so local jobs must remain pollable.
             const initialStatus = isLocalPackagerMode && !supabaseServerConfigured
               ? 'queued'
-              : qaDemand?.state === 'waiting'
+              : qaDemand?.state === 'waiting' && !qaDeferred
                 ? 'awaiting_qa'
                 : qaDemand?.state === 'failed'
                   ? 'qa_failed'
@@ -630,7 +632,9 @@ export async function POST(request: NextRequest) {
               package_config: item as unknown as import('@/types/database').Json,
               status: initialStatus,
               status_message: qaDemand?.state === 'waiting'
-                ? 'Running an isolated installation test to make sure this app works before deployment'
+                ? qaDeferred
+                  ? 'Preparing deployment while installation validation remains scheduled'
+                  : 'Running an isolated installation test to make sure this app works before deployment'
                 : qaDemand?.state === 'failed'
                   ? qaDemand.failureSummary
                   : null,
@@ -650,7 +654,7 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            if (qaDemand?.state === 'waiting' || qaDemand?.state === 'failed') {
+            if ((qaDemand?.state === 'waiting' && !qaDeferred) || qaDemand?.state === 'failed') {
               jobs.push({
                 id: jobId,
                 user_id: userId,

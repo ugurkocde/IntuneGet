@@ -139,6 +139,7 @@ function minutesAgo(minutes: number): string {
 describe('GET /api/package (userId listing)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     // The list path now authenticates and uses the token's userId.
     parseAccessTokenMock.mockResolvedValue({
       userId: 'user-1',
@@ -283,6 +284,7 @@ describe('POST /api/package (workflow dispatch)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     getDatabaseMock.mockReturnValue({
       jobs: {
         create: createMock,
@@ -1478,6 +1480,43 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it('dispatches a customer upload while its QA lifecycle remains durably queued during a bounded continuity window', async () => {
+    process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    ensureQaDemandMock.mockResolvedValueOnce({
+      state: 'waiting',
+      candidateId: 'candidate-deferred-1',
+      identity: {
+        executionProfileSha256: 'A'.repeat(64),
+        packageProfileSha256: 'A'.repeat(64),
+        presentationProfileSha256: 'B'.repeat(64),
+      },
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.jobs[0]).toMatchObject({ status: 'packaging' });
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'queued',
+      status_message: 'Preparing deployment while installation validation remains scheduled',
+      qa_candidate_id: 'candidate-deferred-1',
+      qa_completed_at: null,
+    }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+  });
+
   it('calculates the hash in the workflow for a custom app without a supplied SHA256', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',
@@ -1639,6 +1678,9 @@ describe('POST /api/package (workflow dispatch)', () => {
   });
 
   it('creates an actionable blocked job for a failed execution profile', async () => {
+    process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
     ensureQaDemandMock.mockResolvedValueOnce({
       state: 'failed',
       candidateId: 'candidate-1',
