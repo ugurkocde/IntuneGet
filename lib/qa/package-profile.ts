@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'f6bff5d1879b5cd11e285b1f1f0d140349d82215',
+  packagerCommit: 'd33825c2b786af7c3f22f4b828108c4129299ef9',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -579,6 +579,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // JS8Call-improved now binds the official stable Inno AppId-derived key.
   // Preserve every unrelated compatible pass from the DSH Desktop release.
   '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
+  // Arvis now runs in the vendor-supported signed-in user context. Preserve
+  // every unrelated compatible pass from the JS8Call exact-identity release.
+  'f6bff5d1879b5cd11e285b1f1f0d140349d82215',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

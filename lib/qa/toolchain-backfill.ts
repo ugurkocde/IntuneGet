@@ -655,7 +655,19 @@ const JS8CALL_EXACT_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
+  // Retry only the Arvis tuple that installed below LocalSystem's disposable
+  // systemprofile. The reviewed adapter now runs the same trusted bytes in the
+  // vendor-supported signed-in user context shared with customer packages.
+  'jopemachine.Arvis',
+  // JS8Call-improved passed its exact-key retry at the prior pin; carry every
+  // older still-unconsumed target without replaying it.
+  ...JS8CALL_EXACT_IDENTITY_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'd33825c2b786af7c3f22f4b828108c4129299ef9':
+    ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'f6bff5d1879b5cd11e285b1f1f0d140349d82215':
     JS8CALL_EXACT_IDENTITY_RELEASE_RETRY_TARGETS,
   '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc':

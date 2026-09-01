@@ -62,7 +62,19 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
-  it('retries JS8Call-improved only after activating its exact Inno identity', () => {
+  it('retries Arvis only after activating its reviewed user scope', () => {
+    const wingetId = ' jopemachine.arvis ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'f6bff5d1879b5cd11e285b1f1f0d140349d82215',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('keeps the JS8Call-improved retry available after the Arvis activation', () => {
     const wingetId = ' js8call-improved.js8call-improved ';
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
@@ -652,6 +664,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
+      'jopemachine.Arvis',
       'JS8Call-improved.JS8Call-improved',
       'HiramWong.zyfun',
       'Domino.MaxTo',
@@ -721,6 +734,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
+        'jopemachine.Arvis',
         'JS8Call-improved.JS8Call-improved',
         'HiramWong.zyfun',
         'Logitech.LGS',
