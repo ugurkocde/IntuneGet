@@ -1785,6 +1785,16 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Google Chrome Beta',
     registeredRegistryKey: 'Google Chrome Beta',
   },
+  // JS8Call-improved's catalog title differs from the vendor's Inno AppName.
+  // The official installer source keeps a stable AppId while AppVerName adds
+  // the release version to the visible ARP name. QA run 33471597387 observed
+  // that exact entry alongside an unrelated Edge update, so bind the stable
+  // vendor key instead of widening selection across the install delta.
+  'js8call-improved.js8call-improved': {
+    generatedDisplayName: 'JS8Call-improved',
+    registeredDisplayName: 'JS8Call 3.0.3',
+    registeredRegistryKey: '{B5281957-28FD-4BAE-8D06-FC59898D850E}_is1',
+  },
   // DSH Desktop's WinGet locale has a `Decktop` typo and publishes its NSIS
   // ProductCode as a GUID. Electron Builder registers the same stable NSIS key
   // without braces and uses the versioned `DSH-Desktop 0.2.0` display name.

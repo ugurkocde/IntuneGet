@@ -132,6 +132,19 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('binds JS8Call-improved to its exact stable Inno key', () => {
+    expect(resolveApplicationUninstallCommand(
+      'JS8Call-improved.JS8Call-improved',
+      'REGISTRY_UNINSTALL:JS8Call-improved'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:{B5281957-28FD-4BAE-8D06-FC59898D850E}_is1:JS8Call 3.0.3'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'js8call-improved.js8call-improved',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('binds DSH Desktop to its exact unbraced NSIS key despite the catalog typo', () => {
     expect(resolveApplicationUninstallCommand(
       'JustGenius-s.DSHDesktop',

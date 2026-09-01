@@ -378,6 +378,31 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches JS8Call-improved with the reviewed Inno key to the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'JS8Call-improved.JS8Call-improved',
+      displayName: 'JS8Call-improved',
+      publisher: 'JS8Call-improved',
+      version: '3.0.3',
+      architecture: 'x64',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:JS8Call-improved',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{B5281957-28FD-4BAE-8D06-FC59898D850E}_is1:JS8Call 3.0.3'
+    );
+  });
+
   it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

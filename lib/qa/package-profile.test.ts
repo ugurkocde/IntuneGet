@@ -1452,6 +1452,38 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds JS8Call-improved QA to the exact Inno key used by customer packages', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'JS8Call-improved.JS8Call-improved',
+      displayName: 'JS8Call-improved',
+      publisher: 'JS8Call-improved',
+      version: '3.0.3',
+      architecture: 'x64',
+      installerSha256: 'AFFDFABB91D2AA59CB81D6859679CB19E09C18AC00EA1CE9AE0E2730A5A00285',
+      installerType: 'inno',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:JS8Call-improved',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: {
+        installScope: string;
+        silentArgs: string;
+        uninstallCommand: string;
+      };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.installer.silentArgs).toBe(
+      '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-'
+    );
+    expect(profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{B5281957-28FD-4BAE-8D06-FC59898D850E}_is1:JS8Call 3.0.3'
+    );
+  });
+
   it('binds the bounded Retoolkit component wait to customer and QA packaging', () => {
     const silentSwitches =
       '/VERYSILENT /NORESTART /COMPONENTS="*android,*debuggers,*utilities,!network\\\\nmap"';
