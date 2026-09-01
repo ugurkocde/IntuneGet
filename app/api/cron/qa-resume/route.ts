@@ -7,6 +7,7 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { ensureQaDemand } from '@/lib/qa/demand';
+import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
@@ -163,12 +164,15 @@ export async function GET(request: Request) {
       }
       continue;
     }
-    if (candidateStatus !== 'passed') {
+    const qaDeferred = !job.is_auto_update &&
+      isDeferredCustomerQaEnabled() &&
+      Boolean(candidateStatus && ['queued', 'dispatched', 'running'].includes(candidateStatus));
+    if (candidateStatus !== 'passed' && !qaDeferred) {
       waiting++;
       continue;
     }
 
-    if (!appVersionAlreadyPassed) {
+    if (!appVersionAlreadyPassed && !qaDeferred) {
       const { data: result, error: resultError } = candidate?.package_profile_sha256
         ? await supabase
             .from('qa_package_results')
@@ -189,8 +193,10 @@ export async function GET(request: Request) {
       .from('packaging_jobs')
       .update({
         status: nextStatus,
-        status_message: 'Installation test passed; packaging started automatically',
-        qa_completed_at: now,
+        status_message: qaDeferred
+          ? 'Preparing deployment while installation validation remains scheduled'
+          : 'Installation test passed; packaging started automatically',
+        qa_completed_at: qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
       })
       .eq('id', job.id)
@@ -259,7 +265,9 @@ export async function GET(request: Request) {
         .from('packaging_jobs')
         .update({
           status: 'failed',
-          status_message: 'Installation test passed, but packaging could not start automatically',
+          status_message: qaDeferred
+            ? 'Packaging could not start during the continuity window'
+            : 'Installation test passed, but packaging could not start automatically',
           error_code: 'QA_RESUME_DISPATCH_FAILED',
           error_stage: 'authenticate',
           error_category: 'network',
