@@ -1785,6 +1785,17 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Google Chrome Beta',
     registeredRegistryKey: 'Google Chrome Beta',
   },
+  // DSH Desktop's WinGet locale has a `Decktop` typo and publishes its NSIS
+  // ProductCode as a GUID. Electron Builder registers the same stable NSIS key
+  // without braces and uses the versioned `DSH-Desktop 0.2.0` display name.
+  // QA run 33468742080 also observed an unrelated Edge ARP update, so bind the
+  // exact vendor key instead of guessing from the two-entry install delta.
+  'justgenius-s.dshdesktop': {
+    generatedDisplayName: 'DSH-Decktop',
+    manifestRegistryKey: '{239D4E5C-394E-5607-BF11-8B5229505789}',
+    registeredDisplayName: 'DSH-Desktop 0.2.0',
+    registeredRegistryKey: '239d4e5c-394e-5607-bf11-8b5229505789',
+  },
   // The legacy Edge-channel package is still named `Docker Desktop Edge` in
   // the catalog, but Docker registers the installed product as the ordinary
   // `Docker Desktop` ARP entry. Use that exact vendor identity so install
@@ -1921,8 +1932,14 @@ export function resolveApplicationUninstallCommand(
   const reviewed = REVIEWED_REGISTRY_UNINSTALL_IDENTITIES[wingetId.trim().toLowerCase()];
   if (!reviewed) return uninstallCommand;
   const expected = `REGISTRY_UNINSTALL:${reviewed.generatedDisplayName}`;
+  const exactRegistryIdentity = (registryKey: string, displayName: string) => {
+    const isMsiProductCode = /^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$/.test(
+      registryKey
+    );
+    return `${isMsiProductCode ? 'REGISTRY_UNINSTALL_PRODUCT' : 'REGISTRY_UNINSTALL_KEY'}:${registryKey}:${displayName}`;
+  };
   const expectedManifestKey = reviewed.manifestRegistryKey
-    ? `REGISTRY_UNINSTALL_KEY:${reviewed.manifestRegistryKey}:${reviewed.generatedDisplayName}`
+    ? exactRegistryIdentity(reviewed.manifestRegistryKey, reviewed.generatedDisplayName)
     : undefined;
   const normalizedUninstallCommand = uninstallCommand.trim();
   if (
@@ -1932,11 +1949,10 @@ export function resolveApplicationUninstallCommand(
   if (!reviewed.registeredRegistryKey) {
     return `REGISTRY_UNINSTALL:${reviewed.registeredDisplayName}`;
   }
-  const reviewedKey = reviewed.registeredRegistryKey;
-  const isMsiProductCode = /^\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}$/.test(
-    reviewedKey
+  return exactRegistryIdentity(
+    reviewed.registeredRegistryKey,
+    reviewed.registeredDisplayName
   );
-  return `${isMsiProductCode ? 'REGISTRY_UNINSTALL_PRODUCT' : 'REGISTRY_UNINSTALL_KEY'}:${reviewedKey}:${reviewed.registeredDisplayName}`;
 }
 
 function normalizeProcessName(name: string): string {

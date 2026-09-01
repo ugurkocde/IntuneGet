@@ -352,6 +352,32 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches DSH Desktop with the reviewed NSIS key to the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'JustGenius-s.DSHDesktop',
+      displayName: 'DSH-Decktop',
+      publisher: 'JustGenius-s',
+      version: '0.2.0',
+      architecture: 'x64',
+      installerSha256: 'D'.repeat(64),
+      sourceType: 'winget',
+      installerType: 'nullsoft',
+      silentSwitches: '/S /allusers',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{239D4E5C-394E-5607-BF11-8B5229505789}:DSH-Decktop',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:239d4e5c-394e-5607-bf11-8b5229505789:DSH-Desktop 0.2.0'
+    );
+  });
+
   it('lets reconciliation strengthen a generated display-name uninstall fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

@@ -1421,6 +1421,37 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
   });
 
+  it('binds DSH Desktop QA to the exact NSIS key used by customer packages', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'JustGenius-s.DSHDesktop',
+      displayName: 'DSH-Decktop',
+      publisher: 'JustGenius-s',
+      version: '0.2.0',
+      architecture: 'x64',
+      installerSha256: 'D08A195070FBD32D0CE2282A129145E758BFE2A28A86C0FD6F2EB2B3C6BE20CA',
+      installerType: 'nullsoft',
+      silentSwitches: '/S /allusers',
+      uninstallCommand:
+        'REGISTRY_UNINSTALL_PRODUCT:{239D4E5C-394E-5607-BF11-8B5229505789}:DSH-Decktop',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const profile = normalized.identity.profile as {
+      installer: {
+        installScope: string;
+        silentArgs: string;
+        uninstallCommand: string;
+      };
+    };
+
+    expect(profile.installer.installScope).toBe('machine');
+    expect(profile.installer.silentArgs).toBe('/S /allusers');
+    expect(profile.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:239d4e5c-394e-5607-bf11-8b5229505789:DSH-Desktop 0.2.0'
+    );
+  });
+
   it('binds the bounded Retoolkit component wait to customer and QA packaging', () => {
     const silentSwitches =
       '/VERYSILENT /NORESTART /COMPONENTS="*android,*debuggers,*utilities,!network\\\\nmap"';

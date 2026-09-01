@@ -132,6 +132,19 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('binds DSH Desktop to its exact unbraced NSIS key despite the catalog typo', () => {
+    expect(resolveApplicationUninstallCommand(
+      'JustGenius-s.DSHDesktop',
+      'REGISTRY_UNINSTALL_PRODUCT:{239D4E5C-394E-5607-BF11-8B5229505789}:DSH-Decktop'
+    )).toBe(
+      'REGISTRY_UNINSTALL_KEY:239d4e5c-394e-5607-bf11-8b5229505789:DSH-Desktop 0.2.0'
+    );
+    expect(resolveApplicationUninstallCommand(
+      'justgenius-s.dshdesktop',
+      'vendor-uninstall.exe --custom'
+    )).toBe('vendor-uninstall.exe --custom');
+  });
+
   it('uses Greenshot Preview\'s exact shared Inno registry identity', () => {
     expect(resolveApplicationUninstallCommand(
       'Greenshot.Greenshot.Preview',
