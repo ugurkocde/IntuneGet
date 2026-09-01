@@ -645,7 +645,19 @@ const DSH_DESKTOP_EXACT_IDENTITY_RELEASE_RETRY_TARGETS = [
   ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
 ] as const;
 
+const JS8CALL_EXACT_IDENTITY_RELEASE_RETRY_TARGETS = [
+  // Retry only the JS8Call-improved tuple whose catalog title did not match
+  // the official versioned Inno ARP name. The stable AppId-derived key excludes
+  // the unrelated Edge update observed in the same installation window.
+  'JS8Call-improved.JS8Call-improved',
+  // DSH Desktop passed its exact-key retry at the prior pin; carry every older
+  // still-unconsumed target without replaying it.
+  ...UNIFI_OS_SERVER_MACHINE_SCOPE_RELEASE_RETRY_TARGETS,
+] as const;
+
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'f6bff5d1879b5cd11e285b1f1f0d140349d82215':
+    JS8CALL_EXACT_IDENTITY_RELEASE_RETRY_TARGETS,
   '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc':
     DSH_DESKTOP_EXACT_IDENTITY_RELEASE_RETRY_TARGETS,
   '52e078efa416c2de3edbbe23eecd62079ce04223':

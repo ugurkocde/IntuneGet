@@ -49,11 +49,27 @@ describe('QA toolchain targeted retries', () => {
   it('retries DSH Desktop only after activating its exact NSIS identity', () => {
     const wingetId = ' justgenius-s.dshdesktop ';
     expect(shouldRetryTerminalToolchainCandidate(
-      QA_PSADT_TOOLCHAIN.packagerCommit,
+      '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
       { wingetId, status: 'failed' }
     )).toBe(true);
     expect(shouldRetryTerminalToolchainCandidate(
       '52e078efa416c2de3edbbe23eecd62079ce04223',
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(false);
+  });
+
+  it('retries JS8Call-improved only after activating its exact Inno identity', () => {
+    const wingetId = ' js8call-improved.js8call-improved ';
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId, status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
       { wingetId, status: 'failed' }
     )).toBe(false);
   });
@@ -636,7 +652,7 @@ describe('QA toolchain targeted retries', () => {
   it('exposes a defensive copy of current terminal retry targets', () => {
     const targets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
     expect(targets).toEqual(expect.arrayContaining([
-      'JustGenius-s.DSHDesktop',
+      'JS8Call-improved.JS8Call-improved',
       'HiramWong.zyfun',
       'Domino.MaxTo',
       'Logitech.LGS',
@@ -705,7 +721,7 @@ describe('QA toolchain targeted retries', () => {
 
     expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(
       expect.arrayContaining([
-        'JustGenius-s.DSHDesktop',
+        'JS8Call-improved.JS8Call-improved',
         'HiramWong.zyfun',
         'Logitech.LGS',
         'IrfanSkiljan.IrfanView',

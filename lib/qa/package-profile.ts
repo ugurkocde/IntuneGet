@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
+  packagerCommit: 'f6bff5d1879b5cd11e285b1f1f0d140349d82215',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -576,6 +576,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // NSIS registry key observed in QA. Preserve every unrelated compatible pass
   // from the Notesnook user-scope release.
   '52e078efa416c2de3edbbe23eecd62079ce04223',
+  // JS8Call-improved now binds the official stable Inno AppId-derived key.
+  // Preserve every unrelated compatible pass from the DSH Desktop release.
+  '8395c85642b21b8cc23e2a4b50ebc377f9e46fbc',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
