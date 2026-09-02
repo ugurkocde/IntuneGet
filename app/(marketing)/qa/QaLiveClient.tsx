@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import type { QaLivePhase, QaLiveResponse, QaVirusTotalStatus } from '@/types/qa';
 
 function healthTone(state: string): StatusTone {
-  if (state === 'healthy' || state === 'testing') return 'success';
+  if (state === 'healthy' || state === 'testing' || state === 'idle') return 'success';
   if (state === 'degraded') return 'warning';
   if (state === 'stalled') return 'error';
   return 'neutral';
