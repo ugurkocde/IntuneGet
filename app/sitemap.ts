@@ -77,6 +77,12 @@ export default async function sitemap({ id }: { id: Promise<number> }): Promise<
       priority: 0.6,
     },
     {
+      url: `${BASE_URL}/roadmap`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
       url: `${BASE_URL}/security`,
       lastModified: now,
       changeFrequency: "monthly",

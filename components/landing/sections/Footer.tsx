@@ -63,6 +63,7 @@ const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
         external: true,
       },
       { label: "Changelog", href: "/changelog" },
+      { label: "Roadmap", href: "/roadmap" },
       { label: "About", href: "/about" },
     ],
   },
