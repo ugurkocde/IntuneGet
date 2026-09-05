@@ -1,0 +1,6 @@
+{
+  "title": "Faster pages and smoother large app lists",
+  "summary": "IntuneGet now loads less JavaScript on the website, sign-in page, and dashboard. Important content appears sooner, while optional panels and visual effects load when needed. Large app catalogs and Discovered Apps lists render fewer rows at once for smoother browsing. Inventory starts showing the first page while remaining apps load in the background, with partial results clearly indicated. Shared request caching, cancellation, and quieter background polling reduce repeated work during browsing and deployment. Sign-in and cart checks also avoid duplicate requests.",
+  "type": "improved",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/1087"
+}
