@@ -43,6 +43,7 @@ function chain(result: { data: unknown; error: unknown }) {
 describe('GET /api/cron/qa-resume', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.QA_MAINTENANCE_MODE;
     delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     process.env.CRON_SECRET = 'secret';
     getFeatureFlagsMock.mockReturnValue({ localPackager: true });
@@ -181,7 +182,88 @@ describe('GET /api/cron/qa-resume', () => {
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps automatic updates waiting during a customer continuity window', async () => {
+  it('resumes existing customer uploads without querying or creating QA in maintenance', async () => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    triggerPackagingWorkflowMock.mockResolvedValue({
+      runId: 123,
+      runUrl: 'https://example.test/run/123',
+    });
+    const job = {
+      id: 'job-deferred-customer',
+      tenant_id: 'tenant-1',
+      qa_candidate_id: 'candidate-queued',
+      created_at: '2026-09-01T12:00:00Z',
+      winget_id: 'Example.App',
+      display_name: 'Example App',
+      publisher: 'Example',
+      version: '1.0.0',
+      architecture: 'x64',
+      installer_url: 'https://example.test/installer.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_type: 'exe',
+      install_command: 'installer.exe /silent',
+      uninstall_command: 'installer.exe /uninstall /silent',
+      install_scope: 'machine',
+      package_config: {
+        sourceType: 'winget',
+        displayName: 'Example App',
+        publisher: 'Example',
+        architecture: 'x64',
+        installerUrl: 'https://example.test/installer.exe',
+        installerSha256: 'A'.repeat(64),
+        installerType: 'exe',
+        installCommand: 'installer.exe /silent',
+        uninstallCommand: 'installer.exe /uninstall /silent',
+      },
+      is_auto_update: false,
+    };
+    const claimUpdate = chain({ data: { id: job.id }, error: null });
+    const provenanceUpdate = chain({ data: null, error: null });
+    let packagingCall = 0;
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          packagingCall++;
+          if (packagingCall === 1) return chain({ data: [job], error: null });
+          if (packagingCall === 2) return claimUpdate;
+          return provenanceUpdate;
+        }
+        if (table === 'qa_candidates') {
+          return chain({
+            data: {
+              id: 'candidate-queued',
+              status: 'queued',
+              failure_summary: null,
+              package_profile_sha256: 'B'.repeat(64),
+            },
+            error: null,
+          });
+        }
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    };
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ resumed: 1, failed: 0, waiting: 0 });
+    expect(claimUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'packaging',
+      status_message: 'Preparing deployment',
+      qa_completed_at: null,
+    }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }));
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
+  });
+
+  it('keeps automatic updates waiting during customer continuity and maintenance', async () => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
     process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(
       Date.now() + 7 * 24 * 60 * 60 * 1000
     ).toISOString();

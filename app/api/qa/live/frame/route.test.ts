@@ -87,6 +87,13 @@ describe('/api/qa/live/frame ingest boundary', () => {
     expect(createServerClientMock).not.toHaveBeenCalled();
   });
 
+  it('suppresses existing frames during maintenance without querying storage', async () => {
+    vi.stubEnv('QA_MAINTENANCE_MODE', 'true');
+    const response = await GET(new Request(`https://intuneget.com/api/qa/live/frame?candidate=${candidateId}&sequence=1`));
+    expect(response.status).toBe(204);
+    expect(createServerClientMock).not.toHaveBeenCalled();
+  });
+
   it('requires a candidate-bound public frame request', async () => {
     const response = await GET(new Request('https://intuneget.com/api/qa/live/frame'));
     expect(response.status).toBe(400);

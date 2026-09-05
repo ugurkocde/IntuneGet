@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 /**
  * MSP Batch Deployment Orchestrator
  * Processes pending batch deployments by creating packaging jobs and tracking completion.
@@ -280,6 +281,7 @@ async function startBatchItems(batchId: string): Promise<number> {
   if (installerDetails) {
     try {
       await enforceQaGate({
+        qaOverride: isQaMaintenanceMode(),
         wingetId: batch.winget_id,
         version: batch.version,
         architecture: installerDetails.architecture,
@@ -366,6 +368,7 @@ async function startBatchItems(batchId: string): Promise<number> {
 
       // Trigger GitHub Actions workflow
       const workflowInputs: WorkflowInputs = {
+        qaOverride: isQaMaintenanceMode(),
         jobId,
         tenantId: item.tenant_id,
         wingetId: batch.winget_id,

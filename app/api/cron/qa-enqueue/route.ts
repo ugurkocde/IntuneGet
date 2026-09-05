@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import {
@@ -560,7 +561,7 @@ export async function GET(request: Request) {
       startedAt
     );
     const control = await getQaPipelineControl(supabase);
-    if (control.paused) {
+    if (control.paused || isQaMaintenanceMode()) {
       return NextResponse.json({
         success: true,
         paused: true,

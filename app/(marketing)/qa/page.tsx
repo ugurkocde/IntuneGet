@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -25,6 +26,7 @@ const breadcrumbJsonLd = {
 };
 
 export default async function QaPage() {
+  const maintenance = isQaMaintenanceMode();
   const host = (await headers()).get('host');
   if (!isQaLivePublicEnabled(host)) notFound();
 
@@ -35,10 +37,15 @@ export default async function QaPage() {
       <main id="main-content" className="mx-auto min-h-svh w-full max-w-[1600px] flex-1 px-4 pb-16 pt-24 lg:px-8 lg:pt-28">
         <div className="mb-8 max-w-3xl space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent-cyan"><T>Application quality assurance</T></p>
-          <h1 className="text-3xl font-bold text-text-primary sm:text-4xl"><T>See package QA as it happens</T></h1>
-          <p className="text-lg text-text-secondary"><T>Every update is installed, detected, uninstalled, and verified inside a clean Windows VM before it can be released through IntuneGet.</T></p>
+          <h1 className="text-3xl font-bold text-text-primary sm:text-4xl">{maintenance ? <T>Application QA</T> : <T>See package QA as it happens</T>}</h1>
+          <p className="text-lg text-text-secondary">{maintenance ? <T>Automated application testing is temporarily paused. Customer uploads remain available.</T> : <T>Every update is installed, detected, uninstalled, and verified inside a clean Windows VM before it can be released through IntuneGet.</T>}</p>
         </div>
-        <QaLiveClient />
+        {maintenance ? (
+          <section className="rounded-2xl border border-overlay/10 bg-bg-elevated p-6 sm:p-8" aria-labelledby="qa-maintenance-heading">
+            <h2 id="qa-maintenance-heading" className="text-xl font-semibold text-text-primary"><T>QA is temporarily paused</T></h2>
+            <p className="mt-3 max-w-2xl text-text-secondary"><T>Customer uploads can proceed without an automated installation test during this pause. Live testing and results will return when QA resumes.</T></p>
+          </section>
+        ) : <QaLiveClient />}
       </main>
       <Footer />
     </div>

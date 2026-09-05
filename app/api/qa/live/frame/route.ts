@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import {
@@ -75,6 +76,9 @@ async function authorizeCleanup(request: Request) {
 export async function GET(request: Request) {
   if (!isQaLivePublicEnabled(new URL(request.url).hostname)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: noStoreHeaders() });
+  }
+  if (isQaMaintenanceMode()) {
+    return new NextResponse(null, { status: 204, headers: noStoreHeaders() });
   }
   const rateLimitResponse = await applyRateLimit(`qa-frame:${getIpKey(request)}`, QA_LIVE_FRAME_RATE_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;

@@ -231,6 +231,7 @@ it('allows large installer preflight the same bounded window as customer packagi
 });
 
 afterEach(() => {
+  delete process.env.QA_MAINTENANCE_MODE;
   delete process.env.CRON_SECRET;
 });
 
@@ -249,6 +250,26 @@ describe('GET /api/cron/qa-dispatch', () => {
       dispatched: false,
       reason: 'maintenance_paused',
       maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reconcile or dispatch candidates while maintenance is paused by the server switch', async () => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
+    const row = candidate('catalog-default');
+    const { client, claimedIds } = createSupabaseStub([row], [], { paused: false });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      dispatched: false,
+      reason: 'maintenance_paused',
+      maintenanceReason: null,
     });
     expect(claimedIds).toEqual([]);
     expect(dispatchQaCandidateMock).not.toHaveBeenCalled();

@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
 
   const supabase = createServerClient();
   const control = await getQaPipelineControl(supabase);
-  if (control.paused) {
+  if (control.paused || isQaMaintenanceMode()) {
     return NextResponse.json({
       success: true,
       dispatched: false,

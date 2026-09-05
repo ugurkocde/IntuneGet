@@ -1,0 +1,5 @@
+{
+  "title": "Customer uploads remain available during QA maintenance",
+  "summary": "Customer uploads can proceed without waiting for an automated installation test while QA maintenance is active. New uploads do not add tests to the QA queue during this period. The QA page temporarily hides live testing, queued apps, and past results. Installer validation and existing security protections still apply; automatic updates continue to require QA coverage. Live testing and results will return when maintenance ends.",
+  "type": "maintenance"
+}

@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 /**
  * Package API Route
  * Queues packaging jobs by triggering GitHub Actions workflows
@@ -575,7 +576,7 @@ export async function POST(request: NextRequest) {
             }
             const jobId = crypto.randomUUID();
             const installerSha256 = item.installerSha256?.trim() || '';
-            const qaDemand = item.sourceType === 'custom' || !supabaseServerConfigured
+            const qaDemand = isQaMaintenanceMode() || item.sourceType === 'custom' || !supabaseServerConfigured
               ? null
               : await ensureQaDemand(createServerClient(), {
                   wingetId: item.wingetId,
@@ -751,7 +752,7 @@ export async function POST(request: NextRequest) {
                 : undefined,
               installScope: item.installScope,
               forceCreate: item.forceCreate || forceCreate,
-              qaOverride: item.qaOverride,
+              qaOverride: isQaMaintenanceMode() || item.qaOverride,
               sourceType: item.sourceType,
             };
 

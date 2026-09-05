@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
   let waiting = 0;
 
   for (const job of jobs || []) {
+    const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = job.package_config as unknown as Win32CartItem;
     let candidate: {
       id: string;
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
       failure_summary: string | null;
       package_profile_sha256: string | null;
     } | null = null;
-    if (job.qa_candidate_id) {
+    if (job.qa_candidate_id && !skipCustomerQa) {
       const { data, error: candidateError } = await supabase
         .from('qa_candidates')
         .select('id, status, failure_summary, package_profile_sha256')
@@ -61,7 +63,7 @@ export async function GET(request: Request) {
     let candidateFailureSummary = candidate?.failure_summary;
     let appVersionAlreadyPassed = false;
 
-    if (!candidate || candidateStatus === 'superseded') {
+    if (!skipCustomerQa && (!candidate || candidateStatus === 'superseded')) {
       // A waiting job can outlive the catalog metadata and packager revision
       // that created it. Reconcile the exact version against the trusted live
       // manifest before rebuilding QA demand, then persist that refreshed
@@ -137,7 +139,7 @@ export async function GET(request: Request) {
       if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
     }
 
-    if (!candidateStatus || ['failed', 'error'].includes(candidateStatus)) {
+    if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
       const now = new Date().toISOString();
       const { data: updated } = await supabase
         .from('packaging_jobs')
@@ -164,9 +166,10 @@ export async function GET(request: Request) {
       }
       continue;
     }
-    const qaDeferred = !job.is_auto_update &&
-      isDeferredCustomerQaEnabled() &&
-      Boolean(candidateStatus && ['queued', 'dispatched', 'running'].includes(candidateStatus));
+    const qaDeferred = skipCustomerQa || (
+      !job.is_auto_update && isDeferredCustomerQaEnabled() &&
+      Boolean(candidateStatus && ['queued', 'dispatched', 'running'].includes(candidateStatus))
+    );
     if (candidateStatus !== 'passed' && !qaDeferred) {
       waiting++;
       continue;
@@ -194,7 +197,7 @@ export async function GET(request: Request) {
       .update({
         status: nextStatus,
         status_message: qaDeferred
-          ? 'Preparing deployment while installation validation remains scheduled'
+          ? skipCustomerQa ? 'Preparing deployment' : 'Preparing deployment while installation validation remains scheduled'
           : 'Installation test passed; packaging started automatically',
         qa_completed_at: qaDeferred ? null : now,
         packaging_started_at: features.localPackager ? null : now,
@@ -214,6 +217,7 @@ export async function GET(request: Request) {
     try {
       const installerSha256 = item.installerSha256 || job.installer_sha256 || '';
       const workflowInputs: WorkflowInputs = {
+        qaOverride: skipCustomerQa,
         jobId: job.id,
         tenantId: job.tenant_id || '',
         wingetId: job.winget_id,

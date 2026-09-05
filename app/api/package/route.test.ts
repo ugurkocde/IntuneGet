@@ -139,6 +139,7 @@ function minutesAgo(minutes: number): string {
 describe('GET /api/package (userId listing)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.QA_MAINTENANCE_MODE;
     delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     // The list path now authenticates and uses the token's userId.
     parseAccessTokenMock.mockResolvedValue({
@@ -284,6 +285,7 @@ describe('POST /api/package (workflow dispatch)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.QA_MAINTENANCE_MODE;
     delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     getDatabaseMock.mockReturnValue({
       jobs: {
@@ -1515,6 +1517,34 @@ describe('POST /api/package (workflow dispatch)', () => {
       qa_completed_at: null,
     }));
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips QA demand entirely and authorizes customer dispatch during manual maintenance', async () => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
+
+
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.jobs[0]).toMatchObject({ status: 'packaging' });
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'queued',
+      status_message: null,
+      qa_candidate_id: null,
+      qa_completed_at: null,
+    }));
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock.mock.calls[0][0]).toMatchObject({ qaOverride: true });
   });
 
   it('calculates the hash in the workflow for a custom app without a supplied SHA256', async () => {

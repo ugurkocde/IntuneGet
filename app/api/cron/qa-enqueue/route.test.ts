@@ -373,6 +373,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.QA_MAINTENANCE_MODE;
   delete process.env.CRON_SECRET;
   vi.restoreAllMocks();
 });
@@ -411,6 +412,33 @@ describe('GET /api/cron/qa-enqueue', () => {
       paused: true,
       reason: 'maintenance_paused',
       maintenanceReason: 'Golden VM maintenance',
+    });
+    expect(pollRunInserts).toHaveLength(0);
+    expect(candidateInserts).toHaveLength(0);
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+    expect(pipelineControlUpdates).toEqual([
+      expect.objectContaining({
+        scheduler_packager_commit: QA_PSADT_TOOLCHAIN.packagerCommit,
+        scheduler_seen_at: expect.any(String),
+      }),
+    ]);
+  });
+
+  it('does not poll or mutate the queue while maintenance is paused by the server switch', async () => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
+    const { client, pollRunInserts, candidateInserts, pipelineControlUpdates } =
+      createSupabaseStub({ paused: false });
+    createServerClientMock.mockReturnValue(client);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      paused: true,
+      reason: 'maintenance_paused',
+      maintenanceReason: null,
     });
     expect(pollRunInserts).toHaveLength(0);
     expect(candidateInserts).toHaveLength(0);

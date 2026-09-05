@@ -1,3 +1,4 @@
+import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
 
 import { createServerClient } from '@/lib/supabase';
@@ -407,6 +408,12 @@ export function countConsecutiveFailedPolls(
 }
 
 export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
+  if (isQaMaintenanceMode()) {
+    return buildQaLiveResponse({
+      now: new Date(), current: null, queuedCount: 0, queued: [], poll: null,
+      consecutivePollFailures: 0, recent: [], apps: [], frame: null,
+    });
+  }
   const supabase = createServerClient();
   const candidateColumns =
     'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config';
