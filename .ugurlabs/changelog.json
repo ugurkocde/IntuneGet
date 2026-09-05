@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "productId": "intuneget",
+  "productName": "IntuneGet",
+  "websiteUrl": "https://www.intuneget.com/",
+  "apiUrl": "https://changelog.ugurlabs.com/api/changelog",
+  "publishMode": "on-completion"
+}

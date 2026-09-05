@@ -54,7 +54,7 @@ export function NotificationBell() {
         variant="ghost"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          'relative text-text-secondary hover:text-text-primary hover:bg-overlay/5 transition-all',
+          'relative h-11 w-11 shrink-0 px-0 text-text-secondary hover:text-text-primary hover:bg-overlay/5 transition-all',
           isOpen && 'text-text-primary bg-overlay/5'
         )}
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}

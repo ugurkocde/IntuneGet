@@ -22,6 +22,7 @@ import { TenantSwitcher } from '@/components/msp';
 import dynamic from 'next/dynamic';
 const UploadCart = dynamic(() => import('@/components/UploadCart').then(m => m.UploadCart));
 import { NotificationBell } from '@/components/notifications';
+import { ChangelogBell } from '@/components/changelog/ChangelogBell';
 import { Sidebar, DeploymentStatusIndicator } from '@/components/dashboard';
 const CommandPalette = dynamic(() => import('@/components/dashboard/CommandPalette').then(m => m.CommandPalette));
 import { springPresets } from '@/lib/animations/variants';
@@ -160,7 +161,7 @@ export default function DashboardLayout({
       >
         {/* Top bar */}
         <header className="sticky top-0 z-30 h-16 glass-light">
-          <div className="flex items-center justify-between h-full px-4 lg:px-6">
+          <div className="flex items-center justify-between h-full pl-14 pr-3 sm:pr-4 lg:px-6">
             {/* Command palette trigger */}
             <button
               onClick={handleOpenCommandPalette}
@@ -173,15 +174,16 @@ export default function DashboardLayout({
             </button>
             <div className="flex-1 lg:hidden" />
 
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-1 sm:gap-3">
               <TenantSwitcher />
               <DeploymentStatusIndicator />
+              <ChangelogBell />
               {hostedServices && <NotificationBell />}
               <Button
                 variant="ghost"
                 onClick={toggleCart}
                 aria-label={cartItemCount > 0 ? `Deployment cart, ${cartItemCount} items` : 'Deployment cart'}
-                className="relative text-text-secondary hover:text-text-primary hover:bg-overlay/5 transition-all"
+                className="relative h-11 w-11 shrink-0 px-0 text-text-secondary hover:text-text-primary hover:bg-overlay/5 transition-all"
               >
                 <ShoppingCart className="w-5 h-5" />
                 {cartItemCount > 0 && (

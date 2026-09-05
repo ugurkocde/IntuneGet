@@ -14,6 +14,7 @@ import { LocaleSwitcher } from "./LocaleSwitcher";
 import dynamic from "next/dynamic";
 import { useSharedGitHubStats } from "@/components/providers/LandingStatsProvider";
 import { useAuthHint } from "@/hooks/useAuthHint";
+import { ChangelogBell } from "@/components/changelog/ChangelogBell";
 
 // MSAL-backed avatar, loaded only for signed-in visitors so anonymous
 // visitors never download @azure/msal-browser on marketing pages.
@@ -219,6 +220,8 @@ export function Header() {
             )}
           </nav>
 
+          <div className="relative z-10 ml-2 flex shrink-0 items-center">
+          <ChangelogBell onOpen={() => setIsMenuOpen(false)} />
           {/* Mobile menu button */}
           <button
             ref={menuButtonRef}
@@ -234,6 +237,7 @@ export function Header() {
               <Menu className="h-6 w-6" />
             )}
           </button>
+          </div>
           </div>
         </div>
       </div>
