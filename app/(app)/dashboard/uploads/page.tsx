@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { T, Var } from "gt-next";
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -132,8 +132,13 @@ export default function UploadsPage() {
   // the tenant so a team can avoid deploying the same app twice.
   const [viewScope, setViewScope] = useState<'mine' | 'tenant'>('mine');
 
+  const jobsRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { jobsRequest.current?.abort(); jobsRequest.current = null; }, [viewScope, isMspUser, selectedTenantId, user?.id, user?.tenantId]);
+
   const fetchJobs = useCallback(async (showRefreshing = false) => {
-    if (!user?.id) return;
+    if (!user?.id || jobsRequest.current) return;
+    const controller = new AbortController();
+    jobsRequest.current = controller;
 
     if (showRefreshing) {
       setIsRefreshing(true);
@@ -141,6 +146,7 @@ export default function UploadsPage() {
 
     try {
       const accessToken = await getAccessToken();
+      if (controller.signal.aborted) return;
       if (!accessToken) {
         // Silent refresh failed and interactive auth is required; stop polling
         // and prompt for re-auth instead of sending an unauthenticated request.
@@ -149,6 +155,7 @@ export default function UploadsPage() {
       }
       const url = viewScope === 'tenant' ? '/api/package?scope=tenant' : '/api/package';
       const response = await fetch(url, {
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${accessToken}`,
           // Scope to the MSP-selected customer tenant when one is active, so the
@@ -173,15 +180,20 @@ export default function UploadsPage() {
       }
 
       const data = await response.json();
+      if (controller.signal.aborted) return;
       setJobs(data.jobs || []);
       setError(null);
       setSessionExpired(false);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('Failed to fetch jobs:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch jobs');
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (jobsRequest.current === controller) {
+        jobsRequest.current = null;
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, [user?.id, getAccessToken, viewScope, isMspUser, selectedTenantId]);
 
@@ -199,11 +211,14 @@ export default function UploadsPage() {
 
     if (!hasActiveJobs || sessionExpired) return;
 
-    const interval = setInterval(() => {
-      fetchJobs();
-    }, document.visibilityState === 'visible' ? 5000 : 15000);
-
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval>;
+    const schedule = () => {
+      clearInterval(interval);
+      interval = setInterval(() => { void fetchJobs(); }, document.hidden ? 15000 : 5000);
+    };
+    schedule();
+    document.addEventListener('visibilitychange', schedule);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', schedule); };
   }, [jobs, fetchJobs, sessionExpired]);
 
   const handleSignInAgain = async () => {

@@ -1,239 +1,106 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase';
-import type { RealtimeChannel } from '@supabase/supabase-js';
-
-interface LandingStats {
-  signinClicks: number;
-  appsDeployed: number;
-  appsSupported: number;
-  isLoading: boolean;
-  error: Error | null;
-}
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 export interface LandingStatValues {
   signinClicks: number;
   appsDeployed: number;
   appsSupported: number;
 }
-
-interface FetchStatsOptions {
-  silent?: boolean;
+interface LandingStats extends LandingStatValues {
+  isLoading: boolean;
+  error: Error | null;
 }
-
-// Default fallback values (close to actual) to prevent layout shift during load
-const DEFAULT_STATS: LandingStatValues = {
-  signinClicks: 1000,
-  appsDeployed: 2000,
-  appsSupported: 10000,
-};
-
-const POLL_INTERVAL_HEALTHY_MS = 20000;
-const POLL_INTERVAL_DEGRADED_MS = 8000;
-const POLL_INTERVAL_HIDDEN_MS = 60000;
-const POLL_MAX_BACKOFF_MS = 60000;
-const MAX_FAILURE_BACKOFF_STEPS = 3;
-
-interface UseLandingStatsOptions {
-  /**
-   * When false the hook keeps its seed values and performs no polling or
-   * realtime subscription. Used by the shared-stats context wrappers so a
-   * page-level provider can own the single live instance while consumers
-   * stay hook-order safe.
-   */
-  enabled?: boolean;
-}
+const DEFAULT_STATS = { signinClicks: 1000, appsDeployed: 2000, appsSupported: 10000 };
 
 export function useLandingStats(
   initial?: LandingStatValues,
-  options: UseLandingStatsOptions = {},
+  { enabled = true }: { enabled?: boolean } = {},
 ): LandingStats {
-  const { enabled = true } = options;
-  // Server-rendered pages pass the freshly fetched values so the client never
-  // flashes the DEFAULT_STATS placeholders; polling/realtime still refresh them.
-  const [stats, setStats] = useState<LandingStatValues>(initial ?? DEFAULT_STATS);
+  const [stats, setStats] = useState(initial ?? DEFAULT_STATS);
   const [isLoading, setIsLoading] = useState(initial === undefined && enabled);
   const [error, setError] = useState<Error | null>(null);
-  const realtimeConnectedRef = useRef(false);
-  const pollingFailureCountRef = useRef(0);
-
-  const applyCounterUpdate = useCallback((counterId: string, value: unknown) => {
-    const parsedValue = typeof value === 'number' ? value : Number(value);
-    if (Number.isNaN(parsedValue)) {
-      return;
-    }
-
-    setStats((prev) => {
-      if (counterId === 'apps_deployed') {
-        return { ...prev, appsDeployed: parsedValue };
-      }
-      if (counterId === 'signin_clicks') {
-        return { ...prev, signinClicks: parsedValue };
-      }
-      return prev;
-    });
-  }, []);
-
-  const fetchStats = useCallback(async (options: FetchStatsOptions = {}): Promise<boolean> => {
-    const { silent = false } = options;
-
-    try {
-      const response = await fetch('/api/stats/public', {
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch stats');
-      }
-
-      const data = (await response.json()) as LandingStatValues;
-      setStats(data);
-      setError(null);
-      return true;
-    } catch (err) {
-      if (!silent) {
-        setError(err instanceof Error ? err : new Error('Unknown error'));
-      }
-      return false;
-    } finally {
-      if (!silent) {
-        setIsLoading(false);
-      }
-    }
-  }, []);
+  const seeded = useRef(initial !== undefined);
 
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
+    const controller = new AbortController();
+    let pollTimer: ReturnType<typeof setTimeout>;
+    let realtimeTimer: ReturnType<typeof setTimeout>;
+    let stopRealtime: (() => void) | undefined;
+    let connected = false;
+    let fetching = false;
+    let failures = 0;
+    let startingRealtime = false;
 
-    let timeoutId: number | null = null;
-    let cancelled = false;
+    const update = (next: LandingStatValues) => setStats(previous =>
+      previous.signinClicks === next.signinClicks &&
+      previous.appsDeployed === next.appsDeployed &&
+      previous.appsSupported === next.appsSupported ? previous : next);
 
-    const getNextDelay = (lastFetchSucceeded: boolean): number => {
-      const baseInterval = realtimeConnectedRef.current
-        ? POLL_INTERVAL_HEALTHY_MS
-        : POLL_INTERVAL_DEGRADED_MS;
-
-      const visibilityInterval = document.visibilityState === 'hidden'
-        ? Math.max(baseInterval, POLL_INTERVAL_HIDDEN_MS)
-        : baseInterval;
-
-      const failureMultiplier = lastFetchSucceeded
-        ? 1
-        : 2 ** pollingFailureCountRef.current;
-
-      return Math.min(visibilityInterval * failureMultiplier, POLL_MAX_BACKOFF_MS);
-    };
-
-    const scheduleNextPoll = (delayMs: number) => {
-      timeoutId = window.setTimeout(async () => {
-        const succeeded = await fetchStats({ silent: true });
-        if (succeeded) {
-          pollingFailureCountRef.current = 0;
-        } else {
-          pollingFailureCountRef.current = Math.min(
-            pollingFailureCountRef.current + 1,
-            MAX_FAILURE_BACKOFF_STEPS
-          );
+    const poll = async () => {
+      if (controller.signal.aborted || document.hidden || fetching) return;
+      fetching = true;
+      clearTimeout(pollTimer);
+      try {
+        const response = await fetch('/api/stats/public', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error('Failed to fetch stats');
+        const next = await response.json() as LandingStatValues;
+        if (controller.signal.aborted) return;
+        update(next);
+        setError(null);
+        failures = 0;
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          failures = Math.min(failures + 1, 3);
+          setError(err instanceof Error ? err : new Error('Failed to fetch stats'));
         }
-
-        if (!cancelled) {
-          scheduleNextPoll(getNextDelay(succeeded));
+      } finally {
+        fetching = false;
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          pollTimer = setTimeout(() => void poll(), Math.min((connected ? 20000 : 8000) * 2 ** failures, 60000));
         }
-      }, delayMs);
-    };
-
-    void fetchStats();
-    scheduleNextPoll(POLL_INTERVAL_DEGRADED_MS);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        pollingFailureCountRef.current = 0;
-        void fetchStats({ silent: true });
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const startRealtime = async () => {
+      if (startingRealtime || document.hidden || controller.signal.aborted) return;
+      startingRealtime = true;
+      try {
+        // Keep the SDK outside initial bundles, including GitHub-only headers.
+        const { subscribeLandingCounters } = await import('@/lib/landing/realtime-counters');
+        if (controller.signal.aborted) return;
+        stopRealtime = subscribeLandingCounters((id, value) => {
+          setStats(previous => {
+            const field = id === 'apps_deployed' ? 'appsDeployed' : id === 'signin_clicks' ? 'signinClicks' : null;
+            return field && previous[field] !== value ? { ...previous, [field]: value } : previous;
+          });
+        }, value => { connected = value; });
+      } catch { /* Polling remains available if realtime cannot load. */ }
+    };
 
+    if (seeded.current) pollTimer = setTimeout(() => void poll(), 20000);
+    else void poll();
+    realtimeTimer = setTimeout(() => void startRealtime(), 5000);
+    const visibilityChanged = () => {
+      clearTimeout(pollTimer);
+      if (!document.hidden) {
+        void poll();
+        void startRealtime();
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityChanged);
     return () => {
-      cancelled = true;
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      controller.abort();
+      clearTimeout(pollTimer);
+      clearTimeout(realtimeTimer);
+      stopRealtime?.();
+      document.removeEventListener('visibilitychange', visibilityChanged);
     };
-  }, [enabled, fetchStats]);
+  }, [enabled]);
 
-  // Subscribe to realtime updates for site_counters
-  useEffect(() => {
-    if (!enabled || !isSupabaseConfigured()) {
-      return;
-    }
-
-    const supabase = getSupabaseClient();
-    let channel: RealtimeChannel | null = null;
-
-    try {
-      const channelName = `site_counters_changes_${Math.random().toString(36).slice(2, 12)}`;
-      channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'site_counters',
-          },
-          (payload) => {
-            const { id, value } = payload.new as { id: string; value: number };
-            applyCounterUpdate(id, value);
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'site_counters',
-          },
-          (payload) => {
-            const { id, value } = payload.new as { id: string; value: number };
-            applyCounterUpdate(id, value);
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            realtimeConnectedRef.current = true;
-            pollingFailureCountRef.current = 0;
-            void fetchStats({ silent: true });
-            return;
-          }
-
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            realtimeConnectedRef.current = false;
-            // Fallback fetch keeps counters fresh even if websocket delivery drops.
-            void fetchStats({ silent: true });
-          }
-        });
-    } catch (err) {
-      realtimeConnectedRef.current = false;
-      console.error('Failed to subscribe to realtime updates:', err);
-    }
-
-    return () => {
-      realtimeConnectedRef.current = false;
-      if (channel) {
-        void supabase.removeChannel(channel);
-      }
-    };
-  }, [enabled, applyCounterUpdate, fetchStats]);
-
-  return {
-    ...stats,
-    isLoading,
-    error,
-  };
+  return useMemo(() => ({ ...stats, isLoading, error }), [stats, isLoading, error]);
 }
 
 export async function trackSigninClick(): Promise<void> {

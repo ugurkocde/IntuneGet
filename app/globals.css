@@ -8,10 +8,35 @@
    shift. Rename the files if they are ever re-subset (immutable caching). */
 @font-face {
   font-family: "Inter";
-  src: url("/fonts/InterVariable.woff2") format("woff2");
+  src: url("/fonts/Inter-latin-v1.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000,U+0020-007E,U+00A0-00AC,U+00AE-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+2010-2027,U+202F-2055,U+2057,U+205F,U+20AC,U+2122,U+2190-2193,U+2212,U+FEFF;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-latin-ext-v1.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-0130,U+0132-0148,U+014A-0151,U+0154-01C3,U+01C5-024F,U+02B0-02BA,U+02BD-02C5,U+02C7-02D9,U+02DB,U+02DD-02FF,U+0304,U+0308;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-latin-additional-v1.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+1E00-1E9B,U+1E9D-1EFF;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-symbols-v1.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0250-0254,U+0256-027B,U+027E-0284,U+0286-0290,U+0292-02A4,U+02A6-02AF,U+1D00,U+1D0D,U+1D1B,U+1D43,U+1D47-1D49,U+1D4D,U+1D4F-1D50,U+1D52,U+1D56-1D58,U+1D5B,U+1D62-1D65,U+1D9C,U+1DA0,U+1DBB,U+1DBF,U+20A0-20AB,U+20AD-20AF,U+20B1-20B5,U+20B8-20BA,U+20BC-20C0,U+2113,U+2194-2199,U+21A9-21AA,U+21B0-21B1,U+21B3-21B5,U+21BA-21BB,U+21D0,U+21D2,U+21D4,U+21DE-21DF,U+21E4-21E5,U+21E7,U+21EA,U+2713,U+2C7C,U+2C7F,U+A7FF;
 }
 @font-face {
   font-family: "Inter Fallback";

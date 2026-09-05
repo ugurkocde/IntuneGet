@@ -19,10 +19,11 @@ import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { TenantSwitcher } from '@/components/msp';
-import { UploadCart } from '@/components/UploadCart';
+import dynamic from 'next/dynamic';
+const UploadCart = dynamic(() => import('@/components/UploadCart').then(m => m.UploadCart));
 import { NotificationBell } from '@/components/notifications';
 import { Sidebar, DeploymentStatusIndicator } from '@/components/dashboard';
-import { CommandPalette } from '@/components/dashboard/CommandPalette';
+const CommandPalette = dynamic(() => import('@/components/dashboard/CommandPalette').then(m => m.CommandPalette));
 import { springPresets } from '@/lib/animations/variants';
 import { getClientFeatureFlags } from '@/lib/features';
 
@@ -31,7 +32,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isSigningOut, user, signOut, getAccessToken } = useMicrosoftAuth();
+  const { isAuthenticated, isInitializing, isSigningOut, user, signOut, getAccessToken } = useMicrosoftAuth();
   const {
     isOnboardingComplete,
     isChecking: isCheckingOnboarding,
@@ -47,6 +48,9 @@ export default function DashboardLayout({
   const [isRetrying, setIsRetrying] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
+  const isCartOpen = useCartStore((state) => state.isOpen);
+  const [cartLoaded, setCartLoaded] = useState(false);
+  useEffect(() => { if (isCartOpen) setCartLoaded(true); }, [isCartOpen]);
   const cartItemCount = useCartStore((state) => state.getItemCount());
   const toggleCart = useCartStore((state) => state.toggleCart);
   const { hostedServices } = getClientFeatureFlags();
@@ -65,10 +69,10 @@ export default function DashboardLayout({
   }, []);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && !isSigningOut) {
+    if (!isLoading && !isInitializing && !isAuthenticated && !isSigningOut) {
       router.push('/auth/signin?callbackUrl=/dashboard');
     }
-  }, [isLoading, isAuthenticated, isSigningOut, router]);
+  }, [isLoading, isInitializing, isAuthenticated, isSigningOut, router]);
 
   useEffect(() => {
     if (isLoading || !isAuthenticated || isCheckingOnboarding) return;
@@ -272,10 +276,10 @@ export default function DashboardLayout({
       </motion.div>
 
       {/* Upload Cart Sidebar */}
-      <UploadCart />
+      {(isCartOpen || cartLoaded) && <UploadCart />}
 
       {/* Command Palette */}
-      <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+      {commandPaletteOpen && <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />}
 
       {/* Toast notifications */}
       <Toaster

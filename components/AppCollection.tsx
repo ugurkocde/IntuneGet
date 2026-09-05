@@ -1,5 +1,6 @@
 'use client';
 
+import { useNearViewport } from '@/hooks/use-near-viewport';
 import { useRef, useState, useEffect, memo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ChevronRight as ArrowRight, Loader2, Plus, Check, Settings } from 'lucide-react';
 import { AppIcon } from '@/components/AppIcon';
@@ -38,7 +39,8 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const { data, isLoading } = usePackagesByCategory(category, 12);
+  const { ref: collectionRef, near } = useNearViewport<HTMLDivElement>();
+  const { data, isLoading } = usePackagesByCategory(category, 12, near);
   const packages = data?.packages || [];
 
   const displayName = getCategoryLabel(category);
@@ -73,9 +75,9 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
     }
   };
 
-  if (isLoading) {
+  if (!near || isLoading) {
     return (
-      <div className="space-y-3">
+      <div ref={collectionRef} className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="h-6 w-32 bg-bg-elevated rounded animate-shimmer" />
           <div className="h-4 w-16 bg-bg-elevated rounded animate-shimmer" />
@@ -92,7 +94,7 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
   if (packages.length === 0) return null;
 
   return (
-    <div className="space-y-3">
+    <div ref={collectionRef} className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-bold tracking-tight text-text-primary flex items-center gap-2">

@@ -27,7 +27,7 @@ export function usePermissionStatus() {
   const { isAuthenticated, getAccessToken, user } = useMicrosoftAuth();
   const { isMspUser, selectedTenantId } = useMspOptional();
 
-  const fetchPermissionStatus = useCallback(async (): Promise<ConsentVerificationResult> => {
+  const fetchPermissionStatus = useCallback(async ({ signal }: { signal: AbortSignal }): Promise<ConsentVerificationResult> => {
     const token = await getAccessToken();
     if (!token) {
       return { verified: false, tenantId: '', message: 'No token', error: 'network_error' };
@@ -40,6 +40,7 @@ export function usePermissionStatus() {
 
     const response = await fetch(url, {
       method: 'POST',
+      signal,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',

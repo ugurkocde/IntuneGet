@@ -118,13 +118,6 @@ export class SupabaseCatalogSource implements CatalogSource {
     }
 
     const countQuery = category ? baseQuery.ilike('category', category) : baseQuery;
-    const { count: totalCount, error: countError } = await countQuery;
-
-    if (countError) {
-      console.error('Failed to count curated packages', { error: countError, category });
-      return null;
-    }
-
     let dataQuery = supabase
       .from('curated_apps')
       .select(
@@ -156,7 +149,14 @@ export class SupabaseCatalogSource implements CatalogSource {
         break;
     }
 
-    const { data, error } = await dataQuery.range(offset, offset + limit - 1);
+    const [{ count: totalCount, error: countError }, { data, error }] = await Promise.all([
+      countQuery,
+      dataQuery.range(offset, offset + limit - 1),
+    ]);
+    if (countError) {
+      console.error('Failed to count curated packages', { error: countError, category });
+      return null;
+    }
 
     if (error) {
       console.error('Failed to query curated packages', { error, category, sort, limit, offset });
@@ -274,34 +274,27 @@ export class SupabaseCatalogSource implements CatalogSource {
   // app detail
   // ---------------------------------------------------------------------------
 
-  async getAppByWingetId(wingetId: string): Promise<CuratedAppWithDetails | null> {
+  async getAppByWingetId(wingetId: string, options: { presentationOnly?: boolean } = {}): Promise<CuratedAppWithDetails | null> {
     const supabase = serviceOrAnonClient();
     if (!supabase) {
       return null;
     }
 
-    const { data: curatedData } = await supabase
-      .from('curated_apps')
-      .select('*')
-      .eq('winget_id', wingetId)
-      .single();
-
-    if (!curatedData) {
-      return null;
-    }
-
-    // Get versions from version_history
-    const { data: versionData } = await supabase
-      .from('version_history')
-      .select('version')
-      .eq('winget_id', wingetId)
+    const versionsQuery = supabase.from('version_history').select('version').eq('winget_id', wingetId)
       .order('created_at', { ascending: false });
+    const [{ data: curatedData }, { data: versionData }] = await Promise.all([
+      supabase.from('curated_apps').select(options.presentationOnly
+        ? 'winget_id,name,publisher,latest_version,description,homepage,license,icon_path,category,is_locale_variant,parent_winget_id,is_verified,app_source'
+        : '*').eq('winget_id', wingetId).single<CuratedAppWithDetails['app']>(),
+      options.presentationOnly ? versionsQuery.limit(10) : versionsQuery,
+    ]);
+    if (!curatedData) return null;
 
     const versions = versionData?.map((v) => v.version) || [];
 
     // Fetch locale variants if this is a parent app (not a variant itself)
     let localeVariants: LocaleVariant[] | undefined;
-    if (!curatedData.is_locale_variant) {
+    if (!curatedData.is_locale_variant && !options.presentationOnly) {
       const { data: variantData } = await supabase.rpc('get_locale_variants', {
         parent_id: wingetId,
       });

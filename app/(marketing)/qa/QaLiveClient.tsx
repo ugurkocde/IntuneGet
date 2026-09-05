@@ -464,13 +464,26 @@ function DashboardContent() {
   } | null>(null);
   const [showFullQueue, setShowFullQueue] = useState(false);
 
+  // Distinct roots prevent placeholder boxes from being reused as moving live content.
   if (isLoading) {
-    return <div className="h-80 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" aria-label="Loading live QA status" />;
+    return (
+      <div key="loading" aria-label="Loading live QA status" aria-busy="true" role="status">
+        <span className="sr-only">Loading live QA status</span>
+        <div className="space-y-6" aria-hidden="true">
+          <div className="h-64 sm:h-32 lg:h-16 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
+          <div className="h-[600px] lg:h-[480px] animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="h-80 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
+            <div className="h-80 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (isError || !data) {
     return (
-      <div className="rounded-2xl border border-status-error/20 bg-status-error/5 p-6 text-center">
+      <div key="error" className="rounded-2xl border border-status-error/20 bg-status-error/5 p-6 text-center">
         <AlertTriangle className="mx-auto mb-3 h-6 w-6 text-status-error" aria-hidden="true" />
         <p className="font-medium text-text-primary"><T>Live QA status is temporarily unavailable.</T></p>
         <button type="button" onClick={() => refetch()} className="mt-3 min-h-10 rounded-lg border border-overlay/10 px-4 py-2 text-sm text-text-secondary hover:text-text-primary"><T>Try again</T></button>
@@ -479,7 +492,7 @@ function DashboardContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div key="loaded" className="space-y-6">
       <ServiceHealth data={data} />
       <CurrentTest data={data} />
 

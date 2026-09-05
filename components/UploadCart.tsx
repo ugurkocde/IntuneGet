@@ -18,7 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
 import { useCartStore } from '@/stores/cart-store';
-import { CartItemConfig } from '@/components/CartItemConfig';
+import dynamic from 'next/dynamic';
+const CartItemConfig = dynamic(() => import('@/components/CartItemConfig').then(m => m.CartItemConfig));
 import type { CartItem } from '@/types/upload';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
@@ -39,7 +40,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useQaStatuses } from '@/hooks/use-qa';
-import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
+const QaDetailsDialog = dynamic(() => import('@/components/qa/QaDetailsDialog').then(m => m.QaDetailsDialog));
 import type { QaStatus } from '@/types/qa';
 
 interface PackagingJob {
@@ -102,7 +103,8 @@ export function UploadCart() {
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
   const [qaDetailsTarget, setQaDetailsTarget] = useState<{ wingetId: string; version: string } | null>(null);
   const { data: qaStatusesData } = useQaStatuses(
-    items.filter(isWin32CartItem).map((item) => item.wingetId)
+    items.filter(isWin32CartItem).map((item) => item.wingetId),
+    isOpen || isDeploying
   );
   // winget id -> email of whoever already deployed it in this tenant, so we can
   // warn before a teammate's app is deployed a second time.
@@ -118,13 +120,6 @@ export function UploadCart() {
     verify,
     canDeploy,
   } = usePermissionStatus();
-
-  // Verify permissions when cart opens
-  useEffect(() => {
-    if (isOpen && isAuthenticated && permissionStatus !== 'verified') {
-      verify();
-    }
-  }, [isOpen, isAuthenticated, permissionStatus, verify]);
 
   // Load tenant-wide deployments when the cart opens so we can flag apps a
   // teammate already deployed (non-fatal: on any failure we just skip warnings).

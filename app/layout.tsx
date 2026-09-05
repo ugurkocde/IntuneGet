@@ -201,14 +201,7 @@ export default async function RootLayout({
       <head>
         <link
           rel="preload"
-          href="/fonts/InterVariable.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="/fonts/JetBrainsMono-Variable.woff2"
+          href="/fonts/Inter-latin-v1.woff2"
           as="font"
           type="font/woff2"
           crossOrigin="anonymous"

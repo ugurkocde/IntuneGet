@@ -59,13 +59,14 @@ interface ChangelogResponse {
   summary: ChangelogSummary;
 }
 
-export function usePopularPackages(limit: number = 12, category?: string | null) {
+export function usePopularPackages(limit: number = 12, category?: string | null, enabled = true) {
   return useQuery<PopularPackagesResponse>({
     queryKey: ['packages', 'popular', limit, category],
-    queryFn: async () => {
+    enabled,
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({ limit: limit.toString() });
       if (category) params.append('category', category);
-      const response = await fetch(`/api/winget/popular?${params.toString()}`);
+      const response = await fetch(`/api/winget/popular?${params.toString()}`, { signal });
       if (!response.ok) {
         throw new Error('Failed to fetch popular packages');
       }
@@ -83,17 +84,18 @@ interface InfinitePackagesResponse {
   hasMore: boolean;
 }
 
-export function useInfinitePackages(pageSize: number = 20, category?: string | null, sort?: string) {
+export function useInfinitePackages(pageSize: number = 20, category?: string | null, sort?: string, enabled = true) {
   return useInfiniteQuery<InfinitePackagesResponse>({
     queryKey: ['packages', 'infinite', pageSize, category, sort],
-    queryFn: async ({ pageParam = 0 }) => {
+    enabled,
+    queryFn: async ({ pageParam = 0, signal }) => {
       const params = new URLSearchParams({
         limit: pageSize.toString(),
         offset: (pageParam as number).toString(),
       });
       if (category) params.append('category', category);
       if (sort) params.append('sort', sort);
-      const response = await fetch(`/api/winget/popular?${params.toString()}`);
+      const response = await fetch(`/api/winget/popular?${params.toString()}`, { signal });
       if (!response.ok) {
         throw new Error('Failed to fetch packages');
       }
@@ -110,21 +112,21 @@ export function useInfinitePackages(pageSize: number = 20, category?: string | n
   });
 }
 
-export function usePackagesByCategory(category: string, limit: number = 10) {
+export function usePackagesByCategory(category: string, limit: number = 10, enabled = true) {
   return useQuery<PopularPackagesResponse>({
     queryKey: ['packages', 'byCategory', category, limit],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         limit: limit.toString(),
         category,
       });
-      const response = await fetch(`/api/winget/popular?${params.toString()}`);
+      const response = await fetch(`/api/winget/popular?${params.toString()}`, { signal });
       if (!response.ok) {
         throw new Error('Failed to fetch packages by category');
       }
       return response.json();
     },
-    enabled: !!category,
+    enabled: !!category && enabled,
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -132,14 +134,14 @@ export function usePackagesByCategory(category: string, limit: number = 10) {
 export function useSearchPackages(query: string, limit: number = 50, category?: string | null, sort?: string) {
   return useQuery<SearchPackagesResponse>({
     queryKey: ['packages', 'search', query, limit, category, sort],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         q: query,
         limit: limit.toString(),
       });
       if (category) params.append('category', category);
       if (sort) params.append('sort', sort);
-      const response = await fetch(`/api/winget/search?${params.toString()}`);
+      const response = await fetch(`/api/winget/search?${params.toString()}`, { signal });
       if (!response.ok) {
         throw new Error('Search failed');
       }
@@ -152,9 +154,10 @@ export function useSearchPackages(query: string, limit: number = 50, category?: 
 export function useCatalogPackage(packageId: string | null) {
   return useQuery<CatalogPackageResponse>({
     queryKey: ['packages', 'catalog-package', packageId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await fetch(
         `/api/winget/catalog-package?id=${encodeURIComponent(packageId!)}`,
+        { signal },
       );
       if (!response.ok) {
         throw new Error(
@@ -173,12 +176,12 @@ export function useCatalogPackage(packageId: string | null) {
 export function usePackageManifest(id: string, version?: string, arch?: string, skip?: boolean) {
   return useQuery<ManifestResponse, ManifestFetchError>({
     queryKey: ['packages', 'manifest', id, version, arch],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({ id });
       if (version) params.append('version', version);
       if (arch) params.append('arch', arch);
 
-      const response = await fetch(`/api/winget/manifest?${params.toString()}`);
+      const response = await fetch(`/api/winget/manifest?${params.toString()}`, { signal });
       if (!response.ok) {
         const body = await response.json().catch(() => null) as {
           message?: string;
@@ -202,8 +205,8 @@ export function usePackageManifest(id: string, version?: string, arch?: string, 
 export function useCategories() {
   return useQuery<CategoriesResponse>({
     queryKey: ['categories'],
-    queryFn: async () => {
-      const response = await fetch('/api/winget/categories');
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/winget/categories', { signal });
       if (!response.ok) {
         throw new Error('Failed to fetch categories');
       }
@@ -216,10 +219,10 @@ export function useCategories() {
 export function useInstallationChangelog(id: string, version?: string) {
   return useQuery<ChangelogResponse>({
     queryKey: ['changelog', id, version],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({ id });
       if (version) params.append('version', version);
-      const response = await fetch(`/api/winget/changelog?${params.toString()}`);
+      const response = await fetch(`/api/winget/changelog?${params.toString()}`, { signal });
       if (!response.ok) {
         if (response.status === 404) {
           // Return null data for 404 (no changelog available)
@@ -243,8 +246,8 @@ interface LocaleVariantsResponse {
 export function useLocaleVariants(parentWingetId: string | null) {
   return useQuery<LocaleVariantsResponse>({
     queryKey: ['packages', 'variants', parentWingetId],
-    queryFn: async () => {
-      const response = await fetch(`/api/winget/variants?id=${encodeURIComponent(parentWingetId!)}`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/winget/variants?id=${encodeURIComponent(parentWingetId!)}`, { signal });
       if (!response.ok) {
         throw new Error('Failed to fetch locale variants');
       }
@@ -266,8 +269,8 @@ class FetchError extends Error {
 export function useStoreManifest(packageIdentifier: string | undefined, skip?: boolean) {
   return useQuery<StoreManifestResponse>({
     queryKey: ['store', 'manifest', packageIdentifier],
-    queryFn: async () => {
-      const response = await fetch(`/api/store/manifest?id=${encodeURIComponent(packageIdentifier!)}`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/store/manifest?id=${encodeURIComponent(packageIdentifier!)}`, { signal });
       if (!response.ok) {
         throw new FetchError('Failed to fetch store manifest', response.status);
       }

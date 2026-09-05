@@ -58,6 +58,16 @@ export async function GET(
       );
     }
 
+    if (request.nextUrl.searchParams.get('view') === 'icon') {
+      const response = await fetch(`${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${encodeURIComponent(id)}?$select=largeIcon`, {
+        headers: { Authorization: `Bearer ${graphToken}` }, signal: request.signal,
+        cache: 'no-store',
+      });
+      if (!response.ok) return NextResponse.json({ error: 'Failed to fetch app icon' }, { status: response.status });
+      const data = await response.json();
+      return NextResponse.json({ icon: data.largeIcon || null }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
     // Fetch app details and assignments in parallel
     const [appResponse, assignmentsResponse] = await Promise.all([
       fetch(`${GRAPH_API_BASE}/deviceAppManagement/mobileApps/${id}`, {

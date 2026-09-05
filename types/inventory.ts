@@ -121,3 +121,9 @@ export interface AppUpdateInfo {
   // provenance); false when matched only by fuzzy name/heuristics.
   isManaged: boolean;
 }
+
+/** Lightweight inventory row. Full configuration and icons load on demand. */
+export type InventoryListApp = Pick<IntuneWin32App,
+  'id' | 'displayName' | 'description' | 'publisher' | 'displayVersion' |
+  'createdDateTime' | 'lastModifiedDateTime' | 'installExperience' | 'size'
+> & { hasIcon: boolean };

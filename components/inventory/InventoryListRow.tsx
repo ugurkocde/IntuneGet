@@ -4,10 +4,11 @@ import { memo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Package, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { IntuneWin32App } from '@/types/inventory';
+import { useInventoryIcon } from '@/hooks/use-inventory';
+import type { InventoryListApp } from '@/types/inventory';
 
 interface InventoryListRowProps {
-  app: IntuneWin32App;
+  app: InventoryListApp;
   onClick: () => void;
   isSelected?: boolean;
 }
@@ -18,6 +19,8 @@ export const InventoryListRow = memo(function InventoryListRow({
   isSelected,
 }: InventoryListRowProps) {
   const prefersReducedMotion = useReducedMotion();
+  const { data: iconData } = useInventoryIcon(app.id, app.hasIcon);
+  const largeIcon = iconData?.icon;
   const [iconError, setIconError] = useState(false);
 
   const formatDate = (dateString: string) => {
@@ -61,9 +64,9 @@ export const InventoryListRow = memo(function InventoryListRow({
     >
       {/* Icon */}
       <div className="w-9 h-9 rounded-lg bg-bg-surface border border-overlay/5 flex items-center justify-center flex-shrink-0">
-        {app.largeIcon?.value && !iconError ? (
+        {largeIcon?.value && !iconError ? (
           <img
-            src={`data:${app.largeIcon.type || 'image/png'};base64,${app.largeIcon.value}`}
+            src={`data:${largeIcon.type || 'image/png'};base64,${largeIcon.value}`}
             alt={app.displayName}
             className="w-7 h-7 rounded"
             onError={() => setIconError(true)}

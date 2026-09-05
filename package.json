@@ -16,7 +16,8 @@
     "prepare": "husky",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "perf:bundles": "node scripts/measure-bundles.mjs --check"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
@@ -37,6 +38,7 @@
     "@react-three/postprocessing": "^3.0.4",
     "@supabase/supabase-js": "^2.110.4",
     "@tanstack/react-query": "^5.101.2",
+    "@tanstack/react-virtual": "3.14.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -73,6 +75,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
+    "happy-dom": "20.14.0",
     "husky": "^9.1.7",
     "postcss": "^8.5.19",
     "tailwindcss": "^4.3.2",

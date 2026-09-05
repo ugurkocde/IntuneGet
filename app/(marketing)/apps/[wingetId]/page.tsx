@@ -35,7 +35,7 @@ function decodeWingetId(value: string): string {
 const resolveApp = cache(async (encodedId: string) => {
   const id = decodeWingetId(encodedId);
   const source = getCatalogSource();
-  const details = await source.getAppByWingetId(id).catch(() => null);
+  const details = await source.getAppByWingetId(id, { presentationOnly: true }).catch(() => null);
   if (!details) {
     const canonical = await source.appExistsCaseInsensitive(id).catch(() => null);
     if (canonical) permanentRedirect(appCatalogHref(canonical.winget_id));

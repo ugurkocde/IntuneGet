@@ -1,11 +1,9 @@
-import {
-  Header,
-  HeroSection,
-  TrustSection,
-  HowItWorksSection,
-  FAQSectionAnimated,
-  Footer,
-} from "@/components/landing";
+import { Header } from "@/components/landing/Header";
+import { HeroSection } from "@/components/landing/sections/HeroSection";
+import { TrustSection } from "@/components/landing/sections/TrustSection";
+import { HowItWorksSection } from "@/components/landing/sections/HowItWorksSection";
+import { FAQSectionAnimated } from "@/components/landing/sections/FAQSectionAnimated";
+import { Footer } from "@/components/landing/sections/Footer";
 import {
   DeferredCapabilities,
   DeferredComparison,

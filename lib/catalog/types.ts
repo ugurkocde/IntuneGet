@@ -196,7 +196,7 @@ export interface CatalogSource {
   // --- app detail ---
 
   /** curated_apps select('*') + version_history versions + get_locale_variants. */
-  getAppByWingetId(wingetId: string): Promise<CuratedAppWithDetails | null>;
+  getAppByWingetId(wingetId: string, options?: { presentationOnly?: boolean }): Promise<CuratedAppWithDetails | null>;
 
   /** version_history select('version') ordered by created_at desc. */
   getVersions(wingetId: string): Promise<string[]>;

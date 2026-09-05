@@ -67,7 +67,7 @@ export function FadeIn({
     return (
       <motion.div
         className={className}
-        initial="hidden"
+        initial={false}
         animate="visible"
         variants={variants}
       >

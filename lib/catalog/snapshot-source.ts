@@ -412,7 +412,7 @@ export class SnapshotCatalogSource implements CatalogSource {
   // app detail
   // ---------------------------------------------------------------------------
 
-  async getAppByWingetId(wingetId: string): Promise<CuratedAppWithDetails | null> {
+  async getAppByWingetId(wingetId: string, options: { presentationOnly?: boolean } = {}): Promise<CuratedAppWithDetails | null> {
     return withDb(
       (db) => {
         const app = db
@@ -425,7 +425,7 @@ export class SnapshotCatalogSource implements CatalogSource {
 
         const versionRows = db
           .prepare(
-            `SELECT version FROM version_history WHERE winget_id = ? ORDER BY created_at DESC`
+            `SELECT version FROM version_history WHERE winget_id = ? ORDER BY created_at DESC${options.presentationOnly ? " LIMIT 10" : ""}`
           )
           .all(wingetId) as { version: string }[];
         const versions = versionRows.map((v) => v.version);
@@ -436,7 +436,7 @@ export class SnapshotCatalogSource implements CatalogSource {
         const isLocaleVariant = Boolean(app.is_locale_variant);
 
         let localeVariants: LocaleVariant[] | undefined;
-        if (!isLocaleVariant) {
+        if (!isLocaleVariant && !options.presentationOnly) {
           const variantRows = db
             .prepare(
               `SELECT winget_id, locale_code, latest_version

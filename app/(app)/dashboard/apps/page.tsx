@@ -26,11 +26,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppSearch } from '@/components/AppSearch';
+import { VirtualAppList } from '@/components/VirtualAppList';
+import { useNearViewport } from '@/hooks/use-near-viewport';
 import { AppCard } from '@/components/AppCard';
 import { AppListItem } from '@/components/AppListItem';
-import { PackageConfig } from '@/components/PackageConfig';
-import { CustomAppModal } from '@/components/CustomAppModal';
-import { UploadCart } from '@/components/UploadCart';
+import dynamic from 'next/dynamic';
+const PackageConfig = dynamic(() => import('@/components/PackageConfig').then(m => m.PackageConfig));
+const CustomAppModal = dynamic(() => import('@/components/CustomAppModal').then(m => m.CustomAppModal));
+
 import { FeaturedApps } from '@/components/FeaturedApps';
 import { AppCollection } from '@/components/AppCollection';
 import {
@@ -212,8 +215,16 @@ export default function AppCatalogPage() {
     });
   }, []);
 
+  const hasSearched = searchQuery.length >= 2;
+  const isBrowseMode = !hasSearched && selectedCategory === null;
+  const { ref: discoveryRef, near: discoveryNear } = useNearViewport<HTMLElement>();
+  const [visibleQaIds, setVisibleQaIds] = useState<string[]>([]);
+  const handleVisiblePackages = useCallback((packages: NormalizedPackage[]) => {
+    const ids = packages.filter(pkg => pkg.appSource !== 'store').map(pkg => pkg.id);
+    setVisibleQaIds(previous => previous.join(',') === ids.join(',') ? previous : ids);
+  }, []);
   const { data: categoriesData } = useCategories();
-  const { data: featuredData, isLoading: isLoadingFeatured } = usePopularPackages(5, null);
+  const { data: featuredData, isLoading: isLoadingFeatured } = usePopularPackages(5, null, isBrowseMode && discoveryNear);
   const { data: searchData, isLoading: isSearching, isFetching } = useSearchPackages(searchQuery, 50, selectedCategory, sortBy);
 
   const {
@@ -222,7 +233,7 @@ export default function AppCatalogPage() {
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
-  } = useInfinitePackages(20, selectedCategory, sortBy);
+  } = useInfinitePackages(20, selectedCategory, sortBy, !hasSearched);
   const { deployedSet } = useDeployedPackages();
   const {
     data: deploymentIntentData,
@@ -252,8 +263,6 @@ export default function AppCatalogPage() {
     !isSelectedStoreApp
   );
 
-  const hasSearched = searchQuery.length >= 2;
-  const isBrowseMode = !hasSearched && selectedCategory === null;
   const featuredPackages = featuredData?.packages || [];
   const searchPackages = searchData?.packages || [];
   const allPackages = useMemo(() => {
@@ -278,13 +287,7 @@ export default function AppCatalogPage() {
   const selectedVersions = manifestData?.versions || [];
 
   const showSearchResults = hasSearched;
-  const qaPackageIds = useMemo(
-    () => (showSearchResults ? searchPackages : allPackages)
-      .filter((pkg) => pkg.appSource !== 'store')
-      .map((pkg) => pkg.id),
-    [showSearchResults, searchPackages, allPackages]
-  );
-  const { data: qaStatusesData } = useQaStatuses(qaPackageIds);
+  const { data: qaStatusesData } = useQaStatuses(visibleQaIds);
   const showCategoryResults = !hasSearched && selectedCategory !== null;
   const activeSortLabel = SORT_OPTIONS.find((option) => option.key === sortBy)?.label || 'Popular';
 
@@ -326,7 +329,7 @@ export default function AppCatalogPage() {
   const collectionCategories = useMemo(() => {
     const available = categoriesData?.categories || [];
     if (available.length === 0) {
-      return PREFERRED_COLLECTION_CATEGORIES.slice(0, 6);
+      return [];
     }
 
     const availableSet = new Set(available.map((cat) => cat.category));
@@ -595,53 +598,22 @@ export default function AppCatalogPage() {
     </div>
   );
 
-  const renderPackages = (packages: NormalizedPackage[], keyPrefix: string) => {
-    if (viewMode === 'grid') {
-      return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {packages.map((pkg, index) => (
-            <div
-              key={`${keyPrefix}-${pkg.id}-${index}`}
-              className={mounted ? 'animate-fade-up' : 'opacity-0'}
-              style={{ animationDelay: `${Math.min(index * 30, 220)}ms` }}
-            >
-              <AppCard
-                package={pkg}
-                onSelect={handleSelectPackage}
-                isDeployed={deployedSet.has(pkg.id)}
-                isBulkSelectMode={isBulkSelectMode}
-                isBulkSelected={selectedPackageIds.has(pkg.id)}
-                onBulkToggle={handleBulkToggle}
-                qaStatus={qaStatusesData?.statuses[pkg.id] ?? null}
-              />
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-2">
-        {packages.map((pkg, index) => (
-          <div
-            key={`${keyPrefix}-${pkg.id}-${index}`}
-            className={mounted ? 'animate-fade-up' : 'opacity-0'}
-            style={{ animationDelay: `${Math.min(index * 24, 180)}ms` }}
-          >
-            <AppListItem
-              package={pkg}
-              onSelect={handleSelectPackage}
-              isDeployed={deployedSet.has(pkg.id)}
-              isBulkSelectMode={isBulkSelectMode}
-              isBulkSelected={selectedPackageIds.has(pkg.id)}
-              onBulkToggle={handleBulkToggle}
-              qaStatus={qaStatusesData?.statuses[pkg.id] ?? null}
-            />
-          </div>
-        ))}
-      </div>
-    );
-  };
+  const renderPackages = (packages: NormalizedPackage[], keyPrefix: string) => (
+    <VirtualAppList
+      key={`${keyPrefix}-${viewMode}-${selectedCategory}-${searchQuery}-${sortBy}`}
+      items={packages}
+      grid={viewMode === 'grid'}
+      itemKey={pkg => pkg.id}
+      onVisibleItemsChange={handleVisiblePackages}
+      renderItem={pkg => {
+        const Item = viewMode === 'grid' ? AppCard : AppListItem;
+        return <Item package={pkg} onSelect={handleSelectPackage}
+          isDeployed={deployedSet.has(pkg.id)} isBulkSelectMode={isBulkSelectMode}
+          isBulkSelected={selectedPackageIds.has(pkg.id)} onBulkToggle={handleBulkToggle}
+          qaStatus={qaStatusesData?.statuses[pkg.id] ?? null} />;
+      }}
+    />
+  );
 
   return (
     <div className="space-y-6 pb-4">
@@ -933,7 +905,7 @@ export default function AppCatalogPage() {
               </section>
 
               {isBrowseMode && (
-                <section className={mounted ? 'animate-fade-up stagger-4 space-y-8' : 'space-y-8 opacity-0'}>
+                <section ref={discoveryRef} className={mounted ? 'animate-fade-up stagger-4 space-y-8' : 'space-y-8 opacity-0'}>
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-accent-cyan" />
                     <h2 className="text-xl font-bold tracking-tight text-text-primary"><T>Discover</T></h2>
@@ -1126,7 +1098,7 @@ export default function AppCatalogPage() {
         </div>
       )}
 
-      <UploadCart />
+
     </div>
   );
 }

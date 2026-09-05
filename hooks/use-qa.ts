@@ -1,34 +1,23 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchQaStatuses, QA_STATUS_FRESH_MS } from '@/lib/qa/client-status-cache';
 import type { QaDetailsResponse, QaLiveResponse, QaStatus } from '@/types/qa';
 
 interface QaStatusesResponse {
   statuses: Record<string, QaStatus | null>;
 }
 
-export function useQaStatuses(ids: string[]) {
+export function useQaStatuses(ids: string[], enabled = true) {
+  const client = useQueryClient();
   const stableIds = [...new Set(ids)].sort();
   return useQuery<QaStatusesResponse>({
     queryKey: ['qa', 'statuses', stableIds],
-    queryFn: async () => {
-      const chunks: string[][] = [];
-      for (let i = 0; i < stableIds.length; i += 100) chunks.push(stableIds.slice(i, i + 100));
-      const responses = await Promise.all(
-        chunks.map(async (chunk) => {
-          const params = new URLSearchParams({ ids: chunk.join(',') });
-          const response = await fetch(`/api/qa/status?${params.toString()}`);
-          if (!response.ok) throw new Error('Failed to load QA statuses');
-          return (await response.json()) as QaStatusesResponse;
-        })
-      );
-      return {
-        statuses: Object.assign({}, ...responses.map((response) => response.statuses)),
-      };
-    },
-    enabled: stableIds.length > 0,
-    staleTime: 60 * 1000,
-    refetchInterval: 60 * 1000,
+    queryFn: ({ signal }) => fetchQaStatuses(client, stableIds, signal),
+    enabled: enabled && stableIds.length > 0,
+    staleTime: QA_STATUS_FRESH_MS,
+    refetchInterval: QA_STATUS_FRESH_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -62,11 +51,11 @@ export function useQaDetails(
 ) {
   return useQuery<QaDetailsResponse>({
     queryKey: ['qa', 'details', wingetId, packageProfileSha256 || 'latest'],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
       if (packageProfileSha256) params.set('profile', packageProfileSha256);
       const suffix = params.size ? `?${params.toString()}` : '';
-      const response = await fetch(`/api/apps/${encodeURIComponent(wingetId)}/qa${suffix}`);
+      const response = await fetch(`/api/apps/${encodeURIComponent(wingetId)}/qa${suffix}`, { signal });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;
         throw new QaDetailsRequestError(
@@ -93,8 +82,8 @@ export function useQaDetails(
 export function useQaLive() {
   return useQuery<QaLiveResponse>({
     queryKey: ['qa', 'live'],
-    queryFn: async () => {
-      const response = await fetch('/api/qa/live', { cache: 'no-store' });
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/qa/live', { cache: 'no-store', signal });
       if (!response.ok) throw new Error('Failed to load live QA status');
       return response.json();
     },

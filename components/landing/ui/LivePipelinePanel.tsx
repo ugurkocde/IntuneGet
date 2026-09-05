@@ -119,6 +119,14 @@ function OutcomePill({ outcome }: { outcome: "running" | "queued" }) {
 export function LivePipelinePanel() {
   const t = useGT();
   const localeTag = useLocale() || undefined;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const inViewRef = useRef(true);
+  useEffect(() => {
+    if (!panelRef.current) return;
+    const observer = new IntersectionObserver(([entry]) => { inViewRef.current = entry.isIntersecting; }, { rootMargin: "200px" });
+    observer.observe(panelRef.current);
+    return () => observer.disconnect();
+  }, []);
   const reduceMotion = useReducedMotion() ?? false;
   const [snapshot, setSnapshot] = useState<QaLiveResponse | null>(null);
   // Self-hosted installs keep the live feed disabled (404 from the host
@@ -136,7 +144,7 @@ export function LivePipelinePanel() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!document.hidden) setClockTick((tick) => tick + 1);
+      if (!document.hidden && inViewRef.current) setClockTick((tick) => tick + 1);
     }, 30_000);
     return () => clearInterval(interval);
   }, []);
@@ -147,13 +155,15 @@ export function LivePipelinePanel() {
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => {
-      if (!document.hidden) setClockTick((tick) => tick + 1);
+      if (!document.hidden && inViewRef.current) setClockTick((tick) => tick + 1);
     }, 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
 
   useEffect(() => {
     let cancelled = false;
+    let fetching = false;
+    const controller = new AbortController();
 
     // A cold failure (never any data) falls back to the explainer after a few
     // attempts; once a snapshot arrived, transient failures keep showing it.
@@ -163,9 +173,10 @@ export function LivePipelinePanel() {
     };
 
     const poll = async () => {
-      if (document.hidden || gateClosedRef.current) return;
+      if (document.hidden || !inViewRef.current || gateClosedRef.current || fetching) return;
+      fetching = true;
       try {
-        const response = await fetch("/api/qa/live", { cache: "no-store" });
+        const response = await fetch("/api/qa/live", { cache: "no-store", signal: controller.signal });
         if (cancelled) return;
         if (response.status === 404 || response.status === 403) {
           gateClosedRef.current = true;
@@ -196,6 +207,8 @@ export function LivePipelinePanel() {
         }
       } catch {
         if (!cancelled) recordFailure();
+      } finally {
+        fetching = false;
       }
     };
 
@@ -203,6 +216,7 @@ export function LivePipelinePanel() {
     const interval = setInterval(() => void poll(), POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
+      controller.abort();
       clearInterval(interval);
     };
   }, []);
@@ -239,7 +253,7 @@ export function LivePipelinePanel() {
   if (disabled) {
     // Static explainer for installs without the public live feed.
     return (
-      <div className="overflow-hidden rounded-2xl border border-overlay/[0.08] bg-bg-elevated shadow-soft-lg">
+      <div ref={panelRef} className="overflow-hidden rounded-2xl border border-overlay/[0.08] bg-bg-elevated shadow-soft-lg">
         <div className="flex items-center justify-between gap-3 border-b border-overlay/[0.06] px-4 py-3 md:px-5 xl:px-6 xl:py-4">
           <span className="text-[13.5px] font-semibold text-text-primary xl:text-[15px]">
             <T>QA pipeline</T>
@@ -316,7 +330,7 @@ export function LivePipelinePanel() {
   const recentRows = (current || nextUp ? recent : recent.slice(1)).slice(0, 3);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-overlay/[0.08] bg-bg-elevated shadow-soft-lg">
+    <div ref={panelRef} className="overflow-hidden rounded-2xl border border-overlay/[0.08] bg-bg-elevated shadow-soft-lg">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 border-b border-overlay/[0.06] px-4 py-3 md:px-5">
         <span className="text-[13.5px] font-semibold text-text-primary">

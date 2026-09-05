@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useDeferredValue, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { T } from 'gt-next';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -24,7 +24,7 @@ type SortOrder = 'asc' | 'desc';
 
 export default function InventoryPage() {
   const router = useRouter();
-  const { data, isLoading, error, refetch, isFetching } = useInventoryApps();
+  const { data, isLoading, error, refetch, isFetching, isComplete } = useInventoryApps();
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('name');
@@ -69,50 +69,40 @@ export default function InventoryPage() {
     return [...new Set(publishers)].sort((a, b) => a.localeCompare(b));
   }, [apps]);
 
-  // Filter and sort apps
-  const filteredApps = useMemo(() => {
-    let filtered = apps;
-
-    // Filter by search
-    if (search.trim()) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(
-        (app) =>
-          app.displayName.toLowerCase().includes(searchLower) ||
-          app.publisher?.toLowerCase().includes(searchLower) ||
-          app.description?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Filter by publisher
-    if (selectedPublisher) {
-      filtered = filtered.filter((app) => app.publisher === selectedPublisher);
-    }
-
+  const deferredSearch = useDeferredValue(search);
+  const indexedApps = useMemo(() => apps.map(app => ({
+    app, search: [app.displayName, app.publisher, app.description].join(' ').toLowerCase(),
+    created: Date.parse(app.createdDateTime), modified: Date.parse(app.lastModifiedDateTime),
+  })), [apps]);
+  const sortedApps = useMemo(() => {
     // Sort
-    filtered = [...filtered].sort((a, b) => {
+    return [...indexedApps].sort((a, b) => {
       let comparison = 0;
 
       switch (sortBy) {
         case 'name':
-          comparison = a.displayName.localeCompare(b.displayName);
+          comparison = a.app.displayName.localeCompare(b.app.displayName);
           break;
         case 'publisher':
-          comparison = (a.publisher || '').localeCompare(b.publisher || '');
+          comparison = (a.app.publisher || '').localeCompare(b.app.publisher || '');
           break;
         case 'created':
-          comparison = new Date(a.createdDateTime).getTime() - new Date(b.createdDateTime).getTime();
+          comparison = a.created - b.created;
           break;
         case 'modified':
-          comparison = new Date(a.lastModifiedDateTime).getTime() - new Date(b.lastModifiedDateTime).getTime();
+          comparison = a.modified - b.modified;
           break;
       }
 
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
-    return filtered;
-  }, [apps, search, sortBy, sortOrder, selectedPublisher]);
+  }, [indexedApps, sortBy, sortOrder]);
+  const filteredApps = useMemo(() => {
+    const needle = deferredSearch.trim().toLowerCase();
+    return sortedApps.filter(item => (!needle || item.search.includes(needle)) &&
+      (!selectedPublisher || item.app.publisher === selectedPublisher)).map(item => item.app);
+  }, [sortedApps, deferredSearch, selectedPublisher]);
 
   // Pagination
   const {
@@ -208,6 +198,7 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
+      {!isComplete && !isLoading && <p role="status" className="text-sm text-text-muted"><T>Loading the remaining inventory. Search and statistics will include all apps when loading finishes.</T></p>}
       {/* Header */}
       <PageHeader
         title={<T>Inventory</T>}
