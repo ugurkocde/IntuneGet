@@ -12,6 +12,17 @@ export interface CatalogRelease {
   previous_version: string | null;
   detected_at: string;
   release_date: string | null;
+  release_notes?: string | null;
+  detailsUnavailable?: boolean;
+  virusTotal?: {
+    status: string;
+    hash: string;
+    architecture: string | null;
+    malicious: number | null;
+    suspicious: number | null;
+    total: number | null;
+    scannedAt: string | null;
+  } | null;
 }
 export interface ReleaseHistoryResult {
   rows: CatalogRelease[];

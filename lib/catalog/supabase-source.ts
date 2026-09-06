@@ -1,3 +1,4 @@
+import { enrichRelease, type ReleaseMetadata, type ReleaseScan } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * Supabase-backed CatalogSource.
@@ -67,7 +68,21 @@ export class SupabaseCatalogSource implements CatalogSource {
       kind_filter: filters.kind, page_number: filters.page,
     }).abortSignal(AbortSignal.timeout(15_000));
     if (error) throw new Error('Catalog history unavailable', { cause: error });
-    return data as ReleaseHistoryResult;
+    const result = data as ReleaseHistoryResult;
+    if (!result.rows.length) return result;
+    const ids = [...new Set(result.rows.map(row => row.winget_id))];
+    const versions = [...new Set(result.rows.map(row => row.version))];
+    const scanColumns = 'winget_id,tested_version,installer_sha256,architecture,virustotal_status,virustotal_malicious,virustotal_suspicious,virustotal_total_engines,virustotal_scanned_at_utc';
+    const extras = await Promise.allSettled([
+      client.from('version_history').select('winget_id,version,release_notes,installer_sha256').in('winget_id', ids).in('version', versions).limit(1600).abortSignal(AbortSignal.timeout(5000)),
+      client.from('qa_results').select(scanColumns).in('winget_id', ids).in('tested_version', versions).limit(1000).abortSignal(AbortSignal.timeout(5000)),
+      client.from('qa_package_results').select(scanColumns).in('winget_id', ids).in('tested_version', versions).order('virustotal_scanned_at_utc', {ascending: false, nullsFirst: false}).limit(1000).abortSignal(AbortSignal.timeout(5000)),
+    ]);
+    if (extras.some(response => response.status === 'rejected' || response.value.error)) {
+      return {...result, rows: result.rows.map(row => ({...row, detailsUnavailable: true}))};
+    }
+    const payloads = extras.map(response => response.status === 'fulfilled' ? response.value.data ?? [] : []);
+    return {...result, rows: result.rows.map(row => enrichRelease(row, payloads[0] as ReleaseMetadata[], [...payloads[1], ...payloads[2]] as ReleaseScan[]))};
   }
 
   // ---------------------------------------------------------------------------

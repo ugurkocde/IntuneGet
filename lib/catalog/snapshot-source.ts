@@ -1,3 +1,4 @@
+import { enrichRelease, type ReleaseMetadata, type ReleaseScan } from './release-enrichment';
 import type { CatalogRelease, ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * SQLite-snapshot-backed CatalogSource (self-hosted / Supabase-less mode).
@@ -202,7 +203,16 @@ export class SnapshotCatalogSource implements CatalogSource {
         coalesce(sum(previous_version IS NULL), 0) AS firstTracked FROM history ${where}`).get(params) as { total: number; apps: number; firstTracked: number };
       const months = db.prepare(`${history} SELECT DISTINCT substr(detected_at, 1, 7) AS month FROM history ORDER BY month DESC`).all() as { month: string }[];
       const coverage = db.prepare(`${history} SELECT min(detected_at) AS start FROM history`).get() as { start: string | null };
-      return { rows, ...stats, months: months.map(m => m.month), coverageStart: coverage.start, sync: null };
+      const notesColumn = columns.some(c => c.name === 'release_notes') ? 'release_notes' : 'NULL AS release_notes';
+      const metadataQuery = db.prepare(`SELECT winget_id, version, installer_sha256, ${notesColumn} FROM version_history WHERE winget_id = ? AND version = ?`);
+      const qaExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'qa_results'").get();
+      const scanQuery = qaExists ? db.prepare('SELECT * FROM qa_results WHERE winget_id = ? AND tested_version = ?') : null;
+      const enriched = rows.map(row => {
+        const metadata = metadataQuery.get(row.winget_id, row.version) as ReleaseMetadata | undefined;
+        const scans = scanQuery?.all(row.winget_id, row.version) as ReleaseScan[] | undefined;
+        return enrichRelease(row, metadata ? [metadata] : [], scans ?? []);
+      });
+      return { rows: enriched, ...stats, months: months.map(m => m.month), coverageStart: coverage.start, sync: null };
     }, () => { throw new Error('Catalog snapshot unavailable'); });
   }
 

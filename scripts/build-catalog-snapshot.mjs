@@ -10,7 +10,7 @@
  * Deliberately EXCLUDED from the snapshot:
  *  - Internal/curation + icon bookkeeping columns, and the Postgres `fts`
  *    tsvector (FTS5 is rebuilt locally).
- *  - version_history.manifest_yaml / release_notes / changes_from_previous
+ *  - version_history.manifest_yaml / changes_from_previous
  *    (large "asset" text never read by the catalog code).
  *  - sccm_winget_mappings.created_by / tenant_id and any tenant-scoped rows -
  *    only global mappings (tenant_id IS NULL) are included, so no user/tenant
@@ -43,7 +43,7 @@ const CURATED_COLUMNS = [
 ];
 const VERSION_COLUMNS = [
   'winget_id', 'version', 'installer_url', 'installer_sha256', 'installer_type',
-  'installer_scope', 'silent_args', 'installers', 'created_at', 'release_date',
+  'installer_scope', 'silent_args', 'installers', 'created_at', 'release_date', 'release_notes',
 ];
 const SCCM_COLUMNS = [
   'id', 'sccm_display_name_normalized', 'sccm_ci_id', 'sccm_product_code',
@@ -106,7 +106,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       CREATE TABLE version_history (
         winget_id TEXT, version TEXT, installer_url TEXT, installer_sha256 TEXT,
         installer_type TEXT, installer_scope TEXT, silent_args TEXT, installers TEXT,
-        created_at TEXT, release_date TEXT, PRIMARY KEY (winget_id, version)
+        created_at TEXT, release_date TEXT, release_notes TEXT, PRIMARY KEY (winget_id, version)
       );
       CREATE INDEX idx_vh_winget ON version_history(winget_id);
 
@@ -147,9 +147,9 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       VALUES (@id, @name, @publisher, @description, @tags)`);
     const insVersion = db.prepare(`INSERT OR IGNORE INTO version_history
       (winget_id, version, installer_url, installer_sha256, installer_type, installer_scope,
-       silent_args, installers, created_at, release_date)
+       silent_args, installers, created_at, release_date, release_notes)
       VALUES (@winget_id,@version,@installer_url,@installer_sha256,@installer_type,@installer_scope,
-       @silent_args,@installers,@created_at,@release_date)`);
+       @silent_args,@installers,@created_at,@release_date,@release_notes)`);
     const insSccm = db.prepare(`INSERT OR IGNORE INTO sccm_winget_mappings
       (id, sccm_display_name_normalized, sccm_ci_id, sccm_product_code, winget_package_id,
        winget_package_name, confidence, is_verified)
@@ -195,7 +195,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           winget_id: v.winget_id, version: v.version, installer_url: v.installer_url ?? null,
           installer_sha256: v.installer_sha256 ?? null, installer_type: v.installer_type ?? null,
           installer_scope: v.installer_scope ?? null, silent_args: v.silent_args ?? null,
-          installers: jsonOrNull(v.installers), created_at: v.created_at ?? null, release_date: v.release_date ?? null,
+          installers: jsonOrNull(v.installers), created_at: v.created_at ?? null, release_date: v.release_date ?? null, release_notes: v.release_notes ?? null,
         });
       }
       for (const m of sccmMappings) {

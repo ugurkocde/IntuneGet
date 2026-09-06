@@ -37,7 +37,7 @@ export async function generateMetadata({
 const loadHistory = unstable_cache(
   (filters: ReleaseHistoryFilters) =>
     getCatalogSource().getReleaseHistory(filters),
-  ["catalog-release-history-v1"],
+  ["catalog-release-history-v2"],
   { revalidate: 300 },
 );
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -367,6 +367,81 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                           {row.version}
                         </span>
                       </div>
+                      <div className="min-w-0 space-y-3 text-xs text-text-muted sm:col-span-2">
+                        {row.detailsUnavailable ? (
+                          <p>
+                            <T>
+                              Release notes and scan details are temporarily
+                              unavailable.
+                            </T>
+                          </p>
+                        ) : (
+                          <>
+                            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="font-medium text-text-secondary">
+                                VirusTotal:
+                              </span>
+                              {row.virusTotal ? (
+                                <>
+                                  <a
+                                    href={`https://www.virustotal.com/gui/file/${row.virusTotal.hash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-accent-cyan hover:underline"
+                                  >
+                                    {[
+                                      "clean",
+                                      "flagged",
+                                      "suspicious",
+                                    ].includes(row.virusTotal.status) &&
+                                    row.virusTotal.total != null &&
+                                    row.virusTotal.total > 0 &&
+                                    row.virusTotal.malicious != null &&
+                                    row.virusTotal.suspicious != null ? (
+                                      <T>
+                                        <Var>{row.virusTotal.malicious}</Var>/
+                                        <Var>{row.virusTotal.total}</Var>{" "}
+                                        malicious,{" "}
+                                        <Var>{row.virusTotal.suspicious}</Var>{" "}
+                                        suspicious
+                                      </T>
+                                    ) : row.virusTotal.status ===
+                                      "not_found" ? (
+                                      <T>No report found</T>
+                                    ) : (
+                                      <T>Scan unavailable</T>
+                                    )}
+                                  </a>
+                                  {row.virusTotal.architecture && (
+                                    <span>({row.virusTotal.architecture})</span>
+                                  )}
+                                  {row.virusTotal.scannedAt && (
+                                    <time dateTime={row.virusTotal.scannedAt}>
+                                      {dateLabel(row.virusTotal.scannedAt)}
+                                    </time>
+                                  )}
+                                </>
+                              ) : (
+                                <T>Not scanned for this installer</T>
+                              )}
+                            </p>
+                            {row.release_notes ? (
+                              <details className="group">
+                                <summary className="w-fit cursor-pointer rounded-sm py-1 font-medium text-accent-cyan focus-visible:outline-2 focus-visible:outline-accent-cyan">
+                                  <T>Release notes</T>
+                                </summary>
+                                <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-overlay/10 bg-bg-deepest p-4 text-sm leading-relaxed text-text-secondary">
+                                  {row.release_notes}
+                                </p>
+                              </details>
+                            ) : (
+                              <p>
+                                <T>Release notes not provided</T>
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -408,7 +483,9 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           </h2>
           <p className="mt-2">
             <T>
-              This is an observation history, not a complete archive of
+              VirusTotal results apply to the exact installer hash shown and
+              reflect the recorded scan date. Zero detections do not guarantee
+              safety. This is an observation history, not a complete archive of
               publisher releases. First tracked means the earliest version we
               have recorded for an app, including apps imported when tracking
               began. It does not necessarily mean a newly released product.
