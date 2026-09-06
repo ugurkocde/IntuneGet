@@ -63,26 +63,20 @@ try {
 }
 '@ | Set-Content -LiteralPath (Join-Path $work 'bootstrap.ps1')
     @{ id = $WingetId; version = $ExpectedVersion } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $work 'arguments.json')
-    $action = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -File `"$(Join-Path $work 'bootstrap.ps1')`"" -WorkingDirectory $work
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 22)
-    Register-ScheduledTask -TaskName $taskName -Action $action -User "$env:COMPUTERNAME\$userName" -Password $password -RunLevel Limited -Settings $settings | Out-Null
-    Start-ScheduledTask -TaskName $taskName
+    $credential = [PSCredential]::new("$env:COMPUTERNAME\$userName", $securePassword)
+    $process = Start-Process -FilePath $pwsh -ArgumentList "-NoProfile -File `"$(Join-Path $work 'bootstrap.ps1')`"" -WorkingDirectory $work -Credential $credential -LoadUserProfile -PassThru
     $deadline = (Get-Date).AddMinutes(23)
     $setupDeadline = (Get-Date).AddMinutes(3)
     do {
         Start-Sleep -Seconds 2
+        $process.Refresh()
         if ((Get-Date) -gt $setupDeadline -and -not (Test-Path "$work\ready")) {
             $stage = Get-Content "$work\stage.txt" -Raw -ErrorAction SilentlyContinue
             throw "Standard-user setup exceeded three minutes. Last stage: $stage"
         }
-        $task = Get-ScheduledTask -TaskName $taskName
-        $info = Get-ScheduledTaskInfo -TaskName $taskName
-        if ($task.State -ne 'Running' -and (Test-Path -LiteralPath $retryOutput)) { break }
-        if (Test-Path "$work\bootstrap-error.txt") { throw (Get-Content "$work\bootstrap-error.txt" -Raw) }
-        if ($task.State -ne 'Running' -and $info.LastRunTime -gt (Get-Date).AddMinutes(-24) -and $info.LastTaskResult -ne 267009) {
-            throw "Standard-user task ended without a result (code $($info.LastTaskResult))"
-        }
+        if ($process.HasExited) { break }
     } while ((Get-Date) -lt $deadline)
+    if (Test-Path "$work\bootstrap-error.txt") { throw (Get-Content "$work\bootstrap-error.txt" -Raw) }
     if (-not (Test-Path -LiteralPath $retryOutput)) { throw 'Standard-user scan timed out' }
     $retry = Get-Content -LiteralPath $retryOutput -Raw | ConvertFrom-Json
     Copy-Item -LiteralPath $retryOutput -Destination $output -Force
@@ -94,8 +88,7 @@ try {
     Write-Warning $result.error
     exit 1
 } finally {
-    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
     if (Test-Path "$work\bootstrap.log") { Copy-Item "$work\bootstrap.log" 'scan-standard-user.log' -Force }
     Remove-LocalUser -Name $userName -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

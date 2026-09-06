@@ -155,15 +155,26 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+      - name: Collect failed scan diagnostics
+        if: always() && steps.scan.outcome == 'failure'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path scan-diagnostics -Force | Out-Null
+          $paths = @(
+            'scan-standard-user.log',
+            "$env:LOCALAPPDATA/Packages/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe/LocalState/DiagOutputDir",
+            "$env:LOCALAPPDATA/Microsoft/WinGet/Logs"
+          )
+          foreach ($path in $paths) {
+            if (Test-Path $path) { Copy-Item $path scan-diagnostics -Recurse -Force }
+          }
+
       - name: Preserve WinGet diagnostics for failed installs
         if: always() && steps.scan.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: scan-diagnostics-${{ matrix.winget_id }}
-          path: |
-            scan-standard-user.log
-            ~/AppData/Local/Packages/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe/LocalState/DiagOutputDir/
-            ~/AppData/Local/Microsoft/WinGet/Logs/
+          path: scan-diagnostics/
           if-no-files-found: warn
           retention-days: 7
 
