@@ -32,6 +32,7 @@ export function enrichRelease(
   row: CatalogRelease,
   metadata: ReleaseMetadata[],
   reputations: FileReputation[],
+  now = Date.now(),
 ): CatalogRelease {
   const version = metadata.find(
     (v) => v.winget_id === row.winget_id && v.version === row.version,
@@ -61,7 +62,10 @@ export function enrichRelease(
     release_notes_url: officialReleaseNotesUrl(version?.release_notes_url),
     virusTotal: validHash
       ? {
-          status: reputation?.status ?? "unknown",
+          status: reputation?.status === "pending" &&
+            !(Date.parse(row.detected_at) >= now - 72 * 60 * 60 * 1000 && Date.parse(row.detected_at) <= now)
+              ? "unknown"
+              : reputation?.status ?? "unknown",
           hash: validHash,
           architecture:
             typeof installer?.Architecture === "string"

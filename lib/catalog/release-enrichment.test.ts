@@ -66,8 +66,15 @@ describe("release evidence", () => {
     expect(
       enrichRelease(row, metadata, [
         { ...report, status: "pending", total_engines: null },
-      ]).virusTotal?.status,
+      ], Date.parse(row.detected_at)).virusTotal?.status,
     ).toBe("pending");
+  });
+  it("keeps old report links without promising a queued lookup and preserves cached findings", () => {
+    const pending = { ...report, status: "pending", total_engines: null };
+    const recorded = Date.parse(row.detected_at);
+    expect(enrichRelease(row, metadata, [pending], recorded + 72 * 3600000).virusTotal?.status).toBe("pending");
+    expect(enrichRelease(row, metadata, [pending], recorded + 72 * 3600000 + 1).virusTotal).toMatchObject({status: "unknown", hash});
+    expect(enrichRelease(row, metadata, [report], recorded + 30 * 86400000).virusTotal).toMatchObject({status: "found", total: 72});
   });
   it("does not invent a hash or vendor link without metadata", () => {
     expect(enrichRelease(row, [], [report])).toMatchObject({

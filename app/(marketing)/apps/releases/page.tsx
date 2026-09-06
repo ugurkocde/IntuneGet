@@ -491,8 +491,9 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
             <T>
               VirusTotal reports are looked up by the WinGet installer hash
               without installing or uploading the app. Report pending means we
-              have not retrieved the result yet. Background lookups prioritize
-              new releases and run within the available API quota. You can open
+              have not retrieved the result yet. Background lookups only cover versions recorded by IntuneGet
+              within the last 72 hours and run within the available API quota.
+              Older versions retain cached findings and direct report links. You can open
               the VirusTotal link while waiting. Results are cached and reflect
               the recorded scan date. Zero detections do not guarantee safety.
               This is an observation history, not a complete archive of
