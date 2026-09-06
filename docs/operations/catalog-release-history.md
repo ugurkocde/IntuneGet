@@ -13,3 +13,19 @@ The catalog index import now runs daily at 00:00 UTC, before manifest sync at 02
 Apply migration `20260906052337_catalog_release_history.sql` before deploying the new workflow and page. `supabase/tests/catalog_release_history.sql` tests anonymous reads, month filtering, previous versions, pagination, and timestamp preservation inside a rolled-back transaction.
 
 The installation scanner is independent of release history. It now installs the exact requested WinGet version and preserves that version as its snapshot key; registry display versions stay in registry metadata. Cleanup failures remain failures, with command output retained for diagnosis. Publisher download failures and installers that cannot silently uninstall require app-specific investigation; this page does not claim installation validation.
+
+## Sync status and installation scans
+
+A `partial` manifest sync means the check finished with unavailable upstream
+manifests, not an operational failure. The release page labels this separately
+from `failed`, retains existing records, and shows the completed check time in
+UTC. The next scheduled manifest sync retries unavailable records.
+
+Installation scanning is independent of version-history ingestion. The scanner
+retries only WinGet error `-1978335146` (installer prohibits elevation) using a
+limited scheduled task for the same Windows user. The entire scan, including
+HKCU snapshots and cleanup, runs in that context. This requires an interactive
+session for that user. If the context is unavailable, the scan still fails and
+preserves the reason. Crashes, timeouts and partially completed installs are not
+retried automatically. Failed scans preserve verbose WinGet diagnostic logs as
+separate artifacts for seven days; they are never reported as successful metadata.

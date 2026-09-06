@@ -333,15 +333,11 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                             {row.name}
                             <span className="sr-only"> {row.winget_id}</span>
                           </Link>
-                          <span
-                            className={`rounded-md px-2 py-1 text-xs ${row.previous_version ? "bg-accent-cyan/10 text-accent-cyan" : "bg-overlay/5 text-text-secondary"}`}
-                          >
-                            {row.previous_version ? (
-                              <T>Version change</T>
-                            ) : (
+                          {!row.previous_version && (
+                            <span className="rounded-md bg-overlay/5 px-2 py-1 text-xs text-text-secondary">
                               <T>First tracked</T>
-                            )}
-                          </span>
+                            </span>
+                          )}
                         </div>
                         <p className="mt-2 break-all text-xs text-text-muted">
                           {row.winget_id}
