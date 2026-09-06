@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   WingetSyncOperationalError,
+  manifestReleaseDate,
+  canSkipStoredManifest,
   classifyWingetSyncRun,
   createWingetManifestClient,
   resolveWingetManifest,
@@ -172,5 +174,31 @@ describe('classifyWingetSyncRun', () => {
       shouldFail: true,
       status: 'failed',
     });
+  });
+});
+
+
+describe('bulk manifest sync', () => {
+  it('uses raw files with a token without spending Contents API quota', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('PackageIdentifier: Example.App\nPackageVersion: 2.0\nInstallers: []'));
+    const client = createWingetManifestClient({ fetchImpl, token: 'test-token', preferRaw: true });
+    await client.fetchInstallerManifest('Example.App', '2.0');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toContain('raw.githubusercontent.com');
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBeUndefined();
+  });
+  it('skips stored versions only for incremental syncs with complete descriptions', () => {
+    const input = { mode: 'incremental', forceRefresh: false, version: '1', hasVersion: true, description: 'App' };
+    expect(canSkipStoredManifest(input)).toBe(true);
+    for (const override of [{ mode: 'all' }, { forceRefresh: true }, { hasVersion: false }, { description: null }]) {
+      expect(canSkipStoredManifest({ ...input, ...override })).toBe(false);
+    }
+  });
+  it('preserves publisher calendar dates and rejects invalid dates', () => {
+    expect(manifestReleaseDate({ ReleaseDate: '2026-09-05' })).toBe('2026-09-05T00:00:00.000Z');
+    expect(manifestReleaseDate({ Installers: [{ ReleaseDate: '2026-09-04' }] })).toBe('2026-09-04T00:00:00.000Z');
+    expect(manifestReleaseDate({ ReleaseDate: '2026-02-30' })).toBeNull();
+    expect(manifestReleaseDate({ ReleaseDate: 'yesterday' })).toBeNull();
+    expect(manifestReleaseDate({})).toBeNull();
   });
 });

@@ -43,7 +43,7 @@ const CURATED_COLUMNS = [
 ];
 const VERSION_COLUMNS = [
   'winget_id', 'version', 'installer_url', 'installer_sha256', 'installer_type',
-  'installer_scope', 'silent_args', 'installers', 'created_at',
+  'installer_scope', 'silent_args', 'installers', 'created_at', 'release_date',
 ];
 const SCCM_COLUMNS = [
   'id', 'sccm_display_name_normalized', 'sccm_ci_id', 'sccm_product_code',
@@ -106,7 +106,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       CREATE TABLE version_history (
         winget_id TEXT, version TEXT, installer_url TEXT, installer_sha256 TEXT,
         installer_type TEXT, installer_scope TEXT, silent_args TEXT, installers TEXT,
-        created_at TEXT, PRIMARY KEY (winget_id, version)
+        created_at TEXT, release_date TEXT, PRIMARY KEY (winget_id, version)
       );
       CREATE INDEX idx_vh_winget ON version_history(winget_id);
 
@@ -147,9 +147,9 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
       VALUES (@id, @name, @publisher, @description, @tags)`);
     const insVersion = db.prepare(`INSERT OR IGNORE INTO version_history
       (winget_id, version, installer_url, installer_sha256, installer_type, installer_scope,
-       silent_args, installers, created_at)
+       silent_args, installers, created_at, release_date)
       VALUES (@winget_id,@version,@installer_url,@installer_sha256,@installer_type,@installer_scope,
-       @silent_args,@installers,@created_at)`);
+       @silent_args,@installers,@created_at,@release_date)`);
     const insSccm = db.prepare(`INSERT OR IGNORE INTO sccm_winget_mappings
       (id, sccm_display_name_normalized, sccm_ci_id, sccm_product_code, winget_package_id,
        winget_package_name, confidence, is_verified)
@@ -195,7 +195,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           winget_id: v.winget_id, version: v.version, installer_url: v.installer_url ?? null,
           installer_sha256: v.installer_sha256 ?? null, installer_type: v.installer_type ?? null,
           installer_scope: v.installer_scope ?? null, silent_args: v.silent_args ?? null,
-          installers: jsonOrNull(v.installers), created_at: v.created_at ?? null,
+          installers: jsonOrNull(v.installers), created_at: v.created_at ?? null, release_date: v.release_date ?? null,
         });
       }
       for (const m of sccmMappings) {

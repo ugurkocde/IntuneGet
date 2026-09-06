@@ -381,3 +381,22 @@ describe('snapshot QA schema compatibility', () => {
     current.close();
   });
 });
+
+
+describe('catalog release history', () => {
+  it('filters observations and retains the previous version across month/type filters', async () => {
+    const source = new SnapshotCatalogSource();
+    const result = await source.getReleaseHistory({ query: 'Chrome', month: '2026-01', kind: 'updated', page: 1 });
+    expect(result.total).toBe(1);
+    expect(result.apps).toBe(1);
+    expect(result.firstTracked).toBe(0);
+    expect(result.rows[0]).toMatchObject({ version: '120.0', previous_version: '119.0', detected_at: '2026-01-02T00:00:00Z' });
+    expect(result.months).toEqual(['2026-01']);
+    expect(result.sync).toBeNull();
+  });
+  it('does not treat wildcard search characters as SQL patterns', async () => {
+    const result = await new SnapshotCatalogSource().getReleaseHistory({ query: '%', month: '', kind: 'all', page: 1 });
+    expect(result.rows).toEqual([]);
+    expect(result.total).toBe(0);
+  });
+});

@@ -2,8 +2,8 @@ name: Build Curated App List
 
 on:
   schedule:
-    # Run weekly on Sundays at 00:00 UTC
-    - cron: '0 0 * * 0'
+    # Refresh version discovery daily before the manifest sync
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       limit:

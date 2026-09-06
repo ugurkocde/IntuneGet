@@ -5,6 +5,7 @@ param(
     [string]$WingetId,
 
     [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._+\-]*$')]
     [string]$ExpectedVersion,
 
     [Parameter(Mandatory = $true)]
@@ -67,7 +68,7 @@ try {
         $baseline = & "$PSScriptRoot\snapshot.ps1" -Mode baseline
         $timeout = [int]($env:APP_TIMEOUT_SECONDS ?? 900)
         $install = Invoke-Winget -Arguments @(
-            'install', '--id', $WingetId, '--exact', '--silent',
+            'install', '--id', $WingetId, '--exact', '--version', $ExpectedVersion, '--source', 'winget', '--silent',
             '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'
         ) -TimeoutSeconds $timeout
 
@@ -83,7 +84,9 @@ try {
             throw "Detected registry entry was not created by this installation ($($changes.app_registry_entry.detection_method))"
         }
 
-        $result.version = if ($changes.version) { $changes.version } else { $ExpectedVersion }
+        # Keep the snapshot keyed to the exact WinGet version requested. The
+        # registry display version is preserved in app_registry_entry.
+        $result.version = $ExpectedVersion
         $result.install_path = $changes.install_path
         $result.uninstall_string = $changes.uninstall_string
         $result.quiet_uninstall_string = $changes.quiet_uninstall_string
@@ -97,12 +100,12 @@ try {
 } catch {
     $result.status = 'failed'
     $result.error = $_.Exception.Message
-    Write-Error $_
+    Write-Warning $result.error
 } finally {
     if ($installedByScan) {
-        $uninstall = Invoke-Winget -Arguments @('uninstall', '--id', $WingetId, '--exact', '--silent', '--disable-interactivity') -TimeoutSeconds 300
+        $uninstall = Invoke-Winget -Arguments @('uninstall', '--id', $WingetId, '--exact', '--silent', '--accept-source-agreements', '--disable-interactivity') -TimeoutSeconds 300
         if ($uninstall.ExitCode -ne 0) {
-            $cleanupMessage = "Cleanup failed with exit code $($uninstall.ExitCode)"
+            $cleanupMessage = "Cleanup failed with exit code $($uninstall.ExitCode): $($uninstall.Output)"
             if ($result.status -eq 'completed') {
                 $result.status = 'failed'
                 $result.error = $cleanupMessage

@@ -1,3 +1,4 @@
+import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * Catalog Source abstraction
  *
@@ -156,6 +157,7 @@ export type SccmMappingResult = SccmMatchResult;
  * The catalog read surface. Every method maps 1:1 to a former direct query.
  */
 export interface CatalogSource {
+  getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult>;
   // --- search / discovery ---
 
   /** RPC search_curated_apps. Returns the raw rows + error so each caller keeps

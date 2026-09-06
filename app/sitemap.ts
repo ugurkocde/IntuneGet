@@ -40,6 +40,7 @@ export default async function sitemap({ id }: { id: Promise<number> }): Promise<
 
   // Static public pages
   const staticPages: MetadataRoute.Sitemap = [
+    { url: `${BASE_URL}/apps/releases`, changeFrequency: "daily", priority: 0.7 },
     {
       url: BASE_URL,
       lastModified: now,

@@ -1,3 +1,4 @@
+import type { CatalogRelease, ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * SQLite-snapshot-backed CatalogSource (self-hosted / Supabase-less mode).
  *
@@ -179,6 +180,32 @@ function buildFtsMatch(query: string): string | null {
 }
 
 export class SnapshotCatalogSource implements CatalogSource {
+  async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    return withDb((db) => {
+      // Older snapshots remain readable; release dates were not exported then.
+      const columns = db.prepare('PRAGMA table_info(version_history)').all() as { name: string }[];
+      const releaseDate = columns.some(c => c.name === 'release_date') ? 'v.release_date' : 'NULL';
+      const history = `WITH history AS (
+        SELECT v.winget_id, c.name, c.publisher, v.version, ${releaseDate} AS release_date,
+          v.created_at AS detected_at,
+          lag(v.version) OVER (PARTITION BY v.winget_id ORDER BY v.created_at, v.version) AS previous_version
+        FROM version_history v JOIN curated_apps c USING (winget_id)
+        WHERE coalesce(c.is_locale_variant, 0) = 0 AND v.created_at IS NOT NULL
+      )`;
+      const where = ` WHERE (@month = '' OR substr(detected_at, 1, 7) = @month)
+        AND (@query = '' OR instr(lower(name || ' ' || coalesce(publisher, '') || ' ' || winget_id), lower(@query)) > 0)
+        AND (@kind = 'all' OR (@kind = 'first' AND previous_version IS NULL) OR (@kind = 'updated' AND previous_version IS NOT NULL))`;
+      const params = { month: filters.month, query: filters.query, kind: filters.kind };
+      const rows = db.prepare(`${history} SELECT * FROM history ${where} ORDER BY detected_at DESC, winget_id, version DESC LIMIT 40 OFFSET @offset`)
+        .all({ ...params, offset: (filters.page - 1) * 40 }) as CatalogRelease[];
+      const stats = db.prepare(`${history} SELECT count(*) AS total, count(DISTINCT winget_id) AS apps,
+        coalesce(sum(previous_version IS NULL), 0) AS firstTracked FROM history ${where}`).get(params) as { total: number; apps: number; firstTracked: number };
+      const months = db.prepare(`${history} SELECT DISTINCT substr(detected_at, 1, 7) AS month FROM history ORDER BY month DESC`).all() as { month: string }[];
+      const coverage = db.prepare(`${history} SELECT min(detected_at) AS start FROM history`).get() as { start: string | null };
+      return { rows, ...stats, months: months.map(m => m.month), coverageStart: coverage.start, sync: null };
+    }, () => { throw new Error('Catalog snapshot unavailable'); });
+  }
+
   // ---------------------------------------------------------------------------
   // search / discovery
   // ---------------------------------------------------------------------------

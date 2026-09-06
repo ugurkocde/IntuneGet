@@ -38,6 +38,7 @@ const primaryNavLinks = [
 ];
 
 const secondaryNavLinks = [
+  { href: "/apps/releases", label: "Catalog History" },
   { href: "/pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
   { href: "/blog", label: "Blog" },

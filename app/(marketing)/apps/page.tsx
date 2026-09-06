@@ -99,6 +99,8 @@ export default async function AppsPage() {
             )}
           </div>
 
+          <Link href="/apps/releases" className="inline-flex items-center gap-2 text-sm font-medium text-accent-cyan hover:underline"><T>Explore catalog release history</T><ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
+
           {/* Search */}
           <CatalogSearch />
 

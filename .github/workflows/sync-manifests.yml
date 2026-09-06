@@ -18,7 +18,7 @@ on:
       mode:
         description: "Sync mode"
         required: false
-        default: "all"
+        default: "incremental"
         type: choice
         options:
           - all # All apps (full refresh)
@@ -65,7 +65,8 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
           APP_LIMIT: ${{ github.event.inputs.limit || '0' }}
-          SYNC_MODE: ${{ github.event.inputs.mode || 'all' }}
+          FULL_CATALOG: ${{ (github.event.inputs.app_ids == '' || github.event.inputs.app_ids == 'all') && (github.event.inputs.limit == '' || github.event.inputs.limit == '0') }}
+          SYNC_MODE: ${{ github.event.inputs.mode || 'incremental' }}
         run: |
           node << 'PLANEOF'
           const fs = require('fs');
@@ -206,7 +207,8 @@ jobs:
           APP_IDS: ${{ github.event.inputs.app_ids || 'all' }}
           APP_OFFSET: ${{ matrix.offset }}
           APP_LIMIT: ${{ matrix.chunk_size }}
-          SYNC_MODE: ${{ github.event.inputs.mode || 'all' }}
+          FULL_CATALOG: ${{ (github.event.inputs.app_ids == '' || github.event.inputs.app_ids == 'all') && (github.event.inputs.limit == '' || github.event.inputs.limit == '0') }}
+          SYNC_MODE: ${{ github.event.inputs.mode || 'incremental' }}
           FORCE_REFRESH: ${{ github.event.inputs.force_refresh || 'false' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHARD: ${{ matrix.shard }}
@@ -234,8 +236,8 @@ jobs:
           }
 
           async function syncManifests() {
-            const { createWingetManifestClient, resolveWingetManifest } = await resolverModule;
-            const manifestClient = createWingetManifestClient({ token: GITHUB_TOKEN });
+            const { createWingetManifestClient, resolveWingetManifest, manifestReleaseDate, canSkipStoredManifest } = await resolverModule;
+            const manifestClient = createWingetManifestClient({ token: GITHUB_TOKEN, preferRaw: true });
             const appIds = process.env.APP_IDS;
             const appOffset = parseInt(process.env.APP_OFFSET || '0', 10);
             const chunkSize = parseInt(process.env.APP_LIMIT || '2000', 10);
@@ -263,6 +265,7 @@ jobs:
                 .eq('app_source', 'win32')
                 .eq('is_winget_verified', true)
                 .order('popularity_rank', { ascending: true, nullsFirst: false })
+                .order('winget_id')
                 .range(appOffset, appOffset + chunkSize - 1);
 
               const { data, error } = await query;
@@ -282,7 +285,7 @@ jobs:
 
             // Try the stored catalog version first. GitHub API enumeration is
             // reserved for missing or pruned versions and legacy null rows.
-            const batchSize = 10;
+            const batchSize = 3;
             const batchDelay = 750;
             const delay = ms => new Promise(r => setTimeout(r, ms));
 
@@ -293,17 +296,22 @@ jobs:
             for (let i = 0; i < apps.length; i += 100) {
               const ids = apps.slice(i, i + 100).map(app => app.winget_id);
               if (ids.length === 0) continue;
-              const { data, error } = await supabase
-                .from('version_history')
-                .select('winget_id, version, created_at')
-                .in('winget_id', ids)
-                .order('created_at', { ascending: false });
-              if (error) throw error;
-              for (const row of data || []) {
-                existingVersions.add(`${row.winget_id}\u0000${row.version}`);
-                if (!previousVersionByApp.has(row.winget_id)) {
-                  previousVersionByApp.set(row.winget_id, row.version);
+              for (let offset = 0; ; offset += 1000) {
+                const { data, error } = await supabase
+                  .from('version_history')
+                  .select('winget_id, version, created_at')
+                  .in('winget_id', ids)
+                  .order('created_at', { ascending: false })
+                  .order('id', { ascending: false })
+                  .range(offset, offset + 999);
+                if (error) throw error;
+                for (const row of data || []) {
+                  existingVersions.add(`${row.winget_id}\u0000${row.version}`);
+                  if (!previousVersionByApp.has(row.winget_id)) {
+                    previousVersionByApp.set(row.winget_id, row.version);
+                  }
                 }
+                if (!data || data.length < 1000) break;
               }
             }
 
@@ -331,6 +339,7 @@ jobs:
 
             for (let i = 0; i < apps.length; i += batchSize) {
               const batch = apps.slice(i, i + batchSize);
+              let fetchedInBatch = false;
 
               await Promise.all(batch.map(async (app) => {
                 try {
@@ -339,6 +348,16 @@ jobs:
                     return;
                   }
 
+                  if (canSkipStoredManifest({
+                    forceRefresh, mode: syncMode, version: app.latest_version,
+                    hasVersion: existingVersions.has(`${app.winget_id}\u0000${app.latest_version}`),
+                    description: app.description,
+                  })) {
+                    skippedExisting++;
+                    return;
+                  }
+
+                  fetchedInBatch = true;
                   const resolution = await resolveWingetManifest({
                     client: manifestClient,
                     wingetId: app.winget_id,
@@ -428,6 +447,7 @@ jobs:
                     platform: installerManifest.Platform || null,
                     upgrade_behavior: installerManifest.UpgradeBehavior || null,
                     release_notes: localeManifest?.ReleaseNotes || null,
+                    release_date: manifestReleaseDate(installerManifest),
                     manifest_yaml: yaml.stringify(installerManifest),
                     manifest_fetched_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
@@ -488,7 +508,7 @@ jobs:
                 }
               }));
 
-              if (i + batchSize < apps.length) {
+              if (fetchedInBatch && i + batchSize < apps.length) {
                 await delay(batchDelay);
               }
 
@@ -625,7 +645,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SYNC_MODE: ${{ github.event.inputs.mode || 'all' }}
+          FULL_CATALOG: ${{ (github.event.inputs.app_ids == '' || github.event.inputs.app_ids == 'all') && (github.event.inputs.limit == '' || github.event.inputs.limit == '0') }}
+          SYNC_MODE: ${{ github.event.inputs.mode || 'incremental' }}
           EXPECTED_SHARDS: ${{ needs.plan.outputs.expected_shards }}
         run: |
           node << 'SUMMARYEOF'
@@ -727,6 +748,8 @@ jobs:
                 last_run_completed_at: new Date().toISOString(),
                 last_run_status: classification.status,
                 items_processed: totalSynced,
+                ...(!classification.shouldFail && process.env.FULL_CATALOG === 'true' && syncMode !== 'new_only'
+                  ? { last_successful_sync_at: new Date().toISOString() } : {}),
                 error_message: errorMessage,
                 metadata: {
                   mode: syncMode,
@@ -767,7 +790,7 @@ jobs:
 
             echo "## Manifest Sync Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Mode:** ${{ github.event.inputs.mode || 'all' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Mode:** ${{ github.event.inputs.mode || 'incremental' }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Status:** $STATUS" >> $GITHUB_STEP_SUMMARY
             echo "- **Synced:** $SYNCED" >> $GITHUB_STEP_SUMMARY
             echo "- **Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY

@@ -1,3 +1,4 @@
+import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * Supabase-backed CatalogSource.
  *
@@ -58,6 +59,17 @@ function serviceOrAnonClient() {
 let warnedMissingQaServiceRole = false;
 
 export class SupabaseCatalogSource implements CatalogSource {
+  async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const client = serviceOrAnonClient();
+    if (!client) throw new Error('Catalog unavailable');
+    const { data, error } = await client.rpc('get_catalog_release_history', {
+      search_text: filters.query, month_filter: filters.month,
+      kind_filter: filters.kind, page_number: filters.page,
+    }).abortSignal(AbortSignal.timeout(15_000));
+    if (error) throw new Error('Catalog history unavailable', { cause: error });
+    return data as ReleaseHistoryResult;
+  }
+
   // ---------------------------------------------------------------------------
   // search / discovery
   // ---------------------------------------------------------------------------
