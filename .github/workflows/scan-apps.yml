@@ -144,7 +144,7 @@ jobs:
           WINGET_ID: ${{ matrix.winget_id }}
           EXPECTED_VERSION: ${{ matrix.expected_version }}
           APP_TIMEOUT_SECONDS: "900"
-        run: .github/scripts/scan-app.ps1 -WingetId $env:WINGET_ID -ExpectedVersion $env:EXPECTED_VERSION -OutputPath scan-result.json
+        run: .github/scripts/run-app-scan.ps1 -WingetId $env:WINGET_ID -ExpectedVersion $env:EXPECTED_VERSION -OutputPath scan-result.json
 
       - name: Upload scan result
         if: always()
@@ -154,6 +154,17 @@ jobs:
           path: scan-result.json
           if-no-files-found: error
           retention-days: 2
+
+      - name: Preserve WinGet diagnostics for failed installs
+        if: always() && steps.scan.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scan-diagnostics-${{ matrix.winget_id }}
+          path: |
+            ~/AppData/Local/Packages/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe/LocalState/DiagOutputDir/
+            ~/AppData/Local/Microsoft/WinGet/Logs/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Propagate scanner failure
         if: steps.scan.outcome == 'failure'

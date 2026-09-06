@@ -1,353 +1,213 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, AnimatePresence, useScroll, useTransform, useReducedMotion } from "framer-motion";
-import { Menu, X, Star, Book } from "lucide-react";
-import { Github } from "@/components/icons/brand-icons";
-import { cn } from "@/lib/utils";
-import { DocsDropdown } from "./DocsDropdown";
-import { ResourcesDropdown } from "./ResourcesDropdown";
-import { T, useGT, useLocale } from "gt-next";
-import { LocaleSwitcher } from "./LocaleSwitcher";
+import { usePathname } from "next/navigation";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Menu, X } from "lucide-react";
+import { T, useGT } from "gt-next";
 import dynamic from "next/dynamic";
-import { useSharedGitHubStats } from "@/components/providers/LandingStatsProvider";
+import { cn } from "@/lib/utils";
 import { useAuthHint } from "@/hooks/useAuthHint";
 import { ChangelogBell } from "@/components/changelog/ChangelogBell";
+import { DocsDropdown } from "./DocsDropdown";
+import { ResourcesDropdown, resourceLinks } from "./ResourcesDropdown";
+import { LocaleSwitcher } from "./LocaleSwitcher";
 
-// MSAL-backed avatar, loaded only for signed-in visitors so anonymous
-// visitors never download @azure/msal-browser on marketing pages.
 const AuthedAvatar = dynamic(
   () => import("./AuthedAvatar").then((m) => m.AuthedAvatar),
   {
     ssr: false,
-    loading: () => (
-      <div className="relative flex-shrink-0">
-        <div className="relative w-8 h-8 rounded-full bg-overlay/[0.06]" />
-      </div>
-    ),
-  }
+    loading: () => <div className="h-8 w-8 rounded-full bg-overlay/[0.06]" />,
+  },
 );
-
-const primaryNavLinks = [
-  { href: "/apps", label: "Apps" },
-  { href: "/qa", label: "Live Packaging", isLive: true },
-  { href: "/#how-it-works", label: "How It Works" },
-  { href: "/security", label: "Security" },
+const primaryLinks = [
+  { href: "/apps", label: "App Catalog" },
+  { href: "/apps/releases", label: "Release History" },
+  { href: "/qa", label: "Live Packaging" },
 ];
-
-const secondaryNavLinks = [
-  { href: "/apps/releases", label: "Catalog History" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/#faq", label: "FAQ" },
-  { href: "/blog", label: "Blog" },
-  { href: "/changelog", label: "Changelog" },
-];
+const focus =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2";
 
 export function Header() {
   const t = useGT();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [hasScrolled, setHasScrolled] = useState(false);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const shouldReduceMotion = useReducedMotion();
-
-  const isAuthenticated = useAuthHint();
-
-  // Star count is fetched client-side and hidden until loaded, so the
-  // server-rendered markup never contains a number that could mismatch.
-  const localeTag = useLocale() || undefined;
-  const { stars, isLoading: starsLoading } = useSharedGitHubStats();
-  const starsDisplay = new Intl.NumberFormat(localeTag, {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(stars);
-
-  const { scrollY } = useScroll();
-  const headerOpacity = useTransform(scrollY, [0, 100], [0, 1]);
-
+  const pathname = usePathname();
+  const authenticated = useAuthHint();
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    const handleScroll = () => {
-      setHasScrolled(window.scrollY > 50);
+    const desktop = window.matchMedia("(min-width: 1280px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setOpen(false);
     };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
   }, []);
-
-  useEffect(() => {
-    if (!isMenuOpen) return;
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsMenuOpen(false);
-        menuButtonRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [isMenuOpen]);
-
-  return (
-    <motion.header
-      className="fixed top-0 left-0 right-0 z-50 pointer-events-none"
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{
-        duration: shouldReduceMotion ? 0 : 0.5,
-        ease: [0.25, 0.46, 0.45, 0.94],
-      }}
+  const active = (href: string) =>
+    href === "/apps"
+      ? pathname.startsWith("/apps") && !pathname.startsWith("/apps/releases")
+      : pathname === href || pathname.startsWith(`${href}/`);
+  const account = (mobile = false) => (
+    <Link
+      href={authenticated ? "/dashboard" : "/auth/signin"}
+      onClick={() => setOpen(false)}
+      aria-label={authenticated ? t("Go to dashboard") : undefined}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center gap-3 rounded-lg text-sm font-medium",
+        focus,
+        mobile
+          ? "min-h-11 w-full bg-accent-cyan px-4 py-3 text-white"
+          : authenticated
+            ? "p-1"
+            : "bg-accent-cyan px-4 py-2.5 text-white hover:bg-accent-cyan-dim",
+      )}
     >
-      <div
-        className={cn(
-          "pointer-events-auto relative mx-auto transition-all duration-500 ease-spring",
-          hasScrolled
-            ? "mt-3 w-fit max-w-[calc(100%-2rem)] rounded-2xl border border-overlay/[0.06] shadow-soft-md"
-            : "max-w-full"
-        )}
-      >
-        {/* Animated background */}
-        <motion.div
-          className={cn(
-            "absolute inset-0 backdrop-blur-xl transition-[background-color,border-radius] duration-500",
-            hasScrolled
-              ? "bg-bg-elevated/75 rounded-2xl"
-              : "bg-bg-deepest/80"
-          )}
-          style={{
-            opacity: shouldReduceMotion ? (hasScrolled ? 1 : 0) : headerOpacity,
-          }}
-        />
-
-        <div className={cn(
-          "relative mx-auto px-4 md:px-6 transition-all duration-500",
-          hasScrolled ? "" : "max-w-7xl"
-        )}>
-          <div className="flex h-14 items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group z-10">
-            <motion.div
-              className="relative"
-              whileHover={
-                shouldReduceMotion
-                  ? {}
-                  : {
-                      scale: 1.1,
-                      transition: { duration: 0.2 },
-                    }
-              }
+      {authenticated ? (
+        <>
+          <AuthedAvatar size="sm" />
+          {mobile && <T>Dashboard</T>}
+        </>
+      ) : (
+        <T id="nav.get-started">Get Started</T>
+      )}
+    </Link>
+  );
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-overlay/[0.08] bg-bg-deepest/95 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 md:px-6">
+        <Link
+          href="/"
+          className={cn("flex shrink-0 items-center gap-2 rounded-sm", focus)}
+        >
+          <Image
+            src="/favicon.svg"
+            alt=""
+            width={28}
+            height={28}
+            className="h-7 w-7"
+          />
+          <span className="text-xl font-semibold text-text-primary">
+            IntuneGet
+          </span>
+        </Link>
+        <nav
+          aria-label={t("Main navigation")}
+          className="ml-4 hidden items-center gap-6 whitespace-nowrap xl:flex"
+        >
+          {primaryLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={active(link.href) ? "page" : undefined}
+              className={cn(
+                "relative inline-flex h-16 items-center border-b-2 text-sm font-medium transition-colors",
+                focus,
+                active(link.href)
+                  ? "border-accent-cyan text-accent-cyan"
+                  : "border-transparent text-text-secondary hover:text-text-primary",
+              )}
             >
-              <Image
-                src="/favicon.svg"
-                alt="IntuneGet Logo"
-                width={28}
-                height={28}
-                className="h-7 w-7"
-              />
-            </motion.div>
-            <span className="text-xl font-semibold text-text-primary">IntuneGet</span>
-          </Link>
-
-          {/* Desktop navigation */}
-          <nav className={cn(
-            "ml-6 hidden min-w-0 items-center whitespace-nowrap transition-all duration-500 xl:flex",
-            hasScrolled ? "gap-4" : "gap-5"
-          )}>
-            {primaryNavLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "group relative inline-flex items-center gap-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-4 focus-visible:ring-offset-bg-deepest",
-                  link.isLive
-                    ? "rounded-full border border-red-500/25 bg-red-500/[0.08] px-2.5 py-1 text-text-primary shadow-[0_0_16px_rgba(239,68,68,0.12)] hover:border-red-500/40 hover:bg-red-500/[0.12]"
-                    : "rounded-sm text-text-secondary hover:text-text-primary"
-                )}
-              >
-                {link.isLive && (
-                  <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60 motion-reduce:animate-none" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]" />
-                  </span>
-                )}
-                <T>{link.label}</T>
-                {!link.isLive && (
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-accent-cyan transition-all duration-300 group-hover:w-full" />
-                )}
-              </Link>
-            ))}
-            <DocsDropdown />
-            <ResourcesDropdown />
-            <a
-              href="https://github.com/ugurkocde/IntuneGet"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={t("View IntuneGet on GitHub")}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-overlay/10 px-2.5 py-1.5 text-sm font-medium text-text-secondary transition-colors duration-200 hover:border-overlay/15 hover:bg-overlay/[0.04] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-            >
-              <Github className="h-4 w-4" />
-              <span className="flex items-center gap-1 text-xs text-text-muted min-w-[2.25rem]">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
-                {!starsLoading && (
-                  <>
-                    <span className="tabular-nums">{starsDisplay}</span>
-                    <span className="sr-only">{t("GitHub stars")}</span>
-                  </>
-                )}
-              </span>
-            </a>
+              <T>{link.label}</T>
+            </Link>
+          ))}
+          <DocsDropdown />
+          <ResourcesDropdown />
+        </nav>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="hidden xl:block">
             <LocaleSwitcher />
-            {isAuthenticated ? (
-              <Link
-                href="/dashboard"
-                aria-label={t("Go to dashboard")}
-                className="group"
-              >
-                <AuthedAvatar size="sm" />
-              </Link>
-            ) : (
-              <Link
-                href="/auth/signin"
+          </div>
+          <ChangelogBell onOpen={() => setOpen(false)} />
+          <div className="ml-2 hidden xl:block">{account()}</div>
+          <Dialog.Root open={open} onOpenChange={setOpen}>
+            <Dialog.Trigger asChild>
+              <button
+                type="button"
+                aria-label={t("Open menu")}
                 className={cn(
-                  "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-4 py-2",
-                  "text-sm font-medium text-white bg-accent-cyan",
-                  "transition-all duration-200",
-                  "hover:bg-accent-cyan-dim shadow-soft hover:shadow-soft-md",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-deepest"
+                  "flex h-11 w-11 items-center justify-center rounded-lg text-text-secondary xl:hidden",
+                  focus,
                 )}
               >
-                <T id="nav.get-started">Get Started</T>
-              </Link>
-            )}
-          </nav>
-
-          <div className="relative z-10 ml-2 flex shrink-0 items-center">
-          <ChangelogBell onOpen={() => setIsMenuOpen(false)} />
-          {/* Mobile menu button */}
-          <button
-            ref={menuButtonRef}
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="relative z-10 flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-text-secondary transition-colors hover:text-text-primary xl:hidden"
-            aria-label={isMenuOpen ? t("Close menu") : t("Open menu")}
-            aria-expanded={isMenuOpen}
-            aria-controls="mobile-menu"
-          >
-            {isMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
-            )}
-          </button>
-          </div>
-          </div>
+                <Menu className="h-6 w-6" />
+              </button>
+            </Dialog.Trigger>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/30" />
+              <Dialog.Content
+                aria-describedby={undefined}
+                className="fixed inset-0 z-[61] flex flex-col overflow-y-auto bg-bg-deepest px-6 pb-8 pt-4"
+              >
+                <div className="mb-8 flex items-center justify-between">
+                  <Dialog.Title className="text-xl font-semibold text-text-primary">
+                    IntuneGet
+                  </Dialog.Title>
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      aria-label={t("Close menu")}
+                      className={cn(
+                        "flex h-11 w-11 items-center justify-center rounded-lg text-text-secondary",
+                        focus,
+                      )}
+                    >
+                      <X className="h-6 w-6" />
+                    </button>
+                  </Dialog.Close>
+                </div>
+                <nav aria-label={t("Mobile navigation")}>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    <T>Explore</T>
+                  </p>
+                  {[
+                    ...primaryLinks,
+                    { href: "/docs", label: "Documentation" },
+                  ].map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setOpen(false)}
+                      aria-current={active(link.href) ? "page" : undefined}
+                      className={cn(
+                        "block rounded-lg px-3 py-3 text-xl font-medium",
+                        focus,
+                        active(link.href)
+                          ? "bg-accent-cyan/10 text-accent-cyan"
+                          : "text-text-primary hover:bg-overlay/5",
+                      )}
+                    >
+                      <T>{link.label}</T>
+                    </Link>
+                  ))}
+                  <div className="my-6 border-t border-overlay/10" />
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    <T>Resources</T>
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-4">
+                    {resourceLinks.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "rounded-lg py-3 text-sm font-medium text-text-secondary hover:text-accent-cyan",
+                          focus,
+                        )}
+                      >
+                        <T>{link.label}</T>
+                      </Link>
+                    ))}
+                  </div>
+                </nav>
+                <div className="mt-auto space-y-5 pt-8">
+                  <LocaleSwitcher />
+                  {account(true)}
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </div>
       </div>
-
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            className={cn(
-              "pointer-events-auto mx-auto mt-2 transition-[max-width] duration-500 xl:hidden",
-              hasScrolled
-                ? "max-w-5xl px-0"
-                : "max-w-full px-0"
-            )}
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{
-              duration: shouldReduceMotion ? 0 : 0.2,
-            }}
-          >
-            <nav
-              id="mobile-menu"
-              className={cn(
-                "mx-4 flex flex-col gap-1 rounded-2xl border border-overlay/[0.06] bg-bg-elevated/90 px-4 py-4 shadow-soft-lg backdrop-blur-xl"
-              )}
-            >
-              <span className="px-1 text-xs font-semibold uppercase tracking-wider text-text-muted"><T>Explore</T></span>
-              {primaryNavLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "inline-flex items-center gap-2.5 text-base font-medium transition-all duration-200",
-                    link.isLive
-                      ? "w-fit rounded-full border border-red-500/25 bg-red-500/[0.08] px-3 py-2.5 text-text-primary shadow-[0_0_16px_rgba(239,68,68,0.12)] hover:border-red-500/40 hover:bg-red-500/[0.12]"
-                      : "py-2.5 text-text-secondary hover:text-accent-cyan"
-                  )}
-                >
-                  {link.isLive && (
-                    <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60 motion-reduce:animate-none" />
-                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]" />
-                    </span>
-                  )}
-                  <T>{link.label}</T>
-                </Link>
-              ))}
-              <Link
-                href="/docs"
-                onClick={() => setIsMenuOpen(false)}
-                className="inline-flex items-center gap-2 py-2.5 text-base font-medium text-text-secondary transition-colors hover:text-accent-cyan"
-              >
-                <Book className="h-5 w-5" />
-                <span><T id="nav.documentation">Documentation</T></span>
-              </Link>
-              <div className="my-2 border-t border-overlay/[0.06]" />
-              <span className="px-1 text-xs font-semibold uppercase tracking-wider text-text-muted"><T>Resources</T></span>
-              {secondaryNavLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setIsMenuOpen(false)}
-                  className="py-2 text-base font-medium text-text-secondary transition-colors hover:text-accent-cyan"
-                >
-                  <T>{link.label}</T>
-                </Link>
-              ))}
-              <a
-                href="https://github.com/ugurkocde/IntuneGet"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setIsMenuOpen(false)}
-                className="inline-flex items-center gap-2 py-2.5 text-base font-medium text-text-secondary transition-colors hover:text-accent-cyan"
-              >
-                <Github className="h-5 w-5" />
-                <span><T id="nav.github">GitHub</T></span>
-              </a>
-              <div className="flex items-center gap-2">
-                <LocaleSwitcher />
-              </div>
-              {isAuthenticated ? (
-                <Link
-                  href="/dashboard"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="group inline-flex items-center gap-3 px-4 py-3 rounded-lg mt-2 bg-text-primary hover:bg-text-primary/90 transition-all duration-200"
-                >
-                  <AuthedAvatar size="md" />
-                  <span className="text-sm font-medium text-bg-elevated"><T id="nav.dashboard">Dashboard</T></span>
-                </Link>
-              ) : (
-                <Link
-                  href="/auth/signin"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "inline-flex items-center justify-center px-4 py-3 rounded-lg mt-2",
-                    "text-sm font-medium text-white bg-accent-cyan",
-                    "transition-all duration-200",
-                    "hover:bg-accent-cyan-dim shadow-soft hover:shadow-soft-md"
-                  )}
-                >
-                  <T id="nav.get-started">Get Started</T>
-                </Link>
-              )}
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.header>
+    </header>
   );
 }

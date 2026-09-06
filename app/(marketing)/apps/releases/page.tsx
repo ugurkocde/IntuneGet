@@ -46,6 +46,15 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
   timeZone: "UTC",
 });
+const syncDateFormat = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "UTC",
+});
 function dateLabel(value: string) {
   return dateFormat.format(new Date(value));
 }
@@ -67,9 +76,11 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
       ? "Last run completed successfully"
       : sync?.status === "running"
         ? "Catalog sync in progress"
-        : sync
-          ? "Latest sync is incomplete"
-          : "History from the catalog snapshot";
+        : sync?.status === "partial"
+          ? "Completed with unavailable packages"
+          : sync
+            ? "Latest sync failed"
+            : "History from the catalog snapshot";
 
   return (
     <div className="flex min-h-screen flex-col bg-bg-deepest">
@@ -111,23 +122,34 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                 </T>
               </p>
               <p className="mt-3 leading-relaxed text-text-secondary">
-                <T>Last successful full sync:</T>{" "}
+                <T>Last completed catalog check:</T>{" "}
                 {sync?.lastSuccessfulAt ? (
                   <time dateTime={sync.lastSuccessfulAt}>
-                    {dateLabel(sync.lastSuccessfulAt)} (UTC)
+                    {syncDateFormat.format(new Date(sync.lastSuccessfulAt))}{" "}
+                    (UTC)
                   </time>
                 ) : (
                   <T>Not yet recorded</T>
                 )}
               </p>
-              {sync?.completedAt && (
-                <p className="mt-2 text-xs text-text-muted">
-                  <T>Last attempt:</T>{" "}
-                  <time dateTime={sync.completedAt}>
-                    {dateLabel(sync.completedAt)} (UTC)
-                  </time>
+              {sync?.status === "partial" && (
+                <p className="mt-3 text-xs leading-relaxed text-text-secondary">
+                  <T>
+                    The check completed, but some manifests were unavailable
+                    from WinGet. Existing records are retained and retried on
+                    the next sync.
+                  </T>
                 </p>
               )}
+              {sync?.completedAt &&
+                sync.completedAt !== sync.lastSuccessfulAt && (
+                  <p className="mt-2 text-xs text-text-muted">
+                    <T>Last attempt:</T>{" "}
+                    <time dateTime={sync.completedAt}>
+                      {syncDateFormat.format(new Date(sync.completedAt))} (UTC)
+                    </time>
+                  </p>
+                )}
             </aside>
           )}
         </header>

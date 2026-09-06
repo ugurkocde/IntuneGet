@@ -69,7 +69,7 @@ try {
         $timeout = [int]($env:APP_TIMEOUT_SECONDS ?? 900)
         $install = Invoke-Winget -Arguments @(
             'install', '--id', $WingetId, '--exact', '--version', $ExpectedVersion, '--source', 'winget', '--silent',
-            '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'
+            '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--verbose-logs'
         ) -TimeoutSeconds $timeout
 
         if ($install.TimedOut) { throw "Installation timed out after $timeout seconds" }

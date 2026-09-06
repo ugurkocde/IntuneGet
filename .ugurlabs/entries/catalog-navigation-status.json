@@ -1,0 +1,5 @@
+{
+  "title": "Clearer catalog status and easier navigation",
+  "summary": "Release History now has a direct navigation link. A simpler header groups secondary destinations under Resources, and the mobile menu supports keyboard focus and full-screen browsing. The history page shows a matching loading skeleton and precise UTC sync times, distinguishing completed checks with unavailable upstream packages from failed syncs.",
+  "type": "improved"
+}
