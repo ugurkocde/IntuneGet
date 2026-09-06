@@ -162,6 +162,7 @@ jobs:
           New-Item -ItemType Directory -Path scan-diagnostics -Force | Out-Null
           $paths = @(
             'scan-standard-user.log',
+            'scan-standard-user-diagnostics',
             "$env:LOCALAPPDATA/Packages/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe/LocalState/DiagOutputDir",
             "$env:LOCALAPPDATA/Microsoft/WinGet/Logs"
           )

@@ -40,6 +40,8 @@ try {
     # Reuse runner-installed, signed packages; no extra software downloads.
     $manifests = @($appInstaller.Dependencies | ForEach-Object { Join-Path $_.InstallLocation 'AppxManifest.xml' })
     $manifests += Join-Path $appInstaller.InstallLocation 'AppxManifest.xml'
+    $sourcePackage = Get-AppxPackage -Name Microsoft.Winget.Source
+    if ($sourcePackage) { $manifests += Join-Path $sourcePackage.InstallLocation 'AppxManifest.xml' }
     $manifests | ConvertTo-Json -AsArray | Set-Content -LiteralPath (Join-Path $work 'manifests.json')
     @'
 $ErrorActionPreference = 'Stop'
@@ -56,6 +58,7 @@ try {
     $env:TEMP = Join-Path $PSScriptRoot 'temp'
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
+    $env:LOCALAPPDATA | Set-Content "$PSScriptRoot\localappdata.txt"
     Start-Transcript -Path "$PSScriptRoot\bootstrap.log" | Out-Null
     foreach ($manifest in (Get-Content "$PSScriptRoot\manifests.json" -Raw | ConvertFrom-Json)) {
         "Registering $manifest" | Set-Content "$PSScriptRoot\stage.txt"
@@ -102,6 +105,11 @@ try {
 } finally {
     if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
     if (Test-Path "$work\bootstrap.log") { Copy-Item "$work\bootstrap.log" 'scan-standard-user.log' -Force }
+    if (Test-Path "$work\localappdata.txt") {
+        $localData = (Get-Content "$work\localappdata.txt" -Raw).Trim()
+        $diagnostics = Join-Path $localData 'Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\DiagOutputDir'
+        if (Test-Path $diagnostics) { Copy-Item $diagnostics 'scan-standard-user-diagnostics' -Recurse -Force }
+    }
     Remove-LocalUser -Name $userName -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
