@@ -417,6 +417,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                   )}
                                   {row.virusTotal.scannedAt && (
                                     <time dateTime={row.virusTotal.scannedAt}>
+                                      <T>Checked</T>{" "}
                                       {dateLabel(row.virusTotal.scannedAt)}
                                     </time>
                                   )}

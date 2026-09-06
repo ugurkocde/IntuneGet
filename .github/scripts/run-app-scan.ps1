@@ -47,11 +47,14 @@ try {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Retry unexpectedly has administrator privileges' }
+    Start-Transcript -Path "$PSScriptRoot\bootstrap.log" | Out-Null
     foreach ($manifest in (Get-Content "$PSScriptRoot\manifests.json" -Raw | ConvertFrom-Json)) {
+        "Registering $manifest" | Set-Content "$PSScriptRoot\stage.txt"
         Add-AppxPackage -Register $manifest -DisableDevelopmentMode
     }
     $package = Get-AppxPackage -Name Microsoft.DesktopAppInstaller
     $env:PATH = "$($package.InstallLocation);$env:PATH"
+    New-Item -ItemType File -Path "$PSScriptRoot\ready" | Out-Null
     $arguments = Get-Content "$PSScriptRoot\arguments.json" -Raw | ConvertFrom-Json
     & "$PSScriptRoot\scan-app.ps1" -WingetId $arguments.id -ExpectedVersion $arguments.version -OutputPath "$PSScriptRoot\result.json"
 } catch {
@@ -65,8 +68,13 @@ try {
     Register-ScheduledTask -TaskName $taskName -Action $action -User "$env:COMPUTERNAME\$userName" -Password $password -RunLevel Limited -Settings $settings | Out-Null
     Start-ScheduledTask -TaskName $taskName
     $deadline = (Get-Date).AddMinutes(23)
+    $setupDeadline = (Get-Date).AddMinutes(3)
     do {
         Start-Sleep -Seconds 2
+        if ((Get-Date) -gt $setupDeadline -and -not (Test-Path "$work\ready")) {
+            $stage = Get-Content "$work\stage.txt" -Raw -ErrorAction SilentlyContinue
+            throw "Standard-user setup exceeded three minutes. Last stage: $stage"
+        }
         $task = Get-ScheduledTask -TaskName $taskName
         $info = Get-ScheduledTaskInfo -TaskName $taskName
         if ($task.State -ne 'Running' -and (Test-Path -LiteralPath $retryOutput)) { break }
@@ -88,6 +96,7 @@ try {
 } finally {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    if (Test-Path "$work\bootstrap.log") { Copy-Item "$work\bootstrap.log" 'scan-standard-user.log' -Force }
     Remove-LocalUser -Name $userName -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

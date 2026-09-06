@@ -61,6 +61,10 @@ export default function Loading() {
                     <div className={`${bone} mt-2 h-4 w-2/5`} />
                   </div>
                   <div className={`${bone} h-5 w-28`} />
+                  <div className="space-y-3 sm:col-span-2">
+                    <div className={`${bone} h-4 w-1/2`} />
+                    <div className={`${bone} h-4 w-24`} />
+                  </div>
                 </div>
               ))}
             </div>
