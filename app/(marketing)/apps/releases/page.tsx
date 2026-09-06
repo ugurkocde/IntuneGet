@@ -71,16 +71,10 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
   }
   const pages = Math.max(1, Math.ceil((result?.total ?? 0) / 40));
   const sync = result?.sync;
-  const status =
-    sync?.status === "success"
-      ? "Last run completed successfully"
-      : sync?.status === "running"
-        ? "Catalog sync in progress"
-        : sync?.status === "partial"
-          ? "Completed with unavailable packages"
-          : sync
-            ? "Latest sync failed"
-            : "History from the catalog snapshot";
+  const completed = sync?.status === "success" || sync?.status === "partial";
+  const status = sync?.status === "running"
+    ? "Catalog sync in progress"
+    : sync ? "Latest sync failed" : "History from the catalog snapshot";
 
   return (
     <div className="flex min-h-screen flex-col bg-bg-deepest">
@@ -89,7 +83,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
         id="main-content"
         className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-28 lg:px-8 lg:pt-36"
       >
-        <header className="mb-10 grid gap-8 lg:grid-cols-[1fr_300px] lg:items-end">
+        <header className="mb-10">
           <div>
             <Link
               href="/apps"
@@ -111,18 +105,14 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
             </p>
           </div>
           {result && (
-            <aside className="rounded-xl border border-overlay/10 bg-bg-elevated p-5 text-sm">
-              <p className="flex items-center gap-2 font-medium text-text-primary">
-                <span
-                  aria-hidden="true"
-                  className={`h-2 w-2 shrink-0 rounded-full ${sync?.status === "success" ? "bg-emerald-500" : "bg-amber-500"}`}
-                />
-                <T>
-                  <Var>{status}</Var>
-                </T>
-              </p>
-              <p className="mt-3 leading-relaxed text-text-secondary">
-                <T>Last completed catalog check:</T>{" "}
+            <aside className="mt-5 text-sm text-text-muted">
+              {!completed && (
+                <p className="mb-2 font-medium text-text-secondary">
+                  <T><Var>{status}</Var></T>
+                </p>
+              )}
+              <p>
+                <T>Last checked:</T>{" "}
                 {sync?.lastSuccessfulAt ? (
                   <time dateTime={sync.lastSuccessfulAt}>
                     {syncDateFormat.format(new Date(sync.lastSuccessfulAt))}{" "}
@@ -132,16 +122,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                   <T>Not yet recorded</T>
                 )}
               </p>
-              {sync?.status === "partial" && (
-                <p className="mt-3 text-xs leading-relaxed text-text-secondary">
-                  <T>
-                    The check completed, but some manifests were unavailable
-                    from WinGet. Existing records are retained and retried on
-                    the next sync.
-                  </T>
-                </p>
-              )}
-              {sync?.completedAt &&
+              {!completed && sync?.completedAt &&
                 sync.completedAt !== sync.lastSuccessfulAt && (
                   <p className="mt-2 text-xs text-text-muted">
                     <T>Last attempt:</T>{" "}

@@ -16,7 +16,7 @@ export default function Loading() {
           <T>Loading catalog release history</T>
         </p>
         <div aria-hidden="true">
-          <div className="mb-10 grid gap-8 lg:grid-cols-[1fr_300px] lg:items-end">
+          <div className="mb-10">
             <div>
               <div className={`${bone} h-5 w-24`} />
               <div className={`${bone} mb-3 mt-6 h-4 w-44`} />
@@ -24,11 +24,7 @@ export default function Loading() {
               <div className={`${bone} mt-5 h-6 w-full`} />
               <div className={`${bone} mt-2 h-6 w-3/4`} />
             </div>
-            <div className="space-y-4 rounded-xl border border-overlay/10 bg-bg-elevated p-5">
-              <div className={`${bone} h-5 w-full`} />
-              <div className={`${bone} h-4 w-4/5`} />
-              <div className={`${bone} h-4 w-3/5`} />
-            </div>
+            <div className={`${bone} mt-5 h-5 w-72 max-w-full`} />
           </div>
           <div className="mb-8 grid grid-cols-3 divide-x divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
             {[0, 1, 2].map((i) => (

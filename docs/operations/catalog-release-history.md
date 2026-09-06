@@ -17,9 +17,7 @@ The installation scanner is independent of release history. It now installs the 
 ## Sync status and installation scans
 
 A `partial` manifest sync means the check finished with unavailable upstream
-manifests, not an operational failure. The release page labels this separately
-from `failed`, retains existing records, and shows the completed check time in
-UTC. The next scheduled manifest sync retries unavailable records.
+manifests, not an operational failure. The release page shows a quiet Last checked timestamp for both completed outcomes, retains existing records, and reserves a visible status message for running or failed syncs. Timestamps use UTC. The next scheduled manifest sync retries unavailable records.
 
 Installation scanning is independent of version-history ingestion. The scanner
 retries only WinGet error `-1978335146` (installer prohibits elevation) using a
