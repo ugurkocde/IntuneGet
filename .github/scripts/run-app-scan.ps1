@@ -47,6 +47,14 @@ try {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Retry unexpectedly has administrator privileges' }
+    # CreateProcessWithLogonW inherited the administrator's environment.
+    # Resolve this account's profile and keep temporary output in its own directory.
+    $env:USERPROFILE = [Environment]::GetFolderPath('UserProfile')
+    $env:LOCALAPPDATA = [Environment]::GetFolderPath('LocalApplicationData')
+    $env:APPDATA = [Environment]::GetFolderPath('ApplicationData')
+    $env:TEMP = Join-Path $PSScriptRoot 'temp'
+    $env:TMP = $env:TEMP
+    New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
     Start-Transcript -Path "$PSScriptRoot\bootstrap.log" | Out-Null
     foreach ($manifest in (Get-Content "$PSScriptRoot\manifests.json" -Raw | ConvertFrom-Json)) {
         "Registering $manifest" | Set-Content "$PSScriptRoot\stage.txt"
