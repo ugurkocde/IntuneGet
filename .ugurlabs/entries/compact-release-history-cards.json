@@ -1,0 +1,5 @@
+{
+  "title": "More compact release history cards",
+  "summary": "Release History uses compact cards with clearer app and version hierarchy, combined package and release-date details, and a shared footer for VirusTotal and vendor release notes. Subtle borders and spacing make records easier to scan without additional status colors. Loading skeletons match the new layout. Pending VirusTotal reports now explain that a background lookup is waiting, with a direct report link available in the meantime.",
+  "type": "improved"
+}

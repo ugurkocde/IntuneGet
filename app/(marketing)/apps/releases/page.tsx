@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Search } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarDays, Search } from "lucide-react";
 import { T, Var } from "gt-next";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/sections/Footer";
@@ -270,7 +270,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           </p>
           <Link
             href="/apps/releases"
-            className="text-accent-cyan hover:underline"
+            className="inline-flex min-h-8 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
           >
             <T>Clear filters</T>
           </Link>
@@ -305,53 +305,41 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
             </p>
           </div>
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-7">
             {[...groups].map(([day, rows]) => (
               <section
                 key={day}
                 aria-labelledby={`day-${day}`}
-                className="grid gap-4 lg:grid-cols-[150px_1fr]"
+                className="grid gap-3 lg:grid-cols-[130px_1fr]"
               >
                 <h2
                   id={`day-${day}`}
-                  className="pt-4 text-sm font-semibold text-text-secondary"
+                  className="pt-3 text-sm font-semibold text-text-secondary"
                 >
                   <time dateTime={day}>{dateLabel(day)}</time>
                 </h2>
-                <ul className="divide-y divide-overlay/10 overflow-hidden rounded-xl border border-overlay/10 bg-bg-elevated">
+                <ul className="min-w-0 space-y-2">
                   {rows.map((row) => (
                     <li
                       key={`${row.winget_id}:${row.version}`}
-                      className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center"
+                      className="grid min-w-0 gap-x-4 gap-y-2 rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                     >
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1">
                           <Link
                             href={`/apps/${encodeURIComponent(row.winget_id)}`}
-                            className="break-words font-semibold text-text-primary hover:text-accent-cyan"
+                            className="break-words text-[15px] font-semibold leading-6 text-text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                           >
                             {row.name}
-                            <span className="sr-only"> {row.winget_id}</span>
                           </Link>
                           {!row.previous_version && (
-                            <span className="rounded-md bg-overlay/5 px-2 py-1 text-xs text-text-secondary">
+                            <span className="rounded-md border border-overlay/10 px-1.5 py-0.5 text-[10px] text-text-secondary">
                               <T>First tracked</T>
                             </span>
                           )}
                         </div>
-                        <p className="mt-2 break-all text-xs text-text-muted">
-                          {row.winget_id}
-                        </p>
-                        {row.release_date && (
-                          <p className="mt-2 text-xs text-text-secondary">
-                            <T>Publisher release:</T>{" "}
-                            <time dateTime={row.release_date}>
-                              {dateLabel(row.release_date)}
-                            </time>
-                          </p>
-                        )}
                       </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-sm tabular-nums sm:max-w-80 sm:justify-end">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-xs tabular-nums sm:max-w-72 sm:justify-end">
                         {row.previous_version && (
                           <>
                             <span className="break-all text-text-muted">
@@ -363,11 +351,28 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                             />
                           </>
                         )}
-                        <span className="break-all font-semibold text-text-primary">
+                        <span className="break-all rounded-md border border-overlay/10 bg-overlay/[0.03] px-2 py-1 font-semibold text-text-primary">
                           {row.version}
                         </span>
                       </div>
-                      <div className="min-w-0 space-y-3 text-xs text-text-muted sm:col-span-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted sm:col-span-2">
+                        <span className="break-all">{row.winget_id}</span>
+                        {row.release_date && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <CalendarDays
+                              aria-hidden="true"
+                              className="h-3 w-3 shrink-0"
+                            />
+                            <span>
+                              <T>Released</T>{" "}
+                              <time dateTime={row.release_date}>
+                                {dateLabel(row.release_date)}
+                              </time>
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-overlay/[0.06] pt-1.5 text-xs text-text-muted sm:col-span-2">
                         {row.detailsUnavailable ? (
                           <p>
                             <T>
@@ -377,7 +382,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                           </p>
                         ) : (
                           <>
-                            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <p className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="font-medium text-text-secondary">
                                 VirusTotal:
                               </span>
@@ -387,7 +392,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                     href={`https://www.virustotal.com/gui/file/${row.virusTotal.hash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-accent-cyan hover:underline"
+                                    className="inline-flex min-h-8 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                                   >
                                     {row.virusTotal.status === "found" &&
                                     row.virusTotal.total != null &&
@@ -405,7 +410,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                       "not_found" ? (
                                       <T>No report found</T>
                                     ) : row.virusTotal.status === "pending" ? (
-                                      <T>Lookup queued</T>
+                                      <T>Report pending</T>
                                     ) : row.virusTotal.status === "error" ? (
                                       <T>Lookup unavailable</T>
                                     ) : (
@@ -431,9 +436,13 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                 href={row.release_notes_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex min-h-8 items-center font-medium text-accent-cyan hover:underline"
+                                className="inline-flex min-h-8 shrink-0 items-center gap-1 font-medium text-text-secondary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                               >
-                                <T>Official release notes</T>
+                                <T>Release notes</T>
+                                <ArrowUpRight
+                                  aria-hidden="true"
+                                  className="h-3 w-3"
+                                />
                               </a>
                             )}
                           </>
@@ -481,14 +490,16 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           <p className="mt-2">
             <T>
               VirusTotal reports are looked up by the WinGet installer hash
-              without installing or uploading the app. Results are cached and
-              reflect the recorded scan date. Zero detections do not guarantee
-              safety. This is an observation history, not a complete archive of
-              publisher releases. First tracked means the earliest version we
-              have recorded for an app, including apps imported when tracking
-              began. It does not necessarily mean a newly released product.
-              Versions missed between syncs may be absent. A version change may
-              also reflect an upstream rollback.
+              without installing or uploading the app. Report pending means we
+              have not retrieved the result yet; background lookups run hourly.
+              You can open the VirusTotal link while waiting. Results are cached
+              and reflect the recorded scan date. Zero detections do not
+              guarantee safety. This is an observation history, not a complete
+              archive of publisher releases. First tracked means the earliest
+              version we have recorded for an app, including apps imported when
+              tracking began. It does not necessarily mean a newly released
+              product. Versions missed between syncs may be absent. A version
+              change may also reflect an upstream rollback.
             </T>
           </p>
           {result?.coverageStart && (

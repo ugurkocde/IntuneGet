@@ -48,22 +48,24 @@ export default function Loading() {
             <div className={`${bone} h-11 w-full lg:w-32`} />
           </div>
           <div className={`${bone} mb-10 h-5 w-3/4`} />
-          <div className="grid gap-4 lg:grid-cols-[150px_1fr]">
+          <div className="grid gap-3 lg:grid-cols-[130px_1fr]">
             <div className={`${bone} mt-4 h-5 w-28`} />
-            <div className="divide-y divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
+            <div className="min-w-0 space-y-2">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center"
+                  className="grid gap-x-4 gap-y-2 rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
                 >
                   <div>
                     <div className={`${bone} h-6 w-3/5`} />
-                    <div className={`${bone} mt-2 h-4 w-2/5`} />
                   </div>
                   <div className={`${bone} h-5 w-28`} />
-                  <div className="space-y-3 sm:col-span-2">
+                  <div className="space-y-2 sm:col-span-2">
                     <div className={`${bone} h-4 w-1/2`} />
-                    <div className={`${bone} h-4 w-24`} />
+                    <div className="flex items-center justify-between border-t border-overlay/[0.06] pt-1.5">
+                      <div className={`${bone} h-8 w-44`} />
+                      <div className={`${bone} h-8 w-24`} />
+                    </div>
                   </div>
                 </div>
               ))}
