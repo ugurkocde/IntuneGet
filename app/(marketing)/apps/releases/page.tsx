@@ -491,15 +491,16 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
             <T>
               VirusTotal reports are looked up by the WinGet installer hash
               without installing or uploading the app. Report pending means we
-              have not retrieved the result yet; background lookups run hourly.
-              You can open the VirusTotal link while waiting. Results are cached
-              and reflect the recorded scan date. Zero detections do not
-              guarantee safety. This is an observation history, not a complete
-              archive of publisher releases. First tracked means the earliest
-              version we have recorded for an app, including apps imported when
-              tracking began. It does not necessarily mean a newly released
-              product. Versions missed between syncs may be absent. A version
-              change may also reflect an upstream rollback.
+              have not retrieved the result yet. Background lookups prioritize
+              new releases and run within the available API quota. You can open
+              the VirusTotal link while waiting. Results are cached and reflect
+              the recorded scan date. Zero detections do not guarantee safety.
+              This is an observation history, not a complete archive of
+              publisher releases. First tracked means the earliest version we
+              have recorded for an app, including apps imported when tracking
+              began. It does not necessarily mean a newly released product.
+              Versions missed between syncs may be absent. A version change may
+              also reflect an upstream rollback.
             </T>
           </p>
           {result?.coverageStart && (
