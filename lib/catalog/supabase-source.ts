@@ -1,4 +1,5 @@
-import { enrichRelease, type ReleaseMetadata, type FileReputation } from './release-enrichment';
+import { loadReleaseMetadata, releasePairKey } from './release-metadata';
+import { enrichRelease, type FileReputation } from './release-enrichment';
 import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * Supabase-backed CatalogSource.
@@ -70,10 +71,11 @@ export class SupabaseCatalogSource implements CatalogSource {
     if (error) throw new Error('Catalog history unavailable', { cause: error });
     const result = data as ReleaseHistoryResult;
     if (!result.rows.length) return result;
-    const pairs = result.rows.map(row => `and(winget_id.eq.${quotePostgrestValue(row.winget_id)},version.eq.${quotePostgrestValue(row.version)})`).join(',');
-    const metadata = await client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(40).abortSignal(AbortSignal.timeout(5000));
-    if (metadata.error || !metadata.data) return {...result, rows: result.rows.map(row => ({...row, detailsUnavailable: true}))};
-    const hashes = [...new Set(metadata.data.map(v => v.installer_sha256?.toLowerCase()).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
+    const {metadata, unavailable} = await loadReleaseMetadata(result.rows, batch => {
+      const pairs = batch.map(row => `and(winget_id.eq.${quotePostgrestValue(row.winget_id)},version.eq.${quotePostgrestValue(row.version)})`).join(',');
+      return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(batch.length).abortSignal(AbortSignal.timeout(10_000));
+    });
+    const hashes = [...new Set(metadata.map(v => v.installer_sha256?.toLowerCase()).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
     let reputations: FileReputation[] = [];
     if (hashes.length) {
       const responses = await Promise.allSettled([
@@ -83,7 +85,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       const cached = responses[0];
       if (cached.status === 'fulfilled' && cached.value && !cached.value.error) reputations = (cached.value.data ?? []) as FileReputation[];
     }
-    return {...result, rows: result.rows.map(row => enrichRelease(row, metadata.data as ReleaseMetadata[], reputations))};
+    return {...result, rows: result.rows.map(row => unavailable.has(releasePairKey(row)) ? {...row, detailsUnavailable: true} : enrichRelease(row, metadata, reputations))};
   }
 
   // ---------------------------------------------------------------------------

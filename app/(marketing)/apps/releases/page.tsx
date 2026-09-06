@@ -37,7 +37,7 @@ export async function generateMetadata({
 const loadHistory = unstable_cache(
   (filters: ReleaseHistoryFilters) =>
     getCatalogSource().getReleaseHistory(filters),
-  ["catalog-release-history-v3"],
+  ["catalog-release-history-v4"],
   { revalidate: 300 },
 );
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
