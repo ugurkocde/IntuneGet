@@ -1,0 +1,5 @@
+{
+  "title": "Consistent navigation hover and alignment",
+  "summary": "Resources now opens on hover with the same timing, underline, and chevron animation as Docs. All desktop navigation items share the same height, typography, and vertical alignment. Both dropdowns also support click, keyboard focus, Escape, and outside-click dismissal.",
+  "type": "fixed"
+}

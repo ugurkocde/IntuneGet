@@ -13,6 +13,10 @@ import { useAuthHint } from "@/hooks/useAuthHint";
 import { ChangelogBell } from "@/components/changelog/ChangelogBell";
 import { DocsDropdown } from "./DocsDropdown";
 import { ResourcesDropdown, resourceLinks } from "./ResourcesDropdown";
+import {
+  navigationItemClassName,
+  navigationUnderlineClassName,
+} from "./navigation-styles";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 
 const AuthedAvatar = dynamic(
@@ -92,7 +96,7 @@ export function Header() {
         </Link>
         <nav
           aria-label={t("Main navigation")}
-          className="ml-4 hidden items-center gap-6 whitespace-nowrap xl:flex"
+          className="ml-4 hidden h-16 items-center gap-6 whitespace-nowrap xl:flex"
         >
           {primaryLinks.map((link) => (
             <Link
@@ -100,14 +104,18 @@ export function Header() {
               href={link.href}
               aria-current={active(link.href) ? "page" : undefined}
               className={cn(
-                "relative inline-flex h-16 items-center border-b-2 text-sm font-medium transition-colors",
-                focus,
-                active(link.href)
-                  ? "border-accent-cyan text-accent-cyan"
-                  : "border-transparent text-text-secondary hover:text-text-primary",
+                navigationItemClassName,
+                active(link.href) && "text-accent-cyan",
               )}
             >
               <T>{link.label}</T>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  navigationUnderlineClassName,
+                  active(link.href) && "scale-x-100",
+                )}
+              />
             </Link>
           ))}
           <DocsDropdown />

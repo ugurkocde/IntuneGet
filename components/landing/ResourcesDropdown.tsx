@@ -1,14 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
 import { T } from "gt-next";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { NavigationDropdown } from "./NavigationDropdown";
 
 export const resourceLinks = [
   { href: "/#how-it-works", label: "How It Works" },
@@ -21,28 +15,24 @@ export const resourceLinks = [
 ];
 export function ResourcesDropdown() {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-4">
-        <T>Resources</T>
-        <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        sideOffset={20}
-        className="w-52 rounded-xl p-2"
-      >
-        {resourceLinks.map((link) => (
-          <DropdownMenuItem
-            key={link.href}
-            asChild
-            className="rounded-lg px-3 py-2.5"
-          >
-            <Link href={link.href}>
+    <NavigationDropdown
+      label={<T>Resources</T>}
+      panelClassName="right-0 w-52 p-2"
+    >
+      {(close) => (
+        <div className="space-y-0.5">
+          {resourceLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={close}
+              className="flex items-center rounded-lg px-3 py-2.5 text-sm text-text-secondary transition-colors duration-150 hover:bg-overlay/[0.04] hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+            >
               <T>{link.label}</T>
             </Link>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          ))}
+        </div>
+      )}
+    </NavigationDropdown>
   );
 }
