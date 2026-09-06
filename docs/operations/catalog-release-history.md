@@ -23,9 +23,8 @@ UTC. The next scheduled manifest sync retries unavailable records.
 
 Installation scanning is independent of version-history ingestion. The scanner
 retries only WinGet error `-1978335146` (installer prohibits elevation) using a
-limited scheduled task for the same Windows user. The entire scan, including
-HKCU snapshots and cleanup, runs in that context. This requires an interactive
-session for that user. If the context is unavailable, the scan still fails and
-preserves the reason. Crashes, timeouts and partially completed installs are not
+temporary standard Windows user. The entire scan, including
+HKCU snapshots and cleanup, runs in that context. The account is removed afterward.
+If that context cannot be prepared, the scan still fails and preserves the reason. Crashes, timeouts and partially completed installs are not
 retried automatically. Failed scans preserve verbose WinGet diagnostic logs as
 separate artifacts for seven days; they are never reported as successful metadata.
