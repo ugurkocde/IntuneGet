@@ -1,4 +1,4 @@
-import { enrichRelease, type ReleaseMetadata, type ReleaseScan } from './release-enrichment';
+import { enrichRelease, type ReleaseMetadata, type FileReputation } from './release-enrichment';
 import type { CatalogRelease, ReleaseHistoryFilters, ReleaseHistoryResult } from './release-history';
 /**
  * SQLite-snapshot-backed CatalogSource (self-hosted / Supabase-less mode).
@@ -203,14 +203,17 @@ export class SnapshotCatalogSource implements CatalogSource {
         coalesce(sum(previous_version IS NULL), 0) AS firstTracked FROM history ${where}`).get(params) as { total: number; apps: number; firstTracked: number };
       const months = db.prepare(`${history} SELECT DISTINCT substr(detected_at, 1, 7) AS month FROM history ORDER BY month DESC`).all() as { month: string }[];
       const coverage = db.prepare(`${history} SELECT min(detected_at) AS start FROM history`).get() as { start: string | null };
-      const notesColumn = columns.some(c => c.name === 'release_notes') ? 'release_notes' : 'NULL AS release_notes';
-      const metadataQuery = db.prepare(`SELECT winget_id, version, installer_sha256, ${notesColumn} FROM version_history WHERE winget_id = ? AND version = ?`);
-      const qaExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'qa_results'").get();
-      const scanQuery = qaExists ? db.prepare('SELECT * FROM qa_results WHERE winget_id = ? AND tested_version = ?') : null;
+      const notesColumn = columns.some(c => c.name === 'release_notes_url') ? 'release_notes_url' : 'NULL AS release_notes_url';
+      const metadataQuery = db.prepare(`SELECT winget_id, version, installer_sha256, installers, ${notesColumn} FROM version_history WHERE winget_id = ? AND version = ?`);
+      const reputationExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'catalog_file_reputation'").get();
+      const reputationQuery = reputationExists ? db.prepare('SELECT * FROM catalog_file_reputation WHERE sha256 = ?') : null;
+      const qaColumns = db.prepare('PRAGMA table_info(qa_results)').all() as {name: string}[];
+      const legacyQuery = qaColumns.some(c => c.name === 'virustotal_status') ? db.prepare("SELECT lower(installer_sha256) AS sha256, 'found' AS status, virustotal_malicious AS malicious, virustotal_suspicious AS suspicious, virustotal_total_engines AS total_engines, virustotal_scanned_at_utc AS analyzed_at FROM qa_results WHERE lower(installer_sha256) = ? AND virustotal_status IN ('clean', 'flagged', 'suspicious') ORDER BY virustotal_scanned_at_utc DESC LIMIT 1") : null;
       const enriched = rows.map(row => {
         const metadata = metadataQuery.get(row.winget_id, row.version) as ReleaseMetadata | undefined;
-        const scans = scanQuery?.all(row.winget_id, row.version) as ReleaseScan[] | undefined;
-        return enrichRelease(row, metadata ? [metadata] : [], scans ?? []);
+        const hash = metadata?.installer_sha256?.toLowerCase() ?? '';
+        const reputation = (reputationQuery ?? legacyQuery)?.get(hash) as FileReputation | undefined;
+        return enrichRelease(row, metadata ? [metadata] : [], reputation ? [reputation] : []);
       });
       return { rows: enriched, ...stats, months: months.map(m => m.month), coverageStart: coverage.start, sync: null };
     }, () => { throw new Error('Catalog snapshot unavailable'); });

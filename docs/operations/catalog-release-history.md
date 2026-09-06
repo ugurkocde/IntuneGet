@@ -2,7 +2,7 @@
 
 The public page is `/apps/releases`. The catalog source supports Supabase and self-hosted SQLite snapshots. Results are cached for five minutes and paginated in groups of 40. Search is literal, case insensitive, and limited to 120 characters. Month boundaries are UTC.
 
-`version_history.created_at` is the first time IntuneGet recorded that version, not the publisher release date. A database trigger preserves it across upserts. The earliest stored version for each app is labelled **First tracked**; subsequent observations are **Version change**, including rollbacks. Historical imports and missed versions prevent this from being a complete publisher archive. Locale variants are excluded from the feed and totals.
+`version_history.created_at` is the first time IntuneGet recorded that version, not the publisher release date. A database trigger preserves it across upserts. The earliest stored version for each app is labelled **First tracked**; subsequent observations show the previous and new versions, including rollbacks. Historical imports and missed versions prevent this from being a complete publisher archive. Locale variants are excluded from the feed and totals.
 
 Publisher dates come only from a valid WinGet `ReleaseDate` on the manifest or an installer. Existing dates are not inferred from import or fetch timestamps. Older SQLite snapshots remain readable with unknown publisher dates.
 
@@ -28,3 +28,13 @@ HKCU snapshots and cleanup, runs in that context. The account is removed afterwa
 If that context cannot be prepared, the scan still fails and preserves the reason. Crashes, timeouts and partially completed installs are not
 retried automatically. Failed scans preserve verbose WinGet diagnostic logs as
 separate artifacts for seven days; they are never reported as successful metadata.
+
+## Vendor links and hash reputation
+
+Release History displays the official `ReleaseNotesUrl` from the exact WinGet locale manifest, with no inline release-note body. Manifest sync saves this URL for new records. **Backfill Release Note Links** checks up to 200 older records hourly, newest first. Manual dispatch accepts 1-1000 versions. Missing vendor URLs remain absent; operational errors stay eligible for retry.
+
+VirusTotal evidence lives in the public `catalog_file_reputation` table, keyed by the exact installer SHA-256. Page reads queue only hashes already in version history, using the server service role. Anonymous users can read reports but cannot write or queue hashes. The independent **Refresh Catalog File Reputation** workflow in `IntuneGet-Workflows` uses its existing VirusTotal secret. It performs eight lookups hourly, 20 seconds apart, and caches successful or missing reports for 24 hours. Manual batches allow up to 40 lookups. Page requests never call VirusTotal directly, install software, or upload files.
+
+Findings include malicious and suspicious counts and the original analysis date. Pending, missing, and unavailable reports are distinct from zero detections. Existing findings survive lookup errors and rate limits; errors retry after an hour. A known hash always links to the VirusTotal report. Quota limits can delay queued results. This describes the selected WinGet installer file, not every installer architecture or an already installed application on a device.
+
+Snapshots include vendor URLs and cached reports. Older snapshots can reuse legacy QA findings by hash, but cannot queue live lookups. Deploy the additive database migration before the website and worker.

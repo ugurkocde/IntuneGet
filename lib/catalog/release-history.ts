@@ -12,7 +12,7 @@ export interface CatalogRelease {
   previous_version: string | null;
   detected_at: string;
   release_date: string | null;
-  release_notes?: string | null;
+  release_notes_url?: string | null;
   detailsUnavailable?: boolean;
   virusTotal?: {
     status: string;

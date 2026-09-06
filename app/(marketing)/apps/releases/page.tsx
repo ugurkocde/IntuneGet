@@ -37,7 +37,7 @@ export async function generateMetadata({
 const loadHistory = unstable_cache(
   (filters: ReleaseHistoryFilters) =>
     getCatalogSource().getReleaseHistory(filters),
-  ["catalog-release-history-v2"],
+  ["catalog-release-history-v3"],
   { revalidate: 300 },
 );
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -389,11 +389,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                     rel="noopener noreferrer"
                                     className="text-accent-cyan hover:underline"
                                   >
-                                    {[
-                                      "clean",
-                                      "flagged",
-                                      "suspicious",
-                                    ].includes(row.virusTotal.status) &&
+                                    {row.virusTotal.status === "found" &&
                                     row.virusTotal.total != null &&
                                     row.virusTotal.total > 0 &&
                                     row.virusTotal.malicious != null &&
@@ -408,8 +404,12 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                     ) : row.virusTotal.status ===
                                       "not_found" ? (
                                       <T>No report found</T>
+                                    ) : row.virusTotal.status === "pending" ? (
+                                      <T>Lookup queued</T>
+                                    ) : row.virusTotal.status === "error" ? (
+                                      <T>Lookup unavailable</T>
                                     ) : (
-                                      <T>Scan unavailable</T>
+                                      <T>View report</T>
                                     )}
                                   </a>
                                   {row.virusTotal.architecture && (
@@ -417,28 +417,24 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                   )}
                                   {row.virusTotal.scannedAt && (
                                     <time dateTime={row.virusTotal.scannedAt}>
-                                      <T>Checked</T>{" "}
+                                      <T>Analyzed</T>{" "}
                                       {dateLabel(row.virusTotal.scannedAt)}
                                     </time>
                                   )}
                                 </>
                               ) : (
-                                <T>Not scanned for this installer</T>
+                                <T>Installer hash unavailable</T>
                               )}
                             </p>
-                            {row.release_notes ? (
-                              <details className="group">
-                                <summary className="w-fit cursor-pointer rounded-sm py-1 font-medium text-accent-cyan focus-visible:outline-2 focus-visible:outline-accent-cyan">
-                                  <T>Release notes</T>
-                                </summary>
-                                <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-overlay/10 bg-bg-deepest p-4 text-sm leading-relaxed text-text-secondary">
-                                  {row.release_notes}
-                                </p>
-                              </details>
-                            ) : (
-                              <p>
-                                <T>Release notes not provided</T>
-                              </p>
+                            {row.release_notes_url && (
+                              <a
+                                href={row.release_notes_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex min-h-8 items-center font-medium text-accent-cyan hover:underline"
+                              >
+                                <T>Official release notes</T>
+                              </a>
                             )}
                           </>
                         )}
@@ -484,7 +480,8 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           </h2>
           <p className="mt-2">
             <T>
-              VirusTotal results apply to the exact installer hash shown and
+              VirusTotal reports are looked up by the WinGet installer hash
+              without installing or uploading the app. Results are cached and
               reflect the recorded scan date. Zero detections do not guarantee
               safety. This is an observation history, not a complete archive of
               publisher releases. First tracked means the earliest version we

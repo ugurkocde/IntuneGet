@@ -1,0 +1,5 @@
+{
+  "title": "Official release notes and installer hash reports",
+  "summary": "Release History now links directly to the publisher's release notes where WinGet provides an official URL. VirusTotal findings are retrieved by the exact installer SHA-256, independently of installation testing, and shared through a background cache. Reports show malicious and suspicious detection counts with the analysis date. Pending lookups, missing reports, and unavailable lookups have distinct labels, and every known hash links to its VirusTotal report. Background lookups do not install or upload applications.",
+  "type": "improved"
+}

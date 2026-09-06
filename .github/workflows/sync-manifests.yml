@@ -236,7 +236,7 @@ jobs:
           }
 
           async function syncManifests() {
-            const { createWingetManifestClient, resolveWingetManifest, manifestReleaseDate, canSkipStoredManifest } = await resolverModule;
+            const { createWingetManifestClient, resolveWingetManifest, manifestReleaseDate, manifestReleaseNotesUrl, canSkipStoredManifest } = await resolverModule;
             const manifestClient = createWingetManifestClient({ token: GITHUB_TOKEN, preferRaw: true });
             const appIds = process.env.APP_IDS;
             const appOffset = parseInt(process.env.APP_OFFSET || '0', 10);
@@ -447,6 +447,8 @@ jobs:
                     platform: installerManifest.Platform || null,
                     upgrade_behavior: installerManifest.UpgradeBehavior || null,
                     release_notes: localeManifest?.ReleaseNotes || null,
+                    release_notes_url: manifestReleaseNotesUrl(localeManifest),
+                    release_notes_url_checked_at: new Date().toISOString(),
                     release_date: manifestReleaseDate(installerManifest),
                     manifest_yaml: yaml.stringify(installerManifest),
                     manifest_fetched_at: new Date().toISOString(),
