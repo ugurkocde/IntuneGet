@@ -49,9 +49,10 @@ try {
     if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Retry unexpectedly has administrator privileges' }
     # CreateProcessWithLogonW inherited the administrator's environment.
     # Resolve this account's profile and keep temporary output in its own directory.
-    $env:USERPROFILE = [Environment]::GetFolderPath('UserProfile')
-    $env:LOCALAPPDATA = [Environment]::GetFolderPath('LocalApplicationData')
-    $env:APPDATA = [Environment]::GetFolderPath('ApplicationData')
+    $profileKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$($identity.User.Value)"
+    $env:USERPROFILE = (Get-ItemProperty -LiteralPath $profileKey).ProfileImagePath
+    $env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local'
+    $env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming'
     $env:TEMP = Join-Path $PSScriptRoot 'temp'
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
@@ -61,7 +62,10 @@ try {
         Add-AppxPackage -Register $manifest -DisableDevelopmentMode
     }
     $package = Get-AppxPackage -Name Microsoft.DesktopAppInstaller
-    $env:PATH = "$($package.InstallLocation);$env:PATH"
+    $userAliases = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+    $env:PATH = "$userAliases;$($package.InstallLocation);$env:PATH"
+    Write-Host "Standard-user profile: $env:USERPROFILE"
+    Write-Host "WinGet executable: $((Get-Command winget).Source)"
     New-Item -ItemType File -Path "$PSScriptRoot\ready" | Out-Null
     $arguments = Get-Content "$PSScriptRoot\arguments.json" -Raw | ConvertFrom-Json
     & "$PSScriptRoot\scan-app.ps1" -WingetId $arguments.id -ExpectedVersion $arguments.version -OutputPath "$PSScriptRoot\result.json"
