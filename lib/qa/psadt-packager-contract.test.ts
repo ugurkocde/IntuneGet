@@ -3778,7 +3778,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         'Array Config Contract App',
         [],
         [{ processesToClose: [] }]
-      )).toThrow(/top-level PSADT_CONFIG\s+value/);
+      )).toThrow(/top-level PSADT_CONFIG[\s|]+value/);
 
       expect(() => generateRegistryUninstallPackage(
         'inno',
