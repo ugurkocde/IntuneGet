@@ -37,6 +37,9 @@
   ],
   "exclude": [
     "node_modules",
-    "packager"
+    "packager",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ]
 }
