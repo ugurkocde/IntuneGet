@@ -112,13 +112,14 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
-  it('blocks an exact reviewed installer tuple before resolving dependencies', async () => {
+  it.each(['expired_signing_certificate', 'failed_managed_lifecycle'])(
+    'blocks an exact %s tuple before resolving dependencies', async (code) => {
     getPackageCompatibilityBlockMock.mockResolvedValue({
       wingetId: 'r12f.DivoomGateway',
       version: '0.1.42.0',
       architecture: 'x64',
       installerSha256: 'A'.repeat(64),
-      code: 'expired_signing_certificate',
+      code,
       detail: 'The signing certificate is expired.',
     });
     const client = { from: vi.fn() };

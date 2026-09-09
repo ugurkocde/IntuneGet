@@ -329,6 +329,7 @@ export interface Database {
             | 'user_scope_elevation_required'
             | 'machine_scope_system_profile_install'
             | 'missing_authoritative_install_identity'
+            | 'failed_managed_lifecycle'
             | 'trusted_installer_tuple_unavailable'
             | 'unsupported_dependency_shape'
             | 'expired_signing_certificate'

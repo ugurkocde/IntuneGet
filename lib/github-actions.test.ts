@@ -5,6 +5,7 @@ import {
   type WorkflowInputs,
 } from './github-actions';
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
+import { QaCompatibilityGateError } from './qa/gate';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -662,6 +663,29 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(enforceQaGateMock).toHaveBeenCalledWith(
       expect.objectContaining({ installerSha256: sha, requirePassed: true })
     );
+  });
+
+  it('never sends a customer Actions payload for the quarantined HEC-RAS tuple, even with override', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const tuple = {
+      wingetId: 'HydrologicEngineeringCenter.HEC-RAS',
+      version: '7.0',
+      architecture: 'x86' as const,
+      installerSha256: '166CA2458830C7646ECACD542C40C07E5DA7E48138BD81DA4EBEBD7B5C2A9532',
+    };
+    enforceQaGateMock.mockRejectedValueOnce(new QaCompatibilityGateError({
+      ...tuple, blockCode: 'failed_managed_lifecycle',
+    }));
+    await expect(triggerPackagingWorkflow(
+      workflowInputs({ ...tuple, sourceType: 'winget', qaOverride: true }),
+      config,
+      { skipRunCapture: true },
+    )).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({
+      ...tuple, qaOverride: true,
+    }));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('uses qaOverride only at the server gate and does not forward it to GitHub', async () => {

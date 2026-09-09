@@ -1,0 +1,5 @@
+{
+  "title": "HEC-RAS 7.0 deployment availability",
+  "summary": "The tested HEC-RAS 7.0 installer is unavailable for automated deployment after installation validation failed. Future releases remain eligible for testing.",
+  "type": "maintenance"
+}

@@ -189,13 +189,14 @@ describe('enforceQaGate', () => {
     ).rejects.toBeInstanceOf(QaSecurityGateError);
   });
 
-  it('does not allow a QA override to bypass an exact compatibility block', async () => {
+  it.each(['expired_signing_certificate', 'failed_managed_lifecycle'])(
+    'does not allow a QA override to bypass an exact %s block', async (code) => {
     getPackageCompatibilityBlockMock.mockResolvedValueOnce({
       wingetId: 'r12f.DivoomGateway',
       version: '0.1.42.0',
       architecture: 'x64',
       installerSha256,
-      code: 'expired_signing_certificate',
+      code,
       detail: 'The signing certificate is expired.',
     });
 
