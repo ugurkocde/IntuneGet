@@ -666,6 +666,10 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'a27749fb895eaa142da413bb6b4b9ebaa5477ad4': [
+    'Trimble.SketchUp.2025',
+    ...ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
+  ],
   'd33825c2b786af7c3f22f4b828108c4129299ef9':
     ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
   'f6bff5d1879b5cd11e285b1f1f0d140349d82215':

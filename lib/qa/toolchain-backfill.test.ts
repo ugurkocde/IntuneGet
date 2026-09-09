@@ -6,6 +6,16 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries SketchUp 2025 only after its unattended removal activation', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Trimble.SketchUp.2025', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      'd33825c2b786af7c3f22f4b828108c4129299ef9',
+      { wingetId: 'Trimble.SketchUp.2025', status: 'failed' }
+    )).toBe(false);
+  });
   it('retries Retoolkit after activating the 45-minute bounded install wait', () => {
     const wingetId = 'mentebinaria.retoolkit';
     expect(shouldRetryTerminalToolchainCandidate(

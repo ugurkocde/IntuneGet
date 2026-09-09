@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'd33825c2b786af7c3f22f4b828108c4129299ef9',
+  packagerCommit: 'a27749fb895eaa142da413bb6b4b9ebaa5477ad4',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -582,6 +582,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Arvis now runs in the vendor-supported signed-in user context. Preserve
   // every unrelated compatible pass from the JS8Call exact-identity release.
   'f6bff5d1879b5cd11e285b1f1f0d140349d82215',
+  // SketchUp 2025 gains unattended removal. Other application profiles keep
+  // their existing execution behavior and remain eligible for compatibility.
+  'd33825c2b786af7c3f22f4b828108c4129299ef9',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
