@@ -1596,6 +1596,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-silent'],
   },
   {
+    // QA run 34414113432 observed the exact SketchUp 2025 InstallShield
+    // registration invoking -remove -runfromtemp without unattended mode.
+    // Reuse the reviewed wrapper contract; retain exact registration lookup
+    // and bounded removal verification for QA and customer packages.
+    // https://forums.sketchup.com/t/unattended-uninstall-leaves-sketchup-entry-in-the-control-panel/342617
+    wingetId: 'Trimble.SketchUp.2025',
+    reviewedUninstallArguments: ['-silent'],
+  },
+  {
     // NeoLoad registers its install4j uninstaller without an unattended
     // argument. install4j documents -q for both installers and uninstallers;
     // append it to the exact captured registration instead of guessing a

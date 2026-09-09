@@ -161,6 +161,30 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.successCodes).toEqual([1223]);
   });
 
+  it('binds SketchUp 2025 QA and customer profiles to exact unattended removal', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Trimble.SketchUp.2025',
+      displayName: 'SketchUp 2025',
+      publisher: 'Trimble, Inc.',
+      version: '25.0.660',
+      architecture: 'x64',
+      installerSha256: '0AB6635E4740F415FC102F4DE23E28F6DE95BF4085E84001791A17C5FCBF320E',
+      installerType: 'exe',
+      silentSwitches: '/silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{BF6A8902-D556-5B2D-9FD7-83F19CE65B5C}:SketchUp 2025',
+      installScope: 'machine',
+    });
+    expect(normalized.identity.profile).toMatchObject({
+      installer: {
+        silentArgs: '/silent',
+        uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{BF6A8902-D556-5B2D-9FD7-83F19CE65B5C}:SketchUp 2025',
+      },
+      psadtConfig: { reviewedUninstallArguments: ['-silent'] },
+    });
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments)
+      .toEqual(['-silent']);
+  });
+
   it('binds JetBrains Toolbox customer packages to headless removal', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'JetBrains.Toolbox',

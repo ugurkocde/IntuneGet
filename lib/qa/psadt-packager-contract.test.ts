@@ -11,6 +11,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
+import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 const packager = readFileSync(
   resolve(process.cwd(), '.github/scripts/Create-PSADTPackage.ps1'),
@@ -611,6 +613,39 @@ describe('PSADT vendor argument contract', () => {
       expect(uninstallFunction).toContain(
         '$registeredUninstallArguments += $reviewedArgument'
       );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'executes SketchUp 2025 reviewed argument merging without duplicating silent mode',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe', 'SketchUp 2025', [],
+        applyApplicationPackagingAdapter('Trimble.SketchUp.2025', DEFAULT_PSADT_CONFIG),
+        [], 'Trimble.SketchUp.2025', 'SketchUp 2025', '25.0.660',
+        'REGISTRY_UNINSTALL_PRODUCT:{BF6A8902-D556-5B2D-9FD7-83F19CE65B5C}:SketchUp 2025',
+        '/silent'
+      );
+      const uninstall = generated.slice(generated.indexOf('function Uninstall-ADTDeployment'));
+      expect(uninstall).toContain("$configuredProductCode = '{BF6A8902-D556-5B2D-9FD7-83F19CE65B5C}'");
+      const configLine = uninstall.split('\n').find(line => line.includes('$reviewedUninstallArguments ='));
+      const merge = uninstall.match(/foreach \(\$reviewedArgument in \$reviewedUninstallArguments\) \{[\s\S]*?\$registeredUninstallArguments \+= \$reviewedArgument\s*\}\s*\}/)?.[0];
+      expect(configLine).toBeTruthy();
+      expect(merge).toBeTruthy();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${configLine}
+$registeredUninstallArguments = @('-remove', '-runfromtemp')
+${merge}
+$first = @($registeredUninstallArguments)
+${merge}
+[pscustomobject]@{ First = $first; Repeated = @($registeredUninstallArguments) } | ConvertTo-Json -Compress
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual({
+        First: ['-remove', '-runfromtemp', '-silent'],
+        Repeated: ['-remove', '-runfromtemp', '-silent'],
+      });
+      expect(uninstall).toContain('The vendor uninstall command did not remove registration');
     }
   );
 
@@ -3743,7 +3778,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
         'Array Config Contract App',
         [],
         [{ processesToClose: [] }]
-      )).toThrow('top-level PSADT_CONFIG value');
+      )).toThrow(/top-level PSADT_CONFIG\s+value/);
 
       expect(() => generateRegistryUninstallPackage(
         'inno',

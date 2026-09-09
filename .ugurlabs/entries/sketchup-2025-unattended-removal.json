@@ -1,0 +1,5 @@
+{
+  "title": "SketchUp 2025 unattended removal",
+  "summary": "SketchUp 2025 packages now request silent removal through the registered vendor uninstaller, preventing an interactive prompt from stalling managed uninstallations.",
+  "type": "fixed"
+}

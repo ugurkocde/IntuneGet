@@ -145,6 +145,26 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(JSON.parse(payload.client_payload.installer.successCodes)).toEqual([1223]);
   });
 
+  it('dispatches SketchUp 2025 unattended removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Trimble.SketchUp.2025',
+      displayName: 'SketchUp 2025',
+      publisher: 'Trimble, Inc.',
+      version: '25.0.660',
+      installerSha256: '0AB6635E4740F415FC102F4DE23E28F6DE95BF4085E84001791A17C5FCBF320E',
+      sourceType: 'winget',
+      installerType: 'exe',
+      silentSwitches: '/silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{BF6A8902-D556-5B2D-9FD7-83F19CE65B5C}:SketchUp 2025',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['-silent'] });
+  });
+
   it('dispatches JetBrains Toolbox headless removal through the customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
