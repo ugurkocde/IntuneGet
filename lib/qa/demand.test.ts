@@ -112,7 +112,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
-  it.each(['expired_signing_certificate', 'failed_managed_lifecycle'])(
+  it.each(['expired_signing_certificate', 'failed_managed_lifecycle', 'unverified_file_reputation'])(
     'blocks an exact %s tuple before resolving dependencies', async (code) => {
     getPackageCompatibilityBlockMock.mockResolvedValue({
       wingetId: 'r12f.DivoomGateway',

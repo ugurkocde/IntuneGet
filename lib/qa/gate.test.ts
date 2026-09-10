@@ -189,7 +189,7 @@ describe('enforceQaGate', () => {
     ).rejects.toBeInstanceOf(QaSecurityGateError);
   });
 
-  it.each(['expired_signing_certificate', 'failed_managed_lifecycle'])(
+  it.each(['expired_signing_certificate', 'failed_managed_lifecycle', 'unverified_file_reputation'])(
     'does not allow a QA override to bypass an exact %s block', async (code) => {
     getPackageCompatibilityBlockMock.mockResolvedValueOnce({
       wingetId: 'r12f.DivoomGateway',

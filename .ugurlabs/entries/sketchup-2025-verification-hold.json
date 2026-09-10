@@ -1,0 +1,5 @@
+{
+  "title": "SketchUp 2025 deployment availability",
+  "summary": "Automated deployment of SketchUp 2025 version 25.0.660 is temporarily unavailable while file reputation verification is pending. Its silent removal correction is retained for future eligible packages.",
+  "type": "maintenance"
+}
