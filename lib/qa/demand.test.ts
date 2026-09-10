@@ -78,13 +78,16 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     getPackageCompatibilityBlockMock.mockResolvedValue(null);
   });
 
-  it('does not queue or resolve dependencies for a retired catalog app', async () => {
+  it.each([
+    ['Example.App', 'vendor_retired'],
+    ['Microsoft.VCLibs.14', 'unsupported_managed_uninstall'],
+  ])('does not queue or resolve dependencies for blocked %s', async (wingetId, code) => {
     getPackageEligibilityBlocksMock.mockResolvedValue([
-      { wingetId: 'Example.App', code: 'vendor_retired' },
+      { wingetId, code },
     ]);
     const client = { from: vi.fn() };
 
-    const result = await ensureQaDemand(client as never, demandInput());
+    const result = await ensureQaDemand(client as never, { ...demandInput(), wingetId });
 
     expect(result).toMatchObject({
       state: 'failed',

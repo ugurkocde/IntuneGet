@@ -1,0 +1,5 @@
+{
+  "title": "VCLibs deployment availability",
+  "summary": "Standalone VCLibs 14 deployment is unavailable because Windows can prevent safe removal of the shared framework. Existing dependent applications are preserved.",
+  "type": "fixed"
+}

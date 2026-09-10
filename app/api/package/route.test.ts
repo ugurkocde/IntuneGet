@@ -420,9 +420,12 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
-  it('blocks a retired catalog app before QA or customer packaging begins', async () => {
+  it.each([
+    ['Autodesk.DesktopApp', 'vendor_retired'],
+    ['Microsoft.VCLibs.14', 'unsupported_managed_uninstall'],
+  ])('blocks %s before QA or customer workflow payload creation', async (wingetId, code) => {
     getPackageEligibilityBlocksMock.mockResolvedValueOnce([
-      { wingetId: 'Autodesk.DesktopApp', code: 'vendor_retired' },
+      { wingetId, code },
     ]);
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',
@@ -432,8 +435,8 @@ describe('POST /api/package (workflow dispatch)', () => {
       },
       body: JSON.stringify({
         items: [makeWin32Item({
-          wingetId: 'Autodesk.DesktopApp',
-          displayName: 'Autodesk Desktop App',
+          wingetId,
+          displayName: wingetId,
         })],
       }),
     });
@@ -446,7 +449,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       error: 'App unavailable',
       message: 'This app is not available for automated deployment.',
       code: 'PACKAGE_UNAVAILABLE',
-      package: { wingetId: 'Autodesk.DesktopApp' },
+      package: { wingetId },
     });
     expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
