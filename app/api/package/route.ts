@@ -694,6 +694,10 @@ export async function POST(request: NextRequest) {
               createdAt: jobRecord?.created_at || new Date().toISOString(),
             });
           } catch (error) {
+            console.error(
+              `[package] Job creation failed for ${item.wingetId} ${item.version}:`,
+              error
+            );
             errors.push({
               wingetId: item.wingetId,
               error: error instanceof Error ? error.message : 'Unknown error',
@@ -829,8 +833,11 @@ export async function POST(request: NextRequest) {
       success: totalJobs > 0,
       jobs,
       errors: errors.length > 0 ? errors : undefined,
+      // Name the reasons, not just the count: this string is what a client
+      // shows when no job was created, and "1 failed" is not actionable.
       message: errors.length > 0
-        ? `${totalJobs} job(s) processed, ${errors.length} failed`
+        ? `${totalJobs} job(s) processed, ${errors.length} failed - ` +
+          errors.map((entry) => `${entry.wingetId}: ${entry.error}`).join('; ')
         : storeDeployed > 0 && win32Queued > 0
           ? `${storeDeployed} Store app(s) deployed, ${win32Queued} Win32 app(s) queued`
           : storeDeployed > 0

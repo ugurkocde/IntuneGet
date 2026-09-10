@@ -58,6 +58,27 @@ interface PackageApiResponse {
   message?: string;
 }
 
+/**
+ * Turn a package API response into something an operator can act on.
+ *
+ * Names the app each reason belongs to, because a cart can hold several and
+ * "1 failed" does not say which. Falls back to the server's summary only when
+ * no per-app reason came back.
+ */
+function describeDeploymentFailure(data: PackageApiResponse): string {
+  const reasons = (data.errors ?? []).filter((entry) => entry?.error);
+
+  if (reasons.length === 0) {
+    return data.message || 'No jobs were created';
+  }
+
+  if (reasons.length === 1) {
+    return `${reasons[0].wingetId}: ${reasons[0].error}`;
+  }
+
+  return reasons.map((entry) => `${entry.wingetId}: ${entry.error}`).join('\n');
+}
+
 interface DeploymentError {
   title: string;
   message: string;
@@ -242,7 +263,10 @@ export function UploadCart() {
       const data: PackageApiResponse = await response.json();
 
       if (!data.success || !data.jobs || data.jobs.length === 0) {
-        throw new Error(data.message || 'No jobs were created');
+        // data.message only counts the failures ("0 job(s) processed, 1
+        // failed"); the reasons are per app in data.errors. Show those - a
+        // count alone leaves the operator with nothing to act on.
+        throw new Error(describeDeploymentFailure(data));
       }
 
       const jobCount = data.jobs.length;
@@ -516,7 +540,11 @@ export function UploadCart() {
                             .join(' ')}
                         </p>
                       )}
-                      <p className="text-status-error/70 mt-1">{error.message}</p>
+                      {/* whitespace-pre-line: one line per app when several
+                          failed for different reasons. */}
+                      <p className="text-status-error/70 mt-1 whitespace-pre-line break-words">
+                        {error.message}
+                      </p>
                       {error.blockedBeforeDispatch && (
                         <p className="text-text-muted mt-2">
                           No packaging pipeline was started and no changes were made in Intune.
