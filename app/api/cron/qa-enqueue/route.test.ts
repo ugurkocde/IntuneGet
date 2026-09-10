@@ -424,13 +424,36 @@ describe('GET /api/cron/qa-enqueue', () => {
     ]);
   });
 
-  it('does not poll or mutate the queue while maintenance is paused by the server switch', async () => {
+  it('queues only an explicit recovery target while paused without advancing background scans', async () => {
+    const { client, candidateInserts, cursorUpdates, pipelineControlUpdates, rpcCalls } = createSupabaseStub({
+      paused: true,
+      supportedApps: [
+        { winget_id: 'Opera.Opera', name: 'Opera', publisher: 'Opera', latest_version: '1.0.0' },
+        { winget_id: 'Unrelated.App', name: 'Unrelated', publisher: 'Example', latest_version: '1.0.0' },
+      ],
+      deployedApps: ['Opera.Opera', 'Unrelated.App'],
+      demandBackfillApps: ['Unrelated.App'],
+      catalogBackfillApps: ['Unrelated.App'],
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest('?id=Opera.Opera'));
+    expect(response.status).toBe(200);
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateInserts[0]).toMatchObject({ winget_id: 'Opera.Opera', status: 'queued' });
+    expect(detectWingetChangesMock).not.toHaveBeenCalled();
+    expect(cursorUpdates).toEqual([]);
+    expect(rpcCalls.some((call) => call.name === 'record_qa_demand_backfill_selection')).toBe(false);
+    expect(pipelineControlUpdates.some((update) => update.paused === false)).toBe(false);
+  });
+
+  it.each(['', '?id=Opera.Opera'])('keeps server maintenance authoritative for request %s', async (search) => {
     process.env.QA_MAINTENANCE_MODE = 'true';
     const { client, pollRunInserts, candidateInserts, pipelineControlUpdates } =
       createSupabaseStub({ paused: false });
     createServerClientMock.mockReturnValue(client);
 
-    const response = await GET(cronRequest());
+    const response = await GET(cronRequest(search));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -451,13 +474,13 @@ describe('GET /api/cron/qa-enqueue', () => {
     ]);
   });
 
-  it('does not poll or mutate the queue when production serves the wrong packager release', async () => {
+  it.each(['', '?id=Opera.Opera'])('keeps the required release authoritative for request %s', async (search) => {
     const { client, pollRunInserts, candidateInserts } = createSupabaseStub({
       requiredPackagerCommit: 'F'.repeat(40),
     });
     createServerClientMock.mockReturnValue(client);
 
-    const response = await GET(cronRequest());
+    const response = await GET(cronRequest(search));
     const body = await response.json();
 
     expect(body).toMatchObject({

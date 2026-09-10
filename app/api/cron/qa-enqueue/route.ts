@@ -561,7 +561,10 @@ export async function GET(request: Request) {
       startedAt
     );
     const control = await getQaPipelineControl(supabase);
-    if (control.paused || isQaMaintenanceMode()) {
+    // Authenticated, explicitly targeted recovery may prepare a queue row while
+    // dispatch remains paused. Never advance background scans in this mode.
+    const targetedRecovery = control.paused && requestedPackageIds.length > 0;
+    if ((control.paused && !targetedRecovery) || isQaMaintenanceMode()) {
       return NextResponse.json({
         success: true,
         paused: true,
@@ -611,7 +614,14 @@ export async function GET(request: Request) {
     const lookbackStart = new Date(
       Date.now() - INITIAL_LOOKBACK_MINUTES * 60 * 1000
     ).toISOString();
-    const changes = await detectWingetChanges({
+    const changes = targetedRecovery ? {
+      baseSha,
+      headSha: baseSha || '',
+      changedPackageIds: [] as string[],
+      etag: stateResult.data?.github_etag || null,
+      rateLimitedUntil: null,
+      comparisonTruncated: false,
+    } : await detectWingetChanges({
       token: process.env.GITHUB_PAT,
       baseSha,
       since: stateResult.data?.last_checked_at || lookbackStart,
@@ -649,9 +659,9 @@ export async function GET(request: Request) {
       );
     }
     const [backfill, demandBackfillIds, catalogBackfillIds] = await Promise.all([
-      findToolchainBackfillIds(supabase),
-      findDemandBackfillIds(supabase),
-      findIdleCatalogBackfillIds(supabase),
+      targetedRecovery ? { ids: [] as string[], pagesScanned: 0 } : findToolchainBackfillIds(supabase),
+      targetedRecovery ? [] as string[] : findDemandBackfillIds(supabase),
+      targetedRecovery ? [] as string[] : findIdleCatalogBackfillIds(supabase),
     ]);
     toolchainBackfillPagesScanned = backfill.pagesScanned;
     demandBackfillRequestedCount = demandBackfillIds.length;
@@ -833,10 +843,12 @@ export async function GET(request: Request) {
         .map((result) => result.winget_id)
     );
     supportedApps = supportedApps.filter((app) =>
-      demandedIds.has(app.winget_id) ||
-      backfillIds.has(app.winget_id) ||
-      catalogBackfillIdSet.has(app.winget_id) ||
-      (targetedIdSet.has(app.winget_id) && failedCatalogQaIds.has(app.winget_id))
+      (!targetedRecovery || targetedIdSet.has(app.winget_id)) && (
+        demandedIds.has(app.winget_id) ||
+        backfillIds.has(app.winget_id) ||
+        catalogBackfillIdSet.has(app.winget_id) ||
+        (targetedIdSet.has(app.winget_id) && failedCatalogQaIds.has(app.winget_id))
+      )
     );
     targetedCount = supportedApps.filter((app) => targetedIdSet.has(app.winget_id)).length;
     for (const app of supportedApps) {
@@ -1244,7 +1256,7 @@ export async function GET(request: Request) {
     // error; demanded apps that still lack QA are retried by the bounded
     // reconciliation query on subsequent polls. A GitHub rate-limit deferral
     // is different: no new comparison was performed, so preserve the cursor.
-    if (!changes.rateLimitedUntil) {
+    if (!targetedRecovery && !changes.rateLimitedUntil) {
       const { error: cursorError } = await supabase
         .from('qa_winget_poll_state')
         .update({
