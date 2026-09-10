@@ -75,6 +75,11 @@ const POSTGRESQL_PACKAGING_ADAPTER: ApplicationPackagingAdapter = {
   // unattended mode is supplied. Apply this to every versioned PostgreSQL
   // package ID so a new major release cannot silently lose the lifecycle fix.
   wingetId: 'PostgreSQL.PostgreSQL.*',
+  // The vendor removes its server and bundled components asynchronously.
+  // 16.15-1 needed 280 seconds; 16.15-3 was still removing files at the
+  // generic five-minute deadline (QA run 34465115340). Keep exact ARP
+  // removal authoritative while allowing a bounded fifteen-minute lifecycle.
+  uninstallCompletionTimeoutMinutes: 15,
   reviewedUninstallArguments: [
     '--mode',
     'unattended',

@@ -882,6 +882,7 @@ describe('application packaging adapters', () => {
     for (const wingetId of [
       'PostgreSQL.PostgreSQL.9.6',
       'PostgreSQL.PostgreSQL.13',
+      'PostgreSQL.PostgreSQL.16',
       'PostgreSQL.PostgreSQL.18',
       'postgresql.postgresql.19',
     ]) {
@@ -889,6 +890,8 @@ describe('application packaging adapters', () => {
         applyApplicationPackagingAdapter(wingetId, DEFAULT_PSADT_CONFIG)
           .reviewedUninstallArguments
       ).toEqual(['--mode', 'unattended', '--unattendedmodeui', 'none']);
+      expect(applyApplicationPackagingAdapter(wingetId, DEFAULT_PSADT_CONFIG)
+        .uninstallCompletionTimeoutMinutes).toBe(15);
     }
     expect(
       applyApplicationPackagingAdapter('PostgreSQL.pgAdmin', DEFAULT_PSADT_CONFIG)

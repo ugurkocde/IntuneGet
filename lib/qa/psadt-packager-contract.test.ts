@@ -282,6 +282,22 @@ describe('PSADT Inno packaging contract', () => {
 
 describe('PSADT vendor argument contract', () => {
   it.runIf(canRunWindowsPowerShellPackager)(
+    'generates PostgreSQL 16 bounded removal without relaxing exact registration verification',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe', 'PostgreSQL 16', [],
+        applyApplicationPackagingAdapter('PostgreSQL.PostgreSQL.16', DEFAULT_PSADT_CONFIG),
+        [], 'PostgreSQL.PostgreSQL.16', 'PostgreSQL 16', '16.15-3',
+        'REGISTRY_UNINSTALL:PostgreSQL 16', '--mode unattended --unattendedmodeui none'
+      );
+      expect(generated).toContain('else { 15 }');
+      expect(generated).toContain('$uninstallDeadline = [DateTime]::UtcNow.AddMinutes($effectiveUninstallCompletionTimeoutMinutes)');
+      expect(generated).toContain('throw "The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."');
+      expect(generated).toContain("'--mode', 'unattended', '--unattendedmodeui', 'none'");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'executes a reviewed archive batch from a confined temporary extraction',
     () => {
       const fixtureRoot = mkdtempSync(

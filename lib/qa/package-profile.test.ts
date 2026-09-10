@@ -2090,6 +2090,29 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig).toMatchObject(expectedConfig);
   });
 
+  it('binds PostgreSQL 16 to the bounded vendor removal lifecycle', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'PostgreSQL.PostgreSQL.16',
+      displayName: 'PostgreSQL 16',
+      publisher: 'PostgreSQL',
+      version: '16.15-3',
+      architecture: 'x64',
+      installerSha256: '5AE62E39571AAD71256AC20F769C01B6415E5DBB69A76B44EC643A42037FE45D',
+      installerType: 'exe',
+      silentSwitches: '--mode unattended --unattendedmodeui none',
+      uninstallCommand: 'REGISTRY_UNINSTALL:PostgreSQL 16',
+      installScope: 'machine',
+      detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = {
+      reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
+      uninstallCompletionTimeoutMinutes: 15,
+    };
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(normalized.identity.profile).toMatchObject({ psadtConfig: expectedConfig });
+  });
+
   it('binds SSMS 21 Preview to the unattended Visual Studio Installer removal lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.SQLServerManagementStudio.21.Preview',

@@ -1,0 +1,5 @@
+{
+  "title": "More reliable PostgreSQL removal",
+  "summary": "PostgreSQL packages allow more time for the vendor uninstaller to remove server components, while still verifying that removal finishes successfully.",
+  "type": "fixed"
+}

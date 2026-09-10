@@ -228,6 +228,27 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     });
   });
 
+  it('dispatches the bounded PostgreSQL 16 removal lifecycle to customer packaging', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'PostgreSQL.PostgreSQL.16',
+      displayName: 'PostgreSQL 16',
+      publisher: 'PostgreSQL',
+      version: '16.15-3',
+      installerSha256: 'A'.repeat(64),
+      sourceType: 'winget',
+      silentSwitches: '--mode unattended --unattendedmodeui none',
+      uninstallCommand: 'REGISTRY_UNINSTALL:PostgreSQL 16',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL:PostgreSQL 16');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedUninstallArguments: ['--mode', 'unattended', '--unattendedmodeui', 'none'],
+      uninstallCompletionTimeoutMinutes: 15,
+    });
+  });
+
   it('dispatches the reviewed Postgres Pro lifecycle through the customer packager', async () => {
     reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
       item: {
