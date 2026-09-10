@@ -1526,6 +1526,17 @@ describe('QA toolchain targeted retries', () => {
     )).toBe(false);
   });
 
+  it('adds PostgreSQL 16 to the bounded removal release without arbitrary retries', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+      { wingetId: 'PostgreSQL.PostgreSQL.16', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+      { wingetId: 'Example.UnreviewedApp', status: 'failed' }
+    )).toBe(false);
+  });
+
   it('retries PostgreSQL 13 once with the family unattended lifecycle', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       '2c40f49e2cb0b5a1f7a1c27996f5aee72553a074',
