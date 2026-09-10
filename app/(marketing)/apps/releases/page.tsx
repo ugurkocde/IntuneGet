@@ -1,3 +1,4 @@
+import { AppIcon } from "@/components/AppIcon";
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
@@ -251,7 +252,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           </p>
           <Link
             href="/apps/releases"
-            className="inline-flex min-h-8 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+            className="inline-flex min-h-6 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
           >
             <T>Clear filters</T>
           </Link>
@@ -299,14 +300,17 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                 >
                   <time dateTime={day}>{dateLabel(day)}</time>
                 </h2>
-                <ul className="min-w-0 space-y-2">
+                <ul className="min-w-0 divide-y divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
                   {rows.map((row) => (
                     <li
                       key={`${row.winget_id}:${row.version}`}
-                      className="grid min-w-0 gap-x-4 gap-y-2 rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 shadow-sm transition-shadow hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                      className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-3 first:rounded-t-xl last:rounded-b-xl hover:bg-overlay/[0.025] focus-within:bg-overlay/[0.025] sm:grid-cols-[32px_minmax(0,1fr)_auto]"
                     >
+                      <div className="col-start-1 row-start-1 row-span-3 pt-0.5" aria-hidden="true">
+                        <AppIcon packageId={row.winget_id} packageName={row.name} size="sm" />
+                      </div>
                       <div className="min-w-0">
-                        <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1">
+                        <div className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1">
                           <Link
                             href={`/apps/${encodeURIComponent(row.winget_id)}`}
                             className="break-words text-[15px] font-semibold leading-6 text-text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
@@ -320,7 +324,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                           )}
                         </div>
                       </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-xs tabular-nums sm:max-w-72 sm:justify-end">
+                      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 font-mono text-xs tabular-nums sm:col-start-3 sm:row-start-1 sm:max-w-64 sm:justify-end">
                         {row.previous_version && (
                           <>
                             <span className="break-all text-text-muted">
@@ -336,7 +340,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                           {row.version}
                         </span>
                       </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted sm:col-span-2">
+                      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted sm:row-start-2 sm:self-center">
                         <span className="break-all">{row.winget_id}</span>
                         {row.release_date && (
                           <span className="inline-flex items-center gap-1.5">
@@ -353,7 +357,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                           </span>
                         )}
                       </div>
-                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-overlay/[0.06] pt-1.5 text-xs text-text-muted sm:col-span-2">
+                      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted sm:col-[2/-1] sm:row-start-3 sm:justify-between">
                         {row.detailsUnavailable ? (
                           <p>
                             <T>
@@ -363,7 +367,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                           </p>
                         ) : (
                           <>
-                            <p className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1">
+                            <p className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="font-medium text-text-secondary">
                                 VirusTotal:
                               </span>
@@ -373,7 +377,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                     href={`https://www.virustotal.com/gui/file/${row.virusTotal.hash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex min-h-8 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+                                    className="inline-flex min-h-6 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                                   >
                                     {row.virusTotal.status === "found" &&
                                     row.virusTotal.total != null &&
@@ -395,7 +399,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                     ) : row.virusTotal.status === "error" ? (
                                       <T>Lookup unavailable</T>
                                     ) : (
-                                      <T>View report</T>
+                                      <T>Open report</T>
                                     )}
                                   </a>
                                   {row.virusTotal.architecture && (
@@ -417,7 +421,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                 href={row.release_notes_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex min-h-8 shrink-0 items-center gap-1 font-medium text-text-secondary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+                                className="inline-flex min-h-6 shrink-0 items-center gap-1 font-medium text-text-secondary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                               >
                                 <T>Release notes</T>
                                 <ArrowUpRight

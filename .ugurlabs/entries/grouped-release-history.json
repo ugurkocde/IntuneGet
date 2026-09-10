@@ -1,0 +1,5 @@
+{
+  "title": "Release history grouped for easier scanning",
+  "summary": "Release history now groups apps into compact lists by date, with app icons, subtle row separators, and aligned version and report links. The loading skeleton follows the same layout. Release-note discovery also uses a targeted database index and bounded retries to avoid intermittent backfill timeouts.",
+  "type": "improved"
+}

@@ -46,23 +46,14 @@ export default function Loading() {
           <div className={`${bone} mb-10 h-5 w-3/4`} />
           <div className="grid gap-3 lg:grid-cols-[130px_1fr]">
             <div className={`${bone} mt-4 h-5 w-28`} />
-            <div className="min-w-0 space-y-2">
+            <div className="min-w-0 divide-y divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
               {[0, 1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="grid gap-x-4 gap-y-2 rounded-xl border border-overlay/10 bg-bg-elevated px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
-                >
-                  <div>
-                    <div className={`${bone} h-6 w-3/5`} />
-                  </div>
-                  <div className={`${bone} h-5 w-28`} />
-                  <div className="space-y-2 sm:col-span-2">
-                    <div className={`${bone} h-4 w-1/2`} />
-                    <div className="flex items-center justify-between border-t border-overlay/[0.06] pt-1.5">
-                      <div className={`${bone} h-8 w-44`} />
-                      <div className={`${bone} h-8 w-24`} />
-                    </div>
-                  </div>
+                <div key={i} className="grid grid-cols-[32px_minmax(0,1fr)] gap-x-3 gap-y-2 px-4 py-3 sm:grid-cols-[32px_minmax(0,1fr)_auto]">
+                  <div className={`${bone} col-start-1 row-start-1 row-span-3 h-8 w-8`} />
+                  <div className={`${bone} col-start-2 row-start-1 h-7 w-3/4`} />
+                  <div className={`${bone} col-start-2 h-7 w-36 sm:col-start-3 sm:row-start-1`} />
+                  <div className={`${bone} col-start-2 h-5 w-3/5 sm:row-start-2`} />
+                  <div className={`${bone} col-start-2 h-6 w-3/4 max-w-full sm:col-[2/-1] sm:row-start-3`} />
                 </div>
               ))}
             </div>

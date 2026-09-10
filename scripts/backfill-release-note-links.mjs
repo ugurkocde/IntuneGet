@@ -1,3 +1,4 @@
+import { withDatabaseRetry } from './release-note-db-retry.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { createWingetManifestClient, manifestReleaseNotesUrl } from '../lib/winget-sync-resolution.mjs';
 
@@ -8,9 +9,9 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error('Supabase service credentials are required');
 const db = createClient(url, key, { auth: { persistSession: false } });
 const manifests = createWingetManifestClient({ token: process.env.GITHUB_TOKEN, preferRaw: true, maxRetries: 2 });
-const { data, error } = await db.from('version_history').select('id,winget_id,version')
-  .is('release_notes_url_checked_at', null).order('created_at', { ascending: false }).limit(limit);
-if (error) throw new Error(error.message);
+const { data } = await withDatabaseRetry(() => db.from('version_history').select('id,winget_id,version')
+  .is('release_notes_url_checked_at', null).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(limit)
+  .abortSignal(AbortSignal.timeout(15_000)));
 let checked = 0, linked = 0, failed = 0;
 const queue = [...data];
 await Promise.all(Array.from({ length: 4 }, async () => {
@@ -18,10 +19,9 @@ await Promise.all(Array.from({ length: 4 }, async () => {
     try {
       const manifest = await manifests.fetchLocaleManifest(row.winget_id, row.version);
       const release_notes_url = manifestReleaseNotesUrl(manifest);
-      const { error: updateError } = await db.from('version_history').update({
+      await withDatabaseRetry(() => db.from('version_history').update({
         release_notes_url, release_notes_url_checked_at: new Date().toISOString(),
-      }).eq('id', row.id);
-      if (updateError) throw new Error(updateError.message);
+      }).eq('id', row.id).abortSignal(AbortSignal.timeout(15_000)));
       checked++; if (release_notes_url) linked++;
     } catch (error) {
       failed++;
