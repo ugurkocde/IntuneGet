@@ -155,6 +155,7 @@ function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
 function ServiceHealth({ data }: { data: QaLiveResponse }) {
   const runnerAge = formatRelativeTime(data.runner.heartbeatAt, data.serverTime);
   const pollAge = formatRelativeTime(data.scheduler.lastPollAt, data.serverTime);
+  const pollIsRunning = data.scheduler.lastOutcome === 'running';
   const schedulerIssue = schedulerIssueLabel(data.scheduler.issue);
   const hasIncident = data.runner.state === 'stalled' || data.scheduler.state === 'degraded';
   const passCount = data.recent.filter((item) => item.outcome === 'Passed').length;
@@ -193,10 +194,16 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
             <p className="text-[11px] uppercase tracking-wide text-text-muted"><T>WinGet polling</T></p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StatusBadge tone={healthTone(data.scheduler.state)}>
-                <T>{data.scheduler.state === 'healthy' ? 'Healthy' : data.scheduler.state === 'degraded' ? 'Degraded' : 'Waiting for first scan'}</T>
+                <T>{data.scheduler.state === 'healthy' ? (pollIsRunning ? 'Scanning' : 'Healthy') : data.scheduler.state === 'degraded' ? 'Degraded' : 'Waiting for first scan'}</T>
               </StatusBadge>
               <span className="text-xs text-text-muted">
-                {pollAge ? <T>Last scan <Var>{pollAge}</Var></T> : <T>No scan recorded yet</T>}
+                {pollIsRunning
+                  ? pollAge
+                    ? <T>Started <Var>{pollAge}</Var></T>
+                    : <T>Scanning now</T>
+                  : pollAge
+                    ? <T>Last scan <Var>{pollAge}</Var></T>
+                    : <T>No scan recorded yet</T>}
               </span>
             </div>
           </div>

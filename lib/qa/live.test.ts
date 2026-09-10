@@ -242,6 +242,32 @@ describe('buildQaLiveResponse', () => {
     }
   });
 
+  it('keeps a fresh in-progress poll healthy while it scans', () => {
+    const response = buildQaLiveResponse({
+      now: new Date('2026-08-08T17:00:00.000Z'),
+      current: null,
+      queuedCount: 0,
+      queued: [],
+      poll: {
+        status: 'running',
+        started_at: '2026-08-08T16:59:30.000Z',
+        finished_at: null,
+        errors: [],
+      },
+      consecutivePollFailures: 0,
+      recent: [],
+      apps: [],
+      frame: null,
+    });
+
+    expect(response.scheduler).toMatchObject({
+      state: 'healthy',
+      lastOutcome: 'running',
+      issue: null,
+      consecutiveFailures: 0,
+    });
+  });
+
   it('marks stale runners and abandoned poll runs as degraded', () => {
     const response = buildQaLiveResponse({
       now: new Date('2026-08-08T17:00:00.000Z'),

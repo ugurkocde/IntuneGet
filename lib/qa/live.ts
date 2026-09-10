@@ -261,8 +261,9 @@ function schedulerIssue(
   poll: PollRow | null,
   staleRunning: boolean
 ): QaLiveResponse['scheduler']['issue'] {
-  if (!poll || poll.status === 'succeeded') return null;
-  if (staleRunning) return 'stalled';
+  if (!poll) return null;
+  if (poll.status === 'running') return staleRunning ? 'stalled' : null;
+  if (poll.status === 'succeeded') return null;
   const errors = Array.isArray(poll.errors) ? poll.errors : [];
   const combined = errors.filter((error): error is string => typeof error === 'string').join(' ');
   if (
