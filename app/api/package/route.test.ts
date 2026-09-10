@@ -423,6 +423,7 @@ describe('POST /api/package (workflow dispatch)', () => {
   it.each([
     ['Autodesk.DesktopApp', 'vendor_retired'],
     ['Microsoft.VCLibs.14', 'unsupported_managed_uninstall'],
+    ['Microsoft.VCLibs.Desktop.14', 'unsupported_managed_uninstall'],
   ])('blocks %s before QA or customer workflow payload creation', async (wingetId, code) => {
     getPackageEligibilityBlocksMock.mockResolvedValueOnce([
       { wingetId, code },
