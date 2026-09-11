@@ -10,6 +10,12 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('requires WithSecure unattended removal only for its exact application identity', () => {
+    expect(applyApplicationPackagingAdapter('WithSecure.ElementsAgent', DEFAULT_PSADT_CONFIG)
+      .reviewedUninstallArguments).toEqual(['--silent']);
+    expect(applyApplicationPackagingAdapter('WithSecure.Other', DEFAULT_PSADT_CONFIG)
+      .reviewedUninstallArguments).toEqual(DEFAULT_PSADT_CONFIG.reviewedUninstallArguments);
+  });
   it('attests Amazon Music as an argument-free unattended bootstrapper', () => {
     const adapted = applyApplicationPackagingAdapter(
       'Amazon.Music',

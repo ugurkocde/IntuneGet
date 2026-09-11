@@ -633,6 +633,35 @@ describe('PSADT vendor argument contract', () => {
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'executes WithSecure captured uninstall argument merging without install-only switches',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'msi', 'WithSecure Elements Agent', [],
+        applyApplicationPackagingAdapter('WithSecure.ElementsAgent', DEFAULT_PSADT_CONFIG),
+        [], 'WithSecure.ElementsAgent', 'WithSecure Elements Agent', '26.3.298.0',
+        'REGISTRY_UNINSTALL_PRODUCT:{C9EF1C7D-16FA-4C43-B764-1A127CDBAECB}:WithSecure Elements Agent',
+        '/quiet ALLUSERS=1'
+      );
+      const uninstall = generated.slice(generated.indexOf('function Uninstall-ADTDeployment'));
+      const configLine = uninstall.split('\n').find(line => line.includes('$reviewedUninstallArguments ='));
+      const merge = uninstall.match(/foreach \(\$reviewedArgument in \$reviewedUninstallArguments\) \{[\s\S]*?\$registeredUninstallArguments \+= \$reviewedArgument\s*\}\s*\}/)?.[0];
+      expect(configLine).toBeTruthy();
+      expect(merge).toBeTruthy();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${configLine}
+$registeredUninstallArguments = @()
+${merge}
+${merge}
+ConvertTo-Json -InputObject @($registeredUninstallArguments) -Compress
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual(['--silent']);
+      expect(uninstall).toContain("$configuredProductCode = '{C9EF1C7D-16FA-4C43-B764-1A127CDBAECB}'");
+      expect(uninstall).toContain('The vendor uninstall command did not remove registration');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'executes SketchUp 2025 reviewed argument merging without duplicating silent mode',
     () => {
       const generated = generateRegistryUninstallPackage(

@@ -1,0 +1,5 @@
+{
+  "title": "WithSecure unattended removal",
+  "summary": "WithSecure Elements Agent packages now request the vendor's silent uninstall mode during managed removal.",
+  "type": "fixed"
+}
