@@ -38,7 +38,7 @@ export async function generateMetadata({
 const loadHistory = unstable_cache(
   (filters: ReleaseHistoryFilters) =>
     getCatalogSource().getReleaseHistory(filters),
-  ["catalog-release-history-v4"],
+  ["catalog-release-history-v5"],
   { revalidate: 300 },
 );
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -380,13 +380,11 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                     className="inline-flex min-h-6 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
                                   >
                                     {row.virusTotal.status === "found" &&
-                                    row.virusTotal.total != null &&
-                                    row.virusTotal.total > 0 &&
                                     row.virusTotal.malicious != null &&
                                     row.virusTotal.suspicious != null ? (
                                       <T>
-                                        <Var>{row.virusTotal.malicious}</Var>/
-                                        <Var>{row.virusTotal.total}</Var>{" "}
+                                        <Var>{row.virusTotal.malicious}</Var>
+                                        {row.virusTotal.total != null && row.virusTotal.total > 0 ? <Var>{`/${row.virusTotal.total}`}</Var> : null}{" "}
                                         malicious,{" "}
                                         <Var>{row.virusTotal.suspicious}</Var>{" "}
                                         suspicious

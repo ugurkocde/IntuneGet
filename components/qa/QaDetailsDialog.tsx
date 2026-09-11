@@ -265,9 +265,9 @@ function VirusTotalBanner({
             {clean ? (
               <T>No threats found</T>
             ) : flagged ? (
-              <T><Var>{virusTotal.malicious ?? 0}</Var> of <Var>{totalEngines}</Var> security vendors flagged this installer as malicious</T>
+              <T><Var>{virusTotal.malicious ?? 0}</Var><Var>{totalEngines > 0 ? ` of ${totalEngines}` : ""}</Var> security vendors flagged this installer as malicious</T>
             ) : suspicious ? (
-              <T><Var>{virusTotal.suspicious ?? 0}</Var> of <Var>{totalEngines}</Var> security vendors rated this installer suspicious</T>
+              <T><Var>{virusTotal.suspicious ?? 0}</Var><Var>{totalEngines > 0 ? ` of ${totalEngines}` : ""}</Var> security vendors rated this installer suspicious</T>
             ) : virusTotal.status === 'not_found' ? (
               <T>No verdict available yet</T>
             ) : (
@@ -276,7 +276,7 @@ function VirusTotalBanner({
           </h3>
           <p className="mt-1.5 text-sm leading-6 text-text-secondary">
             {clean ? (
-              <T><Var>{virusTotal.malicious ?? 0}</Var> of <Var>{totalEngines}</Var> security vendors flagged this installer when its verified hash was checked against the VirusTotal database.</T>
+              <T><Var>{virusTotal.malicious ?? 0}</Var><Var>{totalEngines > 0 ? ` of ${totalEngines}` : ""}</Var> security vendors flagged this installer when its verified hash was checked against the VirusTotal database.</T>
             ) : flagged ? (
               <T>Packaging of this version is blocked until the finding is reviewed. <Var>{virusTotal.malicious ?? 0}</Var> vendors rated it malicious and <Var>{virusTotal.suspicious ?? 0}</Var> suspicious; earlier versions with a clean verdict remain available.</T>
             ) : suspicious ? (
