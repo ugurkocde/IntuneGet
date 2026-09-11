@@ -144,6 +144,14 @@ const SSMS_VISUAL_STUDIO_INSTALLER_WINGET_IDS = [
  */
 export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapter[] = [
   {
+    // WithSecure's Intune deployment guide requires --silent for the registered
+    // OneClient uninstaller. QA run 34599096712 captured fs_uninstall_32.exe
+    // without arguments and correctly failed while its exact ARP key remained.
+    // https://support.withsecure.com/userguides/data/pdf/wseep_portal_adminguide_eng.pdf
+    wingetId: 'WithSecure.ElementsAgent',
+    reviewedUninstallArguments: ['--silent'],
+  },
+  {
     // Amazon's official WinGet submission intentionally declares its user-scope
     // bootstrapper without switches and passed Microsoft's unattended validation
     // (winget-pkgs#94441). Preserve that exact argument-free vendor contract.

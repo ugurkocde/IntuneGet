@@ -145,6 +145,22 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(JSON.parse(payload.client_payload.installer.successCodes)).toEqual([1223]);
   });
 
+  it('dispatches WithSecure silent removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'WithSecure.ElementsAgent', displayName: 'WithSecure Elements Agent',
+      publisher: 'WithSecure', version: '26.3.298.0',
+      installerSha256: '1DC76B171B77161754BA6AC883CCFD2D7730D80E7A827779BAD905B1F9483D55',
+      sourceType: 'winget', installerType: 'msi', silentSwitches: '/quiet ALLUSERS=1',
+      uninstallCommand: 'msiexec /x "{26E3718A-7CCD-40E0-BE8B-7F1E756A05F5}" /qn /norestart',
+      installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['--silent'] });
+  });
+
   it('dispatches SketchUp 2025 unattended removal through the customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

@@ -459,6 +459,19 @@ describe('PSADT QA package identity', () => {
     ).toEqual(expected);
   });
 
+  it('binds WithSecure silent removal to the normalized QA profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'WithSecure.ElementsAgent', displayName: 'WithSecure Elements Agent',
+      publisher: 'WithSecure', version: '26.3.298.0', architecture: 'x64',
+      installerSha256: '1DC76B171B77161754BA6AC883CCFD2D7730D80E7A827779BAD905B1F9483D55',
+      installerType: 'msi', silentSwitches: '/quiet ALLUSERS=1',
+      uninstallCommand: 'msiexec /x "{26E3718A-7CCD-40E0-BE8B-7F1E756A05F5}" /qn /norestart',
+      installScope: 'machine',
+    });
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments).toEqual(['--silent']);
+    expect(normalized.identity.profile.psadtConfig.reviewedUninstallArguments).toEqual(['--silent']);
+  });
+
   it('binds FSLogix restart suppression to customer and QA package identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Microsoft.FSLogix',
