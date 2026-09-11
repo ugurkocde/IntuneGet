@@ -4,7 +4,7 @@ export function escapeXml(value: string): string {
   return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").replace(/[<>&"']/g, char => ({"<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;"})[char]!);
 }
 export function releaseFeed(rows: CatalogRelease[], app = ""): string {
-  const origin = "https://www.intuneget.com";
+  const origin = "https://intuneget.com";
   const title = app ? `${app} release history` : "IntuneGet catalog release history";
   const feedUrl = `${origin}/apps/releases/feed${app ? `?app=${encodeURIComponent(app)}` : ""}`;
   return `<?xml version="1.0" encoding="UTF-8"?>

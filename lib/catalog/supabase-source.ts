@@ -72,9 +72,13 @@ export class SupabaseCatalogSource implements CatalogSource {
     if (error) throw new Error('Catalog history unavailable', { cause: error });
     const result = data as ReleaseHistoryResult;
     if (!result.rows.length) return result;
+    let recoverySignal: AbortSignal | undefined;
     const {metadata, unavailable} = await loadReleaseMetadata(result.rows, batch => {
       const pairs = batch.map(row => `and(winget_id.eq.${quotePostgrestValue(row.winget_id)},version.eq.${quotePostgrestValue(row.version)})`).join(',');
       return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(batch.length).abortSignal(AbortSignal.timeout(10_000));
+    }, row => {
+      recoverySignal ??= AbortSignal.timeout(8000);
+      return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').eq('winget_id', row.winget_id).eq('version', row.version).limit(1).abortSignal(AbortSignal.any([recoverySignal, AbortSignal.timeout(3000)]));
     });
     const hashes = [...new Set(result.rows.map(row => enrichRelease(row, metadata, [], Date.now(), filters.architecture).virusTotal?.hash).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
     let reputations: FileReputation[] = [];

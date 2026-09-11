@@ -12,7 +12,7 @@ export function ReleaseFeedDialog({ app }: { app?: string }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "copying" | "copied" | "error">("idle");
-  const feedUrl = `https://www.intuneget.com/apps/releases/feed${app ? `?app=${encodeURIComponent(app)}` : ""}`;
+  const feedUrl = `https://intuneget.com/apps/releases/feed${app ? `?app=${encodeURIComponent(app)}` : ""}`;
 
   async function copyUrl() {
     setStatus("copying");
@@ -49,7 +49,7 @@ export function ReleaseFeedDialog({ app }: { app?: string }) {
             onFocus={(event) => event.currentTarget.select()}
             className="w-full min-w-0 rounded-lg border border-overlay/15 bg-bg-elevated px-3 py-2.5 text-base text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan sm:text-sm"
           />
-          <Button type="button" onClick={copyUrl} disabled={status === "copying"} className="w-full bg-accent-cyan text-white hover:bg-accent-cyan/90 sm:w-auto">
+          <Button type="button" onClick={copyUrl} disabled={status === "copying"} className="w-full bg-accent-cyan-dim text-white hover:bg-accent-cyan-dim/90 sm:w-auto">
             {status === "copied" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
             {status === "copied" ? <T>Copied</T> : status === "copying" ? <T>Copying…</T> : <T>Copy URL</T>}
           </Button>

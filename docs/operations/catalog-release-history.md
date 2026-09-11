@@ -47,3 +47,9 @@ Apply `20260911120000_release_history_filters.sql` before deploying the website 
 `/apps/releases/feed` returns RSS 2.0 with the latest 40 recorded versions; `?app=Example.App` limits it to that application. RSS item identity is stable per app/version, and publication dates use observation times. Responses cache for five minutes; failures return HTTP 503 with no-store rather than a misleading empty feed. This is a bounded recent feed, not a guaranteed delivery queue or full archive. Subscribe with an RSS reader and use the paginated history for older entries. RSS does not accept the page's other filters.
 
 Validation: run the catalog TypeScript tests and `supabase/tests/catalog_release_history_filters.sql` on a migrated test database. SQL fixtures roll back after checking exact matching, UTC boundaries, architecture, predecessors and pagination totals.
+
+### Metadata request recovery
+
+The website retries failed metadata batches and then falls back to indexed app/version equality lookups with at most four concurrent requests. Each fallback request has a three-second timeout and all fallback work shares an eight-second deadline. Only records whose requests still fail show unavailable details; missing optional vendor metadata is not a request failure.
+
+Incomplete history responses are thrown out of the page-cache callback, preserving the previous complete response during background revalidation. On a cold request the available records can still render without storing the partial result. History links do not depend on enrichment. The displayed full-catalog check timestamp is explicitly labelled to distinguish it from incremental updates.

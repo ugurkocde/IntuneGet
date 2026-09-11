@@ -1,0 +1,5 @@
+{
+  "title": "More reliable release details and clearer catalog history",
+  "summary": "Release history now retries failed metadata groups as individual records and avoids caching incomplete results. App history links stay available even when release notes or scan details cannot be loaded. Clearer full-catalog check timestamps, queued-sync labels and UTC headings explain freshness accurately. RSS uses the canonical website address and a higher-contrast copy button. Narrow-screen summaries, translated filter labels, accessible version transitions and recovery from out-of-range page links improve browsing.",
+  "type": "fixed"
+}

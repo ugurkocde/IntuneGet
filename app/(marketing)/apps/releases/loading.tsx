@@ -26,7 +26,7 @@ export default function Loading() {
             </div>
             <div className={`${bone} mt-5 h-5 w-72 max-w-full`} />
           </div>
-          <div className="mb-8 grid grid-cols-3 divide-x divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
+          <div className="mb-8 grid grid-cols-1 divide-y min-[360px]:grid-cols-3 min-[360px]:divide-y-0 min-[360px]:divide-x divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
             {[0, 1, 2].map((i) => (
               <div key={i} className="px-3 py-5 sm:px-6">
                 <div className={`${bone} h-5 w-4/5`} />
