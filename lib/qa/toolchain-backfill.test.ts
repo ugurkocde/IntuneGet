@@ -6,6 +6,16 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries WithSecure only on the reviewed silent-removal release', () => {
+    expect(shouldRetryTerminalToolchainCandidate(
+      QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'WithSecure.ElementsAgent', status: 'failed' }
+    )).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(
+      '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+      { wingetId: 'WithSecure.ElementsAgent', status: 'failed' }
+    )).toBe(false);
+  });
   it('retries SketchUp 2025 only after its unattended removal activation', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,
