@@ -1,0 +1,52 @@
+/* Keep QA dialogs still while fading; avoid rescaling text or VM frames. */
+.dialog[data-state='open'],
+.overlay[data-state='open'] {
+  animation: viewerEnter 180ms ease-out both;
+}
+
+.dialog[data-state='closed'],
+.overlay[data-state='closed'] {
+  animation: viewerExit 140ms ease-in both;
+}
+
+.overlay[data-state] {
+  backdrop-filter: none;
+}
+
+/* Scope the higher-contrast evidence palette to the result modal. */
+.evidence {
+  --bg-surface: 255 255 255;
+  --bg-elevated: 248 250 252;
+  --text-muted: 71 85 105;
+  --accent-cyan: #0e7490;
+  --status-warning: #92400e;
+  --status-error: #b91c1c;
+  --status-success: #047857;
+}
+
+:global(.dark) .evidence {
+  --bg-surface: 15 26 46;
+  --bg-elevated: 21 35 58;
+  --text-muted: 178 192 216;
+  --accent-cyan: #67e8f9;
+  --status-warning: #fcd34d;
+  --status-error: #fca5a5;
+  --status-success: #6ee7b7;
+}
+
+@keyframes viewerEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes viewerExit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[data-state],
+  .overlay[data-state] {
+    animation: none;
+  }
+}

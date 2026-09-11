@@ -6,7 +6,7 @@ import { Maximize2, Minimize2, Monitor } from 'lucide-react';
 import { T } from 'gt-next';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import type { QaFrameState } from '@/lib/qa/presentation';
-import styles from './QaVmViewer.module.css';
+import styles from './QaDialog.module.css';
 
 const CONTROL_CLASS = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-black/70 text-white shadow-sm transition-colors hover:bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan';
 

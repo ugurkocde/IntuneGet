@@ -33,6 +33,7 @@ import { QaDetailsRequestError, useQaDetails } from '@/hooks/use-qa';
 import { formatQaDuration } from '@/lib/qa/presentation';
 import { qaVersionMismatchKind } from '@/lib/qa/version-mismatch';
 import { cn } from '@/lib/utils';
+import styles from './QaDialog.module.css';
 import {
   QA_CHANGE_CATEGORIES,
   type QaChangeSet,
@@ -112,7 +113,7 @@ function ChangeTable({ title, changes }: { title: string; changes: QaChangeSet }
         <T>{title}</T>
       </summary>
       <div className="overflow-x-auto border-t border-overlay/10">
-        <table className="w-full text-left text-xs">
+        <table className="w-full text-left text-sm">
           <thead className="bg-bg-deepest/30 text-text-muted">
             <tr>
               <th className="px-4 py-2.5 font-medium"><T>Area</T></th>
@@ -152,7 +153,7 @@ function SummaryItem({
         <Icon className="h-4.5 w-4.5" aria-hidden="true" />
       </span>
       <span className="min-w-0">
-        <span className="block text-xs text-text-muted">{label}</span>
+        <span className="block text-sm text-text-muted">{label}</span>
         <span className="mt-1 block break-words text-sm font-medium text-text-primary">{children}</span>
       </span>
     </div>
@@ -171,7 +172,7 @@ function LifecycleCard({ name, phaseKey, result }: { name: string; phaseKey: QaP
     )}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-text-muted"><T>{name}</T></p>
+          <p className="text-sm text-text-muted"><T>{name}</T></p>
           <p className={cn(
             'mt-1 text-sm font-medium',
             status.passed === true ? 'text-status-success' : status.passed === false ? 'text-status-error' : 'text-text-muted'
@@ -182,7 +183,7 @@ function LifecycleCard({ name, phaseKey, result }: { name: string; phaseKey: QaP
           status.passed === true ? 'text-status-success' : status.passed === false ? 'text-status-error' : 'text-text-muted'
         )} aria-hidden="true" />
       </div>
-      <div className="mt-4 flex justify-between gap-3 border-t border-overlay/10 pt-3 text-xs text-text-muted">
+      <div className="mt-4 flex justify-between gap-3 border-t border-overlay/10 pt-3 text-sm text-text-muted">
         <span><T>Exit</T> <code className="text-text-secondary">{result?.exitCode ?? '—'}</code></span>
         <span className="font-mono text-text-secondary">{formatQaDuration(result?.durationSeconds)}</span>
       </div>
@@ -197,7 +198,7 @@ function VirusTotalBanner({ virusTotal, installerSha256 }: { virusTotal: QaVirus
   const attention = flagged || suspicious;
   const Icon = clean ? ShieldCheck : ShieldQuestion;
   const reportLink = installerSha256 ? (
-    <a href={`https://www.virustotal.com/gui/file/${installerSha256.toLowerCase()}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan">
+    <a href={`https://www.virustotal.com/gui/file/${installerSha256.toLowerCase()}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan">
       <T>View VirusTotal report</T><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
     </a>
   ) : null;
@@ -209,8 +210,8 @@ function VirusTotalBanner({ virusTotal, installerSha256 }: { virusTotal: QaVirus
           <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', clean ? 'text-status-success' : 'text-text-muted')} aria-hidden="true" />
           <div>
             <h3 className="text-sm font-medium text-text-primary"><T>{clean ? 'VirusTotal: no detections reported' : 'VirusTotal: no verdict available'}</T></h3>
-            <p className="mt-1 text-xs leading-5 text-text-muted">{clean ? <T><Var>{virusTotal.malicious ?? 0}</Var> malicious detections<Var>{virusTotal.totalEngines ? ` across ${virusTotal.totalEngines} vendors` : ""}</Var> at the time of this check.</T> : <T>No reputation verdict was recorded for this installer.</T>}</p>
-            {virusTotal.scannedAtUtc ? <p className="mt-1 text-xs text-text-muted"><T>Analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></p> : null}
+            <p className="mt-1 text-sm leading-5 text-text-muted">{clean ? <T><Var>{virusTotal.malicious ?? 0}</Var> malicious detections<Var>{virusTotal.totalEngines ? ` across ${virusTotal.totalEngines} vendors` : ""}</Var> at the time of this check.</T> : <T>No reputation verdict was recorded for this installer.</T>}</p>
+            {virusTotal.scannedAtUtc ? <p className="mt-1 text-sm text-text-muted"><T>Analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></p> : null}
           </div>
         </div>
         {reportLink}
@@ -224,9 +225,9 @@ function VirusTotalBanner({ virusTotal, installerSha256 }: { virusTotal: QaVirus
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-text-primary"><T>{flagged ? 'Installer flagged by VirusTotal' : 'Suspicious VirusTotal verdict'}</T></h3>
           <p className="mt-1 text-sm leading-6 text-text-secondary"><T><Var>{virusTotal.malicious ?? 0}</Var> malicious and <Var>{virusTotal.suspicious ?? 0}</Var> suspicious detections<Var>{virusTotal.totalEngines ? ` across ${virusTotal.totalEngines} vendors` : ""}</Var>.</T></p>
-          <p className="mt-1 text-xs leading-5 text-text-secondary"><T>{flagged ? 'Packaging of this version is blocked until the finding is reviewed.' : 'This verdict does not block this version. Review the vendor findings for details.'}</T></p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">{reportLink}<span className="text-xs text-text-muted"><T>Hash-only lookup; the installer is not uploaded.</T></span></div>
-          {virusTotal.scannedAtUtc ? <p className="text-xs text-text-muted"><T>Analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></p> : null}
+          <p className="mt-1 text-sm leading-5 text-text-secondary"><T>{flagged ? 'Packaging of this version is blocked until the finding is reviewed.' : 'This verdict does not block this version. Review the vendor findings for details.'}</T></p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">{reportLink}<span className="text-sm text-text-muted"><T>Hash-only lookup; the installer is not uploaded.</T></span></div>
+          {virusTotal.scannedAtUtc ? <p className="text-sm text-text-muted"><T>Analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></p> : null}
         </div>
       </div>
     </section>
@@ -272,7 +273,7 @@ export function QaDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(48rem,92dvh)] w-[calc(100%_-_1.5rem)] max-w-4xl flex-col bg-bg-surface">
+      <DialogContent overlayClassName={styles.overlay} className={`${styles.dialog} ${styles.evidence} flex h-[min(48rem,92dvh)] w-[calc(100%_-_1.5rem)] max-w-4xl flex-col bg-bg-surface`}>
         <DialogHeader className="shrink-0 px-5 py-5 pr-12 sm:px-6 sm:pr-14">
           <div className="flex items-center gap-4">
             <AppIcon
@@ -283,10 +284,10 @@ export function QaDetailsDialog({
             />
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="text-xs font-medium uppercase tracking-[0.16em] text-accent-cyan"><T>Application QA</T></span>
+                <span className="text-sm font-medium uppercase tracking-[0.16em] text-accent-cyan"><T>Application QA</T></span>
                 {data ? (
                   <span className={cn(
-                    'inline-flex items-center gap-1.5 text-xs font-medium',
+                    'inline-flex items-center gap-1.5 text-sm font-medium',
                     data.outcome === 'Passed' ? 'text-status-success' : 'text-status-error'
                   )}>
                     {data.outcome === 'Passed'
@@ -330,7 +331,7 @@ export function QaDetailsDialog({
                 type="button"
                 onClick={() => refetch()}
                 disabled={isFetching}
-                className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent-cyan px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-cyan-bright disabled:cursor-wait disabled:opacity-70"
+                className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent-cyan px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-cyan-dim dark:text-slate-950 dark:hover:bg-cyan-300 disabled:cursor-wait disabled:opacity-70"
               >
                 {isFetching
                   ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -344,7 +345,7 @@ export function QaDetailsDialog({
                 <TabsList className="grid w-full grid-cols-3 sm:w-fit" aria-label="Completed test evidence">
                   <TabsTrigger value="overview" className="min-h-9 px-2 sm:px-3"><T>Overview</T></TabsTrigger>
                   <TabsTrigger value="changes" className="min-h-9 px-2 sm:px-3"><T>Changes</T></TabsTrigger>
-                  <TabsTrigger value="technical" className="min-h-9 px-2 text-xs sm:px-3 sm:text-sm"><T>Technical details</T></TabsTrigger>
+                  <TabsTrigger value="technical" className="min-h-9 px-2 text-sm sm:px-3"><T>Technical details</T></TabsTrigger>
                 </TabsList>
               </div>
               <TabsContent value="overview" className="m-0 min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-6">
@@ -401,7 +402,7 @@ export function QaDetailsDialog({
                       <h3 id="qa-changes-heading" className="text-base font-semibold text-text-primary"><T>Observed system changes</T></h3>
                       <p className="mt-1 text-sm text-text-muted"><T>Compare installation counts with the changes remaining after uninstall. Detailed paths are not retained in this result.</T></p>
                     </div>
-                    <p className="text-xs leading-relaxed text-text-muted"><T>Counts are correlated with the test window, not attributed to the app; background Windows activity is included. A nonzero residual does not mean the uninstall was dirty.</T></p>
+                    <p className="text-sm leading-relaxed text-text-muted"><T>Counts are correlated with the test window, not attributed to the app; background Windows activity is included. A nonzero residual does not mean the uninstall was dirty.</T></p>
                     <ChangeTable title="Changes after installation" changes={data.changes.afterInstall} />
                     {data.phases.uninstall ? <ChangeTable title="Residual changes after uninstall" changes={data.changes.residualAfterUninstall} /> : <p className="rounded-xl border border-overlay/10 p-4 text-sm text-text-muted"><T>Uninstall was not run; no removal comparison is available.</T></p>}
                   </section>
@@ -415,18 +416,18 @@ export function QaDetailsDialog({
                       <Settings2 className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
                       <div>
                         <h3 id="qa-configuration-heading" className="text-sm font-semibold text-text-primary"><T>Test configuration</T></h3>
-                        <p className="mt-0.5 text-xs text-text-muted"><T>The effective PSADT settings used for this exact run.</T></p>
+                        <p className="mt-0.5 text-sm text-text-muted"><T>The effective PSADT settings used for this exact run.</T></p>
                       </div>
                     </div>
                     <div className="grid gap-x-6 gap-y-5 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                      <div><span className="block text-xs text-text-muted"><T>Deploy mode</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.deployMode}</code></div>
-                      <div><span className="block text-xs text-text-muted"><T>Restart behavior</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.restartBehavior}</code></div>
-                      <div><span className="block text-xs text-text-muted"><T>Processes to close</T></span><span className="mt-1 block font-medium text-text-primary">{data.effectiveConfiguration.processCloseCount}</span></div>
-                      <div><span className="block text-xs text-text-muted"><T>UI evidence expected</T></span><span className="mt-1 block font-medium text-text-primary"><T>{data.effectiveConfiguration.uiEvidenceExpected ? 'Yes' : 'No'}</T></span></div>
-                      <div className="sm:col-span-2 lg:col-span-4"><span className="block text-xs text-text-muted"><T>Prompt configuration</T></span><span className="mt-1 block text-text-primary"><PromptConfigurationSummary configuration={data.effectiveConfiguration.promptConfiguration} /></span></div>
+                      <div><span className="block text-sm text-text-muted"><T>Deploy mode</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.deployMode}</code></div>
+                      <div><span className="block text-sm text-text-muted"><T>Restart behavior</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.restartBehavior}</code></div>
+                      <div><span className="block text-sm text-text-muted"><T>Processes to close</T></span><span className="mt-1 block font-medium text-text-primary">{data.effectiveConfiguration.processCloseCount}</span></div>
+                      <div><span className="block text-sm text-text-muted"><T>UI evidence expected</T></span><span className="mt-1 block font-medium text-text-primary"><T>{data.effectiveConfiguration.uiEvidenceExpected ? 'Yes' : 'No'}</T></span></div>
+                      <div className="sm:col-span-2 lg:col-span-4"><span className="block text-sm text-text-muted"><T>Prompt configuration</T></span><span className="mt-1 block text-text-primary"><PromptConfigurationSummary configuration={data.effectiveConfiguration.promptConfiguration} /></span></div>
                       <div className="sm:col-span-2 lg:col-span-4">
-                        <span className="block text-xs text-text-muted"><T>Vendor silent arguments</T></span>
-                        <code className="mt-1.5 block overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 px-3 py-2.5 text-xs text-text-secondary">
+                        <span className="block text-sm text-text-muted"><T>Vendor silent arguments</T></span>
+                        <code className="mt-1.5 block overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 px-3 py-2.5 text-sm text-text-secondary">
                           {data.effectiveConfiguration.vendorSilentArguments === null
                             ? <T>Custom deployment arguments withheld</T>
                             : data.effectiveConfiguration.vendorSilentArguments || <T>No arguments required</T>}
@@ -441,19 +442,19 @@ export function QaDetailsDialog({
                     <TerminalSquare className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
                     <div>
                       <h3 id="qa-method-heading" className="text-sm font-semibold text-text-primary"><T>Installation method</T></h3>
-                      <p className="mt-0.5 text-xs text-text-muted"><T>Commands and detection logic used by the package.</T></p>
+                      <p className="mt-0.5 text-sm text-text-muted"><T>Commands and detection logic used by the package.</T></p>
                     </div>
                   </div>
                   <div className="space-y-5 p-5">
                     <div>
-                      <p className="mb-1.5 text-xs text-text-muted"><T>Install command</T></p>
-                      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-xs text-text-secondary">{data.commands.install}</pre>
+                      <p className="mb-1.5 text-sm text-text-muted"><T>Install command</T></p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-sm text-text-secondary">{data.commands.install}</pre>
                     </div>
                     <div>
-                      <p className="mb-1.5 text-xs text-text-muted"><T>Uninstall command</T></p>
-                      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-xs text-text-secondary">{data.commands.uninstall}</pre>
+                      <p className="mb-1.5 text-sm text-text-muted"><T>Uninstall command</T></p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-sm text-text-secondary">{data.commands.uninstall}</pre>
                     </div>
-                    <p className="text-xs leading-5 text-text-secondary">
+                    <p className="text-sm leading-5 text-text-secondary">
                       {data.detection.type === 'fileVersion' ? (
                         <T>Detection: file version at <Var><code className="rounded bg-bg-deepest px-1 py-0.5">{data.detection.path}</code></Var> must be at least <Var>{data.detection.minimumVersion}</Var>.</T>
                       ) : (
@@ -463,7 +464,7 @@ export function QaDetailsDialog({
                   </div>
                 </section>
 
-                <section className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-overlay/10 pt-5 text-xs text-text-muted">
+                <section className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-overlay/10 pt-5 text-sm text-text-muted">
                   <span><T>Publisher</T>: <span className="text-text-secondary">{data.publisher || <T>Not recorded</T>}</span></span>
                   <span>PSADT <span className="text-text-secondary">{data.package?.psadtVersion || <T>version unknown</T>}</span></span>
                   <span><T>Windows events</T>: <span className="text-text-secondary">{data.relevantEventCount ?? <T>Not recorded</T>}</span></span>
