@@ -306,21 +306,23 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
 
             <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
               <div
-                className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] self-start overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl"
+                className="relative isolate aspect-video w-full self-start rounded-xl"
                 aria-label={`Preparing the isolated QA VM for ${next.displayName}`}
               >
                 <span className={styles.viewerBorder} aria-hidden="true" />
-                <div className="absolute inset-0 animate-shimmer bg-[radial-gradient(circle_at_center,rgba(8,145,178,0.12),transparent_45%)] motion-reduce:animate-none" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-                  <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-accent-cyan">
-                    <span className="absolute inset-0 animate-ping rounded-2xl border border-accent-cyan/20 motion-reduce:animate-none" aria-hidden="true" />
-                    <Monitor className="h-7 w-7" aria-hidden="true" />
-                  </span>
-                  <div>
-                    <p className="font-medium text-white/85"><T>Preparing a clean test VM</T></p>
-                    <p className="mt-1 max-w-md text-sm text-white/50">
-                      <T>The runner will start <Var>{next.displayName}</Var> automatically and the live preview will appear here.</T>
-                    </p>
+                <div className="absolute inset-0 overflow-hidden rounded-[inherit] bg-black">
+                  <div className="absolute inset-0 animate-shimmer bg-[radial-gradient(circle_at_center,rgba(8,145,178,0.12),transparent_45%)] motion-reduce:animate-none" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+                    <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-accent-cyan">
+                      <span className="absolute inset-0 animate-ping rounded-2xl border border-accent-cyan/20 motion-reduce:animate-none" aria-hidden="true" />
+                      <Monitor className="h-7 w-7" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="font-medium text-white/85"><T>Preparing a clean test VM</T></p>
+                      <p className="mt-1 max-w-md text-sm text-white/50">
+                        <T>The runner will start <Var>{next.displayName}</Var> automatically and the live preview will appear here.</T>
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -422,7 +424,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
 
         <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
           <div
-            className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] self-start overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl"
+            className="relative isolate aspect-video w-full self-start rounded-xl"
             aria-labelledby="live-console-heading"
           >
             <span className={styles.viewerBorder} aria-hidden="true" />
@@ -432,7 +434,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
                 <T>Live</T>
               </span>
             ) : null}
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 overflow-hidden rounded-[inherit] bg-black">
               {data.viewer.available && data.viewer.sequence != null && data.viewer.candidateId ? (
                 <LiveFrameImage
                   key={data.viewer.candidateId}

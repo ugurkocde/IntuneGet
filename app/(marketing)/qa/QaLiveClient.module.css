@@ -6,12 +6,10 @@
 
 .viewerBorder {
   position: absolute;
-  inset: 0;
-  z-index: 20;
-  overflow: hidden;
-  border-radius: inherit;
+  inset: -2px;
+  z-index: -1;
+  border-radius: calc(0.75rem + 2px);
   pointer-events: none;
-  box-shadow: inset 0 0 22px rgb(6 182 212 / 45%);
 }
 
 .viewerBorder::before,
@@ -19,19 +17,19 @@
   content: '';
   position: absolute;
   inset: 0;
-  padding: 4px;
+  padding: 2px;
   border-radius: inherit;
   background: conic-gradient(
     from var(--qa-viewer-angle),
-    rgb(6 182 212 / 65%),
-    #22d3ee 15%,
-    #ecfeff 22%,
-    rgb(6 182 212 / 65%) 32%,
-    rgb(139 92 246 / 65%) 50%,
-    #a78bfa 65%,
-    #f5f3ff 72%,
-    rgb(139 92 246 / 65%) 82%,
-    rgb(6 182 212 / 65%)
+    rgb(6 182 212 / 35%),
+    #06b6d4 15%,
+    #a5f3fc 22%,
+    rgb(6 182 212 / 35%) 32%,
+    rgb(139 92 246 / 35%) 50%,
+    #8b5cf6 65%,
+    #c4b5fd 72%,
+    rgb(139 92 246 / 35%) 82%,
+    rgb(6 182 212 / 35%)
   );
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
@@ -39,9 +37,8 @@
 }
 
 .viewerBorder::after {
-  padding: 9px;
-  filter: blur(5px);
-  opacity: 0.9;
+  filter: blur(4px);
+  opacity: 0.45;
 }
 
 @keyframes viewerBorderOrbit {
