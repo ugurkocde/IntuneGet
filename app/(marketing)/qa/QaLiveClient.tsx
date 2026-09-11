@@ -32,6 +32,7 @@ import {
 } from '@/lib/qa/presentation';
 import { cn } from '@/lib/utils';
 import type { QaLivePhase, QaLiveResponse, QaVirusTotalStatus } from '@/types/qa';
+import styles from './QaLiveClient.module.css';
 
 function healthTone(state: string): StatusTone {
   if (state === 'healthy' || state === 'testing' || state === 'idle') return 'success';
@@ -308,6 +309,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
                 className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl lg:aspect-auto lg:min-h-[36rem]"
                 aria-label={`Preparing the isolated QA VM for ${next.displayName}`}
               >
+                <span className={styles.viewerBorder} aria-hidden="true" />
                 <div className="absolute inset-0 animate-shimmer bg-[radial-gradient(circle_at_center,rgba(8,145,178,0.12),transparent_45%)] motion-reduce:animate-none" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
                   <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-accent-cyan">
@@ -423,6 +425,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl lg:aspect-auto lg:min-h-[36rem]"
             aria-labelledby="live-console-heading"
           >
+            <span className={styles.viewerBorder} aria-hidden="true" />
             <h3 id="live-console-heading" className="sr-only"><T>Live test VM</T></h3>
             {frameState === 'live' ? (
               <span className="absolute right-4 top-4 z-10 animate-pulse text-xs font-semibold uppercase tracking-[0.16em] text-status-success drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] motion-reduce:animate-none">
