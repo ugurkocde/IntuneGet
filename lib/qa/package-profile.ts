@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '6bdefc387d1402c71d30a6fbfcf850038f60f37a',
+  packagerCommit: '7238616608f888449fa2e132fffc8d7314c26745',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -590,6 +590,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   'a27749fb895eaa142da413bb6b4b9ebaa5477ad4',
   // WithSecure gains silent removal; unchanged application profiles remain compatible.
   '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+  // Archived EXE-family MSI identities now survive normalization. Unchanged
+  // profiles remain compatible; old archive display fallbacks are excluded below.
+  '6bdefc387d1402c71d30a6fbfcf850038f60f37a',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -789,6 +792,14 @@ function passingProfileCompatibilityReason(
     : [];
 
   for (const release of QA_PACKAGER_RELEASE_HISTORY.slice(priorIndex + 1, currentIndex + 1)) {
+    if (
+      release === '7238616608f888449fa2e132fffc8d7314c26745' &&
+      lowerTextValue(installer.sourceType) === 'zip' &&
+      ['exe', 'inno', 'nullsoft', 'burn'].includes(lowerTextValue(installer.nestedInstallerType)) &&
+      textValue(installer.uninstallCommand).startsWith('REGISTRY_UNINSTALL:')
+    ) {
+      return 'compatible-archive-product-identity-changed';
+    }
     // 42bf6e2 introduced the reviewed process-close lifecycle. A prior pass
     // with no configured process list remains valid; one that expected this
     // behavior must be exercised again. Later releases inherit the behavior

@@ -446,17 +446,20 @@ export function generateUninstallCommand(
         }
         return 'MSIX_UNINSTALL:{PACKAGE_NAME}';
       }
-      // Archive packages execute their nested installer, so a nested MSI/WiX
-      // ProductCode is the authoritative installed-product identity. Preserve
-      // it for post-install capture and removal instead of falling back to a
-      // localized display name that may not match the registered MSI title.
-      if (displayName) {
-        const nestedMsiProductCode = ['msi', 'wix'].includes(
-          installer.nestedInstallerType || ''
-        )
-          ? installer.productCode
-          : undefined;
-        return generateRegistryUninstallCommand(displayName, nestedMsiProductCode);
+        // Archive packages execute their nested installer. MSI and EXE-family
+        // installers both use the manifest's exact registered product identity;
+        // an EXE bootstrapper can register an MSI whose name differs from the
+        // catalog title (for example Acrobat's unified installer).
+        if (displayName) {
+          const nestedType = installer.nestedInstallerType || '';
+          // Extend the archive contract only for canonical MSI product GUIDs.
+          // Named EXE keys can be catalog titles; retain their reviewed adapters.
+          const hasNestedMsiIdentity = ['exe', 'inno', 'nullsoft', 'burn'].includes(nestedType) &&
+            /^\{?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}?$/.test(installer.productCode?.trim() || '');
+          const nestedProductCode = ['msi', 'wix'].includes(nestedType) || hasNestedMsiIdentity
+            ? installer.productCode
+            : undefined;
+          return generateRegistryUninstallCommand(displayName, nestedProductCode);
       }
       return '# Manual uninstall required';
 

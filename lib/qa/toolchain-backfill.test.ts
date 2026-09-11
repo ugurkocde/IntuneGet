@@ -6,6 +6,14 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Acrobat only after its archive MSI identity repair', () => {
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Adobe.Acrobat.Pro', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('6bdefc387d1402c71d30a6fbfcf850038f60f37a',
+      { wingetId: 'Adobe.Acrobat.Pro', status: 'failed' })).toBe(false);
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit))
+      .not.toContain('Adobe.CreativeCloud');
+  });
   it('retries WithSecure only on the reviewed silent-removal release', () => {
     expect(shouldRetryTerminalToolchainCandidate(
       QA_PSADT_TOOLCHAIN.packagerCommit,

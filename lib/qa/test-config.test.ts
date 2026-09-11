@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { buildQaCatalogTestConfig } from './test-config';
 
 describe('buildQaCatalogTestConfig', () => {
+  it('preserves Acrobat unified MSI identity through ZIP/EXE QA normalization', () => {
+    const config = buildQaCatalogTestConfig({
+      app: { wingetId: 'Adobe.Acrobat.Pro', name: 'Adobe Acrobat Pro', publisher: 'Adobe', version: '26.002.21901' },
+      manifest: {
+        InstallerType: 'zip', NestedInstallerType: 'exe', Scope: 'machine',
+        NestedInstallerFiles: [{ RelativeFilePath: 'Adobe Acrobat\\setup.exe' }],
+        ProductCode: '{AC76BA86-1033-FFFF-7760-BC15014EA700}',
+        InstallerSwitches: { Silent: '/sAll /rs /msi', Custom: 'EULA_ACCEPT=YES' },
+      },
+      installer: { Architecture: 'x64' },
+    });
+    expect(config.uninstallCommand).toBe('REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FFFF-7760-BC15014EA700}:Adobe Acrobat Pro');
+    expect(config.productCode).toBe('{AC76BA86-1033-FFFF-7760-BC15014EA700}');
+    expect(config.nestedInstallerType).toBe('exe');
+    expect(config.nestedInstallerFiles).toEqual(['Adobe Acrobat\\setup.exe']);
+    expect(config.silentArgs).toBe('/sAll /rs /msi EULA_ACCEPT=YES');
+    expect(config.scope).toBe('machine');
+  });
+
   it('adds the reviewed Movavi success code to catalog QA packaging', () => {
     const config = buildQaCatalogTestConfig({
       app: {

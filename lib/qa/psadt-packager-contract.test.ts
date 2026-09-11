@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyApplicationPackagingAdapter } from '@/lib/packaging-adapters';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { generateUninstallCommand } from '@/lib/detection-rules';
 
 const packager = readFileSync(
   resolve(process.cwd(), '.github/scripts/Create-PSADTPackage.ps1'),
@@ -2290,6 +2291,41 @@ describe('PSADT registry uninstall identity contract', () => {
     expect(packager).toContain('$configuredMatches = @($postInstallApplications');
     expect(packager).not.toContain('$existingNameMatches');
   });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'captures the Acrobat ZIP bootstrapper MSI identity despite its different registered name',
+    () => {
+      const command = generateUninstallCommand({
+        type: 'zip', nestedInstallerType: 'exe', architecture: 'x64',
+        url: 'https://example.com/acrobat.zip', sha256: 'E'.repeat(64),
+        productCode: '{AC76BA86-1033-FFFF-7760-BC15014EA700}',
+        nestedInstallerPath: 'Adobe Acrobat\\setup.exe',
+      }, 'Adobe Acrobat Pro');
+      const generated = generateRegistryUninstallPackage(
+        'zip', 'Adobe Acrobat Pro', [], {}, [], 'Adobe.Acrobat.Pro',
+        'Adobe Acrobat Pro', '26.002.21901', command,
+        '/sAll /rs /msi EULA_ACCEPT=YES', 'machine', 'exe', 'Adobe Acrobat\\setup.exe'
+      );
+      const identityLine = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selectionLine = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identityLine).toBeDefined();
+      expect(selectionLine).toBeDefined();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identityLine}
+$changedApplications = @(
+  [pscustomobject]@{ PSChildName = '{AC76BA86-1033-FFFF-7760-BC15014EA700}'; DisplayName = 'Adobe Acrobat (64-bit)' },
+  [pscustomobject]@{ PSChildName = '{AC76BA86-1033-FF00-7760-BC15014EA700}'; DisplayName = 'Adobe Acrobat Reader (64-bit)' }
+)
+${selectionLine}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].DisplayName -ne 'Adobe Acrobat (64-bit)') { throw 'Wrong product selected' }
+$changedApplications = @($changedApplications[1])
+${selectionLine}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '{AC76BA86-1033-FFFF-7760-BC15014EA700}'");
+    }, 30_000
+  );
 
   it('supports a reviewed exact non-MSI uninstall registry key', () => {
     expect(packager).toContain(

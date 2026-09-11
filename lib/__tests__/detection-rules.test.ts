@@ -950,6 +950,25 @@ describe('generateUninstallCommand', () => {
     );
   });
 
+  it.each(['exe', 'inno', 'nullsoft', 'burn'] as const)(
+    'preserves exact product identity for a ZIP-wrapped %s installer',
+    (nestedInstallerType) => {
+      const installer: NormalizedInstaller = {
+        architecture: 'x64', url: 'https://example.com/acrobat.zip',
+        sha256: 'abc123', type: 'zip', nestedInstallerType,
+        nestedInstallerPath: 'Adobe Acrobat\\setup.exe',
+        productCode: '{AC76BA86-1033-FFFF-7760-BC15014EA700}',
+      };
+      expect(generateUninstallCommand(installer, 'Adobe Acrobat Pro')).toBe(
+        'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FFFF-7760-BC15014EA700}:Adobe Acrobat Pro'
+      );
+      expect(generateUninstallCommand({ ...installer, productCode: undefined }, 'Adobe Acrobat Pro'))
+        .toBe('REGISTRY_UNINSTALL:Adobe Acrobat Pro');
+      expect(generateUninstallCommand({ ...installer, productCode: 'Unsafe:key' }, 'Adobe Acrobat Pro'))
+        .toBe('REGISTRY_UNINSTALL:Adobe Acrobat Pro');
+    }
+  );
+
   it('should preserve a nested MSI product code for archive packages', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x86',
