@@ -37,6 +37,37 @@ current exact pin with matching hashes, 0/0/0/1 lifecycle, LocalSystem and
 VirusTotal 0/0: `WithSecure.ElementsAgent`. This distinction must remain
 explicit; the 500 milestone has not been met.
 
-Next: protected PR checks and merge, production activation and workflow pins,
-guarded release pin update with zero active lifecycles, fresh scheduler
-heartbeat, exact Acrobat retry before general queue continuation.
+## Production resolution
+
+Shared repair PR #1144 merged as `7238616608f888449fa2e132fffc8d7314c26745`.
+All required CI passed; the local full suite passed 1,833 tests, lint and the
+production build. Activation PR #1145 merged as
+`2179a04f294bba081649b113ad5fe2f6fe61ec00`, including conservative rejection of
+old archive display-fallback compatibility and reviewed retry targets.
+Workflow PR IntuneGet-Workflows#3473 merged as
+`d992874565d8bd2d56f76468676f4ad8932213a0`. Production deployment
+`dpl_5n9CeKqhHTMU7JRhgmwMQh33828G` reached READY. The repair changelog publisher
+succeeded and its public feed entry was verified.
+
+Required, scheduler, QA and customer pins all equal the protected repair
+commit. Only 103 undispatched, unassigned old-pin queued rows were superseded.
+
+Authenticated targeted enqueue attempted the exact Acrobat retry after
+deployment. It returned unavailable: the live metadata resolver selected a
+`2020` directory and reported `installer_manifest_missing`. The original
+exact WinGet manifest remains available through GitHub. No new VM lifecycle
+was started, and no repaired runtime pass is claimed.
+
+Fresh production cache evidence also still shows VirusTotal `not_found`
+with null malicious/suspicious counts for the exact ZIP. At
+`2026-09-11T16:16:31.762Z`, the exact version/architecture/installer SHA was
+blocked as `unverified_file_reputation` in the existing shared
+`qa_package_blocks` gate. This blocks both customer packaging and QA without
+excluding future corrected installer tuples or inventing a clean verdict.
+The original failed result remains preserved.
+
+Production resumed only after block readback, zero active lifecycles, and
+fresh matching required/scheduler pins. General enqueue was invoked to keep
+scanning eligible applications. The 500 milestone remains incomplete. At
+the new exact pin the strict count must be recalculated; the legacy status
+script's 197 is not an authoritative strict count.
