@@ -19,8 +19,11 @@ with strict as (
     and r.virustotal_malicious = 0 and r.virustotal_suspicious = 0
     and r.packager_commit = ((c.test_config->>'packageProfileCanonicalJson')::jsonb#>>'{toolchain,packagerCommit}')
 ), historical as (
-  select distinct lower(trim(winget_id)) id from strict
-  where finished_at <= '2026-08-30T08:28:35Z'
+  -- Older compact-result rows may lack phase/context evidence. Conservatively
+  -- exclude every recorded historical pass rather than count uncertain IDs.
+  select distinct lower(trim(winget_id)) id from public.qa_candidates
+  where status = 'passed' and test_level = 'psadt-package'
+    and finished_at <= '2026-08-30T08:28:35Z'
 )
 select count(distinct lower(trim(s.winget_id))) strict_count,
        max(s.finished_at) latest_strict_finish
