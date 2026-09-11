@@ -133,7 +133,7 @@ function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
           unoptimized
           loading="eager"
           sizes="(min-width: 1024px) 960px, 100vw"
-          className="animate-fade-in object-fill motion-reduce:animate-none"
+          className="animate-fade-in object-contain motion-reduce:animate-none"
         />
       ) : null}
       {src !== visibleSrc ? (
@@ -145,7 +145,7 @@ function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
           unoptimized
           loading="eager"
           sizes="(min-width: 1024px) 960px, 100vw"
-          className="object-fill opacity-0"
+          className="object-contain opacity-0"
           onLoad={() => setVisibleSrc(src)}
         />
       ) : null}
@@ -306,7 +306,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
 
             <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
               <div
-                className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl lg:aspect-auto lg:min-h-[36rem]"
+                className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] self-start overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl"
                 aria-label={`Preparing the isolated QA VM for ${next.displayName}`}
               >
                 <span className={styles.viewerBorder} aria-hidden="true" />
@@ -422,7 +422,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
 
         <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
           <div
-            className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl lg:aspect-auto lg:min-h-[36rem]"
+            className="relative -mx-5 aspect-video w-[calc(100%+2.5rem)] self-start overflow-hidden bg-black sm:mx-0 sm:w-auto sm:rounded-xl"
             aria-labelledby="live-console-heading"
           >
             <span className={styles.viewerBorder} aria-hidden="true" />
