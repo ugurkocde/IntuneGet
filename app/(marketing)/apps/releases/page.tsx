@@ -9,6 +9,7 @@ import { Footer } from "@/components/landing/sections/Footer";
 import { getCatalogSource } from "@/lib/catalog";
 import {
   historyUrl,
+  appHistoryUrl,
   parseHistoryFilters,
   type ReleaseHistoryFilters,
 } from "@/lib/catalog/release-history";
@@ -21,13 +22,13 @@ export async function generateMetadata({
 }: Props): Promise<Metadata> {
   const filters = parseHistoryFilters(await searchParams);
   return {
-    title: "Catalog Release History - IntuneGet",
+    title: filters.app ? `${filters.app} Release History - IntuneGet` : "Catalog Release History - IntuneGet",
     description:
       "Explore app versions recorded in the IntuneGet catalog, with monthly history, publisher release dates, and sync status.",
-    alternates: { canonical: "https://intuneget.com/apps/releases" },
+    alternates: { canonical: "https://intuneget.com/apps/releases", types: { "application/rss+xml": `/apps/releases/feed${filters.app ? `?app=${encodeURIComponent(filters.app)}` : ""}` } },
     robots: {
       index:
-        !filters.query &&
+        !filters.app && !filters.from && !filters.to && !filters.architecture && !filters.query &&
         !filters.month &&
         filters.kind === "all" &&
         filters.page === 1,
@@ -38,7 +39,7 @@ export async function generateMetadata({
 const loadHistory = unstable_cache(
   (filters: ReleaseHistoryFilters) =>
     getCatalogSource().getReleaseHistory(filters),
-  ["catalog-release-history-v5"],
+  ["catalog-release-history-v6"],
   { revalidate: 300 },
 );
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -96,12 +97,12 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
               <T>The catalog, over time</T>
             </p>
             <h1 className="text-balance text-4xl font-bold tracking-tight text-text-primary sm:text-5xl">
-              <T>Catalog release history</T>
+              {filters.app ? <><span className="block text-base font-medium text-text-muted mb-2"><T>Application history</T></span><span className="break-words">{result?.rows[0]?.name ?? filters.app}</span></> : <T>Catalog release history</T>}
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-relaxed text-text-secondary">
               <T>
                 Follow the app versions arriving in IntuneGet. Find an app,
-                explore a month, and see what changed.
+                choose a recorded date range, and inspect the release details.
               </T>
             </p>
           </div>
@@ -113,7 +114,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                 </p>
               )}
               <p>
-                <T>Last checked:</T>{" "}
+                <T>Catalog last checked:</T>{" "}
                 {sync?.lastSuccessfulAt ? (
                   <time dateTime={sync.lastSuccessfulAt}>
                     {syncDateFormat.format(new Date(sync.lastSuccessfulAt))}{" "}
@@ -136,6 +137,10 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           )}
         </header>
 
+        <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          {filters.app && <Link href="/apps/releases" className="text-accent-cyan hover:underline"><T>All app releases</T></Link>}
+          <a href={`/apps/releases/feed${filters.app ? `?app=${encodeURIComponent(filters.app)}` : ""}`} className="text-accent-cyan hover:underline"><T>Subscribe via RSS</T></a>
+        </div>
         {result && (
           <dl className="mb-8 grid grid-cols-3 divide-x divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
             {[
@@ -159,9 +164,10 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
 
         <form
           action="/apps/releases"
-          className="mb-5 grid gap-4 rounded-xl border border-overlay/10 bg-bg-elevated p-5 sm:grid-cols-2 lg:grid-cols-[1fr_180px_190px_auto] lg:items-end"
+          className="mb-5 grid gap-4 rounded-xl border border-overlay/10 bg-bg-elevated p-5 sm:grid-cols-2 lg:grid-cols-4 lg:items-end"
         >
-          <div>
+          {filters.app && <input type="hidden" name="app" value={filters.app} />}
+          <div className="lg:col-span-2">
             <label
               htmlFor="history-search"
               className="mb-2 block text-sm font-medium text-text-primary"
@@ -236,6 +242,24 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
               <option value="first">First tracked</option>
             </select>
           </div>
+          <details open={Boolean(filters.from || filters.to || filters.architecture)} className="sm:col-span-2 lg:col-span-3">
+            <summary className="cursor-pointer py-3 text-sm font-medium text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-cyan"><T>Date range and architecture</T></summary>
+            <div className="mt-2 grid gap-4 sm:grid-cols-3">
+          {[['from', 'Recorded from (UTC)'], ['to', 'Recorded through (UTC)']].map(([key, label]) => (
+            <div key={key}>
+              <label htmlFor={`history-${key}`} className="mb-2 block text-sm font-medium text-text-primary"><T><Var>{label}</Var></T></label>
+              <input id={`history-${key}`} name={key} type="date" defaultValue={key === 'from' ? filters.from : filters.to} className={control} />
+            </div>
+          ))}
+          <div>
+            <label htmlFor="history-architecture" className="mb-2 block text-sm font-medium text-text-primary"><T>Installer architecture</T></label>
+            <select id="history-architecture" name="architecture" defaultValue={filters.architecture ?? ''} className={control}>
+              <option value="">All architectures</option>
+              {['x64', 'x86', 'arm64', 'arm', 'neutral'].map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </div>
+            </div>
+          </details>
           <button
             type="submit"
             className="min-h-11 rounded-lg bg-accent-cyan px-6 py-2 text-sm font-semibold text-bg-deepest hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-cyan"
@@ -251,7 +275,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
             </T>
           </p>
           <Link
-            href="/apps/releases"
+            href={filters.app ? appHistoryUrl(filters.app) : "/apps/releases"}
             className="inline-flex min-h-6 items-center font-medium text-text-secondary underline decoration-overlay/20 underline-offset-4 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
           >
             <T>Clear filters</T>
@@ -298,7 +322,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                   id={`day-${day}`}
                   className="pt-3 text-sm font-semibold text-text-secondary"
                 >
-                  <time dateTime={day}>{dateLabel(day)}</time>
+                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-text-muted"><T>Recorded</T></span><time dateTime={day}>{dateLabel(day)}</time>
                 </h2>
                 <ul className="min-w-0 divide-y divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
                   {rows.map((row) => (
@@ -349,7 +373,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                               className="h-3 w-3 shrink-0"
                             />
                             <span>
-                              <T>Released</T>{" "}
+                              <T>Vendor released</T>{" "}
                               <time dateTime={row.release_date}>
                                 {dateLabel(row.release_date)}
                               </time>
@@ -414,6 +438,8 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                 <T>Installer hash unavailable</T>
                               )}
                             </p>
+                            <div className="flex flex-wrap items-center gap-x-4">
+                            {!filters.app && <Link href={appHistoryUrl(row.winget_id)} className="inline-flex min-h-6 items-center text-text-secondary hover:underline focus-visible:ring-2 focus-visible:ring-accent-cyan"><T>History</T></Link>}
                             {row.release_notes_url && (
                               <a
                                 href={row.release_notes_url}
@@ -428,9 +454,27 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                 />
                               </a>
                             )}
+                            </div>
                           </>
                         )}
                       </div>
+                      <details className="col-start-2 min-w-0 text-xs text-text-muted sm:col-[2/-1]">
+                        <summary className="w-fit cursor-pointer py-1 font-medium text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-cyan"><T>Release details</T></summary>
+                        <div className="mt-2 space-y-3 rounded-lg border border-overlay/10 bg-bg-deepest p-3">
+                          <p><T>Recorded by IntuneGet:</T> <time dateTime={row.detected_at}>{syncDateFormat.format(new Date(row.detected_at))} (UTC)</time></p>
+                          {row.virusTotal?.scannedAt && <p><T>VirusTotal analyzed:</T> <time dateTime={row.virusTotal.scannedAt}>{syncDateFormat.format(new Date(row.virusTotal.scannedAt))} (UTC)</time></p>}
+                          <p><T>Source: WinGet manifest. Findings above apply only to the matching installer hash.</T></p>
+                          {(row.installers?.length ? row.installers : row.virusTotal ? [{hash: row.virusTotal.hash, architecture: row.virusTotal.architecture, filename: null, type: null}] : []).map((installer, index) => (
+                            <div key={`${installer.hash}:${index}`} className="border-t border-overlay/10 pt-3">
+                              <p className="break-all font-medium text-text-secondary">{installer.filename ?? 'Installer'}{installer.architecture ? ` (${installer.architecture})` : ''}{installer.type ? ` · ${installer.type}` : ''}</p>
+                              {installer.hash === row.virusTotal?.hash && <p className="mt-1"><T>Installer shown in the scan summary</T></p>}
+                              <p className="mt-1 break-all font-mono select-all">SHA-256: {installer.hash}</p>
+                              <a href={`https://www.virustotal.com/gui/file/${installer.hash}`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-6 items-center text-accent-cyan hover:underline"><T>Open this file’s report</T></a>
+                            </div>
+                          ))}
+                          {!row.installers?.length && !row.virusTotal && <p><T>Installer details are unavailable for this record.</T></p>}
+                        </div>
+                      </details>
                     </li>
                   ))}
                 </ul>

@@ -22,3 +22,15 @@ describe("release history navigation", () => {
     expect(url.searchParams.get("page")).toBe("2");
   });
 });
+
+describe("detailed history filters", () => {
+  it("rejects impossible calendar dates and reversed ranges", () => {
+    expect(parseHistoryFilters({from: "2026-02-30", to: "invalid", architecture: "all"})).toEqual(parseHistoryFilters({}));
+    expect(parseHistoryFilters({from: "2026-09-11", to: "2026-09-10"}).to).toBeUndefined();
+  });
+  it("preserves exact app, inclusive dates and architecture across pages", () => {
+    const filters = parseHistoryFilters({app: "Example.App", from: "2026-09-01", to: "2026-09-11", architecture: "arm64"});
+    const url = new URL(historyUrl(filters, 2), "https://example.test");
+    expect(parseHistoryFilters(Object.fromEntries(url.searchParams))).toEqual({...filters, page: 2});
+  });
+});

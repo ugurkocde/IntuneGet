@@ -1,0 +1,5 @@
+{
+  "title": "Explore and follow application release history",
+  "summary": "Open a history for an individual app, filter recorded versions by date range and installer architecture, and expand release details to inspect installer filenames, hashes and file-specific VirusTotal links. Publisher release dates and catalog observation times are clearly distinguished. Subscribe to the latest 40 recorded versions through the public RSS feed, globally or for an individual app.",
+  "type": "improved"
+}

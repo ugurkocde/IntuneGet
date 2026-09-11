@@ -33,15 +33,11 @@ export function enrichRelease(
   metadata: ReleaseMetadata[],
   reputations: FileReputation[],
   now = Date.now(),
+  preferredArchitecture = "",
 ): CatalogRelease {
   const version = metadata.find(
     (v) => v.winget_id === row.winget_id && v.version === row.version,
   );
-  const hash = version?.installer_sha256?.toLowerCase();
-  const validHash = hash && /^[a-f0-9]{64}$/.test(hash) ? hash : null;
-  const reputation = validHash
-    ? reputations.find((r) => r.sha256.toLowerCase() === validHash)
-    : null;
   let installers = version?.installers;
   if (typeof installers === "string") {
     try {
@@ -50,6 +46,11 @@ export function enrichRelease(
       installers = [];
     }
   }
+  const preferredInstaller = Array.isArray(installers) && preferredArchitecture
+    ? installers.find(i => typeof i?.Architecture === "string" && i.Architecture.toLowerCase() === preferredArchitecture && typeof i?.InstallerSha256 === "string" && /^[a-f0-9]{64}$/i.test(i.InstallerSha256)) : null;
+  const hash = (preferredArchitecture ? preferredInstaller?.InstallerSha256 : version?.installer_sha256)?.toLowerCase();
+  const validHash = hash && /^[a-f0-9]{64}$/.test(hash) ? hash : null;
+  const reputation = validHash ? reputations.find(r => r.sha256.toLowerCase() === validHash) : null;
   const installer = Array.isArray(installers)
     ? installers.find(
         (i) =>
@@ -59,6 +60,12 @@ export function enrichRelease(
     : null;
   return {
     ...row,
+    installers: Array.isArray(installers) ? installers.flatMap(i => {
+      if (typeof i?.InstallerSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(i.InstallerSha256)) return [];
+      let filename: string | null = null;
+      try { filename = decodeURIComponent(new URL(i.InstallerUrl).pathname.split("/").pop() || "") || null; } catch { /* Missing URL or invalid encoding. */ }
+      return [{ hash: i.InstallerSha256.toLowerCase(), architecture: typeof i.Architecture === "string" ? i.Architecture : null, filename, type: typeof i.InstallerType === "string" ? i.InstallerType : null }];
+    }) : [],
     release_notes_url: officialReleaseNotesUrl(version?.release_notes_url),
     virusTotal: validHash
       ? {

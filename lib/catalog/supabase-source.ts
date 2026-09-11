@@ -64,7 +64,8 @@ export class SupabaseCatalogSource implements CatalogSource {
   async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const client = serviceOrAnonClient();
     if (!client) throw new Error('Catalog unavailable');
-    const { data, error } = await client.rpc('get_catalog_release_history', {
+    const { data, error } = await client.rpc('get_catalog_release_history_v2', {
+      app_filter: filters.app ?? "", date_from: filters.from || null, date_to: filters.to || null, architecture_filter: filters.architecture ?? "",
       search_text: filters.query, month_filter: filters.month,
       kind_filter: filters.kind, page_number: filters.page,
     }).abortSignal(AbortSignal.timeout(15_000));
@@ -75,7 +76,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       const pairs = batch.map(row => `and(winget_id.eq.${quotePostgrestValue(row.winget_id)},version.eq.${quotePostgrestValue(row.version)})`).join(',');
       return client.from('version_history').select('winget_id,version,release_notes_url,installer_sha256,installers').or(pairs).limit(batch.length).abortSignal(AbortSignal.timeout(10_000));
     });
-    const hashes = [...new Set(metadata.map(v => v.installer_sha256?.toLowerCase()).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
+    const hashes = [...new Set(result.rows.map(row => enrichRelease(row, metadata, [], Date.now(), filters.architecture).virusTotal?.hash).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
     let reputations: FileReputation[] = [];
     if (hashes.length) {
       const responses = await Promise.allSettled([
@@ -85,7 +86,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       const cached = responses[0];
       if (cached.status === 'fulfilled' && cached.value && !cached.value.error) reputations = (cached.value.data ?? []) as FileReputation[];
     }
-    return {...result, rows: result.rows.map(row => unavailable.has(releasePairKey(row)) ? {...row, detailsUnavailable: true} : enrichRelease(row, metadata, reputations))};
+    return {...result, rows: result.rows.map(row => unavailable.has(releasePairKey(row)) ? {...row, detailsUnavailable: true} : enrichRelease(row, metadata, reputations, Date.now(), filters.architecture))};
   }
 
   // ---------------------------------------------------------------------------

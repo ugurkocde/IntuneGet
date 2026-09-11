@@ -36,6 +36,9 @@ const report: FileReputation = {
   analyzed_at: "2026-09-06T01:00:00Z",
 };
 describe("release evidence", () => {
+  it("selects the filtered architecture without borrowing another file's findings", () => {
+    expect(enrichRelease(row, metadata, [report], Date.now(), "arm64").virusTotal).toMatchObject({hash: "b".repeat(64), architecture: "arm64", malicious: null, status: "unknown"});
+  });
   it("reuses an exact hash report across apps and versions", () => {
     const other = { ...row, winget_id: "Another.App", version: "3.0" };
     expect(

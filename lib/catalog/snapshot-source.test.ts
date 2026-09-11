@@ -400,3 +400,14 @@ describe('catalog release history', () => {
     expect(result.total).toBe(0);
   });
 });
+
+describe('release history filtering', () => {
+  it('filters exact app, date and architecture before counting while preserving predecessor', async () => {
+    const result = await new SnapshotCatalogSource().getReleaseHistory({query: '', month: '', kind: 'all', page: 1, app: 'google.chrome', from: '2026-01-02', to: '2026-01-02', architecture: 'x64'});
+    expect(result.total).toBe(1);
+    expect(result.apps).toBe(1);
+    expect(result.rows[0].winget_id).toBe('Google.Chrome');
+    const empty = await new SnapshotCatalogSource().getReleaseHistory({query: '', month: '', kind: 'all', page: 1, app: 'Google.Chrome', architecture: 'arm64'});
+    expect(empty.total).toBe(0);
+  });
+});

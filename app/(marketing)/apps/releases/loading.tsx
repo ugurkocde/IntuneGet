@@ -34,13 +34,14 @@ export default function Loading() {
               </div>
             ))}
           </div>
-          <div className="mb-5 grid gap-4 rounded-xl border border-overlay/10 bg-bg-elevated p-5 sm:grid-cols-2 lg:grid-cols-[1fr_180px_190px_auto] lg:items-end">
+          <div className="mb-5 grid gap-4 rounded-xl border border-overlay/10 bg-bg-elevated p-5 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
             {[0, 1, 2].map((i) => (
-              <div key={i}>
+              <div key={i} className={i === 0 ? "lg:col-span-2" : ""}>
                 <div className={`${bone} mb-2 h-5 w-24`} />
                 <div className={`${bone} h-11 w-full`} />
               </div>
             ))}
+            <div className={`${bone} h-11 w-52 sm:col-span-2 lg:col-span-3`} />
             <div className={`${bone} h-11 w-full lg:w-32`} />
           </div>
           <div className={`${bone} mb-10 h-5 w-3/4`} />
@@ -54,6 +55,7 @@ export default function Loading() {
                   <div className={`${bone} col-start-2 h-7 w-36 sm:col-start-3 sm:row-start-1`} />
                   <div className={`${bone} col-start-2 h-5 w-3/5 sm:row-start-2`} />
                   <div className={`${bone} col-start-2 h-6 w-3/4 max-w-full sm:col-[2/-1] sm:row-start-3`} />
+                  <div className={`${bone} col-start-2 h-5 w-24`} />
                 </div>
               ))}
             </div>

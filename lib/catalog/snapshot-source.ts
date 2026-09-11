@@ -191,18 +191,21 @@ export class SnapshotCatalogSource implements CatalogSource {
           v.created_at AS detected_at,
           lag(v.version) OVER (PARTITION BY v.winget_id ORDER BY v.created_at, v.version) AS previous_version
         FROM version_history v JOIN curated_apps c USING (winget_id)
-        WHERE coalesce(c.is_locale_variant, 0) = 0 AND v.created_at IS NOT NULL
+        WHERE (@app = '' OR lower(v.winget_id) = lower(@app)) AND coalesce(c.is_locale_variant, 0) = 0 AND v.created_at IS NOT NULL
       )`;
       const where = ` WHERE (@month = '' OR substr(detected_at, 1, 7) = @month)
+        AND (@from = '' OR detected_at >= @from)
+        AND (@to = '' OR substr(detected_at, 1, 10) <= @to)
+        AND (@architecture = '' OR EXISTS (SELECT 1 FROM version_history av, json_each(CASE WHEN json_valid(av.installers) THEN av.installers ELSE '[]' END) ai WHERE av.winget_id = history.winget_id AND av.version = history.version AND lower(json_extract(ai.value, '$.Architecture')) = @architecture))
         AND (@query = '' OR instr(lower(name || ' ' || coalesce(publisher, '') || ' ' || winget_id), lower(@query)) > 0)
         AND (@kind = 'all' OR (@kind = 'first' AND previous_version IS NULL) OR (@kind = 'updated' AND previous_version IS NOT NULL))`;
-      const params = { month: filters.month, query: filters.query, kind: filters.kind };
+      const params = { month: filters.month, query: filters.query, kind: filters.kind, app: filters.app ?? "", from: filters.from ?? "", to: filters.to ?? "", architecture: filters.architecture ?? "" };
       const rows = db.prepare(`${history} SELECT * FROM history ${where} ORDER BY detected_at DESC, winget_id, version DESC LIMIT 40 OFFSET @offset`)
         .all({ ...params, offset: (filters.page - 1) * 40 }) as CatalogRelease[];
       const stats = db.prepare(`${history} SELECT count(*) AS total, count(DISTINCT winget_id) AS apps,
         coalesce(sum(previous_version IS NULL), 0) AS firstTracked FROM history ${where}`).get(params) as { total: number; apps: number; firstTracked: number };
-      const months = db.prepare(`${history} SELECT DISTINCT substr(detected_at, 1, 7) AS month FROM history ORDER BY month DESC`).all() as { month: string }[];
-      const coverage = db.prepare(`${history} SELECT min(detected_at) AS start FROM history`).get() as { start: string | null };
+      const months = db.prepare(`${history} SELECT DISTINCT substr(detected_at, 1, 7) AS month FROM history ORDER BY month DESC`).all({app: filters.app ?? ''}) as { month: string }[];
+      const coverage = db.prepare(`${history} SELECT min(detected_at) AS start FROM history`).get({app: filters.app ?? ''}) as { start: string | null };
       const notesColumn = columns.some(c => c.name === 'release_notes_url') ? 'release_notes_url' : 'NULL AS release_notes_url';
       const metadataQuery = db.prepare(`SELECT winget_id, version, installer_sha256, installers, ${notesColumn} FROM version_history WHERE winget_id = ? AND version = ?`);
       const reputationExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'catalog_file_reputation'").get();
@@ -211,9 +214,9 @@ export class SnapshotCatalogSource implements CatalogSource {
       const legacyQuery = qaColumns.some(c => c.name === 'virustotal_status') ? db.prepare("SELECT lower(installer_sha256) AS sha256, 'found' AS status, virustotal_malicious AS malicious, virustotal_suspicious AS suspicious, virustotal_total_engines AS total_engines, virustotal_scanned_at_utc AS analyzed_at FROM qa_results WHERE lower(installer_sha256) = ? AND virustotal_status IN ('clean', 'flagged', 'suspicious') ORDER BY virustotal_scanned_at_utc DESC LIMIT 1") : null;
       const enriched = rows.map(row => {
         const metadata = metadataQuery.get(row.winget_id, row.version) as ReleaseMetadata | undefined;
-        const hash = metadata?.installer_sha256?.toLowerCase() ?? '';
+        const hash = enrichRelease(row, metadata ? [metadata] : [], [], Date.now(), filters.architecture).virusTotal?.hash ?? '';
         const reputation = (reputationQuery ?? legacyQuery)?.get(hash) as FileReputation | undefined;
-        return enrichRelease(row, metadata ? [metadata] : [], reputation ? [reputation] : []);
+        return enrichRelease(row, metadata ? [metadata] : [], reputation ? [reputation] : [], Date.now(), filters.architecture);
       });
       return { rows: enriched, ...stats, months: months.map(m => m.month), coverageStart: coverage.start, sync: null };
     }, () => { throw new Error('Catalog snapshot unavailable'); });
