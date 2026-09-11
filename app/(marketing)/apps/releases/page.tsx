@@ -1,4 +1,5 @@
 import { AppIcon } from "@/components/AppIcon";
+import { ReleaseFeedDialog } from "@/components/landing/ReleaseFeedDialog";
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
@@ -139,7 +140,7 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
 
         <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
           {filters.app && <Link href="/apps/releases" className="text-accent-cyan hover:underline"><T>All app releases</T></Link>}
-          <a href={`/apps/releases/feed${filters.app ? `?app=${encodeURIComponent(filters.app)}` : ""}`} className="text-accent-cyan hover:underline"><T>Subscribe via RSS</T></a>
+          <ReleaseFeedDialog key={filters.app ?? "all"} app={filters.app} />
         </div>
         {result && (
           <dl className="mb-8 grid grid-cols-3 divide-x divide-overlay/10 rounded-xl border border-overlay/10 bg-bg-elevated">
