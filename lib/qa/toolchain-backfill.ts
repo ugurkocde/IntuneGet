@@ -666,6 +666,13 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '6bdefc387d1402c71d30a6fbfcf850038f60f37a': [
+    'WithSecure.ElementsAgent',
+    'PostgreSQL.PostgreSQL.16',
+    'Trimble.SketchUp.2025',
+    // Preserve prior unconsumed reviewed retries; security blocks remain authoritative.
+    ...ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
+  ],
   '0ff16a2420976f28a232ad1c015c8023f805fbb3': [
     'PostgreSQL.PostgreSQL.16',
     // Preserve existing unconsumed targets; security eligibility still blocks
