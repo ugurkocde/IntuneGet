@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { T, Var } from 'gt-next';
 import {
   AlertTriangle,
@@ -20,6 +19,7 @@ import {
 import { AppIcon } from '@/components/AppIcon';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { QaDetailsDialog } from '@/components/qa/QaDetailsDialog';
+import { QaVmViewer } from '@/components/qa/QaVmViewer';
 import { QaLiveActivityDialog } from '@/components/qa/QaLiveActivityDialog';
 import { QaLiveStepTimeline } from '@/components/qa/QaLiveStepTimeline';
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge';
@@ -113,39 +113,6 @@ function QaVirusTotalCell({ status }: { status: QaVirusTotalStatus | null }) {
     );
   }
   return <span className="text-xs text-text-muted" aria-hidden="true">—</span>;
-}
-
-function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
-  const [visibleSrc, setVisibleSrc] = useState<string | null>(null);
-
-  return (
-    <>
-      {visibleSrc ? (
-        <Image
-          src={visibleSrc}
-          alt={alt}
-          fill
-          unoptimized
-          loading="eager"
-          sizes="(min-width: 1024px) 960px, 100vw"
-          className="animate-fade-in object-contain motion-reduce:animate-none"
-        />
-      ) : null}
-      {src !== visibleSrc ? (
-        <Image
-          src={src}
-          alt=""
-          aria-hidden="true"
-          fill
-          unoptimized
-          loading="eager"
-          sizes="(min-width: 1024px) 960px, 100vw"
-          className="object-contain opacity-0"
-          onLoad={() => setVisibleSrc(src)}
-        />
-      ) : null}
-    </>
-  );
 }
 
 function ServiceHealth({ data }: { data: QaLiveResponse }) {
@@ -424,25 +391,15 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           >
             <span className={styles.viewerBorder} aria-hidden="true" />
             <h3 id="live-console-heading" className="sr-only"><T>Live test VM</T></h3>
-            {frameState === 'live' ? (
-              <span className="absolute right-4 top-4 z-10 animate-pulse text-xs font-semibold uppercase tracking-[0.16em] text-status-success drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] motion-reduce:animate-none">
-                <T>Live</T>
-              </span>
-            ) : null}
-            <div className="absolute inset-0 overflow-hidden rounded-[inherit] bg-black">
-              {data.viewer.available && data.viewer.sequence != null && data.viewer.candidateId ? (
-                <LiveFrameImage
-                  key={data.viewer.candidateId}
-                  src={`/api/qa/live/frame?candidate=${encodeURIComponent(data.viewer.candidateId)}&sequence=${data.viewer.sequence}`}
-                  alt={`Read-only live view of the isolated QA VM while testing ${data.current.displayName}`}
-                />
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-                  <Monitor className="h-8 w-8 text-white/25" aria-hidden="true" />
-                  <p className="max-w-md text-sm text-white/50"><T>The private host is preparing a safe, read-only VM console view. No keyboard, mouse, clipboard, or audio channel is exposed.</T></p>
-                </div>
-              )}
-            </div>
+            <QaVmViewer
+              key={`${data.current.wingetId}-${data.current.startedAt}`}
+              src={data.viewer.available && data.viewer.sequence != null && data.viewer.candidateId
+                ? `/api/qa/live/frame?candidate=${encodeURIComponent(data.viewer.candidateId)}&sequence=${data.viewer.sequence}`
+                : null}
+              appName={data.current.displayName}
+              phaseLabel={phase.label}
+              frameState={frameState}
+            />
           </div>
           <QaLiveStepTimeline
             phase={data.current.phase}
