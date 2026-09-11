@@ -133,7 +133,7 @@ function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
           unoptimized
           loading="eager"
           sizes="(min-width: 1024px) 960px, 100vw"
-          className="animate-fade-in object-contain motion-reduce:animate-none"
+          className="animate-fade-in object-fill motion-reduce:animate-none"
         />
       ) : null}
       {src !== visibleSrc ? (
@@ -145,7 +145,7 @@ function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
           unoptimized
           loading="eager"
           sizes="(min-width: 1024px) 960px, 100vw"
-          className="object-contain opacity-0"
+          className="object-fill opacity-0"
           onLoad={() => setVisibleSrc(src)}
         />
       ) : null}
