@@ -1,0 +1,31 @@
+/* Fade the large frame without moving or rescaling the desktop mid-transition. */
+.dialog[data-state='open'],
+.overlay[data-state='open'] {
+  animation: viewerEnter 180ms ease-out both;
+}
+
+.dialog[data-state='closed'],
+.overlay[data-state='closed'] {
+  animation: viewerExit 140ms ease-in both;
+}
+
+.overlay {
+  backdrop-filter: none;
+}
+
+@keyframes viewerEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes viewerExit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[data-state],
+  .overlay[data-state] {
+    animation: none;
+  }
+}
