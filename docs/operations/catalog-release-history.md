@@ -50,6 +50,6 @@ Validation: run the catalog TypeScript tests and `supabase/tests/catalog_release
 
 ### Metadata request recovery
 
-The website retries failed metadata batches and then falls back to indexed app/version equality lookups with at most four concurrent requests. Each fallback request has a three-second timeout and all fallback work shares an eight-second deadline. Only records whose requests still fail show unavailable details; missing optional vendor metadata is not a request failure.
+Metadata batches have a three-second request timeout. An aborted request skips the batch retry when individual recovery is available; other transient errors receive one retry. The website then falls back to indexed app/version equality lookups with at most four concurrent requests. Each fallback request has a three-second timeout and all fallback work shares an eight-second deadline. Only records whose requests still fail show unavailable details; missing optional vendor metadata is not a request failure.
 
 Incomplete history responses are thrown out of the page-cache callback, preserving the previous complete response during background revalidation. On a cold request the available records can still render without storing the partial result. History links do not depend on enrichment. The displayed full-catalog check timestamp is explicitly labelled to distinguish it from incremental updates.

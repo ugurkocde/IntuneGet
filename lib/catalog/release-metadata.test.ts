@@ -51,3 +51,13 @@ it('recovers failed batches with bounded single-row lookups and isolates one fai
   expect([...result.unavailable]).toEqual([releasePairKey(rows[3])]);
   warn.mockRestore();
 });
+
+it('skips an aborted batch retry when individual recovery is available', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const batch = vi.fn(async () => ({data:null,error:{},status:0}));
+  const result = await loadReleaseMetadata(rows.slice(0,1), batch, async row => ({data:evidence([row]),error:null,status:200}));
+  expect(batch).toHaveBeenCalledTimes(1);
+  expect(result.unavailable.size).toBe(0);
+  expect(result.metadata).toHaveLength(1);
+  warn.mockRestore();
+});

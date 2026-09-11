@@ -20,6 +20,7 @@ export async function loadReleaseMetadata(
       try {
         const response = await fetchBatch(batch);
         if (!response.error && response.data) return response.data;
+        if (fetchSingle && response.status === 0) throw new Error('Release metadata unavailable (request aborted)');
         const transient = response.status === 0 || response.status === 408 || response.status === 429 || response.status >= 500 || response.error?.code === '57014';
         if (!transient || attempt === 1) throw new Error(`Release metadata unavailable (HTTP ${response.status})`);
       } catch (error) {

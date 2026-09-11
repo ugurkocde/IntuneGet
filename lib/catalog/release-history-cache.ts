@@ -3,6 +3,7 @@ import type { ReleaseHistoryResult } from './release-history';
 export class CompleteHistoryError extends Error {
   constructor(public readonly result: ReleaseHistoryResult) {
     super('Release history metadata is incomplete');
+    Object.defineProperty(this, 'result', {value: result, enumerable: false});
   }
 }
 
