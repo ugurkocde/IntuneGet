@@ -2564,6 +2564,19 @@ describe('current catalog QA package validation', () => {
     ).toMatchObject({ valid: true });
   });
 
+  it('requires fresh archive identity evidence but preserves unrelated prior passes', () => {
+    const archive = identityWithPackagerCommit(buildQaPackageIdentity({
+      ...input, sourceInstallerType: 'zip', nestedInstallerType: 'exe',
+      nestedInstallerFiles: ['setup.exe'],
+    }), '6bdefc387d1402c71d30a6fbfcf850038f60f37a');
+    expect(validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(archive)))
+      .toEqual({ valid: false, reason: 'compatible-archive-product-identity-changed' });
+    const unaffected = identityWithPackagerCommit(buildQaPackageIdentity(input),
+      '6bdefc387d1402c71d30a6fbfcf850038f60f37a');
+    expect(validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(unaffected)))
+      .toMatchObject({ valid: true });
+  });
+
   it('does not reuse a process lifecycle pass from before the lifecycle release', () => {
     const priorCommit = 'c1fe66c04b11f595bfaf4c9ca7cc1444186ea028';
     const legacyIdentity = identityWithPackagerCommit(
