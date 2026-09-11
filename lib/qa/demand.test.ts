@@ -80,6 +80,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
 
   it.each([
     ['Example.App', 'vendor_retired'],
+    ['GlassWire.GlassWire', 'unsupported_managed_uninstall'],
     ['Microsoft.VCLibs.14', 'unsupported_managed_uninstall'],
     ['Microsoft.VCLibs.Desktop.14', 'unsupported_managed_uninstall'],
   ])('does not queue or resolve dependencies for blocked %s', async (wingetId, code) => {
