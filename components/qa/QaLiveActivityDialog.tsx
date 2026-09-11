@@ -3,6 +3,8 @@
 import { ChevronRight, FileCode2, ListTree, ScrollText } from 'lucide-react';
 import { T, Var } from 'gt-next';
 import { QaLiveActivityPanel } from '@/components/qa/QaLiveActivityPanel';
+import { AppIcon } from '@/components/AppIcon';
+import { getQaPhasePresentation } from '@/lib/qa/presentation';
 import {
   Dialog,
   DialogContent,
@@ -18,11 +20,13 @@ export function QaLiveActivityDialog({
   log,
   phase,
   serverTime,
+  app,
 }: {
   activity: QaLiveActivity | null;
   log: QaLiveLog | null;
   phase: QaLivePhase;
   serverTime: string;
+  app: { wingetId: string; displayName: string; version: string; architecture: string; startedAt: string };
 }) {
   const fileCount = activity
     ? activity.counts.filesAdded + activity.counts.filesChanged + activity.counts.filesRemoved
@@ -45,7 +49,7 @@ export function QaLiveActivityDialog({
             <span className="min-w-0">
               <span className="block text-sm font-medium text-text-primary"><T>Detected system changes</T></span>
               <span className="mt-0.5 block text-xs text-text-muted">
-                <T>Open live files, registry activity, and the sanitized PSADT log</T>
+                <T>View file changes, registry entries, and installation log</T>
               </span>
             </span>
           </span>
@@ -67,22 +71,24 @@ export function QaLiveActivityDialog({
           </span>
         </button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100%_-_1.5rem)] max-w-6xl flex-col">
-        <DialogHeader className="shrink-0 pr-10">
-          <DialogTitle><T>Live installation evidence</T></DialogTitle>
-          <DialogDescription>
-            <T>Sanitized snapshot changes and PSADT activity from the isolated test VM.</T>
-          </DialogDescription>
+      <DialogContent className="flex h-[min(48rem,92dvh)] w-[calc(100%_-_1.5rem)] max-w-4xl flex-col bg-bg-surface">
+        <DialogHeader className="shrink-0 px-5 py-5 pr-12 sm:px-6 sm:pr-14">
+          <div className="flex items-center gap-3">
+            <AppIcon packageId={app.wingetId} packageName={app.displayName} size="lg" />
+            <div className="min-w-0">
+              <p className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-accent-cyan"><span className="h-1.5 w-1.5 rounded-full bg-accent-cyan" aria-hidden="true" /><T>Live test</T><span className="text-text-muted">· <T>{getQaPhasePresentation(phase).label}</T></span></p>
+              <DialogTitle className="break-words text-xl [overflow-wrap:anywhere]">{app.displayName}</DialogTitle>
+              <DialogDescription className="mt-1 break-words"><T>Version <Var>{app.version}</Var></T> · {app.architecture}</DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           <QaLiveActivityPanel
+            key={`${app.wingetId}-${app.startedAt}`}
             activity={activity}
             log={log}
             phase={phase}
             serverTime={serverTime}
-            mode="dialog"
           />
-        </div>
       </DialogContent>
     </Dialog>
   );

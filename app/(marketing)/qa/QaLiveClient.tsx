@@ -6,6 +6,7 @@ import { T, Var } from 'gt-next';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   ListOrdered,
   Loader2,
   Monitor,
@@ -112,12 +113,6 @@ function QaVirusTotalCell({ status }: { status: QaVirusTotalStatus | null }) {
     );
   }
   return <span className="text-xs text-text-muted" aria-hidden="true">—</span>;
-}
-
-function resultEdgeClass(outcome: 'Passed' | 'Failed'): string {
-  return outcome === 'Passed'
-    ? 'border-l-status-success/60'
-    : 'border-l-status-error/60';
 }
 
 function LiveFrameImage({ src, alt }: { src: string; alt: string }) {
@@ -455,6 +450,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
           />
           <div className="lg:col-start-1 lg:row-start-2">
             <QaLiveActivityDialog
+              app={data.current}
               activity={data.activity}
               log={data.log}
               phase={data.current.phase}
@@ -484,8 +480,8 @@ function DashboardContent() {
         <div className="space-y-6" aria-hidden="true">
           <div className="h-64 sm:h-32 lg:h-16 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
           <div className="h-[600px] lg:h-[480px] animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-            <div className="h-80 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
+          <div className="space-y-6">
+            <div className="h-40 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
             <div className="h-80 animate-pulse rounded-2xl border border-overlay/10 bg-bg-elevated motion-reduce:animate-none" />
           </div>
         </div>
@@ -508,7 +504,7 @@ function DashboardContent() {
       <ServiceHealth data={data} />
       <CurrentTest data={data} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+      <div className="space-y-6">
         <section className="min-w-0 rounded-2xl border border-overlay/10 bg-bg-elevated p-5 sm:p-6" aria-labelledby="queue-heading">
           <div className="mb-4 flex items-baseline justify-between gap-3">
             <h2 id="queue-heading" className="text-lg font-semibold text-text-primary"><T>Next in queue</T></h2>
@@ -516,11 +512,11 @@ function DashboardContent() {
           </div>
           {data.queue.next.length ? (
             <>
-              <ol id="qa-queue-list" className="divide-y divide-overlay/10">
+              <ol id="qa-queue-list" className="grid gap-x-5 sm:grid-cols-3">
                 {data.queue.next.map((item, index) => (
                   <li
                     key={`${item.wingetId}-${item.version}-${item.architecture}`}
-                    className={cn('items-center gap-3 py-3', index >= 3 && !showFullQueue ? 'hidden sm:flex' : 'flex')}
+                    className={cn('items-center gap-3 py-3', index >= 3 && !showFullQueue ? 'hidden' : 'flex')}
                   >
                     <span className="w-5 text-xs tabular-nums text-text-muted">{index + 1}</span>
                     <AppIcon packageId={item.wingetId} packageName={item.displayName} size="sm" />
@@ -535,7 +531,7 @@ function DashboardContent() {
                 <button
                   type="button"
                   onClick={() => setShowFullQueue((current) => !current)}
-                  className="mt-3 min-h-10 w-full rounded-lg border border-overlay/10 px-3 text-sm text-text-secondary hover:bg-overlay/5 hover:text-text-primary sm:hidden"
+                  className="mt-3 min-h-10 w-full rounded-lg border border-overlay/10 px-3 text-sm text-text-secondary hover:bg-overlay/5 hover:text-text-primary"
                   aria-expanded={showFullQueue}
                   aria-controls="qa-queue-list"
                 >
@@ -553,99 +549,33 @@ function DashboardContent() {
           </div>
 
           {data.recent.length ? (
-            <>
-              <div className="divide-y divide-overlay/10 sm:hidden">
-                {data.recent.map((item) => (
+            <ul className="divide-y divide-overlay/10 border-t border-overlay/10">
+              {data.recent.map((item) => (
+                <li key={item.packageProfileSha256}>
                   <button
-                    key={item.packageProfileSha256}
                     type="button"
-                    onClick={() => setSelected({
-                      wingetId: item.wingetId,
-                      catalogVersion: item.catalogVersion,
-                      packageProfileSha256: item.packageProfileSha256,
-                    })}
-                    className={cn(
-                      'flex min-h-20 w-full items-center gap-3 border-l-2 px-5 py-3 text-left transition-colors hover:bg-overlay/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan',
-                      resultEdgeClass(item.outcome)
-                    )}
+                    onClick={() => setSelected({ wingetId: item.wingetId, catalogVersion: item.catalogVersion, packageProfileSha256: item.packageProfileSha256 })}
+                    aria-label={`View QA result for ${item.displayName}, version ${item.testedVersion}`}
+                    className="group flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-overlay/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan sm:gap-4 sm:px-6"
                   >
-                    <AppIcon packageId={item.wingetId} packageName={item.displayName} size="sm" />
+                    <AppIcon packageId={item.wingetId} packageName={item.displayName} size="md" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-text-primary">{item.displayName}</span>
-                      <span className="mt-0.5 block text-xs text-text-muted">
-                        {item.testedVersion} · {item.architecture} · {formatQaDuration(item.durationSeconds)}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-text-muted">
-                        {formatRelativeTime(item.testedAtUtc, data.serverTime) ?? <T>Test time unavailable</T>}
+                      <span className="block break-words text-sm font-semibold text-text-primary [overflow-wrap:anywhere]">{item.displayName}</span>
+                      <span className="mt-1 block break-words text-xs text-text-muted [overflow-wrap:anywhere]">{item.testedVersion} · {item.architecture}</span>
+                      <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+                        <span><T>Duration</T> {formatQaDuration(item.durationSeconds)}</span>
+                        <span>{formatRelativeTime(item.testedAtUtc, data.serverTime) ?? <T>Test time unavailable</T>}</span>
+                        <QaVirusTotalCell status={item.virusTotalStatus} />
                       </span>
                     </span>
-                    <span className="flex flex-col items-end gap-1">
+                    <span className="flex shrink-0 flex-col items-end gap-2">
                       <QaResultStatus outcome={item.outcome} />
-                      {item.virusTotalStatus === 'clean' ||
-                      item.virusTotalStatus === 'flagged' ||
-                      item.virusTotalStatus === 'suspicious' ? (
-                        <QaVirusTotalCell status={item.virusTotalStatus} />
-                      ) : null}
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-accent-cyan"><T>Details</T><ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" /></span>
                     </span>
                   </button>
-                ))}
-              </div>
-
-              <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-y border-overlay/10 text-xs text-text-muted">
-                    <tr>
-                      <th className="w-full px-6 py-3 font-medium"><T>Application</T></th>
-                      <th className="whitespace-nowrap px-3 py-3 font-medium"><T>Result</T></th>
-                      <th className="whitespace-nowrap px-3 py-3 font-medium"><T>VirusTotal</T></th>
-                      <th className="whitespace-nowrap px-3 py-3 font-medium"><T>Duration</T></th>
-                      <th className="whitespace-nowrap px-6 py-3 font-medium"><T>Tested</T></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-overlay/10">
-                    {data.recent.map((item) => (
-                      <tr
-                        key={item.packageProfileSha256}
-                        onClick={() => setSelected({
-                          wingetId: item.wingetId,
-                          catalogVersion: item.catalogVersion,
-                          packageProfileSha256: item.packageProfileSha256,
-                        })}
-                        className="cursor-pointer transition-colors hover:bg-overlay/5"
-                      >
-                        <td className={cn('w-full max-w-0 border-l-2 px-6 py-3', resultEdgeClass(item.outcome))}>
-                          <button
-                            type="button"
-                            onClick={() => setSelected({
-                              wingetId: item.wingetId,
-                              catalogVersion: item.catalogVersion,
-                              packageProfileSha256: item.packageProfileSha256,
-                            })}
-                            className="flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-                          >
-                            <AppIcon packageId={item.wingetId} packageName={item.displayName} size="sm" />
-                            <span className="min-w-0">
-                              <span className="block truncate font-medium text-text-primary">{item.displayName}</span>
-                              <span className="block text-xs text-text-muted">{item.testedVersion} · {item.architecture}</span>
-                            </span>
-                          </button>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3">
-                          <QaResultStatus outcome={item.outcome} />
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3">
-                          <QaVirusTotalCell status={item.virusTotalStatus} />
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-text-secondary">{formatQaDuration(item.durationSeconds)}</td>
-                        <td className="whitespace-nowrap px-6 py-3 text-xs text-text-muted">
-                          {formatRelativeTime(item.testedAtUtc, data.serverTime) ?? <T>Not recorded</T>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                </li>
+              ))}
+            </ul>
           ) : (
             <p className="border-t border-overlay/10 px-6 py-8 text-sm text-text-muted"><T>No QA results have been published yet.</T></p>
           )}

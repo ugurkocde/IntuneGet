@@ -13,12 +13,15 @@ import {
   RefreshCw,
   Settings2,
   ShieldCheck,
+  ShieldQuestion,
   TerminalSquare,
   XCircle,
 } from 'lucide-react';
 import { VirusTotalIcon } from '@/components/qa/VirusTotalIcon';
 import { T, Var } from 'gt-next';
 import { AppIcon } from '@/components/AppIcon';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getEvidencePhaseStatus, getEvidenceSummary, QA_RESULT_PHASES, type QaPhaseKey } from '@/lib/qa/evidence-presentation';
 import {
   Dialog,
   DialogContent,
@@ -57,23 +60,6 @@ const CATEGORY_LABELS: Record<(typeof QA_CHANGE_CATEGORIES)[number], string> = {
   scheduledTasks: 'Scheduled tasks',
   shortcuts: 'Shortcuts',
 };
-
-function phaseStatus(
-  name: string,
-  result: QaPhaseResult | null
-): { label: string; passed: boolean | null } {
-  if (!result) return { label: 'Not run', passed: null };
-  if (result.timedOut) return { label: 'Timed out', passed: false };
-  if (name === 'Detection after uninstall') {
-    return result.exitCode !== 0
-      ? { label: 'Not detected (expected)', passed: true }
-      : { label: 'Still detected', passed: false };
-  }
-  const passed = name.includes('Detection')
-    ? result.exitCode === 0
-    : [0, 3010, 1641].includes(result.exitCode);
-  return { label: passed ? 'Passed' : 'Failed', passed };
-}
 
 function PromptConfigurationSummary({ configuration }: { configuration: QaPromptConfiguration }) {
   const enabled: Array<{ key: string; content: ReactNode }> = [];
@@ -167,14 +153,14 @@ function SummaryItem({
       </span>
       <span className="min-w-0">
         <span className="block text-xs text-text-muted">{label}</span>
-        <span className="mt-1 block truncate text-sm font-medium text-text-primary">{children}</span>
+        <span className="mt-1 block break-words text-sm font-medium text-text-primary">{children}</span>
       </span>
     </div>
   );
 }
 
-function LifecycleCard({ name, result }: { name: string; result: QaPhaseResult | null }) {
-  const status = phaseStatus(name, result);
+function LifecycleCard({ name, phaseKey, result }: { name: string; phaseKey: QaPhaseKey; result: QaPhaseResult | null }) {
+  const status = getEvidencePhaseStatus(phaseKey, result);
   const Icon = status.passed === true ? CheckCircle2 : status.passed === false ? XCircle : Clock3;
 
   return (
@@ -204,108 +190,43 @@ function LifecycleCard({ name, result }: { name: string; result: QaPhaseResult |
   );
 }
 
-function VirusTotalBanner({
-  virusTotal,
-  installerSha256,
-}: {
-  virusTotal: QaVirusTotalSummary;
-  installerSha256: string | null;
-}) {
+function VirusTotalBanner({ virusTotal, installerSha256 }: { virusTotal: QaVirusTotalSummary; installerSha256: string | null }) {
   const clean = virusTotal.status === 'clean';
   const flagged = virusTotal.status === 'flagged';
   const suspicious = virusTotal.status === 'suspicious';
-  const totalEngines = virusTotal.totalEngines ?? 0;
-  const neutral = !clean && !flagged && !suspicious;
+  const attention = flagged || suspicious;
+  const Icon = clean ? ShieldCheck : ShieldQuestion;
+  const reportLink = installerSha256 ? (
+    <a href={`https://www.virustotal.com/gui/file/${installerSha256.toLowerCase()}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan">
+      <T>View VirusTotal report</T><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+    </a>
+  ) : null;
 
+  if (!attention) {
+    return (
+      <section className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-overlay/10 px-4 py-3" aria-label="Installer reputation">
+        <div className="flex min-w-0 items-start gap-3">
+          <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', clean ? 'text-status-success' : 'text-text-muted')} aria-hidden="true" />
+          <div>
+            <h3 className="text-sm font-medium text-text-primary"><T>{clean ? 'VirusTotal: no detections reported' : 'VirusTotal: no verdict available'}</T></h3>
+            <p className="mt-1 text-xs leading-5 text-text-muted">{clean ? <T><Var>{virusTotal.malicious ?? 0}</Var> malicious detections<Var>{virusTotal.totalEngines ? ` across ${virusTotal.totalEngines} vendors` : ""}</Var> at the time of this check.</T> : <T>No reputation verdict was recorded for this installer.</T>}</p>
+            {virusTotal.scannedAtUtc ? <p className="mt-1 text-xs text-text-muted"><T>Analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></p> : null}
+          </div>
+        </div>
+        {reportLink}
+      </section>
+    );
+  }
   return (
-    <section
-      aria-labelledby="qa-virustotal-heading"
-      className={cn(
-        'relative overflow-hidden rounded-2xl border p-5 sm:p-6',
-        clean && 'border-status-success/25 bg-gradient-to-br from-status-success/15 via-status-success/5 to-transparent',
-        flagged && 'border-status-error/25 bg-gradient-to-br from-status-error/15 via-status-error/5 to-transparent',
-        suspicious && 'border-status-warning/25 bg-gradient-to-br from-status-warning/15 via-status-warning/5 to-transparent',
-        neutral && 'border-overlay/10 bg-bg-elevated/40'
-      )}
-    >
-      <VirusTotalIcon
-        className={cn(
-          'pointer-events-none absolute -right-5 -top-5 h-32 w-32 opacity-[0.07]',
-          clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-muted'
-        )}
-      />
-      <div className="relative flex items-start gap-4">
-        <span
-          className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#394EFF] ring-4',
-            clean && 'ring-status-success/15',
-            flagged && 'ring-status-error/15',
-            suspicious && 'ring-status-warning/15',
-            neutral && 'ring-overlay/10'
-          )}
-        >
-          <VirusTotalIcon className="h-6 w-6" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p
-            className={cn(
-              'text-xs font-medium uppercase tracking-[0.16em]',
-              clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-muted'
-            )}
-          >
-            <T>VirusTotal security check</T>
-          </p>
-          <h3
-            id="qa-virustotal-heading"
-            className={cn(
-              'mt-1 text-lg font-semibold sm:text-xl',
-              clean ? 'text-status-success' : flagged ? 'text-status-error' : suspicious ? 'text-status-warning' : 'text-text-primary'
-            )}
-          >
-            {clean ? (
-              <T>No threats found</T>
-            ) : flagged ? (
-              <T><Var>{virusTotal.malicious ?? 0}</Var><Var>{totalEngines > 0 ? ` of ${totalEngines}` : ""}</Var> security vendors flagged this installer as malicious</T>
-            ) : suspicious ? (
-              <T><Var>{virusTotal.suspicious ?? 0}</Var><Var>{totalEngines > 0 ? ` of ${totalEngines}` : ""}</Var> security vendors rated this installer suspicious</T>
-            ) : virusTotal.status === 'not_found' ? (
-              <T>No verdict available yet</T>
-            ) : (
-              <T>Security check unavailable</T>
-            )}
-          </h3>
-          <p className="mt-1.5 text-sm leading-6 text-text-secondary">
-            {clean ? (
-              <T><Var>{virusTotal.malicious ?? 0}</Var><Var>{totalEngines > 0 ? ` of ${totalEngines}` : ""}</Var> security vendors flagged this installer when its verified hash was checked against the VirusTotal database.</T>
-            ) : flagged ? (
-              <T>Packaging of this version is blocked until the finding is reviewed. <Var>{virusTotal.malicious ?? 0}</Var> vendors rated it malicious and <Var>{virusTotal.suspicious ?? 0}</Var> suspicious; earlier versions with a clean verdict remain available.</T>
-            ) : suspicious ? (
-              <T>No vendor rated it malicious, so this version is not blocked. Suspicious verdicts are heuristic and often false positives — review the engines on VirusTotal if in doubt.</T>
-            ) : virusTotal.status === 'not_found' ? (
-              <T>This installer version is not in the VirusTotal database yet, so no reputation verdict is available.</T>
-            ) : virusTotal.status === 'skipped' ? (
-              <T>The VirusTotal lookup was not configured when this run executed.</T>
-            ) : (
-              <T>The VirusTotal lookup could not be completed for this run.</T>
-            )}
-          </p>
-          <p className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
-            {installerSha256 ? (
-              <a
-                href={`https://www.virustotal.com/gui/file/${installerSha256.toLowerCase()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 font-medium text-accent-cyan transition-colors hover:text-accent-cyan-bright"
-              >
-                <T>Open on VirusTotal</T>
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              </a>
-            ) : null}
-            <span><T>Hash-only lookup — the installer is never uploaded</T></span>
-            {virusTotal.scannedAtUtc ? (
-              <span><T>Last analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></span>
-            ) : null}
-          </p>
+    <section className={cn('rounded-xl border p-4', flagged ? 'border-status-error/25 bg-status-error/5' : 'border-status-warning/25 bg-status-warning/5')} aria-label="Installer reputation finding">
+      <div className="flex items-start gap-3">
+        <VirusTotalIcon className={cn('mt-0.5 h-6 w-6 shrink-0', flagged ? 'text-status-error' : 'text-status-warning')} />
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-text-primary"><T>{flagged ? 'Installer flagged by VirusTotal' : 'Suspicious VirusTotal verdict'}</T></h3>
+          <p className="mt-1 text-sm leading-6 text-text-secondary"><T><Var>{virusTotal.malicious ?? 0}</Var> malicious and <Var>{virusTotal.suspicious ?? 0}</Var> suspicious detections<Var>{virusTotal.totalEngines ? ` across ${virusTotal.totalEngines} vendors` : ""}</Var>.</T></p>
+          <p className="mt-1 text-xs leading-5 text-text-secondary"><T>{flagged ? 'Packaging of this version is blocked until the finding is reviewed.' : 'This verdict does not block this version. Review the vendor findings for details.'}</T></p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">{reportLink}<span className="text-xs text-text-muted"><T>Hash-only lookup; the installer is not uploaded.</T></span></div>
+          {virusTotal.scannedAtUtc ? <p className="text-xs text-text-muted"><T>Analyzed <Var>{new Date(virusTotal.scannedAtUtc).toLocaleDateString()}</Var></T></p> : null}
         </div>
       </div>
     </section>
@@ -351,13 +272,13 @@ export function QaDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col bg-bg-surface shadow-[0_28px_90px_rgba(0,0,0,0.35)]">
-        <DialogHeader className="shrink-0 border-b border-overlay/10 bg-gradient-to-br from-bg-elevated/80 via-bg-surface to-accent-cyan/5 px-6 py-5 pr-14 sm:px-8 sm:py-6 sm:pr-16">
+      <DialogContent className="flex h-[min(48rem,92dvh)] w-[calc(100%_-_1.5rem)] max-w-4xl flex-col bg-bg-surface">
+        <DialogHeader className="shrink-0 px-5 py-5 pr-12 sm:px-6 sm:pr-14">
           <div className="flex items-center gap-4">
             <AppIcon
               packageId={wingetId}
               packageName={data?.displayName || wingetId}
-              size="xl"
+              size="lg"
               className="shadow-sm"
             />
             <div className="min-w-0 flex-1">
@@ -375,10 +296,10 @@ export function QaDetailsDialog({
                   </span>
                 ) : null}
               </div>
-              <DialogTitle className="truncate text-xl sm:text-2xl">
+              <DialogTitle className="break-words text-xl [overflow-wrap:anywhere]">
                 {data?.displayName || <T>Installation test details</T>}
               </DialogTitle>
-              <DialogDescription className="mt-1 truncate">
+              <DialogDescription className="mt-1 break-words [overflow-wrap:anywhere]">
                 {data
                   ? <>{wingetId} · <T>Version <Var>{data.testedVersion}</Var></T> · {data.architecture}</>
                   : <T>Loading the exact isolated test run and its evidence.</T>}
@@ -387,11 +308,11 @@ export function QaDetailsDialog({
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-7">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {isLoading ? (
-            <DetailsSkeleton wingetId={wingetId} />
+            <div className="overflow-y-auto p-5 sm:p-6"><DetailsSkeleton wingetId={wingetId} /></div>
           ) : !data ? (
-            <div className="mx-auto flex min-h-80 max-w-xl flex-col items-center justify-center text-center" role="alert">
+            <div className="mx-auto flex min-h-0 max-w-xl flex-1 flex-col items-center overflow-y-auto p-6 text-center" role="alert">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-status-warning/10 text-status-warning">
                 {isPublishing
                   ? <FileClock className="h-6 w-6" aria-hidden="true" />
@@ -418,121 +339,137 @@ export function QaDetailsDialog({
               </button>
             </div>
           ) : (
-            <div className="space-y-7">
-              <section aria-labelledby="qa-summary-heading">
-                <h3 id="qa-summary-heading" className="sr-only"><T>Test summary</T></h3>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <SummaryItem icon={ShieldCheck} label={<T>Result</T>}>
-                    <span className={data.outcome === 'Passed' ? 'text-status-success' : 'text-status-error'}><T>{data.outcome}</T></span>
-                  </SummaryItem>
-                  <SummaryItem icon={Clock3} label={<T>Total duration</T>}>
-                    {formatQaDuration(data.overallDurationSeconds)}
-                  </SummaryItem>
-                  <SummaryItem icon={PackageCheck} label={<T>Installer</T>}>
-                    {data.installerType?.toUpperCase() || <T>Type unknown</T>}
-                  </SummaryItem>
-                  <SummaryItem icon={Gauge} label={<T>Tested</T>}>
-                    {new Date(data.testedAtUtc).toLocaleString()}
-                  </SummaryItem>
-                </div>
-              </section>
+            <Tabs key={`${wingetId}-${packageProfileSha256 || 'latest'}`} defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
+              <div className="shrink-0 border-b border-overlay/10 px-5 py-3 sm:px-6">
+                <TabsList className="grid w-full grid-cols-3 sm:w-fit" aria-label="Completed test evidence">
+                  <TabsTrigger value="overview" className="min-h-9 px-2 sm:px-3"><T>Overview</T></TabsTrigger>
+                  <TabsTrigger value="changes" className="min-h-9 px-2 sm:px-3"><T>Changes</T></TabsTrigger>
+                  <TabsTrigger value="technical" className="min-h-9 px-2 text-xs sm:px-3 sm:text-sm"><T>Technical details</T></TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="overview" className="m-0 min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-6">
+                <section className={cn('rounded-xl border p-4', data.outcome === 'Passed' ? 'border-status-success/20 bg-status-success/5' : 'border-status-error/20 bg-status-error/5')}>
+                  <h3 className="text-base font-semibold text-text-primary"><T>{data.outcome === 'Passed' ? 'Test passed' : 'Test failed'}</T></h3>
+                  <p className="mt-1 text-sm leading-6 text-text-secondary"><T>{getEvidenceSummary(data.outcome, data.phases)}</T></p>
+                </section>
+                {data.testedVersion !== catalogVersion ? (
+                  <div className="flex gap-3 rounded-2xl border border-status-warning/20 bg-status-warning/10 p-4 text-sm leading-6 text-status-warning">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <p><QaVersionMismatchNotice testedVersion={data.testedVersion} catalogVersion={catalogVersion} /></p>
+                  </div>
+                ) : null}
 
-              {data.virusTotal ? (
-                <VirusTotalBanner virusTotal={data.virusTotal} installerSha256={data.installerSha256} />
-              ) : null}
+                {data.virusTotal && (data.virusTotal.status === 'flagged' || data.virusTotal.status === 'suspicious') ? (
+                  <VirusTotalBanner virusTotal={data.virusTotal} installerSha256={data.installerSha256} />
+                ) : null}
+                <section aria-labelledby="qa-summary-heading">
+                  <h3 id="qa-summary-heading" className="sr-only"><T>Test summary</T></h3>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <SummaryItem icon={Clock3} label={<T>Total duration</T>}>
+                      {formatQaDuration(data.overallDurationSeconds)}
+                    </SummaryItem>
+                    <SummaryItem icon={PackageCheck} label={<T>Installer</T>}>
+                      {data.installerType?.toUpperCase() || <T>Type unknown</T>}
+                    </SummaryItem>
+                    <SummaryItem icon={Gauge} label={<T>Tested</T>}>
+                      {new Date(data.testedAtUtc).toLocaleString()}
+                    </SummaryItem>
+                  </div>
+                </section>
 
-              {data.testedVersion !== catalogVersion ? (
-                <div className="flex gap-3 rounded-2xl border border-status-warning/20 bg-status-warning/10 p-4 text-sm leading-6 text-status-warning">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <p><QaVersionMismatchNotice testedVersion={data.testedVersion} catalogVersion={catalogVersion} /></p>
-                </div>
-              ) : null}
+                <section className="space-y-3" aria-labelledby="qa-lifecycle-heading">
+                  <div>
+                    <h3 id="qa-lifecycle-heading" className="text-base font-semibold text-text-primary"><T>Installation lifecycle</T></h3>
+                    <p className="mt-1 text-sm text-text-muted"><T>Recorded checks from this isolated Windows test.</T></p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {QA_RESULT_PHASES.map(({ key, label }) => (
+                      <LifecycleCard key={key} phaseKey={key} name={label} result={data.phases[key]} />
+                    ))}
+                  </div>
+                </section>
 
-              <section className="space-y-3" aria-labelledby="qa-lifecycle-heading">
-                <div>
-                  <h3 id="qa-lifecycle-heading" className="text-base font-semibold text-text-primary"><T>Installation lifecycle</T></h3>
-                  <p className="mt-1 text-sm text-text-muted"><T>The package was installed, detected, removed, and checked again inside a clean Windows VM.</T></p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <LifecycleCard name="Install" result={data.phases.install} />
-                  <LifecycleCard name="Detection after install" result={data.phases.detectionAfterInstall} />
-                  <LifecycleCard name="Uninstall" result={data.phases.uninstall} />
-                  <LifecycleCard name="Detection after uninstall" result={data.phases.detectionAfterUninstall} />
-                </div>
-              </section>
+                {data.virusTotal && data.virusTotal.status !== 'flagged' && data.virusTotal.status !== 'suspicious' ? (
+                  <VirusTotalBanner virusTotal={data.virusTotal} installerSha256={data.installerSha256} />
+                ) : null}
 
-              {data.effectiveConfiguration ? (
-                <section className="overflow-hidden rounded-2xl border border-overlay/10" aria-labelledby="qa-configuration-heading">
-                  <div className="flex items-center gap-3 border-b border-overlay/10 bg-bg-elevated/50 px-5 py-4">
-                    <Settings2 className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
+              </TabsContent>
+              <TabsContent value="changes" className="m-0 min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-6">
+                {data.changes ? (
+                  <section className="space-y-3" aria-labelledby="qa-changes-heading">
                     <div>
-                      <h3 id="qa-configuration-heading" className="text-sm font-semibold text-text-primary"><T>Test configuration</T></h3>
-                      <p className="mt-0.5 text-xs text-text-muted"><T>The effective PSADT settings used for this exact run.</T></p>
+                      <h3 id="qa-changes-heading" className="text-base font-semibold text-text-primary"><T>Observed system changes</T></h3>
+                      <p className="mt-1 text-sm text-text-muted"><T>Compare installation counts with the changes remaining after uninstall. Detailed paths are not retained in this result.</T></p>
+                    </div>
+                    <p className="text-xs leading-relaxed text-text-muted"><T>Counts are correlated with the test window, not attributed to the app; background Windows activity is included. A nonzero residual does not mean the uninstall was dirty.</T></p>
+                    <ChangeTable title="Changes after installation" changes={data.changes.afterInstall} />
+                    {data.phases.uninstall ? <ChangeTable title="Residual changes after uninstall" changes={data.changes.residualAfterUninstall} /> : <p className="rounded-xl border border-overlay/10 p-4 text-sm text-text-muted"><T>Uninstall was not run; no removal comparison is available.</T></p>}
+                  </section>
+                ) : <p className="rounded-xl border border-dashed border-overlay/15 p-6 text-sm text-text-muted"><T>System-change counts were not recorded for this run.</T></p>}
+
+              </TabsContent>
+              <TabsContent value="technical" className="m-0 min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-6">
+                {data.effectiveConfiguration ? (
+                  <section className="overflow-hidden rounded-2xl border border-overlay/10" aria-labelledby="qa-configuration-heading">
+                    <div className="flex items-center gap-3 border-b border-overlay/10 bg-bg-elevated/50 px-5 py-4">
+                      <Settings2 className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
+                      <div>
+                        <h3 id="qa-configuration-heading" className="text-sm font-semibold text-text-primary"><T>Test configuration</T></h3>
+                        <p className="mt-0.5 text-xs text-text-muted"><T>The effective PSADT settings used for this exact run.</T></p>
+                      </div>
+                    </div>
+                    <div className="grid gap-x-6 gap-y-5 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                      <div><span className="block text-xs text-text-muted"><T>Deploy mode</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.deployMode}</code></div>
+                      <div><span className="block text-xs text-text-muted"><T>Restart behavior</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.restartBehavior}</code></div>
+                      <div><span className="block text-xs text-text-muted"><T>Processes to close</T></span><span className="mt-1 block font-medium text-text-primary">{data.effectiveConfiguration.processCloseCount}</span></div>
+                      <div><span className="block text-xs text-text-muted"><T>UI evidence expected</T></span><span className="mt-1 block font-medium text-text-primary"><T>{data.effectiveConfiguration.uiEvidenceExpected ? 'Yes' : 'No'}</T></span></div>
+                      <div className="sm:col-span-2 lg:col-span-4"><span className="block text-xs text-text-muted"><T>Prompt configuration</T></span><span className="mt-1 block text-text-primary"><PromptConfigurationSummary configuration={data.effectiveConfiguration.promptConfiguration} /></span></div>
+                      <div className="sm:col-span-2 lg:col-span-4">
+                        <span className="block text-xs text-text-muted"><T>Vendor silent arguments</T></span>
+                        <code className="mt-1.5 block overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 px-3 py-2.5 text-xs text-text-secondary">
+                          {data.effectiveConfiguration.vendorSilentArguments === null
+                            ? <T>Custom deployment arguments withheld</T>
+                            : data.effectiveConfiguration.vendorSilentArguments || <T>No arguments required</T>}
+                        </code>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section className="overflow-hidden rounded-2xl border border-overlay/10" aria-labelledby="qa-method-heading">
+                  <div className="flex items-center gap-3 border-b border-overlay/10 bg-bg-elevated/50 px-5 py-4">
+                    <TerminalSquare className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
+                    <div>
+                      <h3 id="qa-method-heading" className="text-sm font-semibold text-text-primary"><T>Installation method</T></h3>
+                      <p className="mt-0.5 text-xs text-text-muted"><T>Commands and detection logic used by the package.</T></p>
                     </div>
                   </div>
-                  <div className="grid gap-x-6 gap-y-5 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div><span className="block text-xs text-text-muted"><T>Deploy mode</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.deployMode}</code></div>
-                    <div><span className="block text-xs text-text-muted"><T>Restart behavior</T></span><code className="mt-1 block text-text-primary">{data.effectiveConfiguration.restartBehavior}</code></div>
-                    <div><span className="block text-xs text-text-muted"><T>Processes to close</T></span><span className="mt-1 block font-medium text-text-primary">{data.effectiveConfiguration.processCloseCount}</span></div>
-                    <div><span className="block text-xs text-text-muted"><T>UI evidence expected</T></span><span className="mt-1 block font-medium text-text-primary"><T>{data.effectiveConfiguration.uiEvidenceExpected ? 'Yes' : 'No'}</T></span></div>
-                    <div className="sm:col-span-2 lg:col-span-4"><span className="block text-xs text-text-muted"><T>Prompt configuration</T></span><span className="mt-1 block text-text-primary"><PromptConfigurationSummary configuration={data.effectiveConfiguration.promptConfiguration} /></span></div>
-                    <div className="sm:col-span-2 lg:col-span-4">
-                      <span className="block text-xs text-text-muted"><T>Vendor silent arguments</T></span>
-                      <code className="mt-1.5 block overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 px-3 py-2.5 text-xs text-text-secondary">
-                        {data.effectiveConfiguration.vendorSilentArguments === null
-                          ? <T>Custom deployment arguments withheld</T>
-                          : data.effectiveConfiguration.vendorSilentArguments || <T>No arguments required</T>}
-                      </code>
+                  <div className="space-y-5 p-5">
+                    <div>
+                      <p className="mb-1.5 text-xs text-text-muted"><T>Install command</T></p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-xs text-text-secondary">{data.commands.install}</pre>
                     </div>
+                    <div>
+                      <p className="mb-1.5 text-xs text-text-muted"><T>Uninstall command</T></p>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-xs text-text-secondary">{data.commands.uninstall}</pre>
+                    </div>
+                    <p className="text-xs leading-5 text-text-secondary">
+                      {data.detection.type === 'fileVersion' ? (
+                        <T>Detection: file version at <Var><code className="rounded bg-bg-deepest px-1 py-0.5">{data.detection.path}</code></Var> must be at least <Var>{data.detection.minimumVersion}</Var>.</T>
+                      ) : (
+                        <T>Detection: <Var>{data.detection.description}</Var>.</T>
+                      )}
+                    </p>
                   </div>
                 </section>
-              ) : null}
 
-              <section className="overflow-hidden rounded-2xl border border-overlay/10" aria-labelledby="qa-method-heading">
-                <div className="flex items-center gap-3 border-b border-overlay/10 bg-bg-elevated/50 px-5 py-4">
-                  <TerminalSquare className="h-4.5 w-4.5 text-accent-cyan" aria-hidden="true" />
-                  <div>
-                    <h3 id="qa-method-heading" className="text-sm font-semibold text-text-primary"><T>Installation method</T></h3>
-                    <p className="mt-0.5 text-xs text-text-muted"><T>Commands and detection logic used by the package.</T></p>
-                  </div>
-                </div>
-                <div className="space-y-5 p-5">
-                  <div>
-                    <p className="mb-1.5 text-xs text-text-muted"><T>Install command</T></p>
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-xs text-text-secondary">{data.commands.install}</pre>
-                  </div>
-                  <div>
-                    <p className="mb-1.5 text-xs text-text-muted"><T>Uninstall command</T></p>
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-bg-deepest/60 p-3 text-xs text-text-secondary">{data.commands.uninstall}</pre>
-                  </div>
-                  <p className="text-xs leading-5 text-text-secondary">
-                    {data.detection.type === 'fileVersion' ? (
-                      <T>Detection: file version at <Var><code className="rounded bg-bg-deepest px-1 py-0.5">{data.detection.path}</code></Var> must be at least <Var>{data.detection.minimumVersion}</Var>.</T>
-                    ) : (
-                      <T>Detection: <Var>{data.detection.description}</Var>.</T>
-                    )}
-                  </p>
-                </div>
-              </section>
-
-              {data.changes ? (
-                <section className="space-y-3" aria-labelledby="qa-changes-heading">
-                  <div>
-                    <h3 id="qa-changes-heading" className="text-base font-semibold text-text-primary"><T>Observed system changes</T></h3>
-                    <p className="mt-1 text-sm text-text-muted"><T>Compact counts captured before and after the installation lifecycle.</T></p>
-                  </div>
-                  <ChangeTable title="Changes after installation" changes={data.changes.afterInstall} />
-                  <ChangeTable title="Residual changes after uninstall" changes={data.changes.residualAfterUninstall} />
-                  <p className="text-xs leading-relaxed text-text-muted"><T>Counts are correlated with the test window, not attributed to the app; background Windows activity is included. A nonzero residual does not mean the uninstall was dirty.</T></p>
+                <section className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-overlay/10 pt-5 text-xs text-text-muted">
+                  <span><T>Publisher</T>: <span className="text-text-secondary">{data.publisher || <T>Not recorded</T>}</span></span>
+                  <span>PSADT <span className="text-text-secondary">{data.package?.psadtVersion || <T>version unknown</T>}</span></span>
+                  <span><T>Windows events</T>: <span className="text-text-secondary">{data.relevantEventCount ?? <T>Not recorded</T>}</span></span>
                 </section>
-              ) : null}
-
-              <section className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-overlay/10 pt-5 text-xs text-text-muted">
-                <span><T>Publisher</T>: <span className="text-text-secondary">{data.publisher || <T>Not recorded</T>}</span></span>
-                <span>PSADT <span className="text-text-secondary">{data.package?.psadtVersion || <T>version unknown</T>}</span></span>
-                <span><T>Windows events</T>: <span className="text-text-secondary">{data.relevantEventCount ?? <T>Not recorded</T>}</span></span>
-              </section>
-            </div>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </DialogContent>
