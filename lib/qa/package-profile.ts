@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '0ff16a2420976f28a232ad1c015c8023f805fbb3',
+  packagerCommit: '6bdefc387d1402c71d30a6fbfcf850038f60f37a',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -588,6 +588,8 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // PostgreSQL receives a longer bounded vendor removal window. Its canonical
   // config changes; unrelated matching execution profiles remain compatible.
   'a27749fb895eaa142da413bb6b4b9ebaa5477ad4',
+  // WithSecure gains silent removal; unchanged application profiles remain compatible.
+  '0ff16a2420976f28a232ad1c015c8023f805fbb3',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
