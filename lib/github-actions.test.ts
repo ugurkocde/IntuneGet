@@ -6,6 +6,7 @@ import {
 } from './github-actions';
 import { buildQaPackageIdentityFromWorkflowInput } from './qa/package-profile';
 import { QaCompatibilityGateError } from './qa/gate';
+import { generateUninstallCommand } from './detection-rules';
 
 const { enforceInstallerPreflightMock, enforceQaGateMock, reconcileCatalogInstallerMock, resolveDependenciesMock } = vi.hoisted(() => ({
   enforceInstallerPreflightMock: vi.fn(),
@@ -296,6 +297,33 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
     expect(JSON.parse(payload.client_payload.config.psadtConfig))
       .toMatchObject({ reviewedUninstallArguments: ['/S'] });
+  });
+
+  it('dispatches the generated Acrobat archive product identity to customer packaging', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: { ...item, nestedInstallerType: 'exe', nestedInstallerPath: 'Adobe Acrobat\\setup.exe' },
+      trustedInstallers: [],
+    }));
+    const uninstallCommand = generateUninstallCommand({
+      type: 'zip', nestedInstallerType: 'exe', architecture: 'x64',
+      url: 'https://example.com/acrobat.zip', sha256: 'E'.repeat(64),
+      nestedInstallerPath: 'Adobe Acrobat\\setup.exe',
+      productCode: '{AC76BA86-1033-FFFF-7760-BC15014EA700}',
+    }, 'Adobe Acrobat Pro');
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Adobe.Acrobat.Pro', displayName: 'Adobe Acrobat Pro', publisher: 'Adobe',
+      version: '26.002.21901', installerUrl: 'https://example.com/acrobat.zip',
+      installerSha256: 'E'.repeat(64), sourceType: 'winget', installerType: 'zip',
+      nestedInstallerType: 'exe', nestedInstallerPath: 'Adobe Acrobat\\setup.exe',
+      silentSwitches: '/sAll /rs /msi EULA_ACCEPT=YES', uninstallCommand, installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FFFF-7760-BC15014EA700}:Adobe Acrobat Pro'
+    );
+    expect(payload.client_payload.installer.nestedInstallerType).toBe('exe');
   });
 
   it('dispatches Teradata silent archive removal through the customer packager', async () => {
