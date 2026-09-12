@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '7238616608f888449fa2e132fffc8d7314c26745',
+  packagerCommit: '5fdfc187c77c3223dc76287b41232770108ee7be',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -593,6 +593,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Archived EXE-family MSI identities now survive normalization. Unchanged
   // profiles remain compatible; old archive display fallbacks are excluded below.
   '6bdefc387d1402c71d30a6fbfcf850038f60f37a',
+  // Philips' exact NSIS key changes only its failing identity path. Other
+  // canonical execution profiles remain compatible with the preceding pin.
+  '7238616608f888449fa2e132fffc8d7314c26745',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

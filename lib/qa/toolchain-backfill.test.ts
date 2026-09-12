@@ -6,6 +6,14 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Philips only after the exact NSIS identity repair', () => {
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Philips.SmartControl', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('7238616608f888449fa2e132fffc8d7314c26745',
+      { wingetId: 'Philips.SmartControl', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Philips.Other', status: 'failed' })).toBe(false);
+  });
   it('retries Acrobat only after its archive MSI identity repair', () => {
     expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Adobe.Acrobat.Pro', status: 'failed' })).toBe(true);
