@@ -438,6 +438,23 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches Philips customer packages with the same exact NSIS identity as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Philips.SmartControl', displayName: 'Smart Control', publisher: 'Philips',
+      version: '7.2.0', architecture: 'x64', installerSha256: '8'.repeat(64),
+      sourceType: 'winget', installerType: 'zip', nestedInstallerType: 'nullsoft',
+      silentSwitches: '/S', installScope: 'user',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{EAF31A0E-C98A-5E6E-9883-2A487A3337A1}:Smart Control',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:eaf31a0e-c98a-5e6e-9883-2a487a3337a1:SmartControl'
+    );
+    expect(payload.client_payload.config.installScope).toBe('user');
+  });
+
   it('dispatches DSH Desktop with the reviewed NSIS key to the customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

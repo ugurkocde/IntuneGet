@@ -1955,6 +1955,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     generatedDisplayName: 'MSYS2 Installer',
     registeredDisplayName: 'MSYS2',
   },
+  // WinGet 7.2.0 and QA run 34666488057 agree on this unbraced NSIS
+  // key. The generated catalog command incorrectly decorates it as an MSI
+  // GUID and uses a spaced title. Preserve the exact vendor registration.
+  'philips.smartcontrol': {
+    generatedDisplayName: 'Smart Control',
+    manifestRegistryKey: '{EAF31A0E-C98A-5E6E-9883-2A487A3337A1}',
+    registeredDisplayName: 'SmartControl',
+    registeredRegistryKey: 'eaf31a0e-c98a-5e6e-9883-2a487a3337a1',
+  },
   // Quassel's WinGet ProductCode omits the space used by the application's
   // actual NSIS ARP identity, and the registered build version is a Git
   // revision instead of the manifest version. Bind the observed stable key so

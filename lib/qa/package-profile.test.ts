@@ -1486,6 +1486,24 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
   });
 
+  it('binds Philips QA to its exact NSIS identity while preserving user scope and ZIP metadata', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Philips.SmartControl', displayName: 'Smart Control', publisher: 'Philips',
+      version: '7.2.0', architecture: 'x64',
+      installerSha256: '82D3632C51CAB9819420F98B885B8499A526CB1A96DCE6893E90E9DE6D2F7E00',
+      installerType: 'zip', nestedInstallerType: 'nullsoft',
+      nestedInstallerPath: 'SmartControl Setup 7.2.0.exe',
+      silentSwitches: '/S', installScope: 'user',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{EAF31A0E-C98A-5E6E-9883-2A487A3337A1}:Smart Control',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile).toMatchObject({ installer: {
+      installScope: 'user', sourceType: 'zip', nestedInstallerType: 'nullsoft',
+      nestedInstallerFiles: ['SmartControl Setup 7.2.0.exe'], silentArgs: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:eaf31a0e-c98a-5e6e-9883-2a487a3337a1:SmartControl',
+    } });
+  });
+
   it('binds DSH Desktop QA to the exact NSIS key used by customer packages', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'JustGenius-s.DSHDesktop',

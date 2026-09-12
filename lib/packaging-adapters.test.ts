@@ -151,6 +151,17 @@ describe('application packaging adapters', () => {
     )).toBe('vendor-uninstall.exe --custom');
   });
 
+  it('binds Philips SmartControl only to its reviewed exact NSIS identity', () => {
+    const original = 'REGISTRY_UNINSTALL_PRODUCT:{EAF31A0E-C98A-5E6E-9883-2A487A3337A1}:Smart Control';
+    const expected = 'REGISTRY_UNINSTALL_KEY:eaf31a0e-c98a-5e6e-9883-2a487a3337a1:SmartControl';
+    expect(resolveApplicationUninstallCommand(' Philips.SmartControl ', original)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Philips.SmartControl', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Philips.Other', original)).toBe(original);
+    for (const command of ['vendor-uninstall.exe --custom', original.replace('EAF31A0E', 'AAF31A0E')]) {
+      expect(resolveApplicationUninstallCommand('Philips.SmartControl', command)).toBe(command);
+    }
+  });
+
   it('binds DSH Desktop to its exact unbraced NSIS key despite the catalog typo', () => {
     expect(resolveApplicationUninstallCommand(
       'JustGenius-s.DSHDesktop',

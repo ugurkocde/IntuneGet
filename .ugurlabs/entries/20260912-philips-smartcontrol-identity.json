@@ -1,0 +1,5 @@
+{
+  "title": "Philips SmartControl package detection and removal",
+  "summary": "Philips SmartControl packages now use the application's exact registered identity to verify installation and remove the correct application.",
+  "type": "fixed"
+}
