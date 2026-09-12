@@ -8,6 +8,7 @@ import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
+import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -75,6 +76,17 @@ export async function GET(request: Request) {
     });
   }
   const now = new Date();
+  const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
+  if (cancelledWaitingRunIds.length > 0) {
+    // Cancellation is asynchronous. Let GitHub release the single-flight
+    // concurrency slot before this endpoint considers another dispatch.
+    return NextResponse.json({
+      success: true,
+      dispatched: false,
+      reason: 'stale_waiting_run_cancelled',
+      cancelledRuns: cancelledWaitingRunIds.length,
+    });
+  }
   const { data: active, error: activeError } = await supabase
     .from('qa_candidates')
     .select('*')

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createServerClientMock, dispatchQaCandidateMock, getGitHubActionsHealthMock } = vi.hoisted(() => ({
+const {
+  cancelStaleWaitingQaRunsMock,
+  createServerClientMock,
+  dispatchQaCandidateMock,
+  getGitHubActionsHealthMock,
+} = vi.hoisted(() => ({
+  cancelStaleWaitingQaRunsMock: vi.fn(),
   createServerClientMock: vi.fn(),
   dispatchQaCandidateMock: vi.fn(),
   getGitHubActionsHealthMock: vi.fn(),
@@ -10,6 +16,9 @@ vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock })
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
 vi.mock('@/lib/qa/github-actions-health', () => ({
   getGitHubActionsHealth: getGitHubActionsHealthMock,
+}));
+vi.mock('@/lib/qa/github-actions-waiting-runs', () => ({
+  cancelStaleWaitingQaRuns: cancelStaleWaitingQaRunsMock,
 }));
 
 import { GET, maxDuration } from './route';
@@ -224,6 +233,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = 'test-cron-secret';
   dispatchQaCandidateMock.mockResolvedValue(undefined);
   getGitHubActionsHealthMock.mockResolvedValue({ operational: true, status: 'operational' });
+  cancelStaleWaitingQaRunsMock.mockResolvedValue([]);
 });
 
 it('allows large installer preflight the same bounded window as customer packaging', () => {
@@ -312,6 +322,26 @@ describe('GET /api/cron/qa-dispatch', () => {
       dispatched: false,
       reason: 'github_actions_unavailable',
       githubActionsStatus: 'major_outage',
+    });
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels a stale environment-waiting run before reconciling or dispatching', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds } = createSupabaseStub([row]);
+    createServerClientMock.mockReturnValue(client);
+    cancelStaleWaitingQaRunsMock.mockResolvedValue([34677693680]);
+
+    const response = await GET(cronRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      dispatched: false,
+      reason: 'stale_waiting_run_cancelled',
+      cancelledRuns: 1,
     });
     expect(claimedIds).toEqual([]);
     expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
