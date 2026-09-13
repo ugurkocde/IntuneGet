@@ -6,6 +6,19 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries AirUSB only on its repaired release while preserving existing targets', () => {
+    const previous = '5fdfc187c77c3223dc76287b41232770108ee7be';
+    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'AirUSB.Client', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'AirUSB.Client', status: 'failed' })).toBe(true);
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'AirUSB.Client', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'AirUSB.Other', status: 'failed' })).toBe(false);
+  });
   it('retries Philips only after the exact NSIS identity repair', () => {
     expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Philips.SmartControl', status: 'failed' })).toBe(true);
