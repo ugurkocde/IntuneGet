@@ -9,7 +9,8 @@ interface QaExecutionEvidence {
 export function qaTimeoutRecoveryUpdate(
   candidate: QaExecutionEvidence,
   now: string,
-  maxAttempts: number
+  maxAttempts: number,
+  exhaustedFailureSummary = 'The installation test did not finish before the safety timeout.'
 ) {
   const exhausted = candidate.attempts >= maxAttempts;
   return {
@@ -19,9 +20,7 @@ export function qaTimeoutRecoveryUpdate(
     github_run_id: exhausted ? candidate.github_run_id : null,
     github_run_url: exhausted ? candidate.github_run_url : null,
     finished_at: exhausted ? now : null,
-    failure_summary: exhausted
-      ? 'The installation test did not finish before the safety timeout.'
-      : null,
+    failure_summary: exhausted ? exhaustedFailureSummary : null,
     ...(exhausted ? {} : {
       phase: null,
       phase_started_at: null,

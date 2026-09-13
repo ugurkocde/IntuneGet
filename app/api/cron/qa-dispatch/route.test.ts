@@ -5,11 +5,13 @@ const {
   createServerClientMock,
   dispatchQaCandidateMock,
   getGitHubActionsHealthMock,
+  isQaWorkflowRunCompletedMock,
 } = vi.hoisted(() => ({
   cancelStaleWaitingQaRunsMock: vi.fn(),
   createServerClientMock: vi.fn(),
   dispatchQaCandidateMock: vi.fn(),
   getGitHubActionsHealthMock: vi.fn(),
+  isQaWorkflowRunCompletedMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
@@ -19,6 +21,9 @@ vi.mock('@/lib/qa/github-actions-health', () => ({
 }));
 vi.mock('@/lib/qa/github-actions-waiting-runs', () => ({
   cancelStaleWaitingQaRuns: cancelStaleWaitingQaRunsMock,
+}));
+vi.mock('@/lib/qa/github-actions-run-status', () => ({
+  isQaWorkflowRunCompleted: isQaWorkflowRunCompletedMock,
 }));
 
 import { GET, maxDuration } from './route';
@@ -99,6 +104,7 @@ function createSupabaseStub(
     claimNullIds?: string[];
     claimErrorById?: Record<string, { message: string; code?: string }>;
     supersedeError?: { message: string; code?: string };
+    activeCandidates?: Array<Record<string, unknown>>;
   } = {}
 ) {
   const supersededIds: string[] = [];
@@ -112,6 +118,7 @@ function createSupabaseStub(
   const supersedePayloads: Array<Record<string, unknown>> = [];
   const queuePages = [queued, ...additionalPages];
   const allQueued = queuePages.flat();
+  let activeCandidates = [...(options.activeCandidates || [])];
   let queuePageIndex = 0;
 
   const client = {
@@ -132,8 +139,10 @@ function createSupabaseStub(
       if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
       return {
         select: vi.fn((columns: string) => {
-          if (columns === '*') return query({ data: [], error: null });
-          if (columns === 'id') return query({ data: [], error: null });
+          if (columns === '*') return query({ data: activeCandidates, error: null });
+          if (columns === 'id') {
+            return query({ data: activeCandidates.map(({ id }) => ({ id })), error: null });
+          }
           if (columns.includes('package_profile_sha256')) {
             const data = queuePages[queuePageIndex++] || [];
             const builder = query({ data, error: null }) as Record<string, unknown>;
@@ -187,7 +196,10 @@ function createSupabaseStub(
             rollbackPayloads.push(values);
             const builder = query({ data: null, error: null }) as Record<string, unknown>;
             builder.eq = vi.fn((column: string, value: string) => {
-              if (column === 'id') rollbackIds.push(value);
+              if (column === 'id') {
+                rollbackIds.push(value);
+                activeCandidates = activeCandidates.filter((candidate) => candidate.id !== value);
+              }
               return builder;
             });
             return builder;
@@ -197,7 +209,10 @@ function createSupabaseStub(
             terminalErrorPayloads.push(values);
             const builder = query({ data: null, error: null }) as Record<string, unknown>;
             builder.eq = vi.fn((column: string, value: string) => {
-              if (column === 'id') terminalErrorIds.push(value);
+              if (column === 'id') {
+                terminalErrorIds.push(value);
+                activeCandidates = activeCandidates.filter((candidate) => candidate.id !== value);
+              }
               return builder;
             });
             return builder;
@@ -234,6 +249,7 @@ beforeEach(() => {
   dispatchQaCandidateMock.mockResolvedValue(undefined);
   getGitHubActionsHealthMock.mockResolvedValue({ operational: true, status: 'operational' });
   cancelStaleWaitingQaRunsMock.mockResolvedValue([]);
+  isQaWorkflowRunCompletedMock.mockResolvedValue(false);
 });
 
 it('allows large installer preflight the same bounded window as customer packaging', () => {
@@ -345,6 +361,74 @@ describe('GET /api/cron/qa-dispatch', () => {
     });
     expect(claimedIds).toEqual([]);
     expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('requeues a stale candidate as soon as its exact QA workflow has completed', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-13T11:00:00.000Z'));
+    try {
+      const active = {
+        ...candidate('catalog-default'),
+        status: 'running',
+        attempts: 1,
+        dispatched_at: '2026-09-13T10:35:00.000Z',
+        started_at: '2026-09-13T10:40:00.000Z',
+        phase_updated_at: '2026-09-13T10:45:00.000Z',
+        updated_at: '2026-09-13T10:45:00.000Z',
+        github_run_id: '34748233863',
+        github_run_url: 'https://github.com/example/workflows/actions/runs/34748233863',
+      };
+      const { client, rollbackIds, rollbackPayloads } = createSupabaseStub([], [], {
+        activeCandidates: [active],
+      });
+      createServerClientMock.mockReturnValue(client);
+      isQaWorkflowRunCompletedMock.mockResolvedValue(true);
+
+      const response = await GET(cronRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({ reason: 'queue_empty', reconciled: 1 });
+      expect(isQaWorkflowRunCompletedMock).toHaveBeenCalledWith('34748233863');
+      expect(rollbackIds).toContain(active.id);
+      expect(rollbackPayloads).toContainEqual(expect.objectContaining({
+        status: 'queued',
+        github_run_id: null,
+        phase: null,
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a stale candidate active while its exact QA workflow is still running', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-13T11:00:00.000Z'));
+    try {
+      const active = {
+        ...candidate('catalog-default'),
+        status: 'running',
+        attempts: 1,
+        dispatched_at: '2026-09-13T10:35:00.000Z',
+        started_at: '2026-09-13T10:40:00.000Z',
+        phase_updated_at: '2026-09-13T10:45:00.000Z',
+        updated_at: '2026-09-13T10:45:00.000Z',
+        github_run_id: '34748233863',
+      };
+      const { client, rollbackIds } = createSupabaseStub([], [], {
+        activeCandidates: [active],
+      });
+      createServerClientMock.mockReturnValue(client);
+
+      const response = await GET(cronRequest());
+      const body = await response.json();
+
+      expect(body).toMatchObject({ reason: 'qa_active', reconciled: 0 });
+      expect(isQaWorkflowRunCompletedMock).toHaveBeenCalledWith('34748233863');
+      expect(rollbackIds).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('supersedes an invalid row and dispatches the valid row behind it', async () => {

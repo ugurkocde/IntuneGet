@@ -9,9 +9,11 @@ import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
+import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
+const STALE_HEARTBEAT_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 2;
 const QUEUE_SCAN_PAGE_SIZE = 100;
 const MAX_QUEUE_SCAN_PAGES = 10;
@@ -98,9 +100,34 @@ export async function GET(request: Request) {
   for (const candidate of active || []) {
     const timestamp = candidate.status === 'running' ? candidate.started_at : candidate.dispatched_at;
     const timeout = candidate.status === 'running' ? RUN_TIMEOUT_MS : DISPATCH_TIMEOUT_MS;
-    if (timestamp && now.getTime() - new Date(timestamp).getTime() <= timeout) continue;
+    const lifecycleStartedAt = typeof timestamp === 'string' ? Date.parse(timestamp) : Number.NaN;
+    const hardTimedOut = !Number.isFinite(lifecycleStartedAt) ||
+      now.getTime() - lifecycleStartedAt > timeout;
+    let completedWithoutCallback = false;
+    if (!hardTimedOut) {
+      const heartbeatCandidates = [
+        candidate.activity_updated_at,
+        candidate.phase_updated_at,
+        candidate.updated_at,
+        timestamp,
+      ]
+        .filter((value): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value)))
+        .map((value) => Date.parse(value));
+      const latestHeartbeat = heartbeatCandidates.length ? Math.max(...heartbeatCandidates) : null;
+      if (latestHeartbeat === null || now.getTime() - latestHeartbeat <= STALE_HEARTBEAT_MS) continue;
+      if (!candidate.github_run_id) continue;
+      completedWithoutCallback = await isQaWorkflowRunCompleted(candidate.github_run_id);
+      if (!completedWithoutCallback) continue;
+    }
 
-    const recovery = qaTimeoutRecoveryUpdate(candidate, now.toISOString(), MAX_ATTEMPTS);
+    const recovery = qaTimeoutRecoveryUpdate(
+      candidate,
+      now.toISOString(),
+      MAX_ATTEMPTS,
+      completedWithoutCallback
+        ? 'The QA workflow completed without reporting a terminal candidate result.'
+        : undefined
+    );
     const { error } = await supabase
       .from('qa_candidates')
       .update(recovery)

@@ -43,4 +43,18 @@ describe('qaTimeoutRecoveryUpdate', () => {
       updated_at: '2026-08-07T20:50:00.000Z',
     });
   });
+
+  it('records a precise terminal summary for a completed workflow callback failure', () => {
+    expect(
+      qaTimeoutRecoveryUpdate(
+        { ...execution, attempts: 2 },
+        '2026-08-07T20:50:00.000Z',
+        2,
+        'The QA workflow completed without reporting a terminal candidate result.'
+      )
+    ).toMatchObject({
+      status: 'error',
+      failure_summary: 'The QA workflow completed without reporting a terminal candidate result.',
+    });
+  });
 });
