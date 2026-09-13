@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba',
+  packagerCommit: '9e51c9ab6cc3a28346f13266e566c9896fa4101b',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -599,6 +599,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // AirUSB's exact Inno identity changes only its failed catalog profile.
   // Unchanged profiles remain compatible; exact-pin cohort audits stay separate.
   '5fdfc187c77c3223dc76287b41232770108ee7be',
+  // RackSight gains an exact NSIS identity. Unchanged execution profiles remain
+  // compatible; exact-pin cohort reporting continues to audit the current pin.
+  '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

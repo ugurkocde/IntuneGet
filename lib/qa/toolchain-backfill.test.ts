@@ -6,9 +6,18 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries RackSight only after its exact identity repair and preserves older targets', () => {
+    const previous = '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba';
+    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'AuthorityGate.RackSight', status: 'failed' })).toBe(false);
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'AuthorityGate.RackSight', ...terminalToolchainRetryTargets(previous),
+    ]);
+  });
   it('retries AirUSB only on its repaired release while preserving existing targets', () => {
     const previous = '5fdfc187c77c3223dc76287b41232770108ee7be';
-    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    const current = '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba';
     expect(shouldRetryTerminalToolchainCandidate(previous,
       { wingetId: 'AirUSB.Client', status: 'failed' })).toBe(false);
     expect(shouldRetryTerminalToolchainCandidate(current,

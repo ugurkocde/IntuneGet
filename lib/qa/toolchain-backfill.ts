@@ -666,6 +666,16 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '9e51c9ab6cc3a28346f13266e566c9896fa4101b': [
+    'AuthorityGate.RackSight',
+    'AirUSB.Client',
+    'Philips.SmartControl',
+    'Adobe.Acrobat.Pro',
+    'WithSecure.ElementsAgent',
+    'PostgreSQL.PostgreSQL.16',
+    'Trimble.SketchUp.2025',
+    ...ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
+  ],
   '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba': [
     // Retry the exact AirUSB registration repair and retain unconsumed targets.
     'AirUSB.Client',
