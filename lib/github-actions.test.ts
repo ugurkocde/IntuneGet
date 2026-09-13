@@ -481,6 +481,22 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches RackSight customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'AuthorityGate.RackSight', displayName: 'RackSight Desktop', publisher: 'AuthorityGate',
+      version: '1.1.9', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:RackSight Desktop',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight'
+    );
+  });
+
   it('dispatches AirUSB customer packages with the exact Inno identity used by QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

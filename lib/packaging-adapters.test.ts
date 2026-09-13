@@ -10,6 +10,13 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('binds RackSight to the captured exact NSIS key without changing custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight';
+    expect(resolveApplicationUninstallCommand(' AuthorityGate.RackSight ', 'REGISTRY_UNINSTALL:RackSight Desktop')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('AuthorityGate.RackSight', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('AuthorityGate.Other', 'REGISTRY_UNINSTALL:RackSight Desktop')).toBe('REGISTRY_UNINSTALL:RackSight Desktop');
+    expect(resolveApplicationUninstallCommand('AuthorityGate.RackSight', 'custom.exe /remove')).toBe('custom.exe /remove');
+  });
   it('binds AirUSB to the captured exact Inno key without changing custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1:Air USB';
     expect(resolveApplicationUninstallCommand(' AirUSB.Client ', 'REGISTRY_UNINSTALL:AirUSB Client')).toBe(expected);

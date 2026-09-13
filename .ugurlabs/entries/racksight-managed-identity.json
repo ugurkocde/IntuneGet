@@ -1,0 +1,5 @@
+{
+  "title": "RackSight package detection and removal",
+  "summary": "RackSight packages now use the application's exact registered identity, so background WebView2 updates cannot interfere with installation verification or managed removal.",
+  "type": "fixed"
+}

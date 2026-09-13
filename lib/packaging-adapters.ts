@@ -1790,6 +1790,14 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // RackSight v1.1.9 uses electron-builder appId net.authoritygate.racksight
+  // and productName RackSight. Isolated run 34787649769 captured this exact
+  // NSIS key alongside WebView2 servicing; never select the runtime instead.
+  'authoritygate.racksight': {
+    generatedDisplayName: 'RackSight Desktop',
+    registeredDisplayName: 'RackSight',
+    registeredRegistryKey: '3961d0de-ceb1-54d7-a222-b94c8b534c40',
+  },
   // RobotStudio's InstallShield wrapper updates Edge during installation. The
   // exact 2025.2 MSI identity prevents that unrelated servicing delta from
   // being captured as RobotStudio's uninstall command.

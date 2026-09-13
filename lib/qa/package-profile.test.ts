@@ -1535,6 +1535,24 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds RackSight QA to the captured NSIS key while retaining its trusted installer profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'AuthorityGate.RackSight', displayName: 'RackSight Desktop', publisher: 'AuthorityGate',
+      version: '1.1.9', architecture: 'x64',
+      installerSha256: 'A8C2BB553DB8C7BDE28C90E1587EA6F2992862C3B9E9AC696B23FDF9ACA2B2BA',
+      installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:RackSight Desktop',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine',
+      sha256: 'A8C2BB553DB8C7BDE28C90E1587EA6F2992862C3B9E9AC696B23FDF9ACA2B2BA',
+      silentArgs: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight',
+    });
+  });
+
   it('binds AirUSB QA to the captured Inno key while retaining its trusted installer profile', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'AirUSB.Client', displayName: 'AirUSB Client', publisher: 'AirUSB',
