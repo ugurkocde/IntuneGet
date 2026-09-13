@@ -2328,6 +2328,35 @@ if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'selects only the AirUSB Inno key despite the observed Edge registration change',
+    () => {
+      const key = '{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1';
+      const command = resolveApplicationUninstallCommand('AirUSB.Client', 'REGISTRY_UNINSTALL:AirUSB Client');
+      const generated = generateRegistryUninstallPackage('inno', 'AirUSB Client', [], {}, [],
+        'AirUSB.Client', 'AirUSB Client', '1.1.2', command);
+      const identity = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identity).toBeDefined();
+      expect(selection).toBeDefined();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identity}
+$changedApplications = @(
+  [pscustomobject]@{ PSChildName = '${key}'; DisplayName = 'Air USB'; Publisher = 'Zed Axis' },
+  [pscustomobject]@{ PSChildName = 'Microsoft Edge'; DisplayName = 'Microsoft Edge'; Publisher = 'Microsoft Corporation' }
+)
+${selection}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].DisplayName -ne 'Air USB') { throw 'Wrong product selected' }
+$changedApplications = @($changedApplications[1])
+${selection}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '" + key + "'");
+      expect(generated).toContain("$registeredInstallerType = 'inno'");
+    }, 30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'selects only the Philips NSIS key despite Edge and OneDrive registry changes',
     () => {
       const key = 'eaf31a0e-c98a-5e6e-9883-2a487a3337a1';

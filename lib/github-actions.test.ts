@@ -481,6 +481,22 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches AirUSB customer packages with the exact Inno identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'AirUSB.Client', displayName: 'AirUSB Client', publisher: 'AirUSB',
+      version: '1.1.2', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'inno', installScope: 'machine',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:AirUSB Client',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1:Air USB'
+    );
+  });
+
   it('dispatches JS8Call-improved with the reviewed Inno key to the customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

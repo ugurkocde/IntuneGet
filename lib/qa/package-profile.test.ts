@@ -1535,6 +1535,24 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds AirUSB QA to the captured Inno key while retaining its trusted installer profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'AirUSB.Client', displayName: 'AirUSB Client', publisher: 'AirUSB',
+      version: '1.1.2', architecture: 'x64',
+      installerSha256: '5498A354C08014A2094D354FA105723246AF79085463277208700695BAFA07C5',
+      installerType: 'inno', installScope: 'machine',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:AirUSB Client',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine',
+      sha256: '5498A354C08014A2094D354FA105723246AF79085463277208700695BAFA07C5',
+      silentArgs: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1:Air USB',
+    });
+  });
+
   it('binds JS8Call-improved QA to the exact Inno key used by customer packages', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'JS8Call-improved.JS8Call-improved',

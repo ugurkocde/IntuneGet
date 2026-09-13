@@ -1817,6 +1817,14 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
     registeredDisplayName: 'Google Chrome Beta',
     registeredRegistryKey: 'Google Chrome Beta',
   },
+  // AirUSB 1.1.2 registered this exact Inno identity in isolated run
+  // 34781866170. Its catalog name and publisher differ from Air USB / Zed Axis;
+  // an unrelated Edge update must never become an uninstall candidate.
+  'airusb.client': {
+    generatedDisplayName: 'AirUSB Client',
+    registeredDisplayName: 'Air USB',
+    registeredRegistryKey: '{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1',
+  },
   // JS8Call-improved's catalog title differs from the vendor's Inno AppName.
   // The official installer source keeps a stable AppId while AppVerName adds
   // the release version to the visible ARP name. QA run 33471597387 observed
