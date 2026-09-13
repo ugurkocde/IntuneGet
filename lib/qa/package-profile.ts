@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '5fdfc187c77c3223dc76287b41232770108ee7be',
+  packagerCommit: '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -596,6 +596,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Philips' exact NSIS key changes only its failing identity path. Other
   // canonical execution profiles remain compatible with the preceding pin.
   '7238616608f888449fa2e132fffc8d7314c26745',
+  // AirUSB's exact Inno identity changes only its failed catalog profile.
+  // Unchanged profiles remain compatible; exact-pin cohort audits stay separate.
+  '5fdfc187c77c3223dc76287b41232770108ee7be',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
