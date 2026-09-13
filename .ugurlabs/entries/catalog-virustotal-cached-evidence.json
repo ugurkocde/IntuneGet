@@ -1,0 +1,5 @@
+{
+  "title": "VirusTotal evidence without waiting for catalog lookups",
+  "summary": "Release history now displays cached findings with their analysis date or a direct View on VirusTotal link for the exact installer hash. It no longer shows pending lookup promises. Catalog-wide background lookups and page-triggered requests are retired, preserving existing reports and leaving installation QA checks independent. A direct link does not guarantee that VirusTotal has a report for that file.",
+  "type": "improved"
+}

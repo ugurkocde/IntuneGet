@@ -83,12 +83,11 @@ export class SupabaseCatalogSource implements CatalogSource {
     const hashes = [...new Set(result.rows.map(row => enrichRelease(row, metadata, [], Date.now(), filters.architecture).virusTotal?.hash).filter((hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))];
     let reputations: FileReputation[] = [];
     if (hashes.length) {
-      const responses = await Promise.allSettled([
-        client.from('catalog_file_reputation').select('sha256,status,malicious,suspicious,total_engines,analyzed_at').in('sha256', hashes).abortSignal(AbortSignal.timeout(5000)),
-        process.env.SUPABASE_SERVICE_ROLE_KEY ? client.rpc('request_catalog_file_reputation', {hashes, prioritized: true}).abortSignal(AbortSignal.timeout(5000)) : Promise.resolve(null),
-      ]);
-      const cached = responses[0];
-      if (cached.status === 'fulfilled' && cached.value && !cached.value.error) reputations = (cached.value.data ?? []) as FileReputation[];
+      // Public history only consumes cached evidence. Never enqueue a lookup.
+      try {
+        const cached = await client.from('catalog_file_reputation').select('sha256,status,malicious,suspicious,total_engines,analyzed_at').in('sha256', hashes).abortSignal(AbortSignal.timeout(5000));
+        if (!cached.error) reputations = (cached.data ?? []) as FileReputation[];
+      } catch { /* Exact-hash links remain available when the cache cannot be read. */ }
     }
     return {...result, rows: result.rows.map(row => unavailable.has(releasePairKey(row)) ? {...row, detailsUnavailable: true} : enrichRelease(row, metadata, reputations, Date.now(), filters.architecture))};
   }

@@ -43,7 +43,7 @@ export async function generateMetadata({
 const loadHistory = unstable_cache(
   async (filters: ReleaseHistoryFilters) =>
     requireCompleteHistory(await getCatalogSource().getReleaseHistory(filters)),
-  ["catalog-release-history-v7"],
+  ["catalog-release-history-v8"],
   { revalidate: 300 },
 );
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -424,15 +424,8 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
                                         <Var>{row.virusTotal.suspicious}</Var>{" "}
                                         suspicious
                                       </T>
-                                    ) : row.virusTotal.status ===
-                                      "not_found" ? (
-                                      <T>No report found</T>
-                                    ) : row.virusTotal.status === "pending" ? (
-                                      <T>Report pending</T>
-                                    ) : row.virusTotal.status === "error" ? (
-                                      <T>Lookup unavailable</T>
                                     ) : (
-                                      <T>Open report</T>
+                                      <T>View on VirusTotal</T>
                                     )}
                                   </a>
                                   {row.virusTotal.architecture && (
@@ -527,13 +520,12 @@ export default async function CatalogReleasesPage({ searchParams }: Props) {
           </h2>
           <p className="mt-2">
             <T>
-              VirusTotal reports are looked up by the WinGet installer hash
-              without installing or uploading the app. Report pending means we
-              have not retrieved the result yet. Background lookups only cover versions recorded by IntuneGet
-              within the last 72 hours and run within the available API quota.
-              Older versions retain cached findings and direct report links. You can open
-              the VirusTotal link while waiting. Results are cached and reflect
-              the recorded scan date. Zero detections do not guarantee safety.
+              VirusTotal links identify the exact WinGet installer file by its
+              hash. Cached findings reflect
+              the analysis date shown. When no cached findings are available,
+              open the file’s VirusTotal page using its installer hash. A report
+              may not exist. Opening a link does not request a new scan.
+              Zero detections do not guarantee safety.
               This is an observation history, not a complete archive of
               publisher releases. First tracked means the earliest version we
               have recorded for an app, including apps imported when tracking
