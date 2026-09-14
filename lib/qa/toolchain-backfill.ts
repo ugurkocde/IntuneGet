@@ -666,6 +666,17 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  '305b9c41a4ccbd271a9873a4fd858d2515586b76': [
+    'NTKERNEL.WireSockVPNClientCLI',
+    'AuthorityGate.RackSight',
+    'AirUSB.Client',
+    'Philips.SmartControl',
+    'Adobe.Acrobat.Pro',
+    'WithSecure.ElementsAgent',
+    'PostgreSQL.PostgreSQL.16',
+    'Trimble.SketchUp.2025',
+    ...ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
+  ],
   '9e51c9ab6cc3a28346f13266e566c9896fa4101b': [
     'AuthorityGate.RackSight',
     'AirUSB.Client',

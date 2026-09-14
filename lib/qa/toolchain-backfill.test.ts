@@ -6,9 +6,22 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries only WireSock CLI in addition to the prior release targets', () => {
+    const previous = '9e51c9ab6cc3a28346f13266e566c9896fa4101b';
+    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'NTKERNEL.WireSockVPNClientCLI', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'NTKERNEL.WireSockVPNClientCLI', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'NTKERNEL.WireSockVPNClientCLI', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'NTKERNEL.WireSockVPNClient', status: 'failed' })).toBe(false);
+  });
   it('retries RackSight only after its exact identity repair and preserves older targets', () => {
     const previous = '05f550c4ec6d14b2cf3d4c2ce32db418da3dd0ba';
-    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    const current = '9e51c9ab6cc3a28346f13266e566c9896fa4101b';
     expect(shouldRetryTerminalToolchainCandidate(previous,
       { wingetId: 'AuthorityGate.RackSight', status: 'failed' })).toBe(false);
     expect(terminalToolchainRetryTargets(current)).toEqual([
