@@ -126,6 +126,15 @@ describe('application packaging adapters', () => {
     ).toEqual(['/silent']);
   });
 
+  it('binds only WireSock CLI to the visible SDK registration', () => {
+    const adapted = applyApplicationPackagingAdapter(' NTKERNEL.WireSockVPNClientCLI ', DEFAULT_PSADT_CONFIG);
+    expect(adapted.reviewedRegistryUninstallDisplayName).toBe('WireSock Secure Connect SDK');
+    expect(adapted.reviewedPreferVisiblePrimaryUninstallRegistration).toBe(true);
+    const other = applyApplicationPackagingAdapter('NTKERNEL.WireSockVPNClient', adapted);
+    expect(other.reviewedRegistryUninstallDisplayName).toBeUndefined();
+    expect(other.reviewedPreferVisiblePrimaryUninstallRegistration).toBeUndefined();
+  });
+
   it('uses the reviewed Chrome EXE registry identity without widening matching', () => {
     expect(resolveApplicationUninstallCommand(
       'Google.Chrome.EXE',

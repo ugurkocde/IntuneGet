@@ -1486,6 +1486,24 @@ describe('PSADT QA package identity', () => {
     expect(profile.installer.uninstallCommand).toBe(uninstallCommand);
   });
 
+  it('binds WireSock CLI QA to the shared SDK registration adapter', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',
+      version: '3.6.1', architecture: 'x64',
+      installerSha256: 'BDB676263FFFA4E36EC6B51155A8AFE2AC6D5680DC6D22008DE9C75C8F533ECC',
+      installerType: 'exe', silentSwitches: '/S /NCRC', installScope: 'machine',
+      uninstallCommand: 'REGISTRY_UNINSTALL:WireSock Secure Connect CLI',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile).toMatchObject({
+      psadtConfig: {
+        reviewedRegistryUninstallDisplayName: 'WireSock Secure Connect SDK',
+        reviewedPreferVisiblePrimaryUninstallRegistration: true,
+      },
+      installer: { sourceType: 'exe', silentArgs: '/S /NCRC', installScope: 'machine' },
+    });
+  });
+
   it('binds Philips QA to its exact NSIS identity while preserving user scope and ZIP metadata', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Philips.SmartControl', displayName: 'Smart Control', publisher: 'Philips',

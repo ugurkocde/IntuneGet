@@ -438,6 +438,22 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches WireSock customers with the same SDK identity adapter as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'NTKERNEL.WireSockVPNClientCLI', displayName: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL',
+      version: '3.6.1', architecture: 'x64', installerSha256: 'BDB676263FFFA4E36EC6B51155A8AFE2AC6D5680DC6D22008DE9C75C8F533ECC',
+      sourceType: 'winget', installerType: 'exe', silentSwitches: '/S /NCRC', installScope: 'machine',
+      uninstallCommand: 'REGISTRY_UNINSTALL:WireSock Secure Connect CLI',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedRegistryUninstallDisplayName: 'WireSock Secure Connect SDK',
+      reviewedPreferVisiblePrimaryUninstallRegistration: true,
+    });
+  });
+
   it('dispatches Philips customer packages with the same exact NSIS identity as QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

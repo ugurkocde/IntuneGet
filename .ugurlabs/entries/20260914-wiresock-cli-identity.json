@@ -1,0 +1,5 @@
+{
+  "title": "WireSock CLI package detection",
+  "summary": "WireSock CLI packages now recognize the installed Secure Connect SDK registration and retain its exact vendor uninstall route.",
+  "type": "fixed"
+}

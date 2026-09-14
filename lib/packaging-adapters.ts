@@ -640,6 +640,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedPreferVisiblePrimaryUninstallRegistration: true,
   },
   {
+    // The official CLI manifest distributes the Secure Connect SDK bundle.
+    // Run 34838391079 observed its visible SDK wrapper, hidden SDK/driver
+    // MSIs, and an unrelated Edge update. Bind the exact registered SDK name;
+    // select only one visible match and retain its captured removal command.
+    wingetId: 'NTKERNEL.WireSockVPNClientCLI',
+    reviewedRegistryUninstallDisplayName: 'WireSock Secure Connect SDK',
+    reviewedPreferVisiblePrimaryUninstallRegistration: true,
+  },
+  {
     // HP replaced Poly Lens Desktop with Poly Studio Desktop in 5.1 while the
     // old Poly.PolyLens WinGet entry remained mapped to the exact same MSI as
     // Poly.PolyStudio. The transitional MSI does not retain its own published

@@ -2896,6 +2896,41 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
   });
 
+  it.runIf(canRunWindowsPowerShellPackager)('selects the WireSock SDK wrapper from the actual failed registry delta', () => {
+    const config = applyApplicationPackagingAdapter('NTKERNEL.WireSockVPNClientCLI', DEFAULT_PSADT_CONFIG);
+    const generated = generateRegistryUninstallPackage('exe', 'WireSock Secure Connect CLI', [], config, [],
+      'NTKERNEL.WireSockVPNClientCLI', 'WireSock Secure Connect CLI', '3.6.1',
+      'REGISTRY_UNINSTALL:WireSock Secure Connect CLI', '/S /NCRC');
+    const identity = generated.split('\n').find(line => line.includes('$configuredUninstallDisplayName ='));
+    const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.DisplayName -eq'));
+    const visible = generated.match(/\$visiblePrimaryMatches = @\(\$selectedApplications \| Where-Object \{[\s\S]*?if \(\$visiblePrimaryMatches.Count -eq 1\) \{ \$selectedApplications = \$visiblePrimaryMatches \}/)?.[0];
+    expect(identity).toContain("'WireSock Secure Connect SDK'");
+    expect(selection).toBeDefined();
+    expect(visible).toBeDefined();
+    const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identity}
+$wrapper = [pscustomobject]@{ PSChildName = '{2D8B4476-9926-4D30-A5FC-C0F369BBDD9C}'; DisplayName = 'WireSock Secure Connect SDK'; SystemComponent = $false }
+$hidden = [pscustomobject]@{ PSChildName = '{CE9DCD95-C063-448F-8C04-5558F212BCD2}'; DisplayName = 'WireSock Secure Connect SDK'; SystemComponent = $true }
+$driver = [pscustomobject]@{ DisplayName = 'WireSock Kernel Drivers'; SystemComponent = $true }
+$edge = [pscustomobject]@{ DisplayName = 'Microsoft Edge'; SystemComponent = $false }
+$changedApplications = @($wrapper, $hidden, $driver, $edge)
+${selection}
+${visible}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].PSChildName -ne $wrapper.PSChildName) { throw 'Wrong identity captured' }
+$changedApplications = @($edge, $driver)
+${selection}
+${visible}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated identity selected' }
+$changedApplications = @($wrapper, $wrapper, $hidden)
+${selection}
+${visible}
+if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
+`], { encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(generated).toContain("$appName = 'WireSock Secure Connect SDK'");
+    expect(generated).toContain('$_.PSChildName -eq $capturedUninstallKey');
+  }, 30_000);
+
   it('keeps visible-primary ARP selection opt-in, identity-bounded, and fail-closed', () => {
     expect(packager).toContain(
       "-Name 'reviewedPreferVisiblePrimaryUninstallRegistration'"

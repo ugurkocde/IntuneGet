@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { buildQaCatalogTestConfig } from './test-config';
 
 describe('buildQaCatalogTestConfig', () => {
+  it('normalizes the WireSock CLI manifest through the shared SDK adapter', () => {
+    const config = buildQaCatalogTestConfig({
+      app: { wingetId: 'NTKERNEL.WireSockVPNClientCLI', name: 'WireSock Secure Connect CLI', publisher: 'NTKERNEL', version: '3.6.1' },
+      manifest: { InstallerType: 'exe' },
+      installer: { Architecture: 'x64', InstallerSwitches: { Silent: '/S /NCRC' } },
+    });
+    expect(config.psadtConfig).toMatchObject({
+      reviewedRegistryUninstallDisplayName: 'WireSock Secure Connect SDK',
+      reviewedPreferVisiblePrimaryUninstallRegistration: true,
+    });
+    expect(config.silentArgs).toBe('/S /NCRC');
+    expect(config.sourceInstallerType).toBe('exe');
+  });
+
   it('preserves Acrobat unified MSI identity through ZIP/EXE QA normalization', () => {
     const config = buildQaCatalogTestConfig({
       app: { wingetId: 'Adobe.Acrobat.Pro', name: 'Adobe Acrobat Pro', publisher: 'Adobe', version: '26.002.21901' },
