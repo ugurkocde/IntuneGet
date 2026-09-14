@@ -226,6 +226,21 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the exact failed SSIS release with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Microsoft.DataTools.IntegrationServices', version: '17.0.1010.2',
+      architecture: 'x86',
+      installerSha256: '75D8444333303D5B449660A669AF07862289E5F2BBDEF0AE7520C5BA3E47D65B',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install failed with exit 1626.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a flagged current version even when its installation test passed', async () => {
     getQaResultMock.mockResolvedValue({
       ...failedRow,

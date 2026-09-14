@@ -191,6 +191,29 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the exact failed SSIS profile before dependency resolution or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Microsoft.DataTools.IntegrationServices', version: '17.0.1010.2',
+      architecture: 'x86' as const,
+      installerSha256: '75D8444333303D5B449660A669AF07862289E5F2BBDEF0AE7520C5BA3E47D65B',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install failed with exit 1626.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'burn', installScope: 'machine',
+      silentSwitches: '/quiet /norestart',
+      uninstallCommand: 'REGISTRY_UNINSTALL:SQL Server Integration Services Projects',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('persists dependency download metadata on a newly queued customer candidate', async () => {
     const dependency = {
       packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
