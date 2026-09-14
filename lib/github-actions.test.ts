@@ -804,6 +804,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: '166CA2458830C7646ECACD542C40C07E5DA7E48138BD81DA4EBEBD7B5C2A9532' },
     { wingetId: 'Microsoft.365Copilot', version: '19.2609.33020.0', architecture: 'x64' as const,
       installerSha256: '7B2A6D88E87F068E8775D1DE267EE932914F430BFA054A2012DEC43FA279E61A' },
+    { wingetId: 'Twinkstar.TwinkstarBrowser', version: '11.4.1000.2609', architecture: 'x64' as const,
+      installerSha256: '3671D4C0693240501854274692724B9A98C35B1E869066CF40985F43D4738668' },
   ])('never sends a customer Actions payload for quarantined $wingetId, even with override', async (tuple) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

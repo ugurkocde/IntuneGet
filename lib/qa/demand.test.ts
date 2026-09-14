@@ -172,6 +172,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('returns a blocked normalized profile for Twinkstar without creating a queue row', async () => {
+    const tuple = {
+      wingetId: 'Twinkstar.TwinkstarBrowser', version: '11.4.1000.2609',
+      architecture: 'x64' as const,
+      installerSha256: '3671D4C0693240501854274692724B9A98C35B1E869066CF40985F43D4738668',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '-silent', uninstallCommand: 'REGISTRY_UNINSTALL:Twinkstar',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('persists dependency download metadata on a newly queued customer candidate', async () => {
     const dependency = {
       packageIdentifier: 'Microsoft.VCRedist.2015+.x64',

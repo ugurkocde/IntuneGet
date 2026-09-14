@@ -211,6 +211,21 @@ describe('enforceQaGate', () => {
     expect(getPackageResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the exact Twinkstar release with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Twinkstar.TwinkstarBrowser', version: '11.4.1000.2609',
+      architecture: 'x64',
+      installerSha256: '3671D4C0693240501854274692724B9A98C35B1E869066CF40985F43D4738668',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a flagged current version even when its installation test passed', async () => {
     getQaResultMock.mockResolvedValue({
       ...failedRow,
