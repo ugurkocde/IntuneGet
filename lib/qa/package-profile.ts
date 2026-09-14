@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '305b9c41a4ccbd271a9873a4fd858d2515586b76',
+  packagerCommit: 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -605,6 +605,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Only WireSock CLI's previously failing SDK registration selection changes.
   // Existing successful execution profiles keep their compatibility history.
   '9e51c9ab6cc3a28346f13266e566c9896fa4101b',
+  // Product Portal gains unattended uninstall arguments in its canonical
+  // config. Unchanged execution profiles remain compatible; strict cohort
+  // reporting still requires the exact current shared pin.
+  '305b9c41a4ccbd271a9873a4fd858d2515586b76',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
