@@ -816,6 +816,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   });
 
   it.each([
+    { wingetId: 'Pithflow.Pithflow', version: '1.37.0', architecture: 'x64' as const,
+      installerSha256: '536AD9787092DFBD9F23C9F5FD4EA1ED81B1A363736AE68B3B3BFCED627028D4' },
     { wingetId: 'HydrologicEngineeringCenter.HEC-RAS', version: '7.0', architecture: 'x86' as const,
       installerSha256: '166CA2458830C7646ECACD542C40C07E5DA7E48138BD81DA4EBEBD7B5C2A9532' },
     { wingetId: 'Microsoft.365Copilot', version: '19.2609.33020.0', architecture: 'x64' as const,

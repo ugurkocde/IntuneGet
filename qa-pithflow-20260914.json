@@ -1,0 +1,22 @@
+{
+  "boundaryUtc": "2026-08-30T08:28:35Z",
+  "target": 500,
+  "candidate": "ff97eab9-b085-4f6a-a5cb-5f289860fe02",
+  "run": "34859020178",
+  "app": "Pithflow.Pithflow",
+  "version": "1.37.0",
+  "architecture": "x64",
+  "installerSha256": "536AD9787092DFBD9F23C9F5FD4EA1ED81B1A363736AE68B3B3BFCED627028D4",
+  "profileSha256": "F89F2A0370CC1E8CC0DFE215242332F2486C9E804A2C8537B12D1D6416ED022A",
+  "packagerPin": "305b9c41a4ccbd271a9873a4fd858d2515586b76",
+  "evidence": "PSADT captured exact registration Pithflow. Uninstall failed immediately because the registered systemprofile LocalAppData/Pithflow/uninstall.exe was absent. Tuple 0/0/60001/0, LocalSystem, VirusTotal 0/0. No installer was accessed on the host.",
+  "sources": [
+    "https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/34859020178",
+    "https://github.com/microsoft/winget-pkgs/blob/master/manifests/p/Pithflow/Pithflow/1.37.0/Pithflow.Pithflow.installer.yaml",
+    "https://pithflow.com/faq/"
+  ],
+  "decision": "Quarantine this exact failed payload through qa_package_blocks / failed_managed_lifecycle, shared by QA demand and customer packaging. WinGet declares NSIS /S but omits scope; no supported machine-scope repair was established. User-context success would not satisfy the required LocalSystem audit. Future versions remain eligible; terminal and security evidence are preserved.",
+  "strictCurrentPinCountAt151152Utc": 4,
+  "statusOnlyCount": 289,
+  "nextAction": "Merge protected PR after required checks, run scripts/qa-pithflow-quarantine.mjs audit then block using production environment, refresh authenticated enqueue heartbeat, verify shared block and fresh aligned pin with no active lifecycle, run resume, dispatch once, audit active phase. Requery all state after restart."
+}
