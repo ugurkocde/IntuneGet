@@ -6,9 +6,22 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Product Portal only on its unattended uninstall release', () => {
+    const previous = '305b9c41a4ccbd271a9873a4fd858d2515586b76';
+    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'iZotope.ProductPortal', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'iZotope.ProductPortal', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'iZotope.ProductPortal', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'iZotope.Other', status: 'failed' })).toBe(false);
+  });
   it('retries only WireSock CLI in addition to the prior release targets', () => {
     const previous = '9e51c9ab6cc3a28346f13266e566c9896fa4101b';
-    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    const current = '305b9c41a4ccbd271a9873a4fd858d2515586b76';
     expect(terminalToolchainRetryTargets(current)).toEqual([
       'NTKERNEL.WireSockVPNClientCLI', ...terminalToolchainRetryTargets(previous),
     ]);
