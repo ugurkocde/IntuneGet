@@ -2175,6 +2175,19 @@ describe('PSADT QA package identity', () => {
     expect(profile.psadtConfig).toMatchObject(expectedConfig);
   });
 
+  it('binds Product Portal unattended removal into the exact QA profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'iZotope.ProductPortal', displayName: 'Product Portal', publisher: 'iZotope',
+      version: '1.4.9', architecture: 'x64', installerType: 'exe',
+      installerSha256: '29D08FA0A07C93EB81095D448271D0E64C6DDECF47115F1B0DD40091622062ED',
+      silentSwitches: '--mode unattended', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Product Portal:Product Portal',
+      installScope: 'machine', detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    const expectedConfig = { reviewedUninstallArguments: ['--mode', 'unattended'] };
+    expect(JSON.parse(normalized.psadtConfigJson)).toMatchObject(expectedConfig);
+    expect(normalized.identity.profile).toMatchObject({ psadtConfig: expectedConfig });
+  });
+
   it('binds PostgreSQL 16 to the bounded vendor removal lifecycle', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'PostgreSQL.PostgreSQL.16',

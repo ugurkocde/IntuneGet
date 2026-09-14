@@ -1,0 +1,5 @@
+{
+  "title": "Unattended Product Portal removal",
+  "summary": "iZotope Product Portal packages now request unattended removal from the registered uninstaller and verify that the application was removed.",
+  "type": "fixed"
+}

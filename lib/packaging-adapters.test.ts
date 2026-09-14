@@ -10,6 +10,16 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('adds unattended removal only to the exact Product Portal identity', () => {
+    for (const id of ['iZotope.ProductPortal', ' izotope.productportal ']) {
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedUninstallArguments).toEqual(['--mode', 'unattended']);
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+      expect(adapted.uninstallCompletionTimeoutMinutes).toBe(DEFAULT_PSADT_CONFIG.uninstallCompletionTimeoutMinutes);
+    }
+    expect(applyApplicationPackagingAdapter('iZotope.Other', DEFAULT_PSADT_CONFIG)
+      .reviewedUninstallArguments).toEqual(DEFAULT_PSADT_CONFIG.reviewedUninstallArguments);
+  });
   it('binds RackSight to the captured exact NSIS key without changing custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight';
     expect(resolveApplicationUninstallCommand(' AuthorityGate.RackSight ', 'REGISTRY_UNINSTALL:RackSight Desktop')).toBe(expected);

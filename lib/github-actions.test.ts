@@ -245,6 +245,21 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     });
   });
 
+  it('dispatches Product Portal unattended removal to customer packaging', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'iZotope.ProductPortal', displayName: 'Product Portal', publisher: 'iZotope',
+      version: '1.4.9', installerSha256: 'A'.repeat(64), sourceType: 'winget',
+      silentSwitches: '--mode unattended', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Product Portal:Product Portal',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:Product Portal:Product Portal');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedUninstallArguments: ['--mode', 'unattended'],
+    });
+  });
+
   it('dispatches the bounded PostgreSQL 16 removal lifecycle to customer packaging', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

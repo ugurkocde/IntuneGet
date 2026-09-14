@@ -597,6 +597,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['-q'],
   },
   {
+    // Product Portal registers its exact product uninstaller without quiet
+    // arguments (QA run 34878280391). WinGet declares --mode unattended;
+    // InstallBuilder supports the same mode for its generated uninstallers:
+    // https://installbuilder.com/uninstall-functionality-screenshot
+    // Keep registry-owned identity, bounded completion, and removal verification.
+    wingetId: 'iZotope.ProductPortal',
+    reviewedUninstallArguments: ['--mode', 'unattended'],
+  },
+  {
     // OpenWebStart documents its Windows payload as an install4j application
     // with a root-level uninstall.exe. The registered command is interactive,
     // and the generic framework detector cannot infer install4j from WinGet's

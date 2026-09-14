@@ -282,6 +282,17 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)('generates Product Portal unattended removal with exact registration verification', () => {
+    const generated = generateRegistryUninstallPackage(
+      'exe', 'Product Portal', [],
+      applyApplicationPackagingAdapter('iZotope.ProductPortal', DEFAULT_PSADT_CONFIG),
+      [], 'iZotope.ProductPortal', 'Product Portal', '1.4.9',
+      'REGISTRY_UNINSTALL_KEY:Product Portal:Product Portal', '--mode unattended'
+    );
+    expect(generated).toContain("'--mode', 'unattended'");
+    expect(generated).toContain('$registeredUninstallArguments += $additionalUninstallArguments');
+    expect(generated).toContain('throw "The vendor uninstall command did not remove registration [$registeredUninstallRegistryKey] before the completion deadline."');
+  });
   it.runIf(canRunWindowsPowerShellPackager)(
     'generates PostgreSQL 16 bounded removal without relaxing exact registration verification',
     () => {
