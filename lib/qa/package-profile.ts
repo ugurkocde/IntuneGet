@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803',
+  packagerCommit: '6dfeaea03893e63cf7aba747638d7ea1768ac6b7',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -609,6 +609,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // config. Unchanged execution profiles remain compatible; strict cohort
   // reporting still requires the exact current shared pin.
   '305b9c41a4ccbd271a9873a4fd858d2515586b76',
+  // LPub3D gains managed-context uninstall arguments. Its profile changes;
+  // unrelated identical execution profiles retain compatibility, not strict count credit.
+  'ada1a8a5d1ad0ae9ad953306a6b528c71479a803',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
