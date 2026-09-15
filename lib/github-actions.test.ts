@@ -831,6 +831,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   });
 
   it.each([
+    { wingetId: 'WizardsoftheCoast.MTGALauncher', version: '1.0.124', architecture: 'x64' as const,
+      installerSha256: '96C64E5E0CD4D5758F3C9AE1AF7A2C6FFCF4782E273AEDE28FA92B8E63FFC368' },
     { wingetId: 'Pithflow.Pithflow', version: '1.37.0', architecture: 'x64' as const,
       installerSha256: '536AD9787092DFBD9F23C9F5FD4EA1ED81B1A363736AE68B3B3BFCED627028D4' },
     { wingetId: 'HydrologicEngineeringCenter.HEC-RAS', version: '7.0', architecture: 'x86' as const,
