@@ -21,9 +21,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Notifications live in user_notifications, a Supabase-only table with no
+    // SQLite equivalent, so an empty badge is the honest answer in a
+    // self-hosted install rather than the 500 createServerClient() used to
+    // throw here. Same `unread_count` key as the success path - NotificationBell
+    // and NotificationCenter read that field and nothing else.
     const supabase = getServerClientOrNull();
     if (!supabase) {
-      return NextResponse.json({ count: 0 });
+      return NextResponse.json({ unread_count: 0 });
     }
 
     const { count, error } = await supabase
