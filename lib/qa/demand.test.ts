@@ -235,6 +235,29 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the failed RadioMaximus profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86' as const,
+      installerSha256: '8D64DD8FCA0C7CD042CD3028496B7085BEDF22364908D056A9795BCCB821A4A8',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact RadioMaximus_is1 registration remained.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, displayName: 'RadioMaximus', publisher: 'Raimersoft',
+      installerType: 'inno', installScope: 'machine',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:RadioMaximus_is1:RadioMaximus',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the failed Tencent ima normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64' as const,

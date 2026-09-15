@@ -255,6 +255,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the exact RadioMaximus release with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86',
+      installerSha256: '8D64DD8FCA0C7CD042CD3028496B7085BEDF22364908D056A9795BCCB821A4A8',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact RadioMaximus_is1 registration remained.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact Tencent ima release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64',
