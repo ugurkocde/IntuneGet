@@ -14,10 +14,13 @@ async function rows(table, params) {
     if (page.length < 500) return all;
   }
 }
-const [controls, candidates, results] = await Promise.all([
+const [controls, candidates, results, appBlocks, exclusions, payloadBlocks] = await Promise.all([
   rows('qa_pipeline_control', {id: 'eq.global', select: 'required_packager_commit,scheduler_packager_commit,paused'}),
   rows('qa_candidates', {status: 'eq.passed', test_level: 'eq.psadt-package', order: 'id.asc', select: 'id,winget_id,version,architecture,installer_sha256,package_profile_sha256,finished_at,test_config,github_run_id'}),
   rows('qa_package_results', {outcome: 'eq.Passed', order: 'package_profile_sha256.asc', select: 'winget_id,tested_version,architecture,installer_sha256,package_profile_sha256,outcome,phase_results,environment,packager_commit,tested_at_utc,virustotal_malicious,virustotal_suspicious,github_run_id'}),
+  rows('package_eligibility_blocks', {order: 'winget_id.asc', select: 'winget_id'}),
+  rows('curated_excluded_apps', {order: 'winget_id.asc', select: 'winget_id'}),
+  rows('qa_package_blocks', {order: 'winget_id.asc,version.asc,architecture.asc,installer_sha256.asc', select: 'winget_id,version,architecture,installer_sha256'}),
 ]);
 const norm = s => String(s || '').trim().toLowerCase();
 const byProfile = new Map(results.map(r=>[norm(r.package_profile_sha256), r]));
@@ -30,6 +33,7 @@ for (const c of candidates) {
   try { profile = JSON.parse(c.test_config.packageProfileCanonicalJson); } catch { why = 'missingCanonicalProfile'; }
   const phases = r?.phase_results;
   if (!why && !r) why = 'missingExactResult';
+  if (!why && (c.test_config.mode !== 'psadt-package' || profile.testLevel !== 'psadt-package')) why = 'packageMode';
   if (!why && (norm(c.winget_id) !== norm(r.winget_id) || c.version !== r.tested_version || c.architecture !== r.architecture || norm(c.installer_sha256) !== norm(r.installer_sha256))) why = 'tupleMismatch';
   if (!why && (createHash('sha256').update(c.test_config.packageProfileCanonicalJson).digest('hex') !== norm(c.package_profile_sha256) || norm(profile.installer?.sha256) !== norm(c.installer_sha256))) why = 'profileHashMismatch';
   if (!why && (phases?.install?.exitCode !== 0 || phases?.detectionAfterInstall?.exitCode !== 0 || phases?.uninstall?.exitCode !== 0 || phases?.detectionAfterUninstall?.exitCode !== 1)) why = 'lifecycleTuple';
@@ -40,7 +44,10 @@ for (const c of candidates) {
   strict.push({c,r});
 }
 const historical = new Set(strict.filter(({c})=>Date.parse(c.finished_at)<=Date.parse(boundary)).map(({c})=>norm(c.winget_id)));
-const eligible = strict.filter(({c,r})=>Date.parse(c.finished_at)>Date.parse(boundary) && !historical.has(norm(c.winget_id)) && norm(r.packager_commit)===norm(controls[0].required_packager_commit));
+const unavailableIds = new Set([...appBlocks, ...exclusions].map(row => norm(row.winget_id)));
+const payloadKey = row => JSON.stringify([norm(row.winget_id), row.version, norm(row.architecture), norm(row.installer_sha256)]);
+const unavailablePayloads = new Set(payloadBlocks.map(payloadKey));
+const eligible = strict.filter(({c,r})=>Date.parse(c.finished_at)>Date.parse(boundary) && !historical.has(norm(c.winget_id)) && norm(r.packager_commit)===norm(controls[0].required_packager_commit) && !unavailableIds.has(norm(c.winget_id)) && !unavailablePayloads.has(payloadKey(c)));
 console.log(JSON.stringify({observedAtUtc:new Date().toISOString(), boundary, requiredPin:controls[0].required_packager_commit,
   strictCount:new Set(eligible.map(({c})=>norm(c.winget_id))).size,
   latestStrictFinish:eligible.map(({c})=>c.finished_at).sort().at(-1)||null,

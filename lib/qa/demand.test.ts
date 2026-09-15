@@ -235,6 +235,27 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the exact Orca profile before dependency resolution or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,
+      installerSha256: 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller was absent.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{2B325EC9-0ED1-575F-AD70-E08307AEE879}:Orca',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the mismatched MTGA Launcher normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'WizardsoftheCoast.MTGALauncher', version: '1.0.124', architecture: 'x64' as const,

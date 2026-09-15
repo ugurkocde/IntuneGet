@@ -255,6 +255,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the exact Orca release with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64',
+      installerSha256: 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller was absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the mismatched MTGA Launcher release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'WizardsoftheCoast.MTGALauncher', version: '1.0.124', architecture: 'x64',
