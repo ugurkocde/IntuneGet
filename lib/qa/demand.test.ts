@@ -235,6 +235,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the failed Tencent ima normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64' as const,
+      installerSha256: '37E79B29536B79F0DB0F203CD9135A196F5A9791D446F7B16E2A3C1FE75F9EB9',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact ima.copilot registration remained.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, displayName: 'ima', publisher: 'Tencent',
+      installerType: 'exe', installScope: 'machine', silentSwitches: 'quiet',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:ima.copilot:ima',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the exact Orca profile before dependency resolution or queue insertion', async () => {
     const tuple = {
       wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,

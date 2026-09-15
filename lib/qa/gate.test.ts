@@ -255,6 +255,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the exact Tencent ima release with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64',
+      installerSha256: '37E79B29536B79F0DB0F203CD9135A196F5A9791D446F7B16E2A3C1FE75F9EB9',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact ima.copilot registration remained.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact Orca release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64',

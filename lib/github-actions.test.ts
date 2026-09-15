@@ -846,6 +846,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   });
 
   it.each([
+    { wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64' as const,
+      installerSha256: '37E79B29536B79F0DB0F203CD9135A196F5A9791D446F7B16E2A3C1FE75F9EB9' },
     { wingetId: 'WizardsoftheCoast.MTGALauncher', version: '1.0.124', architecture: 'x64' as const,
       installerSha256: '96C64E5E0CD4D5758F3C9AE1AF7A2C6FFCF4782E273AEDE28FA92B8E63FFC368' },
     { wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,
