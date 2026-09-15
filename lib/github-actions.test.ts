@@ -182,6 +182,21 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       .toMatchObject({ reviewedUninstallArguments: ['-silent'] });
   });
 
+  it('dispatches LPub3D managed-context removal through the customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'trevorsandy.lpub3d', displayName: 'LPub3D', publisher: 'trevorsandy',
+      version: '2.4.9.86.4133', installerSha256: 'A'.repeat(64), sourceType: 'winget',
+      installerType: 'exe', silentSwitches: '/S /allusers',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:LPub3D:LPub3D', installScope: 'machine',
+    }), config, { skipRunCapture: true });
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const payload = JSON.parse(String(request.body));
+    expect(JSON.parse(payload.client_payload.config.psadtConfig))
+      .toMatchObject({ reviewedUninstallArguments: ['/shelluser', '/S'] });
+  });
+
   it('dispatches JetBrains Toolbox headless removal through the customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

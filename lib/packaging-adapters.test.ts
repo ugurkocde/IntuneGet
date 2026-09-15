@@ -1553,6 +1553,15 @@ describe('application packaging adapters', () => {
     expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
   });
 
+  it('keeps LPub3D managed uninstall in its caller context without affecting other NSIS apps', () => {
+    const adapted = applyApplicationPackagingAdapter('TREVORSANDY.LPUB3D', DEFAULT_PSADT_CONFIG);
+    expect(adapted.reviewedUninstallArguments).toEqual(['/shelluser', '/S']);
+    expect(adapted.reviewedInstallArgumentsOverride).toBeUndefined();
+    expect(adapted.reviewedManagedUninstall).toBeUndefined();
+    expect(applyApplicationPackagingAdapter('trevorsandy.Other', DEFAULT_PSADT_CONFIG)
+      .reviewedUninstallArguments).not.toContain('/shelluser');
+  });
+
   it('uses Mozilla NSIS silent mode with the exact Waterfox ARP command', () => {
     const adapted = applyApplicationPackagingAdapter(
       'waterfox.waterfox',

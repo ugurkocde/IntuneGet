@@ -185,6 +185,19 @@ describe('PSADT QA package identity', () => {
       .toEqual(['-silent']);
   });
 
+  it('binds LPub3D QA profiles to managed-context NSIS removal', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'trevorsandy.lpub3d', displayName: 'LPub3D', publisher: 'trevorsandy',
+      version: '2.4.9.86.4133', architecture: 'x64', installerSha256: 'b'.repeat(64),
+      installerType: 'exe', sourceInstallerType: 'nullsoft', silentSwitches: '/S /allusers',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:LPub3D:LPub3D', installScope: 'machine',
+    });
+    expect(normalized.identity.profile.psadtConfig.reviewedUninstallArguments).toEqual(['/shelluser', '/S']);
+    expect(JSON.parse(normalized.psadtConfigJson).reviewedUninstallArguments).toEqual(['/shelluser', '/S']);
+    expect(normalized.identity.profile.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:LPub3D:LPub3D');
+    expect(normalized.identity.profile.installer.silentArgs).toBe('/S /allusers');
+  });
+
   it('binds JetBrains Toolbox customer packages to headless removal', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'JetBrains.Toolbox',

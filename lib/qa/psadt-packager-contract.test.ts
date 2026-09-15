@@ -674,6 +674,34 @@ ConvertTo-Json -InputObject @($registeredUninstallArguments) -Compress
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'executes LPub3D registered argument merging without a desktop-shell restart',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'nullsoft', 'LPub3D', [],
+        applyApplicationPackagingAdapter('trevorsandy.lpub3d', DEFAULT_PSADT_CONFIG),
+        [], 'trevorsandy.lpub3d', 'LPub3D', '2.4.9.86.4133',
+        'REGISTRY_UNINSTALL_KEY:LPub3D:LPub3D', '/S /allusers'
+      );
+      const uninstall = generated.slice(generated.indexOf('function Uninstall-ADTDeployment'));
+      const configLine = uninstall.split('\n').find(line => line.includes('$reviewedUninstallArguments ='));
+      const merge = uninstall.match(/foreach \(\$reviewedArgument in \$reviewedUninstallArguments\) \{[\s\S]*?\$registeredUninstallArguments \+= \$reviewedArgument\s*\}\s*\}/)?.[0];
+      expect(configLine).toBeTruthy();
+      expect(merge).toBeTruthy();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${configLine}
+$registeredUninstallArguments = @('/allusers', '/S')
+${merge}
+${merge}
+ConvertTo-Json -InputObject @($registeredUninstallArguments) -Compress
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual(['/allusers', '/S', '/shelluser']);
+      expect(uninstall).toContain('The vendor uninstall command did not remove registration');
+      expect(uninstall).toContain("'LPub3D'");
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'executes SketchUp 2025 reviewed argument merging without duplicating silent mode',
     () => {
       const generated = generateRegistryUninstallPackage(

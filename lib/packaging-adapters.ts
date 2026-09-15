@@ -788,6 +788,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/headless'],
   },
   {
+    // LPub3D's un.onInit restarts elevated uninstallers via ExecShellAsUser
+    // unless /shelluser is present. Preserve the managed execution context,
+    // exact registered scope, single-instance checks, and normal NSIS removal.
+    // Source: trevorsandy/lpub3d at 717082cdde0c7a1a34ce66cf1361c1f9ff418d18,
+    // builds/utilities/nsis-scripts/Uninstall.nsh (un.onInit).
+    wingetId: 'trevorsandy.lpub3d',
+    reviewedUninstallArguments: ['/shelluser', '/S'],
+  },
+  {
     // Zen Browser uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
     // command omits the silent switch and opens the hidden uninstall wizard
     // under SYSTEM, leaving the exact registration present until timeout.
