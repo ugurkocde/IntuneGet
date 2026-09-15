@@ -6,9 +6,22 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only LPub3D to the managed-context release retry targets', () => {
+    const previous = 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803';
+    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    expect(terminalToolchainRetryTargets(current)).toEqual([
+      'trevorsandy.lpub3d', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous,
+      { wingetId: 'trevorsandy.lpub3d', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'trevorsandy.lpub3d', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(current,
+      { wingetId: 'trevorsandy.Other', status: 'failed' })).toBe(false);
+  });
   it('retries Product Portal only on its unattended uninstall release', () => {
     const previous = '305b9c41a4ccbd271a9873a4fd858d2515586b76';
-    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    const current = 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803';
     expect(terminalToolchainRetryTargets(current)).toEqual([
       'iZotope.ProductPortal', ...terminalToolchainRetryTargets(previous),
     ]);
