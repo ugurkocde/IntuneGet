@@ -42,6 +42,17 @@ block, original pause, zero active lifecycles, aligned pins and a heartbeat
 younger than five minutes. A future unblock requires reviewed shared repair
 and a controlled exact-payload retest.
 
-At 2026-09-16T09:27Z, the current-pin evidence audit reported 6/500 at the
-immutable boundary 2026-08-30T08:28:35Z. The status-only count was 347 and
+At 2026-09-16T09:34Z, the current-pin evidence audit reported 8/500 at the
+immutable boundary 2026-08-30T08:28:35Z, requiring strict historical evidence
+for the boundary exclusion, explicit PSADT mode, and no current eligibility,
+catalog, or exact-payload block. A conservative preliminary query excluded
+every historical status-only pass and returned 6; the requested definition
+excludes historical strict passes. The broad status-only count was 347 and
 does not satisfy the requested strict criteria. No milestone is warranted.
+
+Validation: 76 focused gate/demand/eligibility tests passed, as did full lint,
+script syntax, and changelog validation. The local full-suite attempt passed
+1,935 tests but encountered an unrelated POSIX-only translation stub timeout
+on Windows and three workers missing happy-dom in the existing dependency
+cache. Protected clean-environment CI must pass full tests, lint, and build
+before merge; do not change unrelated application code to address this cache.
