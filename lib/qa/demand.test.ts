@@ -301,6 +301,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the exact XplicitTrust MSI before dependency resolution or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64' as const,
+      installerSha256: '9015EEE906A0B84F2B5B0471E6F7C88C5BCF50DE6B6F32C5EB252D385D7FDBD2',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured MSI registration disappeared.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'msi', installScope: 'machine',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{76CCDAB5-94FA-4CE5-9B0D-6F8304D801A3}:XplicitTrust Network Access',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the exact Orca profile before dependency resolution or queue insertion', async () => {
     const tuple = {
       wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,

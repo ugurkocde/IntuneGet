@@ -297,6 +297,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the exact XplicitTrust release with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64',
+      installerSha256: '9015EEE906A0B84F2B5B0471E6F7C88C5BCF50DE6B6F32C5EB252D385D7FDBD2',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured MSI registration disappeared.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact Orca release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64',
