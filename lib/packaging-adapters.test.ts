@@ -379,6 +379,9 @@ describe('application packaging adapters', () => {
   });
 
   it('forces reviewed per-user installers out of the LocalSystem profile', () => {
+    expect(resolveApplicationInstallScope('SadeghHayeri.GreenTunnel', 'machine')).toBe('user');
+    expect(resolveApplicationInstallScope(' sadeghhayeri.greentunnel ', undefined)).toBe('user');
+    expect(resolveApplicationInstallScope('SadeghHayeri.Unrelated', 'machine')).toBe('machine');
     expect(
       resolveApplicationInstallScope('Y-ASLant.ElegantClipboard', 'machine')
     ).toBe('user');

@@ -203,6 +203,15 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     requiredInstallScope: 'user',
   },
   {
+    // GreenTunnel's assisted NSIS installer explicitly sets perMachine: false.
+    // WinGet omits Scope; the LocalSystem lifecycle captured an unavailable
+    // systemprofile uninstaller. Use the supported signed-in user context in
+    // both QA and customer packages, retaining the exact registered identity.
+    // https://github.com/SadeghHayeri/GreenTunnel/blob/v3.0.5/apps/desktop/electron-builder.yml
+    wingetId: 'SadeghHayeri.GreenTunnel',
+    requiredInstallScope: 'user',
+  },
+  {
     // Arvis 0.14.6 is built with Electron Builder's default one-click NSIS
     // target and does not enable perMachine. WinGet omits Scope, so the generic
     // machine default installs below LocalSystem's disposable systemprofile and

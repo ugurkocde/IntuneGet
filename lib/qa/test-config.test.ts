@@ -844,6 +844,22 @@ describe('buildQaCatalogTestConfig', () => {
     ]);
   });
 
+  it('keeps the exact GreenTunnel catalog tuple in its supported user context', () => {
+    const config = buildQaCatalogTestConfig({
+      app: { wingetId: 'SadeghHayeri.GreenTunnel', name: 'GreenTunnel', publisher: 'SadeghHayeri', version: '3.0.5' },
+      manifest: {
+        InstallerType: 'nullsoft', ProductCode: 'ba1bb1f3-0069-5c64-9a11-479ebc0471d9',
+        AppsAndFeaturesEntries: [{ DisplayName: 'GreenTunnel 3.0.5', ProductCode: 'ba1bb1f3-0069-5c64-9a11-479ebc0471d9' }],
+      },
+      installer: { Architecture: 'x86', InstallerType: 'nullsoft', InstallerSwitches: { Silent: '/S' } },
+    });
+    expect(config.scope).toBe('user');
+    expect(config.uninstallCommand).toContain('BA1BB1F3-0069-5C64-9A11-479EBC0471D9');
+    expect(config.detectionRules).toEqual([expect.objectContaining({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\SadeghHayeri_GreenTunnel',
+    })]);
+  });
+
   it('tests Ente Photos in user context when its Electron Builder manifest omits scope', () => {
     const config = buildQaCatalogTestConfig({
       app: {

@@ -895,6 +895,22 @@ describe('PSADT QA package identity', () => {
     ]);
   });
 
+  it('normalizes GreenTunnel to the vendor user scope and preserves exact removal identity', () => {
+    const uninstallCommand = 'REGISTRY_UNINSTALL_KEY:ba1bb1f3-0069-5c64-9a11-479ebc0471d9:GreenTunnel';
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'SadeghHayeri.GreenTunnel', displayName: 'GreenTunnel',
+      publisher: 'SadeghHayeri', version: '3.0.5', architecture: 'x86',
+      installerSha256: '77CD4E08ABF2E7A0FC235821AE49BBFDD032616A9A0407902F907C96547D2659',
+      installerType: 'nullsoft', silentSwitches: '/S', uninstallCommand,
+      installScope: 'machine', detectionRules: '[]',
+      psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({ installScope: 'user' });
+    expect(normalized.detectionRules).toEqual([expect.objectContaining({
+      keyPath: 'HKEY_CURRENT_USER\\SOFTWARE\\IntuneGet\\Apps\\SadeghHayeri_GreenTunnel',
+    })]);
+  });
+
   it('keeps WowUp Beta out of LocalSystem when WinGet omits its scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'WowUp.Wowup.Beta',

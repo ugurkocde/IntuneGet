@@ -81,6 +81,21 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('dispatches GreenTunnel in the same user scope as QA with exact registered removal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_KEY:ba1bb1f3-0069-5c64-9a11-479ebc0471d9:GreenTunnel';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'SadeghHayeri.GreenTunnel', displayName: 'GreenTunnel',
+      publisher: 'SadeghHayeri', version: '3.0.5', architecture: 'x86',
+      sourceType: 'winget', installerType: 'nullsoft', installerSha256: 'A'.repeat(64),
+      silentSwitches: '/S', installScope: 'machine', uninstallCommand,
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.config.installScope).toBe('user');
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+  });
+
   it('reconciles a WinGet tuple and passes trusted installers to preflight', async () => {
     const trustedInstallers = [{
       architecture: 'x64',

@@ -11,6 +11,7 @@ import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
 import { enforceInstallerPreflight, InstallerPreflightError } from './installer-preflight';
 import { enforceQaGate } from './qa/gate';
 import {
+  resolveApplicationInstallScope,
   resolveApplicationInstallerSuccessCodes,
   resolveApplicationUninstallCommand,
 } from './packaging-adapters';
@@ -216,6 +217,10 @@ export async function triggerPackagingWorkflow(
     ? effectiveInputs
     : {
         ...effectiveInputs,
+        installScope: resolveApplicationInstallScope(
+          effectiveInputs.wingetId,
+          effectiveInputs.installScope
+        ),
         installerSuccessCodes: resolveApplicationInstallerSuccessCodes(
           effectiveInputs.wingetId,
           effectiveInputs.installerSuccessCodes
