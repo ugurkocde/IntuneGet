@@ -301,6 +301,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks exact UniFi Network bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Ubiquiti.UniFiNetworkServer', version: '10.6.106', architecture: 'x64' as const,
+      installerSha256: '984FEFAA18AA38D90928F9159D2F2C8286202F19B0E038E3C2A8F7192DFC1C91',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Ubiquiti UniFi:Ubiquiti UniFi Network Server',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks the failed TimeScribe bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'WINBIGFOX.TimeScribe', version: '1.16.0', architecture: 'x64' as const,

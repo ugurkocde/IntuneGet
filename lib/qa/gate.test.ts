@@ -297,6 +297,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks UniFi Network missing-uninstaller payload even with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Ubiquiti.UniFiNetworkServer', version: '10.6.106', architecture: 'x64',
+      installerSha256: '984FEFAA18AA38D90928F9159D2F2C8286202F19B0E038E3C2A8F7192DFC1C91',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks TimeScribe with its missing registered uninstaller even with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'WINBIGFOX.TimeScribe', version: '1.16.0', architecture: 'x64',
