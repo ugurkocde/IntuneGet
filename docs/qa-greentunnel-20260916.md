@@ -27,7 +27,12 @@ the scheduler. Resume only with fresh matching pins and zero active lifecycles.
 Audit its complete lifecycle before releasing the general queue.
 
 The immutable cohort boundary remains `2026-08-30T08:28:35Z`. At repair start,
-the status-only count was 333; latest database evidence verified 17 at the exact
+the status-only count was 333; the full archived-evidence audit verified 19 at the exact
 current pin `6dfeaea03893e63cf7aba747638d7ea1768ac6b7`. Compatible historical
 passes must not be reported as exact-current-pin strict credit. No milestone
 record has been written.
+
+Repair PR #1184 merged as `bc329cb8bfafd8d2af940bdc9f8ccf044ac15146` after all
+required CI passed. Local verification: 1,929 tests passed, lint passed with one
+existing warning, and the production build passed. Guarded promotion and exact
+retry operations are in `scripts/qa-greentunnel-rollout.mjs`.

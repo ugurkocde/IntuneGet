@@ -8,7 +8,7 @@ import {
 describe('QA toolchain targeted retries', () => {
   it('adds only LPub3D to the managed-context release retry targets', () => {
     const previous = 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803';
-    const current = QA_PSADT_TOOLCHAIN.packagerCommit;
+    const current = '6dfeaea03893e63cf7aba747638d7ea1768ac6b7';
     expect(terminalToolchainRetryTargets(current)).toEqual([
       'trevorsandy.lpub3d', ...terminalToolchainRetryTargets(previous),
     ]);
@@ -342,6 +342,19 @@ describe('QA toolchain targeted retries', () => {
       QA_PSADT_TOOLCHAIN.packagerCommit,
       { wingetId: 'Unrelated.App', status: 'failed' }
     )).toBe(false);
+  });
+
+  it('retries GreenTunnel only under the repaired shared scope release', () => {
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'SadeghHayeri.GreenTunnel',
+      ...terminalToolchainRetryTargets('6dfeaea03893e63cf7aba747638d7ea1768ac6b7'),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: ' sadeghhayeri.greentunnel ', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('6dfeaea03893e63cf7aba747638d7ea1768ac6b7',
+      { wingetId: 'SadeghHayeri.GreenTunnel', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Unrelated.App', status: 'failed' })).toBe(false);
   });
 
   it('retries Ente Photos only after activating its reviewed user scope', () => {
