@@ -283,6 +283,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('contains GreenTunnel despite a nonqualifying user pass with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'SadeghHayeri.GreenTunnel', version: '3.0.5', architecture: 'x86',
+      installerSha256: '77CD4E08ABF2E7A0FC235821AE49BBFDD032616A9A0407902F907C96547D2659',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'LocalSystem removal failed; user-scope pass is not strict evidence.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact Orca release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64',

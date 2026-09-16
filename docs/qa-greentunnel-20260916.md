@@ -36,3 +36,23 @@ Repair PR #1184 merged as `bc329cb8bfafd8d2af940bdc9f8ccf044ac15146` after all
 required CI passed. Local verification: 1,929 tests passed, lint passed with one
 existing warning, and the production build passed. Guarded promotion and exact
 retry operations are in `scripts/qa-greentunnel-rollout.mjs`.
+
+Activation PR #1185 merged as `d74f4e9463448b1d15e3d4fccc8e7ed15c9bddeb` and
+deployed to production. Workflow PR #4072 omitted the protected config pin;
+validation caught it, and #4073 corrected it after both workflow checks passed.
+Final workflow commit: `d4305fe38aad19293e9c4ec4eb05897063557c59`. Dispatch stayed
+paused throughout promotion. Two undispatched old-pin rows were superseded.
+
+Exact retry candidate `b3c99f72-0ef6-4795-a308-125daca2fa66`, run `35041060339`,
+passed `0/0/0/1` with VirusTotal `0/0` and the original installer hash. Its
+profile hash is `9AC5ADE5687B24BA040CC22AA0F7AB082E24FAE7BF5007CD916EC6897912FBF2`.
+However, execution context is **User**, not the required **LocalSystem**.
+Therefore it earns no strict credit and cannot authorize strict-pass resumption.
+
+The exact payload is contained using `scripts/qa-greentunnel-quarantine.mjs`.
+That guard verifies both original failed LocalSystem evidence and the successful
+user-scope retry before writing the shared `failed_managed_lifecycle` block.
+This blocks the exact tuple in customer packaging and QA, including overrides;
+future versions/hashes are not blocked. The user-scope result is preserved.
+General dispatch may resume only after block readback, zero active lifecycles,
+and fresh matching required/scheduler pins. No security control is relaxed.
