@@ -1,5 +1,0 @@
-{
-  "title": "AirUSB package detection and removal",
-  "summary": "AirUSB Client packages now use the application's exact Windows registration for installation detection and managed removal.",
-  "type": "fixed"
-}

@@ -1,5 +1,0 @@
-{
-  "title": "MTGA Launcher deployment availability",
-  "summary": "MTGA Launcher 1.0.124 is unavailable for automated deployment after its installer failed to provide the expected application identity for detection and removal.",
-  "type": "fixed"
-}

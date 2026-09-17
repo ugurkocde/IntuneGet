@@ -15,6 +15,24 @@ export function validateConfig(config) {
   return config;
 }
 
+// Packaging, detection, removal, quarantine and availability fixes for a single
+// catalog application are routine catalog maintenance, not product announcements.
+const applicationSpecificTitle = [
+  /\b\d+(?:\.\d+){2,}\b/, // a specific release such as 1.0.124; 2.0 or 1.5 MB may describe the product
+  /\b(?:unattended|silent|managed)\b.*\b(?:removal|uninstall)\b/i,
+  /\bpackage (?:detection|identity|removal)\b/i,
+  /\bdeployment availability\b/i,
+];
+const applicationSpecificSummary = [
+  /\b\d+(?:\.\d+){2,}\b/, // a specific release such as 1.0.124
+  /\bunavailable for automated deployment\b/i,
+];
+
+export function isApplicationSpecific(entry) {
+  return applicationSpecificTitle.some(pattern => pattern.test(entry.title)) ||
+    applicationSpecificSummary.some(pattern => pattern.test(entry.summary));
+}
+
 export function validateEntry(entry, filename) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/.test(filename) || filename.length > 150 ||
       !entry || typeof entry !== 'object' || Array.isArray(entry) ||
@@ -27,6 +45,10 @@ export function validateEntry(entry, filename) {
     }
   }
   if (!['new', 'improved', 'fixed', 'maintenance'].includes(entry.type)) throw new Error('Invalid change type');
+  if (isApplicationSpecific(entry)) {
+    throw new Error(`Application-specific change is not a product update: ${filename}. ` +
+      'The changelog announces IntuneGet features and behavior shared by all users, never one catalog application. Remove the entry file.');
+  }
   if (entry.sourceUrl !== undefined) {
     // Only public project links belong in this repository's publication queue.
     if (typeof entry.sourceUrl !== 'string' || entry.sourceUrl.length > 2000 ||

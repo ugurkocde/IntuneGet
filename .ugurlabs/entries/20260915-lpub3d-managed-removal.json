@@ -1,5 +1,0 @@
-{
-  "title": "LPub3D unattended removal",
-  "summary": "LPub3D packages preserve their managed execution context during silent uninstall, avoiding a desktop session restart that can leave the application installed.",
-  "type": "fixed"
-}

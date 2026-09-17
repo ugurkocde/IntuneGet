@@ -29,6 +29,25 @@ describe('automatic changelog publication', () => {
     expect(() => validateEntry(value, filename)).toThrow();
   });
 
+  it.each([
+    { title: 'LPub3D unattended removal', summary: 'LPub3D packages preserve their managed execution context during silent uninstall.' },
+    { title: 'MTGA Launcher deployment availability', summary: 'MTGA Launcher 1.0.124 is unavailable for automated deployment after its installer failed identity checks.' },
+    { title: 'AirUSB package detection and removal', summary: 'AirUSB Client packages now use the exact Windows registration for detection and managed removal.' },
+    { title: 'HEC-RAS 7.0 deployment availability', summary: 'HEC-RAS 7.0 remains blocked from automated deployment after verification failed.' },
+    { title: 'Unattended Product Portal removal', summary: 'Product Portal packages now request unattended removal from the registered uninstaller.' },
+  ])('rejects single-application catalog maintenance as a product update: %j', value => {
+    expect(() => validateEntry({ ...value, type: 'fixed' }, filename)).toThrow('Application-specific');
+  });
+
+  it('accepts product-wide entries that mention example applications or shared packaging behavior', () => {
+    for (const value of [
+      { title: 'Reliable removal for archived installers', summary: 'Fixed packaging for applications such as Adobe Acrobat whose ZIP archive contains an executable installer. Packages now retain the exact product identity for managed removal.' },
+      { title: 'QA automatically recovers stalled runner handoffs', summary: 'The application QA scheduler now clears an orphaned GitHub workflow that holds the runner slot after its test has ended.' },
+      { title: 'Explore and follow application release history', summary: 'Subscribe to the latest 40 recorded versions through the public RSS feed, globally or for an individual app.' },
+      { title: 'IntuneGet 2.0: redesigned dashboard', summary: 'The dashboard now loads 1.5 MB less JavaScript on every page and reaches 99.9% of catalog checks within a minute.' },
+    ]) expect(validateEntry({ ...value, type: 'improved' }, filename)).toEqual({ ...value, type: 'improved' });
+  });
+
   it('rejects alternate credential destinations and unsafe filenames', async () => {
     expect(() => validateConfig({ ...config, apiUrl: 'https://example.com' })).toThrow();
     expect(() => validateEntry(entry, '../unexpected.json')).toThrow();
