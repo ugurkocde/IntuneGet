@@ -402,6 +402,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks the failed Thunder payload before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Thunder.Thunder', version: '25.1.13.1637', architecture: 'x64' as const,
+      installerSha256: 'B2C7A5269B267E7390BED95975FF9BA56088B26A945B6A2BA4B35B3B15FE8EC6',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact thunder_is1 registration remained; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope, silentSwitches: '/Silent',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:thunder_is1:迅雷',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the exact XplicitTrust MSI before dependency resolution or queue insertion', async () => {
     const tuple = {
       wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64' as const,

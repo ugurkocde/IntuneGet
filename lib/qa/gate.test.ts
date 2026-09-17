@@ -239,6 +239,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the failed Thunder payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Thunder.Thunder', version: '25.1.13.1637', architecture: 'x64',
+      installerSha256: 'B2C7A5269B267E7390BED95975FF9BA56088B26A945B6A2BA4B35B3B15FE8EC6',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact thunder_is1 registration remained; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact Twinkstar release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Twinkstar.TwinkstarBrowser', version: '11.4.1000.2609',
