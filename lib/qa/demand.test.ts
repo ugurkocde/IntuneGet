@@ -364,6 +364,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks stalled WeType bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Tencent.WeType', version: '2.1.4.6', architecture: 'x64' as const,
+      installerSha256: 'D8D487B0C3F9319B7C0A4736851701503CC662B101016CC2B62F7D657A1A41EC',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled; no exact uninstall identity.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope, silentSwitches: '/s',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:WeType:微信输入法',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks the failed T3Code payload before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'T3Tools.T3Code', version: '0.0.42', architecture: 'x64' as const,

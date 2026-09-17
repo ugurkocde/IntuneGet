@@ -211,6 +211,20 @@ describe('enforceQaGate', () => {
     expect(getPackageResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the stalled WeType payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Tencent.WeType', version: '2.1.4.6', architecture: 'x64',
+      installerSha256: 'D8D487B0C3F9319B7C0A4736851701503CC662B101016CC2B62F7D657A1A41EC',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled; no exact uninstall identity.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the missing T3Code uninstaller payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'T3Tools.T3Code', version: '0.0.42', architecture: 'x64',
