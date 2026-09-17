@@ -211,6 +211,20 @@ describe('enforceQaGate', () => {
     expect(getPackageResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the missing T3Code uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'T3Tools.T3Code', version: '0.0.42', architecture: 'x64',
+      installerSha256: '9BD4A00AE9B4880F85E81376844E4FC1DBC9F719120958D7445B4C2B281E267F',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact Twinkstar release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Twinkstar.TwinkstarBrowser', version: '11.4.1000.2609',

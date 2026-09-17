@@ -364,6 +364,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks the failed T3Code payload before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'T3Tools.T3Code', version: '0.0.42', architecture: 'x64' as const,
+      installerSha256: '9BD4A00AE9B4880F85E81376844E4FC1DBC9F719120958D7445B4C2B281E267F',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope, silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{E9197887-EFB3-55E0-985E-D6D3B5DD594A}:T3 Code',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the exact XplicitTrust MSI before dependency resolution or queue insertion', async () => {
     const tuple = {
       wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64' as const,
