@@ -893,6 +893,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: '3671D4C0693240501854274692724B9A98C35B1E869066CF40985F43D4738668' },
     { wingetId: 'Microsoft.DataTools.IntegrationServices', version: '17.0.1010.2', architecture: 'x86' as const,
       installerSha256: '75D8444333303D5B449660A669AF07862289E5F2BBDEF0AE7520C5BA3E47D65B' },
+    { wingetId: 'SJMC.SJMCL', version: '1.3.1', architecture: 'x64' as const,
+      installerSha256: 'D736C896A039A9AFB8B7D4339A79293FAAAC6EF3F164DAF2DD44F8702997178A' },
   ])('never sends a customer Actions payload for quarantined $wingetId, even with override', async (tuple) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

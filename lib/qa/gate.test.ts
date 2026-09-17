@@ -367,6 +367,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the missing SJMCL uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'SJMC.SJMCL', version: '1.3.1', architecture: 'x64',
+      installerSha256: 'D736C896A039A9AFB8B7D4339A79293FAAAC6EF3F164DAF2DD44F8702997178A',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks TimeScribe with its missing registered uninstaller even with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'WINBIGFOX.TimeScribe', version: '1.16.0', architecture: 'x64',
