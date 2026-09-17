@@ -353,10 +353,14 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])('blocks the exact Orca release with override=%s', async (qaOverride) => {
+  it.each([
+    ['1.4.203', 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C', false],
+    ['1.4.203', 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C', true],
+    ['1.4.204', '87B877EC7472F664E5264DC5367A5F18F4484AEA67A08B4ECA76F9A65729206C', false],
+    ['1.4.204', '87B877EC7472F664E5264DC5367A5F18F4484AEA67A08B4ECA76F9A65729206C', true],
+  ] as const)('blocks Orca %s (%s) with override=%s', async (version, installerSha256, qaOverride) => {
     const tuple = {
-      wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64',
-      installerSha256: 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C',
+      wingetId: 'StablyAI.Orca', version, architecture: 'x64', installerSha256,
     };
     getPackageCompatibilityBlockMock.mockResolvedValueOnce({
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller was absent.',

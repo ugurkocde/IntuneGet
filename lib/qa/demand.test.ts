@@ -386,10 +386,12 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
-  it('blocks the exact Orca profile before dependency resolution or queue insertion', async () => {
+  it.each([
+    ['1.4.203', 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C'],
+    ['1.4.204', '87B877EC7472F664E5264DC5367A5F18F4484AEA67A08B4ECA76F9A65729206C'],
+  ])('blocks Orca %s profile before dependency resolution or queue insertion', async (version, installerSha256) => {
     const tuple = {
-      wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,
-      installerSha256: 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C',
+      wingetId: 'StablyAI.Orca', version, architecture: 'x64' as const, installerSha256,
     };
     getPackageCompatibilityBlockMock.mockResolvedValue({
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller was absent.',
