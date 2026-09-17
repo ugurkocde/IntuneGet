@@ -323,6 +323,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks exact NateOn bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'SKCommunications.NateOn', version: '7.0.41.0', architecture: 'x86' as const,
+      installerSha256: '1DCA7E3230CDB6BEC7374DEE2D226D62C73919B6119D870DD6BC29D19915AE2F',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after silent uninstall.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope, silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:{EA77EC9A-C82F-4F80-8B7D-D32C09A9C25F}:네이트온',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks the failed TimeScribe bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'WINBIGFOX.TimeScribe', version: '1.16.0', architecture: 'x64' as const,

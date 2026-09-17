@@ -863,6 +863,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   it.each([
     { wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86' as const,
       installerSha256: '8D64DD8FCA0C7CD042CD3028496B7085BEDF22364908D056A9795BCCB821A4A8' },
+    { wingetId: 'SKCommunications.NateOn', version: '7.0.41.0', architecture: 'x86' as const,
+      installerSha256: '1DCA7E3230CDB6BEC7374DEE2D226D62C73919B6119D870DD6BC29D19915AE2F' },
     { wingetId: 'Tencent.ima-copilot', version: '2.6.10.5128', architecture: 'x64' as const,
       installerSha256: '37E79B29536B79F0DB0F203CD9135A196F5A9791D446F7B16E2A3C1FE75F9EB9' },
     { wingetId: 'WizardsoftheCoast.MTGALauncher', version: '1.0.124', architecture: 'x64' as const,
