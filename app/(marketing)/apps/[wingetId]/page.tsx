@@ -281,7 +281,18 @@ export default async function AppDetailPage({ params }: PageProps) {
                   {testedInstallerSha256 && (
                     <div className="sm:col-span-2">
                       <dt className="text-text-muted"><T>Installer SHA-256</T></dt>
-                      <dd className="break-all"><code className="rounded bg-bg-deepest px-1.5 py-0.5 font-mono text-xs text-text-secondary">{testedInstallerSha256}</code></dd>
+                      <dd className="break-all">
+                        <code className="rounded bg-bg-deepest px-1.5 py-0.5 font-mono text-xs text-text-secondary">{testedInstallerSha256}</code>
+                        <a
+                          href={`https://www.virustotal.com/gui/file/${testedInstallerSha256}`}
+                          target="_blank"
+                          rel="noopener nofollow"
+                          className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-medium text-accent-cyan hover:underline"
+                        >
+                          <T>Check on VirusTotal</T>
+                          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        </a>
+                      </dd>
                     </div>
                   )}
                   {psadtVersion && (
