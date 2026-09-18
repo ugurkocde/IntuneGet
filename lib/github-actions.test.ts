@@ -861,6 +861,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   });
 
   it.each([
+    { wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,
+      installerSha256: 'D34F1AFFD65BCF99F5762F5FC1A13C0B2585546BDC89D99AA045364DA6215BC8' },
     { wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86' as const,
       installerSha256: '8D64DD8FCA0C7CD042CD3028496B7085BEDF22364908D056A9795BCCB821A4A8' },
     { wingetId: 'SKCommunications.NateOn', version: '7.0.41.0', architecture: 'x86' as const,

@@ -96,6 +96,20 @@ describe('enforceQaGate', () => {
     packageEqMock.mockReset();
   });
 
+  it.each([false, true])('blocks the failed TubeDigger payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86',
+      installerSha256: 'D34F1AFFD65BCF99F5762F5FC1A13C0B2585546BDC89D99AA045364DA6215BC8',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a failed exact version and architecture', async () => {
     getQaResultMock.mockResolvedValue(failedRow);
     await expect(
