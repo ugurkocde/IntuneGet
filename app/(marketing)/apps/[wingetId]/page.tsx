@@ -197,8 +197,9 @@ export default async function AppDetailPage({ params }: PageProps) {
   // into the package, so the tested hash is what ships. Only show the download
   // source when it matches the tested version to avoid mixing versions.
   const testedInstallerSha256 =
-    qa?.installer_sha256 ??
-    (qa && qa.tested_version === app.latest_version ? installer?.installer_sha256 ?? null : null);
+    qa && qa.tested_version === app.latest_version
+      ? qa.installer_sha256 ?? installer?.installer_sha256 ?? null
+      : null;
   const installerSourceUrl =
     qa && installer && qa.tested_version === app.latest_version ? installer.installer_url : null;
   let installerSourceHost: string | null = null;
