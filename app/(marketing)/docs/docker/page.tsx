@@ -84,14 +84,34 @@ cp .env.example .env.local
 # Edit .env.local with your values
 # (Use your favorite editor)
 
-# Start the application
-docker-compose up -d`}
+# Start the application (Compose reads .env.local only via --env-file)
+docker-compose --env-file .env.local up -d`}
         </CodeBlock>
 
         <p className="text-text-secondary mt-4">
           <T>The application will be available at{" "}
           <code className="text-accent-cyan">http://localhost:3000</code></T>
         </p>
+
+        <Callout type="warning" title="Know what SQLite covers before you start">
+          <p>
+            <T>
+              Docker Compose defaults to <code>DATABASE_MODE=supabase</code>. SQLite is supported
+              for the packaging pipeline, upload history, and the read-only catalog snapshot, but
+              dashboard history, notifications, update policies, and MSP features require Supabase.
+            </T>
+          </p>
+          <p>
+            <T>
+              If you want those surfaces, configure Supabase before the first start rather than
+              migrating later. The
+            </T>{" "}
+            <Link href="/docs/environment-reference" className="text-accent-cyan hover:underline">
+              <T>environment reference</T>
+            </Link>{" "}
+            <T>lists the Supabase URL, anon key, and service role key you need.</T>
+          </p>
+        </Callout>
       </section>
 
       {/* Step by Step */}
