@@ -567,9 +567,6 @@ export interface Database {
           id: string;
           email: string | null;
           name: string | null;
-          microsoft_access_token: string | null;
-          microsoft_refresh_token: string | null;
-          token_expires_at: string | null;
           intune_tenant_id: string | null;
           tenant_name: string | null;
           profile_image: string | null;
@@ -580,9 +577,6 @@ export interface Database {
           id: string;
           email?: string | null;
           name?: string | null;
-          microsoft_access_token?: string | null;
-          microsoft_refresh_token?: string | null;
-          token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
           profile_image?: string | null;
@@ -593,9 +587,6 @@ export interface Database {
           id?: string;
           email?: string | null;
           name?: string | null;
-          microsoft_access_token?: string | null;
-          microsoft_refresh_token?: string | null;
-          token_expires_at?: string | null;
           intune_tenant_id?: string | null;
           tenant_name?: string | null;
           profile_image?: string | null;
