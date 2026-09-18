@@ -92,6 +92,26 @@ docker-compose up -d`}
           <T>The application will be available at{" "}
           <code className="text-accent-cyan">http://localhost:3000</code></T>
         </p>
+
+        <Callout type="warning" title="Know what SQLite covers before you start">
+          <p>
+            <T>
+              Docker Compose defaults to <code>DATABASE_MODE=supabase</code>. SQLite is supported
+              for the packaging pipeline, upload history, and the read-only catalog snapshot, but
+              dashboard history, notifications, update policies, and MSP features require Supabase.
+            </T>
+          </p>
+          <p>
+            <T>
+              If you want those surfaces, configure Supabase before the first start rather than
+              migrating later. See the
+            </T>{" "}
+            <Link href="/docs/database-setup" className="text-accent-cyan hover:underline">
+              <T>database setup</T>
+            </Link>{" "}
+            <T>page for both modes.</T>
+          </p>
+        </Callout>
       </section>
 
       {/* Step by Step */}
