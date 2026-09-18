@@ -36,11 +36,16 @@ on pushes to `main` (`.github/workflows/ci.yml`, `docker` job).
 a healthy status instead of trusting a single request:
 
 ```bash
+healthy=0
 for i in $(seq 1 30); do
   body=$(curl -fsS http://localhost:3000/api/health 2>/dev/null) && \
-    printf '%s' "$body" | grep -q '"status":"healthy"' && break
+    printf '%s' "$body" | grep -q '"status":"healthy"' && healthy=1 && break
   sleep 2
 done
+if [ "$healthy" -ne 1 ]; then
+  echo "Health check did not report status: healthy" >&2
+  exit 1
+fi
 printf '%s\n' "$body"
 ```
 
