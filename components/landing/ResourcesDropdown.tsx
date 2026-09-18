@@ -11,6 +11,7 @@ export const resourceLinks = [
   { href: "/#faq", label: "FAQ" },
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
+  { href: "/roadmap", label: "Roadmap" },
   { href: "https://github.com/ugurkocde/IntuneGet", label: "GitHub" },
 ];
 export function ResourcesDropdown() {
