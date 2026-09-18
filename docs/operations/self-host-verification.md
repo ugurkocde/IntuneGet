@@ -58,9 +58,10 @@ Confirmed 2026-09-18 on the development server: `/api/health` returned `200` wit
 
 ### 5. Catalog snapshot
 
-In SQLite mode the app catalog is served from a downloaded snapshot. The first catalog request
-downloads `catalog.sqlite.gz`, verifies its SHA-256 against the published manifest, opens it
-read-only, and re-checks daily. Requirements: `better-sqlite3` installed, a writable data
+In SQLite mode with Supabase unconfigured, the app catalog is served from a downloaded snapshot.
+If Supabase credentials are present, the Supabase catalog source is used even when
+`DATABASE_MODE=sqlite`. With the snapshot, the first catalog request downloads `catalog.sqlite.gz`,
+verifies its SHA-256 against the published manifest, opens it read-only, and re-checks daily. Requirements: `better-sqlite3` installed, a writable data
 directory, and outbound HTTPS to `github.com`, or set `CATALOG_SNAPSHOT_FILE` for a fully
 offline install.
 
