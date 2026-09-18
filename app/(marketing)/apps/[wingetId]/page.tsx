@@ -10,6 +10,7 @@ import { Footer } from '@/components/landing/sections/Footer';
 import { AppIcon } from '@/components/AppIcon';
 import { CatalogAppCard } from '@/components/catalog/CatalogAppCard';
 import { CatalogCta } from '@/components/catalog/CatalogCta';
+import { QaReportButton } from '@/components/qa/QaReportButton';
 import { getCatalogSource } from '@/lib/catalog';
 import {
   absoluteAppCatalogUrl,
@@ -192,6 +193,27 @@ export default async function AppDetailPage({ params }: PageProps) {
         }
       : null;
 
+  // Provenance for the QA-tested build. The installer is copied byte-for-byte
+  // into the package, so the tested hash is what ships. Only show the download
+  // source when it matches the tested version to avoid mixing versions.
+  const testedInstallerSha256 = qa?.installer_sha256 ?? null;
+  const installerSourceUrl =
+    qa && installer && qa.tested_version === app.latest_version ? installer.installer_url : null;
+  let installerSourceHost: string | null = null;
+  if (installerSourceUrl) {
+    try {
+      installerSourceHost = new URL(installerSourceUrl).host;
+    } catch {
+      installerSourceHost = null;
+    }
+  }
+  const packagerCommit = qa?.packager_commit ?? null;
+  const packageProfileSha256 = qa?.package_profile_sha256 ?? null;
+  const psadtVersion = qa?.psadt_version ?? null;
+  const hasProvenance = Boolean(
+    testedInstallerSha256 || installerSourceHost || packagerCommit || packageProfileSha256 || psadtVersion
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-bg-deepest">
       <Header />
@@ -226,7 +248,83 @@ export default async function AppDetailPage({ params }: PageProps) {
 
         {deploymentRows.length > 0 && <section className="space-y-5"><h2 className="text-2xl font-semibold text-text-primary"><T>Deployment details</T></h2><dl className="divide-y divide-overlay/10 rounded-2xl border border-overlay/10 bg-bg-elevated px-6">{deploymentRows.map((row, index) => <div key={index} className="grid gap-1 py-4 sm:grid-cols-3"><dt className="text-text-muted">{row.label}</dt><dd className="sm:col-span-2 text-text-primary">{row.code ? <code className="rounded bg-bg-deepest px-2 py-1 text-sm"><Var>{row.value}</Var></code> : <Var>{row.value}</Var>}</dd></div>)}</dl>{qaVerified ? <p className="flex items-center gap-2 text-sm text-text-muted"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" /><T>Commands and arguments were captured during an automated QA install of version <Var>{qa.tested_version}</Var> in an isolated Windows VM.</T></p> : <p className="text-sm text-text-muted">{qa ? <T>Values come from the WinGet community manifest.</T> : <T>Values come from the WinGet community manifest. This app has not completed an IntuneGet QA run yet.</T>}</p>}{changelog?.install_path && <p className="text-sm text-text-muted"><T>Observed install path: <Var>{changelog.install_path}</Var></T></p>}</section>}
 
-        {qa && <section className="space-y-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-6"><h2 className="text-2xl font-semibold text-text-primary"><T>Tested by IntuneGet QA</T></h2><div className="flex items-center gap-2">{qa.outcome === 'Passed' ? <CheckCircle2 className="h-5 w-5 text-green-400" /> : <XCircle className="h-5 w-5 text-red-400" />}<span className="font-medium text-text-primary"><Var>{qa.outcome}</Var></span></div><p className="text-sm text-text-secondary"><T>Version <Var>{qa.tested_version}</Var> tested on <Var>{new Date(qa.tested_at_utc).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</Var>.</T></p>{virusTotal && <p className="text-sm text-text-secondary">{virusTotal.status === 'clean' ? <T>VirusTotal scan of the installer hash: clean{virusTotal.engines ? <>. 0 of <Var>{virusTotal.engines}</Var> engines flagged it</> : null}.</T> : <T>VirusTotal scan of the installer hash: <Var>{virusTotal.flagged}</Var> of <Var>{virusTotal.engines ?? 'the'}</Var> engines flagged it.</T>}</p>}</section>}
+        {qa && (
+          <section className="space-y-4 rounded-2xl border border-overlay/10 bg-bg-elevated p-6">
+            <h2 className="text-2xl font-semibold text-text-primary"><T>Tested by IntuneGet QA</T></h2>
+            <div className="flex items-center gap-2">
+              {qa.outcome === 'Passed' ? <CheckCircle2 className="h-5 w-5 text-green-400" /> : <XCircle className="h-5 w-5 text-red-400" />}
+              <span className="font-medium text-text-primary"><Var>{qa.outcome}</Var></span>
+            </div>
+            <p className="text-sm text-text-secondary"><T>Version <Var>{qa.tested_version}</Var> tested on <Var>{new Date(qa.tested_at_utc).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</Var>.</T></p>
+            {virusTotal && (
+              <p className="text-sm text-text-secondary">
+                {virusTotal.status === 'clean'
+                  ? <T>VirusTotal scan of the installer hash: clean{virusTotal.engines ? <>. 0 of <Var>{virusTotal.engines}</Var> engines flagged it</> : null}.</T>
+                  : <T>VirusTotal scan of the installer hash: <Var>{virusTotal.flagged}</Var> of <Var>{virusTotal.engines ?? 'the'}</Var> engines flagged it.</T>}
+              </p>
+            )}
+            {hasProvenance && (
+              <div className="space-y-3 border-t border-overlay/10 pt-4">
+                <h3 className="text-sm font-semibold text-text-primary"><T>Package provenance</T></h3>
+                <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                  {installerSourceHost && (
+                    <div>
+                      <dt className="text-text-muted"><T>Installer source</T></dt>
+                      <dd>
+                        <a href={installerSourceUrl ?? undefined} target="_blank" rel="noopener nofollow" className="inline-flex items-center gap-1 text-accent-cyan hover:underline">
+                          {installerSourceHost}
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                        </a>
+                      </dd>
+                    </div>
+                  )}
+                  {testedInstallerSha256 && (
+                    <div className="sm:col-span-2">
+                      <dt className="text-text-muted"><T>Installer SHA-256</T></dt>
+                      <dd className="break-all">
+                        <code className="rounded bg-bg-deepest px-1.5 py-0.5 font-mono text-xs text-text-secondary">{testedInstallerSha256}</code>
+                        <a
+                          href={`https://www.virustotal.com/gui/file/${testedInstallerSha256}`}
+                          target="_blank"
+                          rel="noopener nofollow"
+                          className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-medium text-accent-cyan hover:underline"
+                        >
+                          <T>Check on VirusTotal</T>
+                          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        </a>
+                      </dd>
+                    </div>
+                  )}
+                  {psadtVersion && (
+                    <div>
+                      <dt className="text-text-muted"><T>PSADT version</T></dt>
+                      <dd className="font-mono text-text-primary">{psadtVersion}</dd>
+                    </div>
+                  )}
+                  {packagerCommit && (
+                    <div>
+                      <dt className="text-text-muted"><T>Packaging commit</T></dt>
+                      <dd>
+                        <a href={`https://github.com/ugurkocde/IntuneGet/commit/${packagerCommit}`} target="_blank" rel="noopener nofollow" className="inline-flex items-center gap-1 font-mono text-accent-cyan hover:underline">
+                          {packagerCommit.slice(0, 10)}
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                        </a>
+                      </dd>
+                    </div>
+                  )}
+                  {packageProfileSha256 && (
+                    <div>
+                      <dt className="text-text-muted"><T>Package profile</T></dt>
+                      <dd className="break-all"><code className="rounded bg-bg-deepest px-1.5 py-0.5 font-mono text-xs text-text-secondary">{packageProfileSha256.slice(0, 16)}...</code></dd>
+                    </div>
+                  )}
+                </dl>
+                <p className="text-sm text-text-muted"><T>IntuneGet verifies the installer SHA-256 before packaging and does not store the installer. The full evidence, including the recorded hash, is in the QA report.</T></p>
+              </div>
+            )}
+            <QaReportButton wingetId={app.winget_id} catalogVersion={app.latest_version ?? ''} packageProfileSha256={packageProfileSha256 ?? undefined} />
+          </section>
+        )}
 
         {recentVersions.length > 0 && <section className="space-y-4"><h2 className="text-2xl font-semibold text-text-primary"><T>Recent versions</T></h2><ol className="flex flex-wrap gap-2">{recentVersions.map((version) => <li key={version} className="rounded-lg border border-overlay/10 bg-bg-elevated px-3 py-1.5 font-mono text-sm text-text-secondary"><Var>{version}</Var></li>)}</ol></section>}
 

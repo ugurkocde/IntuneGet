@@ -416,6 +416,25 @@ export default function SecurityPage() {
               </li>
               <li>
                 <T>
+                  Learn how IntuneGet{" "}
+                  <Link
+                    href="/docs/packaging"
+                    className="text-accent-cyan hover:text-accent-cyan-bright transition-colors"
+                  >
+                    packages and verifies an app
+                  </Link>
+                  , and review{" "}
+                  <Link
+                    href="/qa"
+                    className="text-accent-cyan hover:text-accent-cyan-bright transition-colors"
+                  >
+                    recent QA results
+                  </Link>
+                  .
+                </T>
+              </li>
+              <li>
+                <T>
                   Report security issues via a{" "}
                   <a
                     href="https://github.com/ugurkocde/IntuneGet/issues"

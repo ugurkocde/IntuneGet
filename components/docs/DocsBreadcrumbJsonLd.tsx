@@ -13,6 +13,7 @@ const navItemsMap: Record<string, string> = {
   "/docs/api-reference": "API Reference",
   "/docs/sccm-migration": "SCCM Migration",
   "/docs/updates-policies": "Updates & Policies",
+  "/docs/packaging": "Packaging & Verification",
   "/docs/inventory-reports-uploads": "Inventory/Reports/Uploads",
   "/docs/unmanaged-apps": "Unmanaged Apps",
   "/docs/msp": "MSP Features",

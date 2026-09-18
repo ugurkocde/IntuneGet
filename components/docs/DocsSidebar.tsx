@@ -17,6 +17,7 @@ import {
   ClipboardList,
   RefreshCw,
   Package,
+  PackageCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { Github } from "@/components/icons/brand-icons";
@@ -89,6 +90,12 @@ const navItems: NavItem[] = [
     href: "/docs/updates-policies",
     icon: RefreshCw,
     description: "Update automation controls",
+  },
+  {
+    title: "Packaging & Verification",
+    href: "/docs/packaging",
+    icon: PackageCheck,
+    description: "How packages are built and verified",
   },
   {
     title: "Inventory/Reports/Uploads",
