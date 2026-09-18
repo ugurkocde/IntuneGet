@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowRight } from 'lucide-react';
 import { T } from 'gt-next';
+import { QueryProvider } from '@/components/providers/QueryProvider';
 
 const QaDetailsDialog = dynamic(
   () => import('./QaDetailsDialog').then((module) => module.QaDetailsDialog),
@@ -29,13 +30,15 @@ export function QaReportButton({ wingetId, catalogVersion, packageProfileSha256 
         <T>View the full QA report</T>
         <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
-      <QaDetailsDialog
-        wingetId={wingetId}
-        catalogVersion={catalogVersion}
-        packageProfileSha256={packageProfileSha256}
-        open={open}
-        onOpenChange={setOpen}
-      />
+      <QueryProvider>
+        <QaDetailsDialog
+          wingetId={wingetId}
+          catalogVersion={catalogVersion}
+          packageProfileSha256={packageProfileSha256}
+          open={open}
+          onOpenChange={setOpen}
+        />
+      </QueryProvider>
     </>
   );
 }
