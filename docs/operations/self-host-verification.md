@@ -51,9 +51,11 @@ printf '%s\n' "$body"
 
 Expected: a JSON body with `status: healthy`. A `200` response with `status: degraded` means a
 required service is down even though HTTP succeeded, so check the flags under `services` as well.
-To get `status: healthy` with the default `DATABASE_MODE=supabase`, set the Supabase URL, anon
-key, and service role key first, or use SQLite mode (step 4), which only needs `PACKAGER_API_KEY`.
-The Compose healthcheck already calls this endpoint.
+A healthy result requires all three services configured: database, auth, and pipeline. With the
+default `DATABASE_MODE=supabase`, set the Supabase URL, anon key, and service role key first.
+SQLite mode (step 4) also needs an Azure client id and secret (or managed identity) and a working
+pipeline mode, so `PACKAGER_API_KEY` alone is not enough. The Compose healthcheck already calls
+this endpoint.
 
 ### 4. SQLite mode
 
