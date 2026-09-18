@@ -8,7 +8,6 @@ import type { Database, Json } from '@/types/database';
 
 // Table type aliases for better readability
 type Tables = Database['public']['Tables'];
-type UserProfilesInsert = Tables['user_profiles']['Insert'];
 type StagedPackagesInsert = Tables['staged_packages']['Insert'];
 type UploadJobsInsert = Tables['upload_jobs']['Insert'];
 type UploadJobsUpdate = Tables['upload_jobs']['Update'];
@@ -89,50 +88,6 @@ export async function getCurrentUser() {
   }
 
   return user;
-}
-
-// Helper to get user profile with Microsoft tokens
-export async function getUserProfile(userId: string) {
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from('user_profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (error) {
-    console.error('Error getting user profile:', error);
-    return null;
-  }
-
-  return data;
-}
-
-// Helper to update Microsoft tokens
-export async function updateMicrosoftTokens(
-  userId: string,
-  accessToken: string,
-  refreshToken: string,
-  expiresAt: Date,
-  tenantId?: string
-) {
-  const serverClient = createServerClient();
-
-  const profileData: UserProfilesInsert = {
-    id: userId,
-    microsoft_access_token: accessToken,
-    microsoft_refresh_token: refreshToken,
-    token_expires_at: expiresAt.toISOString(),
-    intune_tenant_id: tenantId,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await serverClient.from('user_profiles').upsert(profileData);
-
-  if (error) {
-    console.error('Error updating Microsoft tokens:', error);
-    throw error;
-  }
 }
 
 // Helper to create a staged package
