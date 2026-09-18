@@ -567,6 +567,21 @@ export default function SignInClient({ callbackUrl }: { callbackUrl: string }) {
                   <Shield className="h-3.5 w-3.5 text-accent-cyan" />
                   <span><T>Protected by Microsoft Entra ID</T></span>
                 </div>
+
+                {/* Access disclosure so the consent choice is informed */}
+                <div className="mt-4 space-y-2 text-xs leading-relaxed text-text-muted">
+                  <p>
+                    <T>Sign-in requests delegated access to <Var>User.Read</Var>, <Var>openid</Var>, and <Var>profile</Var> only, so IntuneGet can read your basic work profile.</T>
+                  </p>
+                  <p>
+                    <T>Intune actions run server-side through an app registration your admin approves, so privileged Graph access is never handed to the browser.</T>
+                  </p>
+                  <p>
+                    <Link href="/security" className="font-medium text-accent-cyan hover:underline">
+                      <T>See the full permission list and data flow</T>
+                    </Link>
+                  </p>
+                </div>
               </div>
 
               {/* Consent section -- visually separated as footer zone */}
