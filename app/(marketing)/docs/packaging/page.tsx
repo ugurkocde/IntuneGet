@@ -57,9 +57,9 @@ export default function PackagingDocsPage() {
         </h1>
         <p className="mt-4 text-lg text-text-secondary leading-relaxed">
           <T>
-            Every package IntuneGet deploys is built from a public WinGet manifest by a pinned,
-            repeatable pipeline. This page describes each step and how to verify a package without
-            taking our word for it.
+            Catalog apps are packaged from a public WinGet manifest by a pinned, repeatable
+            pipeline. Custom apps are packaged from an installer URL you provide. This page
+            describes each step and how to verify a package without taking our word for it.
           </T>
         </p>
       </div>
@@ -71,8 +71,10 @@ export default function PackagingDocsPage() {
         <CodeBlock language="text" filename="package pipeline">{pipeline}</CodeBlock>
         <p className="text-text-secondary">
           <T>
-            The packaging step runs in an ephemeral, hosted runner. The installer and the built
-            package exist only for the duration of the job and are then discarded.
+            In hosted mode, the packaging step runs in an ephemeral runner, and the installer and
+            built package exist only for the duration of the job. In local mode
+            (PACKAGER_MODE=local), packaging runs on your own Windows machine, so the installer and
+            the built package reside there under your control.
           </T>
         </p>
       </section>
@@ -87,8 +89,8 @@ export default function PackagingDocsPage() {
               key={row.label}
               className="rounded-lg border border-overlay/10 bg-bg-elevated p-4"
             >
-              <h3 className="font-semibold text-text-primary">{row.label}</h3>
-              <p className="mt-1 text-sm text-text-secondary">{row.value}</p>
+              <h3 className="font-semibold text-text-primary"><T>{row.label}</T></h3>
+              <p className="mt-1 text-sm text-text-secondary"><T>{row.value}</T></p>
             </div>
           ))}
         </div>
@@ -145,10 +147,6 @@ export default function PackagingDocsPage() {
             <T>Browse the app catalog</T>
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
-          <Link href="/qa" className="inline-flex items-center gap-1 font-medium text-accent-cyan hover:underline">
-            <T>See recent QA results</T>
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </Link>
           <Link href="/docs/docker" className="inline-flex items-center gap-1 font-medium text-accent-cyan hover:underline">
             <T>Self-host with Docker</T>
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -190,8 +188,9 @@ export default function PackagingDocsPage() {
             </li>
             <li>
               <T>
-                A mismatch between the manifest hash and the downloaded file fails the build rather
-                than shipping a package.
+                For catalog apps, a mismatch between the manifest hash and the downloaded file
+                fails the build rather than shipping a package. Custom apps have no manifest hash;
+                IntuneGet calculates the SHA-256 from the installer you provide.
               </T>
             </li>
             <li>
