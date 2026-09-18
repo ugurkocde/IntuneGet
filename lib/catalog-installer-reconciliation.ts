@@ -4,8 +4,13 @@ import {
 } from '@/lib/detection-rules';
 import {
   InstallerPreflightError,
+  manifestUnavailableMessage,
 } from '@/lib/installer-preflight';
-import { getLiveInstallers, GitHubUnavailableError } from '@/lib/manifest-api';
+import {
+  fetchLatestPublishedVersion,
+  getLiveInstallers,
+  GitHubUnavailableError,
+} from '@/lib/manifest-api';
 import {
   resolveApplicationInstallScope,
   resolveApplicationInstallerSelectionScope,
@@ -147,10 +152,19 @@ export async function reconcileCatalogInstaller(
     throw error;
   }
   if (trustedInstallers.length === 0) {
+    const latestVersion = await fetchLatestPublishedVersion(item.wingetId);
+    if (latestVersion && latestVersion !== item.version) {
+      // The catalog is serving a version WinGet no longer publishes. Advance
+      // the stored pin so every user stops hitting the same dead version, while
+      // this request still fails closed and offers the update explicitly.
+      await healStaleCatalogVersion(item.wingetId, latestVersion);
+    }
     throw new InstallerPreflightError(
       'MANIFEST_UNAVAILABLE',
-      `The trusted WinGet installer manifest for ${item.wingetId} ${item.version} is unavailable`,
-      true,
+      manifestUnavailableMessage(item.wingetId, item.version, latestVersion),
+      false,
+      undefined,
+      latestVersion,
     );
   }
 
@@ -224,6 +238,33 @@ export async function reconcileCatalogInstaller(
     item: refreshedItem,
     trustedInstallers,
   };
+}
+
+/**
+ * A curated app whose latest_version disappeared upstream can never deploy
+ * until the catalog is refreshed. The hourly sync normally advances it, but
+ * self-hosted instances and long-tail apps without that cron would otherwise
+ * keep serving a dead pin, so heal the stored version on the deploy path too.
+ * Only verified catalog rows are touched; anything else is left alone.
+ */
+async function healStaleCatalogVersion(wingetId: string, latestVersion: string): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return;
+
+  const { error } = await createClient(url, key)
+    .from('curated_apps')
+    .update({
+      latest_version: latestVersion,
+      upstream_miss_count: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('winget_id', wingetId)
+    .eq('is_verified', true)
+    .eq('is_winget_verified', true);
+  if (error) {
+    console.warn(`Could not advance stale catalog version for ${wingetId} to ${latestVersion}: ${error.message}`);
+  }
 }
 
 async function healCatalogInstaller(

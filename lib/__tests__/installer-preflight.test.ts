@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getLiveInstallersMock, hashRemoteInstallerMock } = vi.hoisted(() => ({
+const { getLiveInstallersMock, fetchLatestPublishedVersionMock, hashRemoteInstallerMock } = vi.hoisted(() => ({
   getLiveInstallersMock: vi.fn(),
+  fetchLatestPublishedVersionMock: vi.fn(),
   hashRemoteInstallerMock: vi.fn(),
 }));
 
 vi.mock('@/lib/manifest-api', () => ({
   getLiveInstallers: getLiveInstallersMock,
+  fetchLatestPublishedVersion: fetchLatestPublishedVersionMock,
 }));
 
 vi.mock('@/lib/installer-download', async (importOriginal) => {
@@ -55,6 +57,7 @@ describe('installer dispatch preflight', () => {
       bytes: 42,
       finalUrl: request.installerUrl,
     });
+    fetchLatestPublishedVersionMock.mockResolvedValue(undefined);
   });
 
   it('skips custom installers', async () => {
@@ -321,6 +324,19 @@ describe('installer dispatch preflight', () => {
     await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
       code: 'PREFLIGHT_STATE_UNAVAILABLE',
       retryable: true,
+    });
+    expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
+  });
+
+  it('treats a removed pinned version as a non-retryable block and names the published version', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([]);
+    fetchLatestPublishedVersionMock.mockResolvedValueOnce('1.4.0');
+
+    await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
+      code: 'MANIFEST_UNAVAILABLE',
+      retryable: false,
+      latestVersion: '1.4.0',
+      message: 'WinGet no longer publishes Example.App 1.2.3. The current published version is 1.4.0.',
     });
     expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
   });
