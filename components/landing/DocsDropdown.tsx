@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Building2,
   FileText,
+  PackageCheck,
   ArrowRight,
 } from "lucide-react";
 import { T } from "gt-next";
@@ -33,6 +34,11 @@ const featureLinks = [
     href: "/docs/updates-policies",
     label: "Updates & Policies",
     icon: RefreshCw,
+  },
+  {
+    href: "/docs/packaging",
+    label: "Packaging & Verification",
+    icon: PackageCheck,
   },
   { href: "/docs/msp", label: "MSP Features", icon: Building2 },
   { href: "/docs/api-reference", label: "API Reference", icon: FileText },

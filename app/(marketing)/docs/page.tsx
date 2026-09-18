@@ -20,6 +20,7 @@ import {
   ClipboardList,
   RefreshCw,
   Package,
+  PackageCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { Github } from "@/components/icons/brand-icons";
@@ -101,6 +102,12 @@ const quickLinks = [
     href: "/docs/updates-policies",
     icon: RefreshCw,
     description: "Available updates, policy types, trigger flow",
+  },
+  {
+    title: "Packaging & Verification",
+    href: "/docs/packaging",
+    icon: PackageCheck,
+    description: "How a package is built, what is pinned, how to verify",
   },
   {
     title: "Inventory/Reports/Uploads",
