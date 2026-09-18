@@ -45,16 +45,16 @@ Run the app with SQLite as the database:
 ```bash
 DATABASE_MODE=sqlite \
 DATABASE_PATH=/tmp/intuneget/intuneget.db \
-PACKAGER_API_KEY=<any-non-empty-value> \
+PACKAGER_API_KEY=placeholder \
 NEXT_PUBLIC_AZURE_AD_CLIENT_ID=placeholder \
 AZURE_AD_CLIENT_SECRET=placeholder \
 npm run dev
 ```
 
-Then request `/api/health`. Expected: `databaseMode: sqlite` and `database: true`.
+Then request `/api/health`. Expected: `databaseMode: sqlite` and `services.database: true`.
 
 Confirmed 2026-09-18 on the development server: `/api/health` returned `200` with
-`databaseMode: sqlite` and `database: true` in about one second.
+`databaseMode: sqlite` and `services.database: true` in about one second.
 
 ### 5. Catalog snapshot
 
@@ -76,5 +76,5 @@ offline install.
 - `docker compose config` renders without a daemon.
 - Image builds and passes the Trivy CRITICAL scan.
 - Container starts and `/api/health` returns `healthy`.
-- SQLite mode reports `database: true`.
+- SQLite mode reports `services.database: true`.
 - A catalog page loads from the snapshot in SQLite mode.
