@@ -116,6 +116,7 @@ export default async function sitemap({ id }: { id: Promise<number> }): Promise<
     "/sccm-migration",
     "/updates-policies",
     "/packaging",
+    "/catalog",
     "/inventory-reports-uploads",
     "/unmanaged-apps",
     "/msp",
