@@ -211,6 +211,20 @@ describe('enforceQaGate', () => {
     expect(getPackageResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the stalled WebView2 payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64',
+      installerSha256: '493AE586FF07EF3696DA3BDE3AEB73D6CACA8A1C00E779DA899FF16A159CF36E',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled and post-install detection failed.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the stalled WeType payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Tencent.WeType', version: '2.1.4.6', architecture: 'x64',

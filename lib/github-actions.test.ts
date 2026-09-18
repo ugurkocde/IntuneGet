@@ -875,6 +875,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: '9015EEE906A0B84F2B5B0471E6F7C88C5BCF50DE6B6F32C5EB252D385D7FDBD2' },
     { wingetId: 'StablyAI.Orca', version: '1.4.203', architecture: 'x64' as const,
       installerSha256: 'DC347211CE31DC1D37BD6522B2BB96169747F626A19754C57F6868769E878A7C' },
+    { wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64' as const,
+      installerSha256: '493AE586FF07EF3696DA3BDE3AEB73D6CACA8A1C00E779DA899FF16A159CF36E' },
     { wingetId: 'Tencent.WeType', version: '2.1.4.6', architecture: 'x64' as const,
       installerSha256: 'D8D487B0C3F9319B7C0A4736851701503CC662B101016CC2B62F7D657A1A41EC' },
     { wingetId: 'Thunder.Thunder', version: '25.1.13.1637', architecture: 'x64' as const,

@@ -383,6 +383,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks stalled WebView2 bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64' as const,
+      installerSha256: '493AE586FF07EF3696DA3BDE3AEB73D6CACA8A1C00E779DA899FF16A159CF36E',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled and post-install detection failed.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope, silentSwitches: '/silent /install',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Microsoft EdgeWebView:Microsoft Edge WebView2 Runtime',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks stalled WeType bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Tencent.WeType', version: '2.1.4.6', architecture: 'x64' as const,
