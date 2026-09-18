@@ -310,7 +310,7 @@ export default async function AppDetailPage({ params }: PageProps) {
                     </div>
                   )}
                 </dl>
-                <p className="text-sm text-text-muted"><T>The installer is downloaded from the source above and its SHA-256 is verified before packaging. The full evidence, including the recorded hash, is in the QA report.</T></p>
+                <p className="text-sm text-text-muted"><T>IntuneGet verifies the installer SHA-256 before packaging and does not store the installer. The full evidence, including the recorded hash, is in the QA report.</T></p>
               </div>
             )}
             <QaReportButton wingetId={app.winget_id} catalogVersion={app.latest_version ?? ''} packageProfileSha256={packageProfileSha256 ?? undefined} />
