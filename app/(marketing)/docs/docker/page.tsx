@@ -84,8 +84,8 @@ cp .env.example .env.local
 # Edit .env.local with your values
 # (Use your favorite editor)
 
-# Start the application
-docker-compose up -d`}
+# Start the application (Compose reads .env.local only via --env-file)
+docker-compose --env-file .env.local up -d`}
         </CodeBlock>
 
         <p className="text-text-secondary mt-4">
@@ -104,12 +104,12 @@ docker-compose up -d`}
           <p>
             <T>
               If you want those surfaces, configure Supabase before the first start rather than
-              migrating later. See the
+              migrating later. The
             </T>{" "}
-            <Link href="/docs/database-setup" className="text-accent-cyan hover:underline">
-              <T>database setup</T>
+            <Link href="/docs/environment-reference" className="text-accent-cyan hover:underline">
+              <T>environment reference</T>
             </Link>{" "}
-            <T>page for both modes.</T>
+            <T>lists the Supabase URL, anon key, and service role key you need.</T>
           </p>
         </Callout>
       </section>
