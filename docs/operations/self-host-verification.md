@@ -32,11 +32,23 @@ on pushes to `main` (`.github/workflows/ci.yml`, `docker` job).
 
 ### 3. Startup smoke test
 
+`docker compose up -d` returns before the app is ready, so poll until the health endpoint reports
+a healthy status instead of trusting a single request:
+
 ```bash
-curl --fail http://localhost:3000/api/health
+for i in $(seq 1 30); do
+  body=$(curl -fsS http://localhost:3000/api/health 2>/dev/null) && \
+    printf '%s' "$body" | grep -q '"status":"healthy"' && break
+  sleep 2
+done
+printf '%s\n' "$body"
 ```
 
-Expected: `status: healthy`. The Compose healthcheck already calls this endpoint.
+Expected: a JSON body with `status: healthy`. A `200` response with `status: degraded` means a
+required service is down even though HTTP succeeded, so check the flags under `services` as well.
+To get `status: healthy` with the default `DATABASE_MODE=supabase`, set the Supabase URL, anon
+key, and service role key first, or use SQLite mode (step 4), which only needs `PACKAGER_API_KEY`.
+The Compose healthcheck already calls this endpoint.
 
 ### 4. SQLite mode
 
