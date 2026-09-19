@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4',
+  packagerCommit: 'e79da0398e3cf3c6874e53b6304a2aef54b5770f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -33,6 +33,9 @@ export const QA_PSADT_TOOLCHAIN = {
  * proven irrelevant to the behavior that profile exercises.
  */
 export const QA_PACKAGER_RELEASE_HISTORY = [
+  // Kiwix's exact registry identity changes only its previously failed
+  // lifecycle; unrelated passing package execution profiles remain compatible.
+  'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4',
   'de49775e759b693b92db09bc99aa116f197c4850',
   'c603eab9b8de23a6b5eb466f0fd8cdf2bfd04e33',
   '99edd0a9f4b7e10d4cc4272f90d763f3bd681440',
