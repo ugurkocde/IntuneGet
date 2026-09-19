@@ -2396,6 +2396,36 @@ if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'selects only the Kiwix NSIS key despite the observed Edge registration change',
+    () => {
+      const key = '149170a6-d630-5e6f-a054-8c34dd8a32a2';
+      const command = resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Electron', 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition');
+      const generated = generateRegistryUninstallPackage('nullsoft', 'Wikivoyage by Kiwix Electron Edition', [], {}, [],
+        'Kiwix.Wikivoyage.Electron', 'Wikivoyage by Kiwix Electron Edition', '3.8.2-E', command);
+      const identity = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identity).toBeDefined();
+      expect(selection).toBeDefined();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identity}
+$changedApplications = @(
+  [pscustomobject]@{ PSChildName = '${key}'; DisplayName = 'Wikivoyage by Kiwix 3.8.2-E'; Publisher = 'Kiwix' },
+  [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; DisplayName = 'Microsoft Edge WebView2 Runtime'; Publisher = 'Microsoft Corporation' },
+  [pscustomobject]@{ PSChildName = 'Microsoft Edge'; DisplayName = 'Microsoft Edge'; Publisher = 'Microsoft Corporation' }
+)
+${selection}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].DisplayName -ne 'Wikivoyage by Kiwix 3.8.2-E') { throw 'Wrong product selected' }
+$changedApplications = @($changedApplications[1])
+${selection}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '" + key + "'");
+      expect(generated).toContain("$registeredInstallerType = 'nullsoft'");
+    }, 30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'selects only the Zermelo NSIS key despite the observed Edge registration change',
     () => {
       const key = 'Zermelo';

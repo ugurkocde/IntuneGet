@@ -35,6 +35,21 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('retains the trusted Kiwix installer while binding its exact installed registry key', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Kiwix.Wikivoyage.Electron', displayName: 'Wikivoyage by Kiwix Electron Edition', publisher: 'Kiwix',
+      version: '3.8.2-E', architecture: 'x86',
+      installerSha256: '353BFC413A3787D7CEA738AB8BAAAB7E33AF42883963D2C29DDEDA438BFFF0C0',
+      installerType: 'nullsoft', installScope: 'machine', silentSwitches: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine', sha256: '353BFC413A3787D7CEA738AB8BAAAB7E33AF42883963D2C29DDEDA438BFFF0C0',
+      silentArgs: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix',
+    });
+  });
   it('canonicalizes object keys recursively', () => {
     expect(canonicalQaJson({ z: 1, a: { y: 2, b: 3 } })).toBe(
       '{"a":{"b":3,"y":2},"z":1}'

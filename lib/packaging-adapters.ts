@@ -1826,6 +1826,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // Kiwix's v3.8.2-Wikivoyage package.json declares productName
+  // `Wikivoyage by Kiwix` and appId `kiwix.js.wikivoyage`. Isolated run
+  // 35429157707 observed this exact electron-builder key alongside unrelated
+  // Edge servicing. The catalog's `Electron Edition` suffix is not registered.
+  'kiwix.wikivoyage.electron': {
+    generatedDisplayName: 'Wikivoyage by Kiwix Electron Edition',
+    registeredDisplayName: 'Wikivoyage by Kiwix',
+    registeredRegistryKey: '149170a6-d630-5e6f-a054-8c34dd8a32a2',
+  },
   // Zermelo 26.09.1 registers the exact NSIS key/name `Zermelo`, not its
   // catalog title `Zermelo Desktop`. Isolated run 35420836685 observed this
   // alongside Edge/WebView2 servicing. Preserve the exact captured vendor

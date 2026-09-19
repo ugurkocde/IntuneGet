@@ -10,6 +10,13 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('binds only the reviewed Kiwix Electron identity and preserves custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix';
+    expect(resolveApplicationUninstallCommand(' Kiwix.Wikivoyage.Electron ', 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Electron', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Other', 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition')).toBe('REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition');
+    expect(resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Electron', 'custom.exe /remove')).toBe('custom.exe /remove');
+  });
   it('adds unattended removal only to the exact Product Portal identity', () => {
     for (const id of ['iZotope.ProductPortal', ' izotope.productportal ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);

@@ -542,6 +542,22 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches Kiwix customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Kiwix.Wikivoyage.Electron', displayName: 'Wikivoyage by Kiwix Electron Edition', publisher: 'Kiwix',
+      version: '3.8.2-E', architecture: 'x86', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix'
+    );
+  });
+
   it('dispatches Zermelo customer packages with the exact NSIS identity used by QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
