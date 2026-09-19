@@ -20,6 +20,14 @@ describe('application packaging adapters', () => {
     expect(applyApplicationPackagingAdapter('iZotope.Other', DEFAULT_PSADT_CONFIG)
       .reviewedUninstallArguments).toEqual(DEFAULT_PSADT_CONFIG.reviewedUninstallArguments);
   });
+  it('binds Zermelo to the captured exact NSIS key without changing custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo';
+    expect(resolveApplicationUninstallCommand(' ZermeloSoftwareBV.ZermeloDesktop ', 'REGISTRY_UNINSTALL:Zermelo Desktop')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('ZermeloSoftwareBV.ZermeloDesktop', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('ZermeloSoftwareBV.Other', 'REGISTRY_UNINSTALL:Zermelo Desktop')).toBe('REGISTRY_UNINSTALL:Zermelo Desktop');
+    expect(resolveApplicationUninstallCommand('ZermeloSoftwareBV.ZermeloDesktop', 'custom.exe /remove')).toBe('custom.exe /remove');
+  });
+
   it('binds RackSight to the captured exact NSIS key without changing custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight';
     expect(resolveApplicationUninstallCommand(' AuthorityGate.RackSight ', 'REGISTRY_UNINSTALL:RackSight Desktop')).toBe(expected);

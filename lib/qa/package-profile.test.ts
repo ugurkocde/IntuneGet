@@ -1582,6 +1582,24 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds Zermelo QA to the captured NSIS key while retaining its trusted installer profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', displayName: 'Zermelo Desktop', publisher: 'Zermelo Software BV',
+      version: '26.09.1', architecture: 'x64',
+      installerSha256: 'A309EB1FFA17A3978C8F2C00A82E279B913434C5AF6C9FA29EB3AAAA75AD6264',
+      installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zermelo Desktop',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine',
+      sha256: 'A309EB1FFA17A3978C8F2C00A82E279B913434C5AF6C9FA29EB3AAAA75AD6264',
+      silentArgs: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo',
+    });
+  });
+
   it('binds RackSight QA to the captured NSIS key while retaining its trusted installer profile', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'AuthorityGate.RackSight', displayName: 'RackSight Desktop', publisher: 'AuthorityGate',

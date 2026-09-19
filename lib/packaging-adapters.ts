@@ -1826,6 +1826,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // Zermelo 26.09.1 registers the exact NSIS key/name `Zermelo`, not its
+  // catalog title `Zermelo Desktop`. Isolated run 35420836685 observed this
+  // alongside Edge/WebView2 servicing. Preserve the exact captured vendor
+  // command and keep unrelated registrations outside the removal identity.
+  'zermelosoftwarebv.zermelodesktop': {
+    generatedDisplayName: 'Zermelo Desktop',
+    registeredDisplayName: 'Zermelo',
+    registeredRegistryKey: 'Zermelo',
+  },
   // RackSight v1.1.9 uses electron-builder appId net.authoritygate.racksight
   // and productName RackSight. Isolated run 34787649769 captured this exact
   // NSIS key alongside WebView2 servicing; never select the runtime instead.

@@ -2396,6 +2396,36 @@ if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'selects only the Zermelo NSIS key despite the observed Edge registration change',
+    () => {
+      const key = 'Zermelo';
+      const command = resolveApplicationUninstallCommand('ZermeloSoftwareBV.ZermeloDesktop', 'REGISTRY_UNINSTALL:Zermelo Desktop');
+      const generated = generateRegistryUninstallPackage('nullsoft', 'Zermelo Desktop', [], {}, [],
+        'ZermeloSoftwareBV.ZermeloDesktop', 'Zermelo Desktop', '26.09.1', command);
+      const identity = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identity).toBeDefined();
+      expect(selection).toBeDefined();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identity}
+$changedApplications = @(
+  [pscustomobject]@{ PSChildName = '${key}'; DisplayName = 'Zermelo'; Publisher = 'Zermelo Software BV' },
+  [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; DisplayName = 'Microsoft Edge WebView2 Runtime'; Publisher = 'Microsoft Corporation' },
+  [pscustomobject]@{ PSChildName = 'Microsoft Edge'; DisplayName = 'Microsoft Edge'; Publisher = 'Microsoft Corporation' }
+)
+${selection}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].DisplayName -ne 'Zermelo') { throw 'Wrong product selected' }
+$changedApplications = @($changedApplications[1])
+${selection}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '" + key + "'");
+      expect(generated).toContain("$registeredInstallerType = 'nullsoft'");
+    }, 30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'selects only the AirUSB Inno key despite the observed Edge registration change',
     () => {
       const key = '{B7A2E3F1-4D8C-4B2A-9E6F-1A3C5D7E9B0F}_is1';
