@@ -84,6 +84,19 @@ describe('sqlite update policies', () => {
   });
 });
 
+describe('sqlite upload history lookup', () => {
+  it('returns the newest deployment for one app, filtered in the query', async () => {
+    const db = await loadAdapter();
+    await db.uploadHistory.create({ user_id: 'u1', winget_id: 'A.One', version: '1.0.0', display_name: 'One', intune_app_id: 'a1', intune_tenant_id: 't1', deployed_at: '2026-01-01T00:00:00.000Z' });
+    await db.uploadHistory.create({ user_id: 'u1', winget_id: 'A.One', version: '1.1.0', display_name: 'One', intune_app_id: 'a1', intune_tenant_id: 't1', deployed_at: '2026-02-01T00:00:00.000Z' });
+    await db.uploadHistory.create({ user_id: 'u1', winget_id: 'A.Two', version: '9.0.0', display_name: 'Two', intune_app_id: 'a2', intune_tenant_id: 't1' });
+
+    expect((await db.uploadHistory.getLatest('u1', 't1', 'A.One'))?.version).toBe('1.1.0');
+    expect((await db.uploadHistory.getLatest('u1', 't1', 'A.Two'))?.version).toBe('9.0.0');
+    expect(await db.uploadHistory.getLatest('u1', 't2', 'A.One')).toBeNull();
+  });
+});
+
 describe('sqlite auto update history', () => {
   it('creates, updates, and lists history joined with the policy target', async () => {
     const db = await loadAdapter();

@@ -7,19 +7,9 @@ import { join } from 'node:path';
 const parseAccessTokenMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: parseAccessTokenMock }));
 
-// vitest cannot resolve the CommonJS require() that lib/db uses to lazy-load
-// the SQLite adapter, so hand the routes the real adapter directly.
-vi.mock('@/lib/db', async () => {
-  const sqlite = await import('@/lib/db/sqlite');
-  return {
-    getDatabase: () => sqlite.sqliteDb,
-    isSqliteMode: () => true,
-    resetDatabaseInstance: () => {},
-  };
-});
-
 let tempDir: string;
 let route: typeof import('@/app/api/update-policies/route');
+let idRoute: typeof import('@/app/api/update-policies/[id]/route');
 
 beforeEach(async () => {
   vi.resetModules();
@@ -29,7 +19,19 @@ beforeEach(async () => {
   process.env.PACKAGER_API_KEY = 'test';
   parseAccessTokenMock.mockReset();
   parseAccessTokenMock.mockResolvedValue({ userId: 'u1', tenantId: 't1' });
+  // vitest cannot resolve the CommonJS require() that lib/db uses to lazy-load
+  // the SQLite adapter, so hand the routes the real adapter directly. doMock is
+  // re-applied per test so each gets the test's fresh database.
+  vi.doMock('@/lib/db', async () => {
+    const sqlite = await import('@/lib/db/sqlite');
+    return {
+      getDatabase: () => sqlite.sqliteDb,
+      isSqliteMode: () => true,
+      resetDatabaseInstance: () => {},
+    };
+  });
   route = await import('@/app/api/update-policies/route');
+  idRoute = await import('@/app/api/update-policies/[id]/route');
 });
 
 afterEach(async () => {
@@ -100,6 +102,32 @@ describe('update policies route in SQLite mode', () => {
 
     const list = await route.GET(getRequest());
     expect((await list.json()).count).toBe(1);
+  });
+
+  it('rejects clearing pinned_version on a pin_version policy', async () => {
+    const { sqliteDb } = await import('@/lib/db/sqlite');
+    await sqliteDb.uploadHistory.create({
+      user_id: 'u1',
+      winget_id: 'Vendor.App',
+      version: '1.2.3',
+      display_name: 'Vendor App',
+      intune_app_id: 'app-1',
+      intune_tenant_id: 't1',
+    });
+    const created = await route.POST(
+      postRequest({ winget_id: 'Vendor.App', tenant_id: 't1', policy_type: 'pin_version' })
+    );
+    const { policy } = await created.json();
+
+    const response = await idRoute.PATCH(
+      new NextRequest(`http://localhost/api/update-policies/${policy.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ policy_type: 'pin_version', pinned_version: null }),
+      }),
+      { params: Promise.resolve({ id: policy.id }) }
+    );
+    expect(response.status).toBe(400);
   });
 
   it('rejects an invalid policy type', async () => {

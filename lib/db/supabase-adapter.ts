@@ -520,6 +520,27 @@ export const supabaseDb: DatabaseAdapter = {
 
       return data || [];
     },
+
+    async getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null> {
+      const supabase = createServerClient();
+      const query = getUploadHistoryQuery(supabase);
+
+      const { data, error } = await query
+        .select('*')
+        .eq('user_id', userId)
+        .eq('intune_tenant_id', tenantId)
+        .eq('winget_id', wingetId)
+        .order('deployed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error fetching latest upload history:', error);
+        throw error;
+      }
+
+      return data ?? null;
+    },
   },
 
   updatePolicies: {

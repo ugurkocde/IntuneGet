@@ -472,11 +472,8 @@ export async function buildDeploymentConfigFromAdapter(
 ): Promise<BuildDeploymentConfigResult> {
   const { userId, tenantId, wingetId, latestVersion } = args;
 
-  // getByUserId returns newest first, so the first match is the latest deployment.
-  const uploads = await db.uploadHistory.getByUserId(userId, 200);
-  const uploadHistory = uploads.find(
-    (entry) => entry.intune_tenant_id === tenantId && entry.winget_id === wingetId
-  );
+  // Filtered in the query so a deployment older than a fixed window is still found.
+  const uploadHistory = await db.uploadHistory.getLatest(userId, tenantId, wingetId);
 
   if (uploadHistory?.packaging_job_id) {
     const packagingJob = await db.jobs.getById(uploadHistory.packaging_job_id);
