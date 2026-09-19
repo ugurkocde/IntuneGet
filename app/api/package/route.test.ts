@@ -425,6 +425,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     ['Wondershare.Filmora', 'unsupported_managed_install'],
     ['GlassWire.GlassWire', 'unsupported_managed_uninstall'],
     ['Wargaming.GameCenter', 'unsupported_managed_uninstall'],
+    ['leezer3.OpenBVE', 'unsupported_managed_uninstall'],
     ['Microsoft.VCLibs.14', 'unsupported_managed_uninstall'],
     ['Microsoft.VCLibs.Desktop.14', 'unsupported_managed_uninstall'],
   ])('blocks %s before QA or customer workflow payload creation', async (wingetId, code) => {

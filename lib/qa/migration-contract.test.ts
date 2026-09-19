@@ -2,6 +2,21 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+describe('OpenBVE unattended removal eligibility', () => {
+  it('blocks customer and QA eligibility while preserving dispatched and terminal evidence', () => {
+    const sql = readFileSync(resolve(process.cwd(),
+      'supabase/migrations/20260919235112_block_openbve_unsupported_managed_uninstall.sql'), 'utf8');
+    expect(sql).toContain('insert into public.package_eligibility_blocks');
+    expect(sql).toContain("'leezer3.OpenBVE'");
+    expect(sql).toContain("'unsupported_managed_uninstall'");
+    expect(sql).toContain('set is_verified = false');
+    expect(sql).toContain("and status = 'queued'");
+    expect(sql).toContain('and dispatched_at is null');
+    expect(sql).toContain('and github_run_id is null');
+    expect(sql).not.toMatch(/delete from|qa_pipeline_control|status = 'passed'/i);
+  });
+});
+
 const migrationPaths = [
   'supabase/migrations/20260807193111_qa_release_gate.sql',
   'supabase/migrations/20260807205000_qa_candidate_terminal_evidence.sql',

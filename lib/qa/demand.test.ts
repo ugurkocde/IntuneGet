@@ -83,6 +83,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     ['Wondershare.Filmora', 'unsupported_managed_install'],
     ['GlassWire.GlassWire', 'unsupported_managed_uninstall'],
     ['Wargaming.GameCenter', 'unsupported_managed_uninstall'],
+    ['leezer3.OpenBVE', 'unsupported_managed_uninstall'],
     ['Microsoft.VCLibs.14', 'unsupported_managed_uninstall'],
     ['Microsoft.VCLibs.Desktop.14', 'unsupported_managed_uninstall'],
   ])('does not queue or resolve dependencies for blocked %s', async (wingetId, code) => {
