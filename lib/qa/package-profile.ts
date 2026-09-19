@@ -33,9 +33,6 @@ export const QA_PSADT_TOOLCHAIN = {
  * proven irrelevant to the behavior that profile exercises.
  */
 export const QA_PACKAGER_RELEASE_HISTORY = [
-  // Kiwix's exact registry identity changes only its previously failed
-  // lifecycle; unrelated passing package execution profiles remain compatible.
-  'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4',
   'de49775e759b693b92db09bc99aa116f197c4850',
   'c603eab9b8de23a6b5eb466f0fd8cdf2bfd04e33',
   '99edd0a9f4b7e10d4cc4272f90d763f3bd681440',
@@ -621,6 +618,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Zermelo's exact registry key changes only its failed identity profile.
   // Unchanged profiles retain compatibility, never exact-pin strict count credit.
   'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146',
+  // Kiwix's exact registry identity changes only its previously failed
+  // lifecycle; compatibility never grants exact-current-pin strict count credit.
+  'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
