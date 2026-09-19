@@ -9,7 +9,9 @@ import type {
   AppUpdatePolicy,
   AutoUpdateHistory,
   AutoUpdateHistoryWithPolicy,
+  AutoUpdateStatus,
 } from '@/types/update-policies';
+import type { UpdateCheckQuery, UpdateCheckResult } from './types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -541,6 +543,20 @@ export const supabaseDb: DatabaseAdapter = {
 
       return data ?? null;
     },
+
+    async listAll(limit: number = 1000): Promise<UploadHistoryRecord[]> {
+      const supabase = createServerClient();
+      const query = getUploadHistoryQuery(supabase);
+      const { data, error } = await query
+        .select('*')
+        .order('deployed_at', { ascending: false })
+        .limit(limit);
+      if (isError(error)) {
+        console.error('Error fetching upload history:', error);
+        throw error;
+      }
+      return data ?? [];
+    },
   },
 
   updatePolicies: {
@@ -587,6 +603,19 @@ export const supabaseDb: DatabaseAdapter = {
         throw error;
       }
       return (data as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async listAll(): Promise<AppUpdatePolicy[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing update policies:', error);
+        throw error;
+      }
+      return (data ?? []) as unknown as AppUpdatePolicy[];
     },
 
     async upsert(
@@ -756,6 +785,128 @@ export const supabaseDb: DatabaseAdapter = {
         },
         display_name: row.packaging_job?.display_name,
       }));
+    },
+
+    async countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number> {
+      if (policyIds.length === 0) return 0;
+      const supabase = createServerClient();
+      let query = supabase
+        .from('auto_update_history')
+        .select('id', { count: 'exact', head: true })
+        .in('policy_id', policyIds)
+        .gte('triggered_at', since);
+      if (status) query = query.eq('status', status);
+      const { count, error } = await query;
+      if (isError(error)) {
+        console.error('Error counting auto-update history:', error);
+        throw error;
+      }
+      return count ?? 0;
+    },
+  },
+
+  updateCheckResults: {
+    async list(userId: string, query: UpdateCheckQuery): Promise<UpdateCheckResult[]> {
+      const supabase = createServerClient();
+      let builder = supabase.from('update_check_results').select('*').eq('user_id', userId);
+      if (query.tenantId) builder = builder.eq('tenant_id', query.tenantId);
+      if (!query.includeDismissed) builder = builder.is('dismissed_at', null);
+      if (query.criticalOnly) builder = builder.eq('is_critical', true);
+
+      const { data, error } = await builder.order('detected_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing update check results:', error);
+        throw error;
+      }
+      return (data ?? []) as unknown as UpdateCheckResult[];
+    },
+
+    async upsert(
+      record: Partial<UpdateCheckResult> &
+        Pick<
+          UpdateCheckResult,
+          'user_id' | 'tenant_id' | 'winget_id' | 'intune_app_id' | 'display_name' | 'current_version' | 'latest_version'
+        >
+    ): Promise<UpdateCheckResult> {
+      const supabase = createServerClient();
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .upsert(
+          {
+            user_id: record.user_id,
+            tenant_id: record.tenant_id,
+            winget_id: record.winget_id,
+            intune_app_id: record.intune_app_id,
+            display_name: record.display_name,
+            current_version: record.current_version,
+            latest_version: record.latest_version,
+            is_critical: record.is_critical ?? false,
+            is_managed: record.is_managed ?? true,
+            large_icon_type: record.large_icon_type ?? null,
+            large_icon_value: record.large_icon_value ?? null,
+            notified_at: record.notified_at ?? null,
+            dismissed_at: record.dismissed_at ?? null,
+            detected_at: record.detected_at || now,
+            updated_at: record.updated_at || now,
+          },
+          { onConflict: 'user_id,tenant_id,winget_id,intune_app_id' }
+        )
+        .select()
+        .single();
+      if (isError(error)) {
+        console.error('Error upserting update check result:', error);
+        throw error;
+      }
+      if (!data) throw new Error('No data returned from upsert');
+      return data as unknown as UpdateCheckResult;
+    },
+
+    async setDismissed(ids: string[], userId: string, dismissedAt: string | null): Promise<number> {
+      if (ids.length === 0) return 0;
+      const supabase = createServerClient();
+      const { count, error } = await supabase
+        .from('update_check_results')
+        .update({ dismissed_at: dismissedAt, updated_at: new Date().toISOString() }, { count: 'exact' })
+        .eq('user_id', userId)
+        .in('id', ids);
+      if (isError(error)) {
+        console.error('Error dismissing update check results:', error);
+        throw error;
+      }
+      return count ?? 0;
+    },
+
+    async deleteMissing(
+      userId: string,
+      tenantId: string,
+      keep: Array<{ wingetId: string; intuneAppId: string }>
+    ): Promise<number> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .select('id, winget_id, intune_app_id')
+        .eq('user_id', userId)
+        .eq('tenant_id', tenantId);
+      if (isError(error)) {
+        console.error('Error reading update check results:', error);
+        throw error;
+      }
+      const keepSet = new Set(keep.map((entry) => `${entry.wingetId}:${entry.intuneAppId}`));
+      const staleIds = (data ?? [])
+        .filter((row) => !keepSet.has(`${row.winget_id}:${row.intune_app_id}`))
+        .map((row) => row.id);
+      if (staleIds.length === 0) return 0;
+
+      const { error: deleteError } = await supabase
+        .from('update_check_results')
+        .delete()
+        .in('id', staleIds);
+      if (isError(deleteError)) {
+        console.error('Error deleting stale update check results:', error);
+        throw deleteError;
+      }
+      return staleIds.length;
     },
   },
 };

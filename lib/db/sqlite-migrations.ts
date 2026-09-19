@@ -195,6 +195,36 @@ export const MIGRATIONS: SqliteMigration[] = [
       addColumnIfMissing(db, 'packaging_jobs', 'auto_update_policy_id', 'TEXT');
     },
   },
+  {
+    version: 3,
+    name: 'update check results',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS update_check_results (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          tenant_id TEXT NOT NULL,
+          winget_id TEXT NOT NULL,
+          intune_app_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          current_version TEXT NOT NULL,
+          latest_version TEXT NOT NULL,
+          is_critical INTEGER NOT NULL DEFAULT 0,
+          is_managed INTEGER NOT NULL DEFAULT 1,
+          large_icon_type TEXT,
+          large_icon_value TEXT,
+          notified_at TEXT,
+          dismissed_at TEXT,
+          detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (user_id, tenant_id, winget_id, intune_app_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_update_check_results_user_id ON update_check_results(user_id);
+        CREATE INDEX IF NOT EXISTS idx_update_check_results_tenant_id ON update_check_results(tenant_id);
+      `);
+    },
+  },
 ];
 
 export function getSqliteSchemaVersion(db: BetterSqlite3.Database): number {

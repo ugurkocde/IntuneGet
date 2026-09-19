@@ -97,9 +97,10 @@ docker-compose --env-file .env.local up -d`}
           <p>
             <T>
               Docker Compose defaults to <code>DATABASE_MODE=supabase</code>. SQLite is supported
-              for the packaging pipeline, upload history, the read-only catalog snapshot, and app
-              update policies with their auto-update history. Notifications, automatic update
-              triggering, and MSP features still require Supabase.
+              for the packaging pipeline, upload history, the read-only catalog snapshot, app
+              update policies with their auto-update history, and the scheduled update check that
+              queues auto-update jobs for the local packager. Live Intune update checks,
+              notifications, and MSP features still require Supabase.
             </T>
           </p>
           <p>

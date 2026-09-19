@@ -23,6 +23,34 @@ export interface AutoUpdateHistoryQuery {
 }
 
 /**
+ * A detected available update for a deployed app.
+ */
+export interface UpdateCheckResult {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  winget_id: string;
+  intune_app_id: string;
+  display_name: string;
+  current_version: string;
+  latest_version: string;
+  is_critical: boolean;
+  is_managed: boolean;
+  large_icon_type: string | null;
+  large_icon_value: string | null;
+  notified_at: string | null;
+  dismissed_at: string | null;
+  detected_at: string;
+  updated_at: string;
+}
+
+export interface UpdateCheckQuery {
+  tenantId?: string;
+  includeDismissed?: boolean;
+  criticalOnly?: boolean;
+}
+
+/**
  * Packaging job record
  */
 export interface PackagingJob {
@@ -68,6 +96,8 @@ export interface PackagingJob {
   qa_candidate_id: string | null;
   qa_requested_at: string | null;
   qa_completed_at: string | null;
+  is_auto_update?: boolean | null;
+  auto_update_policy_id?: string | null;
   packager_id: string | null;
   packager_heartbeat_at: string | null;
   claimed_at: string | null;
@@ -204,6 +234,45 @@ export interface DatabaseAdapter {
      * the query rather than a fixed window so old deployments are found.
      */
     getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null>;
+
+    /**
+     * Every recorded deployment, newest first. Used by the update check to scan
+     * the whole local fleet without knowing the user ids up front.
+     */
+    listAll(limit?: number): Promise<UploadHistoryRecord[]>;
+  };
+
+  updateCheckResults: {
+    /**
+     * List detected updates for a user with the optional filters.
+     */
+    list(userId: string, query: UpdateCheckQuery): Promise<UpdateCheckResult[]>;
+
+    /**
+     * Insert or refresh a detected update on the
+     * (user_id, tenant_id, winget_id, intune_app_id) key.
+     */
+    upsert(
+      record: Partial<UpdateCheckResult> &
+        Pick<
+          UpdateCheckResult,
+          'user_id' | 'tenant_id' | 'winget_id' | 'intune_app_id' | 'display_name' | 'current_version' | 'latest_version'
+        >
+    ): Promise<UpdateCheckResult>;
+
+    /**
+     * Dismiss or restore detected updates owned by the user. Returns the rows changed.
+     */
+    setDismissed(ids: string[], userId: string, dismissedAt: string | null): Promise<number>;
+
+    /**
+     * Delete detected updates for a user and tenant that are no longer current.
+     */
+    deleteMissing(
+      userId: string,
+      tenantId: string,
+      keep: Array<{ wingetId: string; intuneAppId: string }>
+    ): Promise<number>;
   };
 
   updatePolicies: {
@@ -221,6 +290,11 @@ export interface DatabaseAdapter {
      * Get the policy for a user, tenant, and app (the unique key)
      */
     getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Every policy, newest first. Used by the update check across the local fleet.
+     */
+    listAll(): Promise<AppUpdatePolicy[]>;
 
     /**
      * Insert or replace a policy on the (user_id, tenant_id, winget_id) key
@@ -260,5 +334,11 @@ export interface DatabaseAdapter {
      * newest first, honoring the optional filters and pagination.
      */
     list(userId: string, query: AutoUpdateHistoryQuery): Promise<AutoUpdateHistoryWithPolicy[]>;
+
+    /**
+     * Count history records for the given policies triggered at or after
+     * `since`, optionally filtered by status. Backs the auto-update rate limits.
+     */
+    countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number>;
   };
 }

@@ -11,11 +11,14 @@ import type {
   PackagingJob,
   UploadHistoryRecord,
   AutoUpdateHistoryQuery,
+  UpdateCheckResult,
+  UpdateCheckQuery,
 } from './types';
 import type {
   AppUpdatePolicy,
   AutoUpdateHistory,
   AutoUpdateHistoryWithPolicy,
+  AutoUpdateStatus,
 } from '@/types/update-policies';
 import { runSqliteMigrations } from './sqlite-migrations';
 
@@ -74,6 +77,14 @@ function parsePolicyRow(row: Record<string, unknown>): AppUpdatePolicy {
 
 function parseHistoryRow(row: Record<string, unknown>): AutoUpdateHistory {
   return row as unknown as AutoUpdateHistory;
+}
+
+function parseCheckResultRow(row: Record<string, unknown>): UpdateCheckResult {
+  return {
+    ...row,
+    is_critical: Boolean(row.is_critical),
+    is_managed: row.is_managed === undefined ? true : Boolean(row.is_managed),
+  } as unknown as UpdateCheckResult;
 }
 
 /**
@@ -476,6 +487,13 @@ export const sqliteDb: DatabaseAdapter = {
         .get(userId, tenantId, wingetId) as UploadHistoryRecord | undefined;
       return row ?? null;
     },
+
+    async listAll(limit: number = 1000): Promise<UploadHistoryRecord[]> {
+      const database = getDb();
+      return database
+        .prepare('SELECT * FROM upload_history ORDER BY deployed_at DESC LIMIT ?')
+        .all(limit) as UploadHistoryRecord[];
+    },
   },
 
   updatePolicies: {
@@ -506,6 +524,14 @@ export const sqliteDb: DatabaseAdapter = {
         )
         .get(userId, tenantId, wingetId) as Record<string, unknown> | undefined;
       return row ? parsePolicyRow(row) : null;
+    },
+
+    async listAll(): Promise<AppUpdatePolicy[]> {
+      const database = getDb();
+      const rows = database
+        .prepare('SELECT * FROM app_update_policies ORDER BY updated_at DESC')
+        .all() as Record<string, unknown>[];
+      return rows.map(parsePolicyRow);
     },
 
     async upsert(
@@ -687,6 +713,140 @@ export const sqliteDb: DatabaseAdapter = {
         },
         display_name: (row.packaging_display_name as string | null) ?? undefined,
       }));
+    },
+
+    async countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number> {
+      if (policyIds.length === 0) return 0;
+      const database = getDb();
+      const placeholders = policyIds.map(() => '?').join(', ');
+      const conditions = [`policy_id IN (${placeholders})`, 'triggered_at >= ?'];
+      const values: unknown[] = [...policyIds, since];
+      if (status) {
+        conditions.push('status = ?');
+        values.push(status);
+      }
+      const row = database
+        .prepare(`SELECT COUNT(*) AS count FROM auto_update_history WHERE ${conditions.join(' AND ')}`)
+        .get(...values) as { count: number };
+      return row.count;
+    },
+  },
+
+  updateCheckResults: {
+    async list(userId: string, query: UpdateCheckQuery): Promise<UpdateCheckResult[]> {
+      const database = getDb();
+      const conditions = ['user_id = ?'];
+      const values: unknown[] = [userId];
+      if (query.tenantId) {
+        conditions.push('tenant_id = ?');
+        values.push(query.tenantId);
+      }
+      if (!query.includeDismissed) {
+        conditions.push('dismissed_at IS NULL');
+      }
+      if (query.criticalOnly) {
+        conditions.push('is_critical = 1');
+      }
+      const rows = database
+        .prepare(
+          `SELECT * FROM update_check_results WHERE ${conditions.join(' AND ')} ORDER BY detected_at DESC`
+        )
+        .all(...values) as Record<string, unknown>[];
+      return rows.map(parseCheckResultRow);
+    },
+
+    async upsert(
+      record: Partial<UpdateCheckResult> &
+        Pick<
+          UpdateCheckResult,
+          'user_id' | 'tenant_id' | 'winget_id' | 'intune_app_id' | 'display_name' | 'current_version' | 'latest_version'
+        >
+    ): Promise<UpdateCheckResult> {
+      const database = getDb();
+      const id = record.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      database
+        .prepare(
+          `INSERT INTO update_check_results (
+             id, user_id, tenant_id, winget_id, intune_app_id, display_name,
+             current_version, latest_version, is_critical, is_managed, large_icon_type,
+             large_icon_value, notified_at, dismissed_at, detected_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, tenant_id, winget_id, intune_app_id) DO UPDATE SET
+             display_name = excluded.display_name,
+             current_version = excluded.current_version,
+             latest_version = excluded.latest_version,
+             is_critical = excluded.is_critical,
+             is_managed = excluded.is_managed,
+             updated_at = excluded.updated_at`
+        )
+        .run(
+          id,
+          record.user_id,
+          record.tenant_id,
+          record.winget_id,
+          record.intune_app_id,
+          record.display_name,
+          record.current_version,
+          record.latest_version,
+          record.is_critical ? 1 : 0,
+          record.is_managed === false ? 0 : 1,
+          record.large_icon_type ?? null,
+          record.large_icon_value ?? null,
+          record.notified_at ?? null,
+          record.dismissed_at ?? null,
+          record.detected_at || now,
+          record.updated_at || now
+        );
+
+      const row = database
+        .prepare(
+          `SELECT * FROM update_check_results
+           WHERE user_id = ? AND tenant_id = ? AND winget_id = ? AND intune_app_id = ?`
+        )
+        .get(record.user_id, record.tenant_id, record.winget_id, record.intune_app_id) as Record<string, unknown>;
+      return parseCheckResultRow(row);
+    },
+
+    async setDismissed(ids: string[], userId: string, dismissedAt: string | null): Promise<number> {
+      if (ids.length === 0) return 0;
+      const database = getDb();
+      const placeholders = ids.map(() => '?').join(', ');
+      const result = database
+        .prepare(
+          `UPDATE update_check_results
+           SET dismissed_at = ?, updated_at = ?
+           WHERE user_id = ? AND id IN (${placeholders})`
+        )
+        .run(dismissedAt, new Date().toISOString(), userId, ...ids);
+      return result.changes;
+    },
+
+    async deleteMissing(
+      userId: string,
+      tenantId: string,
+      keep: Array<{ wingetId: string; intuneAppId: string }>
+    ): Promise<number> {
+      const database = getDb();
+      if (keep.length === 0) {
+        const result = database
+          .prepare('DELETE FROM update_check_results WHERE user_id = ? AND tenant_id = ?')
+          .run(userId, tenantId);
+        return result.changes;
+      }
+      const tuples = keep.map(() => '(?, ?)').join(', ');
+      const values: unknown[] = [];
+      for (const entry of keep) {
+        values.push(entry.wingetId, entry.intuneAppId);
+      }
+      const result = database
+        .prepare(
+          `DELETE FROM update_check_results
+           WHERE user_id = ? AND tenant_id = ? AND (winget_id, intune_app_id) NOT IN (${tuples})`
+        )
+        .run(userId, tenantId, ...values);
+      return result.changes;
     },
   },
 };

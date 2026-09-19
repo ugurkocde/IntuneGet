@@ -327,6 +327,40 @@ Expected response:
 
 For more details, see the [Packager README](../packager/README.md).
 
+## Automatic updates (SQLite mode)
+
+In `DATABASE_MODE=sqlite`, update policies and their history are stored locally
+(see the earlier note). To make them act, run the update check on a schedule and
+let the local packager do the deployment.
+
+1. Set `PACKAGER_MODE=local` so the self-hosted packager picks up queued jobs.
+2. Set `CRON_SECRET` and call the check endpoint on a schedule:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  https://intune.example.com/api/cron/check-updates
+```
+
+The check compares every recorded deployment with the catalog, records available
+updates, and queues a packaging job for each enabled `auto_update` policy whose
+app is behind. The response reports `available`, `triggered`, `skipped`, and
+`errors`.
+
+Schedule it with any external scheduler, for example cron:
+
+```cron
+30 3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://intune.example.com/api/cron/check-updates
+```
+
+or Windows Task Scheduler on the packager host. Recommended cadence is once or
+twice a day, matching the catalog sync.
+
+Differences from the hosted service: the self-hosted check uses the catalog
+only (no live Intune query), and it does not run hosted QA, send
+notifications, or require tenant consent. Rate limits and the failure circuit
+breaker still apply, and jobs are created in `queued` state for the local
+packager.
+
 ## How Runtime Environment Injection Works
 
 Next.js normally inlines `NEXT_PUBLIC_*` environment variables into the client

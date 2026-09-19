@@ -97,6 +97,63 @@ describe('sqlite upload history lookup', () => {
   });
 });
 
+describe('sqlite update check results', () => {
+  it('upserts, lists with filters, dismisses, and deletes rows that are no longer current', async () => {
+    const db = await loadAdapter();
+    const base = {
+      user_id: 'u1',
+      tenant_id: 't1',
+      winget_id: 'Vendor.App',
+      intune_app_id: 'app-1',
+      display_name: 'Vendor App',
+      current_version: '1.0.0',
+      latest_version: '1.1.0',
+    };
+
+    const created = await db.updateCheckResults.upsert(base);
+    expect(created.is_managed).toBe(true);
+    expect(created.is_critical).toBe(false);
+
+    const refreshed = await db.updateCheckResults.upsert({ ...base, current_version: '1.0.1' });
+    expect(refreshed.id).toBe(created.id);
+    expect(refreshed.current_version).toBe('1.0.1');
+
+    expect(await db.updateCheckResults.list('u1', {})).toHaveLength(1);
+    expect(await db.updateCheckResults.list('u1', { tenantId: 't2' })).toHaveLength(0);
+    expect(await db.updateCheckResults.list('u1', { criticalOnly: true })).toHaveLength(0);
+
+    expect(await db.updateCheckResults.setDismissed([created.id], 'u1', new Date().toISOString())).toBe(1);
+    expect(await db.updateCheckResults.list('u1', {})).toHaveLength(0);
+    expect(await db.updateCheckResults.list('u1', { includeDismissed: true })).toHaveLength(1);
+
+    await db.updateCheckResults.upsert({ ...base, winget_id: 'Vendor.Other', intune_app_id: 'app-2' });
+    const removed = await db.updateCheckResults.deleteMissing('u1', 't1', [
+      { wingetId: 'Vendor.App', intuneAppId: 'app-1' },
+    ]);
+    expect(removed).toBe(1);
+    expect(await db.updateCheckResults.list('u1', { includeDismissed: true })).toHaveLength(1);
+  });
+});
+
+describe('sqlite fleet and rate-limit helpers', () => {
+  it('lists all deployments, policies, and counts history for policies', async () => {
+    const db = await loadAdapter();
+    await db.uploadHistory.create({ user_id: 'u1', winget_id: 'A', version: '1.0.0', display_name: 'A', intune_app_id: 'a1', intune_tenant_id: 't1' });
+    await db.uploadHistory.create({ user_id: 'u2', winget_id: 'B', version: '1.0.0', display_name: 'B', intune_app_id: 'b1', intune_tenant_id: 't2' });
+    expect(await db.uploadHistory.listAll()).toHaveLength(2);
+
+    const policy = await db.updatePolicies.upsert({ user_id: 'u1', tenant_id: 't1', winget_id: 'A', policy_type: 'auto_update' });
+    expect(await db.updatePolicies.listAll()).toHaveLength(1);
+
+    await db.autoUpdateHistory.create({ policy_id: policy.id, from_version: '1.0.0', to_version: '1.1.0', update_type: 'minor', status: 'completed' });
+    const since = '2000-01-01T00:00:00.000Z';
+    expect(await db.autoUpdateHistory.countForPolicies([policy.id], since)).toBe(1);
+    expect(await db.autoUpdateHistory.countForPolicies([policy.id], since, 'completed')).toBe(1);
+    expect(await db.autoUpdateHistory.countForPolicies([policy.id], since, 'failed')).toBe(0);
+    expect(await db.autoUpdateHistory.countForPolicies([], since)).toBe(0);
+  });
+});
+
 describe('sqlite auto update history', () => {
   it('creates, updates, and lists history joined with the policy target', async () => {
     const db = await loadAdapter();

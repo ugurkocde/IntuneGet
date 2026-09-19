@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getDatabase, isSqliteMode } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { compareVersions } from '@/lib/version-compare';
 import type { AvailableUpdate } from '@/types/update-policies';
@@ -30,6 +31,49 @@ export async function GET(request: NextRequest) {
     // By default only surface updates for IntuneGet-managed apps; fuzzy-matched
     // apps are opt-in to avoid accidentally updating mismatched/customized apps.
     const includeUnmanaged = searchParams.get('include_unmanaged') === 'true';
+
+    if (isSqliteMode()) {
+      const db = getDatabase();
+      const updates = await db.updateCheckResults.list(user.userId, {
+        tenantId: tenantId ?? undefined,
+        includeDismissed,
+        criticalOnly,
+      });
+      const policies = await db.updatePolicies.list(user.userId, tenantId ?? undefined);
+      const policyMap = new Map(
+        policies.map((policy) => [
+          `${policy.winget_id}:${policy.tenant_id}`,
+          {
+            id: policy.id,
+            policy_type: policy.policy_type,
+            is_enabled: policy.is_enabled,
+            pinned_version: policy.pinned_version,
+            last_auto_update_at: policy.last_auto_update_at,
+            last_auto_update_version: policy.last_auto_update_version,
+            consecutive_failures: policy.consecutive_failures,
+          } satisfies NonNullable<AvailableUpdate['policy']>,
+        ])
+      );
+
+      const updatesWithPolicies: AvailableUpdate[] = updates
+        .map((update) => ({
+          ...update,
+          is_managed: update.is_managed ?? true,
+          // Rows only exist for apps deployed through IntuneGet.
+          has_prior_deployment: true,
+          policy: policyMap.get(`${update.winget_id}:${update.tenant_id}`) ?? null,
+        }))
+        .filter((update) => update.current_version !== 'Unknown')
+        .filter((update) => compareVersions(update.current_version, update.latest_version) < 0)
+        .filter((update) => update.policy?.last_auto_update_version !== update.latest_version)
+        .filter((update) => includeUnmanaged || update.is_managed);
+
+      return NextResponse.json({
+        updates: updatesWithPolicies,
+        count: updatesWithPolicies.length,
+        criticalCount: updatesWithPolicies.filter((update) => update.is_critical).length,
+      });
+    }
 
     if (!isSupabaseServerConfigured()) {
       return NextResponse.json({
@@ -192,6 +236,12 @@ export async function PATCH(request: NextRequest) {
         { error: 'action must be "dismiss" or "restore"' },
         { status: 400 }
       );
+    }
+
+    if (isSqliteMode()) {
+      const dismissedAt = action === 'dismiss' ? new Date().toISOString() : null;
+      const changed = await getDatabase().updateCheckResults.setDismissed(update_ids, user.userId, dismissedAt);
+      return NextResponse.json({ success: true, updated: changed, action });
     }
 
     if (!isSupabaseServerConfigured()) {

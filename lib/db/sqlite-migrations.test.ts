@@ -21,7 +21,13 @@ describe('sqlite migrations', () => {
 
     expect(getSqliteSchemaVersion(db)).toBe(LATEST_VERSION);
     expect(tableNames(db)).toEqual(
-      expect.arrayContaining(['packaging_jobs', 'upload_history', 'app_update_policies', 'auto_update_history'])
+      expect.arrayContaining([
+        'packaging_jobs',
+        'upload_history',
+        'app_update_policies',
+        'auto_update_history',
+        'update_check_results',
+      ])
     );
     db.close();
   });

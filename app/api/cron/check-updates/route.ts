@@ -7,6 +7,8 @@
 
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getDatabase, isSqliteMode } from '@/lib/db';
+import { runSqliteUpdateCheck } from '@/lib/auto-update/sqlite';
 import { parseVersion, compareVersions } from '@/lib/version-compare';
 import {
   AutoUpdateTrigger,
@@ -189,6 +191,21 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Self-hosted deployments have no Supabase. Run the catalog-based check
+  // through the database adapter and queue any auto-update jobs for the local
+  // packager. Schedule this route externally (see the self-hosting docs).
+  if (isSqliteMode()) {
+    try {
+      const summary = await runSqliteUpdateCheck(getDatabase());
+      return NextResponse.json({ success: true, mode: 'sqlite', ...summary });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Update check failed' },
+        { status: 500 }
+      );
+    }
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
