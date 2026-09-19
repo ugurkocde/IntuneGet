@@ -666,6 +666,22 @@ const ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS = [
 ] as const;
 
 const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  'e79da0398e3cf3c6874e53b6304a2aef54b5770f': [
+    'Kiwix.Wikivoyage.Electron',
+    'ZermeloSoftwareBV.ZermeloDesktop',
+    'SadeghHayeri.GreenTunnel',
+    'trevorsandy.lpub3d',
+    'iZotope.ProductPortal',
+    'NTKERNEL.WireSockVPNClientCLI',
+    'AuthorityGate.RackSight',
+    'AirUSB.Client',
+    'Philips.SmartControl',
+    'Adobe.Acrobat.Pro',
+    'WithSecure.ElementsAgent',
+    'PostgreSQL.PostgreSQL.16',
+    'Trimble.SketchUp.2025',
+    ...ARVIS_USER_SCOPE_RELEASE_RETRY_TARGETS,
+  ],
   'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4': [
     'ZermeloSoftwareBV.ZermeloDesktop',
     'SadeghHayeri.GreenTunnel',
