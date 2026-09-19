@@ -2857,6 +2857,24 @@ describe('current catalog QA package validation', () => {
     ).toEqual({ valid: false, reason: 'compatible-application-adapter-changed' });
   });
 
+  it.each([
+    ['REGISTRY_UNINSTALL:Zermelo Desktop', false],
+    ['REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo', true],
+  ])('checks prior catalog uninstall identity %s before reusing a pass', (uninstallCommand, valid) => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({
+        ...input,
+        wingetId: 'ZermeloSoftwareBV.ZermeloDesktop',
+        uninstallCommand,
+      }),
+      'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146'
+    );
+    expect(validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity)))
+      .toMatchObject(valid ? { valid: true } : {
+        valid: false, reason: 'compatible-uninstall-identity-changed',
+      });
+  });
+
   it('reuses an adapted pass when a later release leaves its behavior unchanged', () => {
     const legacyIdentity = identityWithPackagerCommit(
       buildQaPackageIdentity({

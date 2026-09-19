@@ -1096,6 +1096,10 @@ export function validateCompatiblePassedCatalogQaProfile(
   if (canonicalQaJson(adapted) !== canonicalQaJson(typedPsadtConfig)) {
     return { valid: false, reason: 'compatible-application-adapter-changed' };
   }
+  const uninstallCommand = textValue(record(profile?.installer)?.uninstallCommand);
+  if (resolveApplicationUninstallCommand(wingetId, uninstallCommand) !== uninstallCommand) {
+    return { valid: false, reason: 'compatible-uninstall-identity-changed' };
+  }
 
   return validation;
 }
