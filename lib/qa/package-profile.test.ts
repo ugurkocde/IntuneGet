@@ -35,6 +35,21 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('retains the trusted Kiwix installer while binding its exact installed registry key', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Kiwix.Wikivoyage.Electron', displayName: 'Wikivoyage by Kiwix Electron Edition', publisher: 'Kiwix',
+      version: '3.8.2-E', architecture: 'x86',
+      installerSha256: '353BFC413A3787D7CEA738AB8BAAAB7E33AF42883963D2C29DDEDA438BFFF0C0',
+      installerType: 'nullsoft', installScope: 'machine', silentSwitches: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine', sha256: '353BFC413A3787D7CEA738AB8BAAAB7E33AF42883963D2C29DDEDA438BFFF0C0',
+      silentArgs: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix',
+    });
+  });
   it('canonicalizes object keys recursively', () => {
     expect(canonicalQaJson({ z: 1, a: { y: 2, b: 3 } })).toBe(
       '{"a":{"b":3,"y":2},"z":1}'
@@ -1582,6 +1597,24 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds Zermelo QA to the captured NSIS key while retaining its trusted installer profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', displayName: 'Zermelo Desktop', publisher: 'Zermelo Software BV',
+      version: '26.09.1', architecture: 'x64',
+      installerSha256: 'A309EB1FFA17A3978C8F2C00A82E279B913434C5AF6C9FA29EB3AAAA75AD6264',
+      installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zermelo Desktop',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine',
+      sha256: 'A309EB1FFA17A3978C8F2C00A82E279B913434C5AF6C9FA29EB3AAAA75AD6264',
+      silentArgs: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo',
+    });
+  });
+
   it('binds RackSight QA to the captured NSIS key while retaining its trusted installer profile', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'AuthorityGate.RackSight', displayName: 'RackSight Desktop', publisher: 'AuthorityGate',
@@ -2837,6 +2870,24 @@ describe('current catalog QA package validation', () => {
     expect(
       validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity))
     ).toEqual({ valid: false, reason: 'compatible-application-adapter-changed' });
+  });
+
+  it.each([
+    ['REGISTRY_UNINSTALL:Zermelo Desktop', false],
+    ['REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo', true],
+  ])('checks prior catalog uninstall identity %s before reusing a pass', (uninstallCommand, valid) => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({
+        ...input,
+        wingetId: 'ZermeloSoftwareBV.ZermeloDesktop',
+        uninstallCommand,
+      }),
+      'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146'
+    );
+    expect(validateCompatiblePassedCatalogQaProfile(candidateFromIdentity(legacyIdentity)))
+      .toMatchObject(valid ? { valid: true } : {
+        valid: false, reason: 'compatible-uninstall-identity-changed',
+      });
   });
 
   it('reuses an adapted pass when a later release leaves its behavior unchanged', () => {

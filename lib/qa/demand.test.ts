@@ -172,6 +172,47 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the failed SQL Server bootstrapper before profile normalization or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64' as const,
+      installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'SSEI install returned -1; exact registration absent.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
+      silentSwitches: '/IACCEPTSQLSERVERLICENSETERMS /ENU /ACTION=Install /quiet /InstallPath="c:\\Program Files\\Microsoft SQL Server"',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Microsoft SQL Server SQL2025:Microsoft SQL Server 2025 Developer',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('blocks the failed Zoom MSI profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
+      installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'MSI uninstall returned 1601.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'msi', installScope: 'machine',
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zoom Workplace',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the failed TubeDigger Inno profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,
@@ -380,6 +421,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks the failed DockMapper bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'luqiangbo.DockMapper', version: '1.1.5', architecture: 'x64' as const,
+      installerSha256: '2C17B07EA68C59D38FCE1DACCD88F294FF6E018DC2A87355E95771CC0F141D50',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:DockMapper',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks the failed TimeScribe bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'WINBIGFOX.TimeScribe', version: '1.16.0', architecture: 'x64' as const,
@@ -536,6 +599,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...demandInput(), ...tuple, displayName: 'MTGA Launcher', publisher: 'WizardsoftheCoast',
       installerType: 'exe', installScope: 'machine', silentSwitches: '/quiet',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{BB91E8E1-8030-43C7-8461-1E54166F3AAB}:MTGA Launcher',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('blocks the mismatched IntelliJ EAP profile before dependency resolution or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'JetBrains.IntelliJIDEA.Ultimate.EAP', version: '252.26199.7', architecture: 'x64' as const,
+      installerSha256: 'F6DB9893CC39CF217788A24BBA5C375C332FA354F8BE57F6121BED1FC070F802',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest ARP key was absent; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, displayName: 'IntelliJ IDEA Ultimate Edition (EAP)', publisher: 'JetBrains',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:IntelliJ IDEA 252.26199.7:IntelliJ IDEA Ultimate Edition (EAP)',
     })).resolves.toMatchObject({
       state: 'failed', candidateId: null,
       failureSummary: 'This app version is not available for automated deployment.',

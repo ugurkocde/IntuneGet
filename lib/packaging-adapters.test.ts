@@ -10,6 +10,13 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('binds only the reviewed Kiwix Electron identity and preserves custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix';
+    expect(resolveApplicationUninstallCommand(' Kiwix.Wikivoyage.Electron ', 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Electron', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Other', 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition')).toBe('REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition');
+    expect(resolveApplicationUninstallCommand('Kiwix.Wikivoyage.Electron', 'custom.exe /remove')).toBe('custom.exe /remove');
+  });
   it('adds unattended removal only to the exact Product Portal identity', () => {
     for (const id of ['iZotope.ProductPortal', ' izotope.productportal ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
@@ -20,6 +27,14 @@ describe('application packaging adapters', () => {
     expect(applyApplicationPackagingAdapter('iZotope.Other', DEFAULT_PSADT_CONFIG)
       .reviewedUninstallArguments).toEqual(DEFAULT_PSADT_CONFIG.reviewedUninstallArguments);
   });
+  it('binds Zermelo to the captured exact NSIS key without changing custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo';
+    expect(resolveApplicationUninstallCommand(' ZermeloSoftwareBV.ZermeloDesktop ', 'REGISTRY_UNINSTALL:Zermelo Desktop')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('ZermeloSoftwareBV.ZermeloDesktop', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('ZermeloSoftwareBV.Other', 'REGISTRY_UNINSTALL:Zermelo Desktop')).toBe('REGISTRY_UNINSTALL:Zermelo Desktop');
+    expect(resolveApplicationUninstallCommand('ZermeloSoftwareBV.ZermeloDesktop', 'custom.exe /remove')).toBe('custom.exe /remove');
+  });
+
   it('binds RackSight to the captured exact NSIS key without changing custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:3961d0de-ceb1-54d7-a222-b94c8b534c40:RackSight';
     expect(resolveApplicationUninstallCommand(' AuthorityGate.RackSight ', 'REGISTRY_UNINSTALL:RackSight Desktop')).toBe(expected);

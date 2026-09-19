@@ -6,6 +6,17 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only the repaired Kiwix Electron identity to the bounded retry targets', () => {
+    const previous = 'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'Kiwix.Wikivoyage.Electron', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'Kiwix.Wikivoyage.Electron', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Kiwix.Other', status: 'failed' })).toBe(false);
+  });
   it('adds only LPub3D to the managed-context release retry targets', () => {
     const previous = 'ada1a8a5d1ad0ae9ad953306a6b528c71479a803';
     const current = '6dfeaea03893e63cf7aba747638d7ea1768ac6b7';
@@ -345,7 +356,7 @@ describe('QA toolchain targeted retries', () => {
   });
 
   it('retries GreenTunnel only under the repaired shared scope release', () => {
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146')).toEqual([
       'SadeghHayeri.GreenTunnel',
       ...terminalToolchainRetryTargets('6dfeaea03893e63cf7aba747638d7ea1768ac6b7'),
     ]);
@@ -2061,4 +2072,16 @@ describe('QA toolchain targeted retries', () => {
       'e139e4cc222576f34ca905b7180ac47ea548cbab'
     )).not.toContain('Igneus.SimpleHydraulicCalculator');
   });
+  it('retries Zermelo only after its exact registry identity release', () => {
+    expect(terminalToolchainRetryTargets('cb3e4501fa7c4470330a1b6031dd5799fee8f9e4')).toEqual([
+      'ZermeloSoftwareBV.ZermeloDesktop',
+      ...terminalToolchainRetryTargets('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146'),
+    ]);
+    const candidate = { wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146', candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Example.Other', status: 'failed' })).toBe(false);
+  });
+
 });

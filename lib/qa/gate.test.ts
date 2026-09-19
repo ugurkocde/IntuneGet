@@ -96,6 +96,34 @@ describe('enforceQaGate', () => {
     packageEqMock.mockReset();
   });
 
+  it.each([false, true])('blocks the failed SQL Server payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64',
+      installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'SSEI install returned -1; exact registration absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('blocks the failed Zoom MSI payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64',
+      installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'MSI uninstall returned 1601.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the failed TubeDigger payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86',
@@ -409,6 +437,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks DockMapper with its missing registered uninstaller even with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'luqiangbo.DockMapper', version: '1.1.5', architecture: 'x64',
+      installerSha256: '2C17B07EA68C59D38FCE1DACCD88F294FF6E018DC2A87355E95771CC0F141D50',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks TimeScribe with its missing registered uninstaller even with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'WINBIGFOX.TimeScribe', version: '1.16.0', architecture: 'x64',
@@ -462,6 +504,20 @@ describe('enforceQaGate', () => {
     };
     getPackageCompatibilityBlockMock.mockResolvedValueOnce({
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest launcher identity was absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('blocks the mismatched IntelliJ EAP payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'JetBrains.IntelliJIDEA.Ultimate.EAP', version: '252.26199.7', architecture: 'x64',
+      installerSha256: 'F6DB9893CC39CF217788A24BBA5C375C332FA354F8BE57F6121BED1FC070F802',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest ARP key was absent; reputation unverified.',
     });
     await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
     expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);

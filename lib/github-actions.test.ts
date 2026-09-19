@@ -542,6 +542,38 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches Kiwix customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Kiwix.Wikivoyage.Electron', displayName: 'Wikivoyage by Kiwix Electron Edition', publisher: 'Kiwix',
+      version: '3.8.2-E', architecture: 'x86', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S /ALLUSERS',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix'
+    );
+  });
+
+  it('dispatches Zermelo customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', displayName: 'Zermelo Desktop', publisher: 'Zermelo Software BV',
+      version: '26.09.1', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Zermelo Desktop',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo'
+    );
+  });
+
   it('dispatches RackSight customer packages with the exact NSIS identity used by QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -861,6 +893,10 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   });
 
   it.each([
+    { wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64' as const,
+      installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
+    { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
+      installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
     { wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,
       installerSha256: 'D34F1AFFD65BCF99F5762F5FC1A13C0B2585546BDC89D99AA045364DA6215BC8' },
     { wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86' as const,
@@ -899,6 +935,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: '75D8444333303D5B449660A669AF07862289E5F2BBDEF0AE7520C5BA3E47D65B' },
     { wingetId: 'SJMC.SJMCL', version: '1.3.1', architecture: 'x64' as const,
       installerSha256: 'D736C896A039A9AFB8B7D4339A79293FAAAC6EF3F164DAF2DD44F8702997178A' },
+    { wingetId: 'luqiangbo.DockMapper', version: '1.1.5', architecture: 'x64' as const,
+      installerSha256: '2C17B07EA68C59D38FCE1DACCD88F294FF6E018DC2A87355E95771CC0F141D50' },
   ])('never sends a customer Actions payload for quarantined $wingetId, even with override', async (tuple) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

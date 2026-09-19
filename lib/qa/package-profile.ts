@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146',
+  packagerCommit: 'e79da0398e3cf3c6874e53b6304a2aef54b5770f',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -615,6 +615,12 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // GreenTunnel gains its reviewed user scope. Other unchanged execution
   // profiles retain compatibility; this does not grant exact-pin strict credit.
   '6dfeaea03893e63cf7aba747638d7ea1768ac6b7',
+  // Zermelo's exact registry key changes only its failed identity profile.
+  // Unchanged profiles retain compatibility, never exact-pin strict count credit.
+  'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146',
+  // Kiwix's exact registry identity changes only its previously failed
+  // lifecycle; compatibility never grants exact-current-pin strict count credit.
+  'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -1092,6 +1098,10 @@ export function validateCompatiblePassedCatalogQaProfile(
   const adapted = applyApplicationPackagingAdapter(wingetId, typedPsadtConfig);
   if (canonicalQaJson(adapted) !== canonicalQaJson(typedPsadtConfig)) {
     return { valid: false, reason: 'compatible-application-adapter-changed' };
+  }
+  const uninstallCommand = textValue(record(profile?.installer)?.uninstallCommand);
+  if (resolveApplicationUninstallCommand(wingetId, uninstallCommand) !== uninstallCommand) {
+    return { valid: false, reason: 'compatible-uninstall-identity-changed' };
   }
 
   return validation;
