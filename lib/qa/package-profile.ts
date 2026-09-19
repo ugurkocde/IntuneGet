@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146',
+  packagerCommit: 'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -615,6 +615,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // GreenTunnel gains its reviewed user scope. Other unchanged execution
   // profiles retain compatibility; this does not grant exact-pin strict credit.
   '6dfeaea03893e63cf7aba747638d7ea1768ac6b7',
+  // Zermelo's exact registry key changes only its failed identity profile.
+  // Unchanged profiles retain compatibility, never exact-pin strict count credit.
+  'bc329cb8bfafd8d2af940bdc9f8ccf044ac15146',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

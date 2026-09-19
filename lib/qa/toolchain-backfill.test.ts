@@ -345,7 +345,7 @@ describe('QA toolchain targeted retries', () => {
   });
 
   it('retries GreenTunnel only under the repaired shared scope release', () => {
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146')).toEqual([
       'SadeghHayeri.GreenTunnel',
       ...terminalToolchainRetryTargets('6dfeaea03893e63cf7aba747638d7ea1768ac6b7'),
     ]);
@@ -2061,4 +2061,16 @@ describe('QA toolchain targeted retries', () => {
       'e139e4cc222576f34ca905b7180ac47ea548cbab'
     )).not.toContain('Igneus.SimpleHydraulicCalculator');
   });
+  it('retries Zermelo only after its exact registry identity release', () => {
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'ZermeloSoftwareBV.ZermeloDesktop',
+      ...terminalToolchainRetryTargets('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146'),
+    ]);
+    const candidate = { wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('bc329cb8bfafd8d2af940bdc9f8ccf044ac15146', candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'Example.Other', status: 'failed' })).toBe(false);
+  });
+
 });
