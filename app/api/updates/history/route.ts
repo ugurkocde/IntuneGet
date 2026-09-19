@@ -57,8 +57,11 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenant_id');
     const wingetId = searchParams.get('winget_id');
     const status = searchParams.get('status');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    // Normalize pagination so a malformed value cannot reach the database as NaN.
+    const parsedLimit = parseInt(searchParams.get('limit') || '50', 10);
+    const parsedOffset = parseInt(searchParams.get('offset') || '0', 10);
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 50;
+    const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
 
     if (isSqliteMode()) {
       const entries = await getDatabase().autoUpdateHistory.list(user.userId, {

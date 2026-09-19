@@ -37,7 +37,7 @@ async function patchPolicySqlite(id: string, userId: string, body: PolicyPatchBo
     return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
   }
 
-  if (body.policy_type) {
+  if (body.policy_type !== undefined) {
     const validPolicyTypes: UpdatePolicyType[] = ['auto_update', 'notify', 'ignore', 'pin_version'];
     if (!validPolicyTypes.includes(body.policy_type)) {
       return NextResponse.json(
@@ -45,18 +45,27 @@ async function patchPolicySqlite(id: string, userId: string, body: PolicyPatchBo
         { status: 400 }
       );
     }
-    if (body.policy_type === 'pin_version' && !body.pinned_version && !existing.pinned_version) {
-      return NextResponse.json(
-        { error: 'pinned_version is required for pin_version policy' },
-        { status: 400 }
-      );
-    }
-    if (body.policy_type === 'auto_update' && !body.deployment_config && !existing.deployment_config) {
-      return NextResponse.json(
-        { error: 'deployment_config is required for auto_update policy' },
-        { status: 400 }
-      );
-    }
+  }
+
+  // Validate the state that will exist after the update, not only the fields in
+  // the request, so clearing pinned_version or deployment_config is rejected.
+  const nextPolicyType = body.policy_type ?? existing.policy_type;
+  const nextPinnedVersion =
+    body.pinned_version !== undefined ? body.pinned_version : existing.pinned_version;
+  const nextDeploymentConfig =
+    body.deployment_config !== undefined ? body.deployment_config : existing.deployment_config;
+
+  if (nextPolicyType === 'pin_version' && !nextPinnedVersion) {
+    return NextResponse.json(
+      { error: 'pinned_version is required for pin_version policy' },
+      { status: 400 }
+    );
+  }
+  if (nextPolicyType === 'auto_update' && !nextDeploymentConfig) {
+    return NextResponse.json(
+      { error: 'deployment_config is required for auto_update policy' },
+      { status: 400 }
+    );
   }
 
   const updateData: Partial<AppUpdatePolicy> = { updated_at: new Date().toISOString() };
@@ -193,8 +202,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Validate policy type if provided
-    if (body.policy_type) {
+    // Validate the policy type if provided, then the effective state after the
+    // update so clearing pinned_version or deployment_config is rejected.
+    if (body.policy_type !== undefined) {
       const validPolicyTypes: UpdatePolicyType[] = ['auto_update', 'notify', 'ignore', 'pin_version'];
       if (!validPolicyTypes.includes(body.policy_type)) {
         return NextResponse.json(
@@ -202,21 +212,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           { status: 400 }
         );
       }
+    }
 
-      // Validate constraints based on policy type
-      if (body.policy_type === 'pin_version' && !body.pinned_version && !existingPolicy.pinned_version) {
-        return NextResponse.json(
-          { error: 'pinned_version is required for pin_version policy' },
-          { status: 400 }
-        );
-      }
+    const nextPolicyType = body.policy_type ?? existingPolicy.policy_type;
+    const nextPinnedVersion =
+      body.pinned_version !== undefined ? body.pinned_version : existingPolicy.pinned_version;
+    const nextDeploymentConfig =
+      body.deployment_config !== undefined ? body.deployment_config : existingPolicy.deployment_config;
 
-      if (body.policy_type === 'auto_update' && !body.deployment_config && !existingPolicy.deployment_config) {
-        return NextResponse.json(
-          { error: 'deployment_config is required for auto_update policy' },
-          { status: 400 }
-        );
-      }
+    if (nextPolicyType === 'pin_version' && !nextPinnedVersion) {
+      return NextResponse.json(
+        { error: 'pinned_version is required for pin_version policy' },
+        { status: 400 }
+      );
+    }
+
+    if (nextPolicyType === 'auto_update' && !nextDeploymentConfig) {
+      return NextResponse.json(
+        { error: 'deployment_config is required for auto_update policy' },
+        { status: 400 }
+      );
     }
 
     // Build update data

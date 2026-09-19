@@ -7,17 +7,6 @@ import { join } from 'node:path';
 const parseAccessTokenMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: parseAccessTokenMock }));
 
-// vitest cannot resolve the CommonJS require() that lib/db uses to lazy-load
-// the SQLite adapter, so hand the route the real adapter directly.
-vi.mock('@/lib/db', async () => {
-  const sqlite = await import('@/lib/db/sqlite');
-  return {
-    getDatabase: () => sqlite.sqliteDb,
-    isSqliteMode: () => true,
-    resetDatabaseInstance: () => {},
-  };
-});
-
 let tempDir: string;
 let GET: typeof import('@/app/api/updates/history/route').GET;
 
@@ -29,6 +18,17 @@ beforeEach(async () => {
   process.env.PACKAGER_API_KEY = 'test';
   parseAccessTokenMock.mockReset();
   parseAccessTokenMock.mockResolvedValue({ userId: 'u1', tenantId: 't1' });
+  // vitest cannot resolve the CommonJS require() that lib/db uses to lazy-load
+  // the SQLite adapter, so hand the route the real adapter directly. doMock is
+  // re-applied per test so each gets the test's fresh database.
+  vi.doMock('@/lib/db', async () => {
+    const sqlite = await import('@/lib/db/sqlite');
+    return {
+      getDatabase: () => sqlite.sqliteDb,
+      isSqliteMode: () => true,
+      resetDatabaseInstance: () => {},
+    };
+  });
   ({ GET } = await import('@/app/api/updates/history/route'));
 });
 
@@ -96,6 +96,11 @@ describe('auto-update history route in SQLite mode', () => {
     expect((await (await GET(request('?status=failed'))).json()).count).toBe(1);
     expect((await (await GET(request('?status=completed'))).json()).count).toBe(0);
     expect((await (await GET(request('?tenant_id=t2'))).json()).count).toBe(0);
+  });
+
+  it('defaults malformed pagination instead of failing', async () => {
+    const response = await GET(request('?limit=abc&offset=xyz'));
+    expect(response.status).toBe(200);
   });
 
   it('returns 401 without a token', async () => {

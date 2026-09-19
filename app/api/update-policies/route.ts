@@ -28,10 +28,7 @@ async function savePolicySqlite(userId: string, body: AppUpdatePolicyInput): Pro
   let derivedOriginalUploadHistoryId = body.original_upload_history_id || null;
 
   if (body.policy_type === 'pin_version' && !derivedPinnedVersion) {
-    const uploads = await database.uploadHistory.getByUserId(userId, 200);
-    const latest = uploads.find(
-      (entry) => entry.intune_tenant_id === body.tenant_id && entry.winget_id === body.winget_id
-    );
+    const latest = await database.uploadHistory.getLatest(userId, body.tenant_id, body.winget_id);
     derivedPinnedVersion = latest?.version || null;
 
     if (!derivedPinnedVersion) {

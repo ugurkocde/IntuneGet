@@ -41,6 +41,9 @@ function getDb(): Database.Database {
   // Enable WAL mode for better concurrent access
   db.pragma('journal_mode = WAL');
 
+  // Required for the ON DELETE CASCADE / SET NULL rules in migration 2.
+  db.pragma('foreign_keys = ON');
+
   // Apply versioned migrations (baseline, then additive changes)
   runSqliteMigrations(db);
 
@@ -459,6 +462,19 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       return stmt.all(userId, limit) as UploadHistoryRecord[];
+    },
+
+    async getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          `SELECT * FROM upload_history
+           WHERE user_id = ? AND intune_tenant_id = ? AND winget_id = ?
+           ORDER BY deployed_at DESC
+           LIMIT 1`
+        )
+        .get(userId, tenantId, wingetId) as UploadHistoryRecord | undefined;
+      return row ?? null;
     },
   },
 

@@ -198,6 +198,12 @@ export interface DatabaseAdapter {
      * Get upload history by user ID
      */
     getByUserId(userId: string, limit?: number): Promise<UploadHistoryRecord[]>;
+
+    /**
+     * Get the newest deployment of one app for a user in a tenant, filtered in
+     * the query rather than a fixed window so old deployments are found.
+     */
+    getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null>;
   };
 
   updatePolicies: {
