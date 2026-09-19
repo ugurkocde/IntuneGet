@@ -96,6 +96,20 @@ describe('enforceQaGate', () => {
     packageEqMock.mockReset();
   });
 
+  it.each([false, true])('blocks the failed SQL Server payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64',
+      installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'SSEI install returned -1; exact registration absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the failed Zoom MSI payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64',

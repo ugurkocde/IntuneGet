@@ -172,6 +172,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the failed SQL Server bootstrapper before profile normalization or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64' as const,
+      installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'SSEI install returned -1; exact registration absent.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
+      silentSwitches: '/IACCEPTSQLSERVERLICENSETERMS /ENU /ACTION=Install /quiet /InstallPath="c:\\Program Files\\Microsoft SQL Server"',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Microsoft SQL Server SQL2025:Microsoft SQL Server 2025 Developer',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the failed Zoom MSI profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
