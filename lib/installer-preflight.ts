@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getLiveInstallers } from '@/lib/manifest-api';
+import { fetchLatestPublishedVersion, getLiveInstallers } from '@/lib/manifest-api';
 import {
   hashRemoteInstaller,
   hashesEqual,
@@ -64,10 +64,26 @@ export class InstallerPreflightError extends Error {
     message: string,
     public readonly retryable = false,
     public readonly actualSha256?: string,
+    public readonly latestVersion?: string,
   ) {
     super(message);
     this.name = 'InstallerPreflightError';
   }
+}
+
+/**
+ * An authoritative 404 for a pinned catalog version is not transient, so the
+ * message must not imply that waiting or retrying will help. When WinGet still
+ * publishes a newer version, name it so the caller can offer an update.
+ */
+export function manifestUnavailableMessage(
+  wingetId: string,
+  version: string,
+  latestVersion?: string,
+): string {
+  return latestVersion && latestVersion !== version
+    ? `WinGet no longer publishes ${wingetId} ${version}. The current published version is ${latestVersion}.`
+    : `The trusted WinGet installer manifest for ${wingetId} ${version} is unavailable`;
 }
 
 const memoryHealth = new Map<string, InstallerHealthRow>();
@@ -311,10 +327,13 @@ async function performLivePreflight(
     const installers = trustedInstallers ||
       await getLiveInstallers(input.wingetId, input.version);
     if (installers.length === 0) {
+      const latestVersion = await fetchLatestPublishedVersion(input.wingetId);
       throw new InstallerPreflightError(
         'MANIFEST_UNAVAILABLE',
-        `The trusted WinGet installer manifest for ${input.wingetId} ${input.version} is unavailable`,
-        true,
+        manifestUnavailableMessage(input.wingetId, input.version, latestVersion),
+        false,
+        undefined,
+        latestVersion,
       );
     }
 
