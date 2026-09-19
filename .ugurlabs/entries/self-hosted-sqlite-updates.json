@@ -1,0 +1,6 @@
+{
+  "title": "App updates for self-hosted deployments",
+  "summary": "Self-hosted IntuneGet running on SQLite can now manage app update policies and read their history without Supabase. Set a policy per app to update automatically, notify, ignore, or pin a version, then run the update check on your own schedule to compare recorded deployments with the catalog. An auto-update policy queues a packaging job for your local packager, with the same rate limits, cooldown, and failure cutoff as the hosted service. An on-demand check is available from the Updates page. The check is catalog-based: it does not run hosted QA, send notifications, or match apps live against Intune.",
+  "type": "new",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/1235"
+}
