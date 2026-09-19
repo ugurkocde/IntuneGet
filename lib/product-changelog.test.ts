@@ -60,4 +60,17 @@ describe('product changelog reads', () => {
     expect(parseProductChangelog({ ...feed, entries: [] }).entries).toEqual([]);
     expect(changelogEntryUrl('A#B')).toBe('https://changelog.ugurlabs.com/?product=intuneget#change-a%23b');
   });
+
+  it('hides single-application catalog maintenance from the bell feed', async () => {
+    const { parseProductChangelog } = await import('./product-changelog');
+    const applicationEntry = {
+      id: 'app-entry', title: 'LPub3D unattended removal',
+      summary: 'LPub3D packages preserve their managed execution context during silent uninstall.',
+      publishedOn: '2026-09-15',
+    };
+    const productEntry = { ...entry, id: 'entry-2', title: 'Reliable removal for archived installers' };
+    expect(parseProductChangelog({ ...feed, entries: [applicationEntry, productEntry] }).entries.map(item => item.id))
+      .toEqual(['entry-2']);
+    expect(parseProductChangelog({ ...feed, entries: [applicationEntry] }).entries).toEqual([]);
+  });
 });
