@@ -5,6 +5,11 @@
 
 import { createServerClient } from '@/lib/supabase';
 import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import type {
+  AppUpdatePolicy,
+  AutoUpdateHistory,
+  AutoUpdateHistoryWithPolicy,
+} from '@/types/update-policies';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -514,6 +519,222 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return data || [];
+    },
+  },
+
+  updatePolicies: {
+    async list(userId: string, tenantId?: string): Promise<AppUpdatePolicy[]> {
+      const supabase = createServerClient();
+      let query = supabase.from('app_update_policies').select('*').eq('user_id', userId);
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      const { data, error } = await query.order('updated_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing update policies:', error);
+        throw error;
+      }
+      return (data ?? []) as unknown as AppUpdatePolicy[];
+    },
+
+    async getById(id: string, userId: string): Promise<AppUpdatePolicy | null> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error fetching update policy:', error);
+        throw error;
+      }
+      return (data as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
+        .eq('winget_id', wingetId)
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error fetching update policy:', error);
+        throw error;
+      }
+      return (data as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async upsert(
+      policy: Partial<AppUpdatePolicy> & Pick<AppUpdatePolicy, 'user_id' | 'tenant_id' | 'winget_id' | 'policy_type'>
+    ): Promise<AppUpdatePolicy> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('app_update_policies')
+        .upsert(
+          {
+            user_id: policy.user_id,
+            tenant_id: policy.tenant_id,
+            winget_id: policy.winget_id,
+            policy_type: policy.policy_type,
+            pinned_version: policy.pinned_version ?? null,
+            deployment_config: (policy.deployment_config ?? null) as never,
+            original_upload_history_id: policy.original_upload_history_id ?? null,
+            is_enabled: policy.is_enabled ?? true,
+            updated_at: policy.updated_at || new Date().toISOString(),
+          },
+          { onConflict: 'user_id,tenant_id,winget_id' }
+        )
+        .select()
+        .single();
+
+      if (isError(error)) {
+        console.error('Error upserting update policy:', error);
+        throw error;
+      }
+      if (!data) {
+        throw new Error('No data returned from upsert');
+      }
+      return data as unknown as AppUpdatePolicy;
+    },
+
+    async update(id: string, userId: string, data: Partial<AppUpdatePolicy>): Promise<AppUpdatePolicy | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('app_update_policies')
+        .update({ ...data, updated_at: data.updated_at || new Date().toISOString() } as never)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error updating update policy:', error);
+        throw error;
+      }
+      return (updated as unknown as AppUpdatePolicy) ?? null;
+    },
+
+    async delete(id: string, userId: string): Promise<boolean> {
+      const supabase = createServerClient();
+      const { count, error } = await supabase
+        .from('app_update_policies')
+        .delete({ count: 'exact' })
+        .eq('id', id)
+        .eq('user_id', userId);
+      if (isError(error)) {
+        console.error('Error deleting update policy:', error);
+        throw error;
+      }
+      return (count ?? 0) > 0;
+    },
+  },
+
+  autoUpdateHistory: {
+    async create(
+      record: Partial<AutoUpdateHistory> &
+        Pick<AutoUpdateHistory, 'policy_id' | 'from_version' | 'to_version' | 'update_type'>
+    ): Promise<AutoUpdateHistory> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('auto_update_history')
+        .insert({
+          policy_id: record.policy_id,
+          packaging_job_id: record.packaging_job_id ?? null,
+          from_version: record.from_version,
+          to_version: record.to_version,
+          update_type: record.update_type,
+          status: record.status ?? 'pending',
+          error_message: record.error_message ?? null,
+          triggered_at: record.triggered_at || new Date().toISOString(),
+          completed_at: record.completed_at ?? null,
+        })
+        .select()
+        .single();
+      if (isError(error)) {
+        console.error('Error creating auto-update history:', error);
+        throw error;
+      }
+      if (!data) {
+        throw new Error('No data returned from insert');
+      }
+      return data as unknown as AutoUpdateHistory;
+    },
+
+    async update(id: string, data: Partial<AutoUpdateHistory>): Promise<AutoUpdateHistory | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('auto_update_history')
+        .update(data as never)
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+      if (isError(error) && error.code !== 'PGRST116') {
+        console.error('Error updating auto-update history:', error);
+        throw error;
+      }
+      return (updated as unknown as AutoUpdateHistory) ?? null;
+    },
+
+    async list(userId: string, query: Parameters<DatabaseAdapter['autoUpdateHistory']['list']>[1]): Promise<AutoUpdateHistoryWithPolicy[]> {
+      const supabase = createServerClient();
+
+      let policyQuery = supabase
+        .from('app_update_policies')
+        .select('id, winget_id, tenant_id')
+        .eq('user_id', userId);
+      if (query.tenantId) policyQuery = policyQuery.eq('tenant_id', query.tenantId);
+      if (query.wingetId) policyQuery = policyQuery.eq('winget_id', query.wingetId);
+
+      const { data: policies, error: policyError } = await policyQuery;
+      if (isError(policyError)) {
+        console.error('Error fetching update policy ids:', policyError);
+        throw policyError;
+      }
+      const policyIds = (policies ?? []).map((policy) => policy.id);
+      if (policyIds.length === 0) {
+        return [];
+      }
+
+      let historyQuery = supabase
+        .from('auto_update_history')
+        .select(
+          `*, policy:app_update_policies!policy_id(winget_id, tenant_id), packaging_job:packaging_jobs!packaging_job_id(display_name)`
+        )
+        .in('policy_id', policyIds)
+        .order('triggered_at', { ascending: false })
+        .range(query.offset, query.offset + query.limit - 1);
+      if (query.status) historyQuery = historyQuery.eq('status', query.status);
+
+      const { data, error } = await historyQuery;
+      if (isError(error)) {
+        console.error('Error listing auto-update history:', error);
+        throw error;
+      }
+
+      interface JoinedHistory extends AutoUpdateHistory {
+        policy: { winget_id: string; tenant_id: string } | null;
+        packaging_job: { display_name: string } | null;
+      }
+      return ((data ?? []) as unknown as JoinedHistory[]).map((row) => ({
+        id: row.id,
+        policy_id: row.policy_id,
+        packaging_job_id: row.packaging_job_id,
+        from_version: row.from_version,
+        to_version: row.to_version,
+        update_type: row.update_type,
+        status: row.status,
+        error_message: row.error_message,
+        triggered_at: row.triggered_at,
+        completed_at: row.completed_at,
+        policy: {
+          winget_id: row.policy?.winget_id ?? '',
+          tenant_id: row.policy?.tenant_id ?? '',
+        },
+        display_name: row.packaging_job?.display_name,
+      }));
     },
   },
 };
