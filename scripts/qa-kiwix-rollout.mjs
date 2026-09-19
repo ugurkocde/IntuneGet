@@ -63,6 +63,9 @@ if (action==='set-pin') {
 } else if (action==='retire-old-queue') {
   if(control.required_packager_commit!==pin) throw new Error('Required pin mismatch');
   const queue=await request('qa_candidates',{status:'eq.queued',dispatched_at:'is.null',github_run_id:'is.null',select:'id,package_profile_sha256,test_config',limit:'1000'});
+  // This one-off repair expects the observed small queue. Refuse before any
+  // mutation if the server page could be truncated; never report partial work.
+  if(queue.length >= 1000) throw new Error('Queue exceeds bounded rollout; no rows retired');
   let count=0;
   for(const c of queue) {
     const profile=JSON.parse(c.test_config?.packageProfileCanonicalJson || '{}');
