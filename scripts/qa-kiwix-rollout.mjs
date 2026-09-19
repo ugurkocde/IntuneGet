@@ -1,11 +1,12 @@
 // Guarded operational rollout for the reviewed Kiwix repair; no installer access.
 const [action, pin] = process.argv.slice(2);
+const reviewedPin = 'e79da0398e3cf3c6874e53b6304a2aef54b5770f';
 const oldPin = 'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4';
 const repairReason = 'Kiwix exact repaired application validation in progress.';
 const initialReason = 'Automated QA failure: Kiwix.Wikivoyage.Electron 3.8.2-E (x86), candidate c276ac46-5f0e-40db-a162-19a6061709cf. Install exit 60001; Detection after install exit 1; Uninstall exit 60001; Removal verification exit 1.';
 const base = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!base || new URL(base).origin !== 'https://mbhajocqtogfbgojkwhd.supabase.co' || !key || !/^[a-f0-9]{40}$/.test(pin || '')) throw new Error('Production environment and full reviewed pin required');
+if (!base || new URL(base).origin !== 'https://mbhajocqtogfbgojkwhd.supabase.co' || !key || pin !== reviewedPin) throw new Error('Production environment and full reviewed pin required');
 async function request(table, params, body) {
   const response = await fetch(`${base}/rest/v1/${table}?${new URLSearchParams(params)}`, {
     method: body ? 'PATCH' : 'GET',

@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 const pin = 'e79da0398e3cf3c6874e53b6304a2aef54b5770f';
 const script = pathToFileURL(resolve('scripts/qa-kiwix-rollout.mjs')).href;
 
-function rejectedRun(action: string, reason: string, base = 'https://mbhajocqtogfbgojkwhd.supabase.co') {
+function rejectedRun(action: string, reason: string, base = 'https://mbhajocqtogfbgojkwhd.supabase.co', requestedPin = pin) {
   return spawnSync(process.execPath, ['--input-type=module', '-e', `
-process.argv = ['node', 'fixture', ${JSON.stringify(action)}, ${JSON.stringify(pin)}];
+process.argv = ['node', 'fixture', ${JSON.stringify(action)}, ${JSON.stringify(requestedPin)}];
 globalThis.fetch = async (url, options) => {
   if (options.method !== 'GET') throw Error('UNEXPECTED MUTATION');
   const u = new URL(url);
@@ -28,6 +28,11 @@ await import(${JSON.stringify(script)});
 }
 
 describe('guarded Kiwix production rollout', () => {
+  it('rejects a valid-looking commit that is not the reviewed repair pin', () => {
+    const r = rejectedRun('set-pin', 'test', undefined, 'a'.repeat(40));
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain('Production environment and full reviewed pin required');
+  });
   it('rejects a non-TLS production URL before accessing production', () => {
     const r = rejectedRun('complete-retry', 'test', 'http://mbhajocqtogfbgojkwhd.supabase.co');
     expect(r.status).not.toBe(0);
