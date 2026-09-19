@@ -142,6 +142,26 @@ describe('sqlite auto-update check', () => {
     expect(await db.updateCheckResults.list('u1', { includeDismissed: true })).toHaveLength(0);
   });
 
+  it('never cleans another user when scoped to one user', async () => {
+    const { db, runSqliteUpdateCheck } = await load();
+    await db.updateCheckResults.upsert({
+      user_id: 'u2',
+      tenant_id: 't2',
+      winget_id: 'Other.App',
+      intune_app_id: 'other-1',
+      display_name: 'Other App',
+      current_version: '1.0.0',
+      latest_version: '2.0.0',
+    });
+    await db.updatePolicies.upsert({ user_id: 'u2', tenant_id: 't2', winget_id: 'Other.App', policy_type: 'notify' });
+    await seedDeployment(db);
+    getAppsByWingetIdsMock.mockResolvedValue([{ winget_id: 'Vendor.App', name: 'Vendor App', latest_version: '1.0.0' }]);
+
+    await runSqliteUpdateCheck(db, { userId: 'u1' });
+
+    expect(await db.updateCheckResults.list('u2', { includeDismissed: true })).toHaveLength(1);
+  });
+
   it('records nothing when every deployed app is up to date', async () => {
     const { db, runSqliteUpdateCheck } = await load();
     await seedDeployment(db);

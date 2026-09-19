@@ -278,6 +278,9 @@ export async function runSqliteUpdateCheck(
   // be cleaned even when their app is no longer deployed.
   const policies = await db.updatePolicies.listAll();
   for (const policy of policies) {
+    // A user-scoped check (the on-demand refresh) must never clean another
+    // user's scopes, so only their own policies seed the cleanup set.
+    if (options?.userId && policy.user_id !== options.userId) continue;
     allScopes.add(`${policy.user_id}|${policy.tenant_id}`);
   }
 
