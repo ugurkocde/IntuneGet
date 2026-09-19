@@ -4,6 +4,23 @@
  */
 
 import type { Json } from '@/types/database';
+import type {
+  AppUpdatePolicy,
+  AutoUpdateHistory,
+  AutoUpdateHistoryWithPolicy,
+  AutoUpdateStatus,
+} from '@/types/update-policies';
+
+/**
+ * Query options for auto-update history reads.
+ */
+export interface AutoUpdateHistoryQuery {
+  tenantId?: string;
+  wingetId?: string;
+  status?: AutoUpdateStatus;
+  limit: number;
+  offset: number;
+}
 
 /**
  * Packaging job record
@@ -181,5 +198,67 @@ export interface DatabaseAdapter {
      * Get upload history by user ID
      */
     getByUserId(userId: string, limit?: number): Promise<UploadHistoryRecord[]>;
+
+    /**
+     * Get the newest deployment of one app for a user in a tenant, filtered in
+     * the query rather than a fixed window so old deployments are found.
+     */
+    getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null>;
+  };
+
+  updatePolicies: {
+    /**
+     * List every policy for a user, newest first, optionally scoped to a tenant
+     */
+    list(userId: string, tenantId?: string): Promise<AppUpdatePolicy[]>;
+
+    /**
+     * Get one policy owned by the user
+     */
+    getById(id: string, userId: string): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Get the policy for a user, tenant, and app (the unique key)
+     */
+    getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Insert or replace a policy on the (user_id, tenant_id, winget_id) key
+     */
+    upsert(
+      policy: Partial<AppUpdatePolicy> &
+        Pick<AppUpdatePolicy, 'user_id' | 'tenant_id' | 'winget_id' | 'policy_type'>
+    ): Promise<AppUpdatePolicy>;
+
+    /**
+     * Update a policy owned by the user. Returns null when no row matched.
+     */
+    update(id: string, userId: string, data: Partial<AppUpdatePolicy>): Promise<AppUpdatePolicy | null>;
+
+    /**
+     * Delete a policy owned by the user. Returns false when no row matched.
+     */
+    delete(id: string, userId: string): Promise<boolean>;
+  };
+
+  autoUpdateHistory: {
+    /**
+     * Create an auto-update history record
+     */
+    create(
+      record: Partial<AutoUpdateHistory> &
+        Pick<AutoUpdateHistory, 'policy_id' | 'from_version' | 'to_version' | 'update_type'>
+    ): Promise<AutoUpdateHistory>;
+
+    /**
+     * Update a history record. Returns null when no row matched.
+     */
+    update(id: string, data: Partial<AutoUpdateHistory>): Promise<AutoUpdateHistory | null>;
+
+    /**
+     * List a user's history with the policy target and deployed app name,
+     * newest first, honoring the optional filters and pagination.
+     */
+    list(userId: string, query: AutoUpdateHistoryQuery): Promise<AutoUpdateHistoryWithPolicy[]>;
   };
 }

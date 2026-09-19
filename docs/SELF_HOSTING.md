@@ -154,8 +154,10 @@ Optional catalog snapshot overrides (sensible defaults, normally unset):
 > do not contain the optional `qa_results` table remain compatible: apps simply
 > appear as not QA tested until a newer snapshot is downloaded.
 >
-> Note: other Supabase-backed surfaces (dashboard history, notifications, MSP
-> features) still require Supabase; only the catalog runs Supabase-less.
+> Note: app update policies and their auto-update history are stored locally in
+> SQLite. Other Supabase-backed surfaces (dashboard history, notifications,
+> automatic update triggering, and MSP features) still require Supabase; the
+> catalog and update policies run Supabase-less.
 
 ### Pipeline Configuration
 

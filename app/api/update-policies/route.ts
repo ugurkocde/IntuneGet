@@ -6,11 +6,83 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getDatabase, isSqliteMode } from '@/lib/db';
 import { getCatalogSource } from '@/lib/catalog';
 import { parseAccessToken } from '@/lib/auth-utils';
-import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
+import {
+  buildDeploymentConfigForApp,
+  buildDeploymentConfigFromAdapter,
+} from '@/lib/update-policies/build-deployment-config';
 import type { AppUpdatePolicyInput, AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { Json } from '@/types/database';
+
+/**
+ * SQLite (self-hosted) implementation of the policy upsert. Derives a pinned
+ * version from the local deployment history and an auto-update deployment
+ * config from the local packaging job, then stores it through the adapter.
+ */
+async function savePolicySqlite(userId: string, body: AppUpdatePolicyInput): Promise<NextResponse> {
+  const database = getDatabase();
+  let derivedPinnedVersion = body.pinned_version || null;
+  let derivedDeploymentConfig: DeploymentConfig | null = body.deployment_config || null;
+  let derivedOriginalUploadHistoryId = body.original_upload_history_id || null;
+
+  if (body.policy_type === 'pin_version' && !derivedPinnedVersion) {
+    const latest = await database.uploadHistory.getLatest(userId, body.tenant_id, body.winget_id);
+    derivedPinnedVersion = latest?.version || null;
+
+    if (!derivedPinnedVersion) {
+      return NextResponse.json(
+        { error: 'pinned_version is required for pin_version policy' },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (body.policy_type === 'auto_update' && !derivedDeploymentConfig) {
+    const catalogApp = await getCatalogSource().getAppForInstaller(body.winget_id);
+    const built = await buildDeploymentConfigFromAdapter(database, {
+      userId,
+      tenantId: body.tenant_id,
+      wingetId: body.winget_id,
+      latestVersion: catalogApp?.latest_version || '',
+    });
+
+    if (built.status !== 'ok') {
+      return NextResponse.json(
+        {
+          error:
+            built.status === 'orphaned_job'
+              ? 'Could not retrieve the saved deployment configuration for this app.'
+              : 'Auto-update requires a prior deployment of this app, or the app must be in the catalog.',
+        },
+        { status: 400 }
+      );
+    }
+
+    derivedDeploymentConfig = built.deploymentConfig;
+    derivedOriginalUploadHistoryId = built.originalUploadHistoryId;
+  }
+
+  const existing = await database.updatePolicies.getByKey(userId, body.tenant_id, body.winget_id);
+  const policyData = {
+    user_id: userId,
+    tenant_id: body.tenant_id,
+    winget_id: body.winget_id,
+    policy_type: body.policy_type,
+    pinned_version: body.policy_type === 'pin_version' ? derivedPinnedVersion : null,
+    deployment_config: derivedDeploymentConfig,
+    original_upload_history_id: derivedOriginalUploadHistoryId,
+    is_enabled: body.is_enabled ?? true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const policy = existing
+    ? await database.updatePolicies.update(existing.id, userId, policyData)
+    : await database.updatePolicies.upsert(policyData);
+
+  return NextResponse.json({ policy, created: !existing });
+}
 
 /**
  * GET /api/update-policies
@@ -18,10 +90,6 @@ import type { Json } from '@/types/database';
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!isSupabaseServerConfigured()) {
-      return NextResponse.json({ policies: [], count: 0 });
-    }
-
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -32,6 +100,15 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const tenantId = searchParams.get('tenant_id');
+
+    if (isSqliteMode()) {
+      const policies = await getDatabase().updatePolicies.list(user.userId, tenantId ?? undefined);
+      return NextResponse.json({ policies, count: policies.length });
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ policies: [], count: 0 });
+    }
 
     const supabase = createServerClient();
 
@@ -74,13 +151,6 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!isSupabaseServerConfigured()) {
-      return NextResponse.json(
-        { error: 'Auto-update policies require hosted services' },
-        { status: 503 }
-      );
-    }
-
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -105,6 +175,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Invalid policy_type. Must be one of: ${validPolicyTypes.join(', ')}` },
         { status: 400 }
+      );
+    }
+
+    if (isSqliteMode()) {
+      return savePolicySqlite(user.userId, body);
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Auto-update policies require hosted services' },
+        { status: 503 }
       );
     }
 

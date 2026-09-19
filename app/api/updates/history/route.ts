@@ -5,8 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getDatabase, isSqliteMode } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
-import type { AutoUpdateHistoryWithPolicy } from '@/types/update-policies';
+import type { AutoUpdateHistory, AutoUpdateHistoryWithPolicy } from '@/types/update-policies';
+
+const VALID_HISTORY_STATUSES: AutoUpdateHistory['status'][] = [
+  'pending',
+  'packaging',
+  'deploying',
+  'completed',
+  'failed',
+  'cancelled',
+];
 
 interface AutoUpdateHistoryRow {
   id: string;
@@ -47,8 +57,29 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenant_id');
     const wingetId = searchParams.get('winget_id');
     const status = searchParams.get('status');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    // Normalize pagination so a malformed value cannot reach the database as NaN.
+    const parsedLimit = parseInt(searchParams.get('limit') || '50', 10);
+    const parsedOffset = parseInt(searchParams.get('offset') || '0', 10);
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 50;
+    const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+
+    if (isSqliteMode()) {
+      const entries = await getDatabase().autoUpdateHistory.list(user.userId, {
+        tenantId: tenantId ?? undefined,
+        wingetId: wingetId ?? undefined,
+        status:
+          status && VALID_HISTORY_STATUSES.includes(status as AutoUpdateHistory['status'])
+            ? (status as AutoUpdateHistory['status'])
+            : undefined,
+        limit,
+        offset,
+      });
+      return NextResponse.json({
+        history: entries,
+        count: entries.length,
+        hasMore: entries.length === limit,
+      });
+    }
 
     if (!isSupabaseServerConfigured()) {
       return NextResponse.json({

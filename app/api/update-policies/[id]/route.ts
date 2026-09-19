@@ -7,8 +7,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getDatabase, isSqliteMode } from '@/lib/db';
 import { parseAccessToken } from '@/lib/auth-utils';
-import type { AppUpdatePolicy, UpdatePolicyType } from '@/types/update-policies';
+import type { AppUpdatePolicy, DeploymentConfig, UpdatePolicyType } from '@/types/update-policies';
 import type { Database } from '@/types/database';
 
 type AppUpdatePolicyUpdate = Database['public']['Tables']['app_update_policies']['Update'];
@@ -17,16 +18,81 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+interface PolicyPatchBody {
+  policy_type?: UpdatePolicyType;
+  pinned_version?: string | null;
+  deployment_config?: DeploymentConfig | null;
+  is_enabled?: boolean;
+  original_upload_history_id?: string | null;
+}
+
+/**
+ * SQLite (self-hosted) implementation of PATCH. Mirrors the Supabase path's
+ * validation and field selection through the database adapter.
+ */
+async function patchPolicySqlite(id: string, userId: string, body: PolicyPatchBody): Promise<NextResponse> {
+  const database = getDatabase();
+  const existing = await database.updatePolicies.getById(id, userId);
+  if (!existing) {
+    return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
+  }
+
+  if (body.policy_type !== undefined) {
+    const validPolicyTypes: UpdatePolicyType[] = ['auto_update', 'notify', 'ignore', 'pin_version'];
+    if (!validPolicyTypes.includes(body.policy_type)) {
+      return NextResponse.json(
+        { error: `Invalid policy_type. Must be one of: ${validPolicyTypes.join(', ')}` },
+        { status: 400 }
+      );
+    }
+  }
+
+  // Validate the state that will exist after the update, not only the fields in
+  // the request, so clearing pinned_version or deployment_config is rejected.
+  const nextPolicyType = body.policy_type ?? existing.policy_type;
+  const nextPinnedVersion =
+    body.pinned_version !== undefined ? body.pinned_version : existing.pinned_version;
+  const nextDeploymentConfig =
+    body.deployment_config !== undefined ? body.deployment_config : existing.deployment_config;
+
+  if (nextPolicyType === 'pin_version' && !nextPinnedVersion) {
+    return NextResponse.json(
+      { error: 'pinned_version is required for pin_version policy' },
+      { status: 400 }
+    );
+  }
+  if (nextPolicyType === 'auto_update' && !nextDeploymentConfig) {
+    return NextResponse.json(
+      { error: 'deployment_config is required for auto_update policy' },
+      { status: 400 }
+    );
+  }
+
+  const updateData: Partial<AppUpdatePolicy> = { updated_at: new Date().toISOString() };
+  if (body.policy_type !== undefined) updateData.policy_type = body.policy_type;
+  if (body.pinned_version !== undefined) updateData.pinned_version = body.pinned_version;
+  if (body.deployment_config !== undefined) updateData.deployment_config = body.deployment_config;
+  if (body.is_enabled !== undefined) updateData.is_enabled = body.is_enabled;
+  if (body.original_upload_history_id !== undefined) {
+    updateData.original_upload_history_id = body.original_upload_history_id;
+  }
+  if (body.is_enabled === true) {
+    updateData.consecutive_failures = 0;
+  }
+
+  const policy = await database.updatePolicies.update(id, userId, updateData);
+  if (!policy) {
+    return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
+  }
+  return NextResponse.json({ policy });
+}
+
 /**
  * GET /api/update-policies/[id]
  * Get a specific update policy
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    if (!isSupabaseServerConfigured()) {
-      return NextResponse.json({ policy: null });
-    }
-
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -36,6 +102,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+
+    if (isSqliteMode()) {
+      const policy = await getDatabase().updatePolicies.getById(id, user.userId);
+      if (!policy) {
+        return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
+      }
+      return NextResponse.json({ policy });
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ policy: null });
+    }
+
     const supabase = createServerClient();
 
     // Get policy by ID, ensuring it belongs to the user
@@ -77,13 +156,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    if (!isSupabaseServerConfigured()) {
-      return NextResponse.json(
-        { error: 'Auto-update policies require hosted services' },
-        { status: 503 }
-      );
-    }
-
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -93,7 +165,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
-    const body = await request.json();
+    const body: PolicyPatchBody = await request.json();
+
+    if (isSqliteMode()) {
+      return patchPolicySqlite(id, user.userId, body);
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Auto-update policies require hosted services' },
+        { status: 503 }
+      );
+    }
 
     const supabase = createServerClient();
 
@@ -119,8 +202,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Validate policy type if provided
-    if (body.policy_type) {
+    // Validate the policy type if provided, then the effective state after the
+    // update so clearing pinned_version or deployment_config is rejected.
+    if (body.policy_type !== undefined) {
       const validPolicyTypes: UpdatePolicyType[] = ['auto_update', 'notify', 'ignore', 'pin_version'];
       if (!validPolicyTypes.includes(body.policy_type)) {
         return NextResponse.json(
@@ -128,21 +212,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           { status: 400 }
         );
       }
+    }
 
-      // Validate constraints based on policy type
-      if (body.policy_type === 'pin_version' && !body.pinned_version && !existingPolicy.pinned_version) {
-        return NextResponse.json(
-          { error: 'pinned_version is required for pin_version policy' },
-          { status: 400 }
-        );
-      }
+    const nextPolicyType = body.policy_type ?? existingPolicy.policy_type;
+    const nextPinnedVersion =
+      body.pinned_version !== undefined ? body.pinned_version : existingPolicy.pinned_version;
+    const nextDeploymentConfig =
+      body.deployment_config !== undefined ? body.deployment_config : existingPolicy.deployment_config;
 
-      if (body.policy_type === 'auto_update' && !body.deployment_config && !existingPolicy.deployment_config) {
-        return NextResponse.json(
-          { error: 'deployment_config is required for auto_update policy' },
-          { status: 400 }
-        );
-      }
+    if (nextPolicyType === 'pin_version' && !nextPinnedVersion) {
+      return NextResponse.json(
+        { error: 'pinned_version is required for pin_version policy' },
+        { status: 400 }
+      );
+    }
+
+    if (nextPolicyType === 'auto_update' && !nextDeploymentConfig) {
+      return NextResponse.json(
+        { error: 'deployment_config is required for auto_update policy' },
+        { status: 400 }
+      );
     }
 
     // Build update data
@@ -153,7 +242,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Only include fields that are provided
     if (body.policy_type !== undefined) updateData.policy_type = body.policy_type;
     if (body.pinned_version !== undefined) updateData.pinned_version = body.pinned_version;
-    if (body.deployment_config !== undefined) updateData.deployment_config = body.deployment_config;
+    if (body.deployment_config !== undefined) {
+      updateData.deployment_config = body.deployment_config as unknown as AppUpdatePolicyUpdate['deployment_config'];
+    }
     if (body.is_enabled !== undefined) updateData.is_enabled = body.is_enabled;
     if (body.original_upload_history_id !== undefined) updateData.original_upload_history_id = body.original_upload_history_id;
 
@@ -194,13 +285,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    if (!isSupabaseServerConfigured()) {
-      return NextResponse.json(
-        { error: 'Auto-update policies require hosted services' },
-        { status: 503 }
-      );
-    }
-
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
       return NextResponse.json(
@@ -210,6 +294,22 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+
+    if (isSqliteMode()) {
+      const deleted = await getDatabase().updatePolicies.delete(id, user.userId);
+      if (!deleted) {
+        return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, deleted: true });
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Auto-update policies require hosted services' },
+        { status: 503 }
+      );
+    }
+
     const supabase = createServerClient();
 
     // Delete the policy (only if it belongs to the user)

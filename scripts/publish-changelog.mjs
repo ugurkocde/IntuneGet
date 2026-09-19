@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isApplicationSpecific } from '../lib/changelog/application-specific.mjs';
 
 const API = 'https://changelog.ugurlabs.com/api/changelog';
 const entriesDirectory = '.ugurlabs/entries';
@@ -15,23 +16,7 @@ export function validateConfig(config) {
   return config;
 }
 
-// Packaging, detection, removal, quarantine and availability fixes for a single
-// catalog application are routine catalog maintenance, not product announcements.
-const applicationSpecificTitle = [
-  /\b\d+(?:\.\d+){2,}\b/, // a specific release such as 1.0.124; 2.0 or 1.5 MB may describe the product
-  /\b(?:unattended|silent|managed)\b.*\b(?:removal|uninstall)\b/i,
-  /\bpackage (?:detection|identity|removal)\b/i,
-  /\bdeployment availability\b/i,
-];
-const applicationSpecificSummary = [
-  /\b\d+(?:\.\d+){2,}\b/, // a specific release such as 1.0.124
-  /\bunavailable for automated deployment\b/i,
-];
-
-export function isApplicationSpecific(entry) {
-  return applicationSpecificTitle.some(pattern => pattern.test(entry.title)) ||
-    applicationSpecificSummary.some(pattern => pattern.test(entry.summary));
-}
+export { isApplicationSpecific };
 
 export function validateEntry(entry, filename) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/.test(filename) || filename.length > 150 ||

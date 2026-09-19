@@ -8,6 +8,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import type { DatabaseAdapter } from '@/lib/db/types';
 import { getCatalogSource } from '@/lib/catalog';
 import { normalizeInstaller } from '@/lib/manifest-api';
 import { selectWingetInstaller } from '@/lib/qa/candidate';
@@ -354,6 +355,50 @@ export type BuildDeploymentConfigResult =
   | { status: 'unavailable' };
 
 /**
+ * Assemble a deployment config from a stored packaging job. Shared by the
+ * Supabase and adapter-backed builders so both produce identical configs.
+ */
+function assembleDeploymentConfigFromJob(job: {
+  display_name: string;
+  publisher: string | null;
+  architecture: string | null;
+  installer_type: string | null;
+  install_command: string | null;
+  uninstall_command: string | null;
+  install_scope: string | null;
+  detection_rules: unknown;
+  package_config: unknown;
+}): DeploymentConfig {
+  const packageConfig = job.package_config;
+  const parsedAssignments = parsePackageAssignments(packageConfig);
+  const parsedCategories = parsePackageCategories(packageConfig);
+  const parsedRequirementRules = parseRequirementRules(packageConfig);
+  const parsedRelationships = parseAppRelationships(packageConfig);
+  // Explicit per-app choice only. When the packaging job stored no migration
+  // config, leave it undefined so the auto-update trigger falls back to the
+  // user's current global carryOverAssignments setting at update time.
+  const assignmentMigration = parseAssignmentMigration(packageConfig);
+
+  return {
+    displayName: job.display_name,
+    publisher: job.publisher || 'Unknown Publisher',
+    architecture: job.architecture || 'x64',
+    installerType: job.installer_type || 'exe',
+    installCommand: job.install_command || '',
+    uninstallCommand: job.uninstall_command || '',
+    installScope: job.install_scope || 'system',
+    detectionRules: parseDetectionRules(job.detection_rules),
+    assignments: parsedAssignments,
+    categories: parsedCategories,
+    requirementRules: parsedRequirementRules,
+    relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
+    psadtConfig: parsePsadtConfig(packageConfig),
+    forceCreateNewApp: true,
+    assignmentMigration,
+  };
+}
+
+/**
  * Orchestrator: build a deployment config for an app, replicating the
  * trigger route's "no policy yet" branch.
  */
@@ -392,34 +437,7 @@ export async function buildDeploymentConfigForApp(
       return { status: 'orphaned_job' };
     }
 
-    const packageConfig = packagingJob.package_config;
-    const parsedAssignments = parsePackageAssignments(packageConfig);
-    const parsedCategories = parsePackageCategories(packageConfig);
-    const parsedRequirementRules = parseRequirementRules(packageConfig);
-    const parsedRelationships = parseAppRelationships(packageConfig);
-    // Explicit per-app choice only. When the packaging job stored no
-    // migration config, leave it undefined so the auto-update trigger falls
-    // back to the user's current global carryOverAssignments setting at
-    // update time (baking the global value in here would freeze it).
-    const assignmentMigration = parseAssignmentMigration(packageConfig);
-
-    const deploymentConfig: DeploymentConfig = {
-      displayName: packagingJob.display_name,
-      publisher: packagingJob.publisher || 'Unknown Publisher',
-      architecture: packagingJob.architecture || 'x64',
-      installerType: packagingJob.installer_type || 'exe',
-      installCommand: packagingJob.install_command || '',
-      uninstallCommand: packagingJob.uninstall_command || '',
-      installScope: packagingJob.install_scope || 'system',
-      detectionRules: parseDetectionRules(packagingJob.detection_rules),
-      assignments: parsedAssignments,
-      categories: parsedCategories,
-      requirementRules: parsedRequirementRules,
-      relationships: parsedRelationships.length > 0 ? parsedRelationships : undefined,
-      psadtConfig: parsePsadtConfig(packageConfig),
-      forceCreateNewApp: true,
-      assignmentMigration,
-    };
+    const deploymentConfig = assembleDeploymentConfigFromJob(packagingJob);
 
     return { status: 'ok', deploymentConfig, originalUploadHistoryId: uploadHistory.id };
   }
@@ -427,6 +445,50 @@ export async function buildDeploymentConfigForApp(
   // No prior deployment: build config from curated catalog data
   const defaultConfig = await buildDefaultDeploymentConfig(
     supabase,
+    wingetId,
+    latestVersion
+  );
+
+  if (!defaultConfig) {
+    return { status: 'unavailable' };
+  }
+
+  return { status: 'ok', deploymentConfig: defaultConfig, originalUploadHistoryId: null };
+}
+
+/**
+ * Adapter-backed variant of buildDeploymentConfigForApp. The self-hosted SQLite
+ * adapter has no Supabase client, so it reads the same prior deployment through
+ * the DatabaseAdapter interface and assembles an identical config.
+ */
+export async function buildDeploymentConfigFromAdapter(
+  db: DatabaseAdapter,
+  args: {
+    userId: string;
+    tenantId: string;
+    wingetId: string;
+    latestVersion: string;
+  }
+): Promise<BuildDeploymentConfigResult> {
+  const { userId, tenantId, wingetId, latestVersion } = args;
+
+  // Filtered in the query so a deployment older than a fixed window is still found.
+  const uploadHistory = await db.uploadHistory.getLatest(userId, tenantId, wingetId);
+
+  if (uploadHistory?.packaging_job_id) {
+    const packagingJob = await db.jobs.getById(uploadHistory.packaging_job_id);
+    if (!packagingJob) {
+      return { status: 'orphaned_job' };
+    }
+    return {
+      status: 'ok',
+      deploymentConfig: assembleDeploymentConfigFromJob(packagingJob),
+      originalUploadHistoryId: uploadHistory.id,
+    };
+  }
+
+  const defaultConfig = await buildDefaultDeploymentConfig(
+    null as unknown as ReturnType<typeof createServerClient>,
     wingetId,
     latestVersion
   );

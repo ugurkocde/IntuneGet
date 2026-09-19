@@ -6,7 +6,18 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord } from './types';
+import type {
+  DatabaseAdapter,
+  PackagingJob,
+  UploadHistoryRecord,
+  AutoUpdateHistoryQuery,
+} from './types';
+import type {
+  AppUpdatePolicy,
+  AutoUpdateHistory,
+  AutoUpdateHistoryWithPolicy,
+} from '@/types/update-policies';
+import { runSqliteMigrations } from './sqlite-migrations';
 
 // Singleton database instance
 let db: Database.Database | null = null;
@@ -30,130 +41,13 @@ function getDb(): Database.Database {
   // Enable WAL mode for better concurrent access
   db.pragma('journal_mode = WAL');
 
-  // Initialize schema
-  initializeSchema(db);
+  // Required for the ON DELETE CASCADE / SET NULL rules in migration 2.
+  db.pragma('foreign_keys = ON');
+
+  // Apply versioned migrations (baseline, then additive changes)
+  runSqliteMigrations(db);
 
   return db;
-}
-
-/**
- * Initialize the database schema
- */
-function initializeSchema(db: Database.Database): void {
-  // Create packaging_jobs table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS packaging_jobs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      user_email TEXT,
-      tenant_id TEXT,
-      winget_id TEXT NOT NULL,
-      version TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      publisher TEXT,
-      architecture TEXT,
-      installer_type TEXT NOT NULL,
-      installer_url TEXT NOT NULL,
-      installer_sha256 TEXT,
-      install_command TEXT,
-      uninstall_command TEXT,
-      install_scope TEXT,
-      silent_switches TEXT,
-      detection_rules TEXT,
-      package_config TEXT,
-      github_run_id TEXT,
-      github_run_url TEXT,
-      intunewin_url TEXT,
-      intunewin_size_bytes INTEGER,
-      unencrypted_content_size INTEGER,
-      encryption_info TEXT,
-      intune_app_id TEXT,
-      intune_app_url TEXT,
-      app_source TEXT DEFAULT 'win32',
-      status TEXT NOT NULL DEFAULT 'queued',
-      status_message TEXT,
-      progress_percent INTEGER DEFAULT 0,
-      progress_message TEXT,
-      error_message TEXT,
-      error_stage TEXT,
-      error_category TEXT,
-      error_code TEXT,
-      error_details TEXT,
-      warnings TEXT,
-      execution_profile_sha256 TEXT,
-      presentation_profile_sha256 TEXT,
-      qa_candidate_id TEXT,
-      qa_requested_at TEXT,
-      qa_completed_at TEXT,
-      packager_id TEXT,
-      packager_heartbeat_at TEXT,
-      claimed_at TEXT,
-      packaging_started_at TEXT,
-      packaging_completed_at TEXT,
-      upload_started_at TEXT,
-      completed_at TEXT,
-      cancelled_at TEXT,
-      cancelled_by TEXT,
-      archived_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const existingColumns = new Set(
-    (db.pragma('table_info(packaging_jobs)') as Array<{ name: string }>).map((column) => column.name),
-  );
-  const compatibleColumns: Record<string, string> = {
-    app_source: "TEXT DEFAULT 'win32'",
-    error_stage: 'TEXT',
-    error_category: 'TEXT',
-    error_code: 'TEXT',
-    error_details: 'TEXT',
-    warnings: 'TEXT',
-    archived_at: 'TEXT',
-    execution_profile_sha256: 'TEXT',
-    presentation_profile_sha256: 'TEXT',
-    qa_candidate_id: 'TEXT',
-    qa_requested_at: 'TEXT',
-    qa_completed_at: 'TEXT',
-  };
-  for (const [column, definition] of Object.entries(compatibleColumns)) {
-    if (!existingColumns.has(column)) {
-      db.exec(`ALTER TABLE packaging_jobs ADD COLUMN ${column} ${definition}`);
-    }
-  }
-
-  // Create index for status queries
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_status ON packaging_jobs(status);
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_user_id ON packaging_jobs(user_id);
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_created_at ON packaging_jobs(created_at);
-    CREATE INDEX IF NOT EXISTS idx_packaging_jobs_packager_heartbeat ON packaging_jobs(packager_heartbeat_at);
-  `);
-
-  // Create upload_history table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS upload_history (
-      id TEXT PRIMARY KEY,
-      packaging_job_id TEXT,
-      user_id TEXT NOT NULL,
-      winget_id TEXT NOT NULL,
-      version TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      publisher TEXT,
-      intune_app_id TEXT NOT NULL,
-      intune_app_url TEXT,
-      intune_tenant_id TEXT,
-      deployed_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (packaging_job_id) REFERENCES packaging_jobs(id)
-    )
-  `);
-
-  // Create index for upload_history
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_upload_history_user_id ON upload_history(user_id);
-    CREATE INDEX IF NOT EXISTS idx_upload_history_deployed_at ON upload_history(deployed_at);
-  `);
 }
 
 /**
@@ -168,6 +62,40 @@ function parseJobRow(row: Record<string, unknown>): PackagingJob {
     error_details: row.error_details ? JSON.parse(row.error_details as string) : null,
     warnings: row.warnings ? JSON.parse(row.warnings as string) : null,
   } as PackagingJob;
+}
+
+function parsePolicyRow(row: Record<string, unknown>): AppUpdatePolicy {
+  return {
+    ...row,
+    is_enabled: Boolean(row.is_enabled),
+    deployment_config: row.deployment_config ? JSON.parse(row.deployment_config as string) : null,
+  } as unknown as AppUpdatePolicy;
+}
+
+function parseHistoryRow(row: Record<string, unknown>): AutoUpdateHistory {
+  return row as unknown as AutoUpdateHistory;
+}
+
+/**
+ * Build the SET clause shared by the dynamic update methods.
+ */
+function buildSetClause(
+  data: Record<string, unknown>,
+  options: { json?: Set<string>; boolean?: Set<string> } = {}
+): { clause: string; values: unknown[] } {
+  const assignments: string[] = [];
+  const values: unknown[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    assignments.push(`${key} = ?`);
+    if (options.json?.has(key)) {
+      values.push(value != null ? JSON.stringify(value) : null);
+    } else if (options.boolean?.has(key)) {
+      values.push(value ? 1 : 0);
+    } else {
+      values.push(value);
+    }
+  }
+  return { clause: assignments.join(', '), values };
 }
 
 /**
@@ -248,10 +176,10 @@ export const sqliteDb: DatabaseAdapter = {
           package_config, app_source, status, status_message, progress_percent,
           error_stage, error_category, error_code, execution_profile_sha256,
           presentation_profile_sha256, qa_candidate_id, qa_requested_at,
-          qa_completed_at, created_at, updated_at
+          qa_completed_at, is_auto_update, auto_update_policy_id, created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `);
 
@@ -285,6 +213,8 @@ export const sqliteDb: DatabaseAdapter = {
         job.qa_candidate_id || null,
         job.qa_requested_at || null,
         job.qa_completed_at || null,
+        (job as Record<string, unknown>).is_auto_update ? 1 : 0,
+        (job as Record<string, unknown>).auto_update_policy_id || null,
         now,
         now
       );
@@ -307,6 +237,9 @@ export const sqliteDb: DatabaseAdapter = {
         if (key === 'detection_rules' || key === 'package_config' || key === 'encryption_info' || key === 'warnings' || key === 'error_details') {
           updates.push(`${key} = ?`);
           values.push(value ? JSON.stringify(value) : null);
+        } else if (key === 'is_auto_update') {
+          updates.push(`${key} = ?`);
+          values.push(value ? 1 : 0);
         } else {
           updates.push(`${key} = ?`);
           values.push(value);
@@ -529,6 +462,231 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       return stmt.all(userId, limit) as UploadHistoryRecord[];
+    },
+
+    async getLatest(userId: string, tenantId: string, wingetId: string): Promise<UploadHistoryRecord | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          `SELECT * FROM upload_history
+           WHERE user_id = ? AND intune_tenant_id = ? AND winget_id = ?
+           ORDER BY deployed_at DESC
+           LIMIT 1`
+        )
+        .get(userId, tenantId, wingetId) as UploadHistoryRecord | undefined;
+      return row ?? null;
+    },
+  },
+
+  updatePolicies: {
+    async list(userId: string, tenantId?: string): Promise<AppUpdatePolicy[]> {
+      const database = getDb();
+      const stmt = tenantId
+        ? database.prepare(
+            'SELECT * FROM app_update_policies WHERE user_id = ? AND tenant_id = ? ORDER BY updated_at DESC'
+          )
+        : database.prepare('SELECT * FROM app_update_policies WHERE user_id = ? ORDER BY updated_at DESC');
+      const rows = (tenantId ? stmt.all(userId, tenantId) : stmt.all(userId)) as Record<string, unknown>[];
+      return rows.map(parsePolicyRow);
+    },
+
+    async getById(id: string, userId: string): Promise<AppUpdatePolicy | null> {
+      const database = getDb();
+      const row = database
+        .prepare('SELECT * FROM app_update_policies WHERE id = ? AND user_id = ?')
+        .get(id, userId) as Record<string, unknown> | undefined;
+      return row ? parsePolicyRow(row) : null;
+    },
+
+    async getByKey(userId: string, tenantId: string, wingetId: string): Promise<AppUpdatePolicy | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          'SELECT * FROM app_update_policies WHERE user_id = ? AND tenant_id = ? AND winget_id = ?'
+        )
+        .get(userId, tenantId, wingetId) as Record<string, unknown> | undefined;
+      return row ? parsePolicyRow(row) : null;
+    },
+
+    async upsert(
+      policy: Partial<AppUpdatePolicy> & Pick<AppUpdatePolicy, 'user_id' | 'tenant_id' | 'winget_id' | 'policy_type'>
+    ): Promise<AppUpdatePolicy> {
+      const database = getDb();
+      const id = policy.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      database
+        .prepare(
+          `INSERT INTO app_update_policies (
+             id, user_id, tenant_id, winget_id, policy_type, pinned_version,
+             deployment_config, original_upload_history_id, last_auto_update_at,
+             last_auto_update_version, is_enabled, consecutive_failures, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, tenant_id, winget_id) DO UPDATE SET
+             policy_type = excluded.policy_type,
+             pinned_version = excluded.pinned_version,
+             deployment_config = excluded.deployment_config,
+             original_upload_history_id = excluded.original_upload_history_id,
+             is_enabled = excluded.is_enabled,
+             updated_at = excluded.updated_at`
+        )
+        .run(
+          id,
+          policy.user_id,
+          policy.tenant_id,
+          policy.winget_id,
+          policy.policy_type,
+          policy.pinned_version ?? null,
+          policy.deployment_config ? JSON.stringify(policy.deployment_config) : null,
+          policy.original_upload_history_id ?? null,
+          policy.last_auto_update_at ?? null,
+          policy.last_auto_update_version ?? null,
+          policy.is_enabled === false ? 0 : 1,
+          policy.consecutive_failures ?? 0,
+          policy.created_at || now,
+          policy.updated_at || now
+        );
+
+      const row = database
+        .prepare(
+          'SELECT * FROM app_update_policies WHERE user_id = ? AND tenant_id = ? AND winget_id = ?'
+        )
+        .get(policy.user_id, policy.tenant_id, policy.winget_id) as Record<string, unknown>;
+      return parsePolicyRow(row);
+    },
+
+    async update(id: string, userId: string, data: Partial<AppUpdatePolicy>): Promise<AppUpdatePolicy | null> {
+      const database = getDb();
+      const { clause, values } = buildSetClause(data as Record<string, unknown>, {
+        json: new Set(['deployment_config']),
+        boolean: new Set(['is_enabled']),
+      });
+      if (!clause) {
+        return this.getById(id, userId);
+      }
+
+      const result = database
+        .prepare(`UPDATE app_update_policies SET ${clause} WHERE id = ? AND user_id = ?`)
+        .run(...values, id, userId);
+
+      if (result.changes === 0) {
+        return null;
+      }
+      return this.getById(id, userId);
+    },
+
+    async delete(id: string, userId: string): Promise<boolean> {
+      const database = getDb();
+      const result = database
+        .prepare('DELETE FROM app_update_policies WHERE id = ? AND user_id = ?')
+        .run(id, userId);
+      return result.changes > 0;
+    },
+  },
+
+  autoUpdateHistory: {
+    async create(
+      record: Partial<AutoUpdateHistory> &
+        Pick<AutoUpdateHistory, 'policy_id' | 'from_version' | 'to_version' | 'update_type'>
+    ): Promise<AutoUpdateHistory> {
+      const database = getDb();
+      const id = record.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      database
+        .prepare(
+          `INSERT INTO auto_update_history (
+             id, policy_id, packaging_job_id, from_version, to_version,
+             update_type, status, error_message, triggered_at, completed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          record.policy_id,
+          record.packaging_job_id ?? null,
+          record.from_version,
+          record.to_version,
+          record.update_type,
+          record.status ?? 'pending',
+          record.error_message ?? null,
+          record.triggered_at || now,
+          record.completed_at ?? null
+        );
+
+      const row = database.prepare('SELECT * FROM auto_update_history WHERE id = ?').get(id) as Record<string, unknown>;
+      return parseHistoryRow(row);
+    },
+
+    async update(id: string, data: Partial<AutoUpdateHistory>): Promise<AutoUpdateHistory | null> {
+      const database = getDb();
+      const { clause, values } = buildSetClause(data as Record<string, unknown>);
+      if (!clause) {
+        const row = database.prepare('SELECT * FROM auto_update_history WHERE id = ?').get(id) as
+          | Record<string, unknown>
+          | undefined;
+        return row ? parseHistoryRow(row) : null;
+      }
+
+      const result = database
+        .prepare(`UPDATE auto_update_history SET ${clause} WHERE id = ?`)
+        .run(...values, id);
+      if (result.changes === 0) {
+        return null;
+      }
+      const row = database.prepare('SELECT * FROM auto_update_history WHERE id = ?').get(id) as Record<string, unknown>;
+      return parseHistoryRow(row);
+    },
+
+    async list(userId: string, query: AutoUpdateHistoryQuery): Promise<AutoUpdateHistoryWithPolicy[]> {
+      const database = getDb();
+      const conditions = ['p.user_id = ?'];
+      const values: unknown[] = [userId];
+
+      if (query.tenantId) {
+        conditions.push('p.tenant_id = ?');
+        values.push(query.tenantId);
+      }
+      if (query.wingetId) {
+        conditions.push('p.winget_id = ?');
+        values.push(query.wingetId);
+      }
+      if (query.status) {
+        conditions.push('h.status = ?');
+        values.push(query.status);
+      }
+
+      const stmt = database.prepare(`
+        SELECT
+          h.*,
+          p.winget_id AS policy_winget_id,
+          p.tenant_id AS policy_tenant_id,
+          j.display_name AS packaging_display_name
+        FROM auto_update_history h
+        JOIN app_update_policies p ON h.policy_id = p.id
+        LEFT JOIN packaging_jobs j ON h.packaging_job_id = j.id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY h.triggered_at DESC
+        LIMIT ? OFFSET ?
+      `);
+
+      const rows = stmt.all(...values, query.limit, query.offset) as Record<string, unknown>[];
+      return rows.map((row) => ({
+        id: row.id as string,
+        policy_id: row.policy_id as string,
+        packaging_job_id: (row.packaging_job_id as string | null) ?? null,
+        from_version: row.from_version as string,
+        to_version: row.to_version as string,
+        update_type: row.update_type as AutoUpdateHistory['update_type'],
+        status: row.status as AutoUpdateHistory['status'],
+        error_message: (row.error_message as string | null) ?? null,
+        triggered_at: row.triggered_at as string,
+        completed_at: (row.completed_at as string | null) ?? null,
+        policy: {
+          winget_id: row.policy_winget_id as string,
+          tenant_id: row.policy_tenant_id as string,
+        },
+        display_name: (row.packaging_display_name as string | null) ?? undefined,
+      }));
     },
   },
 };
