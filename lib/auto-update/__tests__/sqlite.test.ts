@@ -128,6 +128,20 @@ describe('sqlite auto-update check', () => {
     expect(updatedPolicy?.last_auto_update_version).toBe('1.1.0');
   });
 
+  it('removes a stored detection once the app is no longer behind', async () => {
+    const { db, runSqliteUpdateCheck } = await load();
+    await seedDeployment(db);
+    getAppsByWingetIdsMock.mockResolvedValue([{ winget_id: 'Vendor.App', name: 'Vendor App', latest_version: '1.1.0' }]);
+    getLatestInstallerInfoMock.mockResolvedValue(installerResolution());
+    await runSqliteUpdateCheck(db);
+    expect(await db.updateCheckResults.list('u1', { includeDismissed: true })).toHaveLength(1);
+
+    getAppsByWingetIdsMock.mockResolvedValue([{ winget_id: 'Vendor.App', name: 'Vendor App', latest_version: '1.0.0' }]);
+    const summary = await runSqliteUpdateCheck(db);
+    expect(summary.available).toBe(0);
+    expect(await db.updateCheckResults.list('u1', { includeDismissed: true })).toHaveLength(0);
+  });
+
   it('records nothing when every deployed app is up to date', async () => {
     const { db, runSqliteUpdateCheck } = await load();
     await seedDeployment(db);

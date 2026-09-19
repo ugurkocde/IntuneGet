@@ -830,35 +830,70 @@ export const supabaseDb: DatabaseAdapter = {
     ): Promise<UpdateCheckResult> {
       const supabase = createServerClient();
       const now = new Date().toISOString();
-      const { data, error } = await supabase
+
+      const { data: existing, error: selectError } = await supabase
         .from('update_check_results')
-        .upsert(
-          {
-            user_id: record.user_id,
-            tenant_id: record.tenant_id,
-            winget_id: record.winget_id,
-            intune_app_id: record.intune_app_id,
+        .select('id')
+        .eq('user_id', record.user_id)
+        .eq('tenant_id', record.tenant_id)
+        .eq('winget_id', record.winget_id)
+        .eq('intune_app_id', record.intune_app_id)
+        .maybeSingle();
+      if (isError(selectError) && selectError.code !== 'PGRST116') {
+        console.error('Error reading update check result:', selectError);
+        throw selectError;
+      }
+
+      // A PostgREST upsert overwrites every supplied column, so use an explicit
+      // update that leaves dismissed_at, notified_at, and detected_at intact.
+      if (existing) {
+        const { data, error } = await supabase
+          .from('update_check_results')
+          .update({
             display_name: record.display_name,
             current_version: record.current_version,
             latest_version: record.latest_version,
             is_critical: record.is_critical ?? false,
             is_managed: record.is_managed ?? true,
-            large_icon_type: record.large_icon_type ?? null,
-            large_icon_value: record.large_icon_value ?? null,
-            notified_at: record.notified_at ?? null,
-            dismissed_at: record.dismissed_at ?? null,
-            detected_at: record.detected_at || now,
-            updated_at: record.updated_at || now,
-          },
-          { onConflict: 'user_id,tenant_id,winget_id,intune_app_id' }
-        )
+            updated_at: now,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (isError(error)) {
+          console.error('Error updating update check result:', error);
+          throw error;
+        }
+        if (!data) throw new Error('No data returned from update');
+        return data as unknown as UpdateCheckResult;
+      }
+
+      const { data, error } = await supabase
+        .from('update_check_results')
+        .insert({
+          user_id: record.user_id,
+          tenant_id: record.tenant_id,
+          winget_id: record.winget_id,
+          intune_app_id: record.intune_app_id,
+          display_name: record.display_name,
+          current_version: record.current_version,
+          latest_version: record.latest_version,
+          is_critical: record.is_critical ?? false,
+          is_managed: record.is_managed ?? true,
+          large_icon_type: record.large_icon_type ?? null,
+          large_icon_value: record.large_icon_value ?? null,
+          notified_at: record.notified_at ?? null,
+          dismissed_at: record.dismissed_at ?? null,
+          detected_at: record.detected_at || now,
+          updated_at: record.updated_at || now,
+        })
         .select()
         .single();
       if (isError(error)) {
-        console.error('Error upserting update check result:', error);
+        console.error('Error inserting update check result:', error);
         throw error;
       }
-      if (!data) throw new Error('No data returned from upsert');
+      if (!data) throw new Error('No data returned from insert');
       return data as unknown as UpdateCheckResult;
     },
 
@@ -903,7 +938,7 @@ export const supabaseDb: DatabaseAdapter = {
         .delete()
         .in('id', staleIds);
       if (isError(deleteError)) {
-        console.error('Error deleting stale update check results:', error);
+        console.error('Error deleting stale update check results:', deleteError);
         throw deleteError;
       }
       return staleIds.length;

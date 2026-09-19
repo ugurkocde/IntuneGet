@@ -151,71 +151,95 @@ export async function triggerSqliteAutoUpdate(
     const updateType = classifyUpdateType(updateInfo.currentVersion, updateInfo.latestVersion);
     const now = new Date().toISOString();
 
-    const history = await db.autoUpdateHistory.create({
-      policy_id: policy.id,
-      from_version: updateInfo.currentVersion,
-      to_version: updateInfo.latestVersion,
-      update_type: updateType,
-      status: 'pending',
-      triggered_at: now,
-    });
+    let historyId: string | undefined;
+    let packagingJobId: string | undefined;
 
-    const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
-    const autoSupersede = Boolean(sourceIntuneAppId);
+    try {
+      const history = await db.autoUpdateHistory.create({
+        policy_id: policy.id,
+        from_version: updateInfo.currentVersion,
+        to_version: updateInfo.latestVersion,
+        update_type: updateType,
+        status: 'pending',
+        triggered_at: now,
+      });
+      historyId = history.id;
 
-    const job = await db.jobs.create({
-      user_id: policy.user_id,
-      tenant_id: policy.tenant_id,
-      winget_id: updateInfo.wingetId,
-      version: updateInfo.latestVersion,
-      display_name: config.displayName || updateInfo.displayName,
-      publisher: config.publisher || 'Unknown Publisher',
-      architecture: config.architecture || 'x64',
-      installer_type: updateInfo.installerType || config.installerType,
-      installer_url: updateInfo.installerUrl,
-      installer_sha256: updateInfo.installerSha256,
-      install_command: updateInfo.installCommand || config.installCommand,
-      uninstall_command: updateInfo.uninstallCommand || config.uninstallCommand,
-      install_scope: updateInfo.installScope || config.installScope,
-      detection_rules: (config.detectionRules ?? []) as unknown as Json,
-      package_config: {
-        assignments: config.assignments ?? [],
-        categories: config.categories ?? [],
-        assignedGroups: config.assignedGroups,
-        requirementRules: config.requirementRules,
-        relationships: config.relationships,
-        psadtConfig: config.psadtConfig,
-        nestedInstallerType: updateInfo.nestedInstallerType,
-        nestedInstallerPath: updateInfo.nestedInstallerPath,
-        installerSuccessCodes: updateInfo.installerSuccessCodes,
-        forceCreate: config.forceCreateNewApp !== false,
-        sourceIntuneAppId,
-        autoSupersede,
-        supersedenceType: autoSupersede ? 'update' : undefined,
-        description: config.description,
-        notes: config.notes,
-        autoUpdateHistoryId: history.id,
-      } as unknown as Json,
-      status: 'queued',
-      status_message: 'Auto-update queued for packaging',
-      progress_percent: 0,
-      is_auto_update: true,
-      auto_update_policy_id: policy.id,
-    });
+      const sourceIntuneAppId = updateInfo.currentIntuneAppId || null;
+      const autoSupersede = Boolean(sourceIntuneAppId);
 
-    await db.autoUpdateHistory.update(history.id, {
-      packaging_job_id: job.id,
-      status: 'packaging',
-    });
+      const job = await db.jobs.create({
+        user_id: policy.user_id,
+        tenant_id: policy.tenant_id,
+        winget_id: updateInfo.wingetId,
+        version: updateInfo.latestVersion,
+        display_name: config.displayName || updateInfo.displayName,
+        publisher: config.publisher || 'Unknown Publisher',
+        architecture: config.architecture || 'x64',
+        installer_type: updateInfo.installerType || config.installerType,
+        installer_url: updateInfo.installerUrl,
+        installer_sha256: updateInfo.installerSha256,
+        install_command: updateInfo.installCommand || config.installCommand,
+        uninstall_command: updateInfo.uninstallCommand || config.uninstallCommand,
+        install_scope: updateInfo.installScope || config.installScope,
+        detection_rules: (config.detectionRules ?? []) as unknown as Json,
+        package_config: {
+          assignments: config.assignments ?? [],
+          categories: config.categories ?? [],
+          assignedGroups: config.assignedGroups,
+          requirementRules: config.requirementRules,
+          relationships: config.relationships,
+          psadtConfig: config.psadtConfig,
+          nestedInstallerType: updateInfo.nestedInstallerType,
+          nestedInstallerPath: updateInfo.nestedInstallerPath,
+          installerSuccessCodes: updateInfo.installerSuccessCodes,
+          forceCreate: config.forceCreateNewApp !== false,
+          sourceIntuneAppId,
+          autoSupersede,
+          supersedenceType: autoSupersede ? 'update' : undefined,
+          description: config.description,
+          notes: config.notes,
+          autoUpdateHistoryId: history.id,
+        } as unknown as Json,
+        status: 'queued',
+        status_message: 'Auto-update queued for packaging',
+        progress_percent: 0,
+        is_auto_update: true,
+        auto_update_policy_id: policy.id,
+      });
+      packagingJobId = job.id;
 
-    await db.updatePolicies.update(policy.id, policy.user_id, {
-      last_auto_update_at: now,
-      last_auto_update_version: updateInfo.latestVersion,
-      consecutive_failures: 0,
-      updated_at: now,
-    });
+      await db.autoUpdateHistory.update(history.id, {
+        packaging_job_id: job.id,
+        status: 'packaging',
+      });
 
-    return { success: true, packagingJobId: job.id, historyId: history.id };
+      await db.updatePolicies.update(policy.id, policy.user_id, {
+        last_auto_update_at: now,
+        last_auto_update_version: updateInfo.latestVersion,
+        consecutive_failures: 0,
+        updated_at: now,
+      });
+
+      return { success: true, packagingJobId: job.id, historyId: history.id };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      // A failure after the job insert must not leave a stray queued job (which
+      // the next run could duplicate) or a dangling pending history row.
+      if (packagingJobId) {
+        await db.jobs.deleteById(packagingJobId).catch(() => false);
+      }
+      if (historyId) {
+        await db.autoUpdateHistory
+          .update(historyId, {
+            status: 'failed',
+            error_message: message,
+            completed_at: new Date().toISOString(),
+          })
+          .catch(() => null);
+      }
+      return { success: false, error: message };
+    }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -246,15 +270,26 @@ export async function runSqliteUpdateCheck(
   const apps = wingetIds.length > 0 ? await catalog.getAppsByWingetIds(wingetIds).catch(() => []) : [];
   const latestVersionByWinget = new Map(apps.map((app) => [app.winget_id, app.latest_version]));
 
-  const keepByUserTenant = new Map<string, Array<{ wingetId: string; intuneAppId: string }>>();
+  const keepByScope = new Map<string, Array<{ wingetId: string; intuneAppId: string }>>();
+  const allScopes = new Set<string>();
   let available = 0;
 
+  // Fetch policies once: they both drive triggering and mark scopes that must
+  // be cleaned even when their app is no longer deployed.
+  const policies = await db.updatePolicies.listAll();
+  for (const policy of policies) {
+    allScopes.add(`${policy.user_id}|${policy.tenant_id}`);
+  }
+
   for (const deployment of newest.values()) {
+    const tenantId = deployment.intune_tenant_id ?? '';
+    const scopeKey = `${deployment.user_id}|${tenantId}`;
+    allScopes.add(scopeKey);
+
     const latestVersion = latestVersionByWinget.get(deployment.winget_id);
     if (!latestVersion) continue;
     if (compareVersions(deployment.version, latestVersion) >= 0) continue;
 
-    const tenantId = deployment.intune_tenant_id ?? '';
     await db.updateCheckResults.upsert({
       user_id: deployment.user_id,
       tenant_id: tenantId,
@@ -270,23 +305,22 @@ export async function runSqliteUpdateCheck(
     });
     available += 1;
 
-    const scopeKey = `${deployment.user_id}|${tenantId}`;
-    const keep = keepByUserTenant.get(scopeKey) ?? [];
+    const keep = keepByScope.get(scopeKey) ?? [];
     keep.push({ wingetId: deployment.winget_id, intuneAppId: deployment.intune_app_id });
-    keepByUserTenant.set(scopeKey, keep);
+    keepByScope.set(scopeKey, keep);
   }
 
-  // A deployment that is gone or now up to date should no longer appear.
-  for (const [scopeKey, keep] of keepByUserTenant) {
+  // Clean every known scope. A scope whose apps are all up to date gets an empty
+  // keep list, so its previously detected updates are removed.
+  for (const scopeKey of allScopes) {
     const [userId, tenantId] = scopeKey.split('|');
-    await db.updateCheckResults.deleteMissing(userId, tenantId, keep);
+    await db.updateCheckResults.deleteMissing(userId, tenantId, keepByScope.get(scopeKey) ?? []);
   }
 
   let triggered = 0;
   let skipped = 0;
   let errors = 0;
 
-  const policies = await db.updatePolicies.listAll();
   for (const policy of policies) {
     if (options?.userId && policy.user_id !== options.userId) continue;
     if (!canAutoUpdate(policy)) continue;
