@@ -497,6 +497,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the mismatched IntelliJ EAP payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'JetBrains.IntelliJIDEA.Ultimate.EAP', version: '252.26199.7', architecture: 'x64',
+      installerSha256: 'F6DB9893CC39CF217788A24BBA5C375C332FA354F8BE57F6121BED1FC070F802',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest ARP key was absent; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a flagged current version even when its installation test passed', async () => {
     getQaResultMock.mockResolvedValue({
       ...failedRow,

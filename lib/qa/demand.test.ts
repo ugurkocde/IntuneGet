@@ -586,6 +586,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the mismatched IntelliJ EAP profile before dependency resolution or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'JetBrains.IntelliJIDEA.Ultimate.EAP', version: '252.26199.7', architecture: 'x64' as const,
+      installerSha256: 'F6DB9893CC39CF217788A24BBA5C375C332FA354F8BE57F6121BED1FC070F802',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest ARP key was absent; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, displayName: 'IntelliJ IDEA Ultimate Edition (EAP)', publisher: 'JetBrains',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:IntelliJ IDEA 252.26199.7:IntelliJ IDEA Ultimate Edition (EAP)',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('persists dependency download metadata on a newly queued customer candidate', async () => {
     const dependency = {
       packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
