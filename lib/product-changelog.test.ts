@@ -72,5 +72,9 @@ describe('product changelog reads', () => {
     expect(parseProductChangelog({ ...feed, entries: [applicationEntry, productEntry] }).entries.map(item => item.id))
       .toEqual(['entry-2']);
     expect(parseProductChangelog({ ...feed, entries: [applicationEntry] }).entries).toEqual([]);
+
+    // Trailing whitespace after the operation must still be treated as app-specific.
+    const trailingSpace = { ...applicationEntry, id: 'app-3', title: 'More reliable PostgreSQL removal ' };
+    expect(parseProductChangelog({ ...feed, entries: [trailingSpace] }).entries).toEqual([]);
   });
 });
