@@ -5,7 +5,6 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
-  Check,
   ChevronRight,
   Loader2,
   PackageCheck,
@@ -55,6 +54,8 @@ export function LandingCatalogSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const shouldReduceMotion = useReducedMotion();
   const t = useGT();
@@ -139,6 +140,29 @@ export function LandingCatalogSearch() {
     return t("Search the public Winget catalog");
   }, [error, isLoading, results, t]);
 
+  const selectedId = selected?.id ?? null;
+  const restoreFocusIdRef = useRef<string | null>(null);
+
+  // The covered list is inert, so keyboard focus follows the card in and back out.
+  useEffect(() => {
+    if (selectedId) {
+      backRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const restoreId = restoreFocusIdRef.current;
+    restoreFocusIdRef.current = null;
+    if (restoreId) {
+      listRef.current
+        ?.querySelector<HTMLElement>(`[data-app-id="${CSS.escape(restoreId)}"]`)
+        ?.focus({ preventScroll: true });
+    }
+  }, [selectedId]);
+
+  const closeDetails = () => {
+    restoreFocusIdRef.current = selectedId;
+    setSelected(null);
+  };
+
   const runPopularSearch = (value: string) => {
     setQuery(value);
     setSelected(null);
@@ -146,7 +170,7 @@ export function LandingCatalogSearch() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="@container mx-auto w-full max-w-5xl">
       <div className="relative">
         <label htmlFor="landing-catalog-search" className="sr-only">
           <T>Search the Winget app catalog</T>
@@ -230,142 +254,10 @@ export function LandingCatalogSearch() {
             className="mt-4"
           >
             {results.length > 0 ? (
-              selected ? (
-              <div className="grid overflow-hidden rounded-2xl border border-overlay/10 bg-bg-elevated shadow-soft-lg lg:grid-cols-[1.08fr_0.92fr]">
-                <div className="border-b border-overlay/10 p-3 sm:p-4 lg:border-b-0 lg:border-r">
-                  <div className="mb-2 flex items-center justify-between px-2 py-1">
-                    <p className="text-sm font-semibold text-text-secondary">
-                      <T>Catalog results</T>
-                    </p>
-                    <Link
-                      href="/apps"
-                      className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium text-accent-cyan transition-colors hover:text-accent-cyan-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
-                    >
-                      <T>Browse all</T>
-                      <ArrowRight aria-hidden="true" className="h-4 w-4" />
-                    </Link>
-                  </div>
-
-                  <div className="space-y-2">
-                    {results.map((app) => {
-                      const isSelected = selected.id === app.id;
-                      return (
-                        <button
-                          key={app.id}
-                          type="button"
-                          onClick={() => setSelected(app)}
-                          className={cn(
-                            "flex min-h-[76px] w-full cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated",
-                            isSelected
-                              ? "border-accent-cyan/45 bg-accent-cyan/[0.06] shadow-soft"
-                              : "border-transparent hover:border-overlay/10 hover:bg-overlay/[0.025]"
-                          )}
-                        >
-                          <AppIcon
-                            packageId={app.id}
-                            packageName={app.name}
-                            iconPath={app.iconPath ?? undefined}
-                            size="lg"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-semibold text-text-primary">
-                              {app.name}
-                            </span>
-                            <span className="block truncate text-sm text-text-muted">
-                              {app.publisher}
-                            </span>
-                            <span className="mt-1 block truncate font-mono text-[11px] text-text-muted">
-                              {app.id}
-                            </span>
-                          </span>
-                          <span
-                            className={cn(
-                              "flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium",
-                              isSelected
-                                ? "text-accent-cyan"
-                                : "border border-overlay/10 text-text-secondary"
-                            )}
-                          >
-                            {isSelected ? (
-                              <>
-                                <Check aria-hidden="true" className="h-4 w-4" />
-                                <span className="hidden sm:inline"><T>Selected</T></span>
-                              </>
-                            ) : (
-                              <T>Select</T>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
+              <div className="grid overflow-hidden rounded-2xl border border-overlay/10 bg-bg-elevated shadow-soft-lg">
                 <motion.div
-                  key={selected.id}
-                  initial={shouldReduceMotion ? false : { opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
-                  className="flex flex-col p-5 sm:p-6"
-                >
-                  <div className="flex items-start gap-4 border-b border-overlay/10 pb-5">
-                    <AppIcon
-                      packageId={selected.id}
-                      packageName={selected.name}
-                      iconPath={selected.iconPath ?? undefined}
-                      size="xl"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h2 className="truncate text-xl font-bold text-text-primary sm:text-2xl">
-                        {selected.name}
-                      </h2>
-                      <p className="truncate text-sm text-text-secondary">
-                        {selected.publisher}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <code translate="no" className="rounded-md bg-bg-surface px-2 py-1 text-[11px] text-text-secondary">
-                          {selected.id}
-                        </code>
-                        {selected.version && (
-                          <span className="text-xs text-text-muted">
-                            <T>Version</T> {selected.version}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <ol className="my-5 grid gap-3 text-sm text-text-secondary sm:grid-cols-3 lg:grid-cols-1">
-                    {uploadSteps.map((step) => (
-                      <li key={step.number} className="flex items-center gap-3">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-cyan/10 font-mono text-xs font-bold text-accent-cyan">
-                          {step.number}
-                        </span>
-                        {step.label}
-                      </li>
-                    ))}
-                  </ol>
-
-                  <div className="mt-auto">
-                    <Link
-                      href={uploadHref}
-                      className="group inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-cyan px-5 py-3 font-semibold text-white shadow-glow-cyan transition-[background-color,box-shadow] duration-200 hover:bg-accent-cyan-dim hover:shadow-glow-cyan-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
-                    >
-                      <Upload aria-hidden="true" className="h-5 w-5" />
-                      <T>Start upload to Intune</T>
-                      <ChevronRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                    </Link>
-                    {!isAuthenticated && (
-                      <p className="mt-3 flex items-start justify-center gap-2 text-center text-xs leading-relaxed text-text-muted">
-                        <MicrosoftLogo className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span><T>Microsoft work account required. We’ll keep your selection.</T></span>
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
-              </div>
-              ) : (
-                <motion.div
+                  ref={listRef}
+                  inert={selected !== null}
                   initial={shouldReduceMotion ? false : "hidden"}
                   animate="visible"
                   variants={{
@@ -375,7 +267,7 @@ export function LandingCatalogSearch() {
                       transition: shouldReduceMotion ? { duration: 0 } : { staggerChildren: 0.035 },
                     },
                   }}
-                  className="overflow-hidden rounded-2xl border border-overlay/10 bg-bg-elevated p-2 shadow-soft-lg"
+                  className="col-start-1 row-start-1 min-w-0 p-2"
                 >
                   <div className="flex items-center justify-between px-3 py-2">
                     <p className="text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
@@ -390,6 +282,7 @@ export function LandingCatalogSearch() {
                       <motion.button
                         key={app.id}
                         type="button"
+                        data-app-id={app.id}
                         onClick={() => setSelected(app)}
                         variants={{
                           hidden: { opacity: 0, y: 6 },
@@ -428,7 +321,88 @@ export function LandingCatalogSearch() {
                     <ArrowRight aria-hidden="true" className="h-4 w-4" />
                   </Link>
                 </motion.div>
-              )
+
+                {/* Shares the list grid cell, so the card covers the results without a height change. */}
+                <AnimatePresence initial={false}>
+                  {selected && (
+                    <motion.div
+                      key={selected.id}
+                      initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, x: 40 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, x: 40 }}
+                      transition={{ duration: shouldReduceMotion ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") closeDetails();
+                      }}
+                      className="relative z-10 col-start-1 row-start-1 flex min-w-0 flex-col bg-bg-elevated p-4 text-left sm:p-5"
+                    >
+                      <div className="flex items-start gap-4 border-b border-overlay/10 pb-4">
+                        <AppIcon
+                          packageId={selected.id}
+                          packageName={selected.name}
+                          iconPath={selected.iconPath ?? undefined}
+                          size="xl"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h2 className="truncate pr-9 text-xl font-bold text-text-primary sm:text-2xl">
+                            {selected.name}
+                          </h2>
+                          <p className="truncate pr-9 text-sm text-text-secondary">
+                            {selected.publisher}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <code translate="no" className="rounded-md bg-bg-surface px-2 py-1 text-[11px] text-text-secondary">
+                              {selected.id}
+                            </code>
+                            {selected.version && (
+                              <span className="text-xs text-text-muted">
+                                <T>Version</T> {selected.version}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          ref={backRef}
+                          type="button"
+                          onClick={closeDetails}
+                          aria-label={t("Back to results")}
+                          className="absolute right-2 top-2 flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-overlay/[0.05] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+                        >
+                          <X aria-hidden="true" className="h-5 w-5" />
+                        </button>
+                      </div>
+
+                      <ol className="my-4 grid gap-3 text-sm text-text-secondary @xl:grid-cols-3">
+                        {uploadSteps.map((step) => (
+                          <li key={step.number} className="flex items-center gap-3">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-cyan/10 font-mono text-xs font-bold text-accent-cyan">
+                              {step.number}
+                            </span>
+                            {step.label}
+                          </li>
+                        ))}
+                      </ol>
+
+                      <div className="mt-auto">
+                        <Link
+                          href={uploadHref}
+                          className="group inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-cyan px-5 py-3 font-semibold text-white shadow-glow-cyan transition-[background-color,box-shadow] duration-200 hover:bg-accent-cyan-dim hover:shadow-glow-cyan-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
+                        >
+                          <Upload aria-hidden="true" className="h-5 w-5" />
+                          <T>Start upload to Intune</T>
+                          <ChevronRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                        </Link>
+                        {!isAuthenticated && (
+                          <p className="mt-3 flex items-start justify-center gap-2 text-center text-xs leading-relaxed text-text-muted">
+                            <MicrosoftLogo className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span><T>Microsoft work account required. We’ll keep your selection.</T></span>
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ) : (
               <div className="rounded-2xl border border-overlay/10 bg-bg-elevated px-5 py-8 text-center shadow-soft">
                 <PackageCheck aria-hidden="true" className="mx-auto h-8 w-8 text-text-muted" />
