@@ -14,7 +14,11 @@
  */
 
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
-import { buildDeploymentConfigForApp } from '@/lib/update-policies/build-deployment-config';
+import { getDatabase, isSqliteMode } from '@/lib/db';
+import {
+  buildDeploymentConfigForApp,
+  buildDeploymentConfigFromAdapter,
+} from '@/lib/update-policies/build-deployment-config';
 import type { Json } from '@/types/database';
 
 export type CartUpdatePolicyChoice = 'auto_update' | 'ignore';
@@ -44,12 +48,49 @@ export async function ensureUpdatePolicy(args: {
   policyType: CartUpdatePolicyChoice;
   deployedVersion: string;
 }): Promise<EnsureUpdatePolicyResult> {
-  if (!isSupabaseServerConfigured()) {
-    return { status: 'skipped', reason: 'not_configured' };
-  }
+  const { userId, tenantId, wingetId, policyType, deployedVersion } = args;
 
   try {
-    const { userId, tenantId, wingetId, policyType, deployedVersion } = args;
+    // Self-hosted SQLite mode: no Supabase client, so build the config and
+    // write the policy through the database adapter.
+    if (isSqliteMode()) {
+      const database = getDatabase();
+      let deploymentConfig = null;
+      let originalUploadHistoryId = null;
+
+      if (policyType === 'auto_update') {
+        const built = await buildDeploymentConfigFromAdapter(database, {
+          userId,
+          tenantId,
+          wingetId,
+          latestVersion: deployedVersion,
+        });
+        if (built.status !== 'ok') {
+          return { status: 'skipped', reason: 'config_unavailable' };
+        }
+        deploymentConfig = built.deploymentConfig;
+        originalUploadHistoryId = built.originalUploadHistoryId;
+      }
+
+      await database.updatePolicies.upsert({
+        user_id: userId,
+        tenant_id: tenantId,
+        winget_id: wingetId,
+        policy_type: policyType,
+        pinned_version: null,
+        deployment_config: deploymentConfig,
+        original_upload_history_id: originalUploadHistoryId,
+        is_enabled: true,
+        updated_at: new Date().toISOString(),
+      });
+
+      return { status: 'saved' };
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return { status: 'skipped', reason: 'not_configured' };
+    }
+
     const supabase = createServerClient();
 
     let deploymentConfig: Json | null = null;
