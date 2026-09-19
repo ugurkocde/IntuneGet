@@ -361,6 +361,9 @@ notifications, or require tenant consent. Rate limits and the failure circuit
 breaker still apply, and jobs are created in `queued` state for the local
 packager.
 
+The on-demand refresh endpoint (`POST /api/updates/refresh`) runs the same
+catalog check in SQLite mode.
+
 ## How Runtime Environment Injection Works
 
 Next.js normally inlines `NEXT_PUBLIC_*` environment variables into the client

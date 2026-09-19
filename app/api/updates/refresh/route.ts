@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseVersion } from '@/lib/version-compare';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getDatabase, isSqliteMode } from '@/lib/db';
+import { runSqliteUpdateCheck } from '@/lib/auto-update/sqlite';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { GET as getLiveIntuneUpdates } from '@/app/api/intune/apps/updates/route';
@@ -51,6 +53,23 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as RefreshRequestBody;
     const requestedTenantId = body.tenant_id?.trim() || null;
+
+    // Self-hosted SQLite: run the same catalog check as the cron. The live
+    // Graph matching path needs the hosted consent plus the claimed and manual
+    // mapping tables, which a self-hosted deployment does not have.
+    if (isSqliteMode()) {
+      const summary = await runSqliteUpdateCheck(getDatabase(), { userId: user.userId });
+      return NextResponse.json({
+        success: true,
+        mode: 'sqlite',
+        refreshedCount: summary.available,
+        removedCount: 0,
+        updateCount: summary.available,
+        triggered: summary.triggered,
+        skipped: summary.skipped,
+        errors: summary.errors,
+      });
+    }
 
     if (!isSupabaseServerConfigured()) {
       return NextResponse.json(
