@@ -214,6 +214,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the Yandex Disk normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Yandex.Disk', version: '3.2.51.5198', architecture: 'x64' as const,
+      installerSha256: '07B333208A5C14F18A8B48C99478D53DD39368D1E66D6EEB2DD44CB0F545FFAA',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact YandexDisk2 registration remained after vendor removal.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
+      silentSwitches: '-silent -norestart -permachine',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:YandexDisk2:Yandex.Disk',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the Bitig normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64' as const,

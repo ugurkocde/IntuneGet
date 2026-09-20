@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the Yandex Disk failed-removal payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Yandex.Disk', version: '3.2.51.5198', architecture: 'x64',
+      installerSha256: '07B333208A5C14F18A8B48C99478D53DD39368D1E66D6EEB2DD44CB0F545FFAA',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact YandexDisk2 registration remained after vendor removal.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the Bitig missing-uninstaller payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64',

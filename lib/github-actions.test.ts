@@ -913,6 +913,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
     { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
+    { wingetId: 'Yandex.Disk', version: '3.2.51.5198', architecture: 'x64' as const,
+      installerSha256: '07B333208A5C14F18A8B48C99478D53DD39368D1E66D6EEB2DD44CB0F545FFAA' },
     { wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64' as const,
       installerSha256: '1D6FBF4139EDF32FA66FC2D72151801D8D622760FAE71985A6C1167F47EFFCFF' },
     { wingetId: 'BearStarSoftware.IVTSecureAccessFreeEdition', version: '28.1', architecture: 'x64' as const,
