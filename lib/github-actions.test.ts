@@ -899,6 +899,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
     { wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64' as const,
       installerSha256: '9F1F3547B1119054623B145FAAE7EC1C83BB833FE3D8C71A66C0AA5067203058' },
+    { wingetId: 'S42yt.FreSH', version: '26.10.0', architecture: 'x64' as const,
+      installerSha256: '8EB1FE8DBDAF3B36F6E77A50D0E8726018CC740D4513D46CAF42BE575BFBCAE1' },
     { wingetId: 'Meitu.ColorByte.Pro', version: '7.9.4', architecture: 'x64' as const,
       installerSha256: '7EAA434D370737369D4E8FF6B6680B0C8BB0DE9D630E0D59C1DC5ADD7E3B3CDF' },
     { wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,

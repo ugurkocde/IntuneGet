@@ -166,6 +166,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the FreSH interactive uninstall payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'S42yt.FreSH', version: '26.10.0', architecture: 'x64',
+      installerSha256: '8EB1FE8DBDAF3B36F6E77A50D0E8726018CC740D4513D46CAF42BE575BFBCAE1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Vendor removal requires interactive confirmation.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a failed exact version and architecture', async () => {
     getQaResultMock.mockResolvedValue(failedRow);
     await expect(

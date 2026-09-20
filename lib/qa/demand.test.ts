@@ -667,6 +667,27 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the FreSH interactive uninstall profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'S42yt.FreSH', version: '26.10.0', architecture: 'x64' as const,
+      installerSha256: '8EB1FE8DBDAF3B36F6E77A50D0E8726018CC740D4513D46CAF42BE575BFBCAE1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Vendor removal requires interactive confirmation.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, displayName: 'FreSH - First-Run Experience Shell', publisher: 'S42yt',
+      installerType: 'exe', installScope: 'user', silentSwitches: '/silent /user',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('persists dependency download metadata on a newly queued customer candidate', async () => {
     const dependency = {
       packageIdentifier: 'Microsoft.VCRedist.2015+.x64',
