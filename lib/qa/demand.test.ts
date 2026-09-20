@@ -214,6 +214,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the IVT normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'BearStarSoftware.IVTSecureAccessFreeEdition', version: '28.1', architecture: 'x64' as const,
+      installerSha256: '8159B07F65735968EB3D14D34A19640B7C1E0084A41BC6189C542D1DC9B76FA2',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'inno',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:IVT Secure Access Free Edition',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the Pebrel failed-removal profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'Kuddev.Pebrel', version: '1.8.0', architecture: 'x64' as const,

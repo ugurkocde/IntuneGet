@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the IVT failed-removal payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'BearStarSoftware.IVTSecureAccessFreeEdition', version: '28.1', architecture: 'x64',
+      installerSha256: '8159B07F65735968EB3D14D34A19640B7C1E0084A41BC6189C542D1DC9B76FA2',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the Pebrel failed-removal payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Kuddev.Pebrel', version: '1.8.0', architecture: 'x64',
