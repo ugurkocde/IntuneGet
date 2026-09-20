@@ -214,6 +214,24 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the CuteCutPro normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64' as const,
+      installerSha256: '9F1F3547B1119054623B145FAAE7EC1C83BB833FE3D8C71A66C0AA5067203058',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:CuteCut Pro',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the failed TubeDigger Inno profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,

@@ -897,6 +897,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
     { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
+    { wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64' as const,
+      installerSha256: '9F1F3547B1119054623B145FAAE7EC1C83BB833FE3D8C71A66C0AA5067203058' },
     { wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,
       installerSha256: 'D34F1AFFD65BCF99F5762F5FC1A13C0B2585546BDC89D99AA045364DA6215BC8' },
     { wingetId: 'Raimersoft.RadioMaximus', version: '2.33.15', architecture: 'x86' as const,

@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the CuteCutPro missing-uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64',
+      installerSha256: '9F1F3547B1119054623B145FAAE7EC1C83BB833FE3D8C71A66C0AA5067203058',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a failed exact version and architecture', async () => {
     getQaResultMock.mockResolvedValue(failedRow);
     await expect(
