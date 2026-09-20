@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the tl;dv missing-uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'tldx.tldv', version: '3.0.264', architecture: 'x64',
+      installerSha256: 'BB5007C2BF94F717428D5982CF739489CB0BD0CAFD1A193DA671304AD421B25C',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent after exact-key repair.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the CuteCutPro missing-uninstaller payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64',

@@ -913,6 +913,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
     { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
+    { wingetId: 'tldx.tldv', version: '3.0.264', architecture: 'x64' as const,
+      installerSha256: 'BB5007C2BF94F717428D5982CF739489CB0BD0CAFD1A193DA671304AD421B25C' },
     { wingetId: 'CuteCutPro.CuteCutPro', version: '2.4.2', architecture: 'x64' as const,
       installerSha256: '9F1F3547B1119054623B145FAAE7EC1C83BB833FE3D8C71A66C0AA5067203058' },
     { wingetId: 'S42yt.FreSH', version: '26.10.0', architecture: 'x64' as const,
