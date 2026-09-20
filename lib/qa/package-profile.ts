@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: 'c861e3a90f8bbf28842b86ab0070230efecaf3a9',
+  packagerCommit: '5e561aeff961e42e63eba4fee4696c15a0cbff71',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -624,6 +624,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // tl;dv gains an exact NSIS key. Unchanged profiles retain compatibility,
   // never exact-current-pin cohort credit.
   'e79da0398e3cf3c6874e53b6304a2aef54b5770f',
+  // ZCode's exact NSIS key repairs only its failed identity. Unchanged
+  // execution profiles retain compatibility, never exact-pin cohort credit.
+  'c861e3a90f8bbf28842b86ab0070230efecaf3a9',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 

@@ -6,9 +6,20 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only ZCode to the bounded retry targets', () => {
+    const previous = 'c861e3a90f8bbf28842b86ab0070230efecaf3a9';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'ZhipuAI.ZCode', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'ZhipuAI.ZCode', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ZhipuAI.Other', status: 'failed' })).toBe(false);
+  });
   it('adds only the repaired tl;dv identity to the bounded retry targets', () => {
     const previous = 'e79da0398e3cf3c6874e53b6304a2aef54b5770f';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('c861e3a90f8bbf28842b86ab0070230efecaf3a9')).toEqual([
       'tldx.tldv', ...terminalToolchainRetryTargets(previous),
     ]);
     const candidate = { wingetId: 'tldx.tldv', status: 'failed' };
