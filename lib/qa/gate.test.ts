@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the Pebrel failed-removal payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Kuddev.Pebrel', version: '1.8.0', architecture: 'x64',
+      installerSha256: '28FA2D4A0FFF3FA039CFFEF586875CB867020EB391DCD31BE3DB3477A8AE2159',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained after silent removal.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the tl;dv missing-uninstaller payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'tldx.tldv', version: '3.0.264', architecture: 'x64',

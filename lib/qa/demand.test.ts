@@ -214,6 +214,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the Pebrel failed-removal profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Kuddev.Pebrel', version: '1.8.0', architecture: 'x64' as const,
+      installerSha256: '28FA2D4A0FFF3FA039CFFEF586875CB867020EB391DCD31BE3DB3477A8AE2159',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained after silent removal.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'inno', installScope: 'user',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:{61022144-7D0A-4E54-94F2-C329A8F58656}_is1:Nebula Terminal',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the tl;dv normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'tldx.tldv', version: '3.0.264', architecture: 'x64' as const,
