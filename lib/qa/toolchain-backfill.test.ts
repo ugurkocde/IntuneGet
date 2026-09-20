@@ -6,15 +6,26 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only the repaired tl;dv identity to the bounded retry targets', () => {
+    const previous = 'e79da0398e3cf3c6874e53b6304a2aef54b5770f';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'tldx.tldv', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'tldx.tldv', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'tldx.Other', status: 'failed' })).toBe(false);
+  });
   it('adds only the repaired Kiwix Electron identity to the bounded retry targets', () => {
     const previous = 'cb3e4501fa7c4470330a1b6031dd5799fee8f9e4';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('e79da0398e3cf3c6874e53b6304a2aef54b5770f')).toEqual([
       'Kiwix.Wikivoyage.Electron', ...terminalToolchainRetryTargets(previous),
     ]);
     const candidate = { wingetId: 'Kiwix.Wikivoyage.Electron', status: 'failed' };
     expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+    expect(shouldRetryTerminalToolchainCandidate('e79da0398e3cf3c6874e53b6304a2aef54b5770f', candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('e79da0398e3cf3c6874e53b6304a2aef54b5770f',
       { wingetId: 'Kiwix.Other', status: 'failed' })).toBe(false);
   });
   it('adds only LPub3D to the managed-context release retry targets', () => {
