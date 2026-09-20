@@ -232,6 +232,24 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the Meitu user-scope profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Meitu.ColorByte.Pro', version: '7.9.4', architecture: 'x64' as const,
+      installerSha256: '7EAA434D370737369D4E8FF6B6680B0C8BB0DE9D630E0D59C1DC5ADD7E3B3CDF',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Installer launch canceled; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'user',
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:美图云修Pro',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the failed TubeDigger Inno profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'TubeDigger.TubeDigger', version: '8.2.5.0', architecture: 'x86' as const,

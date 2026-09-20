@@ -152,6 +152,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the Meitu failed installer payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Meitu.ColorByte.Pro', version: '7.9.4', architecture: 'x64',
+      installerSha256: '7EAA434D370737369D4E8FF6B6680B0C8BB0DE9D630E0D59C1DC5ADD7E3B3CDF',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Installer launch canceled; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a failed exact version and architecture', async () => {
     getQaResultMock.mockResolvedValue(failedRow);
     await expect(
