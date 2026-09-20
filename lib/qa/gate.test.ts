@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the Bitig missing-uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64',
+      installerSha256: '1D6FBF4139EDF32FA66FC2D72151801D8D622760FAE71985A6C1167F47EFFCFF',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent; reputation unverified.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the IVT failed-removal payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'BearStarSoftware.IVTSecureAccessFreeEdition', version: '28.1', architecture: 'x64',

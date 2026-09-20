@@ -214,6 +214,24 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the Bitig normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64' as const,
+      installerSha256: '1D6FBF4139EDF32FA66FC2D72151801D8D622760FAE71985A6C1167F47EFFCFF',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent; reputation unverified.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:Bitig',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the IVT normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'BearStarSoftware.IVTSecureAccessFreeEdition', version: '28.1', architecture: 'x64' as const,
