@@ -37,6 +37,17 @@ describe('application packaging adapters', () => {
     expect(resolveApplicationUninstallCommand('tldx.tldv', 'custom.exe /remove')).toBe('custom.exe /remove');
   });
 
+  it('binds ZCode generated identities to its bare NSIS key and preserves custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:268ce9e6-a30b-5890-ad18-d4b3ebba5377:ZCode';
+    for (const source of ['REGISTRY_UNINSTALL:Z Code', 'REGISTRY_UNINSTALL_PRODUCT:{268CE9E6-A30B-5890-AD18-D4B3EBBA5377}:Z Code', expected]) {
+      expect(resolveApplicationUninstallCommand(' ZhipuAI.ZCode ', source)).toBe(expected);
+    }
+    for (const custom of ['custom.exe /remove', 'REGISTRY_UNINSTALL_PRODUCT:{00000000-0000-0000-0000-000000000000}:Z Code']) {
+      expect(resolveApplicationUninstallCommand('ZhipuAI.ZCode', custom)).toBe(custom);
+    }
+    expect(resolveApplicationUninstallCommand('ZhipuAI.Other', 'REGISTRY_UNINSTALL:Z Code')).toBe('REGISTRY_UNINSTALL:Z Code');
+  });
+
   it('binds Zermelo to the captured exact NSIS key without changing custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo';
     expect(resolveApplicationUninstallCommand(' ZermeloSoftwareBV.ZermeloDesktop ', 'REGISTRY_UNINSTALL:Zermelo Desktop')).toBe(expected);

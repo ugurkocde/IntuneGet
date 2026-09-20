@@ -2456,6 +2456,35 @@ if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'selects only the ZCode bare NSIS key despite the observed Edge registration change',
+    () => {
+      const key = '268ce9e6-a30b-5890-ad18-d4b3ebba5377';
+      const command = resolveApplicationUninstallCommand('ZhipuAI.ZCode', 'REGISTRY_UNINSTALL_PRODUCT:{268CE9E6-A30B-5890-AD18-D4B3EBBA5377}:Z Code');
+      const generated = generateRegistryUninstallPackage('nullsoft', 'Z Code', [], {}, [],
+        'ZhipuAI.ZCode', 'Z Code', '3.14.0', command, '/S /allusers');
+      const identity = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identity).toBeDefined();
+      expect(selection).toBeDefined();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identity}
+$changedApplications = @(
+  [pscustomobject]@{ PSChildName = '${key}'; DisplayName = 'ZCode 3.14.0'; Publisher = 'ZCode' },
+  [pscustomobject]@{ PSChildName = 'Microsoft Edge'; DisplayName = 'Microsoft Edge'; Publisher = 'Microsoft Corporation' }
+)
+${selection}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].PSChildName -ne '${key}') { throw 'Wrong product selected' }
+$changedApplications = @($changedApplications[1])
+${selection}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '" + key + "'");
+      expect(generated).toContain("$registeredInstallerType = 'nullsoft'");
+    }, 30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'selects only the Zermelo NSIS key despite the observed Edge registration change',
     () => {
       const key = 'Zermelo';

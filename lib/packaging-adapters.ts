@@ -1826,6 +1826,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // WinGet 3.14.0 and isolated run 35536993050 identify this bare NSIS key.
+  // The generated braced product code does not match it; Edge servicing must
+  // never become the uninstall target when the catalog title also differs.
+  'zhipuai.zcode': {
+    generatedDisplayName: 'Z Code',
+    manifestRegistryKey: '{268CE9E6-A30B-5890-AD18-D4B3EBBA5377}',
+    registeredDisplayName: 'ZCode',
+    registeredRegistryKey: '268ce9e6-a30b-5890-ad18-d4b3ebba5377',
+  },
   // WinGet's tldx.tldv 3.0.264 manifest and isolated run 35500166302 agree
   // on this exact NSIS key and `tldv 3.0.264` registration. The catalog
   // title `tl;dv` is not its installed name. Keep removal bound to the key.

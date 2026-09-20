@@ -574,6 +574,23 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches ZCode customer packages with the exact bare NSIS key used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZhipuAI.ZCode', displayName: 'Z Code', publisher: 'ZhipuAI',
+      version: '3.14.0', architecture: 'x64',
+      installerSha256: '74AAF7DEEF9B805B993AEAF2133E70EEF74816888B326FC8B4A36C90C4ED15EE',
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S /allusers',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{268CE9E6-A30B-5890-AD18-D4B3EBBA5377}:Z Code',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:268ce9e6-a30b-5890-ad18-d4b3ebba5377:ZCode'
+    );
+  });
+
   it('dispatches Zermelo customer packages with the exact NSIS identity used by QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

@@ -35,6 +35,21 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('normalizes ZCode to the observed bare key without changing its exact payload or install scope', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'ZhipuAI.ZCode', displayName: 'Z Code', publisher: 'ZhipuAI',
+      version: '3.14.0', architecture: 'x64',
+      installerSha256: '74AAF7DEEF9B805B993AEAF2133E70EEF74816888B326FC8B4A36C90C4ED15EE',
+      installerType: 'nullsoft', installScope: 'machine', silentSwitches: '/S /allusers',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{268CE9E6-A30B-5890-AD18-D4B3EBBA5377}:Z Code',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine', silentArgs: '/S /allusers',
+      sha256: '74AAF7DEEF9B805B993AEAF2133E70EEF74816888B326FC8B4A36C90C4ED15EE',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:268ce9e6-a30b-5890-ad18-d4b3ebba5377:ZCode',
+    });
+  });
   it('retains the trusted Kiwix installer while binding its exact installed registry key', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Kiwix.Wikivoyage.Electron', displayName: 'Wikivoyage by Kiwix Electron Edition', publisher: 'Kiwix',
