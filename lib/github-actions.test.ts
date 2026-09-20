@@ -558,6 +558,22 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     );
   });
 
+  it('dispatches tl;dv customer packages with the exact NSIS identity used by QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'tldx.tldv', displayName: 'tl;dv', publisher: 'tldx',
+      version: '3.0.264', architecture: 'x64', installerSha256: 'A'.repeat(64),
+      sourceType: 'winget', installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{D4EF7ABC-E624-5946-B915-B84166F8A4BF}:tl;dv',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(
+      'REGISTRY_UNINSTALL_KEY:d4ef7abc-e624-5946-b915-b84166f8a4bf:tldv'
+    );
+  });
+
   it('dispatches Zermelo customer packages with the exact NSIS identity used by QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

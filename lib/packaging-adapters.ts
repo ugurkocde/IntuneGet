@@ -1826,6 +1826,15 @@ const REVIEWED_REGISTRY_UNINSTALL_IDENTITIES: Readonly<Record<string, Readonly<{
   registeredDisplayName: string;
   registeredRegistryKey?: string;
 }>>> = {
+  // WinGet's tldx.tldv 3.0.264 manifest and isolated run 35500166302 agree
+  // on this exact NSIS key and `tldv 3.0.264` registration. The catalog
+  // title `tl;dv` is not its installed name. Keep removal bound to the key.
+  'tldx.tldv': {
+    generatedDisplayName: 'tl;dv',
+    manifestRegistryKey: '{D4EF7ABC-E624-5946-B915-B84166F8A4BF}',
+    registeredDisplayName: 'tldv',
+    registeredRegistryKey: 'd4ef7abc-e624-5946-b915-b84166f8a4bf',
+  },
   // Kiwix's v3.8.2-Wikivoyage package.json declares productName
   // `Wikivoyage by Kiwix` and appId `kiwix.js.wikivoyage`. Isolated run
   // 35429157707 observed this exact electron-builder key alongside unrelated

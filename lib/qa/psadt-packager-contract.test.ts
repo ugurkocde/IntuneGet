@@ -2426,6 +2426,36 @@ if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'selects only the tl;dv NSIS key despite the observed Edge registration change',
+    () => {
+      const key = 'd4ef7abc-e624-5946-b915-b84166f8a4bf';
+      const command = resolveApplicationUninstallCommand('tldx.tldv', 'REGISTRY_UNINSTALL_PRODUCT:{D4EF7ABC-E624-5946-B915-B84166F8A4BF}:tl;dv');
+      const generated = generateRegistryUninstallPackage('nullsoft', 'tl;dv', [], {}, [],
+        'tldx.tldv', 'tl;dv', '3.0.264', command);
+      const identity = generated.split('\n').find(line => line.includes('$configuredUninstallProductCode ='));
+      const selection = generated.split('\n').find(line => line.includes('$selectedApplications = @($changedApplications | Where-Object { [string]$_.PSChildName -eq'));
+      expect(identity).toBeDefined();
+      expect(selection).toBeDefined();
+      const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${identity}
+$changedApplications = @(
+  [pscustomobject]@{ PSChildName = '${key}'; DisplayName = 'tldv 3.0.264'; Publisher = 'tldx Solutions UG' },
+  [pscustomobject]@{ PSChildName = 'Microsoft EdgeWebView'; DisplayName = 'Microsoft Edge WebView2 Runtime'; Publisher = 'Microsoft Corporation' },
+  [pscustomobject]@{ PSChildName = 'Microsoft Edge'; DisplayName = 'Microsoft Edge'; Publisher = 'Microsoft Corporation' }
+)
+${selection}
+if (@($selectedApplications).Count -ne 1 -or $selectedApplications[0].DisplayName -ne 'tldv 3.0.264') { throw 'Wrong product selected' }
+$changedApplications = @($changedApplications[1])
+${selection}
+if (@($selectedApplications).Count -ne 0) { throw 'Unrelated product selected' }
+`], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(generated).toContain("$configuredProductCode = '" + key + "'");
+      expect(generated).toContain("$registeredInstallerType = 'nullsoft'");
+    }, 30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'selects only the Zermelo NSIS key despite the observed Edge registration change',
     () => {
       const key = 'Zermelo';

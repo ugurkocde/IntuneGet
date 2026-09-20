@@ -1597,6 +1597,24 @@ describe('PSADT QA package identity', () => {
     );
   });
 
+  it('binds tl;dv QA to the captured NSIS key while retaining its trusted installer profile', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'tldx.tldv', displayName: 'tl;dv', publisher: 'tldx',
+      version: '3.0.264', architecture: 'x64',
+      installerSha256: 'BB5007C2BF94F717428D5982CF739489CB0BD0CAFD1A193DA671304AD421B25C',
+      installerType: 'nullsoft', installScope: 'machine',
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{D4EF7ABC-E624-5946-B915-B84166F8A4BF}:tl;dv',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine',
+      sha256: 'BB5007C2BF94F717428D5982CF739489CB0BD0CAFD1A193DA671304AD421B25C',
+      silentArgs: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:d4ef7abc-e624-5946-b915-b84166f8a4bf:tldv',
+    });
+  });
+
   it('binds Zermelo QA to the captured NSIS key while retaining its trusted installer profile', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'ZermeloSoftwareBV.ZermeloDesktop', displayName: 'Zermelo Desktop', publisher: 'Zermelo Software BV',

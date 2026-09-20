@@ -27,6 +27,16 @@ describe('application packaging adapters', () => {
     expect(applyApplicationPackagingAdapter('iZotope.Other', DEFAULT_PSADT_CONFIG)
       .reviewedUninstallArguments).toEqual(DEFAULT_PSADT_CONFIG.reviewedUninstallArguments);
   });
+  it('binds tl;dv to the captured exact NSIS key without changing custom commands', () => {
+    const expected = 'REGISTRY_UNINSTALL_KEY:d4ef7abc-e624-5946-b915-b84166f8a4bf:tldv';
+    expect(resolveApplicationUninstallCommand(' tldx.tldv ', 'REGISTRY_UNINSTALL:tl;dv')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('tldx.tldv', 'REGISTRY_UNINSTALL_PRODUCT:{D4EF7ABC-E624-5946-B915-B84166F8A4BF}:tl;dv')).toBe(expected);
+    expect(resolveApplicationUninstallCommand('tldx.tldv', 'REGISTRY_UNINSTALL_KEY:other:tl;dv')).toBe('REGISTRY_UNINSTALL_KEY:other:tl;dv');
+    expect(resolveApplicationUninstallCommand('tldx.tldv', expected)).toBe(expected);
+    expect(resolveApplicationUninstallCommand('tldx.Other', 'REGISTRY_UNINSTALL:tl;dv')).toBe('REGISTRY_UNINSTALL:tl;dv');
+    expect(resolveApplicationUninstallCommand('tldx.tldv', 'custom.exe /remove')).toBe('custom.exe /remove');
+  });
+
   it('binds Zermelo to the captured exact NSIS key without changing custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo';
     expect(resolveApplicationUninstallCommand(' ZermeloSoftwareBV.ZermeloDesktop ', 'REGISTRY_UNINSTALL:Zermelo Desktop')).toBe(expected);
