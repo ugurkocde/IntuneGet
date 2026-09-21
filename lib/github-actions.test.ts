@@ -930,6 +930,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
     { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
+    { wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64' as const,
+      installerSha256: '4741C1AAD4F058939CAE5A3311E46D9C9F4E3BFAC7BC03F56F582F18C6B5029E' },
     { wingetId: 'Yandex.Disk', version: '3.2.51.5198', architecture: 'x64' as const,
       installerSha256: '07B333208A5C14F18A8B48C99478D53DD39368D1E66D6EEB2DD44CB0F545FFAA' },
     { wingetId: 'Bitig.Bitig', version: '1.0.4', architecture: 'x64' as const,

@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the DeviceShelf failed-launch payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64',
+      installerSha256: '4741C1AAD4F058939CAE5A3311E46D9C9F4E3BFAC7BC03F56F582F18C6B5029E',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Installer launch failed twice before product registration.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the Yandex Disk failed-removal payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Yandex.Disk', version: '3.2.51.5198', architecture: 'x64',
