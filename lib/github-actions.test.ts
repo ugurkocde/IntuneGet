@@ -81,6 +81,22 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('dispatches ZWCAD 2025 customer packages with the same reviewed removal as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_PRODUCT:{82434F95-A001-0000-A200-7E20F67BFF3C}:ZWCAD 2025';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'ZWSOFT.ZWCAD.2025', displayName: 'ZWCAD 2025', publisher: 'ZWSOFT',
+      version: '25.21.10.19929', architecture: 'x64', sourceType: 'winget',
+      installerType: 'exe', installerSha256: '018E6F9E2C5F3F7B88EA5CBF9585B204EB3F9B6536741C82FFE26F61941E0F13',
+      silentSwitches: '/install /quiet', installScope: 'machine', uninstallCommand,
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+    expect(JSON.parse(payload.client_payload.config.psadtConfig)).toMatchObject({
+      reviewedExactUninstall: { executablePath: '%PackageInstaller%', arguments: ['/q', '/u'], completionTimeoutMinutes: 10 },
+    });
+  });
   it('dispatches GreenTunnel in the same user scope as QA with exact registered removal', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

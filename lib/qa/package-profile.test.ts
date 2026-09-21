@@ -35,6 +35,24 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('normalizes ZWCAD 2025 to vendor-documented packaged removal with exact identity', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'ZWSOFT.ZWCAD.2025', displayName: 'ZWCAD 2025', publisher: 'ZWSOFT',
+      version: '25.21.10.19929', architecture: 'x64',
+      installerSha256: '018E6F9E2C5F3F7B88EA5CBF9585B204EB3F9B6536741C82FFE26F61941E0F13',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/install /quiet',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{82434F95-A001-0000-A200-7E20F67BFF3C}:ZWCAD 2025',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      installScope: 'machine', silentArgs: '/install /quiet',
+      sha256: '018E6F9E2C5F3F7B88EA5CBF9585B204EB3F9B6536741C82FFE26F61941E0F13',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{82434F95-A001-0000-A200-7E20F67BFF3C}:ZWCAD 2025',
+    });
+    expect(normalized.identity.profile.psadtConfig).toMatchObject({
+      reviewedExactUninstall: { executablePath: '%PackageInstaller%', arguments: ['/q', '/u'], completionTimeoutMinutes: 10 },
+    });
+  });
   it('normalizes ZCode to the observed bare key without changing its exact payload or install scope', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'ZhipuAI.ZCode', displayName: 'Z Code', publisher: 'ZhipuAI',

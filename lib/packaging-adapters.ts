@@ -1167,6 +1167,18 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // ZWCAD 2025's cached ARP helper returns without removing its exact
+    // registration (QA run 35624376194). ZWSOFT documents removal through
+    // the original installer: https://confluence.zwcad.com/pages/viewpage.action?pageId=314348444
+    // Retain exact registration completion checks and the verified payload.
+    wingetId: 'ZWSOFT.ZWCAD.2025',
+    reviewedExactUninstall: {
+      executablePath: '%PackageInstaller%',
+      arguments: ['/q', '/u'],
+      completionTimeoutMinutes: 10,
+    },
+  },
+  {
     // DDPM registers its private setup helper with interactive removal
     // arguments. Replaying that ARP command from Intune leaves the exact
     // product registration, services, and drivers installed. Stop the reviewed

@@ -10,6 +10,18 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('binds ZWCAD 2025 packaged removal only to the reviewed application', () => {
+    for (const id of ['ZWSOFT.ZWCAD.2025', ' zwsoft.zwcad.2025 ']) {
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedExactUninstall).toEqual({
+        executablePath: '%PackageInstaller%', arguments: ['/q', '/u'], completionTimeoutMinutes: 10,
+      });
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+    }
+    for (const id of ['ZWSOFT.ZWCAD.2026', 'ZWSOFT.NetworkLicenseManager', 'Other.App']) {
+      expect(applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG).reviewedExactUninstall).toBeUndefined();
+    }
+  });
   it('binds only the reviewed Kiwix Electron identity and preserves custom commands', () => {
     const expected = 'REGISTRY_UNINSTALL_KEY:149170a6-d630-5e6f-a054-8c34dd8a32a2:Wikivoyage by Kiwix';
     expect(resolveApplicationUninstallCommand(' Kiwix.Wikivoyage.Electron ', 'REGISTRY_UNINSTALL:Wikivoyage by Kiwix Electron Edition')).toBe(expected);
