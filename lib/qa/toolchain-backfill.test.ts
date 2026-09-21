@@ -6,15 +6,26 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only ZWCAD 2025 to the bounded retry targets', () => {
+    const previous = '5e561aeff961e42e63eba4fee4696c15a0cbff71';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'ZWSOFT.ZWCAD.2025', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'ZWSOFT.ZWCAD.2025', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+      { wingetId: 'ZWSOFT.ZWCAD.2026', status: 'failed' })).toBe(false);
+  });
   it('adds only ZCode to the bounded retry targets', () => {
     const previous = 'c861e3a90f8bbf28842b86ab0070230efecaf3a9';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('5e561aeff961e42e63eba4fee4696c15a0cbff71')).toEqual([
       'ZhipuAI.ZCode', ...terminalToolchainRetryTargets(previous),
     ]);
     const candidate = { wingetId: 'ZhipuAI.ZCode', status: 'failed' };
     expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+    expect(shouldRetryTerminalToolchainCandidate('5e561aeff961e42e63eba4fee4696c15a0cbff71', candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('5e561aeff961e42e63eba4fee4696c15a0cbff71',
       { wingetId: 'ZhipuAI.Other', status: 'failed' })).toBe(false);
   });
   it('adds only the repaired tl;dv identity to the bounded retry targets', () => {
