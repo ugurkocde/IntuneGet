@@ -214,6 +214,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the ZoiteChat machine Inno profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64' as const,
+      installerSha256: 'F3FABDAE2DC83A6AE2344DC1BCF1AD836C4FD4D5472D9B5E681C57CC8F972E08',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled; no exact uninstall identity.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'inno', installScope: 'machine',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:ZoiteChat_is1:ZoiteChat',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the DeviceShelf user profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64' as const,

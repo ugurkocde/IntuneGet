@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the ZoiteChat stalled-install payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64',
+      installerSha256: 'F3FABDAE2DC83A6AE2344DC1BCF1AD836C4FD4D5472D9B5E681C57CC8F972E08',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled; no exact uninstall identity.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the DeviceShelf failed-launch payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64',

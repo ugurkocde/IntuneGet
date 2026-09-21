@@ -928,6 +928,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   it.each([
     { wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64' as const,
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
+    { wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64' as const,
+      installerSha256: 'F3FABDAE2DC83A6AE2344DC1BCF1AD836C4FD4D5472D9B5E681C57CC8F972E08' },
     { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
     { wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64' as const,
