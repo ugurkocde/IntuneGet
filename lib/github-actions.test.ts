@@ -930,6 +930,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
     { wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64' as const,
       installerSha256: 'F3FABDAE2DC83A6AE2344DC1BCF1AD836C4FD4D5472D9B5E681C57CC8F972E08' },
+    { wingetId: 'zokugun.MrCode', version: '1.82.0.23253', architecture: 'x64' as const,
+      installerSha256: '9BB0835D2F8F1F0EF8FB489B3040471BC16676DCE1670BAA8C7876A71D73EF06' },
     { wingetId: 'Zoom.Zoom', version: '7.2.48358', architecture: 'x64' as const,
       installerSha256: '132A59637FCFF4F0F01891F163A7726976D72A4DD7199EC4C0A224CB8E28D5D1' },
     { wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64' as const,

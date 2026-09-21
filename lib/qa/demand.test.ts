@@ -214,6 +214,26 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the MrCode failed-removal profile before normalization or queue insertion', async () => {
+    const tuple = {
+      wingetId: 'zokugun.MrCode', version: '1.82.0.23253', architecture: 'x64' as const,
+      installerSha256: '9BB0835D2F8F1F0EF8FB489B3040471BC16676DCE1670BAA8C7876A71D73EF06',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained after exit 1.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'inno', installScope: 'machine',
+      silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
+      uninstallCommand: 'REGISTRY_UNINSTALL:MrCode',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the ZoiteChat machine Inno profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64' as const,

@@ -138,6 +138,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the MrCode failed-removal payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'zokugun.MrCode', version: '1.82.0.23253', architecture: 'x64',
+      installerSha256: '9BB0835D2F8F1F0EF8FB489B3040471BC16676DCE1670BAA8C7876A71D73EF06',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained after exit 1.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the ZoiteChat stalled-install payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'ZoiteChat.ZoiteChat', version: '2.19.0', architecture: 'x64',
