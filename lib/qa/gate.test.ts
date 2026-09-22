@@ -166,6 +166,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks Wardian missing-uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'WardianApp.Wardian', version: '0.6.1', architecture: 'x64',
+      installerSha256: '5804571F3796E39ED8AC5FFC23F068E17199477531BD1007C9CDF71A8FE64AF6',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured vendor uninstaller is missing.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the ZWSOFT License Manager failed-removal payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'ZWSOFT.NetworkLicenseManager', version: '1.3.10', architecture: 'x64',

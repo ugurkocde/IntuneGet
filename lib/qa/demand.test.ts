@@ -253,6 +253,27 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the Wardian normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'WardianApp.Wardian', version: '0.6.1', architecture: 'x64' as const,
+      installerSha256: '5804571F3796E39ED8AC5FFC23F068E17199477531BD1007C9CDF71A8FE64AF6',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured vendor uninstaller is missing.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe',
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:Wardian',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the ZWSOFT License Manager normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'ZWSOFT.NetworkLicenseManager', version: '1.3.10', architecture: 'x64' as const,
