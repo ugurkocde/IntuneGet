@@ -6,15 +6,27 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only ZWCAD 2026 to the bounded retry targets', () => {
+    const previous = 'e7410e97df040bd38f11842ccf259abd9bc757f7';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'ZWSOFT.ZWCAD.2026', ...terminalToolchainRetryTargets(previous),
+    ]);
+    const candidate = { wingetId: 'ZWSOFT.ZWCAD.2026', status: 'failed' };
+    expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
+    for (const wingetId of ['ZWSOFT.ZWCAD.2027', 'ZWSOFT.ZWCAD.Mechanical.2026', 'ZWSOFT.NetworkLicenseManager']) {
+      expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId, status: 'failed' })).toBe(false);
+    }
+  });
   it('adds only ZWCAD 2025 to the bounded retry targets', () => {
     const previous = '5e561aeff961e42e63eba4fee4696c15a0cbff71';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('e7410e97df040bd38f11842ccf259abd9bc757f7')).toEqual([
       'ZWSOFT.ZWCAD.2025', ...terminalToolchainRetryTargets(previous),
     ]);
     const candidate = { wingetId: 'ZWSOFT.ZWCAD.2025', status: 'failed' };
     expect(shouldRetryTerminalToolchainCandidate(previous, candidate)).toBe(false);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, candidate)).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit,
+    expect(shouldRetryTerminalToolchainCandidate('e7410e97df040bd38f11842ccf259abd9bc757f7', candidate)).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('e7410e97df040bd38f11842ccf259abd9bc757f7',
       { wingetId: 'ZWSOFT.ZWCAD.2026', status: 'failed' })).toBe(false);
   });
   it('adds only ZCode to the bounded retry targets', () => {
