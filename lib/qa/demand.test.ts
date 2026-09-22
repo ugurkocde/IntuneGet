@@ -253,6 +253,27 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the HeyboxChat normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Qingfeng.HeyboxChat', version: '1.58.0', architecture: 'x64' as const,
+      installerSha256: 'C32F3FB488EC5B1FBD046DCE3098719DF2F20C270020A8F692941D5DC686DC55',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured vendor uninstaller is missing.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
+      silentSwitches: 'update', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:HeyboxChat:黑盒语音',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the Wardian normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'WardianApp.Wardian', version: '0.6.1', architecture: 'x64' as const,

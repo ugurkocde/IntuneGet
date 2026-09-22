@@ -166,6 +166,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks HeyboxChat missing-uninstaller payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Qingfeng.HeyboxChat', version: '1.58.0', architecture: 'x64',
+      installerSha256: 'C32F3FB488EC5B1FBD046DCE3098719DF2F20C270020A8F692941D5DC686DC55',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured vendor uninstaller is missing.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks Wardian missing-uninstaller payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'WardianApp.Wardian', version: '0.6.1', architecture: 'x64',
