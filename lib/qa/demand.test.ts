@@ -253,6 +253,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the ZWSOFT License Manager normalized profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'ZWSOFT.NetworkLicenseManager', version: '1.3.10', architecture: 'x64' as const,
+      installerSha256: '89D5794BF27134E3EBD985B36BCA951D7608C69383F6A420597CE794B2699D63',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after vendor removal.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
+      silentSwitches: '/install /quiet',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{B53D2C4E-E455-4441-B2D2-539C6D889782}:ZWSOFT Network License Manager',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the DeviceShelf user profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64' as const,

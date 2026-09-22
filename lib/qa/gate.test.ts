@@ -166,6 +166,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks the ZWSOFT License Manager failed-removal payload with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'ZWSOFT.NetworkLicenseManager', version: '1.3.10', architecture: 'x64',
+      installerSha256: '89D5794BF27134E3EBD985B36BCA951D7608C69383F6A420597CE794B2699D63',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after vendor removal.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the DeviceShelf failed-launch payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'ChristofMueller.DeviceShelf', version: '1.9.30', architecture: 'x64',
