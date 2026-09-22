@@ -1389,6 +1389,25 @@ ${merge}
   );
 
   it.runIf(canRunWindowsPowerShellPackager)(
+    'generates ZWCAD 2026 vendor removal while retaining exact registration completion',
+    () => {
+      const generated = generateRegistryUninstallPackage(
+        'exe', 'ZWCAD 2026', [],
+        applyApplicationPackagingAdapter('ZWSOFT.ZWCAD.2026', DEFAULT_PSADT_CONFIG),
+        [], 'ZWSOFT.ZWCAD.2026', 'ZWCAD 2026', '26.10.0.20036',
+        'REGISTRY_UNINSTALL_PRODUCT:{CBC94276-A001-0000-A200-255782FFDEE0}:ZWCAD 2026',
+        '/install /quiet'
+      );
+      const uninstall = generated.slice(generated.indexOf('function Uninstall-ADTDeployment'), generated.indexOf('function Repair-ADTDeployment'));
+      expect(uninstall).toContain("$registeredUninstallFile = Join-Path $adtSession.DirFiles 'setup.exe'");
+      expect(uninstall).toContain("$registeredUninstallArguments = @('/q', '/u')");
+      expect(uninstall).toContain('{CBC94276-A001-0000-A200-255782FFDEE0}');
+      expect(uninstall).toContain('The vendor uninstall command did not remove registration');
+      expect(uninstall).toContain('$effectiveUninstallCompletionTimeoutMinutes = if ($useReviewedExactUninstall) { 10 }');
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
     'verifies and removes a reviewed self-extracted managed directory without ARP capture',
     () => {
       const generated = generateRegistryUninstallPackage(

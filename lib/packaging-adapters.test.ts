@@ -10,15 +10,15 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
-  it('binds ZWCAD 2025 packaged removal only to the reviewed application', () => {
-    for (const id of ['ZWSOFT.ZWCAD.2025', ' zwsoft.zwcad.2025 ']) {
+  it('binds ZWCAD packaged removal only to the reviewed 2025 and 2026 editions', () => {
+    for (const id of ['ZWSOFT.ZWCAD.2025', ' zwsoft.zwcad.2025 ', 'ZWSOFT.ZWCAD.2026', ' zwsoft.zwcad.2026 ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
       expect(adapted.reviewedExactUninstall).toEqual({
         executablePath: '%PackageInstaller%', arguments: ['/q', '/u'], completionTimeoutMinutes: 10,
       });
       expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
     }
-    for (const id of ['ZWSOFT.ZWCAD.2026', 'ZWSOFT.NetworkLicenseManager', 'Other.App']) {
+    for (const id of ['ZWSOFT.ZWCAD.2027', 'ZWSOFT.ZWCAD.Personal', 'ZWSOFT.ZWCAD.Mechanical.2026', 'ZWSOFT.NetworkLicenseManager', 'Other.App']) {
       expect(applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG).reviewedExactUninstall).toBeUndefined();
     }
   });

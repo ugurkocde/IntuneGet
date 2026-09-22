@@ -1179,6 +1179,17 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     },
   },
   {
+    // The same cached-helper failure affects 2026 (QA run 35681512218).
+    // ZWSOFT's original-installer /q /u contract above applies to 2023+.
+    // Bind this to the exact edition and preserve exact registration removal.
+    wingetId: 'ZWSOFT.ZWCAD.2026',
+    reviewedExactUninstall: {
+      executablePath: '%PackageInstaller%',
+      arguments: ['/q', '/u'],
+      completionTimeoutMinutes: 10,
+    },
+  },
+  {
     // DDPM registers its private setup helper with interactive removal
     // arguments. Replaying that ARP command from Intune leaves the exact
     // product registration, services, and drivers installed. Stop the reviewed
