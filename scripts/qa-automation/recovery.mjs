@@ -25,11 +25,12 @@ export function rateLimitUntil(response, now = Date.now()) {
 export async function publicationJob(runId, github) {
   if (!/^[1-9][0-9]*$/.test(runId || '')) throw new Error('Invalid QA workflow run ID');
   const run = await github(`/actions/runs/${runId}`);
+  if (!run) throw new Error('Incomplete QA workflow evidence');
   if (String(run.id) !== runId || run.path !== '.github/workflows/intune-qa.yml' ||
       run.head_branch !== 'main' || run.event !== 'workflow_dispatch') throw new Error('QA workflow identity mismatch');
   if (run.status !== 'completed') return { waiting: true };
   const payload = await github(`/actions/runs/${runId}/jobs?filter=all&per_page=100`);
-  if (!Array.isArray(payload.jobs) || payload.total_count > 100) throw new Error('Incomplete QA job evidence');
+  if (!payload || !Array.isArray(payload.jobs) || payload.total_count > 100) throw new Error('Incomplete QA job evidence');
   const latest = name => payload.jobs.filter(j => j.name === name).sort((a, b) => a.id - b.id).at(-1);
   const qa = latest('qa');
   const publisher = latest('Publish compact app JSON');

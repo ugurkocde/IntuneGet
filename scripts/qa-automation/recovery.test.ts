@@ -66,6 +66,12 @@ describe('durable infrastructure recovery', () => {
     expect(await recoverInfrastructure(deps({ ...c, recovery_attempts: 5 }))).toMatchObject({ action: 'recovery_exhausted', repairRequired: true });
     await expect(publicationJob('123', async () => ({ id: 123, event: 'push', path: 'wrong.yml' }))).rejects.toThrow('identity mismatch');
   });
+  it('rejects empty successful GET responses as incomplete evidence', async () => {
+    await expect(publicationJob('123', async () => null)).rejects.toThrow('Incomplete QA workflow evidence');
+    await expect(publicationJob('123', async path => path.includes('/jobs?') ? null : {
+      id: 123, event: 'workflow_dispatch', path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'completed',
+    })).rejects.toThrow('Incomplete QA job evidence');
+  });
   it('honors GitHub reset/Retry-After headers and caps exponential delays', () => {
     const response = new Response('', { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String((now + 3600000) / 1000) } });
     expect(Date.parse(rateLimitUntil(response, now))).toBe(now + 3605000);
