@@ -73,7 +73,7 @@ export async function recoverInfrastructure({ rows, patch, github, now = Date.no
       continue;
     }
     if (otherWork.length || (c.test_config?.profileKind === 'catalog-default' &&
-        Date.parse(latestResult[0]?.tested_at_utc) > Date.parse(c.finished_at) && latestResult[0]?.tested_version !== c.version)) {
+        Date.parse(latestResult[0]?.tested_at_utc) > Date.parse(c.finished_at))) {
       if (!dryRun) await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error' }, {
         status: 'superseded', updated_at: new Date(now).toISOString(),
         failure_summary: 'A newer QA candidate or result already covers this application.',
