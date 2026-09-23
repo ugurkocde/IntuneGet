@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PUBLICATION_FAILURE, recoveryKind, retryDelayMs, rateLimitUntil, publicationJob, recoverInfrastructure } from './recovery.mjs';
-import { repairCompletion } from './repair-process.mjs';
+import { repairCompletion, runRepair } from './repair-process.mjs';
 
 const c = { id: 'a', winget_id: 'Example.App', version: '1', architecture: 'x64', installer_sha256: 'A'.repeat(64),
   status: 'error', test_level: 'psadt-package', failure_summary: PUBLICATION_FAILURE, finished_at: '2026-09-22T00:00:00Z',
@@ -64,5 +68,19 @@ describe('durable infrastructure recovery', () => {
     expect(repairCompletion(0, null, false, '')).toBe('incomplete');
     expect(repairCompletion(1, null, true, 'Partial')).toBe('failed');
     expect(repairCompletion(null, 'SIGTERM', false, '')).toBe('terminated');
+  });
+  it.each(['complete', 'partial'])('persists real child-process completion and heartbeat: %s', async mode => {
+    const root = mkdtempSync(join(tmpdir(), 'intuneget-repair-test-'));
+    try {
+      mkdirSync(join(root, 'logs'));
+      writeFileSync(join(root, 'repair-request.md'), mode);
+      const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'repair-cli.mjs');
+      expect(await runRepair(root, root, fixture, process.pid)).toBe(mode === 'complete' ? 0 : 1);
+      const state = JSON.parse(readFileSync(join(root, 'repair-run.json'), 'utf8'));
+      expect(state).toMatchObject({ status: mode === 'complete' ? 'completed' : 'incomplete', threadId: 'test-thread' });
+      expect(state.agentPid).toBeGreaterThan(0);
+      expect(Number.isFinite(Date.parse(state.lastEventAtUtc))).toBe(true);
+      expect(Number.isFinite(Date.parse(state.finishedAtUtc))).toBe(true);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });
