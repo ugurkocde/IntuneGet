@@ -606,8 +606,8 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Existing successful execution profiles keep their compatibility history.
   '9e51c9ab6cc3a28346f13266e566c9896fa4101b',
   // Product Portal gains unattended uninstall arguments in its canonical
-  // config. Unchanged execution profiles remain compatible; strict cohort
-  // reporting still requires the exact current shared pin.
+  // config. Unchanged execution profiles remain compatible. The cohort audit
+  // reports compatible-lineage evidence separately from exact-current-pin passes.
   '305b9c41a4ccbd271a9873a4fd858d2515586b76',
   // LPub3D gains managed-context uninstall arguments. Its profile changes;
   // unrelated identical execution profiles retain compatibility, not strict count credit.

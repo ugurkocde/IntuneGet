@@ -45,7 +45,7 @@ function testUuid(index: number): string {
 
 function query(result: QueryResult) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['eq', 'in', 'order', 'limit', 'or', 'select']) {
+  for (const method of ['eq', 'in', 'order', 'limit', 'or', 'select', 'lte', 'delete']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -81,6 +81,7 @@ function candidate(profileKind: 'catalog-default' | 'deployment-config') {
     version: profileInput.version,
     architecture: profileInput.architecture,
     installer_sha256: profileInput.installerSha256,
+    installer_url: 'https://example.com/installer.exe',
     package_profile_sha256: identity.packageProfileSha256,
     test_config: {
       profileKind,
@@ -122,7 +123,9 @@ function createSupabaseStub(
   let queuePageIndex = 0;
 
   const client = {
+    rpc: vi.fn(async () => ({ data: '2026-09-24T12:30:00.000Z', error: null })),
     from: vi.fn((table: string) => {
+      if (table === 'qa_source_backoff') return query({ data: null, error: null });
       if (table === 'qa_pipeline_control') {
         return query({
           data: {
@@ -683,13 +686,13 @@ describe('GET /api/cron/qa-dispatch', () => {
     expect(dispatchQaCandidateMock).toHaveBeenCalledTimes(1);
   });
 
-  it('terminates an exhausted installer preflight retry and continues dispatching', async () => {
+  it('persists an installer cooldown after repeated failures and continues dispatching', async () => {
     const unavailable = candidate('catalog-default');
     unavailable.id = testUuid(52);
     unavailable.attempts = 1;
     const valid = candidate('catalog-default');
     valid.id = testUuid(53);
-    const { client, claimedIds, terminalErrorIds, terminalErrorPayloads } = createSupabaseStub([
+    const { client, claimedIds, terminalErrorIds, rollbackPayloads } = createSupabaseStub([
       unavailable,
       valid,
     ]);
@@ -708,11 +711,11 @@ describe('GET /api/cron/qa-dispatch', () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ dispatched: true, candidateId: valid.id });
     expect(claimedIds).toEqual([unavailable.id, valid.id]);
-    expect(terminalErrorIds).toEqual([unavailable.id]);
-    expect(terminalErrorPayloads).toContainEqual(expect.objectContaining({
-      status: 'error',
+    expect(terminalErrorIds).toEqual([]);
+    expect(rollbackPayloads).toContainEqual(expect.objectContaining({
+      status: 'queued',
       attempts: 2,
-      finished_at: expect.any(String),
+      next_retry_at: '2026-09-24T12:30:00.000Z',
     }));
   });
 

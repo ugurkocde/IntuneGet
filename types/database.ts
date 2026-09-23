@@ -23,6 +23,18 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      qa_automation_state: {
+        Row: { id: string; value: Json; updated_at: string };
+        Insert: { id: string; value: Json; updated_at?: string };
+        Update: { value?: Json; updated_at?: string };
+        Relationships: GenericRelationship[];
+      };
+      qa_source_backoff: {
+        Row: { source_key: string; failure_count: number; next_retry_at: string; last_candidate_id: string; last_attempt: number; updated_at: string };
+        Insert: { source_key: string; failure_count: number; next_retry_at: string; last_candidate_id: string; last_attempt: number; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['qa_source_backoff']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       installer_health: {
         Row: {
           cache_key: string;
@@ -204,6 +216,9 @@ export interface Database {
       };
       qa_candidates: {
         Row: {
+          next_retry_at: string | null;
+          recovery_attempts: number;
+          recovery_history: Json;
           id: string;
           winget_id: string;
           definition_path: string | null;
@@ -238,6 +253,9 @@ export interface Database {
           updated_at: string;
         };
         Insert: {
+          next_retry_at?: string | null;
+          recovery_attempts?: number;
+          recovery_history?: Json;
           id?: string;
           winget_id: string;
           definition_path?: string | null;
@@ -2442,6 +2460,14 @@ export interface Database {
       };
     };
     Functions: {
+      qa_toolchain_backfill_page: {
+        Args: { p_after?: string; p_limit?: number; p_terminal_retry_ids?: string[] };
+        Returns: Json;
+      };
+      record_qa_source_failure: {
+        Args: { p_source_key: string; p_candidate_id: string; p_attempt: number };
+        Returns: string;
+      };
       authorize_qa_live_frame_ingest: {
         Args: {
           p_secret: string;

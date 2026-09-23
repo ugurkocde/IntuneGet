@@ -52,7 +52,8 @@ const INITIAL_LOOKBACK_MINUTES = 30;
 const MAX_RECORDED_ERRORS = 100;
 const MAX_ERROR_LENGTH = 1_000;
 const TOOLCHAIN_BACKFILL_BATCH_SIZE = 3;
-const TOOLCHAIN_BACKFILL_PAGE_SIZE = 1_000;
+const TOOLCHAIN_BACKFILL_PAGE_SIZE = 100;
+const TOOLCHAIN_BACKFILL_MAX_PAGES = 2;
 // Reconciliation is metadata-only until an immutable installer payload is
 // found without a prior pass. Keep VM execution serialized, but scan enough
 // deployed-app demand per poll to avoid spending hours reclassifying known
@@ -181,6 +182,24 @@ function hasInteractiveCatalogQaProfile(testConfig: unknown): boolean {
 async function findToolchainBackfillIds(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<{ ids: string[]; pagesScanned: number }> {
+  const stateId = `toolchain-backfill:${QA_PSADT_TOOLCHAIN.packagerCommit}`;
+  const { data: saved, error: stateError } = await supabase.from('qa_automation_state')
+    .select('value').eq('id', stateId).maybeSingle();
+  if (stateError) throw new Error(`Could not read QA backfill checkpoint: ${stateError.message}`);
+  const checkpoint = object(saved?.value);
+  let after = typeof checkpoint.after === 'string' ? checkpoint.after : '';
+  const pending = Array.isArray(checkpoint.pending)
+    ? checkpoint.pending.filter((id): id is string => typeof id === 'string') : [];
+  const finish = async (ids: string[], pagesScanned: number) => {
+    const { error } = await supabase.from('qa_automation_state').upsert({
+      id: stateId,
+      value: { after, pending: ids.slice(TOOLCHAIN_BACKFILL_BATCH_SIZE) },
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(`Could not save QA backfill checkpoint: ${error.message}`);
+    return { ids: ids.slice(0, TOOLCHAIN_BACKFILL_BATCH_SIZE), pagesScanned };
+  };
+  if (pending.length) return finish(pending, 0);
   const decidedIds = new Set<string>();
   const supportedStaleCandidates: QaToolchainBackfillCandidate[] = [];
   const retryTargets = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
@@ -216,29 +235,15 @@ async function findToolchainBackfillIds(
       ].map((row) => row.winget_id.trim().toLowerCase())
     );
   }
-  let cursor: { enqueuedAt: string; id: string } | null = null;
   let pagesScanned = 0;
 
-  while (true) {
-    let candidateQuery = supabase
-      .from('qa_candidates')
-      .select(
-        'id, winget_id, version, architecture, installer_sha256, enqueued_at, package_profile_sha256, test_config, status, priority, demand_source'
-      )
-      .eq('test_level', 'psadt-package')
-      .not('package_profile_sha256', 'is', null)
-      .order('enqueued_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(TOOLCHAIN_BACKFILL_PAGE_SIZE);
-    if (cursor) {
-      candidateQuery = candidateQuery.or(
-        `enqueued_at.lt.${cursor.enqueuedAt},and(enqueued_at.eq.${cursor.enqueuedAt},id.lt.${cursor.id})`
-      );
-    }
-
-    const { data, error } = await candidateQuery;
+  while (pagesScanned < TOOLCHAIN_BACKFILL_MAX_PAGES) {
+    const { data, error } = await supabase.rpc('qa_toolchain_backfill_page', {
+      p_after: after, p_limit: TOOLCHAIN_BACKFILL_PAGE_SIZE,
+      p_terminal_retry_ids: [...terminalRetryIds],
+    });
     if (error) throw new Error(`Could not scan prior QA toolchains: ${error.message}`);
-    const rows = (data || []) as QaCandidateProfileRow[];
+    const rows = (data || []) as unknown as QaCandidateProfileRow[];
     pagesScanned++;
 
     let pageStaleRows: QaCandidateProfileRow[] = [];
@@ -380,31 +385,22 @@ async function findToolchainBackfillIds(
       }
     }
 
+    const last = rows.at(-1);
+    after = rows.length < TOOLCHAIN_BACKFILL_PAGE_SIZE ? '' : last?.winget_id || after;
     if (
       supportedStaleCandidates.length >= TOOLCHAIN_BACKFILL_BATCH_SIZE &&
       pendingTerminalRetryIds.size === 0
     ) {
-      return {
-        ids: prioritizeToolchainBackfill(supportedStaleCandidates).slice(
-          0,
-          TOOLCHAIN_BACKFILL_BATCH_SIZE
-        ),
-        pagesScanned,
-      };
+      return finish(prioritizeToolchainBackfill(supportedStaleCandidates), pagesScanned);
     }
     if (rows.length < TOOLCHAIN_BACKFILL_PAGE_SIZE) {
-      return {
-        ids: prioritizeToolchainBackfill(supportedStaleCandidates),
-        pagesScanned,
-      };
+      return finish(prioritizeToolchainBackfill(supportedStaleCandidates), pagesScanned);
     }
-
-    const last = rows.at(-1);
-    if (!last?.enqueued_at || !last.id) {
+    if (!last?.winget_id) {
       throw new Error('Could not advance the QA toolchain backfill cursor.');
     }
-    cursor = { enqueuedAt: last.enqueued_at, id: last.id };
   }
+  return finish(prioritizeToolchainBackfill(supportedStaleCandidates), pagesScanned);
 }
 
 function errorMessage(error: unknown): string {
@@ -658,10 +654,15 @@ export async function GET(request: Request) {
         `WinGet GitHub change feed paused until ${changes.rateLimitedUntil}`
       );
     }
+    // Historical reconciliation must not discard successfully discovered updates.
+    // A failed lane is retried from its checkpoint on the next poll.
     const [backfill, demandBackfillIds, catalogBackfillIds] = await Promise.all([
-      targetedRecovery ? { ids: [] as string[], pagesScanned: 0 } : findToolchainBackfillIds(supabase),
-      targetedRecovery ? [] as string[] : findDemandBackfillIds(supabase),
-      targetedRecovery ? [] as string[] : findIdleCatalogBackfillIds(supabase),
+      targetedRecovery ? { ids: [] as string[], pagesScanned: 0 } : findToolchainBackfillIds(supabase)
+        .catch((error) => { recordPollError(summary, 'toolchain-backfill', error); return { ids: [] as string[], pagesScanned: 0 }; }),
+      targetedRecovery ? [] as string[] : findDemandBackfillIds(supabase)
+        .catch((error) => { recordPollError(summary, 'demand-backfill', error); return [] as string[]; }),
+      targetedRecovery ? [] as string[] : findIdleCatalogBackfillIds(supabase)
+        .catch((error) => { recordPollError(summary, 'catalog-backfill', error); return [] as string[]; }),
     ]);
     toolchainBackfillPagesScanned = backfill.pagesScanned;
     demandBackfillRequestedCount = demandBackfillIds.length;

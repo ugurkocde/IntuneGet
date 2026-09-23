@@ -1,0 +1,5 @@
+{
+  "title": "More resilient application QA",
+  "summary": "Application QA now recovers missing results automatically, schedules retries for temporarily unavailable downloads, and continues checking updates when a background scan encounters an error.",
+  "type": "improved"
+}

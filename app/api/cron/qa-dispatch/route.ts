@@ -10,6 +10,7 @@ import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
+import { qaSourceKey, qaSourceRetryAt } from '@/lib/qa/source-backoff';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -78,17 +79,6 @@ export async function GET(request: Request) {
     });
   }
   const now = new Date();
-  const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
-  if (cancelledWaitingRunIds.length > 0) {
-    // Cancellation is asynchronous. Let GitHub release the single-flight
-    // concurrency slot before this endpoint considers another dispatch.
-    return NextResponse.json({
-      success: true,
-      dispatched: false,
-      reason: 'stale_waiting_run_cancelled',
-      cancelledRuns: cancelledWaitingRunIds.length,
-    });
-  }
   const { data: active, error: activeError } = await supabase
     .from('qa_candidates')
     .select('*')
@@ -148,6 +138,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, dispatched: false, reason: 'qa_active', reconciled });
   }
 
+  // Healthy VM telemetry needs no GitHub API inspection. Check orphaned
+  // waiting workflows only when the single-flight slot is actually free.
+  const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
+  if (cancelledWaitingRunIds.length > 0) {
+    return NextResponse.json({ success: true, dispatched: false,
+      reason: 'stale_waiting_run_cancelled', cancelledRuns: cancelledWaitingRunIds.length });
+  }
+
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
   let scanned = 0;
   let superseded = 0;
@@ -164,10 +162,11 @@ export async function GET(request: Request) {
     let queueQuery = supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts'
+        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts'
       )
       .eq('test_level', 'psadt-package')
       .eq('status', 'queued')
+      .lte('next_retry_at', now.toISOString())
       .order('priority', { ascending: false })
       .order('enqueued_at', { ascending: true })
       .order('id', { ascending: true })
@@ -250,6 +249,15 @@ export async function GET(request: Request) {
     cursor = nextCursor;
 
     for (const candidate of eligible) {
+      const sourceKey = qaSourceKey(candidate);
+      const sourceRetryAt = await qaSourceRetryAt(supabase, sourceKey);
+      if (sourceRetryAt) {
+        const { error } = await supabase.from('qa_candidates')
+          .update({ next_retry_at: sourceRetryAt })
+          .eq('id', candidate.id).eq('status', 'queued');
+        if (error) throw error;
+        continue;
+      }
       const dispatchedAt = new Date().toISOString();
       const { data: claimed, error: claimError } = await supabase
         .from('qa_candidates')
@@ -293,6 +301,12 @@ export async function GET(request: Request) {
 
       try {
         await dispatchQaCandidate(claimed);
+        // Dispatch has already succeeded; never roll back its claim if bookkeeping fails.
+        try {
+          const { error: clearError } = await supabase.from('qa_source_backoff')
+            .delete().eq('source_key', sourceKey);
+          if (clearError) console.warn('Could not clear completed installer cooldown', clearError.code);
+        } catch { console.warn('Could not clear completed installer cooldown'); }
         return NextResponse.json({
           success: true,
           dispatched: true,
@@ -337,31 +351,24 @@ export async function GET(request: Request) {
           const attempts = Number.isInteger(claimed.attempts)
             ? claimed.attempts
             : candidate.attempts + 1;
-          const exhausted = attempts >= MAX_ATTEMPTS;
+          const exhausted = false;
+          const { data: nextRetryAt, error: backoffError } = await supabase.rpc('record_qa_source_failure', {
+            p_source_key: sourceKey, p_candidate_id: claimed.id, p_attempt: attempts,
+          });
+          if (backoffError) throw backoffError;
           const { error: deferError } = await supabase
             .from('qa_candidates')
-            .update(exhausted
-              ? {
-                  status: 'error',
-                  attempts,
-                  finished_at: deferredAt,
-                  phase: null,
-                  phase_started_at: null,
-                  phase_updated_at: null,
-                  failure_summary:
-                    `The installer source remained unavailable after ${attempts} verification attempts. The app was not tested.`,
-                  updated_at: deferredAt,
-                }
-              : {
+            .update({
                   status: 'queued',
                   attempts,
+                  next_retry_at: nextRetryAt,
                   enqueued_at: deferredAt,
                   dispatched_at: null,
                   phase: null,
                   phase_started_at: null,
                   phase_updated_at: null,
                   failure_summary:
-                    'The installer source is temporarily unavailable; retry scheduled behind other queued apps.',
+                    'The installer source is temporarily unavailable; another check is scheduled.',
                   updated_at: deferredAt,
                 })
             .eq('id', claimed.id)
@@ -386,8 +393,7 @@ export async function GET(request: Request) {
             });
           }
           // A transient publisher/CDN response must not block unrelated apps.
-          // Move the candidate behind the current queue (or terminate after the
-          // bounded retry limit) and continue within this dispatch tick.
+          // Persist an increasing cooldown on the same row and exact source.
           continue;
         }
         await supabase
