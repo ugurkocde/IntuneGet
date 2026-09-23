@@ -49,6 +49,8 @@ describe("release history display helpers", () => {
     expect(updateSize("1.0", "1.0.1")).toBe("patch");
     expect(updateSize("2.0.1", "2.0.0")).toBe("lower");
     expect(updateSize("1.2.0-beta", "1.2.0")).toBeNull();
+    expect(updateSize("1.2.0-beta", "1.3.0")).toBeNull();
+    expect(updateSize("1.2.0", "1.2.1-rc1")).toBeNull();
     expect(updateSize("2025.12.1", "2026.1.0")).toBeNull();
     expect(updateSize("2026.1.0", "2026.2.0")).toBe("minor");
     expect(updateSize("1.0", "1.0.0")).toBeNull();

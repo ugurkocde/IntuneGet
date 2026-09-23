@@ -97,8 +97,8 @@ export type UpdateSize = "major" | "minor" | "patch" | "lower";
  * null when the versions are not comparable (non-numeric or date-style schemes). */
 export function updateSize(previous: string | null, next: string): UpdateSize | null {
   const parse = (version: string) => {
-    const parts = version.trim().replace(/^v/i, "").split(".").map(part => /^\d+/.exec(part)?.[0]);
-    return parts.every((part): part is string => part !== undefined) ? parts.map(Number) : null;
+    const parts = version.trim().replace(/^v/i, "").split(".");
+    return parts.every(part => /^\d+$/.test(part)) ? parts.map(Number) : null;
   };
   const before = previous ? parse(previous) : null;
   const after = parse(next);
