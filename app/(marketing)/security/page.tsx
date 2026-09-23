@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     "Exactly which Microsoft Graph permissions IntuneGet requests, how admin consent works, where data lives, and why installers and credentials never touch our infrastructure.",
   alternates: {
-    canonical: "https://intuneget.com/security",
+    canonical: "https://www.intuneget.com/security",
   },
   openGraph: {
     title: "Security & Permissions | IntuneGet",
@@ -27,13 +27,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Security & Permissions",
-      item: "https://intuneget.com/security",
+      item: "https://www.intuneget.com/security",
     },
   ],
 };

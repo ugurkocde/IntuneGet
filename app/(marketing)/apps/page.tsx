@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   description:
     "Browse the Winget catalog IntuneGet deploys to Microsoft Intune - popular apps, publishers, and categories. No sign-in required.",
   alternates: {
-    canonical: "https://intuneget.com/apps",
+    canonical: "https://www.intuneget.com/apps",
   },
   openGraph: {
     title: "Browse the App Catalog - IntuneGet",
@@ -36,13 +36,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "App Catalog",
-      item: "https://intuneget.com/apps",
+      item: "https://www.intuneget.com/apps",
     },
   ],
 };

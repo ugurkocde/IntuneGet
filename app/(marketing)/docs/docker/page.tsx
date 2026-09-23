@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   description:
     "Deploy IntuneGet with Docker and Docker Compose. Complete guide for containerized self-hosting.",
   alternates: {
-    canonical: "https://intuneget.com/docs/docker",
+    canonical: "https://www.intuneget.com/docs/docker",
   },
   openGraph: {
     title: "Docker Deployment | IntuneGet Docs",

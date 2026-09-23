@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "IntuneGet was built by Ugur Koc to solve a real problem: IT teams wasting hours on repetitive app packaging. Learn about our mission to make Intune deployment free and effortless.",
   alternates: {
-    canonical: "https://intuneget.com/about",
+    canonical: "https://www.intuneget.com/about",
   },
   openGraph: {
     title: "About IntuneGet - Our Mission & Story",
@@ -28,13 +28,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "About",
-      item: "https://intuneget.com/about",
+      item: "https://www.intuneget.com/about",
     },
   ],
 };
@@ -48,7 +48,7 @@ const aboutJsonLd = {
   mainEntity: {
     "@type": "SoftwareApplication",
     name: "IntuneGet",
-    url: "https://intuneget.com",
+    url: "https://www.intuneget.com",
   },
 };
 

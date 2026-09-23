@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   description:
     "Optional GitHub Actions pipeline for IntuneGet app packaging. The local packager is now the recommended approach.",
   alternates: {
-    canonical: "https://intuneget.com/docs/github-setup",
+    canonical: "https://www.intuneget.com/docs/github-setup",
   },
   openGraph: {
     title: "GitHub Setup | IntuneGet Docs",

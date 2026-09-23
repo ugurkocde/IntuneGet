@@ -31,7 +31,7 @@ function buildSoftwareApplicationJsonLd(appCountLabel: string) {
     name: "IntuneGet",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    url: "https://intuneget.com",
+    url: "https://www.intuneget.com",
     downloadUrl: "https://github.com/ugurkocde/IntuneGet",
     softwareVersion: packageJson.version,
     datePublished: "2024-01-01",
@@ -62,7 +62,7 @@ function buildSoftwareApplicationJsonLd(appCountLabel: string) {
       "AI-Powered App Discovery",
       "PSADT v4 Support",
     ],
-    screenshot: "https://intuneget.com/og-image.png",
+    screenshot: "https://www.intuneget.com/og-image.png",
   };
 }
 
@@ -114,7 +114,7 @@ const faqPageJsonLd = {
     acceptedAnswer: {
       "@type": "Answer",
       text: faq.linkHref
-        ? `${faq.answer} Learn more: https://intuneget.com${faq.linkHref}`
+        ? `${faq.answer} Learn more: https://www.intuneget.com${faq.linkHref}`
         : faq.answer,
     },
   })),

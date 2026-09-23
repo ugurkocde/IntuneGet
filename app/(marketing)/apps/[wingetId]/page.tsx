@@ -128,8 +128,8 @@ export default async function AppDetailPage({ params }: PageProps) {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://intuneget.com' },
-      { '@type': 'ListItem', position: 2, name: 'App Catalog', item: 'https://intuneget.com/apps' },
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.intuneget.com' },
+      { '@type': 'ListItem', position: 2, name: 'App Catalog', item: 'https://www.intuneget.com/apps' },
       { '@type': 'ListItem', position: 3, name: app.name, item: absoluteAppCatalogUrl(app.winget_id) },
     ],
   };

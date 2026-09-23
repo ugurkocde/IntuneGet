@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "Where the IntuneGet catalog comes from, what is stored, whether installer binaries are mirrored, and the state of a private catalog.",
   alternates: {
-    canonical: "https://intuneget.com/docs/catalog",
+    canonical: "https://www.intuneget.com/docs/catalog",
   },
   openGraph: {
     title: "Catalog & Supply Chain | IntuneGet Docs",

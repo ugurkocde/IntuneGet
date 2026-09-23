@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description:
     "SQLite database for IntuneGet self-hosting. Zero-configuration, embedded database that just works.",
   alternates: {
-    canonical: "https://intuneget.com/docs/database-setup",
+    canonical: "https://www.intuneget.com/docs/database-setup",
   },
   openGraph: {
     title: "Database Setup | IntuneGet Docs",

@@ -3,7 +3,7 @@ import { blogPosts } from "@/lib/data/blog-data";
 import { getCatalogSource } from "@/lib/catalog";
 import { absoluteAppCatalogUrl, mergeCategoryCounts } from "@/lib/catalog/seo";
 
-const BASE_URL = "https://intuneget.com";
+const BASE_URL = "https://www.intuneget.com";
 
 export function generateSitemaps() {
   return [{ id: 0 }, { id: 1 }, { id: 2 }];

@@ -16,12 +16,12 @@ export const metadata: Metadata = {
   title: post.title,
   description: post.description,
   alternates: {
-    canonical: "https://intuneget.com/blog/intune-winget-integration-guide",
+    canonical: "https://www.intuneget.com/blog/intune-winget-integration-guide",
   },
   openGraph: {
     title: post.title,
     description: post.description,
-    url: "https://intuneget.com/blog/intune-winget-integration-guide",
+    url: "https://www.intuneget.com/blog/intune-winget-integration-guide",
     type: "article",
     publishedTime: post.date,
     authors: [post.author],
@@ -42,19 +42,19 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Blog",
-      item: "https://intuneget.com/blog",
+      item: "https://www.intuneget.com/blog",
     },
     {
       "@type": "ListItem",
       position: 3,
       name: post.title,
-      item: "https://intuneget.com/blog/intune-winget-integration-guide",
+      item: "https://www.intuneget.com/blog/intune-winget-integration-guide",
     },
   ],
 };
@@ -79,11 +79,11 @@ const articleJsonLd = {
   publisher: {
     "@type": "Organization",
     name: "IntuneGet",
-    url: "https://intuneget.com",
+    url: "https://www.intuneget.com",
   },
-  image: "https://intuneget.com/favicon.svg",
+  image: "https://www.intuneget.com/favicon.svg",
   mainEntityOfPage:
-    "https://intuneget.com/blog/intune-winget-integration-guide",
+    "https://www.intuneget.com/blog/intune-winget-integration-guide",
   keywords: [
     "Intune Winget integration",
     "Winget Intune",

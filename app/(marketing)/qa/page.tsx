@@ -13,15 +13,15 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Live Application QA - IntuneGet',
   description: 'Follow IntuneGet application package quality assurance in real time, from isolated installation through detection and uninstall verification.',
-  alternates: { canonical: 'https://intuneget.com/qa' },
+  alternates: { canonical: 'https://www.intuneget.com/qa' },
 };
 
 const breadcrumbJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
   itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://intuneget.com' },
-    { '@type': 'ListItem', position: 2, name: 'Application QA', item: 'https://intuneget.com/qa' },
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.intuneget.com' },
+    { '@type': 'ListItem', position: 2, name: 'Application QA', item: 'https://www.intuneget.com/qa' },
   ],
 };
 

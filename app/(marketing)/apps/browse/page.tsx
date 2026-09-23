@@ -18,7 +18,7 @@ function parsePage(value: string | string[] | undefined): number {
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const page = parsePage((await searchParams).page);
-  const canonical = page === 1 ? 'https://intuneget.com/apps/browse' : `https://intuneget.com/apps/browse?page=${page}`;
+  const canonical = page === 1 ? 'https://www.intuneget.com/apps/browse' : `https://www.intuneget.com/apps/browse?page=${page}`;
   return {
     title: `Browse all apps, page ${page} - IntuneGet`,
     description: 'Browse the complete IntuneGet app catalog for Microsoft Intune deployment.',

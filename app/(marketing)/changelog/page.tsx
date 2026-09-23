@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description:
     "Track the latest updates, features, and improvements to IntuneGet. See what's new in the free, open-source Intune app deployment tool.",
   alternates: {
-    canonical: "https://intuneget.com/changelog",
+    canonical: "https://www.intuneget.com/changelog",
   },
   openGraph: {
     title: "IntuneGet Changelog - Release History",
@@ -312,13 +312,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Changelog",
-      item: "https://intuneget.com/changelog",
+      item: "https://www.intuneget.com/changelog",
     },
   ],
 };

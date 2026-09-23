@@ -12,7 +12,7 @@ export function ReleaseFeedDialog({ app }: { app?: string }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "copying" | "copied" | "error">("idle");
-  const feedUrl = `https://intuneget.com/apps/releases/feed${app ? `?app=${encodeURIComponent(app)}` : ""}`;
+  const feedUrl = `https://www.intuneget.com/apps/releases/feed${app ? `?app=${encodeURIComponent(app)}` : ""}`;
 
   async function copyUrl() {
     setStatus("copying");

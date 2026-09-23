@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `Deploy ${name} apps to Microsoft Intune - IntuneGet`,
     description: `Browse ${name} apps that IntuneGet can package and deploy to Microsoft Intune.`,
-    alternates: { canonical: `https://intuneget.com/apps/category/${slug}` },
+    alternates: { canonical: `https://www.intuneget.com/apps/category/${slug}` },
   };
 }
 
@@ -82,9 +82,9 @@ export default async function CategoryPage({ params }: PageProps) {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://intuneget.com' },
-      { '@type': 'ListItem', position: 2, name: 'App Catalog', item: 'https://intuneget.com/apps' },
-      { '@type': 'ListItem', position: 3, name: categoryInfo.name, item: `https://intuneget.com/apps/category/${slug}` },
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.intuneget.com' },
+      { '@type': 'ListItem', position: 2, name: 'App Catalog', item: 'https://www.intuneget.com/apps' },
+      { '@type': 'ListItem', position: 3, name: categoryInfo.name, item: `https://www.intuneget.com/apps/category/${slug}` },
     ],
   };
   const itemListJsonLd = {

@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   description:
     "Learn how to self-host IntuneGet - comprehensive documentation for deploying your own Intune app deployment solution.",
   alternates: {
-    canonical: "https://intuneget.com/docs",
+    canonical: "https://www.intuneget.com/docs",
   },
   openGraph: {
     title: "Documentation | IntuneGet",

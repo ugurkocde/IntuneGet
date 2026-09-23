@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "See where IntuneGet is heading: shipped features, what's being built right now, and what comes next for the free, open-source Intune app deployment tool.",
   alternates: {
-    canonical: "https://intuneget.com/roadmap",
+    canonical: "https://www.intuneget.com/roadmap",
   },
   openGraph: {
     title: "IntuneGet Roadmap",
@@ -48,13 +48,13 @@ const breadcrumbJsonLd = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://intuneget.com",
+      item: "https://www.intuneget.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Roadmap",
-      item: "https://intuneget.com/roadmap",
+      item: "https://www.intuneget.com/roadmap",
     },
   ],
 };

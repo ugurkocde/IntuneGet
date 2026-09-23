@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "How IntuneGet builds a Win32 package from a public WinGet manifest, what is pinned, and how to verify a package yourself.",
   alternates: {
-    canonical: "https://intuneget.com/docs/packaging",
+    canonical: "https://www.intuneget.com/docs/packaging",
   },
   openGraph: {
     title: "Packaging & Verification | IntuneGet Docs",

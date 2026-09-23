@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   description:
     "Operational documentation for inventory browsing, reporting, and upload job tracking.",
   alternates: {
-    canonical: "https://intuneget.com/docs/inventory-reports-uploads",
+    canonical: "https://www.intuneget.com/docs/inventory-reports-uploads",
   },
   openGraph: {
     title: "Inventory, Reports, and Uploads | IntuneGet Docs",

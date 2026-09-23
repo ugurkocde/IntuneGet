@@ -66,7 +66,7 @@ export async function generateMetadata({
     description: appName
       ? `Every ${appName} version IntuneGet has recorded from WinGet, with release notes, installer hashes, and VirusTotal results where available.`
       : "Track every WinGet app update IntuneGet records for Intune, with release notes, installer hashes, VirusTotal results, and monthly history.",
-    alternates: { canonical: "https://intuneget.com/apps/releases", types: { "application/rss+xml": `/apps/releases/feed${filters.app ? `?app=${encodeURIComponent(filters.app)}` : ""}` } },
+    alternates: { canonical: "https://www.intuneget.com/apps/releases", types: { "application/rss+xml": `/apps/releases/feed${filters.app ? `?app=${encodeURIComponent(filters.app)}` : ""}` } },
     robots: {
       index: !filters.app && !hasActiveFilters(filters) && filters.page === 1,
       follow: true,

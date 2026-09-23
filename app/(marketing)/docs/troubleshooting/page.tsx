@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   description:
     "Common issues and solutions for IntuneGet self-hosting. FAQ and debugging guide.",
   alternates: {
-    canonical: "https://intuneget.com/docs/troubleshooting",
+    canonical: "https://www.intuneget.com/docs/troubleshooting",
   },
   openGraph: {
     title: "Troubleshooting | IntuneGet Docs",
