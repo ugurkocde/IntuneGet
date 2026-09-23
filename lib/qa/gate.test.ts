@@ -673,6 +673,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks TimeScribe 1.17.1 with its missing registered uninstaller even with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'WINBIGFOX.TimeScribe', version: '1.17.1', architecture: 'x64',
+      installerSha256: '6DBADEF47A4ED4ADA5BEFA798462A6571D2B5525AC9FA1E5E96F202469C645E1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact XplicitTrust release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64',

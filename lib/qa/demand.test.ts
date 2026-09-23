@@ -741,6 +741,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks the failed TimeScribe 1.17.1 bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'WINBIGFOX.TimeScribe', version: '1.17.1', architecture: 'x64' as const,
+      installerSha256: '6DBADEF47A4ED4ADA5BEFA798462A6571D2B5525AC9FA1E5E96F202469C645E1',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
+      silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{932B644F-CF07-5D84-AEF8-0B37BF9D7CE1}:TimeScribe',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks stalled WebView2 bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64' as const,

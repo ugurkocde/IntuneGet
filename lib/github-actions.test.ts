@@ -1032,6 +1032,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
       installerSha256: 'D736C896A039A9AFB8B7D4339A79293FAAAC6EF3F164DAF2DD44F8702997178A' },
     { wingetId: 'luqiangbo.DockMapper', version: '1.1.5', architecture: 'x64' as const,
       installerSha256: '2C17B07EA68C59D38FCE1DACCD88F294FF6E018DC2A87355E95771CC0F141D50' },
+    { wingetId: 'WINBIGFOX.TimeScribe', version: '1.17.1', architecture: 'x64' as const,
+      installerSha256: '6DBADEF47A4ED4ADA5BEFA798462A6571D2B5525AC9FA1E5E96F202469C645E1' },
   ])('never sends a customer Actions payload for quarantined $wingetId, even with override', async (tuple) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
