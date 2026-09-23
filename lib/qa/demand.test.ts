@@ -253,6 +253,25 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it('blocks the Yuanfudao failed uninstall profile before queue insertion', async () => {
+    const tuple = {
+      wingetId: 'Yuanfudao.Yuanfudao', version: '7.31.0', architecture: 'x64' as const,
+      installerSha256: '0AABCD7B3C471C4C27269874ABC88F338A55E170C3FCF7D132B577B3FB9BA6F2',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after silent uninstall.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:tutor-electron-student:猿辅导',
+    })).resolves.toMatchObject({ state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.' });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it('blocks the HeyboxChat normalized profile before queue insertion', async () => {
     const tuple = {
       wingetId: 'Qingfeng.HeyboxChat', version: '1.58.0', architecture: 'x64' as const,

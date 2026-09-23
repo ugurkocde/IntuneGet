@@ -166,6 +166,18 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks Yuanfudao failed-removal payload with override=%s', async (qaOverride) => {
+    const tuple = { wingetId: 'Yuanfudao.Yuanfudao', version: '7.31.0', architecture: 'x64',
+      installerSha256: '0AABCD7B3C471C4C27269874ABC88F338A55E170C3FCF7D132B577B3FB9BA6F2' };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after silent uninstall.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks HeyboxChat missing-uninstaller payload with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Qingfeng.HeyboxChat', version: '1.58.0', architecture: 'x64',

@@ -960,6 +960,8 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
   it.each([
     { wingetId: 'Microsoft.SQLServer.2025.Developer', version: '17.0.1000.7', architecture: 'x64' as const,
       installerSha256: 'F2FDCEA621E29B2DD09E3802FD6FE7664A2037BED02349854CCAE96C4A03BBF1' },
+    { wingetId: 'Yuanfudao.Yuanfudao', version: '7.31.0', architecture: 'x64' as const,
+      installerSha256: '0AABCD7B3C471C4C27269874ABC88F338A55E170C3FCF7D132B577B3FB9BA6F2' },
     { wingetId: 'Qingfeng.HeyboxChat', version: '1.58.0', architecture: 'x64' as const,
       installerSha256: 'C32F3FB488EC5B1FBD046DCE3098719DF2F20C270020A8F692941D5DC686DC55' },
     { wingetId: 'WardianApp.Wardian', version: '0.6.1', architecture: 'x64' as const,
