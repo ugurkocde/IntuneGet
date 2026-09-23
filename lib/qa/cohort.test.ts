@@ -45,4 +45,16 @@ describe('authoritative cohort audit', () => {
     const { c, input } = fixture();
     expect(auditQaCohort({ ...input, candidates: [c, c] }).strictCount).toBe(1);
   });
+  it('accepts legacy URL-only run identity but rejects wrong repositories and conflicting IDs', () => {
+    const { c, r } = fixture();
+    const github_run_url = 'https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/12345';
+    expect(strictEvidenceReason(c, { ...r, github_run_id: null, github_run_url })).toBeNull();
+    expect(strictEvidenceReason(c, { ...r, github_run_id: null, github_run_url: github_run_url.replace('ugurkocde', 'untrusted') })).toBe('runMismatch');
+    expect(strictEvidenceReason(c, { ...r, github_run_url: github_run_url.replace('12345', '999') })).toBe('runMismatch');
+  });
+  it('does not count a historical app as new when its old detailed result was replaced', () => {
+    const { c, input } = fixture();
+    const historical = { ...c, finished_at: '2026-08-29T12:00:00Z', package_profile_sha256: 'B'.repeat(64) };
+    expect(auditQaCohort({ ...input, candidates: [historical, c] }).strictCount).toBe(0);
+  });
 });

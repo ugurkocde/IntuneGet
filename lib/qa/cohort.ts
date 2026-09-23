@@ -34,7 +34,15 @@ export function strictEvidenceReason(candidate: Row, result: Row | undefined): s
   if (object(result.environment).executionContext !== 'LocalSystem') return 'executionContext';
   if (result.virustotal_status !== 'clean' || result.virustotal_malicious !== 0 || result.virustotal_suspicious !== 0) return 'virusTotalNotClean';
   if (norm(object(profile.toolchain).packagerCommit) !== norm(result.packager_commit)) return 'resultPinMismatch';
-  if (!candidate.github_run_id || candidate.github_run_id !== result.github_run_id) return 'runMismatch';
+  // Published results historically stored the canonical run URL without filling
+  // github_run_id. Accept that exact trusted-repository identity, never an
+  // arbitrary URL suffix or conflicting ID/URL pair.
+  const urlRun = typeof result.github_run_url === 'string'
+    ? result.github_run_url.match(/^https:\/\/github\.com\/ugurkocde\/IntuneGet-Workflows\/actions\/runs\/([1-9][0-9]*)\/?$/i)?.[1]
+    : undefined;
+  const resultRun = result.github_run_id || urlRun;
+  if (!/^[1-9][0-9]*$/.test(String(candidate.github_run_id)) || candidate.github_run_id !== resultRun ||
+      (result.github_run_id && result.github_run_url && urlRun !== result.github_run_id)) return 'runMismatch';
   if (!Number.isFinite(Date.parse(String(candidate.finished_at))) ||
       !Number.isFinite(Date.parse(String(result.tested_at_utc)))) return 'missingTimestamp';
   return null;
@@ -54,7 +62,11 @@ export function auditQaCohort(input: {
     if (reason) reject(reason);
     return !reason;
   });
-  const historical = new Set(strict.filter(c => Date.parse(String(c.finished_at)) <= Date.parse(boundary)).map(c => norm(c.winget_id)));
+  // Conservative baseline: a previous PSADT pass can exclude an app but never
+  // grant new cohort credit. Result rows are upserted; losing the old detailed
+  // evidence must not make a historically tested app appear new after a rerun.
+  const historical = new Set(input.candidates.filter(c => c.status === 'passed' &&
+    c.test_level === 'psadt-package' && Date.parse(String(c.finished_at)) <= Date.parse(boundary)).map(c => norm(c.winget_id)));
   const deployed = new Set(input.deployedIds.map(norm));
   const blocked = new Set(input.blockedIds.map(norm));
   const payloadKey = (c: Row) => JSON.stringify([norm(c.winget_id), c.version, norm(c.architecture), norm(c.installer_sha256)]);
@@ -81,6 +93,7 @@ export function auditQaCohort(input: {
   return {
     boundaryUtc: boundary, target: QA_COHORT_TARGET, policyVersion: 2,
     policy: 'strict-evidence-approved-compatible-release-lineage',
+    historicalExclusionPolicy: 'conservative-preboundary-psadt-pass-record',
     strictCount: accepted.size, currentPinCount,
     remaining: Math.max(0, QA_COHORT_TARGET - accepted.size),
     requiredPin: QA_PSADT_TOOLCHAIN.packagerCommit,

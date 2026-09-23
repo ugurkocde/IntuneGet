@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
   const [candidates, results, deployed, appBlocks, excluded, payloads] = await Promise.all([
     all((s,e) => db.from('qa_candidates').select('id,winget_id,version,architecture,status,test_level,installer_sha256,package_profile_sha256,finished_at,test_config,github_run_id').eq('status','passed').eq('test_level','psadt-package').order('id').range(s,e)),
-    all((s,e) => db.from('qa_package_results').select('winget_id,tested_version,architecture,installer_sha256,package_profile_sha256,outcome,phase_results,environment,packager_commit,tested_at_utc,virustotal_status,virustotal_malicious,virustotal_suspicious,github_run_id').eq('outcome','Passed').order('package_profile_sha256').range(s,e)),
+    all((s,e) => db.from('qa_package_results').select('winget_id,tested_version,architecture,installer_sha256,package_profile_sha256,outcome,phase_results,environment,packager_commit,tested_at_utc,virustotal_status,virustotal_malicious,virustotal_suspicious,github_run_id,github_run_url').eq('outcome','Passed').order('package_profile_sha256').range(s,e)),
     all((s,e) => db.from('upload_history').select('winget_id').order('id').range(s,e)),
     all((s,e) => db.from('package_eligibility_blocks').select('winget_id').order('winget_id').range(s,e)),
     all((s,e) => db.from('curated_excluded_apps').select('winget_id').order('winget_id').range(s,e)),

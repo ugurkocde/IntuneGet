@@ -44,6 +44,10 @@ compatibility rules preserve unaffected passes across packager releases.
 `currentPinCount` is separately reported and does not reset cohort progress.
 Eligibility blocks and changed behavior can still invalidate affected passes.
 This policy is a deliberate correction to the former exact-current-pin count.
+The historical exclusion is conservative: a pre-boundary PSADT pass record
+excludes an app even if a later result replaced its old detailed evidence. It
+cannot grant new credit. Run identity accepts the exact protected-repository
+run URL used by older publishers, as well as a matching explicit run ID.
 
 ## Scanning and repair sessions
 
