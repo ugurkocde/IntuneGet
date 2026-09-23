@@ -72,6 +72,17 @@ describe('durable infrastructure recovery', () => {
       id: 123, event: 'workflow_dispatch', path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'completed',
     })).rejects.toThrow('Incomplete QA job evidence');
   });
+  it('uses a fresh lifecycle for legacy post-merge failures, but permits idempotent publishers', async () => {
+    const run = { id: 123, event: 'workflow_dispatch', path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'completed' };
+    const steps = [{ name: 'Merge result through protected branch', conclusion: 'success' }];
+    const github = async (path: string) => path.includes('/jobs?') ? { total_count: 2, jobs: [
+      { name: 'qa', conclusion: 'success' },
+      { name: 'Publish compact app JSON', id: 456, status: 'completed', conclusion: 'failure', steps },
+    ] } : run;
+    expect(await publicationJob('123', github)).toEqual({ lifecycleRequired: true });
+    steps.push({ name: 'Commit or reuse the compact result', conclusion: 'success' });
+    expect(await publicationJob('123', github)).toEqual({ jobId: 456 });
+  });
   it('honors GitHub reset/Retry-After headers and caps exponential delays', () => {
     const response = new Response('', { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String((now + 3600000) / 1000) } });
     expect(Date.parse(rateLimitUntil(response, now))).toBe(now + 3605000);

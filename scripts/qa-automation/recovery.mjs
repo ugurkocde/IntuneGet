@@ -34,6 +34,13 @@ export async function publicationJob(runId, github) {
   const latest = name => payload.jobs.filter(j => j.name === name).sort((a, b) => a.id - b.id).at(-1);
   const qa = latest('qa');
   const publisher = latest('Publish compact app JSON');
+  const merged = publisher?.steps?.some(step => step.name === 'Merge result through protected branch' && step.conclusion === 'success');
+  const replaySafe = publisher?.steps?.some(step => step.name === 'Commit or reuse the compact result');
+  const legacyCommitFailed = publisher?.steps?.some(step => step.name === 'Commit the compact result' && step.conclusion === 'failure');
+  // Older inline workflows cannot skip a no-change commit after their PR merged.
+  // Replay them through a fresh lifecycle using current protected code instead
+  // of exhausting every publisher retry on the same non-idempotent git commit.
+  if (!replaySafe && (merged || legacyCommitFailed)) return { lifecycleRequired: true };
   // A job-specific rerun preserves completed VM evidence, including failures.
   // Failed lifecycle evidence must reach the normal fail-close reporter too.
   if (['success', 'failure'].includes(qa?.conclusion) && publisher?.status === 'completed' &&
