@@ -158,6 +158,8 @@ export type SccmMappingResult = SccmMatchResult;
  */
 export interface CatalogSource {
   getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult>;
+  /** Matching record count only, without per-release metadata or scan enrichment. */
+  countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number>;
   // --- search / discovery ---
 
   /** RPC search_curated_apps. Returns the raw rows + error so each caller keeps

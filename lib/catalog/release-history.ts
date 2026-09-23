@@ -86,3 +86,41 @@ export function historyUrl(
 export function appHistoryUrl(app: string): string {
   return historyUrl({ query: "", month: "", kind: "all", page: 1, app }, 1);
 }
+
+export function hasActiveFilters(filters: ReleaseHistoryFilters): boolean {
+  return Boolean(filters.query || filters.month || filters.from || filters.to || filters.architecture || filters.kind !== "all");
+}
+
+export type UpdateSize = "major" | "minor" | "patch" | "lower";
+
+/** Classifies a version change by its first differing numeric segment. Returns
+ * null when the versions are not comparable (non-numeric or date-style schemes). */
+export function updateSize(previous: string | null, next: string): UpdateSize | null {
+  const parse = (version: string) => {
+    const parts = version.trim().replace(/^v/i, "").split(".").map(part => /^\d+/.exec(part)?.[0]);
+    return parts.every((part): part is string => part !== undefined) ? parts.map(Number) : null;
+  };
+  const before = previous ? parse(previous) : null;
+  const after = parse(next);
+  if (!before || !after) return null;
+  for (let i = 0; i < Math.max(before.length, after.length); i++) {
+    const a = before[i] ?? 0;
+    const b = after[i] ?? 0;
+    if (a === b) continue;
+    if (b < a) return "lower";
+    // A changed year-like leading segment (2025.x -> 2026.x) says nothing about scope.
+    if (i === 0) return a >= 1000 || b >= 1000 ? null : "major";
+    return i === 1 ? "minor" : "patch";
+  }
+  return null;
+}
+
+/** Page numbers to link around the current page, with "gap" for elided ranges. */
+export function pageWindow(current: number, total: number): (number | "gap")[] {
+  const pages = [...new Set([1, current - 1, current, current + 1, total])]
+    .filter(page => page >= 1 && page <= total)
+    .sort((a, b) => a - b);
+  return pages.flatMap((page, index) =>
+    index > 0 && page - pages[index - 1] > 1 ? (["gap", page] as const) : [page],
+  );
+}

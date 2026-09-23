@@ -181,6 +181,11 @@ function buildFtsMatch(query: string): string | null {
 }
 
 export class SnapshotCatalogSource implements CatalogSource {
+  async countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
+    // Local sqlite enrichment of one page is cheap, so reuse the full query.
+    return (await this.getReleaseHistory(filters)).total;
+  }
+
   async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     return withDb((db) => {
       // Older snapshots remain readable; release dates were not exported then.

@@ -61,16 +61,26 @@ function serviceOrAnonClient() {
 let warnedMissingQaServiceRole = false;
 
 export class SupabaseCatalogSource implements CatalogSource {
-  async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
-    const client = serviceOrAnonClient();
-    if (!client) throw new Error('Catalog unavailable');
+  private async releaseHistoryPage(client: NonNullable<ReturnType<typeof serviceOrAnonClient>>, filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const { data, error } = await client.rpc('get_catalog_release_history_v2', {
       app_filter: filters.app ?? "", date_from: filters.from || null, date_to: filters.to || null, architecture_filter: filters.architecture ?? "",
       search_text: filters.query, month_filter: filters.month,
       kind_filter: filters.kind, page_number: filters.page,
     }).abortSignal(AbortSignal.timeout(15_000));
     if (error) throw new Error('Catalog history unavailable', { cause: error });
-    const result = data as ReleaseHistoryResult;
+    return data as ReleaseHistoryResult;
+  }
+
+  async countReleaseHistory(filters: ReleaseHistoryFilters): Promise<number> {
+    const client = serviceOrAnonClient();
+    if (!client) throw new Error('Catalog unavailable');
+    return (await this.releaseHistoryPage(client, filters)).total;
+  }
+
+  async getReleaseHistory(filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
+    const client = serviceOrAnonClient();
+    if (!client) throw new Error('Catalog unavailable');
+    const result = await this.releaseHistoryPage(client, filters);
     if (!result.rows.length) return result;
     let recoverySignal: AbortSignal | undefined;
     const {metadata, unavailable} = await loadReleaseMetadata(result.rows, batch => {
