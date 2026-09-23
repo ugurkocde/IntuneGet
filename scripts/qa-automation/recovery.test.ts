@@ -53,6 +53,15 @@ describe('durable infrastructure recovery', () => {
     expect(d.github).not.toHaveBeenCalled();
     expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
   });
+  it('never republishes stale catalog evidence over a newer result of the same version', async () => {
+    const candidate = { ...c, test_config: { profileKind: 'catalog-default' } };
+    const d = deps(candidate);
+    d.rows.mockImplementation(async (table, params) => table === 'qa_candidates' && params.status === 'eq.error' ? [candidate]
+      : table === 'qa_results' ? [{ tested_version: c.version, tested_at_utc: new Date(now).toISOString() }] as never : []);
+    expect(await recoverInfrastructure(d)).toMatchObject({ action: 'no_recovery_due' });
+    expect(d.github).not.toHaveBeenCalled();
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
+  });
   it('escalates an exhausted retry budget and rejects an untrusted workflow', async () => {
     expect(await recoverInfrastructure(deps({ ...c, recovery_attempts: 5 }))).toMatchObject({ action: 'recovery_exhausted', repairRequired: true });
     await expect(publicationJob('123', async () => ({ id: 123, event: 'push', path: 'wrong.yml' }))).rejects.toThrow('identity mismatch');

@@ -110,7 +110,9 @@ async function github(path, init = {}) {
       body: JSON.stringify({ id: 'github-recovery-budget', value: { retryAt }, updated_at: new Date().toISOString() }) });
   }
   if (!response.ok) throw Object.assign(new Error(`GitHub recovery returned ${response.status}.`), { httpStatus: response.status, retryAt });
-  return response.status === 204 ? null : response.json();
+  // Job rerun can return an empty 201 response, not only an empty 204.
+  const payload = await response.text();
+  return payload ? JSON.parse(payload) : null;
 }
 
 async function exactCount(table, params) {
