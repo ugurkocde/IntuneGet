@@ -763,6 +763,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks the failed Opera 136.0.6008.52 bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Opera.Opera', version: '136.0.6008.52', architecture: 'x64' as const,
+      installerSha256: 'E628250756E8B7AD9CDE787DFAE806AA2929CA66B77F23D72020BEEDCFB8D1F9',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Opera registration remained after the reviewed uninstall command.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope,
+      silentSwitches: '/silent /allusers=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Opera Stable',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks stalled WebView2 bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64' as const,

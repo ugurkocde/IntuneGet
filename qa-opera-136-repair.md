@@ -1,0 +1,13 @@
+# Opera 136.0.6008.52 exact-payload containment
+
+Production audit on 2026-09-24: immutable cohort boundary `2026-08-30T08:28:35Z`, authoritative policy v2 strict count **41/500**. Auto-paused, zero active candidates, four queued.
+
+Candidate `6ef0456b-7ed2-442a-8324-258f2d777a25`, [run 36010747225](https://github.com/ugurkocde/IntuneGet-Workflows/actions/runs/36010747225), x64. Installer SHA `E628250756E8B7AD9CDE787DFAE806AA2929CA66B77F23D72020BEEDCFB8D1F9`; canonical profile SHA `8041F4579449481597850A41ACC99CD0AF93F29C16094EA79A2FD939B70AF7D6`. Pin `4b4637967c6e2b0188f5713d262dd1219a02465e` matches canonical profile, result, required and scheduler pins.
+
+Database telemetry and committed compact result agree: PSADT 4.1.8, LocalSystem, exits `0/0/60001/0`, clean VirusTotal `0/0`. Cached job logs show the reviewed exact `C:\Program Files\Opera\opera.exe --uninstall --runimmediately --deleteuserprofile=0` invocation. Its parent exited, but exact registration `Opera 136.0.6008.52` remained past the five-minute completion deadline. Independent removal detection still detected the app. Host diagnostic access was denied; no runner directory was accessed.
+
+The [official WinGet manifest](https://github.com/microsoft/winget-pkgs/blob/master/manifests/o/Opera/Opera/136.0.6008.52/Opera.Opera.installer.yaml) confirms the exact x64 hash and machine arguments `/silent /allusers=1`. The [Opera support forum guidance](https://forums.opera.com/topic/72589/scripted-uninstallation) describes the existing immediate-uninstall route; it does not establish a replacement that fixes this failure. Prior version 136.0.6008.22 passed, so this is an exact-payload hold, not an app-wide unsupported classification.
+
+Resolution: use the existing shared `qa_package_blocks` gate for this exact app/version/architecture/hash with `failed_managed_lifecycle`. Both QA demand and customer packaging, including override attempts, reject the payload. Other hashes, architectures, and releases retain their existing eligibility checks. No speculative adapter change, manual removal, new pin, or qualifying pass is justified.
+
+`scripts/qa-opera-136-quarantine.mjs audit|block|resume` uses only the existing production environment. It requires the exact failure pause, no active lifecycle, aligned pins, a recomputed canonical hash, and matching failed lifecycle evidence. Resume additionally requires the persisted shared block and a fresh scheduler heartbeat. Merge through protected CI before applying the block; verify it, refresh the authenticated enqueue endpoint, guarded resume, dispatch once, and audit production state. Preserve the failed result. Continuous QA remains enabled; the cohort milestone is incomplete.
