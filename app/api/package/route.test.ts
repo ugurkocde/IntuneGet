@@ -17,6 +17,7 @@ const {
   getFeatureFlagsMock,
   enforceInstallerPreflightMock,
   getLiveInstallersMock,
+  fetchLatestPublishedVersionMock,
   ensureQaDemandMock,
   getPackageEligibilityBlocksMock,
   isSupabaseServerConfiguredMock,
@@ -35,6 +36,7 @@ const {
   getFeatureFlagsMock: vi.fn(),
   enforceInstallerPreflightMock: vi.fn(),
   getLiveInstallersMock: vi.fn(),
+  fetchLatestPublishedVersionMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
   isSupabaseServerConfiguredMock: vi.fn(),
@@ -42,6 +44,7 @@ const {
 
 vi.mock('@/lib/manifest-api', () => ({
   getLiveInstallers: getLiveInstallersMock,
+  fetchLatestPublishedVersion: fetchLatestPublishedVersionMock,
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -1710,6 +1713,39 @@ describe('POST /api/package (workflow dispatch)', () => {
       },
       expectedSha256: 'A'.repeat(64),
       actualSha256: 'b'.repeat(64),
+    }));
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a non-retryable block with the published version when the pinned catalog version is gone', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([]);
+    fetchLatestPublishedVersionMock.mockResolvedValueOnce('2.0.0');
+
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual(expect.objectContaining({
+      error: 'Installer validation blocked this deployment',
+      message: 'WinGet no longer publishes Test.App 1.0.0. The current published version is 2.0.0.',
+      code: 'MANIFEST_UNAVAILABLE',
+      retryable: false,
+      latestVersion: '2.0.0',
+      package: {
+        wingetId: 'Test.App',
+        displayName: 'Test App',
+        version: '1.0.0',
+      },
     }));
     expect(createMock).not.toHaveBeenCalled();
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
