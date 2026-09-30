@@ -1,5 +1,6 @@
 import { writeFile, rename } from 'node:fs/promises';
-import { recoverInfrastructure, rateLimitUntil } from './recovery.mjs';
+import { recoverInfrastructure, recoverStalledPublication, rateLimitUntil } from './recovery.mjs';
+import { reconcileActive } from './active-health.mjs';
 
 const base = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,7 +11,6 @@ const statePath = stateFlagIndex >= 0 ? process.argv[stateFlagIndex + 1] : null;
 const siteBase = 'https://www.intuneget.com';
 const heartbeatFreshMs = 5 * 60 * 1000;
 const heartbeatRefreshMs = 4 * 60 * 1000;
-const activeReconcileMs = 10 * 60 * 1000;
 const shaPattern = /^[0-9a-f]{40}$/i;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -137,6 +137,10 @@ async function snapshot() {
     'updated_at',
     'phase_updated_at',
     'activity_updated_at',
+    'dispatched_at',
+    'started_at',
+    'recovery_attempts',
+    'recovery_history',
     'finished_at',
     'test_level',
   ].join(',');
@@ -190,12 +194,6 @@ async function invokeCron(route) {
 function heartbeatAgeMs(control) {
   if (!control.scheduler_seen_at) return Number.POSITIVE_INFINITY;
   const timestamp = Date.parse(control.scheduler_seen_at);
-  return Number.isFinite(timestamp) ? Date.now() - timestamp : Number.POSITIVE_INFINITY;
-}
-
-function activeAgeMs(candidate) {
-  const value = candidate.activity_updated_at || candidate.phase_updated_at || candidate.updated_at;
-  const timestamp = Date.parse(value || '');
   return Number.isFinite(timestamp) ? Date.now() - timestamp : Number.POSITIVE_INFINITY;
 }
 
@@ -377,18 +375,22 @@ try {
         result.action = dispatched.body?.dispatched ? 'dispatched' : (dispatched.body?.reason || 'dispatch_checked');
         result.snapshot = await snapshot();
       }
-    } else if (currentActive && activeAgeMs(currentActive) >= activeReconcileMs) {
-      if (isDryRun) {
-        result.action = 'would_reconcile_active';
-        result.actions.push({ type: 'would_reconcile_active', candidateId: currentActive.id });
-      } else {
-        const reconciled = await invokeCron('/api/cron/qa-dispatch');
-        result.actions.push({ type: 'active_reconcile', status: reconciled.status, body: reconciled.body });
-        result.action = reconciled.body?.reason || 'active_reconciled';
+    } else if (currentActive) {
+      const health = await reconcileActive({ candidate: currentActive, invokeCron, snapshot, dryRun: isDryRun,
+        recoverPublication: candidate => recoverStalledPublication({ candidate, github, patch }) });
+      result.action = health.action;
+      if (health.snapshot) result.snapshot = health.snapshot;
+      if (health.reconciled) result.actions.push({ type: 'active_reconcile', ...health.reconciled });
+      if (health.repairRequired) {
+        await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
+          paused: true, reason: 'QA infrastructure recovery in progress.',
+          updated_by: 'qa-execution-watchdog', updated_at: new Date().toISOString(),
+        });
+        requireRepair(health.repairReason, health.repairKey);
         result.snapshot = await snapshot();
       }
     } else {
-      result.action = currentActive ? 'active_healthy' : 'idle_waiting_for_work';
+      result.action = 'idle_waiting_for_work';
     }
   }
 

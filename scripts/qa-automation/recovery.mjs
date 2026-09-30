@@ -4,6 +4,10 @@ export const PUBLICATION_FAILURE = 'QA result publication did not complete; insp
 export function recoveryKind(candidate) {
   if (candidate.status !== 'error' || candidate.test_level !== 'psadt-package') return null;
   if (candidate.failure_summary === PUBLICATION_FAILURE) return 'publication';
+  if (candidate.started_at === null && candidate.github_run_id === null && (
+    candidate.failure_summary === 'The QA workflow did not start before the dispatch timeout.' ||
+    candidate.failure_summary === 'The installation test did not finish before the safety timeout.'
+  )) return 'dispatch';
   if (/^The QA workflow completed without reporting a terminal candidate result\.$/.test(candidate.failure_summary || '')) return 'lifecycle';
   if (/^The installer source remained unavailable after \d+ verification attempts\. The app was not tested\.$/.test(candidate.failure_summary || '')) return 'source';
   return null;
@@ -19,6 +23,48 @@ export function rateLimitUntil(response, now = Date.now()) {
   const retry = Number(response.headers.get('retry-after')) * 1000;
   if (response.status !== 429 && response.headers.get('x-ratelimit-remaining') !== '0' && !retry) return null;
   return new Date(Math.max(now + 60_000, Number.isFinite(reset) ? reset + 5000 : 0, now + retry)).toISOString();
+}
+
+/** Release a stranded publisher, retaining the VM job and candidate run ID. */
+export async function recoverStalledPublication({ candidate: c, github, patch, now = Date.now() }) {
+  if (c.status !== 'running' || c.phase !== 'publishing' || !/^[1-9][0-9]*$/.test(c.github_run_id || '')) return null;
+  const runId = c.github_run_id;
+  const validRun = run => run && String(run.id) === runId && run.path === '.github/workflows/intune-qa.yml' &&
+    run.head_branch === 'main' && run.event === 'workflow_dispatch';
+  const run = await github(`/actions/runs/${runId}`);
+  if (!validRun(run)) throw new Error('QA workflow identity mismatch');
+  if (!['queued', 'completed'].includes(run.status)) return null;
+  const payload = await github(`/actions/runs/${runId}/jobs?filter=latest&per_page=100`);
+  if (!payload || !Array.isArray(payload.jobs) || !Number.isInteger(payload.total_count) ||
+      payload.total_count !== payload.jobs.length || payload.total_count > 100) throw new Error('Incomplete QA job evidence');
+  const qa = payload.jobs.find(job => job.name === 'qa');
+  const publisher = payload.jobs.find(job => job.name === 'Publish compact app JSON');
+  if (qa?.status !== 'completed' || !['success', 'failure'].includes(qa.conclusion) ||
+      !publisher || payload.jobs.some(job => job.status === 'in_progress')) return null;
+  const claim = { id: `eq.${c.id}`, status: 'eq.running', phase: 'eq.publishing', github_run_id: `eq.${runId}` };
+  if (run.status === 'completed' &&
+      ['failure', 'cancelled', 'timed_out'].includes(publisher.conclusion)) {
+    const changed = await patch('qa_candidates', claim, { status: 'error', failure_summary: PUBLICATION_FAILURE,
+      finished_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() });
+    return { action: changed.length ? 'publication_failure_recorded' : 'recovery_claim_lost' };
+  }
+  if (run.status !== 'queued' || publisher.status !== 'queued' || publisher.steps?.length) return null;
+  const history = Array.isArray(c.recovery_history) ? c.recovery_history : [];
+  const runAttempt = run.run_attempt || 1;
+  const prior = history.findLast(event => event.kind === 'publication_queue_cancel' && event.previousRunId === runId &&
+    (event.runAttempt || 1) === runAttempt);
+  if (prior) {
+    if (now - Date.parse(prior.at) < 5 * 60_000) return { action: 'publication_cancel_waiting' };
+    return { action: 'repair_required', repairRequired: true, repairKey: 'qa-publication-cancel-stalled',
+      repairReason: 'A stranded publisher did not finish cancelling within five minutes.' };
+  }
+  const fresh = await github(`/actions/runs/${runId}`);
+  if (!validRun(fresh) || fresh.status !== 'queued') return null;
+  const changed = await patch('qa_candidates', claim, { updated_at: new Date(now).toISOString(),
+    recovery_history: [...history, { at: new Date(now).toISOString(), kind: 'publication_queue_cancel', previousRunId: runId, runAttempt }].slice(-20) });
+  if (changed.length !== 1) return { action: 'recovery_claim_lost' };
+  await github(`/actions/runs/${runId}/cancel`, { method: 'POST', body: '{}' });
+  return { action: 'publication_cancel_requested' };
 }
 
 /** No arbitrary workflow IDs or repository URLs from the candidate are followed. */
@@ -43,8 +89,11 @@ export async function publicationJob(runId, github) {
   if (!replaySafe && (merged || legacyCommitFailed)) return { lifecycleRequired: true };
   // A job-specific rerun preserves completed VM evidence, including failures.
   // Failed lifecycle evidence must reach the normal fail-close reporter too.
-  if (['success', 'failure'].includes(qa?.conclusion) && publisher?.status === 'completed' &&
-      ['failure', 'cancelled', 'timed_out'].includes(publisher.conclusion) && Number.isSafeInteger(publisher.id)) {
+  // A force-cancelled workflow can briefly retain a waiting job status while
+  // exposing its terminal cancelled conclusion. The completed run and terminal
+  // job conclusion are authoritative; the rerun API still enforces eligibility.
+  if (['success', 'failure'].includes(qa?.conclusion) &&
+      ['failure', 'cancelled', 'timed_out'].includes(publisher?.conclusion) && Number.isSafeInteger(publisher.id)) {
     return { jobId: publisher.id };
   }
   return { lifecycleRequired: true };
@@ -52,13 +101,13 @@ export async function publicationJob(runId, github) {
 
 export async function recoverInfrastructure({ rows, patch, github, now = Date.now(), dryRun = false, requiredPin }) {
   const candidates = await rows('qa_candidates', {
-    select: 'id,winget_id,version,architecture,status,test_level,failure_summary,finished_at,github_run_id,github_run_url,attempts,next_retry_at,recovery_attempts,recovery_history,test_config,package_profile_sha256,installer_sha256',
+    select: 'id,winget_id,version,architecture,status,test_level,failure_summary,started_at,finished_at,github_run_id,github_run_url,attempts,next_retry_at,recovery_attempts,recovery_history,test_config,package_profile_sha256,installer_sha256',
     status: 'eq.error', test_level: 'eq.psadt-package',
     finished_at: `gte.${new Date(now - 28 * 24 * 60 * 60_000).toISOString()}`,
     next_retry_at: `lte.${new Date(now).toISOString()}`,
     order: 'finished_at.asc', limit: '100',
     // Exclude non-infrastructure errors before paging so they cannot starve recovery.
-    or: '(failure_summary.eq.' + PUBLICATION_FAILURE + ',failure_summary.eq.The QA workflow completed without reporting a terminal candidate result.,failure_summary.like.The installer source remained unavailable after*)',
+    or: '(failure_summary.eq.' + PUBLICATION_FAILURE + ',failure_summary.eq.The QA workflow completed without reporting a terminal candidate result.,failure_summary.eq.The QA workflow did not start before the dispatch timeout.,and(failure_summary.eq.The installation test did not finish before the safety timeout.,started_at.is.null,github_run_id.is.null),failure_summary.like.The installer source remained unavailable after*)',
   });
   for (const c of candidates) {
     const kind = recoveryKind(c);

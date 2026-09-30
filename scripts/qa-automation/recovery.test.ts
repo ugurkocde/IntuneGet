@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PUBLICATION_FAILURE, recoveryKind, retryDelayMs, rateLimitUntil, publicationJob, recoverInfrastructure } from './recovery.mjs';
+import { PUBLICATION_FAILURE, recoveryKind, retryDelayMs, rateLimitUntil, publicationJob, recoverInfrastructure, recoverStalledPublication } from './recovery.mjs';
 import { repairCompletion, runRepair } from './repair-process.mjs';
 
 const c = { id: 'a', winget_id: 'Example.App', version: '1', architecture: 'x64', installer_sha256: 'A'.repeat(64),
@@ -23,6 +23,65 @@ function deps(candidate = c) {
   return { rows, patch, github, now, requiredPin: 'f'.repeat(40) };
 }
 describe('durable infrastructure recovery', () => {
+  function strandedPublisher() {
+    const candidate = { ...c, status: 'running', phase: 'publishing' };
+    const run = { id: 123, status: 'queued', path: '.github/workflows/intune-qa.yml', head_branch: 'main', event: 'workflow_dispatch' };
+    const jobs = [{ name: 'qa', status: 'completed', conclusion: 'success' },
+      { name: 'Publish compact app JSON', status: 'queued', conclusion: null, steps: [] }];
+    const github = vi.fn(async (path: string) => path.includes('/jobs?') ? { total_count: jobs.length, jobs } : run);
+    const patch = vi.fn(async () => [{ id: c.id }]);
+    return { candidate, run, jobs, github, patch, now };
+  }
+  it('releases only a queued publisher and durably preserves the completed VM evidence', async () => {
+    const d = strandedPublisher();
+    expect(await recoverStalledPublication(d)).toMatchObject({ action: 'publication_cancel_requested' });
+    expect(d.github).toHaveBeenLastCalledWith('/actions/runs/123/cancel', { method: 'POST', body: '{}' });
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.objectContaining({ github_run_id: 'eq.123', status: 'eq.running' }),
+      expect.objectContaining({ recovery_history: [expect.objectContaining({ kind: 'publication_queue_cancel', previousRunId: '123' })] }));
+    expect(d.patch.mock.calls[0][2]).not.toHaveProperty('github_run_id');
+    expect(d.patch.mock.calls[0][2]).not.toHaveProperty('status');
+  });
+  it('never cancels a publisher that started or a lifecycle without complete job evidence', async () => {
+    const d = strandedPublisher(); d.jobs[1].status = 'in_progress';
+    expect(await recoverStalledPublication(d)).toBeNull();
+    expect(d.patch).not.toHaveBeenCalled();
+    d.jobs[1].status = 'queued'; d.jobs[0].status = 'in_progress';
+    expect(await recoverStalledPublication(d)).toBeNull();
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(false);
+  });
+  it('does not cancel after losing the candidate claim', async () => {
+    const d = strandedPublisher(); d.patch.mockResolvedValue([]);
+    expect(await recoverStalledPublication(d)).toMatchObject({ action: 'recovery_claim_lost' });
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(false);
+  });
+  it('converts confirmed cancellation to publication recovery, never to a VM rerun', async () => {
+    const d = strandedPublisher(); d.run.status = 'completed';
+    d.jobs[1].status = 'waiting'; d.jobs[1].conclusion = 'cancelled' as never;
+    expect(await recoverStalledPublication(d)).toMatchObject({ action: 'publication_failure_recorded' });
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({
+      status: 'error', failure_summary: PUBLICATION_FAILURE,
+    }));
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(false);
+  });
+  it('waits briefly after cancellation, then escalates instead of looping forever', async () => {
+    const d = strandedPublisher();
+    d.candidate.recovery_history = [{ kind: 'publication_queue_cancel', previousRunId: '123', at: new Date(now - 60_000).toISOString() }] as never;
+    expect(await recoverStalledPublication(d)).toMatchObject({ action: 'publication_cancel_waiting' });
+    expect(await recoverStalledPublication({ ...d, now: now + 5 * 60_000 })).toMatchObject({ repairRequired: true });
+    expect(d.patch).not.toHaveBeenCalled();
+  });
+  it('recovers unstarted dispatch timeouts without reclassifying real installer failures', async () => {
+    for (const failure_summary of ['The QA workflow did not start before the dispatch timeout.',
+      'The installation test did not finish before the safety timeout.']) {
+      const candidate = { ...c, failure_summary, started_at: null, github_run_id: null };
+      expect(recoveryKind(candidate)).toBe('dispatch');
+      expect(await recoverInfrastructure({ ...deps(candidate as never), dryRun: true }))
+        .toMatchObject({ action: 'would_recover_infrastructure', kind: 'dispatch' });
+      expect(recoveryKind({ ...candidate, started_at: '2026-09-22T00:00:00Z' })).toBeNull();
+      expect(recoveryKind({ ...candidate, github_run_id: '123' })).toBeNull();
+      expect(recoveryKind({ ...candidate, started_at: undefined })).toBeNull();
+    }
+  });
   it('reruns only the publishing job after a successful VM test', async () => {
     const d = deps();
     expect(await recoverInfrastructure(d)).toMatchObject({ action: 'publication_retry_started' });

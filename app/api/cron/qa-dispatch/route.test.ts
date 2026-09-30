@@ -434,6 +434,65 @@ describe('GET /api/cron/qa-dispatch', () => {
     }
   });
 
+  it('unblocks a stale dispatch before charging another app timeout attempt', async () => {
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 2,
+      dispatched_at: '2026-09-24T18:00:00Z', started_at: null, github_run_id: null };
+    const { client, rollbackIds, terminalErrorIds, claimedIds } = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(client);
+    cancelStaleWaitingQaRunsMock.mockResolvedValue([36037902554]);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'stale_waiting_run_cancelled' });
+    expect(rollbackIds).toEqual([]);
+    expect(terminalErrorIds).toEqual([]);
+    expect(claimedIds).toEqual([]);
+  });
+
+  it('retains an unfinished workflow and its run ID even beyond the hard timeout', async () => {
+    const active = { ...candidate('catalog-default'), status: 'running', phase: 'publishing', attempts: 1,
+      dispatched_at: '2026-09-24T17:57:36Z', started_at: '2026-09-24T17:57:41Z',
+      github_run_id: '36037902554' };
+    const { client, rollbackIds, terminalErrorIds } = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(client);
+    isQaWorkflowRunCompletedMock.mockResolvedValue(false);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'qa_active', reconciled: 0 });
+    expect(rollbackIds).toEqual([]);
+    expect(terminalErrorIds).toEqual([]);
+    expect(isQaWorkflowRunCompletedMock).toHaveBeenCalledWith('36037902554');
+  });
+
+  it('preserves a cancelled publisher for publication-only recovery even when cron wins the race', async () => {
+    const active = { ...candidate('catalog-default'), status: 'running', phase: 'publishing', attempts: 1,
+      dispatched_at: '2026-09-24T17:57:36Z', started_at: '2026-09-24T17:57:41Z', github_run_id: '36037902554' };
+    const { client, rollbackIds, terminalErrorPayloads } = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(client);
+    isQaWorkflowRunCompletedMock.mockResolvedValue(true);
+    await GET(cronRequest());
+    expect(rollbackIds).toEqual([]);
+    expect(terminalErrorPayloads).toContainEqual(expect.objectContaining({
+      failure_summary: 'QA result publication did not complete; inspect the protected workflow run.',
+    }));
+    expect(terminalErrorPayloads[0]).not.toHaveProperty('github_run_id');
+  });
+
+  it('reports an unstarted dispatch as infrastructure failure, not failed installation', async () => {
+    const active = { ...candidate('catalog-default'), status: 'dispatched', attempts: 2,
+      dispatched_at: '2026-09-24T18:00:00Z', started_at: null, github_run_id: null };
+    const { client, terminalErrorPayloads } = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(client);
+    await GET(cronRequest());
+    expect(terminalErrorPayloads).toContainEqual(expect.objectContaining({
+      failure_summary: 'The QA workflow did not start before the dispatch timeout.',
+    }));
+  });
+
+  it('never inspects orphaned runs while a fresh VM lifecycle is executing', async () => {
+    const active = { ...candidate('catalog-default'), status: 'running', attempts: 1,
+      dispatched_at: new Date().toISOString(), started_at: new Date().toISOString(), github_run_id: '123' };
+    const { client } = createSupabaseStub([], [], { activeCandidates: [active] });
+    createServerClientMock.mockReturnValue(client);
+    expect(await (await GET(cronRequest())).json()).toMatchObject({ reason: 'qa_active' });
+    expect(cancelStaleWaitingQaRunsMock).not.toHaveBeenCalled();
+  });
+
   it('supersedes an invalid row and dispatches the valid row behind it', async () => {
     const invalid = candidate('catalog-default');
     invalid.id = testUuid(10);

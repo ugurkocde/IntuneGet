@@ -86,6 +86,20 @@ export async function GET(request: Request) {
     .in('status', ['dispatched', 'running']);
   if (activeError) throw new Error(`Could not reconcile QA candidates: ${activeError.message}`);
 
+  // A queued GitHub owner can strand a newer pending dispatch indefinitely.
+  // Repair the owner before burning the pending app's timeout/retry budget.
+  // Healthy VM work never pays for GitHub inventory inspection.
+  const stalledDispatch = (active || []).some(candidate =>
+    candidate.status === 'dispatched' && !candidate.started_at &&
+    now.getTime() - Date.parse(candidate.dispatched_at || '') >= STALE_HEARTBEAT_MS);
+  if (!active?.length || stalledDispatch) {
+    const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
+    if (cancelledWaitingRunIds.length > 0) {
+      return NextResponse.json({ success: true, dispatched: false,
+        reason: 'stale_waiting_run_cancelled', cancelledRuns: cancelledWaitingRunIds.length });
+    }
+  }
+
   let reconciled = 0;
   for (const candidate of active || []) {
     const timestamp = candidate.status === 'running' ? candidate.started_at : candidate.dispatched_at;
@@ -94,6 +108,13 @@ export async function GET(request: Request) {
     const hardTimedOut = !Number.isFinite(lifecycleStartedAt) ||
       now.getTime() - lifecycleStartedAt > timeout;
     let completedWithoutCallback = false;
+    if (hardTimedOut && candidate.github_run_id) {
+      // Do not erase the only link to a workflow that still owns GitHub's
+      // concurrency slot (including a queued result publisher). The guardian
+      // can recover that exact run without repeating its completed VM test.
+      completedWithoutCallback = await isQaWorkflowRunCompleted(candidate.github_run_id);
+      if (!completedWithoutCallback) continue;
+    }
     if (!hardTimedOut) {
       const heartbeatCandidates = [
         candidate.activity_updated_at,
@@ -110,12 +131,19 @@ export async function GET(request: Request) {
       if (!completedWithoutCallback) continue;
     }
 
-    const recovery = qaTimeoutRecoveryUpdate(
+    const recovery = completedWithoutCallback && candidate.phase === 'publishing' ? {
+      // The cron may observe cancellation before the guardian's next tick.
+      // Preserve the completed VM/run identity for publication-only recovery.
+      status: 'error', finished_at: now.toISOString(), updated_at: now.toISOString(),
+      failure_summary: 'QA result publication did not complete; inspect the protected workflow run.',
+    } : qaTimeoutRecoveryUpdate(
       candidate,
       now.toISOString(),
       MAX_ATTEMPTS,
       completedWithoutCallback
         ? 'The QA workflow completed without reporting a terminal candidate result.'
+        : candidate.status === 'dispatched' && !candidate.started_at
+          ? 'The QA workflow did not start before the dispatch timeout.'
         : undefined
     );
     const { error } = await supabase
@@ -136,14 +164,6 @@ export async function GET(request: Request) {
   if (stillActiveError) throw stillActiveError;
   if (stillActive?.length) {
     return NextResponse.json({ success: true, dispatched: false, reason: 'qa_active', reconciled });
-  }
-
-  // Healthy VM telemetry needs no GitHub API inspection. Check orphaned
-  // waiting workflows only when the single-flight slot is actually free.
-  const cancelledWaitingRunIds = await cancelStaleWaitingQaRuns(now);
-  if (cancelledWaitingRunIds.length > 0) {
-    return NextResponse.json({ success: true, dispatched: false,
-      reason: 'stale_waiting_run_cancelled', cancelledRuns: cancelledWaitingRunIds.length });
   }
 
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;

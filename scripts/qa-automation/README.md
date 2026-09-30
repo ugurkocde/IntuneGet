@@ -10,6 +10,27 @@ responsible for scheduling. No interactive agent session needs to stay open.
 
 ## Recovery
 
+Dispatch acceptance is not proof of execution. A fresh dispatch is reported as
+`awaiting_runner`; only actual VM heartbeats can be healthy. After ten minutes,
+the guardian invokes reconciliation and checks the resulting candidate again.
+An HTTP 200 `qa_active` response cannot hide a stalled execution: unresolved
+stalls pause further dispatch and invoke the existing repair task.
+
+The dispatcher checks both environment-waiting and queued GitHub concurrency
+owners, including while a newer candidate is stuck waiting to start. Cleanup
+requires the exact protected workflow/branch/event, a ten-minute age, complete
+job evidence with no execution, and a fresh run-state check. Pending workflows,
+running tests, and completed VM evidence awaiting publication are preserved.
+Unstarted dispatch timeouts (including legacy generic summaries with null run
+and start fields) enter bounded infrastructure recovery, not installer repair.
+
+Hard candidate timeouts never discard the ID of an unfinished GitHub workflow.
+A stale queued publisher after a completed VM job is cancelled only after exact
+workflow/job checks, keeping the candidate lease and run ID until cancellation
+finishes. Bounded publication recovery then reruns only the publisher. A durable
+cancel intent prevents repeated cancellation, and a five-minute cancellation
+deadline escalates to the repair task if GitHub does not release the run.
+
 The controller checks the production database first. When idle, it reviews
 recent infrastructure errors (28 days, at most 100 due records per cycle).
 Security findings and compatibility blocks remain ineligible. A completed VM
