@@ -701,6 +701,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks Edge 154.0.4258.37 after MSI installation failed even with override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Microsoft.Edge', version: '154.0.4258.37', architecture: 'x64',
+      installerSha256: '4D8D922C8B2470084A380142CDFD51B2B28A83AF7982D8F023CB8FACBF258246',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'MSI install failed with 1603; no unambiguous uninstall identity.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks the exact XplicitTrust release with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'XplicitTrust.Agent', version: '1.065', architecture: 'x64',

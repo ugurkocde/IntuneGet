@@ -785,6 +785,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks the failed Edge 154.0.4258.37 bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Microsoft.Edge', version: '154.0.4258.37', architecture: 'x64' as const,
+      installerSha256: '4D8D922C8B2470084A380142CDFD51B2B28A83AF7982D8F023CB8FACBF258246',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'MSI install failed with 1603; no unambiguous uninstall identity.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'msi', installScope,
+      silentSwitches: '/qn /norestart ALLUSERS=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft Edge',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks stalled WebView2 bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Microsoft.EdgeWebView2Runtime', version: '153.0.4234.46', architecture: 'x64' as const,
