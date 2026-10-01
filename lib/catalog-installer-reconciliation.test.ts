@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getLiveInstallersMock } = vi.hoisted(() => ({
+const { getLiveInstallersMock, fetchLatestPublishedVersionMock } = vi.hoisted(() => ({
   getLiveInstallersMock: vi.fn(),
+  fetchLatestPublishedVersionMock: vi.fn(),
 }));
 
 vi.mock('@/lib/manifest-api', () => ({
   getLiveInstallers: getLiveInstallersMock,
+  fetchLatestPublishedVersion: fetchLatestPublishedVersionMock,
+  GitHubUnavailableError: class GitHubUnavailableError extends Error {},
 }));
 
 import {
@@ -62,6 +65,7 @@ describe('catalog installer reconciliation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getLiveInstallersMock.mockResolvedValue(operaInstallers);
+    fetchLatestPublishedVersionMock.mockResolvedValue(undefined);
   });
 
   it('selects the requested scope even when user and machine entries share bytes', () => {
@@ -476,5 +480,17 @@ describe('catalog installer reconciliation', () => {
     expect(reconciled.item.uninstallCommand).toBe(
       'REGISTRY_UNINSTALL_KEY:PostgreSQL 17 (64bit):PostgreSQL 17 (64bit)'
     );
+  });
+
+  it('blocks a removed catalog version as non-retryable and surfaces the published version', async () => {
+    getLiveInstallersMock.mockResolvedValue([]);
+    fetchLatestPublishedVersionMock.mockResolvedValue('134.0.6000.0');
+
+    await expect(reconcileCatalogInstaller(operaItem())).rejects.toMatchObject({
+      code: 'MANIFEST_UNAVAILABLE',
+      retryable: false,
+      latestVersion: '134.0.6000.0',
+      message: 'WinGet no longer publishes Opera.Opera 134.0.5954.46. The current published version is 134.0.6000.0.',
+    });
   });
 });

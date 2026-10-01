@@ -322,6 +322,7 @@ export async function POST(request: NextRequest) {
             message: error.message,
             code: error.code,
             retryable: error.retryable,
+            latestVersion: error.latestVersion,
             package: {
               wingetId: failedItem.wingetId,
               displayName: failedItem.displayName || failedItem.wingetId,
@@ -374,6 +375,7 @@ export async function POST(request: NextRequest) {
             message: error.message,
             code: error.code,
             retryable: error.retryable,
+            latestVersion: error.latestVersion,
             package: {
               wingetId: failedItem.wingetId,
               displayName: failedItem.displayName || failedItem.wingetId,

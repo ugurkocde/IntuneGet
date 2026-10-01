@@ -1,0 +1,5 @@
+{
+  "title": "Clearer recovery when a catalog version is no longer published",
+  "summary": "When the selected version of a catalog app is no longer published by WinGet, deployment now stops before any packaging or Intune changes and explains that the version cannot be resolved, instead of reporting a temporary verification problem and inviting pointless retries. The message names the version WinGet currently publishes, and the cart offers a one-click update and retry so the deployment can continue without editing the selection. The catalog also advances its stored version so other users stop encountering the same retired version. Versions are never changed silently.",
+  "type": "fixed"
+}

@@ -65,6 +65,8 @@ interface DeploymentError {
   blockedBeforeDispatch?: boolean;
   packageName?: string;
   packageVersion?: string;
+  packageWingetId?: string;
+  latestVersion?: string;
 }
 
 interface PackageApiErrorResponse {
@@ -72,7 +74,9 @@ interface PackageApiErrorResponse {
   message?: string;
   code?: string;
   retryable?: boolean;
+  latestVersion?: string;
   package?: {
+    wingetId?: string;
     displayName?: string;
     version?: string;
   };
@@ -174,9 +178,12 @@ export function UploadCart() {
   };
 
   const handleDeploy = async () => {
-    if (items.length === 0) return;
+    // Read the cart at call time so a version refresh applied just before the
+    // retry (see handleUpdateAndRetry) is included in the request.
+    const currentItems = useCartStore.getState().items;
+    if (currentItems.length === 0) return;
 
-    trackDeployment(items.length);
+    trackDeployment(currentItems.length);
     setError(null);
 
     if (!isAuthenticated) {
@@ -211,7 +218,7 @@ export function UploadCart() {
           Authorization: `Bearer ${accessToken}`,
           ...(isMspUser && selectedTenantId ? { 'X-MSP-Tenant-Id': selectedTenantId } : {}),
         },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items: currentItems }),
       });
 
       if (!response.ok) {
@@ -231,6 +238,8 @@ export function UploadCart() {
               blockedBeforeDispatch: true,
               packageName: packageLabel,
               packageVersion: versionLabel,
+              packageWingetId: errorData.package?.wingetId,
+              latestVersion: errorData.latestVersion,
             });
             return;
           }
@@ -266,6 +275,18 @@ export function UploadCart() {
     } finally {
       setIsDeploying(false);
     }
+  };
+
+  // A pinned catalog version can disappear from WinGet before the catalog is
+  // refreshed. Let the user advance to the published version explicitly rather
+  // than silently changing what they selected.
+  const handleUpdateAndRetry = async (wingetId: string, latestVersion: string) => {
+    const target = items.find(
+      (item) => isWin32CartItem(item) && item.wingetId === wingetId
+    );
+    if (!target) return;
+    updateItem(target.id, { version: latestVersion });
+    await handleDeploy();
   };
 
   const handleClearAll = () => {
@@ -522,6 +543,19 @@ export function UploadCart() {
                           No packaging pipeline was started and no changes were made in Intune.
                         </p>
                       )}
+                      {error.latestVersion &&
+                        error.packageWingetId &&
+                        error.latestVersion !== error.packageVersion && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateAndRetry(error.packageWingetId!, error.latestVersion!)}
+                            disabled={isDeploying}
+                            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent-cyan px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-cyan-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-base disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            Update to v{error.latestVersion} and retry
+                          </button>
+                        )}
                       {!error.retryable && (
                         <p className="text-text-muted mt-1">
                           Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.

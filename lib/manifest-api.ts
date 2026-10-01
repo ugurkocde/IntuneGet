@@ -173,6 +173,32 @@ export async function fetchAvailableVersionsLive(wingetId: string): Promise<stri
 }
 
 /**
+ * Pick the newest published version folder from a WinGet package listing.
+ * Channel and packaging folders (Beta, Canary, Dev, EXE) never start with a
+ * digit, so they are ignored.
+ */
+export function latestPublishedVersion(versions: readonly string[]): string | undefined {
+  return versions
+    .map((version) => version.trim())
+    .filter((version) => /^\d/.test(version))
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0];
+}
+
+/**
+ * Resolve the newest version WinGet still publishes for a package, straight
+ * from the live repo. Best-effort: a throttled or unavailable upstream returns
+ * undefined so callers can still fail closed with a less specific message.
+ */
+export async function fetchLatestPublishedVersion(wingetId: string): Promise<string | undefined> {
+  try {
+    return latestPublishedVersion(await fetchAvailableVersionsLive(wingetId));
+  } catch (error) {
+    console.warn(`Could not resolve the latest published version for ${wingetId}:`, error);
+    return undefined;
+  }
+}
+
+/**
  * Transient upstream failure (throttling, outage) while talking to GitHub.
  * Distinct from an authoritative 404 so trust decisions stay strict while
  * callers can surface a retryable error instead of a generic crash.
