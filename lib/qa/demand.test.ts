@@ -786,6 +786,27 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks held Proton Mail bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Proton.ProtonMail', version: '1.14.0', architecture: 'x64' as const,
+      installerSha256: '456ADBFE362FDF14EF0A189CDE1962316B46A8E277D139C12A99D39BCAC89BC3',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Squirrel exited -1; exact registration remained.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope,
+      silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:proton_mail:Proton Mail',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks failed Power BI bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Microsoft.PowerBI', version: '2.158.1177.0', architecture: 'x64' as const,

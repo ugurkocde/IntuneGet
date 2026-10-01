@@ -1716,6 +1716,30 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it('does not create a customer workflow payload for held Proton Mail bytes', async () => {
+    ensureQaDemandMock.mockResolvedValueOnce({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+      identity: {
+        executionProfileSha256: 'A'.repeat(64), packageProfileSha256: 'A'.repeat(64),
+        presentationProfileSha256: 'B'.repeat(64),
+      },
+    });
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({
+        wingetId: 'Proton.ProtonMail', displayName: 'Proton Mail', version: '1.14.0',
+        installerSha256: '456ADBFE362FDF14EF0A189CDE1962316B46A8E277D139C12A99D39BCAC89BC3',
+      })] }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('creates an actionable blocked job for a failed execution profile', async () => {
     process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(
       Date.now() + 7 * 24 * 60 * 60 * 1000
