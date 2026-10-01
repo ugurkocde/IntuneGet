@@ -814,6 +814,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // Since v6 Bandisoft uses its own installer. Its argumentless ARP command
+    // needs the documented /S switch to suppress the hidden SYSTEM wizard.
+    // https://en.bandisoft.com/bandizip/help/uninstall/
+    wingetId: 'Bandisoft.Bandizip',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // Waterfox uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
     // command contains only the helper path, so invoking it unchanged opens an
     // uninstall wizard that is invisible under SYSTEM and leaves the exact

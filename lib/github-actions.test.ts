@@ -81,6 +81,19 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('dispatches Bandizip customer packages with the same silent removal as QA', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Bandisoft.Bandizip', displayName: 'Bandizip', publisher: 'Bandisoft',
+      version: '7.46', installerSha256: 'D6D6489113C013ED7F44C0DCA24B1A882494ACE246E14D10533C4969A0F41CFE',
+      sourceType: 'winget', silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip');
+    expect(JSON.parse(payload.client_payload.config.psadtConfig).reviewedUninstallArguments).toEqual(['/S']);
+  });
   it('dispatches ZWCAD 2025 customer packages with the same reviewed removal as QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

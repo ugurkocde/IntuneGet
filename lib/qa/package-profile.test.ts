@@ -35,6 +35,18 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('normalizes the failed Bandizip tuple with shared silent removal', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Bandisoft.Bandizip', displayName: 'Bandizip', publisher: 'Bandisoft',
+      version: '7.46', architecture: 'x64',
+      installerSha256: 'D6D6489113C013ED7F44C0DCA24B1A882494ACE246E14D10533C4969A0F41CFE',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/S',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.psadtConfig.reviewedUninstallArguments).toEqual(['/S']);
+    expect(normalized.identity.profile.installer.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip');
+  });
   it('normalizes ZWCAD 2025 to vendor-documented packaged removal with exact identity', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'ZWSOFT.ZWCAD.2025', displayName: 'ZWCAD 2025', publisher: 'ZWSOFT',

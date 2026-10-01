@@ -10,6 +10,17 @@ import {
 } from './packaging-adapters';
 
 describe('application packaging adapters', () => {
+  it('adds documented silent removal only to the exact Bandizip identity', () => {
+    for (const id of ['Bandisoft.Bandizip', ' bandisoft.bandizip ']) {
+      const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
+      expect(adapted.reviewedUninstallArguments).toEqual(['/S']);
+      expect(applyApplicationPackagingAdapter(id, adapted)).toEqual(adapted);
+      expect(resolveApplicationUninstallCommand(id, 'REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip')).toBe('REGISTRY_UNINSTALL_KEY:Bandizip:Bandizip');
+    }
+    for (const id of ['Bandisoft.Bandizip.MSE', 'Other.App']) {
+      expect(applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG).reviewedUninstallArguments || []).toEqual([]);
+    }
+  });
   it('binds ZWCAD packaged removal only to the reviewed 2025 and 2026 editions', () => {
     for (const id of ['ZWSOFT.ZWCAD.2025', ' zwsoft.zwcad.2025 ', 'ZWSOFT.ZWCAD.2026', ' zwsoft.zwcad.2026 ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);
