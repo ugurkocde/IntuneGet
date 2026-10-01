@@ -80,6 +80,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
 
   it.each([
     ['Example.App', 'vendor_retired'],
+    ['Google.GoogleDesktop', 'vendor_retired'],
     ['Wondershare.Filmora', 'unsupported_managed_install'],
     ['GlassWire.GlassWire', 'unsupported_managed_uninstall'],
     ['Wargaming.GameCenter', 'unsupported_managed_uninstall'],
