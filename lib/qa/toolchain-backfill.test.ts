@@ -6,9 +6,18 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('retries Bandizip only on the reviewed silent-removal release', () => {
+    const previous = '4b4637967c6e2b0188f5713d262dd1219a02465e';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'Bandisoft.Bandizip', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous, { wingetId: 'Bandisoft.Bandizip', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Bandisoft.Bandizip', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Bandisoft.Bandizip.MSE', status: 'failed' })).toBe(false);
+  });
   it('adds only ZWCAD 2026 to the bounded retry targets', () => {
     const previous = 'e7410e97df040bd38f11842ccf259abd9bc757f7';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('4b4637967c6e2b0188f5713d262dd1219a02465e')).toEqual([
       'ZWSOFT.ZWCAD.2026', ...terminalToolchainRetryTargets(previous),
     ]);
     const candidate = { wingetId: 'ZWSOFT.ZWCAD.2026', status: 'failed' };

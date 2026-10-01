@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '4b4637967c6e2b0188f5713d262dd1219a02465e',
+  packagerCommit: '60395492a3d51b2ff6f14b50ed7cd0c7f558be70',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -633,6 +633,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // ZWCAD 2026 changes only its failed removal profile. Unchanged profiles
   // retain compatibility, never exact-current-pin strict cohort credit.
   'e7410e97df040bd38f11842ccf259abd9bc757f7',
+  // Bandizip's /S adapter changes only its failing removal profile.
+  // Preserve approved unrelated coverage through per-profile compatibility.
+  '4b4637967c6e2b0188f5713d262dd1219a02465e',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
