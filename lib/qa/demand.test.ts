@@ -786,6 +786,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks failed Power BI bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Microsoft.PowerBI', version: '2.158.1177.0', architecture: 'x64' as const,
+      installerSha256: '4924187834D34605C3046F01B876FBA6A2CF36F864C36D16FD52C3F17A21009C',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Burn removal exceeded its deadline; detection remained positive.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'burn', installScope,
+      silentSwitches: '/quiet /norestart ACCEPT_EULA=1',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft PowerBI Desktop',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks the failed Edge 154.0.4258.37 bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Microsoft.Edge', version: '154.0.4258.37', architecture: 'x64' as const,

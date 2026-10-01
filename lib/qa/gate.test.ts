@@ -701,6 +701,20 @@ describe('enforceQaGate', () => {
     expect(getQaResultMock).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('blocks failed Power BI bytes even with customer override=%s', async (qaOverride) => {
+    const tuple = {
+      wingetId: 'Microsoft.PowerBI', version: '2.158.1177.0', architecture: 'x64',
+      installerSha256: '4924187834D34605C3046F01B876FBA6A2CF36F864C36D16FD52C3F17A21009C',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValueOnce({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'Burn removal exceeded its deadline; detection remained positive.',
+    });
+    await expect(enforceQaGate({ ...tuple, qaOverride })).rejects.toBeInstanceOf(QaCompatibilityGateError);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(expect.anything(), tuple);
+    expect(getPackageResultMock).not.toHaveBeenCalled();
+    expect(getQaResultMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks Edge 154.0.4258.37 after MSI installation failed even with override=%s', async (qaOverride) => {
     const tuple = {
       wingetId: 'Microsoft.Edge', version: '154.0.4258.37', architecture: 'x64',
