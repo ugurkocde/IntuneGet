@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  getPackageCompatibilityBlockMock,
   cancelStaleWaitingQaRunsMock,
   createServerClientMock,
   dispatchQaCandidateMock,
   getGitHubActionsHealthMock,
   isQaWorkflowRunCompletedMock,
 } = vi.hoisted(() => ({
+  getPackageCompatibilityBlockMock: vi.fn(),
   cancelStaleWaitingQaRunsMock: vi.fn(),
   createServerClientMock: vi.fn(),
   dispatchQaCandidateMock: vi.fn(),
@@ -15,6 +17,7 @@ const {
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
+vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
 vi.mock('@/lib/qa/github-actions-health', () => ({
   getGitHubActionsHealth: getGitHubActionsHealthMock,
@@ -56,7 +59,7 @@ function query(result: QueryResult) {
   return builder;
 }
 
-function candidate(profileKind: 'catalog-default' | 'deployment-config') {
+function candidate(profileKind: 'catalog-default' | 'deployment-config', installerSha256 = 'A'.repeat(64)) {
   const profileInput = {
     profileKind,
     wingetId: 'Example.App',
@@ -64,7 +67,7 @@ function candidate(profileKind: 'catalog-default' | 'deployment-config') {
     publisher: 'Contoso',
     version: '1.2.3',
     architecture: 'x64',
-    installerSha256: 'A'.repeat(64),
+    installerSha256,
     sourceInstallerType: 'nullsoft',
     silentArgs: '/S',
     uninstallCommand: 'REGISTRY_UNINSTALL:Example:/S',
@@ -248,6 +251,7 @@ function cronRequest(): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getPackageCompatibilityBlockMock.mockReset().mockResolvedValue(null);
   process.env.CRON_SECRET = 'test-cron-secret';
   dispatchQaCandidateMock.mockResolvedValue(undefined);
   getGitHubActionsHealthMock.mockResolvedValue({ operational: true, status: 'operational' });
@@ -265,6 +269,34 @@ afterEach(() => {
 });
 
 describe('GET /api/cron/qa-dispatch', () => {
+  it('supersedes an exact held payload before claiming and dispatches an unaffected payload', async () => {
+    const held = candidate('deployment-config');
+    const allowed = candidate('catalog-default', 'B'.repeat(64));
+    const { client, claimedIds, supersededIds } = createSupabaseStub([held, allowed]);
+    createServerClientMock.mockReturnValue(client);
+    getPackageCompatibilityBlockMock.mockImplementation(async (_client, tuple) =>
+      tuple.installerSha256 === held.installer_sha256 ? { code: 'failed_managed_lifecycle' } : null
+    );
+    const response = await GET(cronRequest());
+    expect(response.status).toBe(200);
+    expect(supersededIds).toContain(held.id);
+    expect(claimedIds).toEqual([allowed.id]);
+    expect(dispatchQaCandidateMock).toHaveBeenCalledTimes(1);
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, {
+      wingetId: held.winget_id, version: held.version,
+      architecture: held.architecture, installerSha256: held.installer_sha256,
+    });
+  });
+
+  it('fails closed without claiming when the compatibility lookup fails', async () => {
+    const { client, claimedIds } = createSupabaseStub([candidate('catalog-default')]);
+    createServerClientMock.mockReturnValue(client);
+    getPackageCompatibilityBlockMock.mockRejectedValueOnce(new Error('Compatibility gate unavailable'));
+    await expect(GET(cronRequest())).rejects.toThrow('Compatibility gate unavailable');
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
   it('does not reconcile or dispatch candidates while maintenance is paused', async () => {
     const row = candidate('catalog-default');
     const { client, claimedIds } = createSupabaseStub([row], [], { paused: true });

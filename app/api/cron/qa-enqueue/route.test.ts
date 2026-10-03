@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  getPackageCompatibilityBlockMock,
   createServerClientMock,
   createManifestClientMock,
   detectWingetChangesMock,
   resolveManifestMock,
   resolveDependenciesMock,
 } = vi.hoisted(() => ({
+  getPackageCompatibilityBlockMock: vi.fn(),
   createServerClientMock: vi.fn(),
   createManifestClientMock: vi.fn(() => ({ kind: 'manifest-client' })),
   detectWingetChangesMock: vi.fn(),
@@ -15,6 +17,7 @@ const {
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
+vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
 vi.mock('@/lib/qa/winget-changes', () => ({ detectWingetChanges: detectWingetChangesMock }));
 vi.mock('@/lib/winget-sync-resolution.mjs', () => ({
   createWingetManifestClient: createManifestClientMock,
@@ -373,6 +376,7 @@ function cronRequest(query = ''): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getPackageCompatibilityBlockMock.mockReset().mockResolvedValue(null);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   process.env.CRON_SECRET = 'test-cron-secret';
@@ -768,6 +772,29 @@ describe('GET /api/cron/qa-enqueue', () => {
     expect(candidateInserts.find((row) => row.winget_id === 'Catalog.App')).toMatchObject({
       priority: 0,
       demand_source: 'catalog',
+    });
+  });
+
+  it.each([false, true])('refuses an exact held payload even for targeted requests (lookup error: %s)', async (lookupError) => {
+    const { client, candidateInserts } = createSupabaseStub({
+      supportedApps: [{ winget_id: 'Microsoft.SQLServerManagementStudio.22', name: 'SSMS', publisher: 'Microsoft', latest_version: '22.10.2' }],
+    });
+    createServerClientMock.mockReturnValue(client);
+    const manifest = resolvedManifest();
+    manifest.version = '22.10.2';
+    manifest.manifest.Installers[0].InstallerSha256 = 'E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2';
+    resolveManifestMock.mockResolvedValue(manifest);
+    if (lookupError) getPackageCompatibilityBlockMock.mockRejectedValueOnce(new Error('Compatibility gate unavailable'));
+    else getPackageCompatibilityBlockMock.mockResolvedValueOnce({ code: 'failed_managed_lifecycle' });
+    const response = await GET(cronRequest('?id=Microsoft.SQLServerManagementStudio.22'));
+    const body = await response.json();
+    expect(body.queued).toBe(0);
+    expect(lookupError ? body.errorCount : body.unavailable).toBe(1);
+    expect(candidateInserts).toHaveLength(0);
+    expect(resolveDependenciesMock).not.toHaveBeenCalled();
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, {
+      wingetId: 'Microsoft.SQLServerManagementStudio.22', version: '22.10.2', architecture: 'x64',
+      installerSha256: 'E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2',
     });
   });
 
