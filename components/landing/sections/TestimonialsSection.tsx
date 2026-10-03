@@ -29,7 +29,7 @@ const featured: Testimonial = {
   name: "Hodge Kaufmann",
   linkedin: "https://www.linkedin.com/in/hodge-k-001110222",
   avatar: "/testimonials/hodge-kaufmann.jpg",
-  role: "Managed security services provider",
+  role: "CEO",
   company: {
     name: "DotStar",
     website: "https://securedotstar.com/",
@@ -42,6 +42,7 @@ const secondary: Testimonial = {
     "IntuneGet is a free deployment tool for Intune, so there is really nothing to complain about. Support requests get an immediate response and suggestions are implemented quickly.",
   name: "Mücahit Savas",
   linkedin: "https://www.linkedin.com/in/mucsav1977/",
+  role: "IT Systems Administrator",
 };
 
 function Avatar({
@@ -98,7 +99,7 @@ function Attribution({
     <figcaption
       className={cn(
         "flex items-start gap-4 text-left",
-        size === "lg" ? "mt-8 lg:min-h-[5.5rem]" : "mt-6"
+        size === "lg" ? "mt-8" : "mt-6"
       )}
     >
       <Avatar testimonial={testimonial} size={size} />
@@ -119,31 +120,36 @@ function Attribution({
           />
           <span className="sr-only">on LinkedIn</span>
         </a>
-        {testimonial.company && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-text-secondary md:text-base">
-            <a
-              href={testimonial.company.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-overlay/30 underline-offset-4 transition-colors hover:text-accent-cyan hover:decoration-accent-cyan"
-            >
-              {testimonial.company.name}
-            </a>
-            <a
-              href={testimonial.company.linkedin}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${testimonial.company.name} on LinkedIn`}
-              className="text-text-muted transition-colors hover:text-[#0A66C2]"
-            >
-              <Linkedin className="h-3.5 w-3.5" />
-            </a>
+        {(testimonial.role || testimonial.company) && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-text-secondary md:text-base">
+            {testimonial.role && (
+              <span>
+                <T>{testimonial.role}</T>
+                {testimonial.company && ","}
+              </span>
+            )}
+            {testimonial.company && (
+              <>
+                <a
+                  href={testimonial.company.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-overlay/30 underline-offset-4 transition-colors hover:text-accent-cyan hover:decoration-accent-cyan"
+                >
+                  {testimonial.company.name}
+                </a>
+                <a
+                  href={testimonial.company.linkedin}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${testimonial.company.name} on LinkedIn`}
+                  className="ml-0.5 text-text-muted transition-colors hover:text-[#0A66C2]"
+                >
+                  <Linkedin className="h-3.5 w-3.5" />
+                </a>
+              </>
+            )}
           </div>
-        )}
-        {testimonial.role && (
-          <p className="mt-1 text-sm text-text-muted md:text-base">
-            <T>{testimonial.role}</T>
-          </p>
         )}
       </div>
     </figcaption>
