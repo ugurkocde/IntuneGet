@@ -53,7 +53,7 @@ function Avatar({
 }) {
   const className = cn(
     "shrink-0 rounded-full",
-    size === "lg" ? "h-16 w-16 md:h-[72px] md:w-[72px]" : "h-11 w-11"
+    size === "lg" ? "h-14 w-14" : "h-11 w-11"
   );
 
   if (testimonial.avatar) {
@@ -97,8 +97,8 @@ function Attribution({
   return (
     <figcaption
       className={cn(
-        "flex items-center justify-center text-left",
-        size === "lg" ? "mt-10 gap-5" : "mt-6 gap-4"
+        "flex items-start gap-4 text-left",
+        size === "lg" ? "mt-8 lg:min-h-[5.5rem]" : "mt-6"
       )}
     >
       <Avatar testimonial={testimonial} size={size} />
@@ -156,34 +156,34 @@ export function TestimonialsSection() {
       id="testimonials"
       className="relative w-full scroll-mt-20 border-t border-overlay/[0.06] py-20 md:scroll-mt-24 md:py-28"
     >
-      <div className="container mx-auto max-w-5xl px-4 text-center md:px-6">
+      <div className="container mx-auto max-w-6xl px-4 md:px-6">
         <FadeIn>
-          <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-accent-cyan md:text-sm">
+          <p className="text-center font-mono text-xs font-semibold uppercase tracking-[0.2em] text-accent-cyan md:text-sm">
             <T>From the field</T>
           </p>
         </FadeIn>
 
-        <FadeIn delay={0.08}>
-          <figure className="mt-10 md:mt-12">
-            <blockquote className="text-balance text-2xl font-semibold leading-snug tracking-tight text-text-primary md:text-[2.125rem] md:leading-[1.3]">
-              <p>
-                &ldquo;<T>{featured.quote}</T>&rdquo;
-              </p>
-            </blockquote>
-            <Attribution testimonial={featured} size="lg" />
-          </figure>
-        </FadeIn>
-
-        <FadeIn delay={0.16}>
-          <figure className="mx-auto mt-16 max-w-3xl border-t border-overlay/10 pt-14 md:mt-20 md:pt-16">
-            <blockquote className="text-balance text-lg leading-relaxed text-text-secondary md:text-xl">
-              <p>
-                &ldquo;<T>{secondary.quote}</T>&rdquo;
-              </p>
-            </blockquote>
-            <Attribution testimonial={secondary} size="sm" />
-          </figure>
-        </FadeIn>
+        <div className="mt-12 grid gap-14 md:mt-16 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-overlay/10">
+          {[featured, secondary].map((testimonial, index) => (
+            <FadeIn
+              key={testimonial.name}
+              delay={0.08 + index * 0.08}
+              className={cn(
+                "flex",
+                index === 0 ? "lg:pr-14" : "border-t border-overlay/10 pt-14 lg:border-t-0 lg:pl-14 lg:pt-0"
+              )}
+            >
+              <figure className="flex flex-1 flex-col justify-between">
+                <blockquote className="text-pretty text-xl font-semibold leading-snug tracking-tight text-text-primary md:text-2xl md:leading-[1.35]">
+                  <p>
+                    &ldquo;<T>{testimonial.quote}</T>&rdquo;
+                  </p>
+                </blockquote>
+                <Attribution testimonial={testimonial} size="lg" />
+              </figure>
+            </FadeIn>
+          ))}
+        </div>
       </div>
     </section>
   );
