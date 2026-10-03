@@ -18,7 +18,7 @@
       "Google LLC"
     ],
     "allowUnsigned": false,
-    "releaseSource": "https://versionhistory.googleapis.com/v1/chrome/platforms/win64/channels/stable/versions?pageSize=1",
+    "releaseSource": "https://versionhistory.googleapis.com/v1/chrome/platforms/win64/channels/stable/versions/all/releases?filter=endtime=none",
     "discovery": "chrome",
     "allowedInstallerSources": [
       {

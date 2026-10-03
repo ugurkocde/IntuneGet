@@ -36,6 +36,12 @@ describe('vendor metadata discovery', () => {
     }
     expect(() => candidateFromMetadata(app('putty'), '<h1>Index of /~sgtatham/putty/0.84/w64</h1><a href="putty-64bit-0.85-installer.msi">MSI</a>')).toThrow(/matching versioned/);
   });
+  it('selects the fully rolled out Chrome release instead of a staged cohort', () => {
+    const releases = [{ version: '154.0.8037.93', fraction: 0.495 }, { version: '154.0.8037.98', fraction: 1 },
+      { version: '155.0.8059.26', fraction: 0.005 }, { version: '154.0.8037.100', fraction: 1 }];
+    expect(candidateFromMetadata(app('chrome'), JSON.stringify({ releases })).version).toBe('154.0.8037.100');
+    expect(() => candidateFromMetadata(app('chrome'), JSON.stringify({ releases: releases.filter(release => release.fraction < 1) }))).toThrow(/fully rolled out/);
+  });
   it('parses WinSCP and VLC text feeds', () => {
     expect(candidateFromMetadata(app('winscp'), 'version=6.5.7.0\n').version).toBe('6.5.7');
     expect(candidateFromMetadata(app('vlc'), '3.0.24\nhttp://ignored-mirror.test/vlc.exe').installerUrl)
@@ -49,7 +55,7 @@ describe('vendor metadata discovery', () => {
     expect(() => candidateFromMetadata(app('git'), JSON.stringify({ ...metadata, assets: [...metadata.assets, ...metadata.assets] }))).toThrow(/one reviewed/);
   });
   it('never downloads installers or silently approves discovery candidates', async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ versions: [{ version: '140.0.0.0' }] }), { headers: { 'content-type': 'application/json' } }));
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ releases: [{ version: '140.0.0.0', fraction: 1 }] }), { headers: { 'content-type': 'application/json' } }));
     const result = await discoverCandidate(app('chrome'), fetcher);
     expect(result.state).toBe('candidate');
     expect(fetcher).toHaveBeenCalledExactlyOnceWith(app('chrome').releaseSource, expect.objectContaining({ redirect: 'error' }));
