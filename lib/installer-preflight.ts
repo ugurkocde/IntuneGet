@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { assertCuratedInstaller } from '@/lib/curated-catalog/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getLiveInstallers } from '@/lib/manifest-api';
 import {
@@ -47,7 +49,8 @@ export interface InstallerPreflightRequest {
   installerSha256: string;
   installerType?: string;
   installScope?: 'machine' | 'user';
-  sourceType?: 'winget' | 'custom';
+  sourceType?: 'winget' | 'custom' | 'curated';
+  curatedReleaseId?: string;
 }
 
 export interface InstallerPreflightResult {
@@ -426,7 +429,12 @@ export async function enforceInstallerPreflight(
   input: InstallerPreflightRequest,
   trustedInstallers?: NormalizedInstaller[],
 ): Promise<InstallerPreflightResult> {
+  if (isCuratedPackageId(input.wingetId) || input.sourceType === 'curated') {
+    const { installer } = assertCuratedInstaller(input);
+    trustedInstallers = [installer];
+  }
   if (input.sourceType === 'custom' || input.wingetId.startsWith('Custom.')) {
+    if (isCuratedPackageId(input.wingetId)) throw new InstallerPreflightError('CURATED_RELEASE_UNAVAILABLE', 'Curated releases cannot use custom installer validation.');
     return { cacheKey: '', status: 'skipped', source: 'custom' };
   }
   if (isHostedRuntime() && !getHealthClient()) {

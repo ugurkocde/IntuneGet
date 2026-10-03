@@ -1,4 +1,6 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
 /**
  * Package API Route
  * Queues packaging jobs by triggering GitHub Actions workflows
@@ -185,6 +187,15 @@ export async function POST(request: NextRequest) {
     const win32Items: Win32CartItem[] = [];
 
     for (const item of items) {
+      if (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated') {
+        try {
+          if (isStoreCartItem(item)) throw new CuratedCatalogError('Curated pilot applications require Win32 packaging.');
+          Object.assign(item, reconcileCuratedCartItem(item as Win32CartItem).item);
+        } catch (error) {
+          if (!(error instanceof CuratedCatalogError)) throw error;
+          return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+        }
+      }
       if (isStoreCartItem(item)) {
         storeItems.push(item);
       } else {
@@ -759,8 +770,9 @@ export async function POST(request: NextRequest) {
                 : undefined,
               installScope: item.installScope,
               forceCreate: item.forceCreate || forceCreate,
-              qaOverride: isQaMaintenanceMode() || item.qaOverride,
+              qaOverride: item.sourceType === 'curated' ? false : isQaMaintenanceMode() || item.qaOverride,
               sourceType: item.sourceType,
+              curatedReleaseId: item.curatedReleaseId,
             };
 
             const triggerResult = await triggerPackagingWorkflow(

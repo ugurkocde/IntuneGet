@@ -118,6 +118,14 @@ export const roadmapStages: RoadmapStage[] = [
     timeframe: "Ongoing",
     items: [
       {
+        id: "curated-catalog",
+        title: "IntuneGet Curated Catalog",
+        description:
+          "Start with ten selected apps using reviewed vendor sources, security checks, and tested deployment configurations. Releases require signed approval before deployment. Pilot verification is in progress.",
+        category: "catalog",
+        href: "/docs/catalog",
+      },
+      {
         title: "Catalog QA coverage",
         description:
           "Expand verified coverage as new apps and installer versions pass through the live QA queue. Results remain specific to the tested version, architecture, and installer hash.",

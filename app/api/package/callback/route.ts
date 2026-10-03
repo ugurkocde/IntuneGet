@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
             installerSha256: currentJob.installer_sha256 || '',
             installerType: currentJob.installer_type || undefined,
             installScope: currentJob.install_scope === 'user' ? 'user' : 'machine',
-            sourceType: packageConfig.sourceType === 'custom' ? 'custom' : 'winget',
+            sourceType: packageConfig.sourceType === 'custom' ? 'custom' : packageConfig.sourceType === 'curated' ? 'curated' : 'winget',
           }, actualHash, 'HASH_MISMATCH', data.message || 'The installer failed SHA256 verification');
         } catch (quarantineError) {
           console.error('Could not persist installer quarantine from callback:', quarantineError);

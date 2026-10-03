@@ -1,4 +1,6 @@
 import { resolveInstallerFileName } from '@/lib/installer-filename';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import {
   fetchAvailableVersions,
   getLiveInstallers,
@@ -258,6 +260,16 @@ export async function resolveWingetPackageDependencies(
   },
   io: WingetDependencyResolverIo = defaultIo
 ): Promise<PackagedWingetDependency[]> {
+  if (isCuratedPackageId(input.wingetId)) {
+    const { app, release } = getApprovedCuratedRelease(input.wingetId, input.version);
+    if (input.installerSha256.toLowerCase() !== release.installerSha256.toLowerCase() ||
+        (input.architecture || 'x64') !== app.architecture || (input.installScope || 'machine') !== app.scope) {
+      throw new Error('Curated dependencies require the approved installer profile.');
+    }
+    // Pilot profiles must pass on the clean VM without an additional bundle.
+    // Prerequisites need a separately reviewed signed dependency model.
+    return [];
+  }
   const targetArchitecture = normalizedArchitecture(input.architecture || 'x64');
   const rootSha256 = normalizeSha256(input.installerSha256);
   if (!rootSha256) throw new Error('Primary installer SHA-256 is invalid.');

@@ -137,7 +137,7 @@ interface CartItemBase {
   id: string; // Unique cart item ID
   wingetId: string;
   // How the item was added to the cart; absent = winget catalog
-  sourceType?: 'winget' | 'custom';
+  sourceType?: 'winget' | 'custom' | 'curated';
   displayName: string;
   publisher: string;
   description?: string;
@@ -182,6 +182,7 @@ interface CartItemBase {
 // Win32 LOB app - goes through packaging pipeline (PSADT + .intunewin + GitHub Actions)
 export interface Win32CartItem extends CartItemBase {
   appSource: 'win32';
+  curatedReleaseId?: string;
   localeCode?: string; // Selected locale for language variant packages
   architecture: WingetArchitecture;
   installScope: WingetScope;

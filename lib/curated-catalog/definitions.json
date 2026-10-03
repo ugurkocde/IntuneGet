@@ -1,0 +1,295 @@
+[
+  {
+    "id": "chrome",
+    "packageId": "IntuneGet.Curated.Chrome",
+    "wingetId": "Google.Chrome",
+    "name": "Google Chrome",
+    "publisher": "Google LLC",
+    "channel": "Enterprise Stable",
+    "category": "browsers",
+    "homepage": "https://chromeenterprise.google/browser/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Google LLC"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://versionhistory.googleapis.com/v1/chrome/platforms/win64/channels/stable/versions?pageSize=1",
+    "discovery": "chrome",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://dl.google.com",
+        "pathPrefix": "/dl/chrome/install/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Enterprise MSI. Google Update remains enabled; catalog approval applies to the packaged release. The mutable MSI URL must be rechecked against the candidate version in the isolated verifier."
+  },
+  {
+    "id": "firefox-esr",
+    "packageId": "IntuneGet.Curated.FirefoxESR",
+    "wingetId": "Mozilla.Firefox.ESR",
+    "name": "Mozilla Firefox ESR",
+    "publisher": "Mozilla Corporation",
+    "channel": "ESR",
+    "category": "browsers",
+    "homepage": "https://www.firefox.com/en-US/browsers/enterprise/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Mozilla Corporation"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://product-details.mozilla.org/1.0/firefox_versions.json",
+    "discovery": "firefox",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://archive.mozilla.org",
+        "pathPrefix": "/pub/firefox/releases/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Use the ESR channel and the en-US machine MSI. Firefox's own update mechanism remains enabled."
+  },
+  {
+    "id": "acrobat-reader",
+    "packageId": "IntuneGet.Curated.AcrobatReader",
+    "wingetId": "Adobe.Acrobat.Reader.64-bit",
+    "name": "Adobe Acrobat Reader",
+    "publisher": "Adobe Inc.",
+    "channel": "Continuous",
+    "category": "productivity",
+    "homepage": "https://www.adobe.com/acrobat/pdf-reader/volume-distribution.html",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "exe",
+    "silentArgs": "/sAll /rs /rps /msi EULA_ACCEPT=YES",
+    "signaturePublishers": [
+      "Adobe Inc.",
+      "Adobe Systems Incorporated"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.adobe.com/devnet-docs/acrobatetk/tools/ReleaseNotesDC/index.html",
+    "discovery": "manual",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://ardownload2.adobe.com",
+        "pathPrefix": "/pub/adobe/acrobat/win/AcrobatDC/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Review the enterprise offline installer and distribution requirements. Record the exact full-installer version and URL manually; do not infer a full installer from an MSP patch release. Adobe ARM remains enabled."
+  },
+  {
+    "id": "7zip",
+    "packageId": "IntuneGet.Curated.7Zip",
+    "wingetId": "7zip.7zip",
+    "name": "7-Zip",
+    "publisher": "Igor Pavlov",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://www.7-zip.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [],
+    "allowUnsigned": true,
+    "releaseSource": "https://api.github.com/repos/ip7z/7zip/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^7z[0-9]+-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/ip7z/7zip/releases/download/"
+      }
+    ],
+    "autoUpdate": "none",
+    "notes": "Publisher-linked official GitHub releases. Unsigned binaries require an explicit reviewed exception, exact hash, and clean malware evidence."
+  },
+  {
+    "id": "notepad-plus-plus",
+    "packageId": "IntuneGet.Curated.NotepadPlusPlus",
+    "wingetId": "Notepad++.Notepad++",
+    "name": "Notepad++",
+    "publisher": "Notepad++",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://notepad-plus-plus.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": [
+      "Notepad++",
+      "Notepad Plus Plus"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://api.github.com/repos/notepad-plus-plus/notepad-plus-plus/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^npp\\.[0-9.]+\\.Installer\\.x64\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/notepad-plus-plus/notepad-plus-plus/releases/download/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Review the exact current signing identity before first approval. Signing identity changes require a definition review. The vendor updater remains enabled."
+  },
+  {
+    "id": "vscode",
+    "packageId": "IntuneGet.Curated.VisualStudioCode",
+    "wingetId": "Microsoft.VisualStudioCode",
+    "name": "Visual Studio Code",
+    "publisher": "Microsoft Corporation",
+    "channel": "Stable system installer",
+    "category": "developer-tools",
+    "homepage": "https://code.visualstudio.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /MERGETASKS=!runcode",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://update.code.visualstudio.com/api/update/win32-x64/stable/latest",
+    "discovery": "vscode",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://vscode.download.prss.microsoft.com",
+        "pathPrefix": "/dbazure/download/stable/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "System installer only. The user installer is outside this pilot's machine deployment profile. VS Code's updater remains enabled."
+  },
+  {
+    "id": "git",
+    "packageId": "IntuneGet.Curated.Git",
+    "wingetId": "Git.Git",
+    "name": "Git for Windows",
+    "publisher": "The Git Development Community",
+    "channel": "Stable",
+    "category": "developer-tools",
+    "homepage": "https://git-scm.com/install/windows",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+    "signaturePublishers": [
+      "Open Source Developer, Johannes Schindelin"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://api.github.com/repos/git-for-windows/git/releases/latest",
+    "discovery": "github",
+    "assetPattern": "^Git-[0-9.]+(?:\\.[0-9]+)?-64-bit\\.exe$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/git-for-windows/git/releases/download/"
+      }
+    ],
+    "autoUpdate": "none",
+    "notes": "Review the publisher certificate identity and default installation choices before approval."
+  },
+  {
+    "id": "vlc",
+    "packageId": "IntuneGet.Curated.VLC",
+    "wingetId": "VideoLAN.VLC",
+    "name": "VLC media player",
+    "publisher": "VideoLAN",
+    "channel": "Stable",
+    "category": "media",
+    "homepage": "https://www.videolan.org/vlc/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": [
+      "VideoLAN"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://update.videolan.org/vlc/status-win-x64",
+    "discovery": "vlc",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://downloads.videolan.org",
+        "pathPrefix": "/pub/videolan/vlc/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Use the official archive instead of automatically following third-party download mirrors. The application's update notifications remain enabled."
+  },
+  {
+    "id": "winscp",
+    "packageId": "IntuneGet.Curated.WinSCP",
+    "wingetId": "WinSCP.WinSCP",
+    "name": "WinSCP",
+    "publisher": "Martin Prikryl",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://winscp.net/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "inno",
+    "silentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
+    "signaturePublishers": [
+      "Martin Prikryl"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://winscp.net/eng/updates.php",
+    "discovery": "winscp",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://downloads.sourceforge.net",
+        "pathPrefix": "/project/winscp/WinSCP/"
+      }
+    ],
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher-linked SourceForge project and all-users setup. Verify final redirect provenance, payload architecture, signature, and hash in the isolated verifier; the vendor setup may contain multiple architectures. Update notifications remain enabled."
+  },
+  {
+    "id": "putty",
+    "packageId": "IntuneGet.Curated.PuTTY",
+    "wingetId": "PuTTY.PuTTY",
+    "name": "PuTTY",
+    "publisher": "Simon Tatham",
+    "channel": "Stable",
+    "category": "utilities",
+    "homepage": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": [
+      "Simon Tatham"
+    ],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html",
+    "discovery": "putty",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://the.earth.li",
+        "pathPrefix": "/~sgtatham/putty/"
+      }
+    ],
+    "autoUpdate": "none",
+    "notes": "Publisher-linked versioned x64 MSI; standalone executables and development snapshots are excluded."
+  }
+]

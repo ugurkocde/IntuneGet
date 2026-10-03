@@ -15,6 +15,9 @@ import {
 } from '@/types/update-policies';
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { assertCuratedInstaller, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import {
   normalizeInstallerSha256,
   selectWingetInstaller,
@@ -51,6 +54,8 @@ interface TriggerResult {
 }
 
 export interface UpdateInfo {
+  sourceType?: 'curated';
+  curatedReleaseId?: string;
   wingetId: string;
   currentVersion: string;
   latestVersion: string;
@@ -70,6 +75,7 @@ export interface UpdateInfo {
 }
 
 export type InstallerResolutionFailureReason =
+  | 'curated_release_unavailable'
   | 'app_not_in_catalog'
   | 'version_record_missing'
   | 'installer_metadata_missing'
@@ -243,7 +249,7 @@ export class AutoUpdateTrigger {
         storedDeploymentConfig.installScope || updateInfo.installScope
       );
       updateInfo = { ...updateInfo, installScope: effectiveInstallScope };
-      const deploymentConfig: DeploymentConfig = {
+      let deploymentConfig: DeploymentConfig = {
         ...storedDeploymentConfig,
         installScope: effectiveInstallScope,
         uninstallCommand:
@@ -255,6 +261,24 @@ export class AutoUpdateTrigger {
           storedDeploymentConfig.psadtConfig || DEFAULT_PSADT_CONFIG
         ),
       };
+      if (isCuratedPackageId(updateInfo.wingetId)) {
+        const approved = assertCuratedInstaller({
+          wingetId: updateInfo.wingetId, version: updateInfo.latestVersion,
+          architecture: deploymentConfig.architecture, installScope: effectiveInstallScope,
+          installerUrl: updateInfo.installerUrl, installerSha256: updateInfo.installerSha256,
+          installerType: updateInfo.installerType, curatedReleaseId: updateInfo.curatedReleaseId,
+        });
+        const current = buildCuratedCartItem(approved.app, approved.release);
+        deploymentConfig = {
+          ...deploymentConfig, sourceType: 'curated', curatedReleaseId: approved.release.id,
+          displayName: current.displayName, publisher: current.publisher,
+          architecture: current.architecture, installScope: current.installScope,
+          installerType: current.installerType, installCommand: current.installCommand,
+          uninstallCommand: current.uninstallCommand, detectionRules: current.detectionRules,
+          psadtConfig: current.psadtConfig,
+        };
+        updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id };
+      }
       // Keep the effective adapter in this update attempt so QA and the job
       // receive the same config, without persisting derived adapter output into
       // the customer's policy. A later adapter revision is therefore reapplied.
@@ -673,6 +697,8 @@ export class AutoUpdateTrigger {
       install_scope: updateInfo.installScope || config.installScope,
       detection_rules: config.detectionRules,
       package_config: {
+        sourceType: updateInfo.sourceType || config.sourceType,
+        curatedReleaseId: updateInfo.curatedReleaseId,
         assignments,
         categories,
         assignedGroups: config.assignedGroups,
@@ -880,6 +906,26 @@ export async function getLatestInstallerInfo(
   architecture?: string,
   installScope?: string
 ): Promise<InstallerResolutionResult> {
+  if (isCuratedPackageId(wingetId)) {
+    try {
+      const { app, release } = getApprovedCuratedRelease(wingetId);
+      if ((architecture && architecture !== app.architecture) || (installScope && installScope !== app.scope)) {
+        throw new Error('The curated pilot supports x64 machine installations.');
+      }
+      const item = buildCuratedCartItem(app, release);
+      return { ok: true, info: {
+        wingetId: app.packageId, currentVersion: '', latestVersion: item.version,
+        displayName: item.displayName, installerUrl: item.installerUrl,
+        installerSha256: item.installerSha256, installerType: item.installerType,
+        installCommand: item.installCommand, uninstallCommand: item.uninstallCommand,
+        detectionRules: item.detectionRules, silentSwitches: app.silentArgs,
+        installScope: app.scope, sourceType: 'curated', curatedReleaseId: release.id,
+      } };
+    } catch {
+      return { ok: false, failure: { reason: 'curated_release_unavailable',
+        message: 'No approved curated release is available for this application and installation configuration.' } };
+    }
+  }
   const catalog = getCatalogSource();
 
   // Get the curated app info

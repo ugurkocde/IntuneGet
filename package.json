@@ -16,6 +16,8 @@
     "prepare": "husky",
     "test": "vitest run",
     "test:watch": "vitest",
+    "curated:validate": "node scripts/curated-catalog.mjs validate",
+    "curated:discover": "node scripts/curated-catalog.mjs discover",
     "test:coverage": "vitest run --coverage",
     "perf:bundles": "node scripts/measure-bundles.mjs --check"
   },

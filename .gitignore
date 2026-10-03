@@ -70,3 +70,6 @@ packager/.env.*
 
 # Catalog snapshot runtime artifacts
 /data/
+
+# Curated discovery and operator verification artifacts
+/output/curated/

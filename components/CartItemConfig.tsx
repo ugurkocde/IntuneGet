@@ -85,6 +85,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const updateItem = useCartStore((state) => state.updateItem);
   const isStore = isStoreCartItem(item);
   const isWin32 = isWin32CartItem(item);
+  const isCurated = isWin32 && item.sourceType === 'curated';
+  const isEditableWin32 = isWin32 && !isCurated;
 
   // Store app state
   const [storeInstallExperience, setStoreInstallExperience] = useState<'user' | 'system'>(
@@ -123,7 +125,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   );
 
   // UI state
-  const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStore ? 'assignment' : 'behavior');
+  const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStore || isCurated ? 'assignment' : 'behavior');
   const [isSaving, setIsSaving] = useState(false);
   const [processesError, setProcessesError] = useState<string | null>(null);
 
@@ -197,6 +199,18 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   };
 
   const handleSave = async () => {
+    if (isCurated) {
+      updateItem(item.id, {
+        assignments: assignments.length ? assignments : undefined,
+        categories: categories.length ? categories : undefined,
+        espProfiles: espProfiles.length ? espProfiles : undefined,
+        updatePolicy,
+        assignmentMigration: updatePolicy === 'auto_update'
+          ? { carryOverAssignments, removeAssignmentsFromPreviousApp: carryOverAssignments } : undefined,
+      });
+      onClose();
+      return;
+    }
     // The packaging pipeline rejects close-process entries without an
     // executable name, so block the save instead of storing a config that
     // fails minutes later during packaging.
@@ -355,7 +369,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
             )}
 
             {/* Win32 app: Install Scope */}
-            {isWin32 && (
+            {isCurated && <p className="text-sm text-text-secondary">This curated release uses a verified machine installation. Installation commands and detection settings are fixed to the approved package. Choose assignments, categories, enrollment profiles, and update preferences below.</p>}
+            {isEditableWin32 && (
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Install Scope</label>
                 <div className="flex gap-2">
@@ -387,7 +402,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </h3>}
 
               {/* Installation Behavior (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Installation Behavior"
                 icon={<Settings className="w-4 h-4" />}
                 expanded={expandedSection === 'behavior'}
@@ -605,7 +620,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Deferral Settings (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Deferral Settings"
                 icon={<Clock className="w-4 h-4" />}
                 expanded={expandedSection === 'deferral'}
@@ -682,7 +697,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Progress & Notifications (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Progress & Notifications"
                 icon={<Bell className="w-4 h-4" />}
                 expanded={expandedSection === 'progress'}
@@ -836,7 +851,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Custom Prompts (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Custom Prompts"
                 icon={<MessageSquare className="w-4 h-4" />}
                 expanded={expandedSection === 'prompts'}
@@ -1043,7 +1058,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Restart Prompt (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Restart Prompt"
                 icon={<RefreshCw className="w-4 h-4" />}
                 expanded={expandedSection === 'restart'}
@@ -1109,7 +1124,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Disk Space Check (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Disk Space Check"
                 icon={<HardDrive className="w-4 h-4" />}
                 expanded={expandedSection === 'diskspace'}
@@ -1207,7 +1222,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Dependencies & Supersedence (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Dependencies & Supersedence"
                 icon={<Link2 className="w-4 h-4" />}
                 expanded={expandedSection === 'dependencies'}
@@ -1221,7 +1236,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Branding (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Branding"
                 icon={<Palette className="w-4 h-4" />}
                 expanded={expandedSection === 'branding'}
@@ -1325,7 +1340,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Advanced (win32 only) */}
-              {isWin32 && <ConfigSection
+              {isEditableWin32 && <ConfigSection
                 title="Advanced Options"
                 icon={<Terminal className="w-4 h-4" />}
                 expanded={expandedSection === 'advanced'}

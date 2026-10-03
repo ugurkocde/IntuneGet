@@ -22,6 +22,8 @@ export type UpdateType = 'patch' | 'minor' | 'major';
  * Contains all information needed to re-deploy an app with a new version
  */
 export interface DeploymentConfig {
+  sourceType?: 'winget' | 'custom' | 'curated';
+  curatedReleaseId?: string;
   // App information
   displayName: string;
   publisher: string;

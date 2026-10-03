@@ -1,4 +1,6 @@
 import { getCatalogSource } from '@/lib/catalog';
+import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { classifyQaFailure } from '@/lib/qa/classify';
 import { createServerClient } from '@/lib/supabase';
 import {
@@ -132,8 +134,18 @@ export async function enforceQaGate(input: {
   packageProfileSha256?: string;
   requirePassed?: boolean;
   qaOverride?: boolean;
-  sourceType?: 'winget' | 'custom';
+  sourceType?: 'winget' | 'custom' | 'curated';
+  curatedReleaseId?: string;
 }): Promise<void> {
+  if (isCuratedPackageId(input.wingetId) || input.sourceType === 'curated') {
+    const { app, release } = getApprovedCuratedRelease(input.wingetId, input.version, input.curatedReleaseId);
+    if (input.sourceType === 'custom' || input.qaOverride || input.architecture !== app.architecture ||
+        input.installerSha256?.toLowerCase() !== release.installerSha256.toLowerCase() ||
+        input.packageProfileSha256?.toLowerCase() !== release.executionProfileSha256.toLowerCase()) {
+      throw new CuratedCatalogError('The requested package does not match its approved curated test evidence.');
+    }
+    return;
+  }
   if (input.sourceType === 'custom') return;
 
   const architecture = (input.architecture || 'x64').toLowerCase();

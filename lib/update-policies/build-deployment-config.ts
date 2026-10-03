@@ -10,6 +10,9 @@
 import { createServerClient } from '@/lib/supabase';
 import type { DatabaseAdapter } from '@/lib/db/types';
 import { getCatalogSource } from '@/lib/catalog';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { normalizeInstaller } from '@/lib/manifest-api';
 import { selectWingetInstaller } from '@/lib/qa/candidate';
 import {
@@ -268,6 +271,13 @@ export async function buildDefaultDeploymentConfig(
   wingetId: string,
   latestVersion: string
 ): Promise<DeploymentConfig | null> {
+  if (isCuratedPackageId(wingetId)) {
+    try {
+      const { app, release } = getApprovedCuratedRelease(wingetId, latestVersion);
+      const item = buildCuratedCartItem(app, release);
+      return { ...item, forceCreateNewApp: true };
+    } catch { return null; }
+  }
   // Get curated app info
   const curatedApp = await getCatalogSource().getAppNamePublisher(wingetId);
 
@@ -381,6 +391,8 @@ function assembleDeploymentConfigFromJob(job: {
 
   return {
     displayName: job.display_name,
+    sourceType: isObject(packageConfig) && packageConfig.sourceType === 'curated' ? 'curated' : undefined,
+    curatedReleaseId: isObject(packageConfig) && typeof packageConfig.curatedReleaseId === 'string' ? packageConfig.curatedReleaseId : undefined,
     publisher: job.publisher || 'Unknown Publisher',
     architecture: job.architecture || 'x64',
     installerType: job.installer_type || 'exe',

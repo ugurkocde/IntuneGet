@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 const questions = [
   {
     q: "Where does the catalog come from?",
-    a: "The WinGet community manifests at microsoft/winget-pkgs. A scheduled sync reads versions, installer URLs, SHA-256 values, and locale variants into the IntuneGet catalog.",
+    a: "The Winget catalog comes from community manifests at microsoft/winget-pkgs. A scheduled sync reads versions, installer URLs, SHA-256 values, and locale variants. The separate IntuneGet Curated Catalog pilot uses reviewed publisher sources and its own release approval.",
   },
   {
     q: "Does IntuneGet mirror winget like cdn.winget.microsoft.com/cache?",
@@ -30,6 +30,10 @@ const questions = [
   {
     q: "Do you store the built package?",
     a: "No. The .intunewin is built on an ephemeral runner, uploaded to your tenant, and then discarded. It is never stored by IntuneGet.",
+  },
+  {
+    q: "What is the Curated Catalog pilot?",
+    a: "A selected set of ten applications with independent publisher sourcing, security evidence, and tested deployment configurations. Each release needs signed approval before deployment. Applications awaiting verification cannot be deployed from the pilot. This is an IntuneGet-maintained catalog; a tenant-private catalog remains a separate roadmap proposal.",
   },
   {
     q: "Is there a private catalog?",

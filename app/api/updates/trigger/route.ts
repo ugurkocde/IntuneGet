@@ -336,6 +336,8 @@ export async function POST(request: NextRequest) {
             const currentCarryOver = globalCarryOver;
 
             const workflowInputs: WorkflowInputs = {
+              sourceType: installerInfo.sourceType,
+              curatedReleaseId: installerInfo.curatedReleaseId,
               jobId: triggerResult.packagingJobId,
               tenantId: req.tenant_id,
               wingetId: req.winget_id,

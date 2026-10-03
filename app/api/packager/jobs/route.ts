@@ -8,6 +8,7 @@ import { getDatabase, verifyPackagerApiKey } from '@/lib/db';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
 import { ensureUpdatePolicy, parseCartUpdatePolicy } from '@/lib/update-policies/ensure-policy';
+import { validateCuratedPackagingJob } from '@/lib/curated-catalog/server';
 
 // Verify the packager auth key (API key for SQLite, service role key for Supabase)
 function verifyPackagerAuth(request: NextRequest): boolean {
@@ -104,6 +105,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    try {
+      validateCuratedPackagingJob(job);
+    } catch {
+      await db.jobs.update(job.id, {
+        status: 'failed', error_code: 'CURATED_RELEASE_UNAVAILABLE',
+        error_message: 'The curated release is no longer approved for this packaging configuration.',
+        completed_at: new Date().toISOString(),
+      }, { status: 'packaging' });
+      return NextResponse.json({ claimed: false, error: 'This curated release is unavailable.' }, { status: 409 });
+    }
     return NextResponse.json({
       claimed: true,
       job,

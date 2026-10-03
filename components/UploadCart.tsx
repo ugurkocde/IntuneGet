@@ -451,6 +451,9 @@ export function UploadCart() {
                                 Custom
                               </span>
                             )}
+                            {item.sourceType === 'curated' && (
+                              <span className="px-2 py-1 bg-accent-cyan/10 rounded text-accent-cyan text-xs font-medium border border-accent-cyan/20">Curated</span>
+                            )}
                           </>
                         ) : null}
                         {item.forceCreate && (

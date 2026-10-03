@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "schemaVersion": 1,
+    "generatedAt": null,
+    "expiresAt": null,
+    "definitionsSha256": null,
+    "releases": [],
+    "withdrawnReleaseIds": []
+  },
+  "keyId": null,
+  "signature": null
+}

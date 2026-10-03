@@ -23,6 +23,9 @@ import type { Json } from '@/types/database';
 import { getCatalogSource } from '@/lib/catalog';
 import { compareVersions } from '@/lib/version-compare';
 import { getLatestInstallerInfo } from '@/lib/auto-update/trigger';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { assertCuratedInstaller } from '@/lib/curated-catalog/server';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import {
   DEFAULT_SAFETY_CONFIG,
   canAutoUpdate,
@@ -33,6 +36,8 @@ import {
 } from '@/types/update-policies';
 
 export interface SqliteUpdateInfo {
+  sourceType?: 'curated';
+  curatedReleaseId?: string;
   wingetId: string;
   currentVersion: string;
   latestVersion: string;
@@ -128,9 +133,21 @@ export async function triggerSqliteAutoUpdate(
       return { success: false, skipped: true, skipReason: 'Policy does not allow auto-update or is disabled' };
     }
 
-    const config = policy.deployment_config as DeploymentConfig | null;
+    let config = policy.deployment_config as DeploymentConfig | null;
     if (!config) {
       return { success: false, error: 'No deployment configuration saved for this policy' };
+    }
+    if (isCuratedPackageId(updateInfo.wingetId)) {
+      const approved = assertCuratedInstaller({
+        wingetId: updateInfo.wingetId, version: updateInfo.latestVersion,
+        architecture: config.architecture, installScope: config.installScope,
+        installerUrl: updateInfo.installerUrl, installerSha256: updateInfo.installerSha256,
+        installerType: updateInfo.installerType, curatedReleaseId: updateInfo.curatedReleaseId,
+      });
+      const item = buildCuratedCartItem(approved.app, approved.release);
+      config = { ...config, ...item };
+      updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id,
+        installCommand: item.installCommand, uninstallCommand: item.uninstallCommand };
     }
 
     if (
@@ -184,6 +201,8 @@ export async function triggerSqliteAutoUpdate(
         install_scope: updateInfo.installScope || config.installScope,
         detection_rules: (config.detectionRules ?? []) as unknown as Json,
         package_config: {
+          sourceType: updateInfo.sourceType || config.sourceType,
+          curatedReleaseId: updateInfo.curatedReleaseId,
           assignments: config.assignments ?? [],
           categories: config.categories ?? [],
           assignedGroups: config.assignedGroups,
@@ -351,6 +370,8 @@ export async function runSqliteUpdateCheck(
     }
 
     const result = await triggerSqliteAutoUpdate(db, policy, {
+      sourceType: resolution.info.sourceType,
+      curatedReleaseId: resolution.info.curatedReleaseId,
       wingetId: policy.winget_id,
       currentVersion: deployment.version,
       latestVersion: resolution.info.latestVersion,

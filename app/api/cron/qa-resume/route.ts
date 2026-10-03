@@ -253,6 +253,7 @@ export async function GET(request: Request) {
         installScope: (item.installScope || job.install_scope) === 'user' ? 'user' : 'machine',
         forceCreate: item.forceCreate,
         sourceType: item.sourceType,
+        curatedReleaseId: item.curatedReleaseId,
       };
       const trigger = await triggerPackagingWorkflow(workflowInputs);
       await supabase

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { T, Var } from "gt-next";
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Package,
   Loader2,
@@ -625,10 +626,13 @@ export default function AppCatalogPage() {
           <div className="relative">
             <h1 className="text-display-sm text-text-primary"><T>App Catalog</T></h1>
             <p className="text-text-secondary mt-2 max-w-2xl">
-              <T>Curated Winget packages optimized for quick Intune deployment and predictable packaging workflows.</T>
+              <T>Browse Winget applications or choose reviewed releases from the IntuneGet Curated Catalog.</T>
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Link href="/dashboard/apps/curated" className="inline-flex items-center gap-2 rounded-full border border-accent-cyan/30 bg-accent-cyan/10 px-3 py-1.5 text-sm font-medium text-accent-cyan hover:bg-accent-cyan/20">
+                <Sparkles className="h-4 w-4" /><T>Curated Catalog</T>
+              </Link>
               <span className="inline-flex items-center gap-2 rounded-full border border-overlay/10 bg-bg-surface px-3 py-1.5 text-sm text-text-secondary">
                 <Package className="w-4 h-4 text-accent-cyan" />
                 <span className="font-medium text-text-primary">{categoriesData?.totalApps?.toLocaleString() || '...'}</span>

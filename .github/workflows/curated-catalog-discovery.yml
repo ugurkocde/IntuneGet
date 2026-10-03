@@ -1,0 +1,35 @@
+name: Curated catalog discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curated-catalog-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Read vendor release metadata
+        run: node scripts/curated-catalog.mjs discover --output output/curated/discovery.json
+      - name: Preserve candidates and source errors for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: curated-catalog-candidates
+          path: output/curated/discovery.json
+          retention-days: 14
+          if-no-files-found: error

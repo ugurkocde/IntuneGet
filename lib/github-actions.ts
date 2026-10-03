@@ -5,6 +5,8 @@
  */
 
 import { createHmac } from 'node:crypto';
+import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { assertCuratedWorkflow } from '@/lib/curated-catalog/server';
 
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
@@ -60,7 +62,8 @@ export interface WorkflowInputs {
   removeAssignmentsFromPreviousApp?: boolean; // Remove assignments from previous app after carry-over
   autoSupersede?: boolean; // Mark the new app as superseding the previous app
   supersedenceType?: string; // Supersedence type for auto-supersede ('update' | 'replace')
-  sourceType?: 'winget' | 'custom'; // Custom installers are outside winget-pkgs trust validation
+  sourceType?: 'winget' | 'custom' | 'curated';
+  curatedReleaseId?: string;
   packageProfileSha256?: string; // Upstream QA identity; final dispatch recalculates from effective inputs
   packageDependencies?: PackagedWingetDependency[]; // Server-resolved; caller values are never trusted
 }
@@ -131,7 +134,14 @@ export async function triggerPackagingWorkflow(
 
   let effectiveInputs = inputs;
   let trustedInstallers: NormalizedInstaller[] | undefined;
-  if (inputs.sourceType !== 'custom') {
+  if (isCuratedPackageId(inputs.wingetId) || inputs.sourceType === 'curated') {
+    if (inputs.sourceType === 'custom' || inputs.qaOverride || inputs.hashValidationMode === 'calculate') {
+      throw new CuratedCatalogError('Curated releases require their approved validation profile.');
+    }
+    const approved = assertCuratedWorkflow(inputs);
+    effectiveInputs = { ...inputs, sourceType: 'curated', curatedReleaseId: approved.release.id };
+    trustedInstallers = [approved.installer];
+  } else if (inputs.sourceType !== 'custom') {
     const resolvedUninstallCommand = resolveApplicationUninstallCommand(
       inputs.wingetId,
       inputs.uninstallCommand,
@@ -212,6 +222,7 @@ export async function triggerPackagingWorkflow(
     installerType: effectiveInputs.installerType,
     installScope: effectiveInputs.installScope,
     sourceType: effectiveInputs.sourceType,
+    curatedReleaseId: effectiveInputs.curatedReleaseId,
   }, trustedInstallers);
   inputs = effectiveInputs.sourceType === 'custom'
     ? effectiveInputs
@@ -282,6 +293,7 @@ export async function triggerPackagingWorkflow(
     requirePassed: options?.requireQaPass,
     qaOverride: inputs.qaOverride,
     sourceType: inputs.sourceType,
+    curatedReleaseId: inputs.curatedReleaseId,
   });
 
   // Record time before triggering to help find the run
