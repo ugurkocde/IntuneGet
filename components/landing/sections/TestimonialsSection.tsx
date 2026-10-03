@@ -1,19 +1,29 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 import { ArrowUpRight } from "lucide-react";
-import { T } from "gt-next";
+import { T, useLocale } from "gt-next";
 import { Linkedin } from "@/components/icons/brand-icons";
 import { FadeIn } from "../animations/FadeIn";
 import { cn } from "@/lib/utils";
 
 interface Testimonial {
-  quote: string;
+  /** Static <T> content, so the translation CLI can extract it at build time. */
+  quote: ReactNode;
+  /**
+   * The author's own words when they were not written in English. Readers of
+   * that language see this verbatim instead of a translation of a translation.
+   */
+  original?: {
+    language: string;
+    quote: string;
+  };
   name: string;
   linkedin: string;
   /** Path under /public. Falls back to initials when missing. */
   avatar?: string;
-  role?: string;
+  role?: ReactNode;
   company?: {
     name: string;
     website: string;
@@ -22,40 +32,49 @@ interface Testimonial {
 }
 
 // Real customer quotes, published with the author's permission. Keep them
-// verbatim (translated only where the original was not in English).
-const featured: Testimonial = {
-  quote:
-    "IntuneGet let me deploy my entire business application suite through Intune without the time-consuming overhead of manual packaging. As an MSSP, it gives me the flexibility I need for diverse client environments while delivering streamlined, reliable application deployments and updates.",
-  name: "Hodge Kaufmann",
-  linkedin: "https://www.linkedin.com/in/hodge-k-001110222",
-  avatar: "/testimonials/hodge-kaufmann.jpg",
-  role: "CEO",
-  company: {
-    name: "DotStar",
-    website: "https://securedotstar.com/",
-    linkedin: "https://www.linkedin.com/company/108982302",
+// verbatim; the English text of a non-English quote is our translation.
+const testimonials: Testimonial[] = [
+  {
+    quote: (
+      <T>
+        IntuneGet let me deploy my entire business application suite through
+        Intune without the time-consuming overhead of manual packaging. As an
+        MSSP, it gives me the flexibility I need for diverse client
+        environments while delivering streamlined, reliable application
+        deployments and updates.
+      </T>
+    ),
+    name: "Hodge Kaufmann",
+    linkedin: "https://www.linkedin.com/in/hodge-k-001110222",
+    avatar: "/testimonials/hodge-kaufmann.jpg",
+    role: <T>CEO</T>,
+    company: {
+      name: "DotStar",
+      website: "https://securedotstar.com/",
+      linkedin: "https://www.linkedin.com/company/108982302",
+    },
   },
-};
+  {
+    quote: (
+      <T>
+        IntuneGet is a free deployment tool for Intune, so there is really
+        nothing to complain about. Support requests get an immediate response
+        and suggestions are implemented quickly.
+      </T>
+    ),
+    original: {
+      language: "de",
+      quote:
+        "IntuneGet.com ist ein kostenloses Bereitstellungswerkzeug für Intune, da kann man sich wirklich nicht beschweren. Auf Supportanfragen wird sofort reagiert und Vorschläge werden zügig umgesetzt.",
+    },
+    name: "Mücahit Savas",
+    linkedin: "https://www.linkedin.com/in/mucsav1977/",
+    role: <T>IT Systems Administrator</T>,
+  },
+];
 
-const secondary: Testimonial = {
-  quote:
-    "IntuneGet is a free deployment tool for Intune, so there is really nothing to complain about. Support requests get an immediate response and suggestions are implemented quickly.",
-  name: "Mücahit Savas",
-  linkedin: "https://www.linkedin.com/in/mucsav1977/",
-  role: "IT Systems Administrator",
-};
-
-function Avatar({
-  testimonial,
-  size,
-}: {
-  testimonial: Testimonial;
-  size: "lg" | "sm";
-}) {
-  const className = cn(
-    "shrink-0 rounded-full",
-    size === "lg" ? "h-14 w-14" : "h-11 w-11"
-  );
+function Avatar({ testimonial }: { testimonial: Testimonial }) {
+  const className = "h-14 w-14 shrink-0 rounded-full";
 
   if (testimonial.avatar) {
     return (
@@ -88,30 +107,16 @@ function Avatar({
   );
 }
 
-function Attribution({
-  testimonial,
-  size,
-}: {
-  testimonial: Testimonial;
-  size: "lg" | "sm";
-}) {
+function Attribution({ testimonial }: { testimonial: Testimonial }) {
   return (
-    <figcaption
-      className={cn(
-        "flex items-start gap-4 text-left",
-        size === "lg" ? "mt-8" : "mt-6"
-      )}
-    >
-      <Avatar testimonial={testimonial} size={size} />
+    <figcaption className="mt-8 flex items-start gap-4 text-left">
+      <Avatar testimonial={testimonial} />
       <div className="min-w-0">
         <a
           href={testimonial.linkedin}
           target="_blank"
           rel="noopener noreferrer"
-          className={cn(
-            "group inline-flex items-center gap-1.5 font-semibold text-text-primary transition-colors hover:text-accent-cyan",
-            size === "lg" ? "text-base md:text-lg" : "text-sm md:text-base"
-          )}
+          className="group inline-flex items-center gap-1.5 text-base font-semibold text-text-primary transition-colors hover:text-accent-cyan md:text-lg"
         >
           {testimonial.name}
           <ArrowUpRight
@@ -124,7 +129,7 @@ function Attribution({
           <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-text-secondary md:text-base">
             {testimonial.role && (
               <span>
-                <T>{testimonial.role}</T>
+                {testimonial.role}
                 {testimonial.company && ","}
               </span>
             )}
@@ -157,6 +162,8 @@ function Attribution({
 }
 
 export function TestimonialsSection() {
+  const language = useLocale()?.split("-")[0];
+
   return (
     <section
       id="testimonials"
@@ -170,7 +177,7 @@ export function TestimonialsSection() {
         </FadeIn>
 
         <div className="mt-12 grid gap-14 md:mt-16 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-overlay/10">
-          {[featured, secondary].map((testimonial, index) => (
+          {testimonials.map((testimonial, index) => (
             <FadeIn
               key={testimonial.name}
               delay={0.08 + index * 0.08}
@@ -182,10 +189,14 @@ export function TestimonialsSection() {
               <figure className="flex flex-1 flex-col justify-between">
                 <blockquote className="text-pretty text-xl font-semibold leading-snug tracking-tight text-text-primary md:text-2xl md:leading-[1.35]">
                   <p>
-                    &ldquo;<T>{testimonial.quote}</T>&rdquo;
+                    &ldquo;
+                    {testimonial.original?.language === language
+                      ? testimonial.original.quote
+                      : testimonial.quote}
+                    &rdquo;
                   </p>
                 </blockquote>
-                <Attribution testimonial={testimonial} size="lg" />
+                <Attribution testimonial={testimonial} />
               </figure>
             </FadeIn>
           ))}
