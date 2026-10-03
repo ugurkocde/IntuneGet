@@ -56,6 +56,22 @@ afterEach(async () => {
 });
 
 describe('reviewing a replacement version', () => {
+  it('keeps the live version spelling through configuration, cart saving, and detection', async () => {
+    useCartStore.setState({ items: [] });
+    await act(async () => root.render(createElement(PackageConfig, {
+      package: { id: oldItem.wingetId, name: oldItem.displayName, publisher: oldItem.publisher, version: '3.0' },
+      installers: [installer], versions: ['v3.0'],
+      deployedConfig: { ...oldItem, version: '3.0' }, onClose: vi.fn(),
+    })));
+    const add = [...document.querySelectorAll('button')].find(button => button.textContent?.includes('Add to Selection'))!;
+    expect(add.disabled).toBe(false);
+    await act(async () => add.click());
+    expect(useCartStore.getState().items[0]).toMatchObject({ version: 'v3.0', installerUrl: installer.url });
+    expect((useCartStore.getState().items[0] as Win32CartItem).detectionRules).toEqual(
+      expect.arrayContaining([expect.objectContaining({ detectionValue: 'v3.0' })]),
+    );
+  });
+
   it.each(['2.0', '1.0'])('reviews version %s before replacing its installer and preserving settings', async (version) => {
     const saved = vi.fn();
     await act(async () => root.render(createElement(PackageConfig, {

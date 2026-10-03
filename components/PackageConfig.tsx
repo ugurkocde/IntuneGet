@@ -79,6 +79,7 @@ function stripSourceMarker(value: string): string {
   return (idx === -1 ? value : value.slice(0, idx)).trimEnd();
 }
 import { useLocaleVariants, usePackageManifest } from '@/hooks/use-packages';
+import { resolveListedWingetVersion } from '@/lib/winget-version';
 import { countryCodeToFlag, cleanPackageName } from '@/lib/locale-utils';
 import { Store } from 'lucide-react';
 
@@ -118,9 +119,14 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const [storeInstallExperience, setStoreInstallExperience] = useState<'user' | 'system'>('user');
 
   // Selection state - pre-fill from deployed config when available
-  const [selectedVersion, setSelectedVersion] = useState(
-    deployedConfig?.version || pkg.version
-  );
+  const defaultVersion = isStoreApp
+    ? pkg.version
+    : resolveListedWingetVersion(pkg.version, versions) ?? pkg.version;
+  const [selectedVersion, setSelectedVersion] = useState(() => {
+    const requestedVersion = deployedConfig?.version || pkg.version;
+    return isStoreApp ? requestedVersion
+      : resolveListedWingetVersion(requestedVersion, versions) ?? requestedVersion;
+  });
   const [selectedArch, setSelectedArch] = useState<WingetArchitecture>(() => {
     const win32Config = deployedConfig && 'architecture' in deployedConfig ? deployedConfig : null;
     const preferred = win32Config?.architecture || 'x64';
@@ -284,7 +290,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   // user selects a different version we must re-fetch so the installer URL/SHA
   // (which flow straight into the cart item) match the chosen version rather than
   // silently deploying the latest binary under an older version label.
-  const isNonDefaultVersion = !isStoreApp && !!selectedVersion && selectedVersion !== pkg.version;
+  const isNonDefaultVersion = !isStoreApp && !!selectedVersion && selectedVersion !== defaultVersion;
   const { data: versionManifest, isFetching: isFetchingVersionInstallers, error: versionInstallerError } = usePackageManifest(
     pkg.id,
     selectedVersion,

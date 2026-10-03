@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getManifest } from '@/lib/winget-api';
 import { fetchAvailableVersionsLive, getLiveInstallers, GitHubUnavailableError } from '@/lib/manifest-api';
+import { resolveListedWingetVersion } from '@/lib/winget-version';
 
 export const fetchCache = 'force-no-store';
 const headers = { 'Cache-Control': 'no-store, max-age=0' };
@@ -25,8 +26,10 @@ export async function GET(request: NextRequest) {
       if (!requestedVersion || !(error instanceof GitHubUnavailableError)) throw error;
       versions = [requestedVersion];
     }
-    const version = requestedVersion || versions[0];
-    if (!version || !versions.includes(version)) {
+    const version = requestedVersion
+      ? resolveListedWingetVersion(requestedVersion, versions)
+      : versions[0];
+    if (!version) {
       return NextResponse.json({
         code: 'MANIFEST_UNAVAILABLE',
         message: requestedVersion

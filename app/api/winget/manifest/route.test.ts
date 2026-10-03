@@ -37,6 +37,26 @@ describe('manifest selection availability', () => {
     expect(mocks.installers).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['3.0', ['v3.0'], 'v3.0'],
+    ['v3.0', ['3.0'], '3.0'],
+    ['3.0', ['v3.0', '3.0'], '3.0'],
+  ])('resolves %s to the live spelling while preferring an exact match', async (requested, versions, resolved) => {
+    mocks.versions.mockResolvedValue(versions);
+    const response = await GET(new NextRequest(`https://example.test/api/winget/manifest?id=Example.App&version=${requested}`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ manifest: { version: resolved }, versions, installers: [currentInstaller] });
+    expect(mocks.manifest).toHaveBeenCalledWith('Example.App', resolved);
+    expect(mocks.installers).toHaveBeenCalledWith('Example.App', resolved);
+  });
+
+  it('does not substitute a different release when resolving a version prefix', async () => {
+    mocks.versions.mockResolvedValue(['v3.1']);
+    const response = await GET(new NextRequest('https://example.test/api/winget/manifest?id=Example.App&version=3.0'));
+    expect(response.status).toBe(409);
+    expect(mocks.installers).not.toHaveBeenCalled();
+  });
+
   it('handles removal between listing versions and reading the manifest', async () => {
     mocks.installers.mockResolvedValue([]);
     const response = await GET(new NextRequest('https://example.test/api/winget/manifest?id=Example.App&version=2.0'));
