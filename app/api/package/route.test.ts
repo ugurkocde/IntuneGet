@@ -1716,6 +1716,31 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it('does not create a customer workflow payload for held SSMS 22.10.2 bytes', async () => {
+    ensureQaDemandMock.mockResolvedValueOnce({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+      identity: {
+        executionProfileSha256: 'A'.repeat(64), packageProfileSha256: 'A'.repeat(64),
+        presentationProfileSha256: 'B'.repeat(64),
+      },
+    });
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item({
+        wingetId: 'Microsoft.SQLServerManagementStudio.22',
+        displayName: 'Microsoft SQL Server Management Studio 22', version: '22.10.2',
+        installerSha256: 'E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2',
+      })] }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.jobs[0]).toMatchObject({ status: 'qa_failed' });
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('does not create a customer workflow payload for held Proton Mail bytes', async () => {
     ensureQaDemandMock.mockResolvedValueOnce({
       state: 'failed', candidateId: null,

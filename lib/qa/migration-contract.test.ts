@@ -2,6 +2,20 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+describe('SSMS 22.10.2 exact-payload hold', () => {
+  it('holds the shared QA/customer tuple and preserves all dispatched evidence', () => {
+    const sql = readFileSync(resolve(process.cwd(),
+      'supabase/migrations/20261003115631_quarantine_ssms22_failed_managed_lifecycle.sql'), 'utf8');
+    expect(sql).toContain('insert into public.qa_package_blocks');
+    expect(sql).toContain("'Microsoft.SQLServerManagementStudio.22', '22.10.2', 'x64'");
+    expect(sql).toContain('E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2');
+    expect(sql).toContain("'failed_managed_lifecycle'");
+    expect(sql).toContain('37119022165 returned 60001/1/60001/1');
+    expect(sql).toContain("and status = 'queued' and dispatched_at is null and github_run_id is null");
+    expect(sql).not.toMatch(/delete from|qa_pipeline_control|package_eligibility_blocks|status = 'passed'/i);
+  });
+});
+
 describe('OpenBVE unattended removal eligibility', () => {
   it('blocks customer and QA eligibility while preserving dispatched and terminal evidence', () => {
     const sql = readFileSync(resolve(process.cwd(),
