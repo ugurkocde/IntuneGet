@@ -15,7 +15,7 @@ The pilot is an IntuneGet-owned catalog sourced from publishers. It has independ
 | Git for Windows | x64 EXE | Publisher GitHub release |
 | VLC | Windows x64 EXE | VideoLAN release feed |
 | WinSCP | Machine installer EXE | WinSCP update feed; official SourceForge distribution |
-| PuTTY | Windows x64 MSI | Publisher download page; manual review if unavailable |
+| PuTTY | Windows x64 MSI | Publisher-linked versioned archive metadata |
 
 Definitions are in `lib/curated-catalog/definitions.json`. These are initial contracts for verification, not evidence that the installers work. In particular, review actual Authenticode publisher identities, payload architecture, unattended arguments, licensing, and redirected download destinations before approving each release. Change a definition through code review if the actual publisher differs; never label a mismatch as a valid signature.
 
@@ -59,4 +59,4 @@ Daily discovery reports source failures, newly discovered versions, changed publ
 
 Run `npm test`, `npx tsc --noEmit`, `npm run lint`, and `npm run build:ci`. Tests exercise tampering, unknown keys, expiration, source spoofing, evidence/hash mismatches, failed lifecycle phases, unsigned exceptions, withdrawal, changed package inputs, local-worker validation, and operator endpoint access. They establish software behavior; they are not application installation evidence.
 
-Initial live discovery produced candidates for eight feeds. Adobe remains manual. PuTTY's publisher page timed out in this development environment; keep it pending and retry or perform explicit publisher-source review. Protected signing setup and verification automation do not constitute installer qualification. No installers are approved in the bootstrap catalog. The operational milestone remains ten genuine passing verification records and maintainer-reviewed approvals, starting with a straightforward MSI. Do not advertise ten deployable apps until those records exist.
+Adobe remains manual. PuTTY discovery uses the publisher-linked official archive directory, avoiding its unavailable primary HTML page, and allows only the exact redirect from `latest/w64/` to a numeric version directory on the same publisher host. Protected signing setup and verification automation do not constitute installer qualification. No installers are approved in the bootstrap catalog. The operational milestone remains ten genuine passing verification records and maintainer-reviewed approvals, starting with a straightforward MSI. Do not advertise ten deployable apps until those records exist.

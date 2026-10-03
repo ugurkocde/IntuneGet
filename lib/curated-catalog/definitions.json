@@ -291,7 +291,7 @@
       "Simon Tatham"
     ],
     "allowUnsigned": false,
-    "releaseSource": "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html",
+    "releaseSource": "https://the.earth.li/~sgtatham/putty/latest/w64/",
     "discovery": "putty",
     "allowedInstallerSources": [
       {

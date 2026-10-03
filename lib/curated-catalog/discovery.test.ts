@@ -18,6 +18,24 @@ describe('vendor metadata discovery', () => {
     expect(candidateFromMetadata(app('putty'), '<a href="https://the.earth.li/~sgtatham/putty/latest/w64/putty-64bit-0.84-installer.msi">Windows x64</a>').version).toBe('0.84');
     expect(() => candidateFromMetadata(app('putty'), '<a href="https://the.earth.li/~sgtatham/putty/0.83/w64/putty-64bit-0.84-installer.msi">Windows x64</a>')).toThrow(/differs/);
   });
+  it('discovers PuTTY from the official archive using only one constrained metadata redirect', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: '/~sgtatham/putty/0.85/w64/' } }))
+      .mockResolvedValueOnce(new Response('<h1>Index of /~sgtatham/putty/0.85/w64</h1><a href="putty-64bit-0.85-installer.msi">MSI</a>', { headers: { 'content-type': 'text/html' } }));
+    const result = await discoverCandidate(app('putty'), fetcher);
+    expect(result.state).toBe('candidate');
+    if (result.state === 'candidate') expect(result.candidate.installerUrl).toBe('https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi');
+    expect(fetcher.mock.calls[1][0]).toBe('https://the.earth.li/~sgtatham/putty/0.85/w64/');
+    expect(fetcher.mock.calls.every(call => !String(call[0]).endsWith('.msi'))).toBe(true);
+  });
+  it('rejects archive redirects to an installer or another host', async () => {
+    for (const location of ['https://evil.example/w64/', '/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi']) {
+      const fetcher = vi.fn(async () => new Response(null, { status: 302, headers: { location } }));
+      await expect(discoverCandidate(app('putty'), fetcher)).rejects.toThrow(/metadata redirect/);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+    expect(() => candidateFromMetadata(app('putty'), '<h1>Index of /~sgtatham/putty/0.84/w64</h1><a href="putty-64bit-0.85-installer.msi">MSI</a>')).toThrow(/matching versioned/);
+  });
   it('parses WinSCP and VLC text feeds', () => {
     expect(candidateFromMetadata(app('winscp'), 'version=6.5.7.0\n').version).toBe('6.5.7');
     expect(candidateFromMetadata(app('vlc'), '3.0.24\nhttp://ignored-mirror.test/vlc.exe').installerUrl)
