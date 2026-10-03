@@ -7,3 +7,4 @@ export { Footer } from "./Footer";
 export { TrustSection } from "./TrustSection";
 export { ComparisonSection } from "./ComparisonSection";
 export { MSPSection } from "./MSPSection";
+export { TestimonialsSection } from "./TestimonialsSection";

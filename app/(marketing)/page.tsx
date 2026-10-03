@@ -1,6 +1,7 @@
 import { Header } from "@/components/landing/Header";
 import { HeroSection } from "@/components/landing/sections/HeroSection";
 import { TrustSection } from "@/components/landing/sections/TrustSection";
+import { TestimonialsSection } from "@/components/landing/sections/TestimonialsSection";
 import { HowItWorksSection } from "@/components/landing/sections/HowItWorksSection";
 import { FAQSectionAnimated } from "@/components/landing/sections/FAQSectionAnimated";
 import { Footer } from "@/components/landing/sections/Footer";
@@ -159,6 +160,7 @@ export default async function LandingPage() {
           <Header />
           <main id="main-content" className="flex-1">
             <HeroSection initialStats={stats} />
+            <TestimonialsSection />
             <HowItWorksSection />
             <DeferredCapabilities />
             <DeferredComparison />
