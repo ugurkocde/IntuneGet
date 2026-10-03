@@ -21,7 +21,8 @@ const writeJson = async (path, value) => {
   await writeFile(target, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' });
 };
 const apps = validateDefinitions(await readJson('lib/curated-catalog/definitions.json'));
-const trustedKeys = () => JSON.parse(process.env.CURATED_CATALOG_PUBLIC_KEYS || '{}');
+const committedKeys = await readJson('catalog/curated/trusted-keys.json');
+const trustedKeys = () => ({ ...committedKeys, ...JSON.parse(process.env.CURATED_CATALOG_PUBLIC_KEYS || '{}') });
 
 try {
   switch (command) {

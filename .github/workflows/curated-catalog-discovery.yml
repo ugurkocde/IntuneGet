@@ -25,11 +25,16 @@ jobs:
           node-version: '22'
       - name: Read vendor release metadata
         run: node scripts/curated-catalog.mjs discover --output output/curated/discovery.json
+      - name: Check source availability, changed payloads and approval expiry
+        if: always()
+        run: node scripts/curated-monitor.mjs
       - name: Preserve candidates and source errors for review
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: curated-catalog-candidates
-          path: output/curated/discovery.json
+          path: |
+            output/curated/discovery.json
+            output/curated/monitor.json
           retention-days: 14
           if-no-files-found: error

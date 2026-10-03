@@ -19,6 +19,7 @@ export function releaseFixture(app: CuratedAppDefinition = CURATED_APPS[0], vers
     id: `${app.id}:${candidate.id}`, candidate, installerSha256: hash, executionProfileSha256: hash,
     preparedBy: 'test-preparer', approvedBy: 'test-approver', approvedAt: at(1),
     evidence: {
+      provenance: { repository: 'ugurkocde/IntuneGet-Workflows', workflowPath: '.github/workflows/curated-catalog-verification.yml', workflowCommit: '1'.repeat(40), websiteCommit: '2'.repeat(40), runId: '123', runAttempt: 1, artifactId: '456', artifactSha256: 'b'.repeat(64) },
       verifiedAt: at(2), installerSha256: hash, installerVersion: version,
       architecture: 'x64', sourceReviewedBy: 'test-source-reviewer', sourceReportUrl: 'https://example.test/source',
       signature: app.allowUnsigned

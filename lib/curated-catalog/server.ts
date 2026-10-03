@@ -1,4 +1,5 @@
 import envelope from '@/catalog/curated/catalog.json';
+import committedKeys from '@/catalog/curated/trusted-keys.json';
 import { CURATED_APPS } from './definitions';
 import { catalogEntries, CuratedCatalogError, verifyCatalog } from './core.mjs';
 import { assertCuratedPackageProfile, buildCuratedCartItem, curatedInstaller, curatedWorkflowInput } from './package';
@@ -13,7 +14,7 @@ export function getCuratedCatalog(): { payload: CuratedCatalogEnvelope['payload'
   let trustedKeys: Record<string, string>;
   try { trustedKeys = JSON.parse(process.env.CURATED_CATALOG_PUBLIC_KEYS || '{}'); }
   catch { throw new CuratedCatalogError('The curated catalog trust configuration is invalid.'); }
-  const payload = verifyCatalog(envelope, CURATED_APPS, trustedKeys);
+  const payload = verifyCatalog(envelope, CURATED_APPS, { ...committedKeys, ...trustedKeys });
   const entries = catalogEntries(CURATED_APPS, payload);
   for (const entry of entries) {
     if (entry.release) assertCuratedPackageProfile(entry.app, entry.release);

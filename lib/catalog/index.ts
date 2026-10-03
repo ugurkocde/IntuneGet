@@ -16,7 +16,7 @@
 import type { CatalogSource } from './types';
 import { SupabaseCatalogSource } from './supabase-source';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { withCuratedUpdates } from '@/lib/curated-catalog/catalog-source';
 
 let _source: CatalogSource | null = null;
 
@@ -47,28 +47,9 @@ function lazySnapshotSource(): CatalogSource {
 export function getCatalogSource(): CatalogSource {
   if (!_source) {
     const base = isSupabaseConfigured() ? new SupabaseCatalogSource() : lazySnapshotSource();
-    _source = new Proxy(base, {
-      get(target, property) {
-        if (property === 'getAllLatestVersions' || property === 'getAppsByWingetIds') {
-          return async (ids?: string[]) => {
-            const ordinary = property === 'getAllLatestVersions'
-              ? await target.getAllLatestVersions()
-              : await target.getAppsByWingetIds((ids || []).filter(id => !isCuratedPackageId(id)));
-            let curated: Awaited<ReturnType<CatalogSource['getAllLatestVersions']>> = [];
-            try {
-              const { getCuratedLatestVersions } = await import('@/lib/curated-catalog/server');
-              curated = getCuratedLatestVersions();
-            } catch {
-              // An unavailable approval catalog must not interrupt Winget updates.
-            }
-            const wanted = ids && new Set(ids.map(id => id.toLowerCase()));
-            return [...ordinary.filter(app => !isCuratedPackageId(app.winget_id)),
-              ...curated.filter(app => !wanted || wanted.has(app.winget_id.toLowerCase()))];
-          };
-        }
-        const value = Reflect.get(target, property);
-        return typeof value === 'function' ? value.bind(target) : value;
-      },
+    _source = withCuratedUpdates(base, async () => {
+      const { getCuratedLatestVersions } = await import('@/lib/curated-catalog/server');
+      return getCuratedLatestVersions();
     });
   }
   return _source;

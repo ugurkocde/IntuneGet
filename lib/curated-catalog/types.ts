@@ -20,6 +20,7 @@ export interface CuratedAppDefinition {
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;
   autoUpdate: 'vendor-managed' | 'none';
   notes: string;
+  installedIdentity: { displayNamePattern: string; executablePaths: string[] };
 }
 
 export interface CuratedCandidate {
@@ -41,6 +42,7 @@ export interface CuratedRelease {
   approvedBy: string;
   approvedAt: string;
   evidence: {
+    provenance: { repository: string; workflowPath: string; workflowCommit: string; websiteCommit: string; runId: string; runAttempt: number; artifactId: string; artifactSha256: string };
     verifiedAt: string;
     installerSha256: string;
     installerVersion: string;

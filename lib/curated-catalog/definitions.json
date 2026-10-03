@@ -1,6 +1,7 @@
 [
   {
     "id": "chrome",
+    "installedIdentity": { "displayNamePattern": "^Google Chrome$", "executablePaths": ["Google/Chrome/Application/chrome.exe"] },
     "packageId": "IntuneGet.Curated.Chrome",
     "wingetId": "Google.Chrome",
     "name": "Google Chrome",
@@ -30,6 +31,7 @@
   },
   {
     "id": "firefox-esr",
+    "installedIdentity": { "displayNamePattern": "^Mozilla Firefox.*$", "executablePaths": ["Mozilla Firefox/firefox.exe"] },
     "packageId": "IntuneGet.Curated.FirefoxESR",
     "wingetId": "Mozilla.Firefox.ESR",
     "name": "Mozilla Firefox ESR",
@@ -59,6 +61,7 @@
   },
   {
     "id": "acrobat-reader",
+    "installedIdentity": { "displayNamePattern": "^Adobe Acrobat(?: Reader)?(?: DC)?(?: \\(64-bit\\))?$", "executablePaths": ["Adobe/Acrobat DC/Acrobat/Acrobat.exe", "Adobe/Acrobat Reader DC/Reader/AcroRd32.exe"] },
     "packageId": "IntuneGet.Curated.AcrobatReader",
     "wingetId": "Adobe.Acrobat.Reader.64-bit",
     "name": "Adobe Acrobat Reader",
@@ -89,6 +92,7 @@
   },
   {
     "id": "7zip",
+    "installedIdentity": { "displayNamePattern": "^7-Zip.*$", "executablePaths": ["7-Zip/7z.exe"] },
     "packageId": "IntuneGet.Curated.7Zip",
     "wingetId": "7zip.7zip",
     "name": "7-Zip",
@@ -117,6 +121,7 @@
   },
   {
     "id": "notepad-plus-plus",
+    "installedIdentity": { "displayNamePattern": "^Notepad\\+\\+(?: \\(64-bit x64\\))?$", "executablePaths": ["Notepad++/notepad++.exe"] },
     "packageId": "IntuneGet.Curated.NotepadPlusPlus",
     "wingetId": "Notepad++.Notepad++",
     "name": "Notepad++",
@@ -148,6 +153,7 @@
   },
   {
     "id": "vscode",
+    "installedIdentity": { "displayNamePattern": "^Microsoft Visual Studio Code$", "executablePaths": ["Microsoft VS Code/Code.exe"] },
     "packageId": "IntuneGet.Curated.VisualStudioCode",
     "wingetId": "Microsoft.VisualStudioCode",
     "name": "Visual Studio Code",
@@ -177,6 +183,7 @@
   },
   {
     "id": "git",
+    "installedIdentity": { "displayNamePattern": "^Git(?: version)? [0-9.]+$", "executablePaths": ["Git/cmd/git.exe"] },
     "packageId": "IntuneGet.Curated.Git",
     "wingetId": "Git.Git",
     "name": "Git for Windows",
@@ -207,6 +214,7 @@
   },
   {
     "id": "vlc",
+    "installedIdentity": { "displayNamePattern": "^VLC media player$", "executablePaths": ["VideoLAN/VLC/vlc.exe"] },
     "packageId": "IntuneGet.Curated.VLC",
     "wingetId": "VideoLAN.VLC",
     "name": "VLC media player",
@@ -236,6 +244,7 @@
   },
   {
     "id": "winscp",
+    "installedIdentity": { "displayNamePattern": "^WinSCP(?: [0-9.]+)?$", "executablePaths": ["WinSCP/WinSCP.exe"] },
     "packageId": "IntuneGet.Curated.WinSCP",
     "wingetId": "WinSCP.WinSCP",
     "name": "WinSCP",
@@ -265,6 +274,7 @@
   },
   {
     "id": "putty",
+    "installedIdentity": { "displayNamePattern": "^PuTTY(?: release)? [0-9.]+(?: \\(64-bit\\))?$", "executablePaths": ["PuTTY/putty.exe"] },
     "packageId": "IntuneGet.Curated.PuTTY",
     "wingetId": "PuTTY.PuTTY",
     "name": "PuTTY",

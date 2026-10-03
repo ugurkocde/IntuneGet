@@ -34,7 +34,7 @@ jobs:
           cache: false
 
       - name: Run actionlint
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= -ignore='unexpected key "queue" for "concurrency" section'
 
   test:
     name: Test
@@ -60,6 +60,12 @@ jobs:
 
       - name: Validate public changelog entries
         run: node scripts/publish-changelog.mjs --validate
+
+      - name: Validate curated definitions and the standalone QA profile runtime
+        run: |
+          npm run curated:validate
+          node scripts/build-curated-runtime.mjs
+          node --check scripts/curated-approval.mjs
 
       - name: Build packager
         working-directory: packager
