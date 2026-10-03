@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { MessageSquareQuote } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { T } from "gt-next";
 import { Linkedin } from "@/components/icons/brand-icons";
 import { FadeIn } from "../animations/FadeIn";
@@ -13,6 +13,7 @@ interface Testimonial {
   linkedin: string;
   /** Path under /public. Falls back to initials when missing. */
   avatar?: string;
+  role?: string;
   company?: {
     name: string;
     website: string;
@@ -28,6 +29,7 @@ const featured: Testimonial = {
   name: "Hodge Kaufmann",
   linkedin: "https://www.linkedin.com/in/hodge-k-001110222",
   avatar: "/testimonials/hodge-kaufmann.jpg",
+  role: "Managed security services provider",
   company: {
     name: "DotStar",
     website: "https://securedotstar.com/",
@@ -42,11 +44,16 @@ const secondary: Testimonial = {
   linkedin: "https://www.linkedin.com/in/mucsav1977/",
 };
 
-function Avatar({ testimonial, size }: { testimonial: Testimonial; size: "lg" | "sm" }) {
-  const dimension = size === "lg" ? 56 : 44;
+function Avatar({
+  testimonial,
+  size,
+}: {
+  testimonial: Testimonial;
+  size: "lg" | "sm";
+}) {
   const className = cn(
     "shrink-0 rounded-full",
-    size === "lg" ? "h-14 w-14" : "h-11 w-11"
+    size === "lg" ? "h-16 w-16 md:h-[72px] md:w-[72px]" : "h-11 w-11"
   );
 
   if (testimonial.avatar) {
@@ -54,9 +61,9 @@ function Avatar({ testimonial, size }: { testimonial: Testimonial; size: "lg" | 
       <Image
         src={testimonial.avatar}
         alt=""
-        width={dimension}
-        height={dimension}
-        className={cn(className, "object-cover ring-2 ring-accent-cyan/20")}
+        width={144}
+        height={144}
+        className={cn(className, "object-cover")}
       />
     );
   }
@@ -72,8 +79,7 @@ function Avatar({ testimonial, size }: { testimonial: Testimonial; size: "lg" | 
       aria-hidden="true"
       className={cn(
         className,
-        "flex items-center justify-center border border-accent-cyan/25 bg-accent-cyan/[0.08] font-semibold text-accent-cyan",
-        size === "lg" ? "text-base" : "text-sm"
+        "flex items-center justify-center bg-accent-cyan/[0.08] text-sm font-semibold text-accent-cyan"
       )}
     >
       {initials}
@@ -81,30 +87,45 @@ function Avatar({ testimonial, size }: { testimonial: Testimonial; size: "lg" | 
   );
 }
 
-function Attribution({ testimonial, size }: { testimonial: Testimonial; size: "lg" | "sm" }) {
+function Attribution({
+  testimonial,
+  size,
+}: {
+  testimonial: Testimonial;
+  size: "lg" | "sm";
+}) {
   return (
-    <figcaption className="flex items-center gap-4">
+    <figcaption
+      className={cn(
+        "flex items-center justify-center text-left",
+        size === "lg" ? "mt-10 gap-5" : "mt-6 gap-4"
+      )}
+    >
       <Avatar testimonial={testimonial} size={size} />
       <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-text-primary">{testimonial.name}</span>
-          <a
-            href={testimonial.linkedin}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`${testimonial.name} on LinkedIn`}
-            className="text-text-muted transition-colors hover:text-[#0A66C2]"
-          >
-            <Linkedin className="h-4 w-4" />
-          </a>
-        </div>
+        <a
+          href={testimonial.linkedin}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            "group inline-flex items-center gap-1.5 font-semibold text-text-primary transition-colors hover:text-accent-cyan",
+            size === "lg" ? "text-base md:text-lg" : "text-sm md:text-base"
+          )}
+        >
+          {testimonial.name}
+          <ArrowUpRight
+            className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+          <span className="sr-only">on LinkedIn</span>
+        </a>
         {testimonial.company && (
-          <div className="mt-0.5 flex items-center gap-2 text-sm text-text-secondary">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-text-secondary md:text-base">
             <a
               href={testimonial.company.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="transition-colors hover:text-accent-cyan"
+              className="underline decoration-overlay/30 underline-offset-4 transition-colors hover:text-accent-cyan hover:decoration-accent-cyan"
             >
               {testimonial.company.name}
             </a>
@@ -119,6 +140,11 @@ function Attribution({ testimonial, size }: { testimonial: Testimonial; size: "l
             </a>
           </div>
         )}
+        {testimonial.role && (
+          <p className="mt-1 text-sm text-text-muted md:text-base">
+            <T>{testimonial.role}</T>
+          </p>
+        )}
       </div>
     </figcaption>
   );
@@ -128,53 +154,35 @@ export function TestimonialsSection() {
   return (
     <section
       id="testimonials"
-      className="relative w-full scroll-mt-20 overflow-hidden border-t border-overlay/[0.06] py-16 md:scroll-mt-24 md:py-24"
+      className="relative w-full scroll-mt-20 border-t border-overlay/[0.06] py-20 md:scroll-mt-24 md:py-28"
     >
-      <div className="container relative mx-auto max-w-6xl px-4 md:px-6">
+      <div className="container mx-auto max-w-5xl px-4 text-center md:px-6">
         <FadeIn>
-          <div className="text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-accent-cyan/25 bg-bg-surface px-4 py-2 font-mono text-xs font-semibold uppercase tracking-[0.16em] text-text-primary shadow-sm">
-              <MessageSquareQuote
-                className="h-4 w-4 text-accent-cyan"
-                aria-hidden="true"
-              />
-              <T>From the community</T>
-            </span>
-          </div>
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-accent-cyan md:text-sm">
+            <T>From the field</T>
+          </p>
         </FadeIn>
 
-        <FadeIn delay={0.1}>
-          <div className="mt-8 grid overflow-hidden rounded-3xl border border-overlay/10 bg-bg-surface shadow-card lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] lg:divide-x lg:divide-overlay/10">
-            <figure className="flex flex-col justify-between gap-8 p-7 sm:p-10">
-              <blockquote className="text-pretty text-xl font-medium leading-relaxed tracking-tight text-text-primary md:text-2xl md:leading-snug">
-                <p>
-                  <span aria-hidden="true" className="text-accent-cyan">
-                    &ldquo;
-                  </span>
-                  <T>{featured.quote}</T>
-                  <span aria-hidden="true" className="text-accent-cyan">
-                    &rdquo;
-                  </span>
-                </p>
-              </blockquote>
-              <Attribution testimonial={featured} size="lg" />
-            </figure>
+        <FadeIn delay={0.08}>
+          <figure className="mt-10 md:mt-12">
+            <blockquote className="text-balance text-2xl font-semibold leading-snug tracking-tight text-text-primary md:text-[2.125rem] md:leading-[1.3]">
+              <p>
+                &ldquo;<T>{featured.quote}</T>&rdquo;
+              </p>
+            </blockquote>
+            <Attribution testimonial={featured} size="lg" />
+          </figure>
+        </FadeIn>
 
-            <figure className="flex flex-col justify-between gap-8 border-t border-overlay/10 bg-overlay/[0.015] p-7 sm:p-10 lg:border-t-0">
-              <blockquote className="text-pretty text-base leading-relaxed text-text-secondary md:text-lg">
-                <p>
-                  <span aria-hidden="true" className="text-accent-cyan">
-                    &ldquo;
-                  </span>
-                  <T>{secondary.quote}</T>
-                  <span aria-hidden="true" className="text-accent-cyan">
-                    &rdquo;
-                  </span>
-                </p>
-              </blockquote>
-              <Attribution testimonial={secondary} size="sm" />
-            </figure>
-          </div>
+        <FadeIn delay={0.16}>
+          <figure className="mx-auto mt-16 max-w-3xl border-t border-overlay/10 pt-14 md:mt-20 md:pt-16">
+            <blockquote className="text-balance text-lg leading-relaxed text-text-secondary md:text-xl">
+              <p>
+                &ldquo;<T>{secondary.quote}</T>&rdquo;
+              </p>
+            </blockquote>
+            <Attribution testimonial={secondary} size="sm" />
+          </figure>
         </FadeIn>
       </div>
     </section>
