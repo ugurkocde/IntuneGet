@@ -317,6 +317,13 @@ export async function POST(request: NextRequest) {
         const failedItem = batch[failedIndex];
         const error = failed.reason;
         if (error instanceof InstallerPreflightError) {
+          console.warn('Installer selection blocked before dispatch', {
+            requestId: request.headers.get('x-vercel-id'),
+            wingetId: failedItem.wingetId,
+            version: failedItem.version,
+            code: error.code,
+            retryable: error.retryable,
+          });
           return NextResponse.json({
             error: 'Installer validation blocked this deployment',
             message: error.message,

@@ -40,7 +40,8 @@ const {
   isSupabaseServerConfiguredMock: vi.fn(),
 }));
 
-vi.mock('@/lib/manifest-api', () => ({
+vi.mock('@/lib/manifest-api', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/manifest-api')>(),
   getLiveInstallers: getLiveInstallersMock,
 }));
 
@@ -417,6 +418,21 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(getPackageEligibilityBlocksMock).not.toHaveBeenCalled();
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
     expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }));
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('returns an actionable conflict for removed versions before creating or dispatching jobs', async () => {
+    getLiveInstallersMock.mockResolvedValueOnce([]);
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'MANIFEST_UNAVAILABLE', retryable: false });
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 

@@ -22,14 +22,15 @@ interface CatalogPackageResponse {
   package: NormalizedPackage;
 }
 
-interface ManifestResponse {
+export interface ManifestResponse {
+  manifest: { id: string; name: string; publisher: string; version: string };
   installers: NormalizedInstaller[];
   recommendedInstaller?: NormalizedInstaller;
   versions?: string[];
 }
 
 export class ManifestFetchError extends Error {
-  constructor(message: string, public readonly suggestions: string[]) {
+  constructor(message: string, public readonly suggestions: string[], public readonly retryable = true) {
     super(message);
     this.name = 'ManifestFetchError';
   }
@@ -185,6 +186,7 @@ export function usePackageManifest(id: string, version?: string, arch?: string, 
       if (!response.ok) {
         const body = await response.json().catch(() => null) as {
           message?: string;
+          retryable?: boolean;
           suggestions?: Array<{ id?: string; name?: string }>;
         } | null;
         const suggestions = body?.suggestions
@@ -194,11 +196,13 @@ export function usePackageManifest(id: string, version?: string, arch?: string, 
         throw new ManifestFetchError(
           body?.message || 'Failed to fetch manifest',
           suggestions,
+          body?.retryable !== false && response.status !== 409 && response.status !== 404,
         );
       }
       return response.json();
     },
     enabled: !!id && !skip,
+    retry: (failureCount, error) => error.retryable && failureCount < 1,
   });
 }
 

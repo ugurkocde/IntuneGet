@@ -149,8 +149,7 @@ export async function reconcileCatalogInstaller(
   if (trustedInstallers.length === 0) {
     throw new InstallerPreflightError(
       'MANIFEST_UNAVAILABLE',
-      `The trusted WinGet installer manifest for ${item.wingetId} ${item.version} is unavailable`,
-      true,
+      `Version ${item.version} of ${item.displayName || item.wingetId} is no longer available from WinGet. Review the current version to update your selection.`,
     );
   }
 

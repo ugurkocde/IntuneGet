@@ -4,7 +4,8 @@ const { getLiveInstallersMock } = vi.hoisted(() => ({
   getLiveInstallersMock: vi.fn(),
 }));
 
-vi.mock('@/lib/manifest-api', () => ({
+vi.mock('@/lib/manifest-api', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/manifest-api')>(),
   getLiveInstallers: getLiveInstallersMock,
 }));
 
@@ -13,6 +14,7 @@ import {
   selectTrustedCatalogInstaller,
 } from '@/lib/catalog-installer-reconciliation';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { GitHubUnavailableError } from '@/lib/manifest-api';
 import type { Win32CartItem } from '@/types/upload';
 import type { NormalizedInstaller } from '@/types/winget';
 
@@ -59,6 +61,19 @@ function operaItem(overrides: Partial<Win32CartItem> = {}): Win32CartItem {
 }
 
 describe('catalog installer reconciliation', () => {
+  it('requires a new version selection when the trusted manifest was removed', async () => {
+    getLiveInstallersMock.mockResolvedValue([]);
+    await expect(reconcileCatalogInstaller(operaItem())).rejects.toMatchObject({
+      code: 'MANIFEST_UNAVAILABLE', retryable: false,
+    });
+  });
+
+  it('keeps upstream outages retryable', async () => {
+    getLiveInstallersMock.mockRejectedValue(new GitHubUnavailableError(429));
+    await expect(reconcileCatalogInstaller(operaItem())).rejects.toMatchObject({
+      code: 'UPSTREAM_UNAVAILABLE', retryable: true,
+    });
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     getLiveInstallersMock.mockResolvedValue(operaInstallers);

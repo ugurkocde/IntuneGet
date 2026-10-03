@@ -68,6 +68,19 @@ describe('installer dispatch preflight', () => {
     expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
   });
 
+  it('does not download or suggest retrying a removed manifest version', async () => {
+    getLiveInstallersMock.mockResolvedValue([]);
+    await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
+      code: 'MANIFEST_UNAVAILABLE', retryable: false,
+    });
+    expect(hashRemoteInstallerMock).not.toHaveBeenCalled();
+    // The claim is released into a definitive error, never left "checking".
+    await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({
+      code: 'MANIFEST_UNAVAILABLE', retryable: false,
+    });
+    expect(getLiveInstallersMock).toHaveBeenCalledOnce();
+  });
+
   it('checks the exact live manifest and caches a healthy tuple', async () => {
     await expect(enforceInstallerPreflight(request)).resolves.toEqual(expect.objectContaining({
       status: 'healthy',

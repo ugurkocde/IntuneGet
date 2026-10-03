@@ -59,7 +59,7 @@ import type {
   CustomPrompt,
   BalloonTipConfig,
 } from '@/types/psadt';
-import type { CartItem, IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
+import type { CartItem, NewCartItem, IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import type { AppRelationship } from '@/types/intune';
 import type { EspProfileSelection } from '@/types/esp';
 import { DEFAULT_PSADT_CONFIG, getDefaultProcessesToClose, sanitizeProcessesToClose } from '@/types/psadt';
@@ -87,6 +87,8 @@ interface PackageConfigProps {
   installers: NormalizedInstaller[];
   versions?: string[];
   onClose: () => void;
+  replaceCartItemId?: string;
+  onAddedToCart?: () => void;
   isDeployed?: boolean;
   deployedConfig?: CartItem | null;
   intuneAppId?: string | null;
@@ -109,7 +111,7 @@ type ConfigSection =
   | 'branding'
   | 'advanced';
 
-export function PackageConfig({ package: pkg, installers, versions = [], onClose, isDeployed = false, deployedConfig, intuneAppId, storeManifest }: PackageConfigProps) {
+export function PackageConfig({ package: pkg, installers, versions = [], onClose, replaceCartItemId, onAddedToCart, isDeployed = false, deployedConfig, intuneAppId, storeManifest }: PackageConfigProps) {
   const isStoreApp = pkg.appSource === 'store';
 
   // Store app install experience state
@@ -229,7 +231,12 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const visibleSections = configMode === 'quick' ? quickSections : null; // null = show all
 
   // Cart store
-  const addItem = useCartStore((state) => state.addItem);
+  const addItemToStore = useCartStore((state) => state.addItem);
+  const updateCartItem = useCartStore((state) => state.updateItem);
+  const addItem = (item: NewCartItem) => {
+    if (replaceCartItemId) updateCartItem(replaceCartItemId, item);
+    else addItemToStore(item);
+  };
   const isInCart = useCartStore((state) => state.isInCart);
 
   // Settings update mutation (for deployed apps with known Intune app ID)
@@ -278,16 +285,17 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   // (which flow straight into the cart item) match the chosen version rather than
   // silently deploying the latest binary under an older version label.
   const isNonDefaultVersion = !isStoreApp && !!selectedVersion && selectedVersion !== pkg.version;
-  const { data: versionManifest, isFetching: isFetchingVersionInstallers } = usePackageManifest(
+  const { data: versionManifest, isFetching: isFetchingVersionInstallers, error: versionInstallerError } = usePackageManifest(
     pkg.id,
     selectedVersion,
     undefined,
     !isNonDefaultVersion
   );
-  const effectiveInstallers =
-    isNonDefaultVersion && versionManifest?.installers?.length
+  const effectiveInstallers = isNonDefaultVersion
+    ? versionManifest?.manifest.version === selectedVersion && !versionInstallerError
       ? versionManifest.installers
-      : installers;
+      : []
+    : installers;
 
   // Bind installer metadata to both architecture and scope. Some manifests
   // publish separate user and machine entries with different vendor switches
@@ -308,9 +316,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
   const inCart = isStoreApp
-    ? isInCart(pkg.packageIdentifier || pkg.id, selectedVersion, undefined, storeInstallExperience)
+    ? isInCart(pkg.packageIdentifier || pkg.id, selectedVersion, undefined, storeInstallExperience, replaceCartItemId)
     : selectedInstaller
-      ? isInCart(effectiveWingetId, selectedVersion, selectedInstaller.architecture, selectedScope)
+      ? isInCart(effectiveWingetId, selectedVersion, selectedInstaller.architecture, selectedScope, replaceCartItemId)
       : false;
 
   const modalRef = useFocusTrap<HTMLDivElement>();
@@ -505,6 +513,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
         });
       }
       setAddedToCartSuccess(true);
+      onAddedToCart?.();
       setTimeout(() => onClose(), 1200);
     } finally {
       setIsAddingToCart(false);
@@ -2100,6 +2109,11 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
           </div>
         </div>
 
+        {versionInstallerError && isNonDefaultVersion && (
+          <p role="alert" className="px-6 py-3 text-sm text-status-error">
+            {versionInstallerError.message}
+          </p>
+        )}
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-overlay/10 p-4 bg-bg-surface/95 space-y-2">
           {settingsSuccess && (
@@ -2199,7 +2213,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
               ) : (
                 <>
                   <Plus className="w-5 h-5 mr-2" />
-                  Add to Selection
+                  {replaceCartItemId ? 'Update Selection' : 'Add to Selection'}
                 </>
               )}
             </Button>

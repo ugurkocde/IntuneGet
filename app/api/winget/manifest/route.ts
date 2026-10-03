@@ -1,90 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getManifest, getInstallers, getBestInstaller, getPackage } from '@/lib/winget-api';
-import { fetchSimilarPackages, fetchAvailableVersions } from '@/lib/manifest-api';
+import { getManifest } from '@/lib/winget-api';
+import { fetchAvailableVersionsLive, getLiveInstallers, GitHubUnavailableError } from '@/lib/manifest-api';
 
+export const fetchCache = 'force-no-store';
+const headers = { 'Cache-Control': 'no-store, max-age=0' };
 
 export async function GET(request: NextRequest) {
+  const packageId = request.nextUrl.searchParams.get('id')?.trim();
+  const requestedVersion = request.nextUrl.searchParams.get('version')?.trim();
+  const architecture = request.nextUrl.searchParams.get('arch') || 'x64';
+  if (!packageId) {
+    return NextResponse.json({ error: 'Package ID parameter "id" is required' }, { status: 400, headers });
+  }
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const packageId = searchParams.get('id');
-    const version = searchParams.get('version');
-    const architecture = searchParams.get('arch') as 'x64' | 'x86' | 'arm64' | null;
-
-    if (!packageId) {
-      return NextResponse.json(
-        { error: 'Package ID parameter "id" is required' },
-        { status: 400 }
-      );
+    // History remains useful for installed apps, but it must not advertise
+    // removed releases as deployable or resurrect their cached installers.
+    let versions: string[];
+    try {
+      versions = await fetchAvailableVersionsLive(packageId, { strict: true });
+    } catch (error) {
+      // An exact selection can still be verified through the manifest's raw
+      // fallback. Discovering a replacement needs a successful live listing.
+      if (!requestedVersion || !(error instanceof GitHubUnavailableError)) throw error;
+      versions = [requestedVersion];
+    }
+    const version = requestedVersion || versions[0];
+    if (!version || !versions.includes(version)) {
+      return NextResponse.json({
+        code: 'MANIFEST_UNAVAILABLE',
+        message: requestedVersion
+          ? `Version ${requestedVersion} is no longer available from WinGet. Review the current version to update your selection.`
+          : 'This app currently has no available versions in WinGet.',
+        retryable: false,
+        versions,
+      }, { status: 409, headers });
     }
 
-    // Try to get manifest
-    let manifest = await getManifest(packageId, version || undefined);
-
-    // If manifest lookup fails, try to get package info and use its version
-    if (!manifest) {
-      const pkg = await getPackage(packageId);
-      if (pkg && pkg.version) {
-        manifest = await getManifest(packageId, pkg.version);
-      }
+    const [manifest, installers] = await Promise.all([
+      getManifest(packageId, version),
+      getLiveInstallers(packageId, version),
+    ]);
+    if (installers.length === 0) {
+      return NextResponse.json({
+        code: 'MANIFEST_UNAVAILABLE',
+        message: `Version ${version} is no longer available from WinGet. Review the current version to update your selection.`,
+        retryable: false,
+      }, { status: 409, headers });
     }
 
-    // If still no manifest, try fetching available versions directly from GitHub
-    if (!manifest) {
-      const versions = await fetchAvailableVersions(packageId);
-      if (versions.length > 0) {
-        manifest = await getManifest(packageId, versions[0]);
-      }
-    }
-
-    if (!manifest) {
-      // Fetch similar packages to suggest
-      const suggestions = await fetchSimilarPackages(packageId);
-      return NextResponse.json(
-        {
-          error: 'Package not found',
-          message: suggestions.length > 0
-            ? `Package "${packageId}" not found. Did you mean one of these?`
-            : `Package "${packageId}" not found in winget-pkgs repository`,
-          suggestions,
-        },
-        { status: 404 }
-      );
-    }
-
-    // Get normalized installers
-    const installers = await getInstallers(packageId, version || manifest.Version);
-
-    // Get best installer for requested architecture
-    const bestInstaller = await getBestInstaller(
-      packageId,
-      version || manifest.Version,
-      architecture || 'x64'
-    );
-
-    // List of all available versions (Supabase-backed) so the catalog can offer
-    // a version selector. Best-effort: an empty list just hides the selector.
-    const versions = await fetchAvailableVersions(packageId);
-
+    const architecturePriority: Record<string, string[]> = {
+      x64: ['x64', 'neutral', 'x86'],
+      x86: ['x86', 'neutral', 'x64'],
+      arm64: ['arm64', 'arm', 'neutral', 'x64'],
+    };
+    const recommendedInstaller = (architecturePriority[architecture] || architecturePriority.x64)
+      .map((arch) => installers.find((installer) => installer.architecture === arch))
+      .find(Boolean) || installers[0];
     return NextResponse.json({
       manifest: {
-        id: manifest.Id,
-        name: manifest.Name,
-        publisher: manifest.Publisher,
-        version: manifest.Version,
-        description: manifest.Description || manifest.ShortDescription,
-        homepage: manifest.Homepage,
-        license: manifest.License,
-        licenseUrl: manifest.LicenseUrl,
-        tags: manifest.Tags,
+        id: packageId,
+        name: manifest?.Name || packageId,
+        publisher: manifest?.Publisher || packageId.split('.')[0],
+        version,
+        description: manifest?.Description || manifest?.ShortDescription,
+        homepage: manifest?.Homepage,
+        license: manifest?.License,
+        licenseUrl: manifest?.LicenseUrl,
+        tags: manifest?.Tags,
       },
       installers,
-      recommendedInstaller: bestInstaller,
+      recommendedInstaller,
       versions,
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Failed to fetch manifest', details: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 }
-    );
+    }, { headers });
+  } catch (error) {
+    console.warn('Manifest selection lookup failed', { packageId, version: requestedVersion, error });
+    const upstream = error instanceof GitHubUnavailableError;
+    return NextResponse.json({
+      code: upstream ? 'UPSTREAM_UNAVAILABLE' : 'MANIFEST_LOOKUP_FAILED',
+      message: 'We could not check available installers right now. Your selection has not changed. Please try again shortly.',
+      retryable: true,
+    }, { status: upstream ? 503 : 500, headers });
   }
 }

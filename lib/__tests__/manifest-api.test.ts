@@ -6,6 +6,7 @@ import {
   getFullManifest,
   getLiveInstallers,
   clearManifestCache,
+  fetchAvailableVersionsLive,
 } from '../manifest-api';
 import type { WingetInstaller, NormalizedInstaller } from '@/types/winget';
 
@@ -1027,6 +1028,10 @@ function notFound() {
   return { ok: false, status: 404, text: async () => '' };
 }
 
+function liveInstallerYaml(id = 'Foo.Bar', version = '1.0.0') {
+  return `PackageIdentifier: ${id}\nPackageVersion: ${version}\nInstallers:\n  - Architecture: x64\n    InstallerUrl: https://example.test/setup.exe\n    InstallerSha256: ${'A'.repeat(64)}\n`;
+}
+
 describe('getLiveInstallers trust semantics', () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -1034,10 +1039,10 @@ describe('getLiveInstallers trust semantics', () => {
 
   it('uses the authenticated GitHub Contents API raw media endpoint', async () => {
     mockFetch.mockResolvedValue(
-      yamlResponse('PackageIdentifier: Foo.Bar\nPackageVersion: 1.0+build\nInstallers: []\n')
+      yamlResponse(liveInstallerYaml('Foo.Bar', '1.0+build'))
     );
 
-    await expect(getLiveInstallers('Foo.Bar', '1.0+build')).resolves.toEqual([]);
+    await expect(getLiveInstallers('Foo.Bar', '1.0+build')).resolves.toMatchObject([{ architecture: 'x64' }]);
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/f/Foo/Bar/1.0%2Bbuild/Foo.Bar.installer.yaml?ref=master',
@@ -1072,11 +1077,11 @@ describe('getLiveInstallers trust semantics', () => {
         return { ok: false, status: 403, text: async () => '' };
       }
       return yamlResponse(
-        'PackageIdentifier: Foo.Bar\nPackageVersion: 1.0.0\nInstallers: []\n'
+        liveInstallerYaml()
       );
     });
 
-    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toEqual([]);
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toMatchObject([{ architecture: 'x64' }]);
 
     const rawCall = mockFetch.mock.calls.find((call) =>
       String(call[0]).startsWith('https://raw.githubusercontent.com/')
@@ -1117,9 +1122,46 @@ describe('getLiveInstallers trust semantics', () => {
   it('propagates network failures instead of creating a compatibility block', async () => {
     mockFetch.mockRejectedValue(new Error('network unavailable'));
 
-    await expect(getLiveInstallers('Foo.Offline', '1.0.0')).rejects.toThrow(
-      'network unavailable'
-    );
+    await expect(getLiveInstallers('Foo.Offline', '1.0.0')).rejects.toMatchObject({
+      name: 'GitHubUnavailableError', status: 0,
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers from a primary timeout using the anonymous fallback with bounded requests', async () => {
+    mockFetch.mockRejectedValueOnce(new DOMException('Timed out', 'TimeoutError'))
+      .mockResolvedValueOnce(yamlResponse(liveInstallerYaml()));
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toMatchObject([{ architecture: 'x64' }]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    for (const call of mockFetch.mock.calls) expect(call[1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('recovers when reading the primary response body fails', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: async () => { throw new Error('stream reset'); } })
+      .mockResolvedValueOnce(yamlResponse(liveInstallerYaml()));
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).resolves.toHaveLength(1);
+  });
+
+  it.each([
+    'PackageIdentifier: Foo.Bar\nPackageVersion: 1.0.0\nInstallers: []\n',
+    liveInstallerYaml('Foo.Bar', '2.0.0'),
+    liveInstallerYaml('Other.App'),
+  ])('does not label a malformed or wrong-identity response as a removed version', async (yaml) => {
+    mockFetch.mockResolvedValue(yamlResponse(yaml));
+    await expect(getLiveInstallers('Foo.Bar', '1.0.0')).rejects.toMatchObject({
+      name: 'GitHubUnavailableError', status: 502,
+    });
+  });
+
+  it('excludes channel directories from available versions', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ['Beta', 'EXE', '1.0', '2.0', 'v3.0'].map(name => ({ type: 'dir', name })) });
+    await expect(fetchAvailableVersionsLive('Google.Chrome', { strict: true })).resolves.toEqual(['v3.0', '2.0', '1.0']);
+  });
+
+  it('keeps strict version-list outages distinct from an empty catalog', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 429 });
+    await expect(fetchAvailableVersionsLive('Google.Chrome', { strict: true })).rejects.toMatchObject({ status: 429 });
+    await expect(fetchAvailableVersionsLive('Google.Chrome')).resolves.toEqual([]);
   });
 });
 

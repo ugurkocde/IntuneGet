@@ -34,7 +34,8 @@ interface CartActions {
     wingetId: string,
     version: string,
     architecture?: string,
-    scopeOrExperience?: string
+    scopeOrExperience?: string,
+    excludeItemId?: string,
   ) => boolean;
   getItemCount: () => number;
 }
@@ -187,8 +188,9 @@ export const useCartStore = create<CartStore>()(
         set({ isOpen: false });
       },
 
-      isInCart: (wingetId, version, architecture, scopeOrExperience) => {
+      isInCart: (wingetId, version, architecture, scopeOrExperience, excludeItemId) => {
         return get().items.some((item) => {
+          if (item.id === excludeItemId) return false;
           if (item.wingetId !== wingetId || item.version !== version) return false;
           if (isStoreCartItem(item)) {
             // Store items distinguish by installExperience (user vs system)

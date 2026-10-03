@@ -20,7 +20,9 @@ import { AppIcon } from '@/components/AppIcon';
 import { useCartStore } from '@/stores/cart-store';
 import dynamic from 'next/dynamic';
 const CartItemConfig = dynamic(() => import('@/components/CartItemConfig').then(m => m.CartItemConfig));
-import type { CartItem } from '@/types/upload';
+const PackageConfig = dynamic(() => import('@/components/PackageConfig').then(m => m.PackageConfig));
+import type { CartItem, Win32CartItem } from '@/types/upload';
+import type { ManifestResponse } from '@/hooks/use-packages';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { usePermissionStatus } from '@/hooks/usePermissionStatus';
@@ -59,6 +61,8 @@ interface PackageApiResponse {
 }
 
 interface DeploymentError {
+  code?: string;
+  packageId?: string;
   title: string;
   message: string;
   retryable: boolean;
@@ -73,6 +77,7 @@ interface PackageApiErrorResponse {
   code?: string;
   retryable?: boolean;
   package?: {
+    wingetId?: string;
     displayName?: string;
     version?: string;
   };
@@ -101,6 +106,12 @@ export function UploadCart() {
   const [showLargeDeployConfirm, setShowLargeDeployConfirm] = useState(false);
   const [error, setError] = useState<DeploymentError | null>(null);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [recovery, setRecovery] = useState<{ item: Win32CartItem; manifest: ManifestResponse } | null>(null);
+  const blockedItem = error?.packageId
+    ? items.find((item) => item.wingetId === error.packageId && (!error.packageVersion || item.version === error.packageVersion))
+    : undefined;
+  const needsVersionReview = error?.code === 'MANIFEST_UNAVAILABLE' && !!blockedItem;
   const [qaDetailsTarget, setQaDetailsTarget] = useState<{ wingetId: string; version: string } | null>(null);
   const { data: qaStatusesData } = useQaStatuses(
     items.filter(isWin32CartItem).map((item) => item.wingetId),
@@ -157,13 +168,34 @@ export function UploadCart() {
   // (item config, large-deploy confirm) is open - Escape should dismiss that
   // layer, not the whole cart.
   useEffect(() => {
-    if (!isOpen || editingItem || showLargeDeployConfirm) return;
+    if (!isOpen || editingItem || recovery || showLargeDeployConfirm) return;
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeCart();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, editingItem, showLargeDeployConfirm, closeCart]);
+  }, [isOpen, editingItem, recovery, showLargeDeployConfirm, closeCart]);
+
+  const handleReviewCurrentVersion = async () => {
+    if (!blockedItem || !isWin32CartItem(blockedItem) || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const response = await fetch(`/api/winget/manifest?id=${encodeURIComponent(blockedItem.wingetId)}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30_000),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not check the current version. Please try again.');
+      // Do not reopen an item removed or edited while the lookup was running.
+      const current = useCartStore.getState().items.find((item) => item.id === blockedItem.id);
+      if (!current || !isWin32CartItem(current) || current.version !== blockedItem.version) return;
+      setRecovery({ item: current, manifest: data as ManifestResponse });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not check the current version. Please try again.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleFixPermissions = () => {
     if (permissionError === 'network_error') {
@@ -174,7 +206,7 @@ export function UploadCart() {
   };
 
   const handleDeploy = async () => {
-    if (items.length === 0) return;
+    if (items.length === 0 || needsVersionReview || isRefreshing) return;
 
     trackDeployment(items.length);
     setError(null);
@@ -223,7 +255,11 @@ export function UploadCart() {
             const versionLabel = errorData.package?.version;
             const retryable = errorData.retryable === true;
             setError({
-              title: retryable
+              code: errorData.code,
+              packageId: errorData.package?.wingetId,
+              title: errorData.code === 'MANIFEST_UNAVAILABLE'
+                ? 'Selected version is no longer available'
+                : retryable
                 ? 'Installer verification temporarily unavailable'
                 : 'Deployment blocked before upload',
               message: errorData.message || errorData.error || 'The installer could not be verified safely.',
@@ -504,8 +540,8 @@ export function UploadCart() {
                 )}
 
                 {/* Error message */}
-                {error && (
-                  <div className="flex items-start gap-3 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
+                {error && (!error.packageId || blockedItem) && (
+                  <div role="alert" className="flex items-start gap-3 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
                     <AlertCircle className="w-5 h-5 text-status-error flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
                       <p className="text-status-error font-medium">{error.title}</p>
@@ -522,7 +558,21 @@ export function UploadCart() {
                           No packaging pipeline was started and no changes were made in Intune.
                         </p>
                       )}
-                      {!error.retryable && (
+                      {needsVersionReview && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <Button size="sm" onClick={handleReviewCurrentVersion} disabled={isRefreshing || isDeploying}>
+                            {isRefreshing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            {isRefreshing ? 'Checking current version...' : 'Review current version'}
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={isRefreshing || isDeploying} onClick={() => {
+                            if (blockedItem) removeItem(blockedItem.id);
+                            setError(null);
+                          }}>
+                            Remove unavailable app
+                          </Button>
+                        </div>
+                      )}
+                      {!error.retryable && !needsVersionReview && (
                         <p className="text-text-muted mt-1">
                           Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.
                         </p>
@@ -575,7 +625,7 @@ export function UploadCart() {
                   </AlertDialog>
                   <Button
                     onClick={isAuthenticated && !canDeploy && permissionStatus !== 'checking' ? handleFixPermissions : handleDeployClick}
-                    disabled={isDeploying || (isAuthenticated && permissionStatus === 'checking')}
+                    disabled={isDeploying || isRefreshing || needsVersionReview || (isAuthenticated && permissionStatus === 'checking')}
                     className={`flex-1 text-white border-0 disabled:opacity-50 ${
                       isAuthenticated && !canDeploy && permissionStatus !== 'checking'
                         ? 'bg-status-error hover:bg-status-error/90'
@@ -600,7 +650,7 @@ export function UploadCart() {
                     ) : (
                       <>
                         <Upload className="w-4 h-4 mr-2" />
-                        Deploy to Intune
+                        {error?.retryable && (!error.packageId || blockedItem) ? 'Retry deployment' : 'Deploy to Intune'}
                         <ChevronRight className="w-4 h-4 ml-2" />
                       </>
                     )}
@@ -611,6 +661,24 @@ export function UploadCart() {
           </div>
 
           {/* Cart Item Config Modal */}
+          {recovery && items.some((item) => item.id === recovery.item.id) && (
+            <PackageConfig
+              package={{
+                id: recovery.item.wingetId,
+                name: recovery.item.displayName,
+                publisher: recovery.item.publisher,
+                version: recovery.manifest.manifest.version,
+                description: recovery.item.description,
+                iconPath: recovery.item.iconPath,
+              }}
+              installers={recovery.manifest.installers}
+              versions={recovery.manifest.versions}
+              deployedConfig={{ ...recovery.item, version: recovery.manifest.manifest.version }}
+              replaceCartItemId={recovery.item.id}
+              onAddedToCart={() => setError(null)}
+              onClose={() => setRecovery(null)}
+            />
+          )}
           {editingItem && (
             <CartItemConfig
               item={editingItem}

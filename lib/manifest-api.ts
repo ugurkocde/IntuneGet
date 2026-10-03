@@ -134,13 +134,17 @@ export async function fetchAvailableVersions(wingetId: string): Promise<string[]
  * skipping the Supabase catalog. Used by dispatch preflight when the catalog
  * may be stale.
  */
-export async function fetchAvailableVersionsLive(wingetId: string): Promise<string[]> {
+export async function fetchAvailableVersionsLive(
+  wingetId: string,
+  options: { strict?: boolean } = {},
+): Promise<string[]> {
   const { basePath } = getManifestPaths(wingetId);
 
   try {
     const response = await fetch(`${GITHUB_API_BASE}/${basePath}`, {
       headers: githubReadHeaders('application/vnd.github.v3+json'),
       cache: 'no-store', // Avoid stale cache issues in edge runtime
+      signal: AbortSignal.timeout(5_000),
     });
 
     if (!response.ok) {
@@ -150,9 +154,10 @@ export async function fetchAvailableVersionsLive(wingetId: string): Promise<stri
       }
       if (response.status === 403) {
         console.warn(`GitHub API rate limit hit for ${wingetId}`);
+        if (options.strict) throw new GitHubUnavailableError(response.status);
         return [];
       }
-      throw new Error(`GitHub API error: ${response.status}`);
+      throw new GitHubUnavailableError(response.status);
     }
 
     const dirs = await response.json();
@@ -160,6 +165,9 @@ export async function fetchAvailableVersionsLive(wingetId: string): Promise<stri
     const versions = dirs
       .filter((d: { type: string }) => d.type === 'dir')
       .map((d: { name: string }) => d.name)
+      // Channel/package directories (e.g. Chrome/Beta or Chrome/EXE) are
+      // not versions of this package.
+      .filter((name: string) => /^v?\d/i.test(name))
       .sort((a: string, b: string) =>
         b.localeCompare(a, undefined, { numeric: true })
       );
@@ -168,6 +176,9 @@ export async function fetchAvailableVersionsLive(wingetId: string): Promise<stri
     return versions;
   } catch (error) {
     console.error(`Failed to fetch versions for ${wingetId}:`, error);
+    if (options.strict) {
+      throw error instanceof GitHubUnavailableError ? error : new GitHubUnavailableError(0);
+    }
     return [];
   }
 }
@@ -182,6 +193,14 @@ export class GitHubUnavailableError extends Error {
     super(`GitHub fetch error: ${status}`);
     this.name = 'GitHubUnavailableError';
   }
+}
+
+function parseInstallerManifest(text: string): Record<string, unknown> {
+  const manifest = YAML.parse(text);
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    throw new GitHubUnavailableError(502);
+  }
+  return manifest;
 }
 
 function installerManifestPath(wingetId: string, version: string): string {
@@ -211,16 +230,14 @@ async function fetchInstallerManifestFromRawFallback(
     response = await fetch(url, {
       headers: { 'User-Agent': 'IntuneGet', Accept: 'text/plain' },
       cache: 'no-store',
+      signal: AbortSignal.timeout(5_000),
     });
+    if (response.ok) return parseInstallerManifest(await response.text());
   } catch {
     throw new GitHubUnavailableError(primaryStatus);
   }
 
-  if (!response.ok) {
-    throw new GitHubUnavailableError(primaryStatus);
-  }
-
-  return YAML.parse(await response.text());
+  throw new GitHubUnavailableError(primaryStatus);
 }
 
 async function fetchInstallerManifestFromGitHub(
@@ -229,27 +246,30 @@ async function fetchInstallerManifestFromGitHub(
 ): Promise<Record<string, unknown> | null> {
   const url = `${GITHUB_API_BASE}/${installerManifestPath(wingetId, version)}?ref=master`;
 
-  const response = await fetch(url, {
-    headers: {
-      ...githubReadHeaders('application/vnd.github.raw+json'),
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    if (response.status === 404) {
-      console.warn(`Installer manifest not found: ${url}`);
-      return null;
-    }
-    console.warn(
-      `GitHub Contents API returned ${response.status} for ${wingetId}@${version}, falling back to anonymous raw fetch`
-    );
-    return fetchInstallerManifestFromRawFallback(wingetId, version, response.status);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        ...githubReadHeaders('application/vnd.github.raw+json'),
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (response.ok) return parseInstallerManifest(await response.text());
+  } catch {
+    console.warn(`GitHub Contents API request failed for ${wingetId}@${version}; trying raw fallback`);
+    return fetchInstallerManifestFromRawFallback(wingetId, version, 0);
   }
 
-  const yamlContent = await response.text();
-  return YAML.parse(yamlContent);
+  if (response.status === 404) {
+    console.warn(`Installer manifest not found: ${url}`);
+    return null;
+  }
+  console.warn(
+    `GitHub Contents API returned ${response.status} for ${wingetId}@${version}, falling back to anonymous raw fetch`
+  );
+  return fetchInstallerManifestFromRawFallback(wingetId, version, response.status);
 }
 
 /**
@@ -977,6 +997,15 @@ export async function getLiveInstallers(
   const installerManifest = await fetchInstallerManifestFromGitHub(wingetId, version);
   if (!installerManifest) {
     return [];
+  }
+  if (
+    installerManifest.PackageIdentifier !== wingetId ||
+    String(installerManifest.PackageVersion) !== version ||
+    !Array.isArray(installerManifest.Installers) ||
+    installerManifest.Installers.length === 0
+  ) {
+    // A malformed response is not evidence that an exact version was removed.
+    throw new GitHubUnavailableError(502);
   }
   return normalizeManifestInstallers(installerManifest).map(normalizeInstaller);
 }

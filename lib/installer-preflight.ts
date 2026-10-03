@@ -151,7 +151,7 @@ function throwForRow(row: InstallerHealthRow): never {
   throw new InstallerPreflightError(
     row.reason_code || 'INSTALLER_QUARANTINED',
     row.reason_message || 'This installer tuple is quarantined and cannot be dispatched',
-    row.status === 'error' && row.reason_code !== 'MANIFEST_CHANGED',
+    row.status === 'error' && !['MANIFEST_CHANGED', 'MANIFEST_UNAVAILABLE'].includes(row.reason_code || ''),
     row.actual_sha256 || undefined,
   );
 }
@@ -311,11 +311,16 @@ async function performLivePreflight(
     const installers = trustedInstallers ||
       await getLiveInstallers(input.wingetId, input.version);
     if (installers.length === 0) {
-      throw new InstallerPreflightError(
+      const error = new InstallerPreflightError(
         'MANIFEST_UNAVAILABLE',
-        `The trusted WinGet installer manifest for ${input.wingetId} ${input.version} is unavailable`,
-        true,
+        `Version ${input.version} of ${input.wingetId} is no longer available from WinGet. Review the current version to update your selection.`,
       );
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
+        reason_code: error.code,
+        reason_message: error.message,
+        expires_at: new Date(Date.now() + ERROR_TTL_MS).toISOString(),
+      }));
+      throw error;
     }
 
     if (!installerExistsInManifest(input, installers)) {
