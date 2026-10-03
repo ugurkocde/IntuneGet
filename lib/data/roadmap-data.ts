@@ -10,9 +10,11 @@ export type RoadmapCategory =
 export type RoadmapStageId = "shipped" | "in-progress" | "next-up" | "exploring";
 
 export interface RoadmapItem {
+  id?: string;
   title: string;
   description: string;
   category: RoadmapCategory;
+  href?: string;
 }
 
 export interface RoadmapStage {
@@ -31,6 +33,8 @@ export const categoryLabels: Record<RoadmapCategory, string> = {
   msp: "MSP",
   trust: "Trust",
 };
+
+export const roadmapLastReviewed = "2026-10-03";
 
 export const roadmapStages: RoadmapStage[] = [
   {
@@ -92,19 +96,41 @@ export const roadmapStages: RoadmapStage[] = [
           "AGPL source, Docker, SQLite mode, and a local Windows packager CLI. Run everything on your own terms.",
         category: "trust",
       },
+      {
+        title: "Package verification pipeline",
+        description:
+          "The hosted pipeline tests WinGet installer versions in isolated Windows VMs and publishes installation, detection, removal, and removal-detection results.",
+        category: "package-quality",
+        href: "/qa",
+      },
+      {
+        title: "Installer malware scanning",
+        description:
+          "VirusTotal checks report reputation for the tested installer hash; known malicious results block hosted packaging. A missing report is not a clean verdict.",
+        category: "trust",
+        href: "/apps/releases",
+      },
     ],
   },
   {
     id: "in-progress",
     title: "In Progress",
-    timeframe: "Q3 2026 target",
+    timeframe: "Ongoing",
     items: [
       {
-        title: "Package verification pipeline",
+        title: "Catalog QA coverage",
         description:
-          "Every package installs and uninstalls in an isolated Windows VM before release, with a published test report.",
+          "Expand verified coverage as new apps and installer versions pass through the live QA queue. Results remain specific to the tested version, architecture, and installer hash.",
         category: "package-quality",
+        href: "/qa",
       },
+    ],
+  },
+  {
+    id: "next-up",
+    title: "Next Up",
+    timeframe: "Planned",
+    items: [
       {
         title: "Deployment waves",
         description:
@@ -112,24 +138,11 @@ export const roadmapStages: RoadmapStage[] = [
         category: "rollout-control",
       },
       {
-        title: "Installer malware scanning",
-        description:
-          "Every downloaded installer is scanned before packaging and blocked on detections.",
-        category: "trust",
-      },
-      {
         title: "Version retention policy",
         description:
           "Keep a set number of previous versions per app and clean up superseded apps in Intune automatically.",
         category: "rollout-control",
       },
-    ],
-  },
-  {
-    id: "next-up",
-    title: "Next Up",
-    timeframe: "Q4 2026 target",
-    items: [
       {
         title: "CVE visibility",
         description:
@@ -168,7 +181,8 @@ export const roadmapStages: RoadmapStage[] = [
       },
       {
         title: "XLSX report export",
-        description: "Export deployment and update reports as CSV, JSON, or XLSX.",
+        description:
+          "Extend the existing CSV report exports with JSON and XLSX formats for deployment and update reporting.",
         category: "fleet-visibility",
       },
     ],
@@ -176,8 +190,15 @@ export const roadmapStages: RoadmapStage[] = [
   {
     id: "exploring",
     title: "Exploring",
-    timeframe: "2027",
+    timeframe: "Under consideration",
     items: [
+      {
+        id: "private-catalog",
+        title: "Tenant-private catalog",
+        description:
+          "Keep an organization-owned collection of apps separate from the public catalog, with access limited to its tenant.",
+        category: "catalog",
+      },
       {
         title: "Custom app binary upload",
         description:

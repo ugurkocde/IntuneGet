@@ -29,7 +29,7 @@ Skip the manual packaging workflow and deploy Winget apps to Intune in seconds.
 
 <div align="center">
 
-**[Features](#features)** | **[Quick Start](#quick-start)** | **[Architecture](#architecture)** | **[How It Compares](#how-it-compares)** | **[Documentation](#documentation)**
+**[Features](#features)** | **[Quick Start](#quick-start)** | **[Architecture](#architecture)** | **[How It Compares](#how-it-compares)** | **[Documentation](#documentation)** | **[Roadmap](https://www.intuneget.com/roadmap)**
 
 </div>
 

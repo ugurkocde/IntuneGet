@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/sections/Footer";
-import { T } from "gt-next";
-import { roadmapStages } from "@/lib/data/roadmap-data";
+import { T, Var } from "gt-next";
+import { roadmapLastReviewed, roadmapStages } from "@/lib/data/roadmap-data";
 import { RoadmapWave } from "./RoadmapWave";
 import { RoadmapBoard } from "./RoadmapBoard";
 
@@ -72,7 +72,7 @@ export default function RoadmapPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(roadmapJsonLd) }}
       />
 
-      <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-12 pt-24 lg:px-8 lg:py-16 lg:pt-28">
+      <main id="main-content" tabIndex={-1} className="flex-1 mx-auto w-full max-w-6xl px-4 py-12 pt-24 lg:px-8 lg:py-16 lg:pt-28">
         {/* Hero */}
         <div className="mb-10 text-center">
           <span className="mb-4 inline-block font-mono text-xs uppercase tracking-wider text-accent-cyan">
@@ -87,6 +87,12 @@ export default function RoadmapPage() {
               right now, and what comes next. Community priorities shape the
               order.
             </T>
+          </p>
+          <p className="mt-3 font-mono text-xs text-text-muted">
+            <T>Last reviewed</T>{" "}
+            <time dateTime={roadmapLastReviewed}>
+              <Var>{roadmapLastReviewed}</Var>
+            </time>
           </p>
           <div className="mt-4 flex items-center justify-center gap-4 text-sm">
             <a
@@ -118,15 +124,25 @@ export default function RoadmapPage() {
           <RoadmapWave />
         </div>
 
-        {/* Filterable stages */}
+        {/* Feature stages */}
         <RoadmapBoard />
 
-        <p className="mt-14 border-t border-overlay/10 pt-6 font-mono text-xs text-text-muted">
-          <T>
-            Timelines are targets, not commitments. Sequencing follows community
-            demand.
-          </T>
-        </p>
+        <div className="mt-14 space-y-3 border-t border-overlay/10 pt-6 text-sm text-text-muted">
+          <p>
+            <T>
+              Hosted QA coverage depends on the app, version, architecture, and
+              installer hash. Custom apps, self-hosted packaging, and temporary
+              QA pauses can follow different paths.
+            </T>
+          </p>
+          <p>
+            <T>
+              Next Up lists planned work; Exploring lists ideas under
+              consideration. Delivery dates are not set. Sequencing follows
+              community demand.
+            </T>
+          </p>
+        </div>
       </main>
 
       <Footer />

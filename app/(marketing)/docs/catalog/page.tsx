@@ -33,7 +33,7 @@ const questions = [
   },
   {
     q: "Is there a private catalog?",
-    a: "Not today. The catalog is the public verified set, and you can add your own apps by pointing at a public installer URL. A tenant-private catalog is planned; see the roadmap for status.",
+    a: "Not today. The catalog is the public verified set, and you can add your own apps by pointing at a public installer URL. A tenant-private catalog is under consideration; see the roadmap for status.",
   },
   {
     q: "Can I use my own source?",
@@ -99,7 +99,7 @@ packaging run   ->  fetch installer from vendor URL, verify SHA-256, discard`}
           <T>How a package is built and verified</T>
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
-        <Link href="/roadmap" className="inline-flex items-center gap-1 font-medium text-accent-cyan hover:underline">
+        <Link href="/roadmap#private-catalog" className="inline-flex items-center gap-1 font-medium text-accent-cyan hover:underline">
           <T>See the roadmap</T>
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>

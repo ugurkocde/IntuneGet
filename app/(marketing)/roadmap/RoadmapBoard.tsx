@@ -1,4 +1,5 @@
 import { T, Var } from "gt-next";
+import Link from "next/link";
 import {
   categoryLabels,
   roadmapStages,
@@ -44,7 +45,8 @@ export function RoadmapBoard() {
               <span className="font-mono text-xs text-text-muted">
                 <T>{stage.timeframe}</T>
                 <span className="mx-2 text-overlay/40">/</span>
-                <Var>{stage.items.length}</Var> <T>items</T>
+                <Var>{stage.items.length}</Var>{" "}
+                {stage.items.length === 1 ? <T>item</T> : <T>items</T>}
               </span>
             </div>
 
@@ -64,10 +66,17 @@ export function RoadmapBoard() {
                 {stage.items.map((item) => (
                   <div
                     key={item.title}
-                    className="grid grid-cols-1 gap-1.5 px-5 py-4 md:grid-cols-[230px_160px_1fr] md:items-baseline md:gap-4"
+                    id={item.id}
+                    className="grid scroll-mt-28 grid-cols-1 gap-1.5 px-5 py-4 md:grid-cols-[230px_160px_1fr] md:items-baseline md:gap-4"
                   >
                     <h3 className="text-sm font-semibold text-text-primary">
-                      <T>{item.title}</T>
+                      {item.href ? (
+                        <Link href={item.href} className="rounded-sm underline decoration-accent-cyan/40 underline-offset-4 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan">
+                          <T>{item.title}</T>
+                        </Link>
+                      ) : (
+                        <T>{item.title}</T>
+                      )}
                     </h3>
                     <span>
                       <span

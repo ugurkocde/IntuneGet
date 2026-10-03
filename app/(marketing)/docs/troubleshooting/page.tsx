@@ -69,7 +69,8 @@ const faqs = [
   {
     question: "How do I add custom apps not in Winget?",
     answer:
-      "Currently, IntuneGet only supports apps available in the Winget repository. You can use the Unmanaged Apps feature to discover applications on your devices and manually link them to Winget packages if a match exists. Custom app support is on the roadmap for future releases.",
+      "Provide a public installer URL to deploy a custom app. You can also use Unmanaged Apps to discover applications on your devices and link them to Winget packages where a match exists. Direct upload of private installer binaries and a tenant-private catalog are under consideration.",
+    linkHref: "/roadmap#exploring",
   },
   {
     question: "What are unmanaged apps and how do I use this feature?",
@@ -610,6 +611,11 @@ export default function TroubleshootingPage() {
           {faqs.map((faq, index) => (
             <Collapsible key={index} title={faq.question}>
               <p className="text-text-secondary leading-relaxed"><T>{faq.answer}</T></p>
+              {faq.linkHref && (
+                <Link href={faq.linkHref} className="mt-3 inline-block text-sm font-medium text-accent-cyan hover:underline">
+                  <T>See the roadmap</T>
+                </Link>
+              )}
             </Collapsible>
           ))}
         </div>

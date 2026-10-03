@@ -89,7 +89,7 @@ export function RoadmapWave() {
   return (
     <div aria-label="Roadmap timeline">
       {/* Desktop wave timeline */}
-      <div className="relative hidden h-[340px] md:block">
+      <div className="relative hidden h-[340px] lg:block">
         <svg
           className="absolute inset-x-0 bottom-0 h-[240px] w-full"
           viewBox="0 0 1200 280"
@@ -126,18 +126,18 @@ export function RoadmapWave() {
             <a
               key={station.id}
               href={`#${station.id}`}
-              className="group relative block h-full"
+              className="group relative block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
             >
               {/* dot at the top of the connector */}
               <span
-                className={`absolute left-1/2 top-1 h-2 w-2 -translate-x-1/2 rounded-full ${station.dot}`}
+                className={`absolute left-1/2 top-[104px] h-2 w-2 -translate-x-1/2 rounded-full ${station.dot}`}
               />
               {/* connector line down to the wave node */}
               <span
-                className={`absolute left-1/2 top-3 h-[179px] w-px ${station.line}`}
+                className={`absolute left-1/2 top-[112px] h-[79px] w-px ${station.line}`}
               />
               {/* label */}
-              <span className="absolute left-1/2 top-0 block pl-4 pr-2">
+              <span className="absolute inset-x-2 top-0 block text-center">
                 <span className="block text-lg font-bold text-text-primary transition-colors group-hover:text-accent-cyan">
                   <T>{station.title}</T>
                 </span>
@@ -145,7 +145,8 @@ export function RoadmapWave() {
                   <T>{station.timeframe}</T>
                 </span>
                 <span className="mt-1 block font-mono text-xs text-text-muted">
-                  <Var>{station.count}</Var> <T>items</T>
+                  <Var>{station.count}</Var>{" "}
+                  {station.count === 1 ? <T>item</T> : <T>items</T>}
                 </span>
               </span>
               {/* node sitting on the wave crest */}
@@ -157,15 +158,15 @@ export function RoadmapWave() {
         </div>
       </div>
 
-      {/* Mobile fallback */}
-      <div className="grid grid-cols-2 gap-2 md:hidden">
+      {/* Phone and tablet navigation */}
+      <div className="grid grid-cols-2 gap-2 lg:hidden">
         {stations.map((station) => (
           <a
             key={station.id}
             href={`#${station.id}`}
-            className={`flex items-center justify-between rounded-xl border bg-bg-elevated px-4 py-3 ${station.pill}`}
+            className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border bg-bg-elevated px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan ${station.pill}`}
           >
-            <span>
+            <span className="min-w-0">
               <span className="block text-sm font-semibold text-text-primary">
                 <T>{station.title}</T>
               </span>
@@ -173,7 +174,7 @@ export function RoadmapWave() {
                 <T>{station.timeframe}</T>
               </span>
             </span>
-            <span className="font-mono text-xs">
+            <span className="shrink-0 font-mono text-xs">
               <Var>{station.count}</Var>
             </span>
           </a>
