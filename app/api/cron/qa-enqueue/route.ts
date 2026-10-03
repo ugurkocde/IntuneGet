@@ -1,4 +1,5 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import {
@@ -1029,6 +1030,23 @@ export async function GET(request: Request) {
                 architecture,
                 preflightReasonCode: unavailableReasonCode,
               });
+              return;
+            }
+            const compatibilityBlock = await getPackageCompatibilityBlock(supabase!, {
+              wingetId: app.winget_id,
+              version: resolution.version,
+              architecture,
+              installerSha256,
+            });
+            if (compatibilityBlock) {
+              await persistQaCatalogReconciliation(supabase!, {
+                wingetId: app.winget_id,
+                catalogVersion: app.latest_version!,
+                observedHeadSha: headSha,
+                reasonCode: 'package_compatibility_blocked',
+                observedLiveVersion: resolution.version,
+              });
+              summary.unavailable++;
               return;
             }
             const testConfig = buildQaCatalogTestConfig({

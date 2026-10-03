@@ -786,6 +786,28 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(client.from).not.toHaveBeenCalled();
   });
 
+  it.each(['machine', 'user'] as const)('blocks held SSMS 22.10.2 bytes before queueing %s scope', async (installScope) => {
+    const tuple = {
+      wingetId: 'Microsoft.SQLServerManagementStudio.22', version: '22.10.2', architecture: 'x64' as const,
+      installerSha256: 'E7B3885D3A0FEBB83B7A5CB155EFD8410A9A651A1BE16EAAA35D594C4D1D75D2',
+    };
+    getPackageCompatibilityBlockMock.mockResolvedValue({
+      ...tuple, code: 'failed_managed_lifecycle', detail: 'No exact vendor identity was captured.',
+    });
+    const client = { from: vi.fn() };
+    await expect(ensureQaDemand(client as never, {
+      ...demandInput(), ...tuple, installerType: 'exe', installScope,
+      silentSwitches: '--quiet --wait --campaign "winget"',
+      uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft SQL Server Management Studio 22',
+    })).resolves.toMatchObject({
+      state: 'failed', candidateId: null,
+      failureSummary: 'This app version is not available for automated deployment.',
+    });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, tuple);
+    expect(resolveWingetPackageDependenciesMock).not.toHaveBeenCalled();
+    expect(client.from).not.toHaveBeenCalled();
+  });
+
   it.each(['machine', 'user'] as const)('blocks held Proton Mail bytes before queueing %s scope', async (installScope) => {
     const tuple = {
       wingetId: 'Proton.ProtonMail', version: '1.14.0', architecture: 'x64' as const,

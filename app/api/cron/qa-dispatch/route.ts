@@ -1,4 +1,5 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
@@ -229,6 +230,16 @@ export async function GET(request: Request) {
         candidateInstallerSha256: candidate.installer_sha256,
       });
       if (validation.valid) {
+        const compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
+          wingetId: candidate.winget_id,
+          version: candidate.version,
+          architecture: candidate.architecture,
+          installerSha256: candidate.installer_sha256,
+        });
+        if (compatibilityBlock) {
+          addInvalid('package-compatibility-blocked', candidate.id);
+          continue;
+        }
         eligible.push(candidate);
         continue;
       }
