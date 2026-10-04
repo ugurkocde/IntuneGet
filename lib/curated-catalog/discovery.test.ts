@@ -61,6 +61,8 @@ describe('vendor metadata discovery', () => {
     const vlc = candidateFromMetadata(app('vlc'), '3.0.24\nhttp://ignored-mirror.test/vlc.exe', new Date(), `${pin('C')}  vlc-3.0.24-win64.exe\n`);
     expect(vlc.installerUrl).toBe('https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe');
     expect(vlc.vendorSha256).toBe(pin('c'));
+    // VideoLAN publishes binary-mode lines ('<hash> *<file>').
+    expect(candidateFromMetadata(app('vlc'), '3.0.24\n', new Date(), `${pin('D')} *vlc-3.0.24-win64.exe\r\n`).vendorSha256).toBe(pin('d'));
     expect(() => candidateFromMetadata(app('vlc'), '3.0.24\n')).toThrow(/SHA256 pin/);
   });
   it('reads only the publisher SHA256 line for the exact candidate installer', () => {

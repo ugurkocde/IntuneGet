@@ -105,7 +105,8 @@ describe('curated approval trust boundary', () => {
     expect(() => validateDefinitions([{ ...vlc(), installerRedirectPolicy: 'any-mirror' } as never])).toThrow(/redirect policy/);
     expect(() => validateDefinitions([{ ...vlc(), checksumSource: undefined }])).toThrow(/checksum source/);
     for (const urlTemplate of ['https://checksums.example/{version}.sha256', 'https://downloads.videolan.org/pub/videolan/vlc/{version}/win64/vlc-{version}-win64.exe',
-      'http://downloads.videolan.org/pub/videolan/vlc/{version}/SHA256SUMS', 'https://downloads.videolan.org/pub/{version}/sums?file=x']) {
+      'http://downloads.videolan.org/pub/videolan/vlc/{version}/SHA256SUMS', 'https://downloads.videolan.org/pub/{version}/sums?file=x',
+      'https://downloads.videolan.org/other/{version}/vlc.sha256']) {
       expect(() => validateDefinitions([{ ...vlc(), checksumSource: { ...vlc().checksumSource!, urlTemplate } }])).toThrow();
     }
     for (const entryTemplate of ['../vlc-{version}-win64.exe', '/vlc-{version}-win64.exe', 'vlc-{version}-win64.sha256']) {
