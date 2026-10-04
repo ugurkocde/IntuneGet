@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-04T22:44:29.156Z",
-    "expiresAt": "2026-10-11T22:44:29.156Z",
+    "generatedAt": "2026-10-04T23:45:22.373Z",
+    "expiresAt": "2026-10-11T23:45:22.373Z",
     "definitionsSha256": "81fc06e6b33da70a7ed5775931bb0bedc18a4b09949edda61ab63333775e70ac",
     "releases": [
       {
@@ -175,10 +175,92 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/7zip/e680ec0f39b4c2636f83a241.json"
           }
         }
+      },
+      {
+        "id": "vlc:a947bde072383e7ecf44093b",
+        "candidate": {
+          "appId": "vlc",
+          "version": "3.0.24",
+          "installerUrl": "https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe",
+          "vendorSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+          "releaseNotesUrl": "https://www.videolan.org/vlc/",
+          "discoveredAt": "2026-10-04T23:20:31.724Z",
+          "id": "a947bde072383e7ecf44093b"
+        },
+        "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+        "executionProfileSha256": "C2A78A3606C673B4DF196C08F651DB2F042C11EFA19042D90C0331E7CE776B48",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-04T23:45:22.373Z",
+        "evidence": {
+          "verifiedAt": "2026-10-04T23:42:55.7845153Z",
+          "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+          "installerVersion": "3.0.24",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vlc/a947bde072383e7ecf44093b.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "VideoLAN"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "9b61bb82c18323ad543027aeaf802bf04a34b374",
+            "websiteCommit": "029b901386d9b65f3468340dbeef87df380a6a53",
+            "runId": "37243410536",
+            "runAttempt": 1,
+            "artifactId": "11318024586",
+            "artifactSha256": "710c8c27e9b82b6d78059697b04ffb77c33dc310139d0761057ac16ee4c0f56d"
+          },
+          "security": {
+            "engineVersion": "1.1.26080.3",
+            "signatureVersion": "1.459.554.0",
+            "malicious": 0,
+            "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+            "scanner": "defender",
+            "scannedAt": "2026-10-04T23:41:29.0813746Z",
+            "status": "clean",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vlc/a947bde072383e7ecf44093b.json"
+          },
+          "qa": {
+            "candidateId": "a947bde072383e7ecf44093b",
+            "architecture": "x64",
+            "testLevel": "psadt-package",
+            "testedAt": "2026-10-04T23:42:51.9879879Z",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "executionContext": "LocalSystem",
+            "executionProfileSha256": "C2A78A3606C673B4DF196C08F651DB2F042C11EFA19042D90C0331E7CE776B48",
+            "installerVersion": "3.0.24",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerSha256": "d711e1e1fe52052748c39080c7dce63f6b7e4c315efedf1774a3f1957b782ff3",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: VLC media player is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vlc/a947bde072383e7ecf44093b.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "qnwlcH1F1GETILSnzvrzqZrCV1ggGCX18s0M9J/9NXZGA+PjdemPaG8wPRqOGgLsnITQCSol7zCMcngOQAzEBw=="
+  "signature": "ntaTaE5zuFt+hLZYw/OpNqbhzPPH7xsf3vj8rVzIiQKPzbObcJBvRSAtNt+jsi/hONfRyxlMU/Ep48/Zez7OBQ=="
 }
