@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '60395492a3d51b2ff6f14b50ed7cd0c7f558be70',
+  packagerCommit: '25849ac512c211e616c135149ef1e059db367ebc',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -636,6 +636,9 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Bandizip's /S adapter changes only its failing removal profile.
   // Preserve approved unrelated coverage through per-profile compatibility.
   '4b4637967c6e2b0188f5713d262dd1219a02465e',
+  // Wacom's exact registered removal gains /s. Preserve unrelated coverage;
+  // the release-aware check below requires affected Wacom profiles to retest.
+  '60395492a3d51b2ff6f14b50ed7cd0c7f558be70',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
@@ -835,6 +838,12 @@ function passingProfileCompatibilityReason(
     : [];
 
   for (const release of QA_PACKAGER_RELEASE_HISTORY.slice(priorIndex + 1, currentIndex + 1)) {
+    if (
+      release === '25849ac512c211e616c135149ef1e059db367ebc' &&
+      lowerTextValue(record(profile.app)?.wingetId) === 'wacom.wacomtabletdriver'
+    ) {
+      return 'compatible-application-adapter-changed';
+    }
     if (
       release === '7238616608f888449fa2e132fffc8d7314c26745' &&
       lowerTextValue(installer.sourceType) === 'zip' &&

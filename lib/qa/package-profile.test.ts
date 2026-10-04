@@ -2969,6 +2969,19 @@ describe('current catalog QA package validation', () => {
     ).toEqual({ valid: false, reason: 'compatible-application-adapter-changed' });
   });
 
+  it.each(['Wacom.WacomTabletDriver', 'Example.App'])('scopes Wacom release compatibility to %s', (wingetId) => {
+    const legacyIdentity = identityWithPackagerCommit(
+      buildQaPackageIdentity({ ...input, wingetId }),
+      '60395492a3d51b2ff6f14b50ed7cd0c7f558be70'
+    );
+    const candidate = { ...candidateFromIdentity(legacyIdentity), candidateWingetId: wingetId };
+    expect(validateCompatiblePassedCatalogQaProfile(candidate)).toMatchObject(
+      wingetId === 'Wacom.WacomTabletDriver'
+        ? { valid: false, reason: 'compatible-application-adapter-changed' }
+        : { valid: true }
+    );
+  });
+
   it.each([
     ['REGISTRY_UNINSTALL:Zermelo Desktop', false],
     ['REGISTRY_UNINSTALL_KEY:Zermelo:Zermelo', true],
