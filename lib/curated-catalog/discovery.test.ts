@@ -41,6 +41,7 @@ describe('vendor metadata discovery', () => {
       { version: '155.0.8059.26', fraction: 0.005 }, { version: '154.0.8037.100', fraction: 1 }];
     expect(candidateFromMetadata(app('chrome'), JSON.stringify({ releases })).version).toBe('154.0.8037.100');
     expect(() => candidateFromMetadata(app('chrome'), JSON.stringify({ releases: releases.filter(release => release.fraction < 1) }))).toThrow(/fully rolled out/);
+    expect(() => candidateFromMetadata(app('chrome'), JSON.stringify({ releases, nextPageToken: 'next' }))).toThrow(/more than one page/);
   });
   it('parses WinSCP and VLC text feeds', () => {
     expect(candidateFromMetadata(app('winscp'), 'version=6.5.7.0\n').version).toBe('6.5.7');
