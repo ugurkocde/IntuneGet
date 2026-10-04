@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+// The committed catalog changes whenever the automation publishes, so these
+// tests use the unsigned bootstrap catalog instead.
+vi.mock('@/catalog/curated/catalog.json', () => ({ default: {
+  payload: { schemaVersion: 1, generatedAt: null, expiresAt: null, definitionsSha256: null, releases: [], withdrawnReleaseIds: [] },
+  keyId: null, signature: null,
+} }));
 import { POST } from './route';
 import { GET } from '../route';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
@@ -10,7 +17,7 @@ const request = (body: unknown, token = 'operator-test') => new NextRequest('htt
 });
 afterEach(() => vi.unstubAllEnvs());
 describe('curated catalog APIs', () => {
-  it('shows ten pending apps and no deployable cart items', async () => {
+  it('shows ten pending apps and no deployable cart items without signed releases', async () => {
     const response = await GET();
     const body = await response.json();
     expect(response.status).toBe(200);
