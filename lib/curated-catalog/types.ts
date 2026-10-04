@@ -35,8 +35,10 @@ export interface CuratedAppDefinition {
   silentArgs: string;
   signaturePublishers: string[];
   allowUnsigned: boolean;
+  /** Reviewed reason that an unsigned installer is acceptable. Required exactly when allowUnsigned is true. */
+  unsignedExceptionReason?: string;
   releaseSource: string;
-  discovery: 'github' | 'chrome' | 'firefox' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'manual';
+  discovery: 'github' | 'chrome' | 'firefox' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'manual';
   assetPattern?: string;
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;
   /** Publisher checksum file fetched as text during discovery to pin vendorSha256. */

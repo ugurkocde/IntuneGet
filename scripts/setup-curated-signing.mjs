@@ -10,7 +10,9 @@ if (Object.keys(keys).length && !process.argv.includes('--rotate')) throw new Er
 const result = spawnSync('gh', ['api', 'repos/ugurkocde/IntuneGet/environments/curated-catalog-approval'], { encoding: 'utf8' });
 if (result.status !== 0) throw new Error('Cannot inspect the signing environment.');
 const environment = JSON.parse(result.stdout);
-if (environment.can_admins_bypass !== false || !environment.protection_rules.some(rule => rule.type === 'required_reviewers')) throw new Error('Configure required reviewers and disable administrator bypass before initializing a signing key.');
+// Signing is automated, so the environment's guard is its branch policy: only
+// workflows running on protected branches can read the key.
+if (environment.deployment_branch_policy?.protected_branches !== true) throw new Error('Restrict the signing environment to protected branches before initializing a signing key.');
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
 const keyId = `curated-${new Date().toISOString().slice(0, 10)}-${Date.now()}`;
 // The private key goes directly into gh's stdin. It is never printed, written

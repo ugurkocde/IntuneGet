@@ -84,8 +84,8 @@
       "Adobe Systems Incorporated"
     ],
     "allowUnsigned": false,
-    "releaseSource": "https://www.adobe.com/devnet-docs/acrobatetk/tools/ReleaseNotesDC/index.html",
-    "discovery": "manual",
+    "releaseSource": "https://rdc.adobe.io/reader/products?lang=en&site=enterprise&os=Windows%2011&api_key=dc-get-adobereader-cdn",
+    "discovery": "adobe",
     "allowedInstallerSources": [
       {
         "origin": "https://ardownload2.adobe.com",
@@ -93,7 +93,7 @@
       }
     ],
     "autoUpdate": "vendor-managed",
-    "notes": "Review the enterprise offline installer and distribution requirements. Record the exact full-installer version and URL manually; do not infer a full installer from an MSP patch release. Adobe ARM remains enabled.",
+    "notes": "Adobe's enterprise download service reports the current Reader version. Discovery selects only the matching full x64 en-US installer on Adobe's distribution host and confirms it exists, never an MSP patch. Each tenant accepts Adobe's distribution agreement before deployment. Adobe ARM remains enabled.",
     "licenceAttestation": {
       "id": "adobe-acrobat-reader-distribution",
       "title": "Adobe Acrobat Reader Distribution License Agreement",
@@ -118,6 +118,7 @@
     "silentArgs": "/qn /norestart",
     "signaturePublishers": [],
     "allowUnsigned": true,
+    "unsignedExceptionReason": "Igor Pavlov publishes 7-Zip installers without Authenticode signatures. Releases come only from the publisher's official GitHub repository, are pinned to the GitHub asset SHA256, and must pass a clean Defender scan and the full lifecycle test.",
     "releaseSource": "https://api.github.com/repos/ip7z/7zip/releases/latest",
     "discovery": "github",
     "assetPattern": "^7z[0-9]+-x64\\.msi$",
@@ -128,7 +129,7 @@
       }
     ],
     "autoUpdate": "none",
-    "notes": "Publisher-linked official GitHub releases. Unsigned binaries require an explicit reviewed exception, exact hash, and clean malware evidence."
+    "notes": "Publisher-linked official GitHub releases. Unsigned binaries are accepted only under the reviewed exception above, with an exact hash and clean malware evidence."
   },
   {
     "id": "notepad-plus-plus",

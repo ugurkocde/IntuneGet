@@ -1,5 +1,5 @@
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
-import { normalizeQaWorkflowPackageInput, QA_PSADT_TOOLCHAIN, type QaWorkflowPackageInput } from '@/lib/qa/package-profile';
+import { compatiblePriorExecutionProfileReason, normalizeQaWorkflowPackageInput, type QaWorkflowPackageInput } from '@/lib/qa/package-profile';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import type { NormalizedInstaller } from '@/types/winget';
@@ -48,8 +48,12 @@ export function curatedWorkflowInput(item: Omit<Win32CartItem, 'id' | 'addedAt'>
 
 export function assertCuratedPackageProfile(app: CuratedAppDefinition, release: CuratedRelease, input?: QaWorkflowPackageInput): void {
   const expected = curatedWorkflowInput(buildCuratedCartItem(app, release));
-  const profile = normalizeQaWorkflowPackageInput(expected).identity.executionProfileSha256;
-  if (profile.toLowerCase() !== release.executionProfileSha256.toLowerCase() || release.evidence.qa.packagerCommit !== QA_PSADT_TOOLCHAIN.packagerCommit) {
+  const identity = normalizeQaWorkflowPackageInput(expected).identity;
+  const profile = identity.executionProfileSha256;
+  // Packager releases ship every few days. A release tested on an earlier
+  // packager stays deployable only while its exact profile is unchanged and no
+  // intervening packager release alters behavior that profile exercises.
+  if (compatiblePriorExecutionProfileReason(identity.canonicalJson, release.evidence.qa.packagerCommit, release.executionProfileSha256) !== null) {
     throw new CuratedCatalogError('This curated release needs verification with the current packaging configuration.');
   }
   if (input && normalizeQaWorkflowPackageInput({ ...input, packageDependencies: [] }).identity.executionProfileSha256 !== profile) {

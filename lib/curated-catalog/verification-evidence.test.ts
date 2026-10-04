@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authenticatedCatalogReviewer, releaseFromVerification, type VerificationReport } from './verification-evidence';
+import { AUTOMATED_APPROVER, automatedApprovalExceptions, releaseFromVerification, type VerificationReport } from './verification-evidence';
 import { createCuratedVerificationProfile } from './verification-profile';
 import { releaseFixture } from './test-fixtures';
 import { CURATED_APPS } from './definitions';
@@ -114,13 +114,23 @@ describe('authenticated curated evidence', () => {
     expect(() => releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException })).toThrow(/only when no earlier release/);
     expect(releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException: '  ' }).evidence.qa.upgrade).toBeUndefined();
   });
-  it('takes the approver from GitHub required-reviewer history', () => {
-    const environment = { can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', reviewer: { id: 7 } }] }] };
-    const reviews = [{ state: 'approved', environments: [{ name: 'curated-catalog-approval' }], user: { id: 7, type: 'User', login: 'unit-test-maintainer' } }];
-    expect(authenticatedCatalogReviewer(reviews, environment)).toBe('unit-test-maintainer');
-    expect(() => authenticatedCatalogReviewer(reviews, { ...environment, can_admins_bypass: true })).toThrow();
-    expect(() => authenticatedCatalogReviewer([{ ...reviews[0], user: { ...reviews[0].user, id: 8 } }], environment)).toThrow();
-    expect(() => authenticatedCatalogReviewer([{ ...reviews[0], user: { ...reviews[0].user, type: 'Bot' } }], environment)).toThrow();
-    expect(() => authenticatedCatalogReviewer([], environment)).toThrow();
+  it('approves automatically under fixed policy exceptions, never caller supplied ones', () => {
+    const f = skippedFixture();
+    const exceptions = automatedApprovalExceptions(CURATED_APPS[0], f.report);
+    expect(exceptions.unsignedException).toBeUndefined();
+    expect(exceptions.upgradeException).toMatch(/^Automated policy: Google Chrome/);
+    const release = releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, approvedBy: AUTOMATED_APPROVER, ...exceptions });
+    expect(release.approvedBy).toBe(AUTOMATED_APPROVER);
+    expect(release.approvedBy).not.toBe(release.preparedBy);
+    expect(release.evidence.qa.upgrade).toEqual({ tested: false, reason: exceptions.upgradeException });
+    expect(automatedApprovalExceptions(CURATED_APPS[0], fixture().report).upgradeException).toBeUndefined();
+  });
+  it('takes the unsigned exception only from the reviewed definition', () => {
+    const sevenZip = CURATED_APPS.find(app => app.id === '7zip')!;
+    const f = fixture(sevenZip);
+    const exceptions = automatedApprovalExceptions(sevenZip, f.report);
+    expect(exceptions.unsignedException).toBe(sevenZip.unsignedExceptionReason);
+    const release = releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, approvedBy: AUTOMATED_APPROVER, ...exceptions });
+    expect(release.evidence.signature.exceptionReason).toBe(sevenZip.unsignedExceptionReason);
   });
 });

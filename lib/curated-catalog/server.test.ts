@@ -6,7 +6,7 @@ import type { PackagingJob } from '@/lib/db/types';
 
 const state = vi.hoisted(() => ({ envelope: {} as Record<string, unknown> }));
 vi.mock('@/catalog/curated/catalog.json', () => ({ default: state.envelope }));
-import { assertCuratedWorkflow, getApprovedCuratedRelease, getCuratedLatestVersions,
+import { assertCuratedWorkflow, getApprovedCuratedRelease, getCuratedCatalog, getCuratedLatestVersions,
   reconcileCuratedCartItem, validateCuratedPackagingJob } from './server';
 
 describe('curated deployment authorization', () => {
@@ -68,6 +68,20 @@ describe('curated deployment authorization', () => {
     vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', JSON.stringify(fixture.keys));
     expect(getCuratedLatestVersions()).toEqual([]);
     expect(() => getApprovedCuratedRelease(CURATED_APPS[0].packageId)).toThrow(/withdrawn/);
+  });
+  it('withholds only a release whose packaging profile is no longer current', () => {
+    const stale = releaseFixture();
+    stale.executionProfileSha256 = 'c'.repeat(64);
+    stale.evidence.qa.executionProfileSha256 = stale.executionProfileSha256;
+    const current = releaseFixture(CURATED_APPS[1], '140.2.0');
+    const fixture = signedFixture([stale, current]);
+    Object.assign(state.envelope, fixture.envelope);
+    vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', JSON.stringify(fixture.keys));
+    const entries = getCuratedCatalog().entries;
+    expect(entries.find(entry => entry.app.id === CURATED_APPS[0].id)).toMatchObject({ status: 'pending', release: null });
+    expect(entries.find(entry => entry.app.id === CURATED_APPS[1].id)?.status).toBe('approved');
+    expect(getCuratedLatestVersions()).toEqual([{ winget_id: CURATED_APPS[1].packageId, latest_version: '140.2.0' }]);
+    expect(() => getApprovedCuratedRelease(CURATED_APPS[0].packageId)).toThrow(/awaiting verification/);
   });
   it('leaves ordinary packaging jobs untouched', () => {
     expect(() => validateCuratedPackagingJob({ winget_id: 'Google.Chrome', package_config: {} } as PackagingJob)).not.toThrow();

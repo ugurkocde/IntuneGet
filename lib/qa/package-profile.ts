@@ -1131,6 +1131,32 @@ export function validateCompatiblePassedCatalogQaProfile(
   return validation;
 }
 
+/**
+ * A curated release binds the execution profile hash it was tested with. That
+ * hash includes the packager commit, so a later unrelated packager release
+ * must not strand it. The prior profile is the current one with only the
+ * packager commit swapped back; it must hash to the tested value and no
+ * intervening release may change behavior that profile exercises.
+ */
+export function compatiblePriorExecutionProfileReason(
+  currentCanonicalJson: string,
+  priorPackagerCommit: string,
+  priorExecutionProfileSha256: string
+): string | null {
+  let current: Record<string, unknown> | null = null;
+  try { current = record(JSON.parse(currentCanonicalJson)); } catch { current = null; }
+  const toolchain = record(current?.toolchain);
+  if (!current || !toolchain || textValue(toolchain.packagerCommit) !== QA_PSADT_TOOLCHAIN.packagerCommit) {
+    return 'compatible-profile-invalid';
+  }
+  const prior = { ...current, toolchain: { ...toolchain, packagerCommit: priorPackagerCommit } };
+  if (qaSha256(canonicalQaJson(prior)).toLowerCase() !== priorExecutionProfileSha256.toLowerCase()) {
+    return 'compatible-execution-profile-changed';
+  }
+  if (priorPackagerCommit === QA_PSADT_TOOLCHAIN.packagerCommit) return null;
+  return passingProfileCompatibilityReason(priorPackagerCommit, prior);
+}
+
 export function validateCompatiblePassedDeploymentQaProfile(input: {
   prior: QaPackageProfileValidationInput;
   currentCanonicalJson: string;

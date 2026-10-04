@@ -1,0 +1,82 @@
+name: Curated catalog automation
+run-name: Curated catalog automation${{ inputs.withdraw_release_id && format(' - withdraw {0}', inputs.withdraw_release_id) || '' }}
+
+# Every 30 minutes: read publisher release metadata, dispatch isolated VM
+# verification for new releases, then sign passing releases into the catalog
+# and publish it through an auto-merging PR. No step needs manual approval.
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      withdraw_release_id:
+        description: Optional emergency withdrawal of an approved release ID
+        required: false
+        type: string
+      withdraw_reason:
+        description: Reason for the withdrawal (at least 20 characters)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curated-catalog-automation
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      approvals: ${{ steps.plan.outputs.approvals }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/build-curated-runtime.mjs
+      - name: Discover releases, dispatch verification and select passing runs
+        id: plan
+        env:
+          # Reads and dispatches the private QA verification workflow, and keeps
+          # the alert issue there current. The workflow token only authenticates
+          # public GitHub release metadata reads.
+          GH_TOKEN: ${{ secrets.PAT }}
+          GITHUB_TOKEN: ${{ github.token }}
+          CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
+          CURATED_SYNC_ISSUE: 'true'
+        run: node scripts/curated-automation.mjs plan
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    # Holds the signing key. Restricted to protected branches; no reviewer gate.
+    environment: curated-catalog-approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26.5.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/build-curated-runtime.mjs
+      - name: Re-authenticate evidence, sign and open the auto-merging catalog PR
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          CURATED_CATALOG_SIGNING_KEY: ${{ secrets.CURATED_CATALOG_SIGNING_KEY }}
+          CURATED_APPROVALS: ${{ needs.plan.outputs.approvals }}
+          CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
+          CURATED_WITHDRAW_REASON: ${{ inputs.withdraw_reason }}
+        run: node scripts/curated-automation.mjs publish

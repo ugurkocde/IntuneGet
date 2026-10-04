@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CURATED_APPS } from './definitions';
-import { candidateFromMetadata, discoverCandidate, vendorSha256FromChecksums } from './discovery.mjs';
+import { candidateFromMetadata, discoverCandidate, discoverPreviousCandidate, vendorSha256FromChecksums } from './discovery.mjs';
 
 const app = (id: string) => CURATED_APPS.find(app => app.id === id)!;
 const pin = (char: string) => char.repeat(64);
@@ -134,9 +134,49 @@ describe('vendor metadata discovery', () => {
     const fetcher = vi.fn(async () => new Response('a'.repeat(2 * 1024 * 1024 + 1), { headers: { 'content-type': 'text/plain' } }));
     await expect(discoverCandidate(app('chrome'), fetcher)).rejects.toThrow(/limit/);
   });
-  it('leaves full Adobe installer selection to an explicit source review', async () => {
+  it('selects the full Adobe x64 installer for the reported version and confirms it exists without downloading it', async () => {
+    const installer = 'https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600221931/AcroRdrDCx642600221931_en_US.exe';
+    const head = vi.fn(() => new Response(null, { status: 200 }));
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === app('acrobat-reader').releaseSource) return text(JSON.stringify({ products: { reader: [{ version: '26.002.21931' }] } }), 'application/json');
+      if (url === installer && init?.method === 'HEAD') return head();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    const result = await discoverCandidate(app('acrobat-reader'), fetcher);
+    expect(result.state === 'candidate' && result.candidate.installerUrl).toBe(installer);
+    expect(head).toHaveBeenCalledOnce();
+    head.mockReturnValueOnce(new Response(null, { status: 404 }));
+    await expect(discoverCandidate(app('acrobat-reader'), fetcher)).rejects.toThrow(/no full installer/);
+  });
+  it('rejects ambiguous Adobe release metadata', () => {
+    expect(() => candidateFromMetadata(app('acrobat-reader'), JSON.stringify({ products: { reader: [{ version: '26.002.21931' }, { version: '26.002.21932' }] } }))).toThrow(/exactly one/);
+    expect(() => candidateFromMetadata(app('acrobat-reader'), JSON.stringify({ products: { reader: [] } }))).toThrow(/exactly one/);
+  });
+  it('finds the newest earlier stable GitHub release for the upgrade test', async () => {
+    const release = (tag: string, extra: Record<string, unknown> = {}) => ({ tag_name: tag, draft: false, prerelease: false, html_url: `https://github.com/ip7z/7zip/releases/tag/${tag}`,
+      assets: [{ name: `7z${tag.replace('.', '')}-x64.msi`, browser_download_url: `https://github.com/ip7z/7zip/releases/download/${tag}/7z${tag.replace('.', '')}-x64.msi`, digest: `sha256:${pin(tag.at(-1)!)}` }], ...extra });
+    const fetcher = routed({ 'https://api.github.com/repos/ip7z/7zip/releases?per_page=10': () => text(JSON.stringify([
+      release('26.04', { prerelease: true }), release('26.03'), release('26.01'), release('26.02'),
+    ]), 'application/json') });
+    const current = candidateFromMetadata(app('7zip'), JSON.stringify(release('26.03')));
+    const previous = await discoverPreviousCandidate(app('7zip'), current, fetcher);
+    expect(previous?.version).toBe('26.02');
+    expect(previous?.vendorSha256).toBe(pin('2'));
+  });
+  it('steps PuTTY back one minor version in the official archive', async () => {
+    const fetcher = routed({
+      'https://the.earth.li/~sgtatham/putty/0.84/w64/': () => new Response('<h1>Index of /~sgtatham/putty/0.84/w64</h1><a href="putty-64bit-0.84-installer.msi">MSI</a>', { headers: { 'content-type': 'text/html' } }),
+      'https://the.earth.li/~sgtatham/putty/0.84/sha256sums': () => text(`${pin('4')}  w64/putty-64bit-0.84-installer.msi\n`, null),
+    });
+    const current = candidateFromMetadata(app('putty'), '<a href="https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi">x64</a>');
+    const previous = await discoverPreviousCandidate(app('putty'), current, fetcher);
+    expect(previous?.version).toBe('0.84');
+    expect(previous?.vendorSha256).toBe(pin('4'));
+  });
+  it('offers no earlier installer for sources without immutable history', async () => {
     const fetcher = vi.fn();
-    expect((await discoverCandidate(app('acrobat-reader'), fetcher)).state).toBe('manual');
+    const current = candidateFromMetadata(app('firefox-esr'), JSON.stringify({ FIREFOX_ESR: '140.2.0esr' }));
+    expect(await discoverPreviousCandidate(app('firefox-esr'), current, fetcher)).toBeNull();
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

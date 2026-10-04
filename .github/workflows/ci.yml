@@ -65,7 +65,7 @@ jobs:
         run: |
           npm run curated:validate
           node scripts/build-curated-runtime.mjs
-          node --check scripts/curated-approval.mjs
+          node --check scripts/curated-automation.mjs
 
       - name: Build packager
         working-directory: packager

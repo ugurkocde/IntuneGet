@@ -4,3 +4,4 @@ export function candidateFromMetadata(app: CuratedAppDefinition, text: string, n
 export function discoverCandidate(app: CuratedAppDefinition, fetcher?: typeof fetch, now?: Date): Promise<
   { appId: string; state: 'manual'; releaseSource: string } | { appId: string; state: 'candidate'; candidate: CuratedCandidate }
 >;
+export function discoverPreviousCandidate(app: CuratedAppDefinition, current: CuratedCandidate, fetcher?: typeof fetch, now?: Date): Promise<CuratedCandidate | null>;

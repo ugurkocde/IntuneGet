@@ -1,15 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import bootstrap from '@/catalog/curated/catalog.json';
+import committed from '@/catalog/curated/catalog.json';
+import committedKeys from '@/catalog/curated/trusted-keys.json';
 import { CURATED_APPS } from './definitions';
 import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVersions,
-  createCandidate, signCatalog, validateDefinitions, validateRelease, verifyCatalog } from './core.mjs';
+  createCandidate, signCatalog, validateDefinitions, validateRelease, verifyCatalog, verifyCatalogSignature } from './core.mjs';
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
-  it('starts with exactly ten pending applications and no release authority', () => {
+  it('defines ten applications and commits only a catalog signed by a committed trust key', () => {
     expect(validateDefinitions(CURATED_APPS)).toHaveLength(10);
-    const payload = verifyCatalog(bootstrap, CURATED_APPS, {});
-    expect(catalogEntries(CURATED_APPS, payload).every(entry => entry.status === 'pending' && !entry.release)).toBe(true);
+    // The automation re-signs after definition changes and before expiry, so
+    // only the signer is checked here; deployment checks expiry and digest.
+    const payload = verifyCatalogSignature(committed, committedKeys);
+    if (committed.signature === null) expect(payload.releases).toHaveLength(0);
+    else expect(() => verifyCatalogSignature(committed, {})).toThrow(/not trusted/);
+  });
+  it('authenticates the signer for re-signing without checking expiry or the definitions digest', () => {
+    const { envelope, keys } = signedFixture();
+    const changed = CURATED_APPS.map(app => ({ ...app, notes: `${app.notes} Changed.` }));
+    expect(() => verifyCatalog(envelope, changed, keys)).toThrow(/definitions/);
+    expect(verifyCatalogSignature(envelope, keys).releases).toHaveLength(1);
+    expect(() => verifyCatalogSignature({ ...envelope, payload: { ...envelope.payload, withdrawnReleaseIds: ['x'] } }, keys)).toThrow(/signature is invalid/);
+    expect(() => verifyCatalogSignature(envelope, {})).toThrow(/not trusted/);
+  });
+  it('requires a reviewed unsigned exception reason exactly when unsigned installers are allowed', () => {
+    const sevenZip = CURATED_APPS.find(app => app.id === '7zip')!;
+    const { unsignedExceptionReason, ...withoutReason } = sevenZip;
+    expect(unsignedExceptionReason!.length).toBeGreaterThanOrEqual(20);
+    expect(() => validateDefinitions([withoutReason])).toThrow(/unsigned/);
+    expect(() => validateDefinitions([{ ...CURATED_APPS[0], unsignedExceptionReason: 'Not allowed for signed apps.' }])).toThrow(/unsigned/);
   });
   it('accepts an independently signed catalog with complete evidence', () => {
     const { envelope, keys } = signedFixture();

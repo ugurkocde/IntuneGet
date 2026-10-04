@@ -15,10 +15,13 @@ export function getCuratedCatalog(): { payload: CuratedCatalogEnvelope['payload'
   try { trustedKeys = JSON.parse(process.env.CURATED_CATALOG_PUBLIC_KEYS || '{}'); }
   catch { throw new CuratedCatalogError('The curated catalog trust configuration is invalid.'); }
   const payload = verifyCatalog(envelope, CURATED_APPS, { ...committedKeys, ...trustedKeys });
-  const entries = catalogEntries(CURATED_APPS, payload);
-  for (const entry of entries) {
-    if (entry.release) assertCuratedPackageProfile(entry.app, entry.release);
-  }
+  // A release whose packaging profile is no longer current is withheld until
+  // the automation verifies it again; other apps stay deployable meanwhile.
+  const entries = catalogEntries(CURATED_APPS, payload).map(entry => {
+    if (!entry.release) return entry;
+    try { assertCuratedPackageProfile(entry.app, entry.release); return entry; }
+    catch { return { ...entry, status: 'pending' as const, release: null }; }
+  });
   return { payload, entries };
 }
 

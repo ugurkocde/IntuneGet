@@ -1,9 +1,12 @@
 import { createCuratedVerificationProfile, CURATED_APPS } from './verification-profile';
 import { CuratedCatalogError, validateCandidate, validateRelease } from './core.mjs';
-import type { CuratedCandidate, CuratedRelease } from './types';
+import { compatiblePriorExecutionProfileReason, qaSha256 } from '@/lib/qa/package-profile';
+import type { CuratedAppDefinition, CuratedCandidate, CuratedRelease } from './types';
 
 const REPOSITORY = 'ugurkocde/IntuneGet-Workflows';
 const WORKFLOW = '.github/workflows/curated-catalog-verification.yml';
+/** The approval identity recorded on every release signed by the automation. */
+export const AUTOMATED_APPROVER = 'github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml';
 export interface VerificationRun {
   id: number; run_attempt: number; repository: { full_name: string };
   path: string; event: string; status: string; conclusion: string;
@@ -75,8 +78,13 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
   }
   const measured = report.inspection.current.installerSha256;
   const profile = createCuratedVerificationProfile(report.candidate, measured);
-  requireValue(report.profile.executionProfileSha256 === profile.executionProfileSha256 && report.profile.packageProfileCanonicalJson === profile.packageProfileCanonicalJson &&
-    report.qa.executionProfileSha256 === profile.executionProfileSha256 && report.qa.candidateId === report.candidate.id &&
+  // The run may have used an earlier packager release than the one current at
+  // approval. Its exact tested profile must still be compatible.
+  const tested = report.qa.executionProfileSha256;
+  requireValue(typeof tested === 'string' && report.profile.executionProfileSha256 === tested &&
+    qaSha256(report.profile.packageProfileCanonicalJson).toLowerCase() === tested.toLowerCase() &&
+    compatiblePriorExecutionProfileReason(profile.packageProfileCanonicalJson, report.qa.packagerCommit, tested) === null &&
+    report.qa.candidateId === report.candidate.id &&
     report.qa.installerSha256 === measured && (previous === null || (report.qa.previousInstallerSha256 === report.inspection.previous?.installerSha256 &&
     report.qa.upgradeFromVersion === previous.version)) && report.qa.installerVersion === report.candidate.version && report.qa.architecture === app.architecture, 'QA did not exercise the current production profile and every exact installer.');
   const reportUrl = `https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/${app.id}/${report.candidate.id}.json`;
@@ -87,7 +95,7 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
   }
   const release: CuratedRelease = {
     id: `${app.id}:${report.candidate.id}`, candidate: report.candidate, installerSha256: measured,
-    executionProfileSha256: profile.executionProfileSha256,
+    executionProfileSha256: tested,
     preparedBy: `github-actions:${REPOSITORY}/${WORKFLOW}`, approvedBy: context.approvedBy, approvedAt: context.approvedAt,
     evidence: {
       verifiedAt: report.verifiedAt, installerSha256: measured, installerVersion: report.qa.installerVersion, architecture: app.architecture,
@@ -102,13 +110,16 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
   return release;
 }
 
-export function authenticatedCatalogReviewer(reviews: Array<{ state: string; environments: Array<{ name: string }>; user: { id: number; login: string; type: string } }>,
-  environment: { can_admins_bypass: boolean; protection_rules: Array<{ type: string; reviewers?: Array<{ type: string; reviewer: { id: number } }> }> }) {
-  const required = environment.protection_rules.find(rule => rule.type === 'required_reviewers');
-  requireValue(environment.can_admins_bypass === false && required?.reviewers?.length, 'Signing requires an environment with required reviewers and no administrator bypass.');
-  const approved = [...reviews].reverse().find(review => review.state === 'approved' &&
-    review.environments.some(env => env.name === 'curated-catalog-approval') && review.user.type === 'User' &&
-    required?.reviewers?.some(reviewer => reviewer.type === 'User' && reviewer.reviewer.id === review.user.id));
-  requireValue(approved, 'A real required maintainer must approve the signing environment.');
-  return approved!.user.login;
+/**
+ * Automated approval policy. Every evidence check in releaseFromVerification
+ * still applies; the exceptions that a maintainer used to type are instead
+ * fixed by reviewed code and definitions, so they are identical every time.
+ */
+export function automatedApprovalExceptions(app: CuratedAppDefinition, report: Pick<VerificationReport, 'previous' | 'inspection'>) {
+  return {
+    unsignedException: report.inspection.current.signature.status === 'unsigned' ? app.unsignedExceptionReason : undefined,
+    upgradeException: report.previous === null
+      ? `Automated policy: ${app.name} is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested.`
+      : undefined,
+  };
 }
