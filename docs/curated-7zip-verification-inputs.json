@@ -1,5 +1,0 @@
-{
-  "app_label": "7-Zip 26.03 x64",
-  "candidate": "{\"appId\":\"7zip\",\"version\":\"26.03\",\"installerUrl\":\"https://github.com/ip7z/7zip/releases/download/26.03/7z2603-x64.msi\",\"vendorSha256\":\"c0680064d698a62dd4a5a47f403db356a6531a5473e4c4b1d090ea2590513926\",\"releaseNotesUrl\":\"https://github.com/ip7z/7zip/releases/tag/26.03\",\"discoveredAt\":\"2026-10-03T18:17:16.236Z\",\"id\":\"e680ec0f39b4c2636f83a241\"}",
-  "previous": "{\"appId\":\"7zip\",\"version\":\"26.02\",\"installerUrl\":\"https://github.com/ip7z/7zip/releases/download/26.02/7z2602-x64.msi\",\"vendorSha256\":\"db407a4f6d4999e5c7bc00ce8a882be94717b56e7fa68140fe3f12605d91643e\",\"releaseNotesUrl\":\"https://github.com/ip7z/7zip/releases/tag/26.02\",\"discoveredAt\":\"2026-10-03T18:17:16.238Z\",\"id\":\"c358844d3557941b328ee93b\"}"
-}
