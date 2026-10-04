@@ -81,6 +81,22 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it('sends the exact Wacom driver registration to the shared customer packager', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const uninstallCommand = 'REGISTRY_UNINSTALL_KEY:Wacom Tablet Driver:Wacom Tablet';
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Wacom.WacomTabletDriver', displayName: 'Wacom Tablet', publisher: 'Wacom',
+      version: '6.4.14-1', architecture: 'x64', sourceType: 'winget',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/s', uninstallCommand,
+      installerSha256: '9DDB4C8FB467B1C9A9B9377F7FCD7ED481550D6F43BB9EA62E4724089EEECD63',
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe(uninstallCommand);
+    expect(payload.client_payload.installer.sha256).toBe('9DDB4C8FB467B1C9A9B9377F7FCD7ED481550D6F43BB9EA62E4724089EEECD63');
+    expect(payload.client_payload.installer.silentSwitches).toBe('/s');
+  });
+
   it('dispatches Bandizip customer packages with the same silent removal as QA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

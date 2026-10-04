@@ -282,6 +282,42 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager)('adds Wacom silent removal only to its exact registered driver command', () => {
+    const generated = generateRegistryUninstallPackage(
+      'exe', 'Wacom Tablet', [1, 2], {}, [], 'Wacom.WacomTabletDriver',
+      'Wacom Tablet', '6.4.14-1',
+      'REGISTRY_UNINSTALL_KEY:Wacom Tablet Driver:Wacom Tablet', '/s'
+    );
+    const start = generated.indexOf('        $wacomRemover =');
+    const end = generated.indexOf('        $autodeskOdisInstaller =', start);
+    expect(start).toBeGreaterThan(0);
+    const adapter = generated.slice(start, end);
+    const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+function Test-Adapter($key, $path, $arguments) {
+  $registeredUninstallRegistryKey = $key
+  $registeredUninstallFile = $path
+  $registeredArgumentText = $arguments
+  $additionalUninstallArguments = @()
+  ${adapter}
+  return @($additionalUninstallArguments)
+}
+$path = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tablet\\Wacom\\32\\Remove.exe'
+[ordered]@{
+  Exact = @(Test-Adapter 'Wacom Tablet Driver' $path '/u')
+  AlreadySilent = @(Test-Adapter 'Wacom Tablet Driver' $path '/u /s')
+  OtherKey = @(Test-Adapter 'Other Driver' $path '/u')
+  OtherPath = @(Test-Adapter 'Wacom Tablet Driver' 'C:\\Other\\Remove.exe' '/u')
+  Install = @(Test-Adapter 'Wacom Tablet Driver' $path '/s')
+  PartialSwitch = @(Test-Adapter 'Wacom Tablet Driver' $path '/update')
+} | ConvertTo-Json -Compress
+`], { encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual({
+      Exact: ['/s'], AlreadySilent: [], OtherKey: [], OtherPath: [], Install: [], PartialSwitch: [],
+    });
+    expect(generated).toContain('The vendor uninstall command did not remove registration');
+  });
+
   it.runIf(canRunWindowsPowerShellPackager)('generates Product Portal unattended removal with exact registration verification', () => {
     const generated = generateRegistryUninstallPackage(
       'exe', 'Product Portal', [],

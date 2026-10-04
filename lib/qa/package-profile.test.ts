@@ -35,6 +35,22 @@ const input = {
 };
 
 describe('PSADT QA package identity', () => {
+  it('preserves the exact failed Wacom driver identity for the shared registered-command adapter', () => {
+    const normalized = normalizeQaWorkflowPackageInput({
+      wingetId: 'Wacom.WacomTabletDriver', displayName: 'Wacom Tablet', publisher: 'Wacom',
+      version: '6.4.14-1', architecture: 'x64',
+      installerSha256: '9DDB4C8FB467B1C9A9B9377F7FCD7ED481550D6F43BB9EA62E4724089EEECD63',
+      installerType: 'exe', installScope: 'machine', silentSwitches: '/s',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Wacom Tablet Driver:Wacom Tablet',
+      detectionRules: '[]', psadtConfig: JSON.stringify({ detectionRules: [] }),
+    });
+    expect(normalized.identity.profile.installer).toMatchObject({
+      sourceType: 'exe', installScope: 'machine', silentArgs: '/s',
+      uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Wacom Tablet Driver:Wacom Tablet',
+      sha256: '9DDB4C8FB467B1C9A9B9377F7FCD7ED481550D6F43BB9EA62E4724089EEECD63',
+    });
+  });
+
   it('normalizes the failed Bandizip tuple with shared silent removal', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Bandisoft.Bandizip', displayName: 'Bandizip', publisher: 'Bandisoft',
