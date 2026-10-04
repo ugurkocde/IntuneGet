@@ -50,6 +50,11 @@
     "allowUnsigned": false,
     "releaseSource": "https://product-details.mozilla.org/1.0/firefox_versions.json",
     "discovery": "firefox",
+    "checksumSource": {
+      "urlTemplate": "https://archive.mozilla.org/pub/firefox/releases/{version}esr/SHA256SUMS",
+      "entryTemplate": "win64/en-US/Firefox Setup {version}esr.msi",
+      "format": "sha256sums"
+    },
     "allowedInstallerSources": [
       {
         "origin": "https://archive.mozilla.org",
@@ -233,6 +238,12 @@
     "allowUnsigned": false,
     "releaseSource": "https://update.videolan.org/vlc/status-win-x64",
     "discovery": "vlc",
+    "checksumSource": {
+      "urlTemplate": "https://downloads.videolan.org/pub/videolan/vlc/{version}/win64/vlc-{version}-win64.exe.sha256",
+      "entryTemplate": "vlc-{version}-win64.exe",
+      "format": "sha256sums"
+    },
+    "installerRedirectPolicy": "any-https-mirror-with-pinned-sha256",
     "allowedInstallerSources": [
       {
         "origin": "https://downloads.videolan.org",
@@ -240,7 +251,7 @@
       }
     ],
     "autoUpdate": "vendor-managed",
-    "notes": "Use the official archive instead of automatically following third-party download mirrors. The application's update notifications remain enabled."
+    "notes": "Starts from the official archive. VideoLAN may redirect the download to any HTTPS mirror; that is accepted automatically because discovery pins the publisher SHA256 from the .sha256 file beside the installer and every download must match it. The application's update notifications remain enabled."
   },
   {
     "id": "winscp",
@@ -252,7 +263,7 @@
     "channel": "Stable",
     "category": "utilities",
     "homepage": "https://winscp.net/",
-    "architecture": "x64",
+    "architecture": "x86",
     "scope": "machine",
     "locale": "neutral",
     "installerType": "inno",
@@ -263,6 +274,11 @@
     "allowUnsigned": false,
     "releaseSource": "https://winscp.net/eng/updates.php",
     "discovery": "winscp",
+    "checksumSource": {
+      "urlTemplate": "https://winscp.net/download/WinSCP-{version}-ReadMe.txt",
+      "entryTemplate": "WinSCP-{version}-Setup.exe",
+      "format": "winscp-readme"
+    },
     "allowedInstallerSources": [
       {
         "origin": "https://downloads.sourceforge.net",
@@ -270,7 +286,7 @@
       }
     ],
     "autoUpdate": "vendor-managed",
-    "notes": "Publisher-linked SourceForge project and all-users setup. Verify final redirect provenance, payload architecture, signature, and hash in the isolated verifier; the vendor setup may contain multiple architectures. Update notifications remain enabled."
+    "notes": "Publisher-linked SourceForge project and all-users setup. The setup is a 32-bit (x86) installer that installs to Program Files (x86); the stable release has no x64 build. Discovery pins the publisher SHA256 from the official release ReadMe on winscp.net. Verify final redirect provenance, signature, and hash in the isolated verifier. Update notifications remain enabled."
   },
   {
     "id": "putty",
@@ -293,6 +309,11 @@
     "allowUnsigned": false,
     "releaseSource": "https://the.earth.li/~sgtatham/putty/latest/w64/",
     "discovery": "putty",
+    "checksumSource": {
+      "urlTemplate": "https://the.earth.li/~sgtatham/putty/{version}/sha256sums",
+      "entryTemplate": "w64/putty-64bit-{version}-installer.msi",
+      "format": "sha256sums"
+    },
     "allowedInstallerSources": [
       {
         "origin": "https://the.earth.li",

@@ -18,7 +18,7 @@ function fixture(app = CURATED_APPS[0]) {
     provenance: { repository: run.repository.full_name, workflowPath: run.path, workflowCommit: run.head_sha, websiteCommit: '2'.repeat(40), runId: '123', runAttempt: '1' },
     candidate: release.candidate, previous: previous.candidate, inspection: { current: inspection(release), previous: inspection(previous) },
     profile: createCuratedVerificationProfile(release.candidate, release.installerSha256),
-    qa: { ...release.evidence.qa, candidateId: release.candidate.id, installerVersion: release.candidate.version, architecture: 'x64', upgradeFromVersion: previous.candidate.version, previousInstallerSha256: previous.installerSha256 },
+    qa: { ...release.evidence.qa, candidateId: release.candidate.id, installerVersion: release.candidate.version, architecture: app.architecture, upgradeFromVersion: previous.candidate.version, previousInstallerSha256: previous.installerSha256 },
   };
   const context = { websiteCommit: '2'.repeat(40), artifactSha256: 'b'.repeat(64), approvedBy: 'unit-test-maintainer', approvedAt: release.approvedAt };
   return { report, run, artifact, context };
@@ -52,6 +52,12 @@ describe('authenticated curated evidence', () => {
     const f = fixture(CURATED_APPS.find(app => app.id === '7zip')!);
     expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow(/exception/);
     expect(releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, unsignedException: 'Unit test explanation for a reviewed unsigned vendor installer.' }).evidence.signature.status).toBe('unsigned');
+  });
+  it('binds QA architecture to the reviewed x86 WinSCP definition', () => {
+    const f = fixture(CURATED_APPS.find(app => app.id === 'winscp')!);
+    expect(releaseFromVerification(f.report, f.run, f.artifact, f.context).evidence.architecture).toBe('x86');
+    f.report.qa.architecture = 'x64';
+    expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow(/production profile/);
   });
   it('takes the approver from GitHub required-reviewer history', () => {
     const environment = { can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', reviewer: { id: 7 } }] }] };

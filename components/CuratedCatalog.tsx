@@ -48,7 +48,7 @@ export function CuratedCatalog() {
           <h1 className="text-display-sm text-text-primary"><T>IntuneGet Curated Catalog</T></h1>
         </div>
         <p className="mt-3 max-w-3xl text-text-secondary"><T>Selected applications with reviewed publisher sources and tested deployment configurations. Each release becomes available after verification and approval.</T></p>
-        <p className="mt-3 text-sm text-text-secondary">{approvedCount} <T>approved</T> · {data?.entries.length || 10} <T>pilot applications</T> · <T>Windows x64, machine installation</T></p>
+        <p className="mt-3 text-sm text-text-secondary">{approvedCount} <T>approved</T> · {data?.entries.length || 10} <T>pilot applications</T> · <T>64-bit Windows, machine installation</T></p>
       </section>
       <label className="block">
         <span className="sr-only"><T>Search curated applications</T></span>

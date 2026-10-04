@@ -58,7 +58,7 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
   requireValue(report.profile.executionProfileSha256 === profile.executionProfileSha256 && report.profile.packageProfileCanonicalJson === profile.packageProfileCanonicalJson &&
     report.qa.executionProfileSha256 === profile.executionProfileSha256 && report.qa.candidateId === report.candidate.id &&
     report.qa.installerSha256 === measured && report.qa.previousInstallerSha256 === report.inspection.previous.installerSha256 &&
-    report.qa.upgradeFromVersion === report.previous.version && report.qa.installerVersion === report.candidate.version && report.qa.architecture === 'x64', 'QA did not exercise the current production profile and both exact installers.');
+    report.qa.upgradeFromVersion === report.previous.version && report.qa.installerVersion === report.candidate.version && report.qa.architecture === app.architecture, 'QA did not exercise the current production profile and both exact installers.');
   const reportUrl = `https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/${app.id}/${report.candidate.id}.json`;
   const signature = { ...report.inspection.current.signature };
   if (signature.status === 'unsigned') {
@@ -70,7 +70,7 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
     executionProfileSha256: profile.executionProfileSha256,
     preparedBy: `github-actions:${REPOSITORY}/${WORKFLOW}`, approvedBy: context.approvedBy, approvedAt: context.approvedAt,
     evidence: {
-      verifiedAt: report.verifiedAt, installerSha256: measured, installerVersion: report.qa.installerVersion, architecture: 'x64',
+      verifiedAt: report.verifiedAt, installerSha256: measured, installerVersion: report.qa.installerVersion, architecture: app.architecture,
       sourceReviewedBy: context.approvedBy, sourceReportUrl: reportUrl, signature,
       provenance: { repository: REPOSITORY, workflowPath: WORKFLOW, workflowCommit: run.head_sha, websiteCommit: context.websiteCommit,
         runId: String(run.id), runAttempt: run.run_attempt, artifactId: String(artifact.id), artifactSha256: context.artifactSha256 },

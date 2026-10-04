@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CURATED_APPS } from './definitions';
-import { candidateFromMetadata, discoverCandidate } from './discovery.mjs';
+import { candidateFromMetadata, discoverCandidate, vendorSha256FromChecksums } from './discovery.mjs';
 
 const app = (id: string) => CURATED_APPS.find(app => app.id === id)!;
+const pin = (char: string) => char.repeat(64);
+const text = (body: string, contentType: string | null = 'text/plain') => new Response(body, { headers: contentType ? { 'content-type': contentType } : {} });
+// Routes synthetic vendor responses by exact URL; any other request fails the test.
+const routed = (routes: Record<string, () => Response>) => vi.fn(async (url: string) => {
+  if (!routes[url]) throw new Error(`Unexpected request ${url}`);
+  return routes[url]();
+});
+const VLC_SUMS = 'https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe.sha256';
 describe('vendor metadata discovery', () => {
   it('selects the Firefox ESR x64 MSI independently of Winget', () => {
     const candidate = candidateFromMetadata(app('firefox-esr'), JSON.stringify({ FIREFOX_ESR: '140.2.0esr', LATEST_FIREFOX_VERSION: '999.0' }));
@@ -21,11 +29,16 @@ describe('vendor metadata discovery', () => {
   it('discovers PuTTY from the official archive using only one constrained metadata redirect', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: '/~sgtatham/putty/0.85/w64/' } }))
-      .mockResolvedValueOnce(new Response('<h1>Index of /~sgtatham/putty/0.85/w64</h1><a href="putty-64bit-0.85-installer.msi">MSI</a>', { headers: { 'content-type': 'text/html' } }));
+      .mockResolvedValueOnce(new Response('<h1>Index of /~sgtatham/putty/0.85/w64</h1><a href="putty-64bit-0.85-installer.msi">MSI</a>', { headers: { 'content-type': 'text/html' } }))
+      .mockResolvedValueOnce(text(`${pin('1')}  w32/putty-0.85-installer.msi\n${pin('2')}  w64/putty-64bit-0.85-installer.msi\n`, null));
     const result = await discoverCandidate(app('putty'), fetcher);
     expect(result.state).toBe('candidate');
-    if (result.state === 'candidate') expect(result.candidate.installerUrl).toBe('https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi');
+    if (result.state === 'candidate') {
+      expect(result.candidate.installerUrl).toBe('https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi');
+      expect(result.candidate.vendorSha256).toBe(pin('2'));
+    }
     expect(fetcher.mock.calls[1][0]).toBe('https://the.earth.li/~sgtatham/putty/0.85/w64/');
+    expect(fetcher.mock.calls[2]).toEqual(['https://the.earth.li/~sgtatham/putty/0.85/sha256sums', expect.objectContaining({ redirect: 'error' })]);
     expect(fetcher.mock.calls.every(call => !String(call[0]).endsWith('.msi'))).toBe(true);
   });
   it('rejects archive redirects to an installer or another host', async () => {
@@ -45,8 +58,39 @@ describe('vendor metadata discovery', () => {
   });
   it('parses WinSCP and VLC text feeds', () => {
     expect(candidateFromMetadata(app('winscp'), 'version=6.5.7.0\n').version).toBe('6.5.7');
-    expect(candidateFromMetadata(app('vlc'), '3.0.24\nhttp://ignored-mirror.test/vlc.exe').installerUrl)
-      .toBe('https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe');
+    const vlc = candidateFromMetadata(app('vlc'), '3.0.24\nhttp://ignored-mirror.test/vlc.exe', new Date(), `${pin('C')}  vlc-3.0.24-win64.exe\n`);
+    expect(vlc.installerUrl).toBe('https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe');
+    expect(vlc.vendorSha256).toBe(pin('c'));
+    expect(() => candidateFromMetadata(app('vlc'), '3.0.24\n')).toThrow(/SHA256 pin/);
+  });
+  it('reads only the publisher SHA256 line for the exact candidate installer', () => {
+    const firefox = 'https://archive.mozilla.org/pub/firefox/releases/140.17.0esr/win64/en-US/Firefox%20Setup%20140.17.0esr.msi';
+    const sums = `${pin('1')}  win64/en-US/Firefox Setup 140.17.0esr.exe\n${pin('2')}  win64/en-US/Firefox Setup 140.17.0esr.msi\n${pin('3')}  win64/de/Firefox Setup 140.17.0esr.msi\n`;
+    expect(vendorSha256FromChecksums(app('firefox-esr'), firefox, '140.17.0', sums)).toBe(pin('2'));
+    expect(() => vendorSha256FromChecksums(app('firefox-esr'), firefox, '140.17.0', sums.replace('140.17.0esr.msi', '140.16.0esr.msi'))).toThrow(/found 0/);
+    expect(() => vendorSha256FromChecksums(app('firefox-esr'), firefox, '140.17.0', `${sums}${pin('4')}  win64/en-US/Firefox Setup 140.17.0esr.msi\n`)).toThrow(/found 2/);
+    expect(() => vendorSha256FromChecksums(app('firefox-esr'), firefox, '140.16.0', sums)).toThrow(/does not name the candidate/);
+    const readMe = `WinSCP-6.5.7-Setup.exe\n - MD5: ${'d'.repeat(32)}\n - SHA-256: ${pin('A')}\n - Installation package\n\nWinSCP-6.5.7-Portable.zip\n - SHA-256: ${pin('b')}\n`;
+    const winscp = 'https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe';
+    expect(vendorSha256FromChecksums(app('winscp'), winscp, '6.5.7', readMe)).toBe(pin('a'));
+    expect(() => vendorSha256FromChecksums(app('winscp'), winscp, '6.5.7', readMe.replace('WinSCP-6.5.7-Setup.exe', 'WinSCP-6.5.6-Setup.exe'))).toThrow(/found 0/);
+  });
+  it('pins VLC discovery to the .sha256 file beside the official installer', async () => {
+    const fetcher = routed({ [app('vlc').releaseSource]: () => text('3.0.24\n', 'application/octet-stream'),
+      [VLC_SUMS]: () => text(`${pin('e')}  vlc-3.0.24-win64.exe\n`, 'application/octet-stream') });
+    const result = await discoverCandidate(app('vlc'), fetcher);
+    expect(result.state === 'candidate' && result.candidate.vendorSha256).toBe(pin('e'));
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([app('vlc').releaseSource, VLC_SUMS]);
+  });
+  it('fails VLC discovery when no publisher pin can be obtained', async () => {
+    for (const [sums, error] of [[() => new Response('missing', { status: 404, headers: { 'content-type': 'text/plain' } }), /HTTP 404/],
+      [() => text(`${pin('e')}  vlc-3.0.23-win64.exe\n`), /found 0/], [() => text(`${pin('e')}  vlc-3.0.24-win64.exe\n`, 'application/x-msdownload'), /text checksum/],
+      [() => text(`MZ\0\0${pin('e')}  vlc-3.0.24-win64.exe\n`, 'application/octet-stream'), /not text/], [() => text('a'.repeat(1024 * 1024 + 1)), /limit/]] as const) {
+      const fetcher = routed({ [app('vlc').releaseSource]: () => text('3.0.24\n', 'application/octet-stream'), [VLC_SUMS]: sums });
+      await expect(discoverCandidate(app('vlc'), fetcher)).rejects.toThrow(error);
+    }
+    const unreachable = routed({ [app('vlc').releaseSource]: () => text('3.0.24\n', 'application/octet-stream') });
+    await expect(discoverCandidate(app('vlc'), unreachable)).rejects.toThrow(/Unexpected request/);
   });
   it('accepts exactly one stable GitHub installer with an allowed source', () => {
     const metadata = { tag_name: 'v2.50.0.windows.1', html_url: 'https://github.com/git-for-windows/git/releases/tag/v2.50.0.windows.1',
@@ -62,8 +106,25 @@ describe('vendor metadata discovery', () => {
     expect(fetcher).toHaveBeenCalledExactlyOnceWith(app('chrome').releaseSource, expect.objectContaining({ redirect: 'error' }));
     expect(result).not.toHaveProperty('approvedAt');
   });
+  it('fetches only metadata and checksum text for pinned apps, never installers', async () => {
+    const fixtures = {
+      'firefox-esr': [JSON.stringify({ FIREFOX_ESR: '140.17.0esr' }), 'https://archive.mozilla.org/pub/firefox/releases/140.17.0esr/SHA256SUMS', `${pin('1')}  win64/en-US/Firefox Setup 140.17.0esr.msi\n`],
+      vlc: ['3.0.24\n', VLC_SUMS, `${pin('2')}  vlc-3.0.24-win64.exe\n`],
+      winscp: ['version=6.5.7.0\n', 'https://winscp.net/download/WinSCP-6.5.7-ReadMe.txt', `WinSCP-6.5.7-Setup.exe\n - SHA-256: ${pin('3')}\n`],
+    } as const;
+    for (const [id, [metadata, sumsUrl, sums]] of Object.entries(fixtures)) {
+      const fetcher = routed({ [app(id).releaseSource]: () => text(metadata), [sumsUrl]: () => text(sums) });
+      const result = await discoverCandidate(app(id), fetcher);
+      expect(result.state === 'candidate' && result.candidate.vendorSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher.mock.calls.every(call => call[1]?.redirect === 'error' && !/\.(?:msi|exe)$/i.test(new URL(call[0]).pathname))).toBe(true);
+      expect(result).not.toHaveProperty('approvedAt');
+    }
+  });
   it('allows VLC text metadata despite its vendor MIME type', async () => {
-    const fetcher = vi.fn(async () => new Response('3.0.24\n', { headers: { 'content-type': 'application/octet-stream' } }));
+    const fetcher = routed({ [app('vlc').releaseSource]: () => text('3.0.24\n', 'application/octet-stream'),
+      [VLC_SUMS]: () => text(`${pin('e')}  vlc-3.0.24-win64.exe\n`, 'application/octet-stream'),
+      [app('chrome').releaseSource]: () => text('{}', 'application/octet-stream') });
     expect((await discoverCandidate(app('vlc'), fetcher)).state).toBe('candidate');
     await expect(discoverCandidate(app('chrome'), fetcher)).rejects.toThrow(/text metadata/);
   });

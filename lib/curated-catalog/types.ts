@@ -1,3 +1,5 @@
+export type CuratedArchitecture = 'x64' | 'x86';
+
 export interface CuratedAppDefinition {
   id: string;
   packageId: string;
@@ -7,7 +9,7 @@ export interface CuratedAppDefinition {
   channel: string;
   category: string;
   homepage: string;
-  architecture: 'x64';
+  architecture: CuratedArchitecture;
   scope: 'machine';
   locale: string;
   installerType: 'msi' | 'exe' | 'inno' | 'nullsoft';
@@ -18,6 +20,10 @@ export interface CuratedAppDefinition {
   discovery: 'github' | 'chrome' | 'firefox' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'manual';
   assetPattern?: string;
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;
+  /** Publisher checksum file fetched as text during discovery to pin vendorSha256. */
+  checksumSource?: { urlTemplate: string; entryTemplate: string; format: 'sha256sums' | 'winscp-readme' };
+  /** Opt-in: verifier redirects may reach any HTTPS mirror because the SHA256 is pinned. */
+  installerRedirectPolicy?: 'any-https-mirror-with-pinned-sha256';
   autoUpdate: 'vendor-managed' | 'none';
   notes: string;
   installedIdentity: { displayNamePattern: string; executablePaths: string[] };
@@ -46,7 +52,7 @@ export interface CuratedRelease {
     verifiedAt: string;
     installerSha256: string;
     installerVersion: string;
-    architecture: 'x64';
+    architecture: CuratedArchitecture;
     sourceReviewedBy: string;
     sourceReportUrl: string;
     signature: {

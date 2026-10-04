@@ -94,6 +94,31 @@ describe('curated approval trust boundary', () => {
   ])('rejects installer source spoofing: %s', url => {
     expect(() => assertInstallerSource(CURATED_APPS[0], url)).toThrow();
   });
+  it('accepts x86 and x64 machine definitions only', () => {
+    const app = (id: string) => structuredClone(CURATED_APPS.find(app => app.id === id)!);
+    expect(app('winscp').architecture).toBe('x86');
+    expect(() => validateDefinitions([{ ...app('winscp'), architecture: 'arm64' }])).toThrow(/x64 or x86/);
+  });
+  it('validates mirror redirect opt-ins and publisher checksum sources', () => {
+    const vlc = () => structuredClone(CURATED_APPS.find(app => app.id === 'vlc')!);
+    expect(vlc().installerRedirectPolicy).toBe('any-https-mirror-with-pinned-sha256');
+    expect(() => validateDefinitions([{ ...vlc(), installerRedirectPolicy: 'any-mirror' } as never])).toThrow(/redirect policy/);
+    expect(() => validateDefinitions([{ ...vlc(), checksumSource: undefined }])).toThrow(/checksum source/);
+    for (const urlTemplate of ['https://checksums.example/{version}.sha256', 'https://downloads.videolan.org/pub/videolan/vlc/{version}/win64/vlc-{version}-win64.exe',
+      'http://downloads.videolan.org/pub/videolan/vlc/{version}/SHA256SUMS', 'https://downloads.videolan.org/pub/{version}/sums?file=x']) {
+      expect(() => validateDefinitions([{ ...vlc(), checksumSource: { ...vlc().checksumSource!, urlTemplate } }])).toThrow();
+    }
+    for (const entryTemplate of ['../vlc-{version}-win64.exe', '/vlc-{version}-win64.exe', 'vlc-{version}-win64.sha256']) {
+      expect(() => validateDefinitions([{ ...vlc(), checksumSource: { ...vlc().checksumSource!, entryTemplate } }])).toThrow(/relative installer/);
+    }
+  });
+  it('requires a publisher SHA256 for apps that accept any HTTPS mirror', () => {
+    const vlc = CURATED_APPS.find(app => app.id === 'vlc')!;
+    const installerUrl = 'https://downloads.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.exe';
+    expect(() => createCandidate(vlc, { version: '3.0.24', installerUrl })).toThrow(/SHA256 pin/);
+    expect(createCandidate(vlc, { version: '3.0.24', installerUrl, vendorSha256: 'A'.repeat(64) }).vendorSha256).toBe('a'.repeat(64));
+    expect(createCandidate(CURATED_APPS.find(app => app.id === 'putty')!, { version: '0.85', installerUrl: 'https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi' }).vendorSha256).toBeNull();
+  });
   it('rejects unknown versions and non-JSON signature inputs', () => {
     expect(() => createCandidate(CURATED_APPS[0], { version: 'latest', installerUrl: 'https://dl.google.com/dl/chrome/install/test.msi' })).toThrow(/numeric/);
     expect(() => canonicalJson({ hash: undefined })).toThrow();
