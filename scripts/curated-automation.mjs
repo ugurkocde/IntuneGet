@@ -40,11 +40,18 @@ const { CURATED_APPS, releaseFromVerification, automatedApprovalExceptions, asse
   await import(pathToFileURL(resolve('output/curated/runtime/profile-runtime.mjs')).href);
 await mkdir(root, { recursive: true });
 
+// The private QA repository needs its own credential; GH_TOKEN covers the
+// website repository (catalog branch, PR and auto-merge).
+function tokenFor(args) {
+  return args.some(arg => arg.startsWith(`repos/${QA}/`)) && process.env.CURATED_QA_TOKEN ? process.env.CURATED_QA_TOKEN : process.env.GH_TOKEN;
+}
+
 function gh(args, { input, raw = false, optional = false } = {}) {
-  const result = spawnSync('gh', args, { input, encoding: raw ? 'buffer' : 'utf8', maxBuffer: 16_777_216 });
+  const result = spawnSync('gh', args, { input, encoding: raw ? 'buffer' : 'utf8', maxBuffer: 16_777_216, env: { ...process.env, GH_TOKEN: tokenFor(args) } });
   if (result.status !== 0) {
     if (optional) return null;
-    throw new Error(`GitHub request failed: ${args.slice(0, 3).map(arg => arg.split('?')[0]).join(' ')}`);
+    const detail = String(result.stderr || '').split('\n').find(line => line.trim()) || 'no detail';
+    throw new Error(`GitHub request failed: ${args.slice(0, 3).map(arg => arg.split('?')[0]).join(' ')} (${detail.trim().slice(0, 200)})`);
   }
   if (raw) return result.stdout;
   return result.stdout.trim() ? JSON.parse(result.stdout) : null;

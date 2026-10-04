@@ -46,10 +46,11 @@ jobs:
       - name: Discover releases, dispatch verification and select passing runs
         id: plan
         env:
-          # Reads and dispatches the private QA verification workflow, and keeps
-          # the alert issue there current. The workflow token only authenticates
-          # public GitHub release metadata reads.
+          # CURATED_QA_TOKEN reads and dispatches the private QA verification
+          # workflow and keeps the alert issue there current. The workflow token
+          # only authenticates public GitHub release metadata reads.
           GH_TOKEN: ${{ secrets.PAT }}
+          CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
           CURATED_SYNC_ISSUE: 'true'
@@ -75,6 +76,7 @@ jobs:
       - name: Re-authenticate evidence, sign and open the auto-merging catalog PR
         env:
           GH_TOKEN: ${{ secrets.PAT }}
+          CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
           CURATED_CATALOG_SIGNING_KEY: ${{ secrets.CURATED_CATALOG_SIGNING_KEY }}
           CURATED_APPROVALS: ${{ needs.plan.outputs.approvals }}
           CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
