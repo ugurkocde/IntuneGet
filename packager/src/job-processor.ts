@@ -1118,7 +1118,7 @@ ${steps}
     displayName: string;
   } | null {
     const exactRegistryKeyMatch = job.uninstall_command?.match(
-      /^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9._{}+-]{0,255}):(.+)$/
+      /^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}):(.+)$/
     );
     if (exactRegistryKeyMatch) {
       return {
@@ -1912,6 +1912,14 @@ ${nestedPathEscaped ? `        $declaredNestedPath = [System.IO.Path]::GetFullPa
         $registeredArgumentText = ($registeredUninstallArguments -join ' ').Trim()
         if (-not $hasQuietUninstall) {
             $registeredUninstallLeaf = Split-Path -Leaf $registeredUninstallFile
+            # Require the exact captured Wacom driver registration and installed remover.
+            $wacomRemover = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tablet\\Wacom\\32\\Remove.exe'
+            if ($registeredUninstallRegistryKey -ieq 'Wacom Tablet Driver' -and
+                $registeredUninstallFile -ieq $wacomRemover -and
+                $registeredArgumentText -match '(?i)(^|\\s)/u(\\s|$)' -and
+                $registeredArgumentText -notmatch '(?i)(^|\\s)/s(\\s|$)') {
+                $additionalUninstallArguments += '/s'
+            }
             $isCutePdfWriterUninstall = (
                 $registeredUninstallRegistryKey -ieq 'CutePDF Writer Installation' -and
                 $registeredUninstallLeaf -in @('unInstcpw.exe', 'unInstcpw64.exe') -and

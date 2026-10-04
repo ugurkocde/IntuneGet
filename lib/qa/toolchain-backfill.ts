@@ -669,6 +669,9 @@ const TOOLCHAIN_TERMINAL_RETRY_TARGETS: Readonly<Record<string, readonly string[
   get '60395492a3d51b2ff6f14b50ed7cd0c7f558be70'() {
     return ['Bandisoft.Bandizip', ...terminalToolchainRetryTargets('4b4637967c6e2b0188f5713d262dd1219a02465e')];
   },
+  get '25849ac512c211e616c135149ef1e059db367ebc'() {
+    return ['Wacom.WacomTabletDriver', ...terminalToolchainRetryTargets('60395492a3d51b2ff6f14b50ed7cd0c7f558be70')];
+  },
   '4b4637967c6e2b0188f5713d262dd1219a02465e': [
     'ZWSOFT.ZWCAD.2026',
     'ZWSOFT.ZWCAD.2025',

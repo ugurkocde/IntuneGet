@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { JobProcessor } from '../src/job-processor';
@@ -58,6 +59,38 @@ function uninstallScript(job: PackagingJob): string {
 }
 
 describe('nested portable PSADT generation', () => {
+  it.runIf(process.platform === 'win32')('executes the same exact Wacom silent-removal adapter in standalone packages', () => {
+    const script = uninstallScript(packagingJob({
+      winget_id: 'Wacom.WacomTabletDriver', display_name: 'Wacom Tablet',
+      installer_type: 'exe', uninstall_command: 'REGISTRY_UNINSTALL_KEY:Wacom Tablet Driver:Wacom Tablet',
+      package_config: { psadtConfig: {} },
+    }));
+    const start = script.indexOf('            $wacomRemover =');
+    const end = script.indexOf('            $isCutePdfWriterUninstall =', start);
+    expect(start).toBeGreaterThan(0);
+    const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+function Test-Adapter($key, $path, $argsText) {
+  $registeredUninstallRegistryKey = $key
+  $registeredUninstallFile = $path
+  $registeredArgumentText = $argsText
+  $additionalUninstallArguments = @()
+  ${script.slice(start, end)}
+  return @($additionalUninstallArguments)
+}
+$path = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tablet\\Wacom\\32\\Remove.exe'
+[ordered]@{
+ Exact = @(Test-Adapter 'Wacom Tablet Driver' $path '/u')
+ AlreadySilent = @(Test-Adapter 'Wacom Tablet Driver' $path '/u /s')
+ WrongKey = @(Test-Adapter 'Other' $path '/u')
+ WrongPath = @(Test-Adapter 'Wacom Tablet Driver' 'C:\\Other\\Remove.exe' '/u')
+ Install = @(Test-Adapter 'Wacom Tablet Driver' $path '/update')
+} | ConvertTo-Json -Compress
+`], { encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual({ Exact: ['/s'], AlreadySilent: [], WrongKey: [], WrongPath: [], Install: [] });
+    expect(script).toContain('The vendor uninstall command did not remove registration');
+  });
+
   it('strips complete MSI UI tokens without leaking quiet suffix fragments', () => {
     expect(
       generator.extractMsiProperties.call(

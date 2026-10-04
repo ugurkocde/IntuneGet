@@ -6,9 +6,18 @@ import {
 } from './toolchain-backfill';
 
 describe('QA toolchain targeted retries', () => {
+  it('adds only Wacom while carrying approved unconsumed retry targets', () => {
+    const previous = '60395492a3d51b2ff6f14b50ed7cd0c7f558be70';
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+      'Wacom.WacomTabletDriver', ...terminalToolchainRetryTargets(previous),
+    ]);
+    expect(shouldRetryTerminalToolchainCandidate(previous, { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Wacom.OtherDriver', status: 'failed' })).toBe(false);
+  });
   it('retries Bandizip only on the reviewed silent-removal release', () => {
     const previous = '4b4637967c6e2b0188f5713d262dd1219a02465e';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('60395492a3d51b2ff6f14b50ed7cd0c7f558be70')).toEqual([
       'Bandisoft.Bandizip', ...terminalToolchainRetryTargets(previous),
     ]);
     expect(shouldRetryTerminalToolchainCandidate(previous, { wingetId: 'Bandisoft.Bandizip', status: 'failed' })).toBe(false);
