@@ -23,6 +23,18 @@ function fixture(app = CURATED_APPS[0]) {
   const context = { websiteCommit: '2'.repeat(40), artifactSha256: 'b'.repeat(64), approvedBy: 'unit-test-maintainer', approvedAt: release.approvedAt };
   return { report, run, artifact, context };
 }
+// QA output when no earlier official build was supplied for the run.
+const upgradeException = 'Google publishes no historical enterprise MSI, so no earlier official build exists.';
+function skippedFixture(app = CURATED_APPS[0]) {
+  const f = fixture(app);
+  const { upgrade, detectionAfterUpgrade, ...phases } = f.report.qa.phases;
+  void upgrade; void detectionAfterUpgrade;
+  const { upgradeFromVersion, previousInstallerSha256, ...qa } = f.report.qa;
+  void upgradeFromVersion; void previousInstallerSha256;
+  f.report.previous = null; delete f.report.inspection.previous;
+  f.report.qa = { ...qa, phases, upgrade: { tested: false } };
+  return f;
+}
 describe('authenticated curated evidence', () => {
   it('binds a release to the successful run, exact artifact and production profile', () => {
     const f = fixture(); const result = releaseFromVerification(f.report, f.run, f.artifact, f.context);
@@ -42,8 +54,8 @@ describe('authenticated curated evidence', () => {
       (f: ReturnType<typeof fixture>) => { f.report.provenance.websiteCommit = '3'.repeat(40); },
       (f: ReturnType<typeof fixture>) => { f.report.vmRestored = false; },
       (f: ReturnType<typeof fixture>) => { f.report.qa.executionProfileSha256 = 'c'.repeat(64); },
-      (f: ReturnType<typeof fixture>) => { f.report.qa.phases.upgrade.passed = false; },
-      (f: ReturnType<typeof fixture>) => { f.report.inspection.previous.security.malicious = 1; },
+      (f: ReturnType<typeof fixture>) => { f.report.qa.phases.upgrade!.passed = false; },
+      (f: ReturnType<typeof fixture>) => { f.report.inspection.previous!.security.malicious = 1; },
     ]) {
       const f = fixture(); mutate(f); expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow();
     }
@@ -58,6 +70,49 @@ describe('authenticated curated evidence', () => {
     expect(releaseFromVerification(f.report, f.run, f.artifact, f.context).evidence.architecture).toBe('x86');
     f.report.qa.architecture = 'x64';
     expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow(/production profile/);
+  });
+  it('records a reviewed skipped upgrade for a vendor-managed app without an earlier build', () => {
+    const f = skippedFixture();
+    expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow(/why the upgrade was not tested/);
+    expect(() => releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException: 'too short' })).toThrow(/why the upgrade was not tested/);
+    const release = releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException });
+    expect(release.evidence.qa.upgrade).toEqual({ tested: false, reason: upgradeException });
+    expect(release.evidence.qa.upgradeFromVersion).toBeUndefined();
+    expect(release.evidence.qa.phases.upgrade).toBeUndefined();
+  });
+  it('rejects a skipped upgrade for an app without a vendor updater', () => {
+    const f = skippedFixture(CURATED_APPS.find(app => app.id === 'git')!);
+    expect(() => releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException })).toThrow(/vendor-managed/);
+  });
+  it('rejects a skipped upgrade report that is not explicit or carries upgrade evidence', () => {
+    for (const mutate of [
+      (f: ReturnType<typeof fixture>) => { delete f.report.qa.upgrade; },
+      (f: ReturnType<typeof fixture>) => { f.report.qa.upgradeFromVersion = '119.0.0.0'; },
+      (f: ReturnType<typeof fixture>) => { f.report.qa.previousInstallerSha256 = 'a'.repeat(64); },
+      (f: ReturnType<typeof fixture>) => { f.report.inspection.previous = fixture().report.inspection.previous; },
+      (f: ReturnType<typeof fixture>) => { f.report.qa.phases.upgrade = { passed: true }; },
+      (f: ReturnType<typeof fixture>) => { f.report.qa.phases.uninstall.passed = false; },
+    ]) {
+      const f = skippedFixture(); mutate(f);
+      expect(() => releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException })).toThrow();
+    }
+  });
+  it('requires the upgrade to run and pass whenever an earlier build was supplied, even for vendor-managed apps', () => {
+    expect(CURATED_APPS[0].autoUpdate).toBe('vendor-managed');
+    for (const mutate of [
+      (f: ReturnType<typeof fixture>) => { f.report.qa.upgrade = { tested: false }; },
+      (f: ReturnType<typeof fixture>) => { delete f.report.qa.phases.upgrade; },
+      (f: ReturnType<typeof fixture>) => { delete f.report.qa.phases.detectionAfterUpgrade; },
+      (f: ReturnType<typeof fixture>) => { f.report.qa.phases.detectionAfterUpgrade!.passed = false; },
+      (f: ReturnType<typeof fixture>) => { delete f.report.qa.upgradeFromVersion; },
+      (f: ReturnType<typeof fixture>) => { delete f.report.inspection.previous; },
+    ]) {
+      const f = fixture(); mutate(f);
+      expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow();
+    }
+    const f = fixture();
+    expect(() => releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException })).toThrow(/only when no earlier release/);
+    expect(releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, upgradeException: '  ' }).evidence.qa.upgrade).toBeUndefined();
   });
   it('takes the approver from GitHub required-reviewer history', () => {
     const environment = { can_admins_bypass: false, protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', reviewer: { id: 7 } }] }] };

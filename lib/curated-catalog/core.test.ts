@@ -38,7 +38,7 @@ describe('curated approval trust boundary', () => {
   });
   it.each(['install', 'detectionAfterInstall', 'upgrade', 'detectionAfterUpgrade', 'uninstall', 'detectionAfterUninstall'] as const)('requires the %s phase to pass', phase => {
     const release = releaseFixture();
-    release.evidence.qa.phases[phase].passed = false;
+    release.evidence.qa.phases[phase]!.passed = false;
     expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/all pass/);
   });
   it.each(['installer', 'security', 'qa', 'profile'] as const)('binds %s evidence to the exact artifact', kind => {
@@ -74,6 +74,58 @@ describe('curated approval trust boundary', () => {
     release.evidence.qa.testedAt = release.evidence.verifiedAt;
     release.evidence.qa.upgradeFromVersion = release.candidate.version;
     expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/earlier version/);
+  });
+  describe('vendor-managed upgrade exemption', () => {
+    const reason = 'Google publishes no historical enterprise MSI for Chrome.';
+    const skipped = (app = CURATED_APPS[0]) => {
+      const release = releaseFixture(app);
+      const { upgrade, detectionAfterUpgrade, ...phases } = release.evidence.qa.phases;
+      void upgrade; void detectionAfterUpgrade;
+      delete release.evidence.qa.upgradeFromVersion;
+      release.evidence.qa.phases = phases;
+      release.evidence.qa.upgrade = { tested: false, reason };
+      return release;
+    };
+    it('accepts a skipped upgrade only for a vendor-managed app with a reviewed reason', () => {
+      expect(CURATED_APPS[0].autoUpdate).toBe('vendor-managed');
+      expect(validateRelease(CURATED_APPS[0], skipped()).evidence.qa.upgrade).toEqual({ tested: false, reason });
+      const { envelope, keys } = signedFixture([skipped()]);
+      expect(verifyCatalog(envelope, CURATED_APPS, keys).releases[0].evidence.qa.upgrade?.tested).toBe(false);
+    });
+    it.each(['7zip', 'git', 'putty'])('rejects a skipped upgrade for the self-contained %s release', id => {
+      const app = CURATED_APPS.find(app => app.id === id)!;
+      expect(app.autoUpdate).toBe('none');
+      expect(() => validateRelease(app, skipped(app))).toThrow(/vendor-managed/);
+    });
+    it('rejects a missing, short or malformed exemption', () => {
+      for (const upgrade of [{ tested: false, reason: 'too short' }, { tested: false, reason: ' '.repeat(30) }, { tested: false }, { tested: true, reason },
+        { tested: false, reason, upgradeFromVersion: '1.0' }, null]) {
+        const release = skipped(); (release.evidence.qa as Record<string, unknown>).upgrade = upgrade;
+        expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/exemption reason/);
+      }
+    });
+    it('rejects a skipped upgrade that also claims upgrade evidence', () => {
+      for (const mutate of [
+        (release: ReturnType<typeof skipped>) => { release.evidence.qa.upgradeFromVersion = '1.0'; },
+        (release: ReturnType<typeof skipped>) => { release.evidence.qa.phases.upgrade = { passed: true }; },
+        (release: ReturnType<typeof skipped>) => { release.evidence.qa.phases.detectionAfterUpgrade = { passed: false }; },
+        (release: ReturnType<typeof skipped>) => { (release.evidence.qa as Record<string, unknown>).previousInstallerSha256 = 'a'.repeat(64); },
+      ]) {
+        const release = skipped(); mutate(release);
+        expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/cannot carry upgrade evidence/);
+      }
+    });
+    it.each(['install', 'detectionAfterInstall', 'uninstall', 'detectionAfterUninstall'] as const)('still requires the %s phase when the upgrade is skipped', phase => {
+      const release = skipped(); release.evidence.qa.phases[phase].passed = false;
+      expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/all pass/);
+    });
+    it('still requires both upgrade phases when no exemption is recorded', () => {
+      const release = skipped(); delete release.evidence.qa.upgrade; release.evidence.qa.upgradeFromVersion = '1.0';
+      expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/all pass/);
+    });
+  });
+  it('requires a reviewed vendor auto-update policy in every definition', () => {
+    expect(() => validateDefinitions([{ ...structuredClone(CURATED_APPS[0]), autoUpdate: 'unknown' } as never])).toThrow(/auto-update/);
   });
   it('selects numeric latest versions and excludes withdrawn releases', () => {
     const old = releaseFixture(CURATED_APPS[0], '9.0');

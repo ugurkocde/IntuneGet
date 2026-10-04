@@ -56,7 +56,7 @@ if (operation === 'approve') {
   releaseFromVerification(report, run, artifact, {
     websiteCommit: report.provenance.websiteCommit, artifactSha256,
     approvedBy: 'pending-required-maintainer-review', approvedAt: new Date().toISOString(),
-    unsignedException: process.env.CURATED_UNSIGNED_EXCEPTION,
+    unsignedException: process.env.CURATED_UNSIGNED_EXCEPTION, upgradeException: process.env.CURATED_UPGRADE_EXCEPTION,
   });
 }
 if (operation === 'withdraw' && !payload.releases.some(release => release.id === process.env.CURATED_RELEASE_ID)) throw new Error('Choose an existing release ID to withdraw.');
@@ -65,7 +65,7 @@ if (mode === 'prepare') {
     installerSha256: source?.report.inspection.current.installerSha256 || null, executionProfileSha256: source?.report.qa.executionProfileSha256 || null,
     signature: source?.report.inspection.current.signature || null, security: source?.report.inspection.current.security || null,
     qa: source?.report.qa || null, releaseId: process.env.CURATED_RELEASE_ID || null,
-    unsignedException: process.env.CURATED_UNSIGNED_EXCEPTION || null, reviewNote: process.env.CURATED_REVIEW_NOTE || null,
+    unsignedException: process.env.CURATED_UNSIGNED_EXCEPTION || null, upgradeException: process.env.CURATED_UPGRADE_EXCEPTION || null, reviewNote: process.env.CURATED_REVIEW_NOTE || null,
     currentCatalogExpiresAt: payload.expiresAt });
   console.log('Evidence validated. A required maintainer must review the artifact before signing.');
   process.exit(0);
@@ -76,9 +76,10 @@ if (!process.env.CURATED_REVIEW_NOTE || process.env.CURATED_REVIEW_NOTE.trim().l
 const releases = [...payload.releases]; const withdrawnReleaseIds = [...payload.withdrawnReleaseIds];
 if (operation === 'approve') {
   const release = releaseFromVerification(source.report, source.run, source.artifact, { websiteCommit: source.report.provenance.websiteCommit,
-    artifactSha256: source.artifactSha256, approvedBy: reviewer, approvedAt: new Date().toISOString(), unsignedException: process.env.CURATED_UNSIGNED_EXCEPTION });
+    artifactSha256: source.artifactSha256, approvedBy: reviewer, approvedAt: new Date().toISOString(), unsignedException: process.env.CURATED_UNSIGNED_EXCEPTION,
+    upgradeException: process.env.CURATED_UPGRADE_EXCEPTION });
   releases.push(release);
-  await writeJson('evidence.json', { ...source.report, authenticatedArtifact: { id: source.artifact.id, sha256: source.artifactSha256 }, maintainerReview: { reviewer, note: process.env.CURATED_REVIEW_NOTE } });
+  await writeJson('evidence.json', { ...source.report, authenticatedArtifact: { id: source.artifact.id, sha256: source.artifactSha256 }, maintainerReview: { reviewer, note: process.env.CURATED_REVIEW_NOTE, upgradeException: release.evidence.qa.upgrade?.reason ?? null } });
 }
 if (operation === 'withdraw' && !withdrawnReleaseIds.includes(process.env.CURATED_RELEASE_ID)) withdrawnReleaseIds.push(process.env.CURATED_RELEASE_ID);
 const key = process.env.CURATED_CATALOG_SIGNING_KEY;

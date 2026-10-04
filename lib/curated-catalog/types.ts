@@ -97,11 +97,15 @@ export interface CuratedRelease {
       testedAt: string;
       reportUrl: string;
       packagerCommit: string;
-      upgradeFromVersion: string;
-      phases: Record<
-        'install' | 'detectionAfterInstall' | 'uninstall' | 'detectionAfterUninstall' | 'upgrade' | 'detectionAfterUpgrade',
-        { passed: boolean }
-      >;
+      /** Absent only when `upgrade` records a reviewed skipped upgrade test. */
+      upgradeFromVersion?: string;
+      /**
+       * Present only when no earlier official build was tested. Allowed for
+       * `autoUpdate: 'vendor-managed'` apps with the maintainer's written reason.
+       */
+      upgrade?: { tested: false; reason: string };
+      phases: Record<'install' | 'detectionAfterInstall' | 'uninstall' | 'detectionAfterUninstall', { passed: boolean }> &
+        Partial<Record<'upgrade' | 'detectionAfterUpgrade', { passed: boolean }>>;
     };
   };
 }
