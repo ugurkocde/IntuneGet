@@ -440,6 +440,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     ['Autodesk.DesktopApp', 'vendor_retired'],
     ['Google.GoogleDesktop', 'vendor_retired'],
     ['Wondershare.Filmora', 'unsupported_managed_install'],
+    ['ZorusInc.ArchonAgent', 'unsupported_managed_install'],
     ['GlassWire.GlassWire', 'unsupported_managed_uninstall'],
     ['Wargaming.GameCenter', 'unsupported_managed_uninstall'],
     ['leezer3.OpenBVE', 'unsupported_managed_uninstall'],
