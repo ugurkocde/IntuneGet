@@ -37,6 +37,23 @@ The protected `Curated catalog verification` workflow in the QA repository produ
 
 The signing key exists only in the public website repository's `curated-catalog-approval` environment. That environment requires a maintainer review, disables administrator bypass and permits protected branches only. The signer verifies GitHub's actual required-reviewer history; a workflow input cannot supply an approver name. The committed `catalog/curated/trusted-keys.json` holds public keys only. Optional `CURATED_CATALOG_PUBLIC_KEYS` adds deployment trust keys. The key never enters the application server, browser, physical QA host or verification VM.
 
+## Licence attestations
+
+Some publishers allow redistribution only after the deploying organization accepts their terms. A definition declares this with `licenceAttestation: { id, title, url, version }`. The `id` names the agreement and may be shared by several applications, which must then declare identical values. The `url` must be the publisher's official HTTPS page for the agreement. `validateDefinitions` enforces these rules, and the definitions digest binds the requirement into the signed catalog.
+
+Adobe Acrobat Reader requires the Adobe Acrobat Reader Distribution License Agreement (`adobe-acrobat-reader-distribution`). The URL is Adobe's distribution application form at `https://get.adobe.com/reader/licenseform`, which the "Apply now" link on Adobe's volume distribution page resolves to. No other pilot definition declares an agreement.
+
+The curated catalog page shows the agreement title and link. A user who can deploy to the tenant must explicitly confirm acceptance before the application can be added to the cart. `POST /api/curated-catalog/attestations` records the acceptance for the caller's resolved tenant, including MSP customer tenants selected with `X-MSP-Tenant-Id`. Accepting for a managed customer tenant requires an MSP role with the deploy permission. `GET` on the same route reports the current status. Only the current agreement version can be accepted.
+
+Acceptances are stored in `curated_licence_attestations`, unique per tenant, agreement, and version. The first acceptance of a version is kept as the audit record, with the accepting user and time. The browser cart is untrusted. The server checks the stored acceptance for the target tenant at every packaging boundary:
+
+- `POST /api/package` rejects the item with `409 CURATED_LICENCE_NOT_ACCEPTED` before any job exists, and stores the verified acceptance in the job's `package_config.curatedLicenceAcceptance`. A value supplied by the cart is discarded.
+- `triggerPackagingWorkflow` refuses every hosted dispatch: cart deployments, QA resume, manual and automatic updates, and MSP batches.
+- The local packager claim fails the job with `CURATED_LICENCE_NOT_ACCEPTED` instead of handing it to the worker.
+- Hosted and self-hosted automatic updates skip the update with that code and a readable reason, without creating a job or counting a policy failure. Manual update requests return the reason to the user. MSP batches skip the tenant item.
+
+An acceptance never covers another tenant. Changing the `version` in a definition requires every tenant to accept again before new jobs run; existing acceptances of the earlier version remain as history. Apps without `licenceAttestation` are unaffected. Apply the `curated_licence_attestations` Supabase migration before deploying code that reads it. Self-hosted SQLite databases receive the table through migration 4.
+
 ## Operator workflow
 
 1. Run `npm run curated:validate` to validate definitions and the committed catalog. The empty bootstrap needs no keys.

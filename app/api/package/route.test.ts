@@ -20,7 +20,9 @@ const {
   ensureQaDemandMock,
   getPackageEligibilityBlocksMock,
   isSupabaseServerConfiguredMock,
+  curatedState,
 } = vi.hoisted(() => ({
+  curatedState: { envelope: {} as Record<string, unknown> },
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
   getByIdMock: vi.fn(),
@@ -44,6 +46,12 @@ vi.mock('@/lib/manifest-api', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/lib/manifest-api')>(),
   getLiveInstallers: getLiveInstallersMock,
 }));
+
+vi.mock('@/catalog/curated/catalog.json', async (importOriginal) => {
+  const original = await importOriginal<{ default: Record<string, unknown> }>();
+  Object.assign(curatedState.envelope, structuredClone(original.default));
+  return { default: curatedState.envelope };
+});
 
 vi.mock('@/lib/db', () => ({
   getDatabase: getDatabaseMock,
@@ -115,6 +123,9 @@ vi.mock('@/lib/store-app-deploy', () => ({
 import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
 
 function makeJob(overrides: Partial<PackagingJob>): PackagingJob {
   const now = new Date().toISOString();
@@ -1817,5 +1828,102 @@ describe('POST /api/package (workflow dispatch)', () => {
       error_code: 'QA_FAILED_EXECUTION_PROFILE',
     }));
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/package (curated licence attestation)', () => {
+  const acrobat = CURATED_APPS.find(app => app.id === 'acrobat-reader')!;
+  const attestation = acrobat.licenceAttestation!;
+  const acceptances = new Set<string>();
+  let original: Record<string, unknown>;
+  let acrobatItem: Record<string, unknown>;
+  let chromeItem: Record<string, unknown>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    acceptances.clear();
+    original = { ...curatedState.envelope };
+    const fixture = signedFixture([releaseFixture(acrobat), releaseFixture(CURATED_APPS[0])]);
+    Object.assign(curatedState.envelope, fixture.envelope);
+    vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', JSON.stringify(fixture.keys));
+    const cart = (index: number, app = acrobat) => ({
+      ...buildCuratedCartItem(app, fixture.envelope.payload.releases[index]), id: `cart-${index}`, addedAt: new Date().toISOString(),
+    });
+    acrobatItem = cart(0);
+    chromeItem = cart(1, CURATED_APPS[0]);
+    getDatabaseMock.mockReturnValue({
+      jobs: { create: createMock, update: updateMock },
+      curatedLicenceAttestations: {
+        get: vi.fn(async (tenantId: string, id: string, version: string) => acceptances.has(`${tenantId}|${id}|${version}`)
+          ? { id: 'acceptance', tenant_id: tenantId, app_id: acrobat.id, attestation_id: id, attestation_version: version,
+              accepted_by_user_id: 'admin-1', accepted_by_email: 'admin@contoso.test', accepted_at: '2026-10-04T00:00:00.000Z' }
+          : null),
+      },
+    });
+    createMock.mockImplementation(async (data: Record<string, unknown>) => ({ ...data, created_at: new Date().toISOString() }));
+    updateMock.mockResolvedValue({});
+    parseAccessTokenMock.mockResolvedValue({ userId: 'user-1', userEmail: 'user@example.com', tenantId: 'tenant-1', userName: 'User' });
+    checkStoredConsentMock.mockResolvedValue(true);
+    getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: false });
+    isGitHubActionsConfiguredMock.mockReturnValue(true);
+    getAppConfigMock.mockReturnValue({ app: { url: 'http://localhost:3000' } });
+    triggerPackagingWorkflowMock.mockResolvedValue({ success: true });
+    enforceInstallerPreflightMock.mockResolvedValue({ cacheKey: 'healthy-key', status: 'healthy', source: 'cache' });
+    ensureQaDemandMock.mockResolvedValue({ state: 'passed', candidateId: null, identity: {
+      executionProfileSha256: 'A'.repeat(64), packageProfileSha256: 'A'.repeat(64), presentationProfileSha256: 'B'.repeat(64) } });
+    getPackageEligibilityBlocksMock.mockResolvedValue([]);
+    isSupabaseServerConfiguredMock.mockReturnValue(true);
+  });
+  afterEach(() => {
+    Object.keys(curatedState.envelope).forEach(key => delete curatedState.envelope[key]);
+    Object.assign(curatedState.envelope, original);
+    vi.unstubAllEnvs();
+  });
+
+  const post = (items: unknown[]) => POST(new NextRequest('http://localhost:3000/api/package', {
+    method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  }));
+
+  it('blocks a curated app whose agreement the tenant has not accepted, before any job exists', async () => {
+    const response = await post([acrobatItem]);
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toMatchObject({ code: 'CURATED_LICENCE_NOT_ACCEPTED', attestation, package: { wingetId: acrobat.packageId } });
+    expect(body.message).toContain(attestation.title);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks acceptances recorded for another tenant or an earlier agreement version', async () => {
+    acceptances.add(`tenant-2|${attestation.id}|${attestation.version}`);
+    acceptances.add(`tenant-1|${attestation.id}|2025-01-01`);
+    expect((await post([acrobatItem])).status).toBe(409);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores an acceptance claimed by the cart and records the server-verified one', async () => {
+    const forged = { attestationId: attestation.id, attestationVersion: attestation.version, acceptedAt: 'forged', acceptedByUserId: 'x', acceptedByEmail: null };
+    expect((await post([{ ...acrobatItem, curatedLicenceAcceptance: forged }])).status).toBe(409);
+
+    acceptances.add(`tenant-1|${attestation.id}|${attestation.version}`);
+    const response = await post([{ ...acrobatItem, curatedLicenceAcceptance: forged }]);
+    expect(response.status).toBe(200);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      tenant_id: 'tenant-1',
+      package_config: expect.objectContaining({ curatedLicenceAcceptance: {
+        attestationId: attestation.id, attestationVersion: attestation.version, acceptedAt: '2026-10-04T00:00:00.000Z',
+        acceptedByUserId: 'admin-1', acceptedByEmail: 'admin@contoso.test',
+      } }),
+    }));
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves curated apps without an agreement unaffected', async () => {
+    const response = await post([chromeItem]);
+    expect(response.status).toBe(200);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      package_config: expect.not.objectContaining({ curatedLicenceAcceptance: expect.anything() }),
+    }));
   });
 });

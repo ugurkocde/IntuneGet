@@ -10,7 +10,8 @@ export async function GET() {
     return NextResponse.json({
       generatedAt: payload.generatedAt, expiresAt: payload.expiresAt,
       entries: entries.map(({ app, status, release }) => ({
-        app: { id: app.id, name: app.name, publisher: app.publisher, channel: app.channel, category: app.category, homepage: app.homepage, architecture: app.architecture, scope: app.scope, locale: app.locale, autoUpdate: app.autoUpdate },
+        app: { id: app.id, name: app.name, publisher: app.publisher, channel: app.channel, category: app.category, homepage: app.homepage, architecture: app.architecture, scope: app.scope, locale: app.locale, autoUpdate: app.autoUpdate,
+          licenceAttestation: app.licenceAttestation ?? null },
         status,
         release: release ? {
           id: release.id, version: release.candidate.version, approvedAt: release.approvedAt,

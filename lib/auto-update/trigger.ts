@@ -18,6 +18,8 @@ import { getCatalogSource } from '@/lib/catalog';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { assertCuratedInstaller, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
+import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/types';
 import {
   normalizeInstallerSha256,
   selectWingetInstaller,
@@ -50,12 +52,14 @@ interface TriggerResult {
     | 'QA_FAILED_CURRENT_VERSION'
     | 'QA_NOT_PASSED_CURRENT_VERSION'
     | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
-    | 'QA_PACKAGE_COMPATIBILITY_BLOCKED';
+    | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
+    | 'CURATED_LICENCE_NOT_ACCEPTED';
 }
 
 export interface UpdateInfo {
   sourceType?: 'curated';
   curatedReleaseId?: string;
+  curatedLicenceAcceptance?: CuratedLicenceAcceptanceSnapshot;
   wingetId: string;
   currentVersion: string;
   latestVersion: string;
@@ -278,6 +282,15 @@ export class AutoUpdateTrigger {
           psadtConfig: current.psadtConfig,
         };
         updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id };
+        // Automatic updates never imply licence acceptance: skip (without
+        // counting a failure) until the tenant accepts the current agreement.
+        try {
+          const acceptance = await assertCuratedLicenceAccepted(policy.tenant_id, approved.app.packageId);
+          if (acceptance) updateInfo = { ...updateInfo, curatedLicenceAcceptance: acceptance };
+        } catch (error) {
+          if (!(error instanceof CuratedLicenceError)) throw error;
+          return { success: false, skipped: true, skipReason: error.message, code: error.code };
+        }
       }
       // Keep the effective adapter in this update attempt so QA and the job
       // receive the same config, without persisting derived adapter output into
@@ -699,6 +712,7 @@ export class AutoUpdateTrigger {
       package_config: {
         sourceType: updateInfo.sourceType || config.sourceType,
         curatedReleaseId: updateInfo.curatedReleaseId,
+        curatedLicenceAcceptance: updateInfo.curatedLicenceAcceptance,
         assignments,
         categories,
         assignedGroups: config.assignedGroups,

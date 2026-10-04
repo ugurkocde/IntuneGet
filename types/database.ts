@@ -418,6 +418,29 @@ export interface Database {
         >;
         Relationships: GenericRelationship[];
       };
+      curated_licence_attestations: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          app_id: string;
+          attestation_id: string;
+          attestation_version: string;
+          accepted_by_user_id: string;
+          accepted_by_email: string | null;
+          accepted_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['curated_licence_attestations']['Row'],
+          'id' | 'accepted_at'
+        > & {
+          id?: string;
+          accepted_at?: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['curated_licence_attestations']['Insert']
+        >;
+        Relationships: GenericRelationship[];
+      };
       package_eligibility_blocks: {
         Row: {
           winget_id: string;

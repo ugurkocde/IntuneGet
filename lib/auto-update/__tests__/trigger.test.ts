@@ -7,13 +7,18 @@ import { AutoUpdateTrigger, getLatestInstallerInfo } from '../trigger';
 import type { AppUpdatePolicy, DeploymentConfig } from '@/types/update-policies';
 import type { QaResultRow } from '@/types/qa';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
+import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
 
 const {
   getQaResultMock,
   getAppForInstallerMock,
   getVersionInstallerInfoMock,
   ensureQaDemandMock,
+  curatedState,
 } = vi.hoisted(() => ({
+  curatedState: { envelope: {} as Record<string, unknown>, acceptances: new Set<string>() },
   getQaResultMock: vi.fn(),
   getAppForInstallerMock: vi.fn(),
   getVersionInstallerInfoMock: vi.fn(),
@@ -28,6 +33,21 @@ vi.mock('@/lib/catalog', () => ({
 }));
 vi.mock('@/lib/qa/demand', () => ({
   ensureQaDemand: ensureQaDemandMock,
+}));
+vi.mock('@/catalog/curated/catalog.json', async (importOriginal) => {
+  const original = await importOriginal<{ default: Record<string, unknown> }>();
+  Object.assign(curatedState.envelope, structuredClone(original.default));
+  return { default: curatedState.envelope };
+});
+vi.mock('@/lib/db', () => ({
+  getDatabase: () => ({
+    curatedLicenceAttestations: {
+      get: async (tenantId: string, id: string, version: string) => curatedState.acceptances.has(`${tenantId}|${id}|${version}`)
+        ? { id: 'acceptance', tenant_id: tenantId, app_id: 'acrobat-reader', attestation_id: id, attestation_version: version,
+            accepted_by_user_id: 'admin', accepted_by_email: 'admin@contoso.test', accepted_at: '2026-10-04T00:00:00.000Z' }
+        : null,
+    },
+  }),
 }));
 
 interface TableHandlers {
@@ -1017,5 +1037,69 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       expect(jobData.package_config.autoSupersede).toBe(false);
       expect(jobData.package_config.supersedenceType).toBeUndefined();
     });
+  });
+});
+
+describe('AutoUpdateTrigger curated licence attestation', () => {
+  const acrobat = CURATED_APPS.find(app => app.id === 'acrobat-reader')!;
+  const attestation = acrobat.licenceAttestation!;
+  function setup() {
+    vi.clearAllMocks();
+    curatedState.acceptances.clear();
+    const fixture = signedFixture([releaseFixture(acrobat)]);
+    const original = { ...curatedState.envelope };
+    Object.assign(curatedState.envelope, fixture.envelope);
+    vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', JSON.stringify(fixture.keys));
+    const item = buildCuratedCartItem(acrobat, fixture.envelope.payload.releases[0]);
+    ensureQaDemandMock.mockResolvedValue({ state: 'passed', candidateId: null,
+      identity: { executionProfileSha256: 'B'.repeat(64), presentationProfileSha256: 'D'.repeat(64) } });
+    const insertSpy = vi.fn();
+    const supabase = createSupabaseMock({ packaging_jobs: { insertSpy, singleResult: { data: { id: 'job-1' }, error: null } } });
+    const trigger = makeTrigger(supabase);
+    const policy = makePolicy({ ...item, assignments: [] } as unknown as DeploymentConfig);
+    policy.winget_id = item.wingetId;
+    policy.original_upload_history_id = 'prior-upload';
+    policy.consecutive_failures = 0;
+    vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'createHistoryRecord' as never).mockResolvedValue({ id: 'history-1' } as never);
+    const run = () => trigger.triggerAutoUpdate(policy, {
+      wingetId: item.wingetId, currentVersion: '119.0.0.0', latestVersion: item.version,
+      displayName: item.displayName, installerUrl: item.installerUrl, installerSha256: item.installerSha256,
+      installerType: item.installerType, installScope: 'machine',
+    }, { skipRateLimits: true });
+    const restore = () => {
+      Object.keys(curatedState.envelope).forEach(key => delete curatedState.envelope[key]);
+      Object.assign(curatedState.envelope, original);
+      vi.unstubAllEnvs();
+    };
+    return { run, insertSpy, restore };
+  }
+
+  it('skips without creating a job or QA demand until the tenant accepts the agreement', async () => {
+    const { run, insertSpy, restore } = setup();
+    try {
+      curatedState.acceptances.add(`other-tenant|${attestation.id}|${attestation.version}`);
+      curatedState.acceptances.add(`tenant-1|${attestation.id}|2025-01-01`);
+      const result = await run();
+      expect(result).toMatchObject({ success: false, skipped: true, code: 'CURATED_LICENCE_NOT_ACCEPTED' });
+      expect(result.skipReason).toContain(attestation.title);
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(insertSpy).not.toHaveBeenCalled();
+    } finally { restore(); }
+  });
+
+  it('creates the job with an audit snapshot of the current acceptance', async () => {
+    const { run, insertSpy, restore } = setup();
+    try {
+      curatedState.acceptances.add(`tenant-1|${attestation.id}|${attestation.version}`);
+      const result = await run();
+      expect(result).toMatchObject({ success: true, packagingJobId: 'job-1' });
+      expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 'tenant-1', package_config: expect.objectContaining({
+        sourceType: 'curated',
+        curatedLicenceAcceptance: expect.objectContaining({ attestationId: attestation.id, attestationVersion: attestation.version, acceptedByEmail: 'admin@contoso.test' }),
+      }) }));
+    } finally { restore(); }
   });
 });

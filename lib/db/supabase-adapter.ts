@@ -11,7 +11,12 @@ import type {
   AutoUpdateHistoryWithPolicy,
   AutoUpdateStatus,
 } from '@/types/update-policies';
-import type { UpdateCheckQuery, UpdateCheckResult } from './types';
+import type {
+  CuratedLicenceAttestationInput,
+  CuratedLicenceAttestationRecord,
+  UpdateCheckQuery,
+  UpdateCheckResult,
+} from './types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
@@ -942,6 +947,60 @@ export const supabaseDb: DatabaseAdapter = {
         throw deleteError;
       }
       return staleIds.length;
+    },
+  },
+
+  curatedLicenceAttestations: {
+    async get(
+      tenantId: string,
+      attestationId: string,
+      attestationVersion: string
+    ): Promise<CuratedLicenceAttestationRecord | null> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('curated_licence_attestations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('attestation_id', attestationId)
+        .eq('attestation_version', attestationVersion)
+        .maybeSingle();
+      if (isError(error)) {
+        console.error('Error reading licence acceptance:', error);
+        throw error;
+      }
+      return (data as CuratedLicenceAttestationRecord | null) ?? null;
+    },
+
+    async listByTenant(tenantId: string): Promise<CuratedLicenceAttestationRecord[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('curated_licence_attestations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('accepted_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing licence acceptances:', error);
+        throw error;
+      }
+      return (data ?? []) as CuratedLicenceAttestationRecord[];
+    },
+
+    async accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord> {
+      const supabase = createServerClient();
+      // The first acceptance of an agreement version is the audit record;
+      // a repeated acceptance (unique violation) leaves it unchanged.
+      const { error } = await supabase.from('curated_licence_attestations').insert(record);
+      if (isError(error) && error.code !== '23505') {
+        console.error('Error recording licence acceptance:', error);
+        throw error;
+      }
+      const stored = await supabaseDb.curatedLicenceAttestations.get(
+        record.tenant_id,
+        record.attestation_id,
+        record.attestation_version
+      );
+      if (!stored) throw new Error('Failed to record licence acceptance');
+      return stored;
     },
   },
 };

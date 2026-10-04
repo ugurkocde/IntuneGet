@@ -93,7 +93,13 @@
       }
     ],
     "autoUpdate": "vendor-managed",
-    "notes": "Review the enterprise offline installer and distribution requirements. Record the exact full-installer version and URL manually; do not infer a full installer from an MSP patch release. Adobe ARM remains enabled."
+    "notes": "Review the enterprise offline installer and distribution requirements. Record the exact full-installer version and URL manually; do not infer a full installer from an MSP patch release. Adobe ARM remains enabled.",
+    "licenceAttestation": {
+      "id": "adobe-acrobat-reader-distribution",
+      "title": "Adobe Acrobat Reader Distribution License Agreement",
+      "url": "https://get.adobe.com/reader/licenseform",
+      "version": "2026-10-04"
+    }
   },
   {
     "id": "7zip",

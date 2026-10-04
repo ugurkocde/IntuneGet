@@ -16,6 +16,9 @@ describe('curated catalog APIs', () => {
     expect(response.status).toBe(200);
     expect(body.entries).toHaveLength(10);
     expect(body.entries.every((entry: { status: string; cartItem: unknown }) => entry.status === 'pending' && !entry.cartItem)).toBe(true);
+    const licences = body.entries.filter((entry: { app: { licenceAttestation: unknown } }) => entry.app.licenceAttestation);
+    expect(licences.map((entry: { app: { id: string } }) => entry.app.id)).toEqual(['acrobat-reader']);
+    expect(licences[0].app.licenceAttestation).toEqual(CURATED_APPS.find(app => app.id === 'acrobat-reader')!.licenceAttestation);
   });
   it('requires operator authentication, including when no token is configured', async () => {
     vi.stubEnv('CURATED_CATALOG_OPERATOR_TOKEN', '');

@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 /**
  * Package API Route
  * Queues packaging jobs by triggering GitHub Actions workflows
@@ -201,6 +202,27 @@ export async function POST(request: NextRequest) {
       } else {
         // Treat missing appSource as win32 for backward compatibility
         win32Items.push(item as Win32CartItem);
+      }
+    }
+
+    // Publisher licence agreements are accepted per tenant, never per cart.
+    // Record the acceptance that authorized each curated job for audit; the
+    // dispatch and local packager claim paths verify it again.
+    for (const item of win32Items) {
+      delete item.curatedLicenceAcceptance;
+      if (item.sourceType !== 'curated') continue;
+      try {
+        const acceptance = await assertCuratedLicenceAccepted(tenantId, item.wingetId, db);
+        if (acceptance) item.curatedLicenceAcceptance = acceptance;
+      } catch (error) {
+        if (!(error instanceof CuratedLicenceError)) throw error;
+        return NextResponse.json({
+          error: 'Licence agreement required',
+          message: error.message,
+          code: error.code,
+          attestation: error.attestation,
+          package: { wingetId: item.wingetId, displayName: item.displayName, version: item.version },
+        }, { status: 409 });
       }
     }
 

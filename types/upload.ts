@@ -7,6 +7,7 @@ import type { DetectionRule, RequirementRule, AppRelationship } from './intune';
 import type { WingetArchitecture, WingetScope, WingetInstallerType } from './winget';
 import type { PSADTConfig } from './psadt';
 import type { EspProfileSelection } from './esp';
+import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/types';
 
 // Staged package awaiting upload to Intune
 export interface StagedPackage {
@@ -183,6 +184,8 @@ interface CartItemBase {
 export interface Win32CartItem extends CartItemBase {
   appSource: 'win32';
   curatedReleaseId?: string;
+  // Server-set audit snapshot of the tenant's licence acceptance (curated apps)
+  curatedLicenceAcceptance?: CuratedLicenceAcceptanceSnapshot;
   localeCode?: string; // Selected locale for language variant packages
   architecture: WingetArchitecture;
   installScope: WingetScope;

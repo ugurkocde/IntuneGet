@@ -26,6 +26,8 @@ import { getLatestInstallerInfo } from '@/lib/auto-update/trigger';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { assertCuratedInstaller } from '@/lib/curated-catalog/server';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
+import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/types';
 import {
   DEFAULT_SAFETY_CONFIG,
   canAutoUpdate,
@@ -58,6 +60,7 @@ export interface SqliteTriggerResult {
   success: boolean;
   skipped?: boolean;
   skipReason?: string;
+  code?: 'CURATED_LICENCE_NOT_ACCEPTED';
   error?: string;
   packagingJobId?: string;
   historyId?: string;
@@ -137,6 +140,7 @@ export async function triggerSqliteAutoUpdate(
     if (!config) {
       return { success: false, error: 'No deployment configuration saved for this policy' };
     }
+    let curatedLicenceAcceptance: CuratedLicenceAcceptanceSnapshot | null = null;
     if (isCuratedPackageId(updateInfo.wingetId)) {
       const approved = assertCuratedInstaller({
         wingetId: updateInfo.wingetId, version: updateInfo.latestVersion,
@@ -148,6 +152,14 @@ export async function triggerSqliteAutoUpdate(
       config = { ...config, ...item };
       updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id,
         installCommand: item.installCommand, uninstallCommand: item.uninstallCommand };
+      // Automatic updates never imply licence acceptance: skip until the
+      // tenant accepts the current agreement version.
+      try {
+        curatedLicenceAcceptance = await assertCuratedLicenceAccepted(policy.tenant_id, approved.app.packageId, db);
+      } catch (error) {
+        if (!(error instanceof CuratedLicenceError)) throw error;
+        return { success: false, skipped: true, skipReason: error.message, code: error.code };
+      }
     }
 
     if (
@@ -203,6 +215,7 @@ export async function triggerSqliteAutoUpdate(
         package_config: {
           sourceType: updateInfo.sourceType || config.sourceType,
           curatedReleaseId: updateInfo.curatedReleaseId,
+          curatedLicenceAcceptance: curatedLicenceAcceptance ?? undefined,
           assignments: config.assignments ?? [],
           categories: config.categories ?? [],
           assignedGroups: config.assignedGroups,
@@ -389,8 +402,10 @@ export async function runSqliteUpdateCheck(
     });
 
     if (result.success) triggered += 1;
-    else if (result.skipped) skipped += 1;
-    else errors += 1;
+    else if (result.skipped) {
+      skipped += 1;
+      if (result.code) console.warn(`[auto-update] ${policy.winget_id} skipped for tenant ${policy.tenant_id}: ${result.skipReason}`);
+    } else errors += 1;
   }
 
   return { available, triggered, skipped, errors };

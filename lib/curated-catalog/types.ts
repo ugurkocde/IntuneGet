@@ -1,5 +1,24 @@
 export type CuratedArchitecture = 'x64' | 'x86';
 
+export interface CuratedLicenceAttestation {
+  /** Stable identifier of the agreement, shared by every app that requires it. */
+  id: string;
+  title: string;
+  /** Official publisher URL where the customer reviews the agreement. */
+  url: string;
+  /** Changing the version requires every tenant to accept again. */
+  version: string;
+}
+
+/** Audit copy of the acceptance stored with every packaging job it authorized. */
+export interface CuratedLicenceAcceptanceSnapshot {
+  attestationId: string;
+  attestationVersion: string;
+  acceptedAt: string;
+  acceptedByUserId: string;
+  acceptedByEmail: string | null;
+}
+
 export interface CuratedAppDefinition {
   id: string;
   packageId: string;
@@ -27,6 +46,7 @@ export interface CuratedAppDefinition {
   autoUpdate: 'vendor-managed' | 'none';
   notes: string;
   installedIdentity: { displayNamePattern: string; executablePaths: string[] };
+  licenceAttestation?: CuratedLicenceAttestation;
 }
 
 export interface CuratedCandidate {

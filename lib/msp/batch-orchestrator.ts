@@ -13,6 +13,7 @@ import {
   triggerPackagingWorkflow,
   type WorkflowInputs,
 } from '@/lib/github-actions';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
@@ -329,6 +330,23 @@ async function startBatchItems(batchId: string): Promise<number> {
           .update({
             status: 'failed',
             error_message: 'Tenant consent not granted or revoked',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+        continue;
+      }
+
+      // A curated publisher licence is accepted per customer tenant, so an
+      // acceptance for one tenant never authorizes the rest of the batch.
+      try {
+        await assertCuratedLicenceAccepted(item.tenant_id, batch.winget_id, db);
+      } catch (error) {
+        if (!(error instanceof CuratedLicenceError)) throw error;
+        await supabase
+          .from('msp_batch_deployment_items')
+          .update({
+            status: 'skipped',
+            error_message: error.message,
             completed_at: new Date().toISOString(),
           })
           .eq('id', item.id);

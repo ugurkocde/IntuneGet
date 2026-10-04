@@ -6,6 +6,7 @@ import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
+import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { ensureQaDemand } from '@/lib/qa/demand';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
@@ -266,16 +267,19 @@ export async function GET(request: Request) {
         .eq('status', 'packaging');
       resumed++;
     } catch (error) {
+      const licenceRequired = error instanceof CuratedLicenceError;
       const { data: failedJob } = await supabase
         .from('packaging_jobs')
         .update({
           status: 'failed',
-          status_message: qaDeferred
+          status_message: licenceRequired
+            ? 'The tenant has not accepted the publisher licence agreement for this application'
+            : qaDeferred
             ? 'Packaging could not start during the continuity window'
             : 'Installation test passed, but packaging could not start automatically',
-          error_code: 'QA_RESUME_DISPATCH_FAILED',
-          error_stage: 'authenticate',
-          error_category: 'network',
+          error_code: licenceRequired ? error.code : 'QA_RESUME_DISPATCH_FAILED',
+          error_stage: licenceRequired ? 'validation' : 'authenticate',
+          error_category: licenceRequired ? 'validation' : 'network',
           error_message: error instanceof Error ? error.message : 'Unknown resume error',
           completed_at: new Date().toISOString(),
         })

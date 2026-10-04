@@ -7,6 +7,7 @@
 import { createHmac } from 'node:crypto';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { assertCuratedWorkflow } from '@/lib/curated-catalog/server';
+import { assertCuratedLicenceAccepted } from '@/lib/curated-catalog/licence';
 
 import { applyInstallerUrlOverride } from './installer-url-overrides';
 import { reconcileCatalogInstaller } from './catalog-installer-reconciliation';
@@ -139,6 +140,10 @@ export async function triggerPackagingWorkflow(
       throw new CuratedCatalogError('Curated releases require their approved validation profile.');
     }
     const approved = assertCuratedWorkflow(inputs);
+    // Every hosted dispatch (cart, QA resume, manual and automatic updates,
+    // MSP batches) passes here, so the target tenant's licence acceptance is
+    // enforced for each one regardless of how the job was created.
+    await assertCuratedLicenceAccepted(inputs.tenantId, approved.app.packageId);
     effectiveInputs = { ...inputs, sourceType: 'curated', curatedReleaseId: approved.release.id };
     trustedInstallers = [approved.installer];
   } else if (inputs.sourceType !== 'custom') {

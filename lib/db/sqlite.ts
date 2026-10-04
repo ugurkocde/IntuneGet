@@ -13,6 +13,8 @@ import type {
   AutoUpdateHistoryQuery,
   UpdateCheckResult,
   UpdateCheckQuery,
+  CuratedLicenceAttestationRecord,
+  CuratedLicenceAttestationInput,
 } from './types';
 import type {
   AppUpdatePolicy,
@@ -847,6 +849,59 @@ export const sqliteDb: DatabaseAdapter = {
         )
         .run(userId, tenantId, ...values);
       return result.changes;
+    },
+  },
+
+  curatedLicenceAttestations: {
+    async get(
+      tenantId: string,
+      attestationId: string,
+      attestationVersion: string
+    ): Promise<CuratedLicenceAttestationRecord | null> {
+      const database = getDb();
+      const row = database
+        .prepare(
+          `SELECT * FROM curated_licence_attestations
+           WHERE tenant_id = ? AND attestation_id = ? AND attestation_version = ?`
+        )
+        .get(tenantId, attestationId, attestationVersion) as CuratedLicenceAttestationRecord | undefined;
+      return row ?? null;
+    },
+
+    async listByTenant(tenantId: string): Promise<CuratedLicenceAttestationRecord[]> {
+      const database = getDb();
+      return database
+        .prepare('SELECT * FROM curated_licence_attestations WHERE tenant_id = ? ORDER BY accepted_at DESC')
+        .all(tenantId) as CuratedLicenceAttestationRecord[];
+    },
+
+    async accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord> {
+      const database = getDb();
+      database
+        .prepare(
+          `INSERT INTO curated_licence_attestations (
+             id, tenant_id, app_id, attestation_id, attestation_version,
+             accepted_by_user_id, accepted_by_email, accepted_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (tenant_id, attestation_id, attestation_version) DO NOTHING`
+        )
+        .run(
+          crypto.randomUUID(),
+          record.tenant_id,
+          record.app_id,
+          record.attestation_id,
+          record.attestation_version,
+          record.accepted_by_user_id,
+          record.accepted_by_email,
+          new Date().toISOString()
+        );
+      const stored = await sqliteDb.curatedLicenceAttestations.get(
+        record.tenant_id,
+        record.attestation_id,
+        record.attestation_version
+      );
+      if (!stored) throw new Error('Failed to record licence acceptance');
+      return stored;
     },
   },
 };

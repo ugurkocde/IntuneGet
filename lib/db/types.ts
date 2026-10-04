@@ -113,6 +113,23 @@ export interface PackagingJob {
 }
 
 /**
+ * A tenant's acceptance of a publisher licence agreement required by a
+ * curated application. Unique per tenant, agreement, and agreement version.
+ */
+export interface CuratedLicenceAttestationRecord {
+  id: string;
+  tenant_id: string;
+  app_id: string;
+  attestation_id: string;
+  attestation_version: string;
+  accepted_by_user_id: string;
+  accepted_by_email: string | null;
+  accepted_at: string;
+}
+
+export type CuratedLicenceAttestationInput = Omit<CuratedLicenceAttestationRecord, 'id' | 'accepted_at'>;
+
+/**
  * Upload history record
  */
 export interface UploadHistoryRecord {
@@ -340,5 +357,23 @@ export interface DatabaseAdapter {
      * `since`, optionally filtered by status. Backs the auto-update rate limits.
      */
     countForPolicies(policyIds: string[], since: string, status?: AutoUpdateStatus): Promise<number>;
+  };
+
+  curatedLicenceAttestations: {
+    /**
+     * Get a tenant's acceptance of one exact agreement version
+     */
+    get(tenantId: string, attestationId: string, attestationVersion: string): Promise<CuratedLicenceAttestationRecord | null>;
+
+    /**
+     * Every agreement acceptance recorded for a tenant, newest first
+     */
+    listByTenant(tenantId: string): Promise<CuratedLicenceAttestationRecord[]>;
+
+    /**
+     * Record an acceptance. Idempotent: an existing acceptance of the same
+     * agreement version is returned unchanged.
+     */
+    accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord>;
   };
 }

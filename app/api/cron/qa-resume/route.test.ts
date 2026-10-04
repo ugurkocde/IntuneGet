@@ -29,6 +29,8 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 }));
 
 import { GET } from './route';
+import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
+import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
@@ -707,5 +709,45 @@ describe('GET /api/cron/qa-resume', () => {
       'failed',
       'GitHub dispatch unavailable'
     );
+  });
+
+  it('fails a resumed curated job with a licence reason when the tenant has not accepted the agreement', async () => {
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    const acrobat = CURATED_APPS.find(app => app.id === 'acrobat-reader')!;
+    const licenceError = new CuratedLicenceError(acrobat, acrobat.licenceAttestation!);
+    triggerPackagingWorkflowMock.mockRejectedValue(licenceError);
+    const job = {
+      id: 'job-licence', qa_candidate_id: 'candidate-passed', is_auto_update: true,
+      created_at: '2026-08-09T12:00:00Z', winget_id: acrobat.packageId, tenant_id: 'tenant-1',
+      display_name: acrobat.name, version: '120.0.0.0', installer_url: 'https://example.test/installer.exe',
+      installer_type: 'exe', install_command: 'installer.exe /sAll', package_config: { sourceType: 'curated' },
+    };
+    const failedUpdate = chain({ data: { id: job.id }, error: null });
+    let packagingCall = 0;
+    createServerClientMock.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === 'packaging_jobs') {
+          packagingCall++;
+          if (packagingCall === 1) return chain({ data: [job], error: null });
+          if (packagingCall === 2) return chain({ data: { id: job.id }, error: null });
+          return failedUpdate;
+        }
+        if (table === 'qa_candidates') {
+          return chain({ data: { id: 'candidate-passed', status: 'passed', failure_summary: null, package_profile_sha256: 'B'.repeat(64) }, error: null });
+        }
+        if (table === 'qa_package_results') return chain({ data: { outcome: 'Passed' }, error: null });
+        throw new Error(`Unexpected table ${table}`);
+      }),
+    });
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: 1 });
+    expect(failedUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'failed', error_code: 'CURATED_LICENCE_NOT_ACCEPTED', error_message: licenceError.message,
+    }));
+    expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledWith(job.id, 'failed', licenceError.message);
   });
 });

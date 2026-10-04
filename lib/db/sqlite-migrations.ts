@@ -225,6 +225,25 @@ export const MIGRATIONS: SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    name: 'curated licence attestations',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS curated_licence_attestations (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          app_id TEXT NOT NULL,
+          attestation_id TEXT NOT NULL,
+          attestation_version TEXT NOT NULL,
+          accepted_by_user_id TEXT NOT NULL,
+          accepted_by_email TEXT,
+          accepted_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (tenant_id, attestation_id, attestation_version)
+        );
+      `);
+    },
+  },
 ];
 
 export function getSqliteSchemaVersion(db: BetterSqlite3.Database): number {
