@@ -6,7 +6,7 @@ import { getAppConfig } from '@/lib/config';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { triggerPackagingWorkflow, type WorkflowInputs } from '@/lib/github-actions';
-import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
+import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { ensureQaDemand } from '@/lib/qa/demand';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
@@ -187,6 +187,37 @@ export async function GET(request: Request) {
       if (resultError) throw resultError;
       if (result?.outcome !== 'Passed') {
         waiting++;
+        continue;
+      }
+    }
+
+    if (features.localPackager) {
+      // The local packager can claim queued jobs straight from the database,
+      // so the licence must be checked before the job is released to it.
+      try {
+        await assertCuratedLicenceAccepted(job.tenant_id, job.winget_id);
+      } catch (error) {
+        if (!(error instanceof CuratedLicenceError)) {
+          waiting++;
+          continue;
+        }
+        const { data: failedJob } = await supabase
+          .from('packaging_jobs')
+          .update({
+            status: 'failed',
+            status_message: 'The tenant has not accepted the publisher licence agreement for this application',
+            error_code: error.code,
+            error_stage: 'validation',
+            error_category: 'validation',
+            error_message: error.message,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id)
+          .eq('status', 'awaiting_qa')
+          .select('id')
+          .maybeSingle();
+        if (failedJob) await handleAutoUpdateJobCompletion(job.id, 'failed', error.message);
+        failed++;
         continue;
       }
     }
