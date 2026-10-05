@@ -150,8 +150,9 @@ function CuratedAppCard({ entry, inCart, expired, licenceStatus, licenceLoading,
 
   return (
     <article
+      id={app.id}
       aria-label={`${app.name} by ${app.publisher}${release ? `, version ${release.version}` : ''}${inCart ? ', selected' : ''}`}
-      className="group relative flex flex-col rounded-2xl border border-overlay/10 bg-bg-elevated p-5 contain-layout transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-cyan/30 hover:shadow-card-hover"
+      className="group relative flex flex-col scroll-mt-28 rounded-2xl border border-overlay/10 bg-bg-elevated p-5 contain-layout transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-cyan/30 hover:shadow-card-hover target:border-accent-cyan/50"
     >
       <div className="flex items-start gap-4">
         <div className="relative flex-shrink-0">

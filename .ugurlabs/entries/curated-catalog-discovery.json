@@ -1,0 +1,6 @@
+{
+  "title": "Find curated releases from the app catalog",
+  "summary": "Matching Winget apps now link to available curated releases with a Curated release available badge. Curated cards also share the main catalog layout, with compact evidence links and licence agreements.",
+  "type": "improved",
+  "sourceUrl": "https://github.com/ugurkocde/IntuneGet/pull/1364"
+}
