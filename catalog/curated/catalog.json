@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-04T23:45:22.373Z",
-    "expiresAt": "2026-10-11T23:45:22.373Z",
+    "generatedAt": "2026-10-05T06:48:22.096Z",
+    "expiresAt": "2026-10-12T06:48:22.096Z",
     "definitionsSha256": "81fc06e6b33da70a7ed5775931bb0bedc18a4b09949edda61ab63333775e70ac",
     "releases": [
       {
@@ -257,10 +257,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vlc/a947bde072383e7ecf44093b.json"
           }
         }
+      },
+      {
+        "id": "putty:6ca4a0fe82b9f9e730c8f441",
+        "candidate": {
+          "appId": "putty",
+          "version": "0.85",
+          "installerUrl": "https://the.earth.li/~sgtatham/putty/0.85/w64/putty-64bit-0.85-installer.msi",
+          "vendorSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+          "releaseNotesUrl": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
+          "discoveredAt": "2026-10-05T05:55:37.191Z",
+          "id": "6ca4a0fe82b9f9e730c8f441"
+        },
+        "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+        "executionProfileSha256": "B32B7A2B627E45248906CA632727F325D7B5396A2E94082FA5B58A08EF2DD741",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T06:48:22.096Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T06:12:57.0134260Z",
+          "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+          "installerVersion": "0.85",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/putty/6ca4a0fe82b9f9e730c8f441.json",
+          "signature": {
+            "publisher": "Simon Tatham",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "d8f21bb21cffb6bfdb1b609c9befc146a64f5fff",
+            "websiteCommit": "ca26106ac1822bc3d60e84d1812a5216dc3b5501",
+            "runId": "37269945856",
+            "runAttempt": 1,
+            "artifactId": "11328049278",
+            "artifactSha256": "50f8c675e8fdcc68e7a3e80746dd82955bab95a2a5d1da3fcffecdeba02a6d61"
+          },
+          "security": {
+            "malicious": 0,
+            "engineVersion": "1.1.26080.3",
+            "signatureVersion": "1.459.557.0",
+            "scanner": "defender",
+            "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+            "status": "clean",
+            "scannedAt": "2026-10-05T06:11:22.8571843Z",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/putty/6ca4a0fe82b9f9e730c8f441.json"
+          },
+          "qa": {
+            "upgradeFromVersion": "0.84",
+            "executionProfileSha256": "B32B7A2B627E45248906CA632727F325D7B5396A2E94082FA5B58A08EF2DD741",
+            "installerSha256": "2213ebacf962b709411d654a40087508a694756bc4e41c5a1c24ad86596b2511",
+            "testedAt": "2026-10-05T06:12:54.2408377Z",
+            "candidateId": "6ca4a0fe82b9f9e730c8f441",
+            "architecture": "x64",
+            "executionContext": "LocalSystem",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "previousInstallerSha256": "190d00150e67ad3ff51af4b50e76a3ab97b863a34efd50472627b17c0cf4102b",
+            "installerVersion": "0.85",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "testLevel": "psadt-package",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/putty/6ca4a0fe82b9f9e730c8f441.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "ntaTaE5zuFt+hLZYw/OpNqbhzPPH7xsf3vj8rVzIiQKPzbObcJBvRSAtNt+jsi/hONfRyxlMU/Ep48/Zez7OBQ=="
+  "signature": "bw1xYn5cE1zGRl9MVWMEGK2l6Lzj46vXJAR6UR+jqYxhnyGm0r/tMZQvCYBwUlinI5ODvBpFZ9ZlgctPkBUNCg=="
 }
