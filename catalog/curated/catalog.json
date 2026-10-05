@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-05T09:38:55.991Z",
-    "expiresAt": "2026-10-12T09:38:55.991Z",
+    "generatedAt": "2026-10-05T10:12:08.547Z",
+    "expiresAt": "2026-10-12T10:12:08.547Z",
     "definitionsSha256": "4a540feca340e844eec00e136efcea6528ce489a785a21c4ad8bd319e207b8c0",
     "releases": [
       {
@@ -767,10 +767,92 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/6ef13159374af56b83a9bf3e.json"
           }
         }
+      },
+      {
+        "id": "firefox-esr:da098bfc38b7ad0b5fd238a9",
+        "candidate": {
+          "appId": "firefox-esr",
+          "version": "140.17.0",
+          "installerUrl": "https://archive.mozilla.org/pub/firefox/releases/140.17.0esr/win64/en-US/Firefox%20Setup%20140.17.0esr.msi",
+          "vendorSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+          "releaseNotesUrl": "https://www.firefox.com/en-US/browsers/enterprise/",
+          "discoveredAt": "2026-10-05T09:37:49.257Z",
+          "id": "da098bfc38b7ad0b5fd238a9"
+        },
+        "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+        "executionProfileSha256": "7484C06164042874B7C3301EC6B95A759FE4FE7C0AC8A58D3DF1106675EF6FE8",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T10:12:08.547Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T10:09:35.2710897Z",
+          "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+          "installerVersion": "140.17.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/firefox-esr/da098bfc38b7ad0b5fd238a9.json",
+          "signature": {
+            "publisher": "Mozilla Corporation",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+            "websiteCommit": "96873292167da0a691c4fd7d6274d91236158ff2",
+            "runId": "37293736022",
+            "runAttempt": 1,
+            "artifactId": "11338230766",
+            "artifactSha256": "bf32c194e05958654e9233fd98f71cd56bb69bc1446b46eca9404e0251071e2a"
+          },
+          "security": {
+            "engineVersion": "1.1.26080.3",
+            "status": "clean",
+            "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+            "scannedAt": "2026-10-05T10:08:19.9317505Z",
+            "signatureVersion": "1.459.560.0",
+            "malicious": 0,
+            "scanner": "defender",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/firefox-esr/da098bfc38b7ad0b5fd238a9.json"
+          },
+          "qa": {
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "installerVersion": "140.17.0",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "architecture": "x64",
+            "candidateId": "da098bfc38b7ad0b5fd238a9",
+            "testLevel": "psadt-package",
+            "executionProfileSha256": "7484C06164042874B7C3301EC6B95A759FE4FE7C0AC8A58D3DF1106675EF6FE8",
+            "testedAt": "2026-10-05T10:09:31.1915591Z",
+            "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+            "executionContext": "LocalSystem",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: Mozilla Firefox ESR is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/firefox-esr/da098bfc38b7ad0b5fd238a9.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "yWaKUdctNs1KNdN2zAOwIsf+tdnu69+0DC8tDzsLfDjy+3VIdvJSni3NjKPUofq+TqElJTdHA0O89m3uCprtDw=="
+  "signature": "8qHHcmsBN2pLr+5QM9GQcc0q7fssTqDUlok7zyTJrANDcqAYaR9FZ2DjHFYFTFOqdCqII6jbYTKi662vLOz4Bg=="
 }

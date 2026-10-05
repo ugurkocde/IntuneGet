@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runId": "37293736022",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "websiteCommit": "96873292167da0a691c4fd7d6274d91236158ff2",
+    "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "firefox-esr",
+    "version": "140.17.0",
+    "installerUrl": "https://archive.mozilla.org/pub/firefox/releases/140.17.0esr/win64/en-US/Firefox%20Setup%20140.17.0esr.msi",
+    "vendorSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+    "releaseNotesUrl": "https://www.firefox.com/en-US/browsers/enterprise/",
+    "discoveredAt": "2026-10-05T09:37:49.257Z",
+    "id": "da098bfc38b7ad0b5fd238a9"
+  },
+  "previous": null,
+  "inspection": {
+    "current": {
+      "candidateId": "da098bfc38b7ad0b5fd238a9",
+      "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+      "sourceUrl": "https://archive.mozilla.org/pub/firefox/releases/140.17.0esr/win64/en-US/Firefox%20Setup%20140.17.0esr.msi",
+      "finalOrigin": "https://archive.mozilla.org",
+      "signature": {
+        "publisher": "Mozilla Corporation",
+        "status": "valid"
+      },
+      "security": {
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+        "scannedAt": "2026-10-05T10:08:19.9317505Z",
+        "signatureVersion": "1.459.560.0",
+        "malicious": 0,
+        "scanner": "defender",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "da098bfc38b7ad0b5fd238a9",
+    "packageId": "IntuneGet.Curated.FirefoxESR",
+    "installerUrl": "https://archive.mozilla.org/pub/firefox/releases/140.17.0esr/win64/en-US/Firefox%20Setup%20140.17.0esr.msi",
+    "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.FirefoxESR",
+      "displayName": "Mozilla Firefox ESR",
+      "publisher": "Mozilla Corporation",
+      "version": "140.17.0",
+      "architecture": "x64",
+      "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Mozilla Firefox ESR",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_FirefoxESR\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"140.17.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[\"/S\"],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_FirefoxESR\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"140.17.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "7484C06164042874B7C3301EC6B95A759FE4FE7C0AC8A58D3DF1106675EF6FE8",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.FirefoxESR\",\"publisher\":\"IntuneGet QA\",\"version\":\"140.17.0\",\"wingetId\":\"IntuneGet.Curated.FirefoxESR\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"140.17.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_FirefoxESR\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"976837252AC128809F8EE9A189C711025B95DCE4B324C7F4BEFE0631902AB47B\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"67C3BDBBEA8E3F8B506F1D427BD9728BE59D030B4893AAE93EA5C2C4201958FE\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Mozilla Firefox ESR\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"140.17.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_FirefoxESR\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[\"/S\"],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"EFA50963CD1E8CE88FA00C31FDD2D30D79E84D60621D2F520747FD943F3D8DBB\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "installerVersion": "140.17.0",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "architecture": "x64",
+    "candidateId": "da098bfc38b7ad0b5fd238a9",
+    "testLevel": "psadt-package",
+    "executionProfileSha256": "7484C06164042874B7C3301EC6B95A759FE4FE7C0AC8A58D3DF1106675EF6FE8",
+    "testedAt": "2026-10-05T10:09:31.1915591Z",
+    "upgrade": {
+      "tested": false
+    },
+    "installerSha256": "67c3bdbbea8e3f8b506f1d427bd9728be59d030b4893aae93ea5c2c4201958fe",
+    "executionContext": "LocalSystem"
+  },
+  "verifiedAt": "2026-10-05T10:09:35.2710897Z",
+  "authenticatedArtifact": {
+    "id": 11338230766,
+    "sha256": "bf32c194e05958654e9233fd98f71cd56bb69bc1446b46eca9404e0251071e2a"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-05T10:12:08.547Z",
+    "unsignedException": null,
+    "upgradeException": "Automated policy: Mozilla Firefox ESR is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+  }
+}
