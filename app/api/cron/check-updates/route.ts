@@ -167,7 +167,7 @@ async function processAutoUpdates(
         result.triggered++;
       } else if (triggerResult.skipped) {
         result.skipped++;
-        if (triggerResult.code === 'CURATED_LICENCE_NOT_ACCEPTED') {
+        if (triggerResult.code === 'CURATED_LICENCE_NOT_ACCEPTED' || triggerResult.code?.startsWith('CURATED_CONFIG_VERIFICATION')) {
           console.warn(`[auto-update] ${update.winget_id} skipped for tenant ${update.tenant_id}: ${triggerResult.skipReason}`);
         }
       } else {

@@ -220,7 +220,9 @@ export interface TriggerUpdateResponse {
       | 'QA_NOT_PASSED_CURRENT_VERSION'
       | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
       | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
-      | 'CURATED_LICENCE_NOT_ACCEPTED';
+      | 'CURATED_LICENCE_NOT_ACCEPTED'
+      | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+      | 'CURATED_CONFIG_VERIFICATION_FAILED';
     packaging_job_id?: string;
     error?: string;
   }[];
