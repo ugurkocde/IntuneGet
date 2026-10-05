@@ -105,5 +105,5 @@ export async function authorizeCuratedExecution(
     const { error: writeError } = await write;
     if (writeError && !/duplicate key/i.test(writeError.message)) throw new CuratedCatalogError('Custom curated configuration verification could not be queued.');
   }
-  throw new CuratedConfigVerificationError(`Custom deployment settings for ${app.name} ${release.candidate.version} must pass an install, upgrade and uninstall test in the IntuneGet QA VM before first use. ${row && row.status !== 'passed' ? 'Verification is in progress' : 'Verification has been queued'}; it usually completes within about an hour. Add the app again afterwards.`, row?.status === 'verifying' ? 'verifying' : 'requested');
+  throw new CuratedConfigVerificationError(`Custom deployment settings for ${app.name} ${release.candidate.version} must pass an install, upgrade and uninstall test in the IntuneGet QA VM before first use. ${row && row.status !== 'passed' ? 'Verification is in progress' : 'Verification has been queued'}; it usually completes within about an hour. Deploy again afterwards.`, row?.status === 'verifying' ? 'verifying' : 'requested');
 }

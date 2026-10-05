@@ -11,8 +11,9 @@ import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
 import { QaBadge } from '@/components/qa/QaBadge';
 import type { QaStatus } from '@/types/qa';
+import { CuratedReleaseBadge } from '@/components/CuratedReleaseBadge';
 
-const installerTypeStyles: Record<string, string> = {
+export const installerTypeStyles: Record<string, string> = {
   msi: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   wix: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   msix: 'text-purple-600 bg-purple-500/10 border-purple-500/20',
@@ -25,7 +26,7 @@ const installerTypeStyles: Record<string, string> = {
   portable: 'text-slate-600 bg-slate-500/10 border-slate-500/20',
 };
 
-function getInstallerLabel(type: string): string {
+export function getInstallerLabel(type: string): string {
   const upper = type.toUpperCase();
   if (upper === 'NULLSOFT' || upper === 'INNO' || upper === 'BURN') return 'EXE';
   if (upper === 'WIX') return 'MSI';
@@ -41,9 +42,10 @@ interface AppCardProps {
   isBulkSelected?: boolean;
   onBulkToggle?: (pkg: NormalizedPackage) => void;
   qaStatus?: QaStatus | null;
+  curatedAppId?: string;
 }
 
-function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus }: AppCardProps) {
+function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus, curatedAppId }: AppCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -147,6 +149,7 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
           )}
 
           <div className="flex items-center flex-wrap gap-1.5 mt-3">
+            {curatedAppId && pkg.appSource !== 'store' && <CuratedReleaseBadge appId={curatedAppId} />}
             {pkg.appSource === 'store' && (
               <span className="text-xs font-medium text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">
                 Store
@@ -237,6 +240,7 @@ export const AppCard = memo(AppCardComponent, (prevProps, nextProps) => {
          prevProps.isDeployed === nextProps.isDeployed &&
          prevProps.isBulkSelectMode === nextProps.isBulkSelectMode &&
          prevProps.isBulkSelected === nextProps.isBulkSelected &&
+         prevProps.curatedAppId === nextProps.curatedAppId &&
          prevProps.qaStatus?.outcome === nextProps.qaStatus?.outcome &&
          prevProps.qaStatus?.testedVersion === nextProps.qaStatus?.testedVersion &&
          prevProps.qaStatus?.architecture === nextProps.qaStatus?.architecture &&

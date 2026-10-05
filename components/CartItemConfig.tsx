@@ -200,7 +200,18 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
 
   const handleSave = async () => {
     if (isCurated) {
+      // PSADT behaviour may be customised; the server verifies a changed
+      // execution configuration in the QA VM before its first deployment.
+      const curatedProcesses = sanitizeProcessesToClose(config.processesToClose);
+      if (curatedProcesses.invalid.length > 0) {
+        setProcessesError(
+          'Each process to close needs an executable name, for example chrome. Fill in the process name or remove the row.'
+        );
+        setExpandedSection('behavior');
+        return;
+      }
       updateItem(item.id, {
+        psadtConfig: { ...config, registryMarkerPath: item.psadtConfig.registryMarkerPath, processesToClose: curatedProcesses.processes },
         assignments: assignments.length ? assignments : undefined,
         categories: categories.length ? categories : undefined,
         espProfiles: espProfiles.length ? espProfiles : undefined,
@@ -369,7 +380,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
             )}
 
             {/* Win32 app: Install Scope */}
-            {isCurated && <p className="text-sm text-text-secondary">This curated release uses a verified machine installation. Installation commands and detection settings are fixed to the approved package. Choose assignments, categories, enrollment profiles, and update preferences below.</p>}
+            {isCurated && <p className="text-sm text-text-secondary">This curated release uses a verified machine installation. Installation commands and detection settings are fixed to the approved package. You can choose assignments, categories, enrollment profiles, update preferences and PSADT settings. Branding and dialog text apply immediately. Changed deployment behaviour, such as processes to close, deferrals, restart handling or prompts, is tested once in the IntuneGet QA virtual machine before its first deployment, which usually takes about an hour.</p>}
             {isEditableWin32 && (
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Install Scope</label>
@@ -402,7 +413,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </h3>}
 
               {/* Installation Behavior (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {isWin32 && <ConfigSection
                 title="Installation Behavior"
                 icon={<Settings className="w-4 h-4" />}
                 expanded={expandedSection === 'behavior'}
@@ -444,8 +455,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                     onChange={(checked) => updateConfig({ verifyInstall: checked })}
                   />
 
-                  {/* Detection Marker Registry Path */}
-                  <div>
+                  {/* Detection Marker Registry Path: curated detection is fixed to the signed release. */}
+                  {!isCurated && <div>
                     <label className="block text-sm font-medium text-text-secondary mb-1.5">
                       Detection marker registry path
                     </label>
@@ -459,7 +470,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                     <p className="text-xs text-text-muted mt-1">
                       Registry key under HKLM/HKCU where the detection marker is written. Customize to track deployments under your own key, e.g. SOFTWARE\CompanyName\Apps. The detection rule updates automatically on save.
                     </p>
-                  </div>
+                  </div>}
 
                   {/* Processes to Close */}
                   <div>
@@ -620,7 +631,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Deferral Settings (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {isWin32 && <ConfigSection
                 title="Deferral Settings"
                 icon={<Clock className="w-4 h-4" />}
                 expanded={expandedSection === 'deferral'}
@@ -697,7 +708,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Progress & Notifications (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {isWin32 && <ConfigSection
                 title="Progress & Notifications"
                 icon={<Bell className="w-4 h-4" />}
                 expanded={expandedSection === 'progress'}
@@ -851,7 +862,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Custom Prompts (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {isWin32 && <ConfigSection
                 title="Custom Prompts"
                 icon={<MessageSquare className="w-4 h-4" />}
                 expanded={expandedSection === 'prompts'}
@@ -1058,7 +1069,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Restart Prompt (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {isWin32 && <ConfigSection
                 title="Restart Prompt"
                 icon={<RefreshCw className="w-4 h-4" />}
                 expanded={expandedSection === 'restart'}
@@ -1124,7 +1135,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Disk Space Check (win32 only) */}
-              {isEditableWin32 && <ConfigSection
+              {isWin32 && <ConfigSection
                 title="Disk Space Check"
                 icon={<HardDrive className="w-4 h-4" />}
                 expanded={expandedSection === 'diskspace'}

@@ -259,6 +259,10 @@ export function UploadCart() {
               packageId: errorData.package?.wingetId,
               title: errorData.code === 'MANIFEST_UNAVAILABLE'
                 ? 'Selected version is no longer available'
+                : errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+                ? 'Custom settings are being verified'
+                : errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED'
+                ? 'Custom settings failed verification'
                 : retryable
                 ? 'Installer verification temporarily unavailable'
                 : 'Deployment blocked before upload',
@@ -577,7 +581,11 @@ export function UploadCart() {
                       )}
                       {!error.retryable && !needsVersionReview && (
                         <p className="text-text-muted mt-1">
-                          Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.
+                          {error.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+                            ? 'Keep this app in the cart and deploy again once verification has passed, or remove it to deploy the remaining apps now.'
+                            : error.code === 'CURATED_CONFIG_VERIFICATION_FAILED'
+                            ? 'Edit the deployment settings or restore the defaults, or remove this app to deploy the remaining apps.'
+                            : 'Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.'}
                         </p>
                       )}
                     </div>
