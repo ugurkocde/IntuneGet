@@ -6,6 +6,14 @@ import { graphScopes, getAdminConsentUrl } from "@/lib/msal-config";
 import { useCallback, useRef, useState } from "react";
 import { isTokenExpiringSoon, getTokenExpiryMinutes } from "@/lib/token-utils";
 
+const BLOCKED_POPUP_ERRORS = new Set(["popup_window_error", "empty_window_error"]);
+
+/** True when MSAL could not open its sign-in popup (blocked or unsupported). */
+export function isBlockedPopupError(error: unknown): boolean {
+  const code = (error as { errorCode?: unknown } | null)?.errorCode;
+  return typeof code === "string" && BLOCKED_POPUP_ERRORS.has(code);
+}
+
 /**
  * Hook to manage Microsoft authentication and access tokens
  * Provides sign-in, sign-out, and token management functionality
@@ -142,7 +150,19 @@ export function useMicrosoftAuth() {
         document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
       }
       return !!result;
-    } catch {
+    } catch (error) {
+      // Popup blockers and embedded browsers cannot open the sign-in window.
+      // Fall back to a full-page redirect instead of failing silently; the
+      // /redirect bridge returns to this page and MsalProvider completes it.
+      if (isBlockedPopupError(error)) {
+        try {
+          document.cookie = 'msal-auth-hint=1; path=/; SameSite=Lax; max-age=86400';
+          await instance.loginRedirect({ scopes: graphScopes });
+          return true;
+        } catch {
+          return false;
+        }
+      }
       return false;
     }
   }, [instance]);
