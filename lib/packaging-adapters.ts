@@ -821,6 +821,14 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // The curated Firefox ESR MSI hands removal to Mozilla's NSIS helper.exe,
+    // whose captured ARP command has no silent switch. Under SYSTEM it opened
+    // an invisible wizard and the registration outlived the deadline (curated
+    // verification run 37291324155). Apply Mozilla's documented /S contract.
+    wingetId: 'IntuneGet.Curated.FirefoxESR',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // Waterfox uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
     // command contains only the helper path, so invoking it unchanged opens an
     // uninstall wizard that is invisible under SYSTEM and leaves the exact
