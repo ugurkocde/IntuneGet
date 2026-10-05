@@ -27,6 +27,34 @@ describe('package callback contract', () => {
     }
   });
 
+  it('accepts a duplicate callback for an existing app without a version', () => {
+    const result = packageCallbackSchema.safeParse({
+      jobId,
+      status: 'duplicate_skipped',
+      progress: 100,
+      intuneAppId: 'existing-app',
+      duplicateInfo: {
+        matchType: 'exact',
+        existingAppId: 'existing-app',
+        existingVersion: null,
+        createdAt: '2025-03-04T10:11:12.1234567Z',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts the tenant configuration error category', () => {
+    const result = packageCallbackSchema.safeParse({
+      jobId,
+      status: 'failed',
+      errorCategory: 'tenant_config',
+      errorCode: 'TENANT_NOT_INTUNE_PROVISIONED',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('rejects invalid progress and unknown statuses', () => {
     expect(packageCallbackSchema.safeParse({ jobId, status: 'uploading', progress: 101 }).success).toBe(false);
     expect(packageCallbackSchema.safeParse({ jobId, status: 'cancelled', progress: 0 }).success).toBe(false);
