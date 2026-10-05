@@ -259,6 +259,10 @@ export function UploadCart() {
               packageId: errorData.package?.wingetId,
               title: errorData.code === 'MANIFEST_UNAVAILABLE'
                 ? 'Selected version is no longer available'
+                : errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+                ? 'Custom settings are being verified'
+                : errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED'
+                ? 'Custom settings failed verification'
                 : retryable
                 ? 'Installer verification temporarily unavailable'
                 : 'Deployment blocked before upload',
