@@ -25,8 +25,13 @@ const BRANCH = 'automation/curated-catalog';
 const ISSUE_TITLE = 'Curated catalog automation needs attention';
 // The QA VM is shared with ordinary QA; keep at most this many curated runs queued.
 const MAX_IN_FLIGHT = 2;
-// Failures are counted per verifier revision, so a merged verifier fix retries.
+// Failures are counted since the curated verifier code last changed, so a
+// merged fix retries. The QA repository's main moves with every ordinary QA
+// result, so its head commit cannot be used for this.
 const MAX_FAILURES_PER_VERIFIER = 2;
+// Hard cap regardless of verifier changes, protecting the shared QA VM.
+const MAX_FAILURES_PER_DAY = 4;
+const VERIFIER_PATHS = [[QA, 'qa/curated'], [QA, '.github/workflows/curated-catalog-verification.yml'], [WEBSITE, 'lib/curated-catalog']];
 const RETRY_COOLDOWN_MS = 2 * 3_600_000;
 const RENEW_BEFORE_MS = 3 * 86_400_000;
 const STALE_PR_MS = 3 * 3_600_000;
@@ -193,7 +198,10 @@ async function plan() {
     .map(run => ({ ...run, candidateId: /\[([a-f0-9]{24})\]\s*$/.exec(run.display_title || '')?.[1] || null }))
     .filter(run => run.candidateId)
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const verifierHead = gh(['api', `repos/${QA}/commits/main`]).sha;
+  const verifierChangedAt = Math.max(...VERIFIER_PATHS.map(([repository, path]) => {
+    const [latest] = gh(['api', `repos/${repository}/commits?sha=main&path=${encodeURIComponent(path)}&per_page=1`]) || [];
+    return latest ? Date.parse(latest.commit.committer.date) : 0;
+  }));
   let inFlight = runs.filter(run => run.status !== 'completed').length;
 
   for (const app of CURATED_APPS) {
@@ -230,13 +238,20 @@ async function plan() {
     failures.push(...mine.filter(run => run.status === 'completed' && run.conclusion !== 'success'));
     const lastFailure = failures[0] || null;
     let lastFailedStep = lastFailure?.policyError ? `approval policy: ${lastFailure.policyError}` : null;
+    let lastFailureDetail = lastFailedStep;
     if (lastFailure && !lastFailure.policyError) {
-      try { lastFailedStep = (await runEvidence(lastFailure.id)).report.failedStep || 'unknown'; } catch { lastFailedStep = 'no evidence'; }
+      try {
+        const { report } = await runEvidence(lastFailure.id);
+        lastFailedStep = report.failedStep || 'unknown';
+        lastFailureDetail = [lastFailedStep, report.failedMessage, report.failedSignature && `observed signer ${report.failedSignature}`].filter(Boolean).join('; ');
+      } catch { lastFailedStep = 'no evidence'; lastFailureDetail = lastFailedStep; }
     }
-    const failuresOnVerifier = failures.filter(run => run.head_sha === verifierHead).length;
-    if (failuresOnVerifier >= MAX_FAILURES_PER_VERIFIER) {
-      row.state = `Failed ${failuresOnVerifier} times on the current verifier (last step: ${lastFailedStep})`;
-      alerts.push(`${app.name} ${candidate.version} failed verification ${failuresOnVerifier} times on the current verifier; last failed step: ${lastFailedStep}. Latest run: https://github.com/${QA}/actions/runs/${lastFailure.id}`);
+    const failuresSinceChange = failures.filter(run => Date.parse(run.created_at) > verifierChangedAt).length;
+    const failuresToday = failures.filter(run => now.getTime() - Date.parse(run.created_at) < 86_400_000).length;
+    if (failuresSinceChange >= MAX_FAILURES_PER_VERIFIER || failuresToday >= MAX_FAILURES_PER_DAY) {
+      const count = Math.max(failuresSinceChange, failuresToday);
+      row.state = `Stopped after ${count} failures (${lastFailureDetail})`;
+      alerts.push(`${app.name} ${candidate.version} failed verification ${count} times; retries resume after a curated verifier or definition change. Last failure: ${lastFailureDetail} (https://github.com/${QA}/actions/runs/${lastFailure.id})`);
       continue;
     }
     if (lastFailure && now.getTime() - Date.parse(lastFailure.updated_at) < RETRY_COOLDOWN_MS) { row.state = `Retry after cooldown (last step: ${lastFailedStep})`; continue; }
