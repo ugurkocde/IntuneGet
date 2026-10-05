@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { BellRing } from 'lucide-react';
 import { useGT } from 'gt-next';
@@ -17,7 +17,7 @@ export function ChangelogBell({ onOpen }: { onOpen?: () => void }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
   const onOpenRef = useRef(onOpen);
-  onOpenRef.current = onOpen;
+  useLayoutEffect(() => { onOpenRef.current = onOpen; }, [onOpen]);
   const [open, setOpen] = useState(false);
   const [feed, setFeed] = useState<ProductChangelogFeed | null>(null);
   const [loading, setLoading] = useState(false);
