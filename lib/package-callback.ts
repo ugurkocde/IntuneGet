@@ -38,14 +38,16 @@ export const packageCallbackSchema = z.object({
   duplicateInfo: z.object({
     matchType: z.enum(['exact', 'partial']),
     existingAppId: z.string().trim().min(1).max(128),
-    existingVersion: z.string().max(128).optional(),
-    createdAt: z.string().datetime({ offset: true }).optional(),
+    // Graph returns null displayVersion for apps uploaded without one, and the
+    // workflow forwards it verbatim. Rejecting null left jobs stuck in packaging.
+    existingVersion: z.string().max(128).nullish(),
+    createdAt: z.string().datetime({ offset: true }).nullish(),
   }).optional(),
   warnings: z.array(z.string().max(1_000)).max(20).optional(),
   runId: z.union([z.string(), z.number().int().nonnegative()]).optional(),
   runUrl: z.string().url().max(2_048).optional(),
   errorStage: z.enum(['download', 'package', 'upload', 'authenticate', 'finalize', 'unknown']).optional(),
-  errorCategory: z.enum(['network', 'validation', 'permission', 'approval', 'installer', 'intune_api', 'system']).optional(),
+  errorCategory: z.enum(['network', 'validation', 'permission', 'approval', 'installer', 'intune_api', 'system', 'tenant_config']).optional(),
   errorCode: z.string().regex(/^[A-Z0-9_]{1,80}$/).optional(),
   errorDetails: z.record(z.string(), z.unknown()).optional(),
   retryable: z.boolean().optional(),
