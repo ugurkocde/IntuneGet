@@ -77,6 +77,7 @@ describe('custom configuration verification lifecycle', () => {
     responses = { 'curated_verification_queue?select': [
       { id: 'old', version: '1.139.0', verification_key: 'release:old' },
       { id: 'same', version: '1.140.0', verification_key: `release:${release.candidate.id}` },
+      { id: 'same-version-other-installer', version: '1.140.0', verification_key: 'release:other-installer' },
     ] };
     await store.enqueueCuratedVerification({ candidate: JSON.stringify(release.candidate), app_label: `VS Code [${release.candidate.id}]` });
     expect(calls.find(call => call.path === 'rpc/enqueue_curated_verification')?.body).toMatchObject({

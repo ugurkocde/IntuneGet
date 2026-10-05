@@ -39,7 +39,7 @@ export async function enqueueCuratedVerification(inputs) {
   const queued = await rest(`curated_verification_queue?select=id,version,verification_key&app_id=eq.${candidate.appId}&kind=eq.release&status=eq.queued`);
   if (kind === 'release' && (queued || []).some(row => compareReleaseVersions(row.version, candidate.version) > 0)) return { queued: true };
   const supersedeIds = kind === 'release' ? (queued || [])
-    .filter(row => row.verification_key !== key && compareReleaseVersions(candidate.version, row.version) >= 0).map(row => row.id) : [];
+    .filter(row => row.verification_key !== key && compareReleaseVersions(candidate.version, row.version) > 0).map(row => row.id) : [];
   await rest('rpc/enqueue_curated_verification', { method: 'POST', body: {
     p_key: key, p_app_id: candidate.appId, p_version: candidate.version, p_kind: kind, p_inputs: inputs, p_supersede_ids: supersedeIds,
   } });
