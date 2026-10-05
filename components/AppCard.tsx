@@ -12,7 +12,7 @@ import { useQuickAdd } from '@/hooks/useQuickAdd';
 import { QaBadge } from '@/components/qa/QaBadge';
 import type { QaStatus } from '@/types/qa';
 
-const installerTypeStyles: Record<string, string> = {
+export const installerTypeStyles: Record<string, string> = {
   msi: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   wix: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   msix: 'text-purple-600 bg-purple-500/10 border-purple-500/20',
@@ -25,7 +25,7 @@ const installerTypeStyles: Record<string, string> = {
   portable: 'text-slate-600 bg-slate-500/10 border-slate-500/20',
 };
 
-function getInstallerLabel(type: string): string {
+export function getInstallerLabel(type: string): string {
   const upper = type.toUpperCase();
   if (upper === 'NULLSOFT' || upper === 'INNO' || upper === 'BURN') return 'EXE';
   if (upper === 'WIX') return 'MSI';

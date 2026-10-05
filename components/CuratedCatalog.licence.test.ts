@@ -70,7 +70,7 @@ describe('curated catalog licence attestation', () => {
     const link = [...document.querySelectorAll('a')].find(entry => entry.textContent?.includes(attestation.title))!;
     expect(link.getAttribute('href')).toBe(attestation.url);
     expect(link.getAttribute('target')).toBe('_blank');
-    expect(button('Add to cart').disabled).toBe(true);
+    expect(button('Select').disabled).toBe(true);
     expect(button('Accept agreement').disabled).toBe(true);
 
     const checkbox = document.querySelector<HTMLInputElement>(`#licence-${acrobat.id}`)!;
@@ -82,9 +82,9 @@ describe('curated catalog licence attestation', () => {
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!;
     expect(JSON.parse(post[1]!.body as string)).toEqual({ appId: acrobat.id, attestationId: attestation.id, attestationVersion: attestation.version, accepted: true });
     expect((post[1]!.headers as Record<string, string>)['X-MSP-Tenant-Id']).toBe('customer-tenant');
-    expect(document.body.textContent).toContain('Accepted for this tenant');
-    expect(button('Add to cart').disabled).toBe(false);
-    await act(async () => { button('Add to cart').click(); });
+    expect(document.body.textContent).toContain('Licence accepted for this tenant');
+    expect(button('Select').disabled).toBe(false);
+    await act(async () => { button('Select').click(); });
     expect(useCartStore.getState().items).toHaveLength(1);
   });
 });
