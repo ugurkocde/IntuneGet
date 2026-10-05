@@ -120,6 +120,17 @@ describe('changelog bell', () => {
     expect(window.location.pathname).toBe('/pricing');
   });
 
+  it('opens when the hash changes to #changelog after mount', async () => {
+    window.history.replaceState(null, '', '/pricing');
+    await act(async () => root.render(createElement(ChangelogBell)));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    window.history.replaceState(null, '', '/pricing#changelog');
+    await act(async () => { window.dispatchEvent(new HashChangeEvent('hashchange')); });
+    await flush();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(window.location.hash).toBe('');
+  });
+
   it('falls back to the home page panel when no bell is mounted', () => {
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
     openChangelog();

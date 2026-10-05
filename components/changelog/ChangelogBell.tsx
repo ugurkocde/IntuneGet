@@ -79,13 +79,19 @@ export function ChangelogBell({ onOpen }: { onOpen?: () => void }) {
       event.preventDefault();
       show();
     };
-    window.addEventListener(CHANGELOG_OPEN_EVENT, openFromLink);
     // Legacy /changelog links redirect to /#changelog.
-    if (window.location.hash === CHANGELOG_HASH) {
+    const openFromHash = () => {
+      if (window.location.hash !== CHANGELOG_HASH) return;
       window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
       show();
-    }
-    return () => window.removeEventListener(CHANGELOG_OPEN_EVENT, openFromLink);
+    };
+    window.addEventListener(CHANGELOG_OPEN_EVENT, openFromLink);
+    window.addEventListener('hashchange', openFromHash);
+    openFromHash();
+    return () => {
+      window.removeEventListener(CHANGELOG_OPEN_EVENT, openFromLink);
+      window.removeEventListener('hashchange', openFromHash);
+    };
   }, [show]);
 
   const onRead = useCallback((id: string) => {
