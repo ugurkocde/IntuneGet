@@ -319,3 +319,22 @@ export interface QaDetailsResponse {
     contentSha256: string | null;
   };
 }
+
+/** One curated catalog verification run, as shown on the public QA page. */
+export interface CuratedQaRun {
+  runId: string;
+  kind: 'release' | 'config';
+  wingetId: string;
+  displayName: string;
+  testedVersion: string;
+  architecture: string;
+  outcome: 'Passed' | 'Failed';
+  testedAtUtc: string;
+  upgradeTested: boolean | null;
+  upgradeFromVersion: string | null;
+  signatureStatus: string | null;
+  signer: string | null;
+  defenderStatus: string | null;
+  failedStep: string | null;
+  failedMessage: string | null;
+}
