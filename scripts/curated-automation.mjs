@@ -29,8 +29,9 @@ const MAX_IN_FLIGHT = 2;
 // merged fix retries. The QA repository's main moves with every ordinary QA
 // result, so its head commit cannot be used for this.
 const MAX_FAILURES_PER_VERIFIER = 2;
-// Hard cap regardless of verifier changes, protecting the shared QA VM.
-const MAX_FAILURES_PER_DAY = 4;
+// Backstop regardless of verifier changes, protecting the shared QA VM. It
+// leaves room for retries after a fix that lands on a day of failures.
+const MAX_FAILURES_PER_DAY = 8;
 const VERIFIER_PATHS = [[QA, 'qa/curated'], [QA, '.github/workflows/curated-catalog-verification.yml'], [WEBSITE, 'lib/curated-catalog']];
 const RETRY_COOLDOWN_MS = 2 * 3_600_000;
 const RENEW_BEFORE_MS = 3 * 86_400_000;
