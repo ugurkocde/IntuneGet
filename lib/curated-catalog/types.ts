@@ -77,8 +77,9 @@ export interface CuratedRelease {
     architecture: CuratedArchitecture;
     sourceReviewedBy: string;
     sourceReportUrl: string;
+    /** Observed Authenticode result, recorded for transparency. Not a release gate. */
     signature: {
-      status: 'valid' | 'unsigned';
+      status: 'valid' | 'unsigned' | 'untrusted';
       publisher: string | null;
       exceptionReason?: string;
     };

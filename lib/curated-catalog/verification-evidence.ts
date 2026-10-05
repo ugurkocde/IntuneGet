@@ -73,8 +73,7 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
       /^[a-f0-9]{64}$/.test(inspection.installerSha256) && (!candidate.vendorSha256 || candidate.vendorSha256 === inspection.installerSha256), 'Inspection does not match the exact publisher candidate.');
     requireValue(inspection.security.status === 'clean' && inspection.security.scanner === 'defender' && inspection.security.malicious === 0 &&
       inspection.security.suspicious === 0 && inspection.security.installerSha256 === inspection.installerSha256, 'Every tested installer must have clean exact-hash security evidence.');
-    requireValue((inspection.signature.status === 'valid' && app.signaturePublishers.includes(inspection.signature.publisher || '')) ||
-      (app.allowUnsigned && inspection.signature.status === 'unsigned' && inspection.signature.publisher === null), 'Every tested installer must satisfy the publisher signature policy.');
+    requireValue(['valid', 'unsigned', 'untrusted'].includes(inspection.signature?.status), 'Every tested installer must record its observed signature.');
   }
   const measured = report.inspection.current.installerSha256;
   const profile = createCuratedVerificationProfile(report.candidate, measured);
@@ -88,11 +87,9 @@ export function releaseFromVerification(report: VerificationReport, run: Verific
     report.qa.installerSha256 === measured && (previous === null || (report.qa.previousInstallerSha256 === report.inspection.previous?.installerSha256 &&
     report.qa.upgradeFromVersion === previous.version)) && report.qa.installerVersion === report.candidate.version && report.qa.architecture === app.architecture, 'QA did not exercise the current production profile and every exact installer.');
   const reportUrl = `https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/${app.id}/${report.candidate.id}.json`;
+  // The signature is informational; a reviewed note is kept when one applies.
   const signature = { ...report.inspection.current.signature };
-  if (signature.status === 'unsigned') {
-    requireValue(typeof context.unsignedException === 'string' && context.unsignedException.trim().length >= 20, 'The maintainer must explicitly review and explain the unsigned installer exception.');
-    signature.exceptionReason = context.unsignedException;
-  }
+  if (signature.status === 'unsigned' && context.unsignedException?.trim()) signature.exceptionReason = context.unsignedException;
   const release: CuratedRelease = {
     id: `${app.id}:${report.candidate.id}`, candidate: report.candidate, installerSha256: measured,
     executionProfileSha256: tested,

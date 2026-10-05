@@ -68,23 +68,27 @@ describe('curated approval trust boundary', () => {
     if (kind === 'profile') release.evidence.qa.executionProfileSha256 = 'b'.repeat(64);
     expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/different installer|different installer or execution/);
   });
-  it('blocks malware flags, unexpected publisher signatures, and self approval', () => {
+  it('blocks malware flags, missing signature evidence, and self approval', () => {
     const release = releaseFixture();
     release.evidence.security.suspicious = 1;
     expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/malware/);
     release.evidence.security.suspicious = 0;
-    release.evidence.signature.publisher = 'Impersonated publisher';
-    expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/signer/);
-    release.evidence.signature.publisher = CURATED_APPS[0].signaturePublishers[0];
+    const observed = release.evidence.signature;
+    release.evidence.signature = { status: 'forged', publisher: null } as unknown as typeof observed;
+    expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/signature evidence/);
+    release.evidence.signature = observed;
     release.approvedBy = release.preparedBy.toUpperCase();
     expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/different reviewers/);
   });
-  it('permits unsigned installers only with a reviewed app exception', () => {
-    const app = CURATED_APPS.find(app => app.id === '7zip')!;
-    expect(validateRelease(app, releaseFixture(app, '26.0'))).toBeTruthy();
+  it('records the observed signature without gating on the signer, because the SHA256 pin is the trust anchor', () => {
+    for (const signature of [{ status: 'valid', publisher: 'A renamed certificate subject' }, { status: 'unsigned', publisher: null }, { status: 'untrusted', publisher: 'Self-signed publisher' }] as const) {
+      const release = releaseFixture();
+      release.evidence.signature = { ...signature };
+      expect(validateRelease(CURATED_APPS[0], release)).toBeTruthy();
+    }
     const release = releaseFixture();
-    release.evidence.signature = { status: 'unsigned', publisher: null, exceptionReason: 'This is deliberately long but is not an approved exception.' };
-    expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/unsigned/);
+    release.evidence.installerSha256 = 'b'.repeat(64);
+    expect(() => validateRelease(CURATED_APPS[0], release)).toThrow(/different installer/);
   });
   it('requires fresh evidence after discovery and a genuinely older upgrade source', () => {
     const release = releaseFixture();

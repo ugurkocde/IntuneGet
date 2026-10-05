@@ -60,10 +60,18 @@ describe('authenticated curated evidence', () => {
       const f = fixture(); mutate(f); expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow();
     }
   });
-  it('requires a separately reviewed explanation for unsigned 7-Zip', () => {
-    const f = fixture(CURATED_APPS.find(app => app.id === '7zip')!);
-    expect(() => releaseFromVerification(f.report, f.run, f.artifact, f.context)).toThrow(/exception/);
-    expect(releaseFromVerification(f.report, f.run, f.artifact, { ...f.context, unsignedException: 'Unit test explanation for a reviewed unsigned vendor installer.' }).evidence.signature.status).toBe('unsigned');
+  it('accepts any observed signature but still requires the exact hash and clean scan', () => {
+    const f = fixture(CURATED_APPS.find(app => app.id === 'notepad-plus-plus')!);
+    f.report.inspection.current.signature = { status: 'untrusted', publisher: 'Notepad++' };
+    expect(releaseFromVerification(f.report, f.run, f.artifact, f.context).evidence.signature.status).toBe('untrusted');
+    const unsigned = fixture(CURATED_APPS.find(app => app.id === '7zip')!);
+    expect(releaseFromVerification(unsigned.report, unsigned.run, unsigned.artifact, unsigned.context).evidence.signature.status).toBe('unsigned');
+    const tampered = fixture();
+    tampered.report.inspection.current.installerSha256 = 'c'.repeat(64);
+    expect(() => releaseFromVerification(tampered.report, tampered.run, tampered.artifact, tampered.context)).toThrow();
+    const flagged = fixture();
+    flagged.report.inspection.current.security.malicious = 1;
+    expect(() => releaseFromVerification(flagged.report, flagged.run, flagged.artifact, flagged.context)).toThrow(/clean/);
   });
   it('binds QA architecture to the reviewed x86 WinSCP definition', () => {
     const f = fixture(CURATED_APPS.find(app => app.id === 'winscp')!);

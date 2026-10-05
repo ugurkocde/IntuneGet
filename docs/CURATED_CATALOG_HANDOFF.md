@@ -12,7 +12,7 @@ Read [CURATED_CATALOG.md](./CURATED_CATALOG.md) for the pipeline, trust model an
 
 ## Policy decisions
 
-- **Automated approval (2026-10-04).** No maintainer review. Approval requires the authenticated passing run, exact installer hash, valid publisher signature or the definition's reviewed unsigned exception (7-Zip), clean Defender scan, every lifecycle phase and VM restoration.
+- **Automated approval (2026-10-04).** No maintainer review. Approval requires the authenticated passing run, exact installer hash, observed Authenticode result recorded but not gated (trust rests on the SHA256 pin), clean Defender scan, every lifecycle phase and VM restoration.
 - **Vendor-updated apps** (`autoUpdate: "vendor-managed"`) may be approved without an upgrade test when no immutable earlier official build is available. The fixed policy reason is signed into the release.
 - **Adobe Reader** is discovered from Adobe's enterprise download service, uses only the full `_en_US.exe` installer, and requires each tenant to accept the Adobe Acrobat Reader Distribution License Agreement before deployment.
 - **VLC** may download from any HTTPS mirror, but only with the publisher SHA-256 pinned.
