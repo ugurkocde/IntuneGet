@@ -73,3 +73,14 @@ packager/.env.*
 
 # Curated discovery and operator verification artifacts
 /output/curated/
+
+# Scratch notes, task logs and one-off operator artifacts never belong in the repo.
+# Per-app QA evidence lives in the private QA repository.
+/qa-*
+/tasks/
+/RELEASE_NOTES_*.md
+/docs/qa-*
+/docs/qa/
+/scripts/qa-*.mjs
+!/scripts/qa-strict-cohort-audit.mjs
+/.codex/

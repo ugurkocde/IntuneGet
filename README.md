@@ -263,7 +263,8 @@ See [SECURITY.md](SECURITY.md) for our complete security policy.
 | [Updates and Policy Guide](docs/FEATURES_UPDATES.md) | Auto-update policies, triggers, and history |
 | [Inventory/Reports/Uploads Guide](docs/FEATURES_INVENTORY_AND_REPORTS.md) | Operational dashboard feature docs |
 | [Authentication Architecture](docs/authentication-architecture.md) | MSAL, admin consent, and service principal flow |
-| [Documentation Audit](docs/DOCUMENTATION_AUDIT.md) | Coverage and remaining documentation gaps |
+| [Curated Catalog](docs/CURATED_CATALOG.md) | Verified catalog pipeline, trust model, and withdrawal |
+| [PSADT Packaging Coverage](docs/PSADT_PACKAGING_COVERAGE.md) | Which PSADT options are generated and tested |
 
 ---
 

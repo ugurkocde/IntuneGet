@@ -18,3 +18,7 @@ For a qualifying product change, add a uniquely named entry JSON file with `titl
 Run `node scripts/publish-changelog.mjs --validate` before committing. Verify the **Publish changelog** workflow and public feed after merging. If the service is temporarily unavailable, rerun the failed workflow with the same files and keys. The repository Actions secret `CHANGELOG_PUBLISH_TOKEN` must match the central service's publisher credential. Do not publish pending PR changes manually through the global skill.
 
 The navigation bell reads the public API without credentials. Keep publisher tokens out of this repository and browser bundles. Preserve full-screen mobile behavior, keyboard access, the current design system, and entry titles without change-type labels.
+
+# Repository hygiene
+
+Commit only product code, tests, migrations and maintained documentation. Never commit scratch plans, task logs, handoff notes, per-application QA evidence, or one-off operator scripts for a single application or incident. Keep those outside the repository; per-application QA evidence belongs in the private QA repository. Migration comments must not point at files that will not be maintained. Release notes go in `release-notes/vX.Y.Z.md`, never the repository root. `.gitignore` blocks the common paths; do not force-add around it.
