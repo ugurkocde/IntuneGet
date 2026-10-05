@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-05T09:00:49.126Z",
-    "expiresAt": "2026-10-12T09:00:49.126Z",
+    "generatedAt": "2026-10-05T09:38:55.991Z",
+    "expiresAt": "2026-10-12T09:38:55.991Z",
     "definitionsSha256": "4a540feca340e844eec00e136efcea6528ce489a785a21c4ad8bd319e207b8c0",
     "releases": [
       {
@@ -591,10 +591,186 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscode/e0a2f3f1cb3190f37deeffc5.json"
           }
         }
+      },
+      {
+        "id": "notepad-plus-plus:f8844a541ea6a174d0c375e8",
+        "candidate": {
+          "appId": "notepad-plus-plus",
+          "version": "8.9.8.1",
+          "installerUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8.1/npp.8.9.8.1.Installer.x64.exe",
+          "vendorSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+          "releaseNotesUrl": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/tag/v8.9.8.1",
+          "discoveredAt": "2026-10-05T06:47:06.885Z",
+          "id": "f8844a541ea6a174d0c375e8"
+        },
+        "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+        "executionProfileSha256": "C3EE59B00C68EE7DEE68A63C827DF8B0DFE17DE5733FF8D87B2814FABBA10994",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T09:38:55.991Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T09:13:45.1530881Z",
+          "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+          "installerVersion": "8.9.8.1",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/notepad-plus-plus/f8844a541ea6a174d0c375e8.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "NOTEPAD++"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+            "websiteCommit": "95f3950c25ea62389cebd3811525f74ff9de34b4",
+            "runId": "37283316172",
+            "runAttempt": 1,
+            "artifactId": "11335377045",
+            "artifactSha256": "38782a9d0820f1d8a420d8c81f243f93aeeb2d3a5105a5c29d9c87a173e4b8ae"
+          },
+          "security": {
+            "status": "clean",
+            "malicious": 0,
+            "engineVersion": "1.1.26080.3",
+            "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+            "scannedAt": "2026-10-05T09:11:31.3202351Z",
+            "scanner": "defender",
+            "signatureVersion": "1.459.560.0",
+            "suspicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/notepad-plus-plus/f8844a541ea6a174d0c375e8.json"
+          },
+          "qa": {
+            "previousInstallerSha256": "7b2a949bf460fb37a3888c9048698f43222a185a48323023df1c51e78a3ca1c2",
+            "testedAt": "2026-10-05T09:13:40.4695197Z",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "executionContext": "LocalSystem",
+            "executionProfileSha256": "C3EE59B00C68EE7DEE68A63C827DF8B0DFE17DE5733FF8D87B2814FABBA10994",
+            "installerSha256": "26f3bcced788fadbac4e7e577b430ea2ce6060cf3bcad993ef4612ecd7d743da",
+            "candidateId": "f8844a541ea6a174d0c375e8",
+            "architecture": "x64",
+            "testLevel": "psadt-package",
+            "installerVersion": "8.9.8.1",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "upgradeFromVersion": "8.9.8",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/notepad-plus-plus/f8844a541ea6a174d0c375e8.json"
+          }
+        }
+      },
+      {
+        "id": "git:6ef13159374af56b83a9bf3e",
+        "candidate": {
+          "appId": "git",
+          "version": "2.56.0",
+          "installerUrl": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.1/Git-2.56.0-64-bit.exe",
+          "vendorSha256": "bfe94e7b419b16eee9fecbd1253a98e3d4f49ba8f029630549052278ffe286a6",
+          "releaseNotesUrl": "https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.1",
+          "discoveredAt": "2026-10-05T07:47:14.266Z",
+          "id": "6ef13159374af56b83a9bf3e"
+        },
+        "installerSha256": "bfe94e7b419b16eee9fecbd1253a98e3d4f49ba8f029630549052278ffe286a6",
+        "executionProfileSha256": "E3D08A3EF6D9C74FD1263B69EB83AA7ABC87A5AE8CEBFA99CAF64231B3ADF492",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T09:38:55.991Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T09:05:03.6980577Z",
+          "installerSha256": "bfe94e7b419b16eee9fecbd1253a98e3d4f49ba8f029630549052278ffe286a6",
+          "installerVersion": "2.56.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/6ef13159374af56b83a9bf3e.json",
+          "signature": {
+            "publisher": "Johannes Schindelin",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+            "websiteCommit": "5d31fc3a5cfa7cc7e093e272df2f84cd315eaed2",
+            "runId": "37283310527",
+            "runAttempt": 1,
+            "artifactId": "11334738202",
+            "artifactSha256": "90e4c0a1c67bdc84c46eb2ba419fc65ce5ec08afdfcd83b4fce08490b3faa597"
+          },
+          "security": {
+            "installerSha256": "bfe94e7b419b16eee9fecbd1253a98e3d4f49ba8f029630549052278ffe286a6",
+            "scannedAt": "2026-10-05T09:02:25.6308333Z",
+            "engineVersion": "1.1.26080.3",
+            "signatureVersion": "1.459.560.0",
+            "suspicious": 0,
+            "malicious": 0,
+            "status": "clean",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/6ef13159374af56b83a9bf3e.json"
+          },
+          "qa": {
+            "upgradeFromVersion": "2.55.0.5",
+            "executionContext": "LocalSystem",
+            "testedAt": "2026-10-05T09:04:59.5364023Z",
+            "installerVersion": "2.56.0",
+            "executionProfileSha256": "E3D08A3EF6D9C74FD1263B69EB83AA7ABC87A5AE8CEBFA99CAF64231B3ADF492",
+            "candidateId": "6ef13159374af56b83a9bf3e",
+            "architecture": "x64",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "finalUninstallExitCode": 0,
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "previousInstallerSha256": "d065a4e23c3d9a6b5073d609b5be0830227ec3ca053c083ba385061ddfaf94c6",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "installerSha256": "bfe94e7b419b16eee9fecbd1253a98e3d4f49ba8f029630549052278ffe286a6",
+            "testLevel": "psadt-package",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/git/6ef13159374af56b83a9bf3e.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "HKOZ12dwPaBHiBLhjkM/n/odkqADG17dBg7D13gvS+OxXKdVKfT2yPxMfqFAc2FnHUFHmdxyTfNiGxUvjf1UAg=="
+  "signature": "yWaKUdctNs1KNdN2zAOwIsf+tdnu69+0DC8tDzsLfDjy+3VIdvJSni3NjKPUofq+TqElJTdHA0O89m3uCprtDw=="
 }
