@@ -25,6 +25,7 @@ Operating rules
 - Failed, excluded, superseded, unavailable, quarantined, or security-blocked candidates never count toward 500.
 - Security findings remain quarantined. Never weaken hash, signature, VirusTotal, pin, tenant-secrecy, managed-uninstall, or fail-closed controls.
 - Never access or enumerate the self-hosted runner working directory. Service metadata is allowed. Never download or execute an installer on the host.
+- The agent cannot query Hyper-V on the host. When a pause needs clean VM restoration verified, accept an operator verification file `.codex-qa-guardian/hyperv-verification-*.json` written after the pause by the host owner's elevated, read-only `Verify-HyperVHostState.ps1`. It satisfies that requirement only if `errors` is empty, the QA VM is `Off`, its `parentCheckpoint` is `Golden-Clean`, every disk has `exists` and `testVhd` true, and the system volume has at least 50 GB free. Then continue with the normal guarded resume and required strict retests. If the file is missing, older than the pause, or fails any condition, keep the pause and request a fresh operator verification. Never ask for or use Hyper-V administrator rights.
 
 Failure repair contract
 

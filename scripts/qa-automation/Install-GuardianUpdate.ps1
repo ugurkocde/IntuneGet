@@ -7,7 +7,7 @@ if ((Split-Path -Leaf $destinationRoot) -ne '.codex-qa-guardian' -or -not (Test-
     throw 'Destination must be the existing .codex-qa-guardian directory.'
 }
 $files = @('qa-control.mjs', 'qa-status.mjs', 'active-health.mjs', 'recovery.mjs', 'repair-process.mjs',
-    'qa-guardian-prompt.md', 'Invoke-IntuneGetQaSupervisor.ps1', 'Invoke-IntuneGetQaRepairAgent.ps1')
+    'qa-guardian-prompt.md', 'Invoke-IntuneGetQaSupervisor.ps1', 'Invoke-IntuneGetQaRepairAgent.ps1', 'Verify-HyperVHostState.ps1')
 foreach ($name in $files) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $name) -PathType Leaf)) { throw "Missing managed source: $name" }
 }

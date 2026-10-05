@@ -53,6 +53,18 @@ minutes doubling to 24 hours. It survives a packager/profile change and records
 an attempt once. Successful verification clears that cooldown. Hash mismatch
 and other deterministic integrity failures retain their existing quarantine.
 
+## Host verification after a VM or storage incident
+
+The repair agent runs without Hyper-V rights and must never be given them. When
+a pause requires clean VM restoration to be verified, the host owner runs
+`Verify-HyperVHostState.ps1` once in an elevated PowerShell. The script is
+read-only (`Get-VM`, `Get-VMSnapshot`, `Get-VMHardDiskDrive`, `Test-VHD`,
+`Get-Volume`) and writes `hyperv-verification-<utc>.json` next to itself. The
+guardian prompt accepts that file only when it is newer than the pause, reports
+no errors, the VM is off on the `Golden-Clean` checkpoint, every disk passes
+`Test-VHD`, and the system volume has at least 50 GB free. The agent then
+performs its normal guarded resume and strict retests.
+
 ## Cohort policy, version 2
 
 `/api/qa/cohort`, protected by `CRON_SECRET`, is the authoritative audit used by
