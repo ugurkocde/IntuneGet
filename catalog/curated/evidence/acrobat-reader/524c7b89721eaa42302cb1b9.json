@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+    "websiteCommit": "7d42fda4a41a28adc146cbb76418cec1c1d67bff",
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "37283299686"
+  },
+  "candidate": {
+    "appId": "acrobat-reader",
+    "version": "26.002.21931",
+    "installerUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600221931/AcroRdrDCx642600221931_en_US.exe",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://www.adobe.com/acrobat/pdf-reader/volume-distribution.html",
+    "discoveredAt": "2026-10-05T06:47:06.206Z",
+    "id": "524c7b89721eaa42302cb1b9"
+  },
+  "previous": null,
+  "inspection": {
+    "current": {
+      "candidateId": "524c7b89721eaa42302cb1b9",
+      "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+      "sourceUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600221931/AcroRdrDCx642600221931_en_US.exe",
+      "finalOrigin": "https://ardownload2.adobe.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Adobe Inc."
+      },
+      "security": {
+        "signatureVersion": "1.459.560.0",
+        "status": "clean",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "scannedAt": "2026-10-05T08:41:29.4886795Z",
+        "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+        "suspicious": 0,
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "524c7b89721eaa42302cb1b9",
+    "packageId": "IntuneGet.Curated.AcrobatReader",
+    "installerUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600221931/AcroRdrDCx642600221931_en_US.exe",
+    "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.AcrobatReader",
+      "displayName": "Adobe Acrobat Reader",
+      "publisher": "Adobe Inc.",
+      "version": "26.002.21931",
+      "architecture": "x64",
+      "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+      "installerType": "exe",
+      "installScope": "machine",
+      "silentSwitches": "/sAll /rs /rps /msi EULA_ACCEPT=YES",
+      "uninstallCommand": "REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat (64-bit)",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.002.21931\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.002.21931\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "515C9B5AB5A59451B7868A0F840EC7A897BD25C23393DA8A0728F4144E68D462",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.AcrobatReader\",\"publisher\":\"IntuneGet QA\",\"version\":\"26.002.21931\",\"wingetId\":\"IntuneGet.Curated.AcrobatReader\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.002.21931\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"7E475548B24FDA2544E8C4BFE4346E568FD5B8C1B484F0CDF22CA24E7F9801D4\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"EB26AABF9B3D64949594157780F240E23E81FFB73300D41239046E7D4AF7707A\",\"silentArgs\":\"/sAll /rs /rps /msi EULA_ACCEPT=YES\",\"sourceType\":\"exe\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat (64-bit)\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.002.21931\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_AcrobatReader\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"A6E39ACDD571EE7135B623B5DA1E8B37FA1C2D97C39700C8BB8F93D735435814\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "architecture": "x64",
+    "executionProfileSha256": "515C9B5AB5A59451B7868A0F840EC7A897BD25C23393DA8A0728F4144E68D462",
+    "upgrade": {
+      "tested": false
+    },
+    "executionContext": "LocalSystem",
+    "testedAt": "2026-10-05T08:44:51.098994Z",
+    "testLevel": "psadt-package",
+    "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerVersion": "26.002.21931",
+    "candidateId": "524c7b89721eaa42302cb1b9"
+  },
+  "verifiedAt": "2026-10-05T08:44:54.8876434Z",
+  "authenticatedArtifact": {
+    "id": 11333723029,
+    "sha256": "1a943ed0177a2aacc156ba7dfe23e9ed33c546d2a7629c98aad69bebc4178493"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-05T09:00:49.126Z",
+    "unsignedException": null,
+    "upgradeException": "Automated policy: Adobe Acrobat Reader is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+  }
+}

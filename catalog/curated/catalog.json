@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-05T08:42:39.259Z",
-    "expiresAt": "2026-10-12T08:42:39.259Z",
+    "generatedAt": "2026-10-05T09:00:49.126Z",
+    "expiresAt": "2026-10-12T09:00:49.126Z",
     "definitionsSha256": "4a540feca340e844eec00e136efcea6528ce489a785a21c4ad8bd319e207b8c0",
     "releases": [
       {
@@ -427,10 +427,174 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winscp/1d3c95281570016ff4e86dbf.json"
           }
         }
+      },
+      {
+        "id": "acrobat-reader:524c7b89721eaa42302cb1b9",
+        "candidate": {
+          "appId": "acrobat-reader",
+          "version": "26.002.21931",
+          "installerUrl": "https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600221931/AcroRdrDCx642600221931_en_US.exe",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://www.adobe.com/acrobat/pdf-reader/volume-distribution.html",
+          "discoveredAt": "2026-10-05T06:47:06.206Z",
+          "id": "524c7b89721eaa42302cb1b9"
+        },
+        "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+        "executionProfileSha256": "515C9B5AB5A59451B7868A0F840EC7A897BD25C23393DA8A0728F4144E68D462",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T09:00:49.126Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T08:44:54.8876434Z",
+          "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+          "installerVersion": "26.002.21931",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/acrobat-reader/524c7b89721eaa42302cb1b9.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "Adobe Inc."
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+            "websiteCommit": "7d42fda4a41a28adc146cbb76418cec1c1d67bff",
+            "runId": "37283299686",
+            "runAttempt": 1,
+            "artifactId": "11333723029",
+            "artifactSha256": "1a943ed0177a2aacc156ba7dfe23e9ed33c546d2a7629c98aad69bebc4178493"
+          },
+          "security": {
+            "signatureVersion": "1.459.560.0",
+            "status": "clean",
+            "engineVersion": "1.1.26080.3",
+            "scanner": "defender",
+            "scannedAt": "2026-10-05T08:41:29.4886795Z",
+            "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+            "suspicious": 0,
+            "malicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/acrobat-reader/524c7b89721eaa42302cb1b9.json"
+          },
+          "qa": {
+            "architecture": "x64",
+            "executionProfileSha256": "515C9B5AB5A59451B7868A0F840EC7A897BD25C23393DA8A0728F4144E68D462",
+            "executionContext": "LocalSystem",
+            "testedAt": "2026-10-05T08:44:51.098994Z",
+            "testLevel": "psadt-package",
+            "installerSha256": "eb26aabf9b3d64949594157780f240e23e81ffb73300d41239046e7d4af7707a",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "installerVersion": "26.002.21931",
+            "candidateId": "524c7b89721eaa42302cb1b9",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: Adobe Acrobat Reader is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/acrobat-reader/524c7b89721eaa42302cb1b9.json"
+          }
+        }
+      },
+      {
+        "id": "vscode:e0a2f3f1cb3190f37deeffc5",
+        "candidate": {
+          "appId": "vscode",
+          "version": "1.140.0",
+          "installerUrl": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/07f806f999227108933c2e30515b26eecc1fda74/VSCodeSetup-x64-1.140.0.exe",
+          "vendorSha256": "f2580caea258d6d6be9342717973eff4624d5e05439e77daab2dcecf68c8b2f1",
+          "releaseNotesUrl": "https://code.visualstudio.com/",
+          "discoveredAt": "2026-10-05T07:47:14.185Z",
+          "id": "e0a2f3f1cb3190f37deeffc5"
+        },
+        "installerSha256": "f2580caea258d6d6be9342717973eff4624d5e05439e77daab2dcecf68c8b2f1",
+        "executionProfileSha256": "3DD495A98A9A64D1449A87328A016B92F40464304726868C377DF600EE622945",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T09:00:49.126Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T08:53:26.9806423Z",
+          "installerSha256": "f2580caea258d6d6be9342717973eff4624d5e05439e77daab2dcecf68c8b2f1",
+          "installerVersion": "1.140.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscode/e0a2f3f1cb3190f37deeffc5.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "Microsoft Corporation"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+            "websiteCommit": "7d42fda4a41a28adc146cbb76418cec1c1d67bff",
+            "runId": "37283305129",
+            "runAttempt": 1,
+            "artifactId": "11334950172",
+            "artifactSha256": "3aef58791b2da7e8e456d2981f6c0e58ef8b8f518e6d6e7079fc00d6768d4e21"
+          },
+          "security": {
+            "engineVersion": "1.1.26080.3",
+            "signatureVersion": "1.459.560.0",
+            "scannedAt": "2026-10-05T08:52:11.3885896Z",
+            "malicious": 0,
+            "installerSha256": "f2580caea258d6d6be9342717973eff4624d5e05439e77daab2dcecf68c8b2f1",
+            "suspicious": 0,
+            "status": "clean",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscode/e0a2f3f1cb3190f37deeffc5.json"
+          },
+          "qa": {
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "installerSha256": "f2580caea258d6d6be9342717973eff4624d5e05439e77daab2dcecf68c8b2f1",
+            "candidateId": "e0a2f3f1cb3190f37deeffc5",
+            "architecture": "x64",
+            "testLevel": "psadt-package",
+            "testedAt": "2026-10-05T08:53:23.9508453Z",
+            "executionProfileSha256": "3DD495A98A9A64D1449A87328A016B92F40464304726868C377DF600EE622945",
+            "installerVersion": "1.140.0",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionContext": "LocalSystem",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: Visual Studio Code is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/vscode/e0a2f3f1cb3190f37deeffc5.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "6Y5D/5W7MmOl5VidvkF1deekFJcFt8Idk7YjO+mcz8ozW78KwHphvmHs7IOZTaYl1Lmb/EPMkznjsGMUpD+aAg=="
+  "signature": "HKOZ12dwPaBHiBLhjkM/n/odkqADG17dBg7D13gvS+OxXKdVKfT2yPxMfqFAc2FnHUFHmdxyTfNiGxUvjf1UAg=="
 }
