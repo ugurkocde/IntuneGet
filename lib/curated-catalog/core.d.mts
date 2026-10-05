@@ -16,3 +16,4 @@ export function verifyCatalog(envelope: unknown, apps: CuratedAppDefinition[], t
 export function signCatalog(payload: CuratedCatalogEnvelope['payload'], apps: CuratedAppDefinition[], keyId: string, privateKey: string): CuratedCatalogEnvelope;
 export function catalogEntries(apps: CuratedAppDefinition[], payload: CuratedCatalogEnvelope['payload']): CuratedCatalogEntry[];
 export function verifyCatalogSignature(envelope: unknown, trustedKeys: Record<string, string>): CuratedCatalogEnvelope['payload'];
+export function verifyCatalogReleases(envelope: unknown, apps: CuratedAppDefinition[], trustedKeys: Record<string, string>, now?: Date): { payload: CuratedCatalogEnvelope['payload']; current: boolean };

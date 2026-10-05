@@ -48,6 +48,8 @@ export interface CuratedAppDefinition {
   autoUpdate: 'vendor-managed' | 'none';
   notes: string;
   installedIdentity: { displayNamePattern: string; executablePaths: string[] };
+  /** Apps and Features display name and exact uninstall key or MSI product code registered by the installer. */
+  registeredUninstall?: { displayName: string; key: string };
   licenceAttestation?: CuratedLicenceAttestation;
 }
 

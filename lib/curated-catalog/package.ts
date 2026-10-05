@@ -12,6 +12,10 @@ export function curatedInstaller(app: CuratedAppDefinition, release: CuratedRele
     architecture: app.architecture, scope: app.scope, type: app.installerType,
     url: release.candidate.installerUrl, sha256: release.installerSha256,
     silentArgs: app.silentArgs,
+    // The exact registered uninstall identity, as Winget manifests supply for
+    // ordinary apps. Without it the package matches the catalog title, which
+    // differs from the Apps and Features name for several publishers.
+    ...(app.registeredUninstall ? { productCode: app.registeredUninstall.key } : {}),
   };
 }
 
@@ -25,7 +29,7 @@ export function buildCuratedCartItem(app: CuratedAppDefinition, release: Curated
     version: release.candidate.version, architecture: app.architecture, installScope: app.scope,
     installerType: app.installerType, installerUrl: installer.url, installerSha256: installer.sha256,
     installCommand: generateInstallCommand(installer, app.scope),
-    uninstallCommand: generateUninstallCommand(installer, app.name),
+    uninstallCommand: generateUninstallCommand(installer, app.registeredUninstall?.displayName ?? app.name),
     detectionRules, psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules },
   };
 }

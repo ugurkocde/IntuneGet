@@ -30,3 +30,17 @@ describe('curated packager compatibility', () => {
     expect(() => assertCuratedPackageProfile(changed.app, changed.release)).toThrow(/current packaging configuration/);
   });
 });
+
+describe('curated registered uninstall identity', () => {
+  const app = (id: string) => CURATED_APPS.find(app => app.id === id)!;
+  it('uses the exact Apps and Features key or MSI product code instead of the catalog title', () => {
+    expect(buildCuratedCartItem(app('vscode'), releaseFixture(app('vscode'), '1.140.0')).uninstallCommand)
+      .toBe('REGISTRY_UNINSTALL_KEY:{EA457B21-F73E-494C-ACAB-524FDE069978}_is1:Microsoft Visual Studio Code');
+    expect(buildCuratedCartItem(app('acrobat-reader'), releaseFixture(app('acrobat-reader'), '26.002.21931')).uninstallCommand)
+      .toBe('REGISTRY_UNINSTALL_PRODUCT:{AC76BA86-1033-FF00-7760-BC15014EA700}:Adobe Acrobat (64-bit)');
+    expect(buildCuratedCartItem(app('git'), releaseFixture(app('git'), '2.56.0')).uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:Git_is1:Git');
+  });
+  it('leaves apps without a registered identity unchanged', () => {
+    expect(buildCuratedCartItem(app('vlc'), releaseFixture(app('vlc'), '3.0.24')).uninstallCommand).toBe('REGISTRY_UNINSTALL:VLC media player');
+  });
+});

@@ -2,7 +2,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalJson, catalogEntries, createCandidate, sha256, signCatalog, validateDefinitions, validateRelease, verifyCatalog } from '../lib/curated-catalog/core.mjs';
+import { canonicalJson, catalogEntries, createCandidate, sha256, signCatalog, validateDefinitions, validateRelease, verifyCatalog, verifyCatalogReleases } from '../lib/curated-catalog/core.mjs';
 import { discoverCandidate } from '../lib/curated-catalog/discovery.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,9 +28,11 @@ try {
   switch (command) {
     case 'validate': {
       const catalog = await readJson(flags.catalog || 'catalog/curated/catalog.json');
-      const payload = verifyCatalog(catalog, apps, trustedKeys());
+      // A definitions change is re-signed by the automation after merge, so
+      // CI checks the signer and each release, not the digest.
+      const { payload, current } = verifyCatalogReleases(catalog, apps, trustedKeys());
       const entries = catalogEntries(apps, payload);
-      console.log(`${apps.length} definitions; ${entries.filter(entry => entry.status === 'approved').length} approved apps; ${payload.releases.length} release records.`);
+      console.log(`${apps.length} definitions; ${entries.filter(entry => entry.status === 'approved').length} approved apps; ${payload.releases.length} release records.${current ? '' : ' Definitions changed since signing; the automation re-signs after merge.'}`);
       break;
     }
     case 'discover': {

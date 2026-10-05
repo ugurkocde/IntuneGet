@@ -1,7 +1,7 @@
 import envelope from '@/catalog/curated/catalog.json';
 import committedKeys from '@/catalog/curated/trusted-keys.json';
 import { CURATED_APPS } from './definitions';
-import { catalogEntries, CuratedCatalogError, verifyCatalog } from './core.mjs';
+import { catalogEntries, CuratedCatalogError, verifyCatalogReleases } from './core.mjs';
 import { assertCuratedPackageProfile, buildCuratedCartItem, curatedInstaller, curatedWorkflowInput } from './package';
 import type { CuratedCatalogEnvelope, CuratedCatalogEntry } from './types';
 import type { Win32CartItem } from '@/types/upload';
@@ -14,7 +14,9 @@ export function getCuratedCatalog(): { payload: CuratedCatalogEnvelope['payload'
   let trustedKeys: Record<string, string>;
   try { trustedKeys = JSON.parse(process.env.CURATED_CATALOG_PUBLIC_KEYS || '{}'); }
   catch { throw new CuratedCatalogError('The curated catalog trust configuration is invalid.'); }
-  const payload = verifyCatalog(envelope, CURATED_APPS, { ...committedKeys, ...trustedKeys });
+  // Serving tolerates a definitions change that the automation has not
+  // re-signed yet; every release is still revalidated individually.
+  const { payload } = verifyCatalogReleases(envelope, CURATED_APPS, { ...committedKeys, ...trustedKeys });
   // A release whose packaging profile is no longer current is withheld until
   // the automation verifies it again; other apps stay deployable meanwhile.
   const entries = catalogEntries(CURATED_APPS, payload).map(entry => {

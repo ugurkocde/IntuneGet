@@ -67,6 +67,7 @@
   {
     "id": "acrobat-reader",
     "installedIdentity": { "displayNamePattern": "^Adobe Acrobat(?: Reader)?(?: DC)?(?: \\(64-bit\\))?$", "executablePaths": ["Adobe/Acrobat DC/Acrobat/Acrobat.exe", "Adobe/Acrobat Reader DC/Reader/AcroRd32.exe"] },
+    "registeredUninstall": { "displayName": "Adobe Acrobat (64-bit)", "key": "{AC76BA86-1033-FF00-7760-BC15014EA700}" },
     "packageId": "IntuneGet.Curated.AcrobatReader",
     "wingetId": "Adobe.Acrobat.Reader.64-bit",
     "name": "Adobe Acrobat Reader",
@@ -134,6 +135,7 @@
   {
     "id": "notepad-plus-plus",
     "installedIdentity": { "displayNamePattern": "^Notepad\\+\\+(?: \\(64-bit x64\\))?$", "executablePaths": ["Notepad++/notepad++.exe"] },
+    "registeredUninstall": { "displayName": "Notepad++", "key": "Notepad++" },
     "packageId": "IntuneGet.Curated.NotepadPlusPlus",
     "wingetId": "Notepad++.Notepad++",
     "name": "Notepad++",
@@ -166,6 +168,7 @@
   {
     "id": "vscode",
     "installedIdentity": { "displayNamePattern": "^Microsoft Visual Studio Code$", "executablePaths": ["Microsoft VS Code/Code.exe"] },
+    "registeredUninstall": { "displayName": "Microsoft Visual Studio Code", "key": "{EA457B21-F73E-494C-ACAB-524FDE069978}_is1" },
     "packageId": "IntuneGet.Curated.VisualStudioCode",
     "wingetId": "Microsoft.VisualStudioCode",
     "name": "Visual Studio Code",
@@ -195,7 +198,8 @@
   },
   {
     "id": "git",
-    "installedIdentity": { "displayNamePattern": "^Git(?: version)? [0-9.]+$", "executablePaths": ["Git/cmd/git.exe"] },
+    "installedIdentity": { "displayNamePattern": "^Git(?:(?: version)? [0-9.]+)?$", "executablePaths": ["Git/cmd/git.exe"] },
+    "registeredUninstall": { "displayName": "Git", "key": "Git_is1" },
     "packageId": "IntuneGet.Curated.Git",
     "wingetId": "Git.Git",
     "name": "Git for Windows",
@@ -263,6 +267,7 @@
   {
     "id": "winscp",
     "installedIdentity": { "displayNamePattern": "^WinSCP(?: [0-9.]+)?$", "executablePaths": ["WinSCP/WinSCP.exe"] },
+    "registeredUninstall": { "displayName": "WinSCP", "key": "winscp3_is1" },
     "packageId": "IntuneGet.Curated.WinSCP",
     "wingetId": "WinSCP.WinSCP",
     "name": "WinSCP",

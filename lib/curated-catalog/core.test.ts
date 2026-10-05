@@ -3,7 +3,7 @@ import committed from '@/catalog/curated/catalog.json';
 import committedKeys from '@/catalog/curated/trusted-keys.json';
 import { CURATED_APPS } from './definitions';
 import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVersions,
-  createCandidate, signCatalog, validateDefinitions, validateRelease, verifyCatalog, verifyCatalogSignature } from './core.mjs';
+  createCandidate, signCatalog, validateDefinitions, validateRelease, verifyCatalog, verifyCatalogReleases, verifyCatalogSignature } from './core.mjs';
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
@@ -199,5 +199,29 @@ describe('curated approval trust boundary', () => {
     expect(() => createCandidate(CURATED_APPS[0], { version: 'latest', installerUrl: 'https://dl.google.com/dl/chrome/install/test.msi' })).toThrow(/numeric/);
     expect(() => canonicalJson({ hash: undefined })).toThrow();
     expect(() => canonicalJson({ score: NaN })).toThrow();
+  });
+});
+
+describe('curated catalog serving across definition changes', () => {
+  it('keeps a signed catalog servable after a definitions change, revalidating each release', () => {
+    const { envelope, keys } = signedFixture();
+    const changed = CURATED_APPS.map(app => ({ ...app, notes: `${app.notes} Changed.` }));
+    const result = verifyCatalogReleases(envelope, changed, keys);
+    expect(result.current).toBe(false);
+    expect(result.payload.releases).toHaveLength(1);
+    expect(verifyCatalogReleases(envelope, CURATED_APPS, keys).current).toBe(true);
+    expect(() => verifyCatalogReleases(envelope, CURATED_APPS, {})).toThrow(/not trusted/);
+    expect(() => verifyCatalogReleases(envelope, CURATED_APPS, keys, new Date(Date.now() + 2 * 86_400_000))).toThrow(/expired/);
+  });
+  it('drops only releases that no longer satisfy the current definitions', () => {
+    const { envelope, keys } = signedFixture();
+    const moved = CURATED_APPS.map(app => app.id === CURATED_APPS[0].id ? { ...app, allowedInstallerSources: [{ origin: 'https://example.com', pathPrefix: '/moved/' }] } : app);
+    expect(verifyCatalogReleases(envelope, moved, keys).payload.releases).toHaveLength(0);
+  });
+  it('rejects registered uninstall identities that are unsafe or do not match the installed identity', () => {
+    const vscode = CURATED_APPS.find(app => app.id === 'vscode')!;
+    for (const registeredUninstall of [{ displayName: 'Microsoft Visual Studio Code', key: 'bad"key' }, { displayName: 'Something Else', key: 'Code_is1' }, { displayName: 'Microsoft Visual Studio Code' }]) {
+      expect(() => validateDefinitions([{ ...vscode, registeredUninstall } as typeof vscode])).toThrow(/registered uninstall/);
+    }
   });
 });
