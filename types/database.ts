@@ -441,6 +441,27 @@ export interface Database {
         >;
         Relationships: GenericRelationship[];
       };
+      curated_verification_queue: {
+        Row: {
+          id: string; verification_key: string; app_id: string; version: string;
+          kind: 'release' | 'config'; inputs: Json; priority: number;
+          status: 'queued' | 'dispatched' | 'completed' | 'superseded';
+          enqueued_at: string; dispatched_at: string | null; finished_at: string | null;
+          github_run_id: string | null; updated_at: string;
+        };
+        Insert: {
+          id?: string; verification_key: string; app_id: string; version: string;
+          kind: 'release' | 'config'; inputs: Json; priority?: number; status?: string;
+          enqueued_at?: string; dispatched_at?: string | null; finished_at?: string | null;
+          github_run_id?: string | null; updated_at?: string;
+        };
+        Update: {
+          status?: 'queued' | 'dispatched' | 'completed' | 'superseded';
+          github_run_id?: string | null; dispatched_at?: string | null;
+          finished_at?: string | null; updated_at?: string;
+        };
+        Relationships: GenericRelationship[];
+      };
       curated_config_verifications: {
         Row: {
           id: string;
@@ -2560,6 +2581,10 @@ export interface Database {
       };
     };
     Functions: {
+      claim_qa_work: {
+        Args: { p_kind: 'ordinary' | 'curated'; p_id: string; p_packager_commit: string };
+        Returns: Json;
+      };
       qa_toolchain_backfill_page: {
         Args: { p_after?: string; p_limit?: number; p_terminal_retry_ids?: string[] };
         Returns: Json;

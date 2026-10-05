@@ -65,6 +65,31 @@ describe('custom configuration verification lifecycle', () => {
     psadt_config_sha256: 'c'.repeat(64), psadt_config: { deployMode: 'Silent' }, status: 'requested', github_run_id: null, failure_detail: null, updated_at: '2026-10-05T08:00:00Z', ...overrides });
   const base = { releases: [release], apps: CURATED_APPS, now, authenticate: async () => {}, slots: 1 };
 
+  it('keeps a persisted request queued until the minute dispatcher actually starts it', async () => {
+    responses = { 'curated_config_verifications?select': [row({})] };
+    const dispatch = vi.fn(async () => ({ queued: true }));
+    await store.processConfigVerifications({ ...base, runs: [], readEvidence: async () => { throw new Error('none'); }, dispatch });
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(calls.some(call => call.method === 'PATCH')).toBe(false);
+  });
+
+  it('supersedes only older queued release identities without resetting duplicate intent', async () => {
+    responses = { 'curated_verification_queue?select': [
+      { id: 'old', version: '1.139.0', verification_key: 'release:old' },
+      { id: 'same', version: '1.140.0', verification_key: `release:${release.candidate.id}` },
+    ] };
+    await store.enqueueCuratedVerification({ candidate: JSON.stringify(release.candidate), app_label: `VS Code [${release.candidate.id}]` });
+    expect(calls.find(call => call.path === 'rpc/enqueue_curated_verification')?.body).toMatchObject({
+      p_app_id: app.id, p_kind: 'release', p_supersede_ids: ['old'],
+    });
+  });
+
+  it('does not enqueue a stale discovery behind an already newer queued release', async () => {
+    responses = { 'curated_verification_queue?select': [{ id: 'newer', version: '1.141.0', verification_key: 'release:newer' }] };
+    await store.enqueueCuratedVerification({ candidate: JSON.stringify(release.candidate), app_label: `VS Code [${release.candidate.id}]` });
+    expect(calls.some(call => call.method === 'POST')).toBe(false);
+  });
+
   it('dispatches a requested configuration with its PSADT settings and marks it verifying', async () => {
     responses = { 'curated_config_verifications?select': [row({})] };
     const dispatch = vi.fn();

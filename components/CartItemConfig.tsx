@@ -43,7 +43,8 @@ import type { CartItem, StoreCartItem, IntuneAppCategorySelection, PackageAssign
 import type { EspProfileSelection } from '@/types/esp';
 import { isStoreCartItem, isWin32CartItem } from '@/types/upload';
 import type { AppRelationship, MsiDetectionRule } from '@/types/intune';
-import { sanitizeProcessesToClose } from '@/types/psadt';
+import { DEFAULT_PSADT_CONFIG, sanitizeProcessesToClose } from '@/types/psadt';
+import { testedCuratedSettings } from '@/lib/curated-catalog/settings';
 import type {
   PSADTConfig,
   ProcessToClose,
@@ -87,6 +88,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const isWin32 = isWin32CartItem(item);
   const isCurated = isWin32 && item.sourceType === 'curated';
   const isEditableWin32 = isWin32 && !isCurated;
+  const [curatedSettingsMode, setCuratedSettingsMode] = useState<'tested-defaults' | 'custom'>(
+    isCurated ? item.curatedSettingsMode || 'custom' : 'custom'
+  );
+  const canEditExecution = isWin32 && (!isCurated || curatedSettingsMode === 'custom');
 
   // Store app state
   const [storeInstallExperience, setStoreInstallExperience] = useState<'user' | 'system'>(
@@ -138,6 +143,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
     espProfiles, relationships, installCommand, uninstallCommand,
     updatePolicy: updatePolicy ?? null,
     carryOverAssignments,
+    curatedSettingsMode,
   });
   const baselineSnapshotRef = useRef(configSnapshot);
   const requestClose = () => {
@@ -202,7 +208,9 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
     if (isCurated) {
       // PSADT behaviour may be customised; the server verifies a changed
       // execution configuration in the QA VM before its first deployment.
-      const curatedProcesses = sanitizeProcessesToClose(config.processesToClose);
+      const savedConfig = curatedSettingsMode === 'tested-defaults'
+        ? testedCuratedSettings({ ...DEFAULT_PSADT_CONFIG, detectionRules: item.detectionRules }, config) : config;
+      const curatedProcesses = sanitizeProcessesToClose(savedConfig.processesToClose);
       if (curatedProcesses.invalid.length > 0) {
         setProcessesError(
           'Each process to close needs an executable name, for example chrome. Fill in the process name or remove the row.'
@@ -211,7 +219,8 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
         return;
       }
       updateItem(item.id, {
-        psadtConfig: { ...config, registryMarkerPath: item.psadtConfig.registryMarkerPath, processesToClose: curatedProcesses.processes },
+        curatedSettingsMode,
+        psadtConfig: { ...savedConfig, registryMarkerPath: item.psadtConfig.registryMarkerPath, processesToClose: curatedProcesses.processes },
         assignments: assignments.length ? assignments : undefined,
         categories: categories.length ? categories : undefined,
         espProfiles: espProfiles.length ? espProfiles : undefined,
@@ -380,7 +389,19 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
             )}
 
             {/* Win32 app: Install Scope */}
-            {isCurated && <p className="text-sm text-text-secondary">This curated release uses a verified machine installation. Installation commands and detection settings are fixed to the approved package. You can choose assignments, categories, enrollment profiles, update preferences and PSADT settings. Branding and dialog text apply immediately. Saving changed deployment behaviour, such as processes to close, deferrals, restart handling or prompts, queues an automatic verification. The cart shows its progress and enables deployment when the settings pass. You can use the tested defaults to deploy without waiting.</p>}
+            {isCurated && <fieldset className="space-y-3 rounded-xl border border-accent-cyan/20 bg-accent-cyan/5 p-4">
+              <legend className="px-1 text-sm font-medium text-text-primary">Curated deployment settings</legend>
+              <label className="flex items-start gap-2 text-sm text-text-primary">
+                <input type="radio" name="curated-settings" checked={curatedSettingsMode === 'tested-defaults'}
+                  onChange={() => setCuratedSettingsMode('tested-defaults')} className="mt-1" />
+                <span>Use tested defaults (recommended)<span className="mt-1 block text-xs text-text-secondary">Deploy without waiting for custom-settings QA. Assignments, categories, update preferences and branding remain configurable.</span></span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-text-primary">
+                <input type="radio" name="curated-settings" checked={curatedSettingsMode === 'custom'}
+                  onChange={() => setCuratedSettingsMode('custom')} className="mt-1" />
+                <span>Customize deployment behaviour<span className="mt-1 block text-xs text-text-secondary">Changed execution settings require their own automatic QA pass before deployment.</span></span>
+              </label>
+            </fieldset>}
             {isEditableWin32 && (
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Install Scope</label>
@@ -413,7 +434,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </h3>}
 
               {/* Installation Behavior (win32 only) */}
-              {isWin32 && <ConfigSection
+              {canEditExecution && <ConfigSection
                 title="Installation Behavior"
                 icon={<Settings className="w-4 h-4" />}
                 expanded={expandedSection === 'behavior'}
@@ -631,7 +652,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Deferral Settings (win32 only) */}
-              {isWin32 && <ConfigSection
+              {canEditExecution && <ConfigSection
                 title="Deferral Settings"
                 icon={<Clock className="w-4 h-4" />}
                 expanded={expandedSection === 'deferral'}
@@ -708,7 +729,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Progress & Notifications (win32 only) */}
-              {isWin32 && <ConfigSection
+              {canEditExecution && <ConfigSection
                 title="Progress & Notifications"
                 icon={<Bell className="w-4 h-4" />}
                 expanded={expandedSection === 'progress'}
@@ -862,7 +883,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Custom Prompts (win32 only) */}
-              {isWin32 && <ConfigSection
+              {canEditExecution && <ConfigSection
                 title="Custom Prompts"
                 icon={<MessageSquare className="w-4 h-4" />}
                 expanded={expandedSection === 'prompts'}
@@ -1069,7 +1090,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Restart Prompt (win32 only) */}
-              {isWin32 && <ConfigSection
+              {canEditExecution && <ConfigSection
                 title="Restart Prompt"
                 icon={<RefreshCw className="w-4 h-4" />}
                 expanded={expandedSection === 'restart'}
@@ -1135,7 +1156,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
               </ConfigSection>}
 
               {/* Disk Space Check (win32 only) */}
-              {isWin32 && <ConfigSection
+              {canEditExecution && <ConfigSection
                 title="Disk Space Check"
                 icon={<HardDrive className="w-4 h-4" />}
                 expanded={expandedSection === 'diskspace'}

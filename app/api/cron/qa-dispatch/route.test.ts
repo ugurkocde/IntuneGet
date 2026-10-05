@@ -7,6 +7,7 @@ const {
   dispatchQaCandidateMock,
   getGitHubActionsHealthMock,
   isQaWorkflowRunCompletedMock,
+  dispatchCuratedQueueMock,
 } = vi.hoisted(() => ({
   getPackageCompatibilityBlockMock: vi.fn(),
   cancelStaleWaitingQaRunsMock: vi.fn(),
@@ -14,11 +15,13 @@ const {
   dispatchQaCandidateMock: vi.fn(),
   getGitHubActionsHealthMock: vi.fn(),
   isQaWorkflowRunCompletedMock: vi.fn(),
+  dispatchCuratedQueueMock: vi.fn(async () => ({ handled: false, dispatched: false })),
 }));
 
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/package-eligibility', () => ({ getPackageCompatibilityBlock: getPackageCompatibilityBlockMock }));
 vi.mock('@/lib/qa/dispatch', () => ({ dispatchQaCandidate: dispatchQaCandidateMock }));
+vi.mock('@/lib/qa/curated-queue', () => ({ dispatchCuratedQueue: dispatchCuratedQueueMock }));
 vi.mock('@/lib/qa/github-actions-health', () => ({
   getGitHubActionsHealth: getGitHubActionsHealthMock,
 }));
@@ -126,7 +129,17 @@ function createSupabaseStub(
   let queuePageIndex = 0;
 
   const client = {
-    rpc: vi.fn(async () => ({ data: '2026-09-24T12:30:00.000Z', error: null })),
+    rpc: vi.fn(async (name: string, args: { p_id?: string }) => {
+      if (name !== 'claim_qa_work') return { data: '2026-09-24T12:30:00.000Z', error: null };
+      const id = args.p_id!;
+      claimAttemptIds.push(id);
+      const claimError = options.claimErrorById?.[id];
+      if (claimError) return { data: null, error: claimError };
+      if (options.claimNullIds?.includes(id)) return { data: null, error: null };
+      const row = allQueued.find(entry => entry.id === id);
+      if (row) claimedIds.push(id);
+      return { data: row ? { row: { ...row, status: 'dispatched', attempts: row.attempts + 1, dispatched_at: new Date().toISOString() } } : null, error: null };
+    }),
     from: vi.fn((table: string) => {
       if (table === 'qa_source_backoff') return query({ data: null, error: null });
       if (table === 'qa_pipeline_control') {

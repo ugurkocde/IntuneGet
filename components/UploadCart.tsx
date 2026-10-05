@@ -566,7 +566,7 @@ export function UploadCart() {
                     unavailable={curatedSettings.isError}
                     checking={curatedSettings.isFetching}
                     onRetry={() => { void curatedSettings.refetch(); }}
-                    onDefaults={(id, psadtConfig) => { updateItem(id, { psadtConfig }); setError(null); }}
+                    onDefaults={(id, psadtConfig) => { updateItem(id, { psadtConfig, curatedSettingsMode: 'tested-defaults' }); setError(null); }}
                   />
                 )}
 

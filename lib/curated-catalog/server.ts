@@ -10,6 +10,7 @@ import type { PackagingJob } from '@/lib/db/types';
 import { isCuratedPackageId } from './core.mjs';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { authorizeCuratedExecution } from './custom-config';
+import { testedCuratedSettings } from './settings';
 
 export function getCuratedCatalog(): { payload: CuratedCatalogEnvelope['payload']; entries: CuratedCatalogEntry[] } {
   let trustedKeys: Record<string, string>;
@@ -74,10 +75,15 @@ export async function reconcileCuratedCartItem(item: Win32CartItem, request?: { 
   if (item.sourceType !== 'curated' || !item.curatedReleaseId || item.qaOverride || item.nestedInstallerType || item.nestedInstallerPath) {
     throw new CuratedCatalogError('Select an approved release from the curated catalog.');
   }
-  const approved = await authorizeCuratedWorkflow({ ...curatedWorkflowInput(item), installerUrl: item.installerUrl, curatedReleaseId: item.curatedReleaseId }, request);
+  const signed = getApprovedCuratedRelease(item.wingetId, item.version, item.curatedReleaseId);
+  const psadtConfig = item.curatedSettingsMode === 'tested-defaults'
+    ? testedCuratedSettings(buildCuratedCartItem(signed.app, signed.release).psadtConfig, item.psadtConfig)
+    : item.psadtConfig;
+  const approved = await authorizeCuratedWorkflow({ ...curatedWorkflowInput({ ...item, psadtConfig }), installerUrl: item.installerUrl, curatedReleaseId: item.curatedReleaseId }, request);
   // Assignment and PSADT choices survive; every other execution field comes
   // from the signed definition and cannot be replaced by mutable browser data.
-  return { item: { ...item, ...buildCuratedCartItem(approved.app, approved.release), psadtConfig: item.psadtConfig }, trustedInstallers: [approved.installer] };
+  return { item: { ...item, ...buildCuratedCartItem(approved.app, approved.release),
+    curatedSettingsMode: item.curatedSettingsMode || 'custom', psadtConfig }, trustedInstallers: [approved.installer] };
 }
 
 export function getCuratedLatestVersions() {

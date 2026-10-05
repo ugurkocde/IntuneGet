@@ -24,6 +24,7 @@ export type UpdateType = 'patch' | 'minor' | 'major';
 export interface DeploymentConfig {
   sourceType?: 'winget' | 'custom' | 'curated';
   curatedReleaseId?: string;
+  curatedSettingsMode?: 'tested-defaults' | 'custom';
   // App information
   displayName: string;
   publisher: string;

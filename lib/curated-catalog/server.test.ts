@@ -30,6 +30,26 @@ describe('curated deployment authorization', () => {
     expect(reconciled.item.sourceType).toBe('curated');
     expect(reconciled.trustedInstallers[0].sha256).toBe(cart.installerSha256);
   });
+  it.each(CURATED_APPS)('uses verified defaults for $name while preserving branding and assignments', async app => {
+    const release = releaseFixture(app);
+    const fixture = signedFixture([release]);
+    Object.assign(state.envelope, fixture.envelope);
+    vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', JSON.stringify(fixture.keys));
+    const cart = { ...buildCuratedCartItem(app, release), id: 'defaults', addedAt: new Date(),
+      assignments: [{ type: 'allDevices' as const, intent: 'required' as const }] };
+    cart.psadtConfig = { ...cart.psadtConfig, processesToClose: [{ name: 'untested', description: '' }], brandingCompanyName: 'Example Company' };
+    const reconciled = await reconcileCuratedCartItem(cart);
+    expect(reconciled.item.psadtConfig.processesToClose).toEqual([]);
+    expect(reconciled.item.psadtConfig.brandingCompanyName).toBe('Example Company');
+    expect(reconciled.item.assignments).toEqual(cart.assignments);
+    expect(reconciled.item.curatedSettingsMode).toBe('tested-defaults');
+  });
+  it('retains the verification gate for opt-in and legacy custom settings', async () => {
+    const cart = item();
+    cart.psadtConfig.processesToClose = [{ name: 'untested', description: '' }];
+    await expect(reconcileCuratedCartItem({ ...cart, curatedSettingsMode: 'custom' })).rejects.toThrow(/verification/);
+    await expect(reconcileCuratedCartItem({ ...cart, curatedSettingsMode: undefined })).rejects.toThrow(/verification/);
+  });
   it('rejects source downgrades and QA overrides', async () => {
     await expect(reconcileCuratedCartItem({ ...item(), sourceType: 'custom' })).rejects.toThrow(/approved release/);
     await expect(reconcileCuratedCartItem({ ...item(), qaOverride: true })).rejects.toThrow(/approved release/);

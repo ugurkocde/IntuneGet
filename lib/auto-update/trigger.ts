@@ -19,6 +19,7 @@ import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { assertCuratedInstaller, authorizeCuratedWorkflow, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { CuratedConfigVerificationError } from '@/lib/curated-catalog/custom-config';
 import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalog/package';
+import { testedCuratedSettings } from '@/lib/curated-catalog/settings';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/types';
 import {
@@ -285,7 +286,9 @@ export class AutoUpdateTrigger {
           // Keep the tenant's PSADT settings. Custom execution settings must be
           // verified for this release; until then the update waits (queued for
           // verification) without counting a failure.
-          psadtConfig: deploymentConfig.psadtConfig || current.psadtConfig,
+          psadtConfig: deploymentConfig.curatedSettingsMode === 'tested-defaults'
+            ? testedCuratedSettings(current.psadtConfig, deploymentConfig.psadtConfig || current.psadtConfig)
+            : deploymentConfig.psadtConfig || current.psadtConfig,
         };
         try {
           await authorizeCuratedWorkflow({
@@ -347,7 +350,7 @@ export class AutoUpdateTrigger {
         detectionRules: JSON.stringify(
           updateInfo.detectionRules || deploymentConfig.detectionRules || []
         ),
-        priority: 1500,
+        priority: 2000,
         demandSource: 'auto_update',
       });
       if (qaDemand.state === 'failed') {
@@ -727,6 +730,7 @@ export class AutoUpdateTrigger {
       package_config: {
         sourceType: updateInfo.sourceType || config.sourceType,
         curatedReleaseId: updateInfo.curatedReleaseId,
+        curatedSettingsMode: config.curatedSettingsMode,
         curatedLicenceAcceptance: updateInfo.curatedLicenceAcceptance,
         assignments,
         categories,

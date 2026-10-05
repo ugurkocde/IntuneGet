@@ -184,6 +184,7 @@ interface CartItemBase {
 export interface Win32CartItem extends CartItemBase {
   appSource: 'win32';
   curatedReleaseId?: string;
+  curatedSettingsMode?: 'tested-defaults' | 'custom';
   // Server-set audit snapshot of the tenant's licence acceptance (curated apps)
   curatedLicenceAcceptance?: CuratedLicenceAcceptanceSnapshot;
   localeCode?: string; // Selected locale for language variant packages

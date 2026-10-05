@@ -1074,7 +1074,7 @@ describe('AutoUpdateTrigger curated licence attestation', () => {
       Object.assign(curatedState.envelope, original);
       vi.unstubAllEnvs();
     };
-    return { run, insertSpy, restore };
+    return { run, insertSpy, restore, policy };
   }
 
   it('skips without creating a job or QA demand until the tenant accepts the agreement', async () => {
@@ -1099,6 +1099,19 @@ describe('AutoUpdateTrigger curated licence attestation', () => {
       expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 'tenant-1', package_config: expect.objectContaining({
         sourceType: 'curated',
         curatedLicenceAcceptance: expect.objectContaining({ attestationId: attestation.id, attestationVersion: attestation.version, acceptedByEmail: 'admin@contoso.test' }),
+      }) }));
+    } finally { restore(); }
+  });
+  it('uses the new release defaults for a tested-defaults policy without custom-settings QA', async () => {
+    const { run, insertSpy, restore, policy } = setup();
+    try {
+      curatedState.acceptances.add(`tenant-1|${attestation.id}|${attestation.version}`);
+      const config = policy.deployment_config as unknown as DeploymentConfig;
+      config.curatedSettingsMode = 'tested-defaults';
+      config.psadtConfig = { ...DEFAULT_PSADT_CONFIG, processesToClose: [{ name: 'old-custom', description: '' }], brandingCompanyName: 'Example Company' };
+      expect(await run()).toMatchObject({ success: true });
+      expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ package_config: expect.objectContaining({
+        curatedSettingsMode: 'tested-defaults', psadtConfig: expect.objectContaining({ processesToClose: [], brandingCompanyName: 'Example Company' }),
       }) }));
     } finally { restore(); }
   });

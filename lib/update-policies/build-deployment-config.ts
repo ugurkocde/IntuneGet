@@ -393,6 +393,8 @@ function assembleDeploymentConfigFromJob(job: {
     displayName: job.display_name,
     sourceType: isObject(packageConfig) && packageConfig.sourceType === 'curated' ? 'curated' : undefined,
     curatedReleaseId: isObject(packageConfig) && typeof packageConfig.curatedReleaseId === 'string' ? packageConfig.curatedReleaseId : undefined,
+    curatedSettingsMode: isObject(packageConfig) && ['tested-defaults', 'custom'].includes(String(packageConfig.curatedSettingsMode))
+      ? packageConfig.curatedSettingsMode as 'tested-defaults' | 'custom' : undefined,
     publisher: job.publisher || 'Unknown Publisher',
     architecture: job.architecture || 'x64',
     installerType: job.installer_type || 'exe',

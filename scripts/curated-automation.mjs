@@ -17,15 +17,13 @@ import { pathToFileURL } from 'node:url';
 import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
 import { discoverCandidate, discoverPreviousCandidate } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
-import { processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
+import { enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
 const QA = 'ugurkocde/IntuneGet-Workflows';
 const VERIFY_WORKFLOW = 'curated-catalog-verification.yml';
 const BRANCH = 'automation/curated-catalog';
 const ISSUE_TITLE = 'Curated catalog automation needs attention';
-// The QA VM is shared with ordinary QA; keep at most this many curated runs queued.
-const MAX_IN_FLIGHT = 2;
 // Failures are counted since the curated verifier code last changed, so a
 // merged fix retries. The QA repository's main moves with every ordinary QA
 // result, so its head commit cannot be used for this.
@@ -114,10 +112,10 @@ async function approvedRelease(runId, approvedAt) {
   return { app, release, evidence };
 }
 
-function dispatchVerification(inputs) {
+async function dispatchVerification(inputs) {
   const body = { ref: 'main', inputs };
   if (process.env.CURATED_DRY_RUN === 'true') console.log(`Dry run: would dispatch ${JSON.stringify(body)}`);
-  else gh(['api', '-X', 'POST', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/dispatches`, '--input', '-'], { input: JSON.stringify(body) });
+  else return enqueueCuratedVerification(inputs);
 }
 
 /** A passing run must come from protected main of both repositories. */
@@ -225,18 +223,16 @@ async function plan() {
     const [latest] = gh(['api', `repos/${repository}/commits?sha=main&path=${encodeURIComponent(path)}&per_page=1`]) || [];
     return latest ? Date.parse(latest.commit.committer.date) : 0;
   }));
-  let inFlight = allRuns.filter(run => run.status !== 'completed').length;
 
-  // Custom PSADT configurations requested by tenants come first (one slot),
-  // since a deployment is waiting on each of them.
+  // Discover all requests independently of available VM slots. The minute
+  // dispatcher orders this durable queue alongside ordinary customer QA.
   if (supabaseConfigured()) {
     try {
       const configs = await processConfigVerifications({
         runs: allRuns, releases: payload.releases.filter(release => !payload.withdrawnReleaseIds.includes(release.id)), apps: CURATED_APPS,
         readEvidence: runEvidence, authenticate: authenticateRun, dispatch: dispatchVerification,
-        slots: Math.max(0, Math.min(1, MAX_IN_FLIGHT - inFlight)), now,
+        slots: 100, now,
       });
-      inFlight += configs.dispatched;
       configStates.push(...configs.states);
     } catch (error) { alerts.push(`Custom configuration verification could not be processed: ${error.message}`); }
   }
@@ -292,7 +288,6 @@ async function plan() {
       continue;
     }
     if (lastFailure && now.getTime() - Date.parse(lastFailure.updated_at) < RETRY_COOLDOWN_MS) { row.state = `Retry after cooldown (last step: ${lastFailedStep})`; continue; }
-    if (inFlight >= MAX_IN_FLIGHT) { row.state = 'Waiting for a free verification slot'; continue; }
 
     // Prefer the last approved release for the upgrade test. Chrome's mutable
     // URL cannot serve an older build, so it falls through to the exemption.
@@ -308,9 +303,8 @@ async function plan() {
       alerts.push(`${app.name} ${candidate.version}: no earlier official installer is available, and this app requires a tested upgrade.`);
       continue;
     }
-    dispatchVerification({ app_label: `${app.name} ${candidate.version} ${app.architecture} [${candidate.id}]`, candidate: JSON.stringify(candidate), previous: previous ? JSON.stringify(previous) : '' });
-    inFlight++;
-    row.state = previous ? `Verification dispatched (upgrade from ${previous.version})` : 'Verification dispatched (vendor-managed, no upgrade test)';
+    await dispatchVerification({ app_label: `${app.name} ${candidate.version} ${app.architecture} [${candidate.id}]`, candidate: JSON.stringify(candidate), previous: previous ? JSON.stringify(previous) : '' });
+    row.state = previous ? `Priority verification queued (upgrade from ${previous.version})` : 'Priority verification queued (vendor-managed, no upgrade test)';
   }
 
   // Decide whether the catalog must be signed again.

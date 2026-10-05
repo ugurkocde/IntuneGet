@@ -1,7 +1,7 @@
 name: Curated catalog automation
 run-name: Curated catalog automation${{ inputs.withdraw_release_id && format(' - withdraw {0}', inputs.withdraw_release_id) || '' }}
 
-# Every 30 minutes: read publisher release metadata, dispatch isolated VM
+# Every 30 minutes: read publisher release metadata, enqueue priority VM
 # verification for new releases, then sign passing releases into the catalog
 # and publish it through an auto-merging PR. No step needs manual approval.
 on:
@@ -43,10 +43,10 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: node scripts/build-curated-runtime.mjs
-      - name: Discover releases, dispatch verification and select passing runs
+      - name: Discover releases, queue priority verification and select passing runs
         id: plan
         env:
-          # CURATED_QA_TOKEN reads and dispatches the private QA verification
+          # CURATED_QA_TOKEN reads the private QA verification
           # workflow and keeps the alert issue there current. The workflow token
           # only authenticates public GitHub release metadata reads.
           GH_TOKEN: ${{ secrets.PAT }}

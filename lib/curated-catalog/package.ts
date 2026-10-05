@@ -23,7 +23,7 @@ export function buildCuratedCartItem(app: CuratedAppDefinition, release: Curated
   const installer = curatedInstaller(app, release);
   const detectionRules = generateDetectionRules(installer, app.name, app.packageId, release.candidate.version);
   return {
-    appSource: 'win32', sourceType: 'curated', curatedReleaseId: release.id,
+    appSource: 'win32', sourceType: 'curated', curatedReleaseId: release.id, curatedSettingsMode: 'tested-defaults',
     wingetId: app.packageId, displayName: app.name, publisher: app.publisher,
     description: `${app.name}. IntuneGet Curated Catalog — ${app.channel}.`,
     version: release.candidate.version, architecture: app.architecture, installScope: app.scope,

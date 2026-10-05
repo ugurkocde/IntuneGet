@@ -830,9 +830,15 @@ export async function GET(request: Request) {
       priorities.set(policy.winget_id, (priorities.get(policy.winget_id) || 0) + 1);
     }
     const demandedIds = new Set<string>(policies.map((policy) => policy.winget_id));
+    // Newly detected updates for deployed/managed apps join customer uploads
+    // in the urgent FIFO band. Background backfill retains its lower priority.
+    for (const policy of policies) {
+      if (changedIds.has(policy.winget_id)) priorities.set(policy.winget_id, 2000);
+    }
     for (const deployed of deployedApps) {
       demandedIds.add(deployed.winget_id);
       if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
+      if (changedIds.has(deployed.winget_id)) priorities.set(deployed.winget_id, 2000);
     }
     for (const wingetId of backfillIds) {
       if (terminalBackfillIds.has(wingetId.trim().toLowerCase())) {
@@ -1188,7 +1194,7 @@ export async function GET(request: Request) {
               summary.alreadyKnown++;
               const { data: existing, error: existingError } = await supabase!
                 .from('qa_candidates')
-                .select('id, status, failure_summary')
+                .select('id, status, failure_summary, priority')
                 .eq('winget_id', app.winget_id)
                 .eq('version', resolution.version)
                 .eq('architecture', architecture)
@@ -1233,7 +1239,7 @@ export async function GET(request: Request) {
                 const { error: priorityError } = await supabase!
                   .from('qa_candidates')
                   .update({
-                    priority: priorities.get(app.winget_id) || 0,
+                    priority: Math.max(existing.priority || 0, priorities.get(app.winget_id) || 0),
                     test_config: testConfig as never,
                     updated_at: now,
                   })

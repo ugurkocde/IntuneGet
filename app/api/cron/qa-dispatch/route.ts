@@ -12,6 +12,8 @@ import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
 import { qaSourceKey, qaSourceRetryAt } from '@/lib/qa/source-backoff';
+import { dispatchCuratedQueue } from '@/lib/qa/curated-queue';
+import type { Database } from '@/types/database';
 
 const DISPATCH_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -168,6 +170,8 @@ export async function GET(request: Request) {
   }
 
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+  const curated = await dispatchCuratedQueue(supabase, now);
+  if (curated.handled) return NextResponse.json({ success: true, ...curated, reconciled });
   let scanned = 0;
   let superseded = 0;
   let lastInstallerQuarantine: { candidateId: string; code: string } | null = null;
@@ -289,28 +293,16 @@ export async function GET(request: Request) {
         if (error) throw error;
         continue;
       }
-      const dispatchedAt = new Date().toISOString();
-      const { data: claimed, error: claimError } = await supabase
-        .from('qa_candidates')
-        .update({
-          status: 'dispatched',
-          attempts: candidate.attempts + 1,
-          dispatched_at: dispatchedAt,
-          phase: null,
-          phase_started_at: null,
-          phase_updated_at: null,
-          failure_summary: null,
-          updated_at: dispatchedAt,
-        })
-        .eq('id', candidate.id)
-        .eq('status', 'queued')
-        .select('*')
-        .maybeSingle();
+      const { data: claimData, error: claimError } = await supabase.rpc('claim_qa_work', {
+        p_kind: 'ordinary', p_id: candidate.id, p_packager_commit: QA_PSADT_TOOLCHAIN.packagerCommit,
+      });
+      const claim = claimData as { row?: Database['public']['Tables']['qa_candidates']['Row']; reason?: string } | null;
+      const claimed = claim?.row;
       if (claimError?.code === '23505') {
         return NextResponse.json({
           success: true,
           dispatched: false,
-          reason: 'claim_lost',
+          reason: claim?.reason || 'claim_lost',
           reconciled,
           scanned,
           superseded,
@@ -323,7 +315,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
           success: true,
           dispatched: false,
-          reason: 'claim_lost',
+          reason: claim?.reason || 'claim_lost',
           reconciled,
           scanned,
           superseded,

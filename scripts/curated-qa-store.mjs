@@ -3,6 +3,7 @@
 // fail), and the lifecycle of custom configuration verifications.
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { compareReleaseVersions } from '../lib/curated-catalog/core.mjs';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -25,6 +26,24 @@ async function rest(path, { method = 'GET', body, prefer } = {}) {
   if (!response.ok) throw new Error(`Supabase ${method} ${path.split('?')[0]} returned HTTP ${response.status}.`);
   const text = await response.text();
   return text ? JSON.parse(text) : null;
+}
+
+/** Persist priority work; only older queued releases of this app are replaced. */
+export async function enqueueCuratedVerification(inputs) {
+  if (!supabaseConfigured()) throw new Error('Curated QA queue storage is required.');
+  const candidate = JSON.parse(inputs.candidate);
+  if (!/^[a-z0-9-]+$/.test(candidate.appId) || !/^[a-f0-9]{24}$/.test(candidate.id)) throw new Error('Invalid curated queue identity.');
+  const configId = CONFIG_RUN.exec(inputs.app_label)?.[1];
+  const kind = configId ? 'config' : 'release';
+  const key = configId ? `config:${configId}` : `release:${candidate.id}`;
+  const queued = await rest(`curated_verification_queue?select=id,version,verification_key&app_id=eq.${candidate.appId}&kind=eq.release&status=eq.queued`);
+  if (kind === 'release' && (queued || []).some(row => compareReleaseVersions(row.version, candidate.version) > 0)) return { queued: true };
+  const supersedeIds = kind === 'release' ? (queued || [])
+    .filter(row => row.verification_key !== key && compareReleaseVersions(candidate.version, row.version) >= 0).map(row => row.id) : [];
+  await rest('rpc/enqueue_curated_verification', { method: 'POST', body: {
+    p_key: key, p_app_id: candidate.appId, p_version: candidate.version, p_kind: kind, p_inputs: inputs, p_supersede_ids: supersedeIds,
+  } });
+  return { queued: true };
 }
 
 const parseJson = (value, fallback) => {
@@ -132,7 +151,8 @@ export async function processConfigVerifications({ runs, releases, apps, readEvi
     const app = apps.find(item => item.id === row.app_id);
     if (!release || !app) { await update(row.id, { status: 'failed', failure_detail: 'The curated release is no longer available.' }); continue; }
     const run = runs.find(item => CONFIG_RUN.exec(item.display_title || '')?.[1] === row.id);
-    if (row.status === 'verifying') {
+    if (row.status === 'verifying' || (run && Date.parse(run.created_at || run.updated_at) > Date.parse(row.updated_at))) {
+      if (row.status === 'requested' && run.status !== 'completed') await update(row.id, { status: 'verifying' });
       if (run && run.status !== 'completed') { states.push(`${app.name} custom settings ${row.psadt_config_sha256.slice(0, 8)}: verifying`); continue; }
       if (!run) {
         if (now.getTime() - Date.parse(row.updated_at) > LOST_DISPATCH_MS) await update(row.id, { status: 'requested', github_run_id: null });
@@ -163,14 +183,14 @@ export async function processConfigVerifications({ runs, releases, apps, readEvi
     if (dispatched >= slots) { states.push(`${app.name} custom settings ${row.psadt_config_sha256.slice(0, 8)}: queued`); continue; }
     const previous = await evidencePrevious(app, release);
     if (!previous && app.autoUpdate !== 'vendor-managed') { await update(row.id, { status: 'failed', failure_detail: 'No earlier release is available for the upgrade test.' }); continue; }
-    dispatch({
+    const dispatchResult = await dispatch({
       app_label: `${app.name} ${release.candidate.version} ${app.architecture} custom settings [config:${row.id}]`,
       candidate: JSON.stringify(release.candidate), previous: previous ? JSON.stringify(previous) : '',
       psadt_config: JSON.stringify(row.psadt_config),
     });
-    await update(row.id, { status: 'verifying' });
+    if (!dispatchResult?.queued) await update(row.id, { status: 'verifying' });
     dispatched++;
-    states.push(`${app.name} custom settings ${row.psadt_config_sha256.slice(0, 8)}: verification dispatched`);
+    states.push(`${app.name} custom settings ${row.psadt_config_sha256.slice(0, 8)}: ${dispatchResult?.queued ? 'queued' : 'verification dispatched'}`);
   }
   return { states, dispatched };
 }
