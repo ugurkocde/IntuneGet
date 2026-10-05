@@ -1,0 +1,5 @@
+{
+  "title": "Check curated deployment settings before uploading",
+  "summary": "Custom deployment settings now enter automatic verification when selected in the cart. The cart shows queued and running checks, enables deployment after a pass, and offers tested defaults for deployment without waiting.",
+  "type": "improved"
+}

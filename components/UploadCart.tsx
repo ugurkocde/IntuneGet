@@ -14,6 +14,7 @@ import {
   Settings,
   RefreshCw,
   ShieldAlert,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
@@ -44,6 +45,8 @@ import { toast } from 'sonner';
 import { useQaStatuses } from '@/hooks/use-qa';
 const QaDetailsDialog = dynamic(() => import('@/components/qa/QaDetailsDialog').then(m => m.QaDetailsDialog));
 import type { QaStatus } from '@/types/qa';
+import { useCuratedSettings } from '@/hooks/use-curated-settings';
+import { CuratedSettingsNotice } from '@/components/CuratedSettingsNotice';
 
 interface PackagingJob {
   id: string;
@@ -123,6 +126,8 @@ export function UploadCart() {
 
   const { isAuthenticated, getAccessToken, signIn, requestAdminConsent } = useMicrosoftAuth();
   const { isMspUser, selectedTenantId } = useMspOptional();
+  const curatedSettings = useCuratedSettings(items, isOpen || isDeploying);
+  const awaitingCuratedSettings = isAuthenticated && !curatedSettings.ready;
   const {
     status: permissionStatus,
     error: permissionError,
@@ -131,6 +136,7 @@ export function UploadCart() {
     verify,
     canDeploy,
   } = usePermissionStatus();
+  const needsPermissions = isAuthenticated && !canDeploy && permissionStatus !== 'checking';
 
   // Load tenant-wide deployments when the cart opens so we can flag apps a
   // teammate already deployed (non-fatal: on any failure we just skip warnings).
@@ -206,7 +212,7 @@ export function UploadCart() {
   };
 
   const handleDeploy = async () => {
-    if (items.length === 0 || needsVersionReview || isRefreshing) return;
+    if (items.length === 0 || needsVersionReview || isRefreshing || awaitingCuratedSettings) return;
 
     trackDeployment(items.length);
     setError(null);
@@ -236,6 +242,13 @@ export function UploadCart() {
     setIsDeploying(true);
 
     try {
+      // Recheck at the point of deployment, including after signing in. The
+      // server independently authorizes the exact profile again in /api/package.
+      if (curatedSettings.curatedItems.length > 0) {
+        const verification = await curatedSettings.refetch();
+        if (verification.isError || !verification.data || curatedSettings.curatedItems.some(item =>
+          !verification.data.items.some(status => status.itemId === item.id && status.status === 'ready'))) return;
+      }
       const response = await fetch('/api/package', {
         method: 'POST',
         headers: {
@@ -250,6 +263,10 @@ export function UploadCart() {
         const contentType = response.headers.get('content-type');
         if (contentType?.includes('application/json')) {
           const errorData = await response.json() as PackageApiErrorResponse;
+          if (errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED' || errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED') {
+            await curatedSettings.refetch();
+            return;
+          }
           if (response.status === 409 || Boolean(errorData.code)) {
             const packageLabel = errorData.package?.displayName;
             const versionLabel = errorData.package?.version;
@@ -259,10 +276,6 @@ export function UploadCart() {
               packageId: errorData.package?.wingetId,
               title: errorData.code === 'MANIFEST_UNAVAILABLE'
                 ? 'Selected version is no longer available'
-                : errorData.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED'
-                ? 'Custom settings are being verified'
-                : errorData.code === 'CURATED_CONFIG_VERIFICATION_FAILED'
-                ? 'Custom settings failed verification'
                 : retryable
                 ? 'Installer verification temporarily unavailable'
                 : 'Deployment blocked before upload',
@@ -546,6 +559,17 @@ export function UploadCart() {
                   />
                 )}
 
+                {awaitingCuratedSettings && (
+                  <CuratedSettingsNotice
+                    items={curatedSettings.curatedItems}
+                    statuses={curatedSettings.data?.items}
+                    unavailable={curatedSettings.isError}
+                    checking={curatedSettings.isFetching}
+                    onRetry={() => { void curatedSettings.refetch(); }}
+                    onDefaults={(id, psadtConfig) => { updateItem(id, { psadtConfig }); setError(null); }}
+                  />
+                )}
+
                 {/* Error message */}
                 {error && (!error.packageId || blockedItem) && (
                   <div role="alert" className="flex items-start gap-3 p-3 bg-status-error/10 border border-status-error/20 rounded-lg">
@@ -581,11 +605,7 @@ export function UploadCart() {
                       )}
                       {!error.retryable && !needsVersionReview && (
                         <p className="text-text-muted mt-1">
-                          {error.code === 'CURATED_CONFIG_VERIFICATION_REQUIRED'
-                            ? 'Keep this app in the cart and deploy again once verification has passed, or remove it to deploy the remaining apps now.'
-                            : error.code === 'CURATED_CONFIG_VERIFICATION_FAILED'
-                            ? 'Edit the deployment settings or restore the defaults, or remove this app to deploy the remaining apps.'
-                            : 'Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.'}
+                          Keep this app in the cart and try again after its trusted WinGet manifest is updated, or remove it to deploy the remaining apps.
                         </p>
                       )}
                     </div>
@@ -635,8 +655,8 @@ export function UploadCart() {
                     </AlertDialogContent>
                   </AlertDialog>
                   <Button
-                    onClick={isAuthenticated && !canDeploy && permissionStatus !== 'checking' ? handleFixPermissions : handleDeployClick}
-                    disabled={isDeploying || isRefreshing || needsVersionReview || (isAuthenticated && permissionStatus === 'checking')}
+                    onClick={needsPermissions ? handleFixPermissions : handleDeployClick}
+                    disabled={isDeploying || isRefreshing || needsVersionReview || (awaitingCuratedSettings && !needsPermissions) || (isAuthenticated && permissionStatus === 'checking')}
                     className={`flex-1 text-white border-0 disabled:opacity-50 ${
                       isAuthenticated && !canDeploy && permissionStatus !== 'checking'
                         ? 'bg-status-error hover:bg-status-error/90'
@@ -657,6 +677,11 @@ export function UploadCart() {
                       <>
                         <Shield className="w-4 h-4 mr-2" />
                         {permissionError === 'network_error' ? 'Retry Check' : 'Grant Permissions'}
+                      </>
+                    ) : awaitingCuratedSettings ? (
+                      <>
+                        <Clock className="w-4 h-4 mr-2" />
+                        Awaiting verification
                       </>
                     ) : (
                       <>

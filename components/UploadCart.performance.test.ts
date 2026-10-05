@@ -37,6 +37,53 @@ afterEach(async () => {
 });
 
 describe('cart permission verification', () => {
+  it('queues custom curated settings before deployment and enables deployment after a pass without uploading automatically', async () => {
+    const item: Win32CartItem = {
+      id: 'curated-firefox', addedAt: '2026-10-05', appSource: 'win32', sourceType: 'curated', curatedReleaseId: 'release-1',
+      wingetId: 'IntuneGet.Curated.FirefoxESR', displayName: 'Mozilla Firefox ESR', publisher: 'Mozilla', version: '140.17.0',
+      architecture: 'x64', installScope: 'machine', installerType: 'msi', installerUrl: 'https://example.test/firefox.msi',
+      installerSha256: 'a'.repeat(64), installCommand: 'install', uninstallCommand: 'uninstall', detectionRules: [],
+      psadtConfig: { ...DEFAULT_PSADT_CONFIG, processesToClose: [{ name: 'firefox', description: '' }] },
+    };
+    let status = 'requested';
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/curated-catalog/settings-verification') return Response.json({ items: [{ itemId: item.id, status, defaultConfig: DEFAULT_PSADT_CONFIG }] });
+      if (url.startsWith('/api/auth/verify-consent')) return Response.json({ verified: true, tenantId: 'tenant' });
+      return Response.json({ statuses: {}, tenantDeployments: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    useCartStore.setState({ isOpen: true, items: [item] });
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
+    await act(async () => root!.render(createElement(QueryClientProvider, { client: client! }, createElement(UploadCart))));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(document.body.textContent).toContain('Queued for verification');
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    const button = (label: string) => [...document.querySelectorAll('button')].find(value => value.textContent?.trim() === label)!;
+    expect(button('Awaiting verification').disabled).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/package')).toBe(false);
+    status = 'ready';
+    await act(async () => { await client!.invalidateQueries({ queryKey: ['curated-settings'] }); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(button('Deploy to Intune').disabled).toBe(false);
+    expect(document.body.textContent).not.toContain('Queued for verification');
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/package')).toBe(false);
+    // Editing the profile cannot reuse the previous ready result while its
+    // new verification is still pending.
+    status = 'verifying';
+    await act(async () => useCartStore.getState().updateItem(item.id, {
+      psadtConfig: { ...item.psadtConfig, processesToClose: [{ name: 'other', description: '' }] },
+    }));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(button('Awaiting verification').disabled).toBe(true);
+    expect(document.body.textContent).toContain('Verification running');
+    status = 'ready';
+    await act(async () => button('Use tested defaults').click());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(useCartStore.getState().items[0]).toMatchObject({ psadtConfig: { processesToClose: [] } });
+    expect(button('Deploy to Intune').disabled).toBe(false);
+  });
+
   it('does not refetch negative permission responses on checking/error transitions', async () => {
     const fetchMock = vi.fn(async () => Response.json({ verified: false, tenantId: 'tenant', error: 'consent_propagating', message: 'Waiting' }));
     vi.stubGlobal('fetch', fetchMock);

@@ -99,11 +99,15 @@ export async function authorizeCuratedExecution(
       tenant_id: request.tenantId || null, requested_by_user_id: request.userId || null,
     };
     // A stale pass (incompatible packager release) is verified again.
-    const write = row
-      ? supabase.from('curated_config_verifications').update({ status: row.status === 'passed' ? 'requested' : row.status, updated_at: new Date().toISOString() }).eq('id', row.id)
-      : supabase.from('curated_config_verifications').insert({ ...record, status: 'requested' });
-    const { error: writeError } = await write;
-    if (writeError && !/duplicate key/i.test(writeError.message)) throw new CuratedCatalogError('Custom curated configuration verification could not be queued.');
+    // Status polling must not reset the dispatch timestamp or overwrite a
+    // concurrent completion. Only a stale pass or a new request needs a write.
+    if (!row || row.status === 'passed') {
+      const write = row
+        ? supabase.from('curated_config_verifications').update({ status: 'requested', updated_at: new Date().toISOString() }).eq('id', row.id).eq('status', 'passed')
+        : supabase.from('curated_config_verifications').insert({ ...record, status: 'requested' });
+      const { error: writeError } = await write;
+      if (writeError && !/duplicate key/i.test(writeError.message)) throw new CuratedCatalogError('Custom curated configuration verification could not be queued.');
+    }
   }
   throw new CuratedConfigVerificationError(`Custom deployment settings for ${app.name} ${release.candidate.version} must pass an install, upgrade and uninstall test in the IntuneGet QA VM before first use. ${row && row.status !== 'passed' ? 'Verification is in progress' : 'Verification has been queued'}; it usually completes within about an hour. Deploy again afterwards.`, row?.status === 'verifying' ? 'verifying' : 'requested');
 }

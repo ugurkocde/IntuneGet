@@ -10,7 +10,7 @@ vi.mock('@/lib/supabase', () => ({
     from: () => ({
       select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: db.row, error: null }) }) }) }),
       insert: async (value: unknown) => { db.inserted.push(value); return { error: null }; },
-      update: (value: unknown) => ({ eq: async () => { db.updated.push(value); return { error: null }; } }),
+      update: (value: unknown) => ({ eq: () => ({ eq: async () => { db.updated.push(value); return { error: null }; } }) }),
     }),
   } : null,
 }));
@@ -49,6 +49,14 @@ describe('curated custom PSADT execution settings', () => {
 
   it('does not queue without a request context', async () => {
     await expect(authorizeCuratedExecution(app, release, customised())).rejects.toThrow(/must pass/);
+    expect(db.inserted).toHaveLength(0);
+  });
+
+  it.each(['requested', 'verifying'])('polls %s without changing dispatch state or timestamps', async (status) => {
+    db.row = { id: 'v1', status, packager_commit: null, execution_profile_sha256: null, failure_detail: null };
+    const error = await authorizeCuratedExecution(app, release, customised(), { tenantId: 't' }).catch(e => e);
+    expect(error.status).toBe(status);
+    expect(db.updated).toHaveLength(0);
     expect(db.inserted).toHaveLength(0);
   });
 

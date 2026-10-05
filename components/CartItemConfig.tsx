@@ -380,7 +380,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
             )}
 
             {/* Win32 app: Install Scope */}
-            {isCurated && <p className="text-sm text-text-secondary">This curated release uses a verified machine installation. Installation commands and detection settings are fixed to the approved package. You can choose assignments, categories, enrollment profiles, update preferences and PSADT settings. Branding and dialog text apply immediately. Changed deployment behaviour, such as processes to close, deferrals, restart handling or prompts, is tested once in the IntuneGet QA virtual machine before its first deployment, which usually takes about an hour.</p>}
+            {isCurated && <p className="text-sm text-text-secondary">This curated release uses a verified machine installation. Installation commands and detection settings are fixed to the approved package. You can choose assignments, categories, enrollment profiles, update preferences and PSADT settings. Branding and dialog text apply immediately. Saving changed deployment behaviour, such as processes to close, deferrals, restart handling or prompts, queues an automatic verification. The cart shows its progress and enables deployment when the settings pass. You can use the tested defaults to deploy without waiting.</p>}
             {isEditableWin32 && (
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Install Scope</label>
