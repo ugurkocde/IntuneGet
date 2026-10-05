@@ -74,10 +74,13 @@ describe('curated deployment settings choice', () => {
       dialog.value = 'BottomRight'; dialog.dispatchEvent(new Event('change', { bubbles: true }));
       const progress = document.querySelector<HTMLSelectElement>('#curated-progress-position')!;
       progress.value = 'Center'; progress.dispatchEvent(new Event('change', { bubbles: true }));
+      const message = document.querySelector<HTMLInputElement>('#curated-progress-message')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(message, 'Installing Firefox ESR');
+      message.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await act(async () => save());
     expect(useCartStore.getState().items[0]).toMatchObject({ curatedSettingsMode: 'tested-defaults',
       psadtConfig: { windowLocation: 'BottomRight', progressDialog: { enabled: DEFAULT_PSADT_CONFIG.progressDialog.enabled,
-        statusMessage: 'Please wait', windowLocation: 'Center' } } });
+        statusMessage: 'Installing Firefox ESR', windowLocation: 'Center' } } });
   });
 });
