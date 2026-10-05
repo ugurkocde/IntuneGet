@@ -1,9 +1,9 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-05T06:48:22.096Z",
-    "expiresAt": "2026-10-12T06:48:22.096Z",
-    "definitionsSha256": "81fc06e6b33da70a7ed5775931bb0bedc18a4b09949edda61ab63333775e70ac",
+    "generatedAt": "2026-10-05T08:42:39.259Z",
+    "expiresAt": "2026-10-12T08:42:39.259Z",
+    "definitionsSha256": "4a540feca340e844eec00e136efcea6528ce489a785a21c4ad8bd319e207b8c0",
     "releases": [
       {
         "id": "chrome:54d5c369f7bbf090a0e6e170",
@@ -345,10 +345,92 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/putty/6ca4a0fe82b9f9e730c8f441.json"
           }
         }
+      },
+      {
+        "id": "winscp:1d3c95281570016ff4e86dbf",
+        "candidate": {
+          "appId": "winscp",
+          "version": "6.5.7",
+          "installerUrl": "https://downloads.sourceforge.net/project/winscp/WinSCP/6.5.7/WinSCP-6.5.7-Setup.exe",
+          "vendorSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+          "releaseNotesUrl": "https://winscp.net/",
+          "discoveredAt": "2026-10-05T08:20:48.87Z",
+          "id": "1d3c95281570016ff4e86dbf"
+        },
+        "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+        "executionProfileSha256": "25F9C425DA65DA36BC31C850D85FEFF11D5645D5CF2D9CA669AA7DD8C641EBD7",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-05T08:42:39.259Z",
+        "evidence": {
+          "verifiedAt": "2026-10-05T08:31:01.4958976Z",
+          "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+          "installerVersion": "6.5.7",
+          "architecture": "x86",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winscp/1d3c95281570016ff4e86dbf.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "Martin Přikryl"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "403e0efa0ab63d0239103183a44c770a8e2ffcda",
+            "websiteCommit": "5a56878f3e91b26d2a186854c83fe6bc9878598b",
+            "runId": "37283076957",
+            "runAttempt": 1,
+            "artifactId": "11333407526",
+            "artifactSha256": "7958d880594722d8864dd18a41a734ccb93157ee541cbb427428924f30e5cccd"
+          },
+          "security": {
+            "scanner": "defender",
+            "suspicious": 0,
+            "engineVersion": "1.1.26080.3",
+            "status": "clean",
+            "malicious": 0,
+            "scannedAt": "2026-10-05T08:30:17.8572733Z",
+            "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+            "signatureVersion": "1.459.560.0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winscp/1d3c95281570016ff4e86dbf.json"
+          },
+          "qa": {
+            "executionProfileSha256": "25F9C425DA65DA36BC31C850D85FEFF11D5645D5CF2D9CA669AA7DD8C641EBD7",
+            "executionContext": "LocalSystem",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "architecture": "x86",
+            "installerVersion": "6.5.7",
+            "installerSha256": "65103dad94a907bf8b7b9b8db8174dfb60010237d9125db066f34d89817bcd99",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "testLevel": "psadt-package",
+            "candidateId": "1d3c95281570016ff4e86dbf",
+            "testedAt": "2026-10-05T08:30:58.3025207Z",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: WinSCP is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winscp/1d3c95281570016ff4e86dbf.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "bw1xYn5cE1zGRl9MVWMEGK2l6Lzj46vXJAR6UR+jqYxhnyGm0r/tMZQvCYBwUlinI5ODvBpFZ9ZlgctPkBUNCg=="
+  "signature": "6Y5D/5W7MmOl5VidvkF1deekFJcFt8Idk7YjO+mcz8ozW78KwHphvmHs7IOZTaYl1Lmb/EPMkznjsGMUpD+aAg=="
 }
