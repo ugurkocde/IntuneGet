@@ -149,7 +149,6 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
           )}
 
           <div className="flex items-center flex-wrap gap-1.5 mt-3">
-            {curatedAppId && pkg.appSource !== 'store' && <CuratedReleaseBadge appId={curatedAppId} />}
             {pkg.appSource === 'store' && (
               <span className="text-xs font-medium text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">
                 Store
@@ -174,6 +173,10 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
           </div>
         </div>
       </div>
+
+      {curatedAppId && pkg.appSource !== 'store' && (
+        <div className="mt-3"><CuratedReleaseBadge appId={curatedAppId} /></div>
+      )}
 
       {!isBulkSelectMode && (
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-overlay/10">

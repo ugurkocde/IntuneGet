@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowLeft, Check, CheckCircle2, ChevronDown, Clock, Download, ExternalLink, FileText, FlaskConical, Loader2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
@@ -151,6 +151,7 @@ function CuratedAppCard({ entry, inCart, expired, licenceStatus, licenceLoading,
   return (
     <article
       id={app.id}
+      tabIndex={-1}
       aria-label={`${app.name} by ${app.publisher}${release ? `, version ${release.version}` : ''}${inCart ? ', selected' : ''}`}
       className="group relative flex flex-col scroll-mt-28 rounded-2xl border border-overlay/10 bg-bg-elevated p-5 contain-layout transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-cyan/30 hover:shadow-card-hover target:border-accent-cyan/50"
     >
@@ -253,6 +254,7 @@ function CuratedAppCard({ entry, inCart, expired, licenceStatus, licenceLoading,
 
 export function CuratedCatalog() {
   const [query, setQuery] = useState('');
+  const scrolledHash = useRef('');
   const addItem = useCartStore(state => state.addItem);
   const items = useCartStore(state => state.items);
   const { query: attestations, accept } = useLicenceAttestations();
@@ -265,6 +267,17 @@ export function CuratedCatalog() {
     },
     staleTime: 30_000, refetchInterval: 60_000,
   });
+  useEffect(() => {
+    const appId = window.location.hash.slice(1);
+    if (!appId || scrolledHash.current === appId || !data?.entries.some(entry => entry.app.id === appId)) return;
+    const card = document.getElementById(appId);
+    if (!card) return;
+    // The catalog arrives after navigation, so Next.js cannot find the hash
+    // target during its initial scroll. Do this once after the cards mount.
+    scrolledHash.current = appId;
+    card.scrollIntoView({ block: 'start' });
+    card.focus({ preventScroll: true });
+  }, [data]);
   const visible = data?.entries.filter(({ app }) => `${app.name} ${app.publisher} ${app.channel} ${app.wingetId || ''}`.toLowerCase().includes(query.trim().toLowerCase())) || [];
   const approvedCount = data?.entries.filter(entry => entry.status === 'approved').length || 0;
   const expired = Boolean(data?.expiresAt && Date.parse(data.expiresAt) <= Date.now());
