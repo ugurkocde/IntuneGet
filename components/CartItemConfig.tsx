@@ -68,6 +68,7 @@ interface CartItemConfigProps {
 }
 
 type ConfigSection =
+  | 'appearance'
   | 'behavior'
   | 'deferral'
   | 'progress'
@@ -432,6 +433,49 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                 <Settings className="w-5 h-5 text-blue-400" />
                 Deployment Configuration
               </h3>}
+
+              {isCurated && !canEditExecution && <ConfigSection
+                title="Dialog appearance"
+                icon={<MessageSquare className="w-4 h-4" />}
+                expanded={expandedSection === 'appearance'}
+                onToggle={() => toggleSection('appearance')}
+              >
+                <div className="space-y-4">
+                  <p className="text-xs text-text-muted">These choices apply when a dialog is shown. Tested defaults control whether dialogs appear.</p>
+                  <div>
+                    <label htmlFor="curated-dialog-position" className="block text-sm font-medium text-text-secondary mb-2">Dialog position</label>
+                    <select id="curated-dialog-position" value={config.windowLocation || 'Default'}
+                      onChange={(e) => updateConfig({ windowLocation: e.target.value as DialogPosition })}
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm">
+                      <option value="Default">Default</option>
+                      <option value="Center">Center</option>
+                      <option value="Top">Top</option>
+                      <option value="Bottom">Bottom</option>
+                      <option value="TopLeft">Top Left</option>
+                      <option value="TopRight">Top Right</option>
+                      <option value="BottomLeft">Bottom Left</option>
+                      <option value="BottomRight">Bottom Right</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="curated-progress-message" className="block text-sm font-medium text-text-secondary mb-2">Status message (optional)</label>
+                    <input id="curated-progress-message" type="text" value={config.progressDialog?.statusMessage || ''}
+                      onChange={(e) => updateConfig({ progressDialog: { ...config.progressDialog, statusMessage: e.target.value || undefined } })}
+                      placeholder="Installing application..."
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="curated-progress-position" className="block text-sm font-medium text-text-secondary mb-2">Progress window position</label>
+                    <select id="curated-progress-position" value={config.progressDialog?.windowLocation || 'Default'}
+                      onChange={(e) => updateConfig({ progressDialog: { ...config.progressDialog, windowLocation: e.target.value as DialogPosition } })}
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm">
+                      <option value="Default">Default</option>
+                      <option value="Center">Center</option>
+                      <option value="BottomRight">Bottom Right</option>
+                    </select>
+                  </div>
+                </div>
+              </ConfigSection>}
 
               {/* Installation Behavior (win32 only) */}
               {canEditExecution && <ConfigSection

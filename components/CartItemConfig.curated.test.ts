@@ -60,4 +60,24 @@ describe('curated deployment settings choice', () => {
     await act(async () => save());
     expect(useCartStore.getState().items[0]).toMatchObject({ curatedSettingsMode: 'custom', psadtConfig: { processesToClose: cart.psadtConfig.processesToClose } });
   });
+  it('lets tested-defaults users change presentation without enabling execution customizations', async () => {
+    const cart = item();
+    cart.psadtConfig.progressDialog = { ...cart.psadtConfig.progressDialog, enabled: false, statusMessage: 'Please wait' };
+    await render(cart);
+    const appearance = [...document.querySelectorAll('button')].find(button => button.textContent?.includes('Dialog appearance'))!;
+    await act(async () => appearance.click());
+    expect(document.querySelector('#curated-progress-message')).not.toBeNull();
+    expect(document.body.textContent).not.toContain('Show progress dialog');
+    expect(document.body.textContent).not.toContain('Installation Behavior');
+    await act(async () => {
+      const dialog = document.querySelector<HTMLSelectElement>('#curated-dialog-position')!;
+      dialog.value = 'BottomRight'; dialog.dispatchEvent(new Event('change', { bubbles: true }));
+      const progress = document.querySelector<HTMLSelectElement>('#curated-progress-position')!;
+      progress.value = 'Center'; progress.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => save());
+    expect(useCartStore.getState().items[0]).toMatchObject({ curatedSettingsMode: 'tested-defaults',
+      psadtConfig: { windowLocation: 'BottomRight', progressDialog: { enabled: DEFAULT_PSADT_CONFIG.progressDialog.enabled,
+        statusMessage: 'Please wait', windowLocation: 'Center' } } });
+  });
 });

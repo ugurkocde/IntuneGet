@@ -84,12 +84,22 @@ export async function dispatchCuratedQueue(supabase: SupabaseClient<Database>, n
   if (claimError) throw new Error('Could not claim curated QA.');
   const claim = data as { row?: QueueRow; reason?: string; queue?: string } | null;
   if (!claim?.row) return { handled: claim?.reason !== 'higher_priority_work' || claim.queue !== 'ordinary', dispatched: false, reason: claim?.reason || 'claim_lost' };
-  // Keep the claim on network/dispatch errors: a timeout may hide an accepted
-  // workflow. Inventory reconciliation resolves it before anything else starts.
+  // Network failures and server errors may hide an accepted workflow. Keep
+  // those claims until inventory reconciliation establishes what happened.
   const response = await fetchImpl(`${base}/workflows/${WORKFLOW}/dispatches`, {
     method: 'POST', headers, body: JSON.stringify({ ref: config.ref, inputs }), signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error(`Curated QA dispatch failed (${response.status}).`);
+  if (!response.ok) {
+    if (response.status >= 400 && response.status < 500) {
+      // GitHub definitively rejected this request. Retire it immediately so
+      // ordinary uploads and other updates can progress on the next tick.
+      const { error } = await supabase.from('curated_verification_queue').update({
+        status: 'superseded', finished_at: now.toISOString(), updated_at: now.toISOString(),
+      }).eq('id', next.id).eq('status', 'dispatched');
+      if (error) throw new Error('Could not release a rejected curated QA dispatch.');
+    }
+    throw new Error(`Curated QA dispatch failed (${response.status}).`);
+  }
   if (next.kind === 'config') {
     const id = next.verification_key.slice('config:'.length);
     const { error } = await supabase.from('curated_config_verifications').update({ status: 'verifying', updated_at: now.toISOString() }).eq('id', id).eq('status', 'requested');

@@ -56,6 +56,18 @@ describe('curated priority dispatch', () => {
     await expect(dispatchCuratedQueue(mock.supabase, now, vi.fn(async () => { throw new Error('timeout'); }))).rejects.toThrow('timeout');
     expect(mock.updates).toEqual([]);
   });
+  it.each([401, 403, 404, 422, 429])('releases a definitively rejected dispatch (%s) so other QA is not blocked', async (status) => {
+    const mock = client(null, row());
+    await expect(dispatchCuratedQueue(mock.supabase, now, vi.fn(async () => new Response(null, { status }))))
+      .rejects.toThrow(`Curated QA dispatch failed (${status})`);
+    expect(mock.updates).toEqual([expect.objectContaining({ status: 'superseded', finished_at: now.toISOString() })]);
+  });
+  it('keeps server errors claimed because a run may have been accepted', async () => {
+    const mock = client(null, row());
+    await expect(dispatchCuratedQueue(mock.supabase, now, vi.fn(async () => new Response(null, { status: 503 }))))
+      .rejects.toThrow('Curated QA dispatch failed (503)');
+    expect(mock.updates).toEqual([]);
+  });
   it('preserves a currently running verification', async () => {
     const mock = client(row({ status: 'dispatched' }), row());
     const fetchMock = vi.fn(async () => Response.json({ total_count: 1, workflow_runs: [{ id: 42,
