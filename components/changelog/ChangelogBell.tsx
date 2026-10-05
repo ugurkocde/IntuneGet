@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { BellRing } from 'lucide-react';
 import { useGT } from 'gt-next';
 import {
-  CHANGELOG_SEEN_EVENT, CHANGELOG_SEEN_KEY, fetchProductChangelog,
+  CHANGELOG_HASH, CHANGELOG_OPEN_EVENT, CHANGELOG_SEEN_EVENT, CHANGELOG_SEEN_KEY, fetchProductChangelog,
   markChangelogSeen, readChangelogSeen, type ProductChangelogFeed,
 } from '@/lib/product-changelog';
 
@@ -16,6 +16,8 @@ export function ChangelogBell({ onOpen }: { onOpen?: () => void }) {
   const panelId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
   const [open, setOpen] = useState(false);
   const [feed, setFeed] = useState<ProductChangelogFeed | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,6 +67,27 @@ export function ChangelogBell({ onOpen }: { onOpen?: () => void }) {
     };
   }, [load]);
 
+  const show = useCallback(() => {
+    onOpenRef.current?.();
+    setOpen(true);
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const openFromLink = (event: Event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      show();
+    };
+    window.addEventListener(CHANGELOG_OPEN_EVENT, openFromLink);
+    // Legacy /changelog links redirect to /#changelog.
+    if (window.location.hash === CHANGELOG_HASH) {
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+      show();
+    }
+    return () => window.removeEventListener(CHANGELOG_OPEN_EVENT, openFromLink);
+  }, [show]);
+
   const onRead = useCallback((id: string) => {
     setSeen(id);
     markChangelogSeen(id);
@@ -84,7 +107,7 @@ export function ChangelogBell({ onOpen }: { onOpen?: () => void }) {
         aria-controls={open ? panelId : undefined}
         onFocus={() => { void load(); }}
         onPointerEnter={() => { void load(); }}
-        onClick={() => { onOpen?.(); setOpen(true); void load(); }}
+        onClick={show}
         className="relative inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-overlay/5 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
       >
         <BellRing className="h-5 w-5" aria-hidden="true" />

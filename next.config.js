@@ -30,6 +30,16 @@ const nextConfig = {
     // in production; AppIcon renders icons at quality 90.
     qualities: [75, 90],
   },
+  async redirects() {
+    return [
+      {
+        // The changelog page was retired; the header bell's panel opens from this hash.
+        source: "/changelog",
+        destination: "/#changelog",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

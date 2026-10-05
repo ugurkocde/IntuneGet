@@ -5,6 +5,8 @@ export const CHANGELOG_FEED_URL = `${config.apiUrl}/${config.productId}?limit=20
 export const CHANGELOG_ARCHIVE_URL = `https://changelog.ugurlabs.com/?product=${config.productId}`;
 export const CHANGELOG_SEEN_KEY = `ugurlabs:changelog:last-seen:${config.productId}`;
 export const CHANGELOG_SEEN_EVENT = 'intuneget:changelog-seen';
+export const CHANGELOG_OPEN_EVENT = 'intuneget:changelog-open';
+export const CHANGELOG_HASH = '#changelog';
 const CACHE_TTL_MS = 5 * 60_000;
 
 export interface ProductChangelogEntry {
@@ -88,6 +90,15 @@ export function readChangelogSeen(): string | null {
 export function markChangelogSeen(id: string): void {
   try { window.localStorage.setItem(CHANGELOG_SEEN_KEY, id); } catch { /* Keep the panel usable without storage. */ }
   window.dispatchEvent(new CustomEvent(CHANGELOG_SEEN_EVENT, { detail: id }));
+}
+
+// Opens the updates panel owned by the page's ChangelogBell. Pages without a
+// bell (error pages) fall back to the home page, which opens it from the hash.
+export function openChangelog(): void {
+  const event = new CustomEvent(CHANGELOG_OPEN_EVENT, { cancelable: true });
+  // A full load is intended: error pages may not have a working router.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  if (window.dispatchEvent(event)) window.location.assign(`/${CHANGELOG_HASH}`);
 }
 
 export function changelogEntryUrl(id: string): string {

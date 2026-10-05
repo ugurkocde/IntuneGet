@@ -13,7 +13,7 @@ vi.mock('@/lib/product-changelog', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/product-changelog')>(), fetchProductChangelog: mocks.load,
 }));
 import { ChangelogBell } from './ChangelogBell';
-import { CHANGELOG_SEEN_KEY } from '@/lib/product-changelog';
+import { CHANGELOG_SEEN_KEY, openChangelog } from '@/lib/product-changelog';
 
 const feed = { product: { id: 'intuneget', name: 'IntuneGet', websiteUrl: 'https://www.intuneget.com/' }, entries: [
   { id: 'latest-update', title: '<b>A smoother catalog</b>', summary: 'Large catalogs are easier to browse.', publishedOn: '2026-09-05', type: 'improved' },
@@ -97,5 +97,32 @@ describe('changelog bell', () => {
     mocks.load.mockClear();
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(mocks.load).not.toHaveBeenCalled();
+  });
+
+  it('opens from links elsewhere on the page through a single mounted bell', async () => {
+    const onOpen = vi.fn();
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
+    await act(async () => root.render(createElement('div', null, createElement(ChangelogBell, { onOpen }), createElement(ChangelogBell))));
+    await act(async () => openChangelog());
+    await flush();
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(mocks.load).toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('opens from the legacy /changelog redirect hash and clears it', async () => {
+    window.history.replaceState(null, '', '/pricing#changelog');
+    await act(async () => root.render(createElement(ChangelogBell)));
+    await flush();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(window.location.hash).toBe('');
+    expect(window.location.pathname).toBe('/pricing');
+  });
+
+  it('falls back to the home page panel when no bell is mounted', () => {
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
+    openChangelog();
+    expect(assign).toHaveBeenCalledWith('/#changelog');
   });
 });

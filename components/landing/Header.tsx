@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { useAuthHint } from "@/hooks/useAuthHint";
 import { ChangelogBell } from "@/components/changelog/ChangelogBell";
+import { openChangelog } from "@/lib/product-changelog";
 import { DocsDropdown } from "./DocsDropdown";
 import { ResourcesDropdown, resourceLinks } from "./ResourcesDropdown";
 import {
@@ -192,19 +193,34 @@ export function Header() {
                     <T>Resources</T>
                   </p>
                   <div className="grid grid-cols-2 gap-x-4">
-                    {resourceLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setOpen(false)}
-                        className={cn(
-                          "rounded-lg py-3 text-sm font-medium text-text-secondary hover:text-accent-cyan",
-                          focus,
-                        )}
-                      >
-                        <T>{link.label}</T>
-                      </Link>
-                    ))}
+                    {resourceLinks.map((link) => {
+                      const className = cn(
+                        "rounded-lg py-3 text-left text-sm font-medium text-text-secondary hover:text-accent-cyan",
+                        focus,
+                      );
+                      return link.href ? (
+                        <Link
+                          key={link.label}
+                          href={link.href}
+                          onClick={() => setOpen(false)}
+                          className={className}
+                        >
+                          <T>{link.label}</T>
+                        </Link>
+                      ) : (
+                        <button
+                          key={link.label}
+                          type="button"
+                          onClick={() => {
+                            setOpen(false);
+                            openChangelog();
+                          }}
+                          className={className}
+                        >
+                          <T>{link.label}</T>
+                        </button>
+                      );
+                    })}
                   </div>
                 </nav>
                 <div className="mt-auto space-y-5 pt-8">

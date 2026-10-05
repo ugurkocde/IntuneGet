@@ -15,12 +15,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { GithubMark, Linkedin } from "@/components/icons/brand-icons";
+import { openChangelog } from "@/lib/product-changelog";
 import { FadeIn } from "../animations/FadeIn";
 import { StaggerContainer, StaggerItem } from "../animations/StaggerContainer";
 
 interface FooterLink {
   label: string;
-  href: string;
+  // Omitted for the changelog, which opens the updates panel instead of a page.
+  href?: string;
   external?: boolean;
 }
 
@@ -63,14 +65,14 @@ const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
         href: "https://github.com/ugurkocde/IntuneGet",
         external: true,
       },
-      { label: "Changelog", href: "/changelog" },
+      { label: "Changelog" },
       { label: "Roadmap", href: "/roadmap" },
       { label: "About", href: "/about" },
     ],
   },
 ];
 
-const utilityLinks: Array<FooterLink & { icon: LucideIcon }> = [
+const utilityLinks: Array<FooterLink & { href: string; icon: LucideIcon }> = [
   {
     label: "Deployment guide",
     href: "/blog/deploy-winget-apps-to-intune",
@@ -116,6 +118,14 @@ function FooterNavLink({ link }: { link: FooterLink }) {
       )}
     </>
   );
+
+  if (!link.href) {
+    return (
+      <button type="button" onClick={openChangelog} className={className}>
+        {content}
+      </button>
+    );
+  }
 
   if (link.external || link.href.startsWith("mailto:")) {
     return (
