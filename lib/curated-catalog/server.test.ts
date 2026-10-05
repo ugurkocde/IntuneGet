@@ -6,7 +6,7 @@ import type { PackagingJob } from '@/lib/db/types';
 
 const state = vi.hoisted(() => ({ envelope: {} as Record<string, unknown> }));
 vi.mock('@/catalog/curated/catalog.json', () => ({ default: state.envelope }));
-import { assertCuratedWorkflow, getApprovedCuratedRelease, getCuratedCatalog, getCuratedLatestVersions,
+import { authorizeCuratedWorkflow, getApprovedCuratedRelease, getCuratedCatalog, getCuratedLatestVersions,
   reconcileCuratedCartItem, validateCuratedPackagingJob } from './server';
 
 describe('curated deployment authorization', () => {
@@ -23,18 +23,18 @@ describe('curated deployment authorization', () => {
     expect(getApprovedCuratedRelease(CURATED_APPS[0].packageId).release.candidate.version).toBe('120.0.0.0');
     expect(getCuratedLatestVersions()).toEqual([{ winget_id: CURATED_APPS[0].packageId, latest_version: '120.0.0.0' }]);
   });
-  it('keeps assignments while reconciling the approved package', () => {
+  it('keeps assignments while reconciling the approved package', async () => {
     const cart = { ...item(), assignments: [{ type: 'allDevices' as const, intent: 'required' as const }] };
-    const reconciled = reconcileCuratedCartItem(cart);
+    const reconciled = await reconcileCuratedCartItem(cart);
     expect(reconciled.item.assignments).toEqual(cart.assignments);
     expect(reconciled.item.sourceType).toBe('curated');
     expect(reconciled.trustedInstallers[0].sha256).toBe(cart.installerSha256);
   });
-  it('rejects source downgrades and QA overrides', () => {
-    expect(() => reconcileCuratedCartItem({ ...item(), sourceType: 'custom' })).toThrow(/approved release/);
-    expect(() => reconcileCuratedCartItem({ ...item(), qaOverride: true })).toThrow(/approved release/);
+  it('rejects source downgrades and QA overrides', async () => {
+    await expect(reconcileCuratedCartItem({ ...item(), sourceType: 'custom' })).rejects.toThrow(/approved release/);
+    await expect(reconcileCuratedCartItem({ ...item(), qaOverride: true })).rejects.toThrow(/approved release/);
   });
-  it.each(['url', 'hash', 'scope', 'architecture', 'switches', 'detection', 'successCodes', 'nested'] as const)('rejects changed %s', field => {
+  it.each(['url', 'hash', 'scope', 'architecture', 'switches', 'detection', 'successCodes', 'nested'] as const)('rejects changed %s', async field => {
     const cart = item();
     const input = { ...curatedWorkflowInput(cart), installerUrl: cart.installerUrl, curatedReleaseId: cart.curatedReleaseId };
     if (field === 'url') input.installerUrl = 'https://evil.test/app.msi';
@@ -45,9 +45,9 @@ describe('curated deployment authorization', () => {
     if (field === 'detection') input.detectionRules = JSON.stringify([{ type: 'script', scriptContent: 'Write-Output "incorrect"; exit 0', enforceSignatureCheck: false, runAs32Bit: false }]);
     if (field === 'successCodes') input.installerSuccessCodes = [42];
     if (field === 'nested') input.nestedInstallerPath = 'payload.exe';
-    expect(() => assertCuratedWorkflow(input)).toThrow(/approved curated release/);
+    await expect(authorizeCuratedWorkflow(input)).rejects.toThrow(/approved curated release/);
   });
-  it('revalidates queued local-packager jobs before handing off an installer', () => {
+  it('revalidates queued local-packager jobs before handing off an installer', async () => {
     const cart = item();
     const job = {
       winget_id: cart.wingetId, version: cart.version, display_name: cart.displayName,
@@ -57,9 +57,9 @@ describe('curated deployment authorization', () => {
       uninstall_command: cart.uninstallCommand, detection_rules: cart.detectionRules,
       package_config: { sourceType: 'curated', curatedReleaseId: cart.curatedReleaseId, psadtConfig: cart.psadtConfig },
     } as unknown as PackagingJob;
-    expect(() => validateCuratedPackagingJob(job)).not.toThrow();
+    await expect(validateCuratedPackagingJob(job)).resolves.toBeUndefined();
     job.installer_sha256 = 'b'.repeat(64);
-    expect(() => validateCuratedPackagingJob(job)).toThrow(/metadata differs/);
+    await expect(validateCuratedPackagingJob(job)).rejects.toThrow(/metadata differs/);
   });
   it('rejects revoked releases and does not substitute a Winget release', () => {
     const release = releaseFixture();
@@ -83,7 +83,7 @@ describe('curated deployment authorization', () => {
     expect(getCuratedLatestVersions()).toEqual([{ winget_id: CURATED_APPS[1].packageId, latest_version: '140.2.0' }]);
     expect(() => getApprovedCuratedRelease(CURATED_APPS[0].packageId)).toThrow(/awaiting verification/);
   });
-  it('leaves ordinary packaging jobs untouched', () => {
-    expect(() => validateCuratedPackagingJob({ winget_id: 'Google.Chrome', package_config: {} } as PackagingJob)).not.toThrow();
+  it('leaves ordinary packaging jobs untouched', async () => {
+    await expect(validateCuratedPackagingJob({ winget_id: 'Google.Chrome', package_config: {} } as PackagingJob)).resolves.toBeUndefined();
   });
 });

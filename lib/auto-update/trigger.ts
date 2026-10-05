@@ -16,8 +16,9 @@ import {
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
-import { assertCuratedInstaller, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
-import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
+import { assertCuratedInstaller, authorizeCuratedWorkflow, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
+import { CuratedConfigVerificationError } from '@/lib/curated-catalog/custom-config';
+import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalog/package';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 import type { CuratedLicenceAcceptanceSnapshot } from '@/lib/curated-catalog/types';
 import {
@@ -53,7 +54,9 @@ interface TriggerResult {
     | 'QA_NOT_PASSED_CURRENT_VERSION'
     | 'QA_SECURITY_FLAGGED_CURRENT_VERSION'
     | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
-    | 'CURATED_LICENCE_NOT_ACCEPTED';
+    | 'CURATED_LICENCE_NOT_ACCEPTED'
+    | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+    | 'CURATED_CONFIG_VERIFICATION_FAILED';
 }
 
 export interface UpdateInfo {
@@ -279,8 +282,20 @@ export class AutoUpdateTrigger {
           architecture: current.architecture, installScope: current.installScope,
           installerType: current.installerType, installCommand: current.installCommand,
           uninstallCommand: current.uninstallCommand, detectionRules: current.detectionRules,
-          psadtConfig: current.psadtConfig,
+          // Keep the tenant's PSADT settings. Custom execution settings must be
+          // verified for this release; until then the update waits (queued for
+          // verification) without counting a failure.
+          psadtConfig: deploymentConfig.psadtConfig || current.psadtConfig,
         };
+        try {
+          await authorizeCuratedWorkflow({
+            ...curatedWorkflowInput({ ...current, psadtConfig: deploymentConfig.psadtConfig || current.psadtConfig }),
+            installerUrl: current.installerUrl, curatedReleaseId: approved.release.id,
+          }, { tenantId: policy.tenant_id, userId: policy.user_id });
+        } catch (error) {
+          if (!(error instanceof CuratedConfigVerificationError)) throw error;
+          return { success: false, skipped: true, skipReason: error.message, code: error.verificationCode };
+        }
         updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id };
         // Automatic updates never imply licence acceptance: skip (without
         // counting a failure) until the tenant accepts the current agreement.

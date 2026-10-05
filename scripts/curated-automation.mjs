@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
 import { discoverCandidate, discoverPreviousCandidate } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
+import { processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
 const QA = 'ugurkocde/IntuneGet-Workflows';
@@ -42,7 +43,7 @@ const root = resolve('output/curated/automation');
 
 const mode = process.argv[2];
 if (!['plan', 'publish'].includes(mode)) throw new Error('Choose plan or publish.');
-const { CURATED_APPS, releaseFromVerification, automatedApprovalExceptions, assertCuratedPackageProfile, AUTOMATED_APPROVER } =
+const { CURATED_APPS, releaseFromVerification, automatedApprovalExceptions, assertCuratedPackageProfile, AUTOMATED_APPROVER, buildCuratedCartItem } =
   await import(pathToFileURL(resolve('output/curated/runtime/profile-runtime.mjs')).href);
 await mkdir(root, { recursive: true });
 
@@ -113,6 +114,26 @@ async function approvedRelease(runId, approvedAt) {
   return { app, release, evidence };
 }
 
+function dispatchVerification(inputs) {
+  const body = { ref: 'main', inputs };
+  if (process.env.CURATED_DRY_RUN === 'true') console.log(`Dry run: would dispatch ${JSON.stringify(body)}`);
+  else gh(['api', '-X', 'POST', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/dispatches`, '--input', '-'], { input: JSON.stringify(body) });
+}
+
+/** A passing run must come from protected main of both repositories. */
+async function authenticateRun(run, report) {
+  const current = gh(['api', `repos/${QA}/actions/runs/${run.id}`]);
+  if (current.status !== 'completed' || current.conclusion !== 'success' || current.head_branch !== 'main' || current.path.split('@')[0] !== `.github/workflows/${VERIFY_WORKFLOW}`) {
+    throw new Error('Verification has not passed on protected main.');
+  }
+  if (report.provenance?.runId !== String(run.id) || report.provenance?.workflowCommit !== current.head_sha) throw new Error('Verification report provenance is invalid.');
+  for (const [repository, commit] of [[WEBSITE, report.provenance.websiteCommit], [QA, current.head_sha]]) {
+    if (!/^[a-f0-9]{40}$/.test(commit || '')) throw new Error('Invalid verification commit.');
+    const comparison = gh(['api', `repos/${repository}/compare/${commit}...main`]);
+    if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('Verification source is outside protected main history.');
+  }
+}
+
 /**
  * Carries forward every signed release that still satisfies the current
  * definitions and packaging profile. Releases that no longer do are dropped
@@ -180,7 +201,7 @@ function syncAlertIssue(alerts, runUrl) {
 async function plan() {
   const now = new Date();
   const runUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${process.env.GITHUB_REPOSITORY || WEBSITE}/actions/runs/${process.env.GITHUB_RUN_ID || 'local'}`;
-  const alerts = []; const rows = []; const approvals = [];
+  const alerts = []; const rows = []; const approvals = []; const configStates = [];
   const catalog = await loadCatalog(await readJson(CATALOG_PATH), now);
   const { payload } = catalog;
   if (catalog.dropped.length) alerts.push(`Dropped ${catalog.dropped.length} release(s) that no longer match the current definitions or packaging; they will be verified again.`);
@@ -195,15 +216,30 @@ async function plan() {
   const monitor = curatedMonitor(CURATED_APPS, payload, discovery, new Date());
   for (const alert of monitor.alerts) if (/changed an already approved/.test(alert)) alerts.push(alert);
 
-  const runs = (gh(['api', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/runs?per_page=100`]).workflow_runs || [])
-    .map(run => ({ ...run, candidateId: /\[([a-f0-9]{24})\]\s*$/.exec(run.display_title || '')?.[1] || null }))
-    .filter(run => run.candidateId)
+  const allRuns = (gh(['api', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/runs?per_page=100`]).workflow_runs || [])
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const runs = allRuns
+    .map(run => ({ ...run, candidateId: /\[([a-f0-9]{24})\]\s*$/.exec(run.display_title || '')?.[1] || null }))
+    .filter(run => run.candidateId);
   const verifierChangedAt = Math.max(...VERIFIER_PATHS.map(([repository, path]) => {
     const [latest] = gh(['api', `repos/${repository}/commits?sha=main&path=${encodeURIComponent(path)}&per_page=1`]) || [];
     return latest ? Date.parse(latest.commit.committer.date) : 0;
   }));
-  let inFlight = runs.filter(run => run.status !== 'completed').length;
+  let inFlight = allRuns.filter(run => run.status !== 'completed').length;
+
+  // Custom PSADT configurations requested by tenants come first (one slot),
+  // since a deployment is waiting on each of them.
+  if (supabaseConfigured()) {
+    try {
+      const configs = await processConfigVerifications({
+        runs: allRuns, releases: payload.releases.filter(release => !payload.withdrawnReleaseIds.includes(release.id)), apps: CURATED_APPS,
+        readEvidence: runEvidence, authenticate: authenticateRun, dispatch: dispatchVerification,
+        slots: Math.max(0, Math.min(1, MAX_IN_FLIGHT - inFlight)), now,
+      });
+      inFlight += configs.dispatched;
+      configStates.push(...configs.states);
+    } catch (error) { alerts.push(`Custom configuration verification could not be processed: ${error.message}`); }
+  }
 
   for (const app of CURATED_APPS) {
     const result = discovery.results.find(item => item.appId === app.id);
@@ -272,10 +308,7 @@ async function plan() {
       alerts.push(`${app.name} ${candidate.version}: no earlier official installer is available, and this app requires a tested upgrade.`);
       continue;
     }
-    const label = `${app.name} ${candidate.version} ${app.architecture} [${candidate.id}]`;
-    const body = { ref: 'main', inputs: { app_label: label, candidate: JSON.stringify(candidate), previous: previous ? JSON.stringify(previous) : '' } };
-    if (process.env.CURATED_DRY_RUN === 'true') console.log(`Dry run: would dispatch ${JSON.stringify(body)}`);
-    else gh(['api', '-X', 'POST', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/dispatches`, '--input', '-'], { input: JSON.stringify(body) });
+    dispatchVerification({ app_label: `${app.name} ${candidate.version} ${app.architecture} [${candidate.id}]`, candidate: JSON.stringify(candidate), previous: previous ? JSON.stringify(previous) : '' });
     inFlight++;
     row.state = previous ? `Verification dispatched (upgrade from ${previous.version})` : 'Verification dispatched (vendor-managed, no upgrade test)';
   }
@@ -306,12 +339,18 @@ async function plan() {
     alerts.push(`The signed catalog on main expires at ${payload.expiresAt}; automatic renewal has not merged yet.`);
   }
 
+  // Every completed run, pass or fail, is kept in Supabase beyond artifact retention.
+  if (supabaseConfigured() && process.env.CURATED_DRY_RUN !== 'true') {
+    try { console.log(`Recorded ${await syncHistory(allRuns, runEvidence, { apps: CURATED_APPS, buildCuratedCartItem })} curated QA run(s) in Supabase.`); }
+    catch (error) { alerts.push(`Curated QA history could not be recorded: ${error.message}`); }
+  }
+
   await writeFile(resolve(root, 'plan.json'), `${JSON.stringify({ generatedAt: now.toISOString(), approvals, publish, rows, alerts }, null, 2)}\n`);
   await setOutput('publish', publish ? 'true' : 'false');
   await setOutput('approvals', JSON.stringify(approvals));
   const approvedCount = catalogEntries(CURATED_APPS, payload).filter(entry => entry.status === 'approved').length;
   await appendSummary([`### Curated catalog automation`, '', `${approvedCount}/${CURATED_APPS.length} applications deployable. Catalog expires: ${payload.expiresAt || 'not signed yet'}.`, '',
-    summaryTable(rows), '', alerts.length ? ['**Alerts**', ...alerts.map(alert => `- ${alert}`)].join('\n') : 'No alerts.', '',
+    summaryTable(rows), '', configStates.length ? ['**Custom PSADT configurations**', ...configStates.map(state => `- ${state}`), ''].join('\n') : '', alerts.length ? ['**Alerts**', ...alerts.map(alert => `- ${alert}`)].join('\n') : 'No alerts.', '',
     publish ? 'A signed catalog will be published in this run.' : 'No catalog change to publish.'].join('\n'));
   if (process.env.CURATED_SYNC_ISSUE === 'true') syncAlertIssue(alerts, runUrl);
 }

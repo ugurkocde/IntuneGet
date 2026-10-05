@@ -52,6 +52,10 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT }}
           CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
+          # Records every curated QA run in curated_qa_runs and drives custom
+          # PSADT configuration verification (curated_config_verifications).
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
           CURATED_SYNC_ISSUE: 'true'
         run: node scripts/curated-automation.mjs plan

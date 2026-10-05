@@ -9,6 +9,7 @@ import type { QaWorkflowPackageInput } from '@/lib/qa/package-profile';
 import type { PackagingJob } from '@/lib/db/types';
 import { isCuratedPackageId } from './core.mjs';
 import { extractSilentSwitches } from '@/lib/msp/silent-switches';
+import { authorizeCuratedExecution } from './custom-config';
 
 export function getCuratedCatalog(): { payload: CuratedCatalogEnvelope['payload']; entries: CuratedCatalogEntry[] } {
   let trustedKeys: Record<string, string>;
@@ -54,19 +55,28 @@ export function assertCuratedInstaller(input: {
   return { app, release, installer: curatedInstaller(app, release) };
 }
 
-export function assertCuratedWorkflow(input: QaWorkflowPackageInput & { installerUrl: string; curatedReleaseId?: string }) {
+/**
+ * Authorizes a curated deployment. Installer, arguments, uninstall identity
+ * and detection must match the signed release; PSADT execution settings must
+ * be the verified defaults or a custom configuration that passed its own VM
+ * verification. With `request`, an unverified custom configuration is queued.
+ */
+export async function authorizeCuratedWorkflow(
+  input: QaWorkflowPackageInput & { installerUrl: string; curatedReleaseId?: string },
+  request?: { tenantId?: string | null; userId?: string | null },
+) {
   const approved = assertCuratedInstaller(input);
-  assertCuratedPackageProfile(approved.app, approved.release, input);
-  return approved;
+  const execution = await authorizeCuratedExecution(approved.app, approved.release, input, request);
+  return { ...approved, execution };
 }
 
-export function reconcileCuratedCartItem(item: Win32CartItem) {
+export async function reconcileCuratedCartItem(item: Win32CartItem, request?: { tenantId?: string | null; userId?: string | null }) {
   if (item.sourceType !== 'curated' || !item.curatedReleaseId || item.qaOverride || item.nestedInstallerType || item.nestedInstallerPath) {
     throw new CuratedCatalogError('Select an approved release from the curated catalog.');
   }
-  const approved = assertCuratedWorkflow({ ...curatedWorkflowInput(item), installerUrl: item.installerUrl, curatedReleaseId: item.curatedReleaseId });
-  // Only presentation/assignment choices survive; execution fields come from
-  // the signed definition and cannot be replaced by mutable browser data.
+  const approved = await authorizeCuratedWorkflow({ ...curatedWorkflowInput(item), installerUrl: item.installerUrl, curatedReleaseId: item.curatedReleaseId }, request);
+  // Assignment and PSADT choices survive; every other execution field comes
+  // from the signed definition and cannot be replaced by mutable browser data.
   return { item: { ...item, ...buildCuratedCartItem(approved.app, approved.release), psadtConfig: item.psadtConfig }, trustedInstallers: [approved.installer] };
 }
 
@@ -74,14 +84,14 @@ export function getCuratedLatestVersions() {
   return getCuratedCatalog().entries.flatMap(({ app, release }) => release ? [{ winget_id: app.packageId, latest_version: release.candidate.version }] : []);
 }
 
-export function validateCuratedPackagingJob(job: PackagingJob): void {
+export async function validateCuratedPackagingJob(job: PackagingJob): Promise<void> {
   const config = job.package_config && typeof job.package_config === 'object' && !Array.isArray(job.package_config)
     ? job.package_config as Record<string, unknown> : {};
   if (!isCuratedPackageId(job.winget_id) && config.sourceType !== 'curated') return;
   if (config.sourceType !== 'curated' || typeof config.curatedReleaseId !== 'string' || config.qaOverride) {
     throw new CuratedCatalogError('This packaging job has no valid curated release provenance.');
   }
-  assertCuratedWorkflow({
+  await authorizeCuratedWorkflow({
     wingetId: job.winget_id, version: job.version, displayName: job.display_name,
     publisher: job.publisher || '', architecture: job.architecture || 'x64',
     installerUrl: job.installer_url || '', installerSha256: job.installer_sha256 || '',

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
-import { assertCuratedWorkflow } from '@/lib/curated-catalog/server';
+import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
 import {
   isQaRunnerArchitectureSupported,
   normalizeQaInstallerType,
@@ -50,7 +50,7 @@ export async function ensureQaDemand(
   input: QaDemandInput
 ): Promise<QaDemandResult> {
   if (isCuratedPackageId(input.wingetId)) {
-    assertCuratedWorkflow(input);
+    await authorizeCuratedWorkflow(input);
     return { identity: normalizeQaWorkflowPackageInput({ ...input, packageDependencies: [] }).identity, candidateId: null, state: 'passed' };
   }
   const installScope = resolveApplicationInstallScope(input.wingetId, input.installScope);

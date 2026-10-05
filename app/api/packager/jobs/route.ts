@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      validateCuratedPackagingJob(job);
+      await validateCuratedPackagingJob(job);
     } catch {
       await db.jobs.update(job.id, {
         status: 'failed', error_code: 'CURATED_RELEASE_UNAVAILABLE',

@@ -191,7 +191,9 @@ export async function POST(request: NextRequest) {
       if (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated') {
         try {
           if (isStoreCartItem(item)) throw new CuratedCatalogError('Curated pilot applications require Win32 packaging.');
-          Object.assign(item, reconcileCuratedCartItem(item as Win32CartItem).item);
+          // Custom PSADT execution settings are queued for VM verification
+          // on first use and rejected until that verification passes.
+          Object.assign(item, (await reconcileCuratedCartItem(item as Win32CartItem, { tenantId, userId })).item);
         } catch (error) {
           if (!(error instanceof CuratedCatalogError)) throw error;
           return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });

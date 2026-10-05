@@ -441,6 +441,83 @@ export interface Database {
         >;
         Relationships: GenericRelationship[];
       };
+      curated_config_verifications: {
+        Row: {
+          id: string;
+          release_id: string;
+          app_id: string;
+          winget_id: string;
+          version: string;
+          psadt_config_sha256: string;
+          psadt_config: Json;
+          status: 'requested' | 'verifying' | 'passed' | 'failed';
+          github_run_id: string | null;
+          execution_profile_sha256: string | null;
+          packager_commit: string | null;
+          failure_detail: string | null;
+          tenant_id: string | null;
+          requested_by_user_id: string | null;
+          requested_at: string;
+          updated_at: string;
+          verified_at: string | null;
+        };
+        Insert: Pick<
+          Database['public']['Tables']['curated_config_verifications']['Row'],
+          'release_id' | 'app_id' | 'winget_id' | 'version' | 'psadt_config_sha256' | 'psadt_config'
+        > & Partial<Database['public']['Tables']['curated_config_verifications']['Row']>;
+        Update: Partial<
+          Database['public']['Tables']['curated_config_verifications']['Row']
+        >;
+        Relationships: GenericRelationship[];
+      };
+      curated_qa_runs: {
+        Row: {
+          github_run_id: string;
+          github_run_attempt: number;
+          kind: 'release' | 'config';
+          winget_id: string;
+          app_id: string;
+          display_name: string;
+          publisher: string;
+          tested_version: string;
+          architecture: string;
+          outcome: 'Passed' | 'Failed';
+          tested_at_utc: string;
+          candidate_id: string;
+          config_verification_id: string | null;
+          installer_type: string | null;
+          installer_url: string | null;
+          installer_sha256: string | null;
+          install_command: string | null;
+          uninstall_command: string | null;
+          silent_args: string | null;
+          detection: Json;
+          phase_results: Json;
+          psadt_config: Json | null;
+          psadt_config_sha256: string | null;
+          package_profile_sha256: string | null;
+          packager_commit: string | null;
+          upgrade_from_version: string | null;
+          upgrade_tested: boolean | null;
+          signature_status: string | null;
+          signer: string | null;
+          defender_status: string | null;
+          defender_signature_version: string | null;
+          failed_phase: string | null;
+          failed_step: string | null;
+          failed_message: string | null;
+          failed_lifecycle: string | null;
+          failed_signature: string | null;
+          failed_location: string | null;
+          workflow_commit: string | null;
+          website_commit: string | null;
+          github_run_url: string;
+          synced_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['curated_qa_runs']['Row'], 'synced_at'> & { synced_at?: string };
+        Update: Partial<Database['public']['Tables']['curated_qa_runs']['Row']>;
+        Relationships: GenericRelationship[];
+      };
       package_eligibility_blocks: {
         Row: {
           winget_id: string;
