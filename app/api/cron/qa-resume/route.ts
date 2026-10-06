@@ -10,6 +10,7 @@ import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import { ensureQaDemand } from '@/lib/qa/demand';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
+import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
@@ -110,7 +111,7 @@ export async function GET(request: Request) {
         installScope: item.installScope || job.install_scope || 'machine',
         psadtConfig: item.psadtConfig ? JSON.stringify(item.psadtConfig) : undefined,
         detectionRules: item.detectionRules ? JSON.stringify(item.detectionRules) : undefined,
-        priority: 2000,
+        priority: job.is_auto_update ? QA_PRIORITY_DEMAND : QA_PRIORITY_CUSTOMER,
         demandSource: job.is_auto_update ? 'auto_update' : 'customer',
       });
       candidateStatus = demand.state === 'waiting' ? 'queued' : demand.state;

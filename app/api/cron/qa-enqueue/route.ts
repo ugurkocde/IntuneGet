@@ -46,6 +46,7 @@ import {
   resolveWingetManifest,
 } from '@/lib/winget-sync-resolution.mjs';
 import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
+import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 
 const BATCH_SIZE = 3;
 const POLL_STATE_ID = 'microsoft/winget-pkgs';
@@ -830,15 +831,16 @@ export async function GET(request: Request) {
       priorities.set(policy.winget_id, (priorities.get(policy.winget_id) || 0) + 1);
     }
     const demandedIds = new Set<string>(policies.map((policy) => policy.winget_id));
-    // Newly detected updates for deployed/managed apps join customer uploads
-    // in the urgent FIFO band. Background backfill retains its lower priority.
+    // Newly detected updates for deployed/managed apps join the urgent demand
+    // band, served oldest-first but strictly behind waiting customer uploads
+    // (QA_PRIORITY_CUSTOMER). Background backfill retains its lower priority.
     for (const policy of policies) {
-      if (changedIds.has(policy.winget_id)) priorities.set(policy.winget_id, 2000);
+      if (changedIds.has(policy.winget_id)) priorities.set(policy.winget_id, QA_PRIORITY_DEMAND);
     }
     for (const deployed of deployedApps) {
       demandedIds.add(deployed.winget_id);
       if (!priorities.has(deployed.winget_id)) priorities.set(deployed.winget_id, 1);
-      if (changedIds.has(deployed.winget_id)) priorities.set(deployed.winget_id, 2000);
+      if (changedIds.has(deployed.winget_id)) priorities.set(deployed.winget_id, QA_PRIORITY_DEMAND);
     }
     for (const wingetId of backfillIds) {
       if (terminalBackfillIds.has(wingetId.trim().toLowerCase())) {

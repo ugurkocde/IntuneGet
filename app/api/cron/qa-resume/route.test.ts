@@ -37,6 +37,7 @@ vi.mock('@/lib/catalog-installer-reconciliation', () => ({
 import { GET } from './route';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { CuratedLicenceError } from '@/lib/curated-catalog/licence';
+import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
@@ -423,7 +424,7 @@ describe('GET /api/cron/qa-resume', () => {
     expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 1 });
     expect(ensureQaDemandMock).toHaveBeenCalledWith(client, expect.objectContaining({
       wingetId: 'Example.App',
-      priority: 2000,
+      priority: QA_PRIORITY_CUSTOMER,
       demandSource: 'customer',
     }));
     expect(relinkUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -584,7 +585,7 @@ describe('GET /api/cron/qa-resume', () => {
     expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 1 });
     expect(ensureQaDemandMock).toHaveBeenCalledWith(client, expect.objectContaining({
       wingetId: 'Example.Legacy',
-      priority: 2000,
+      priority: QA_PRIORITY_CUSTOMER,
       demandSource: 'customer',
     }));
     expect(relinkUpdate.update).toHaveBeenCalledWith(expect.objectContaining({

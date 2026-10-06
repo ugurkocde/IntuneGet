@@ -126,6 +126,7 @@ import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
+import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 
 function makeJob(overrides: Partial<PackagingJob>): PackagingJob {
   const now = new Date().toISOString();
@@ -651,6 +652,26 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
     expect(triggerPackagingWorkflowMock.mock.calls[0][0].relationships).toBeUndefined();
+  });
+
+  it('queues a customer deployment strictly above the shared auto_update/managed demand tier', async () => {
+    const request = new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(ensureQaDemandMock).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ priority: QA_PRIORITY_CUSTOMER, demandSource: 'customer' })
+    );
+    expect(QA_PRIORITY_CUSTOMER).toBeGreaterThan(QA_PRIORITY_DEMAND);
   });
 
   it('uses a reviewed user scope consistently for QA, packaging, and Intune', async () => {

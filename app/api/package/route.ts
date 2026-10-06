@@ -58,6 +58,7 @@ import {
   getPackageEligibilityBlocks,
   PACKAGE_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
+import { QA_PRIORITY_CUSTOMER } from '@/lib/qa/constants';
 
 export const maxDuration = 300;
 
@@ -641,7 +642,7 @@ export async function POST(request: NextRequest) {
                   installScope: item.installScope,
                   psadtConfig: JSON.stringify(item.psadtConfig),
                   detectionRules: JSON.stringify(item.detectionRules || []),
-                  priority: 2000,
+                  priority: QA_PRIORITY_CUSTOMER,
                   demandSource: 'customer',
                 });
             const qaDeferred = qaDemand?.state === 'waiting' && isDeferredCustomerQaEnabled();

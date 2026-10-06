@@ -41,6 +41,7 @@ import {
 } from '@/lib/packaging-adapters';
 import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
 import { DEFAULT_PSADT_CONFIG, type DetectionRule } from '@/types/psadt';
+import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 
 interface TriggerResult {
   success: boolean;
@@ -350,7 +351,7 @@ export class AutoUpdateTrigger {
         detectionRules: JSON.stringify(
           updateInfo.detectionRules || deploymentConfig.detectionRules || []
         ),
-        priority: 2000,
+        priority: QA_PRIORITY_DEMAND,
         demandSource: 'auto_update',
       });
       if (qaDemand.state === 'failed') {
