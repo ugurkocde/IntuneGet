@@ -127,6 +127,22 @@ describe('GET /api/intune/apps/updates', () => {
     });
   });
 
+  it('preserves a Graph permission rejection without suggesting a retry', async () => {
+    createServerClientMock.mockReturnValue(createSupabaseMock([]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ access_token: 'graph-token' }))
+      .mockResolvedValueOnce(new Response('private Graph error details', { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = await GET(new NextRequest('http://localhost:3000/api/intune/apps/updates', {
+      headers: { Authorization: 'Bearer mock-token' },
+    }));
+    expect(response.status).toBe(403);
+    expect(response.headers.get('Retry-After')).toBeNull();
+    expect(await response.json()).toEqual({
+      error: 'Microsoft Graph rejected the update scan request.', code: 'UPDATE_SCAN_GRAPH_REJECTED',
+    });
+  });
+
   it('compares updates using newest app object per Winget ID', async () => {
     createServerClientMock.mockReturnValue(
       createSupabaseMock([{ winget_id: 'Microsoft.Edge', latest_version: '2.5.0' }])

@@ -3,6 +3,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {beforeEach,afterEach,describe,it,expect} from 'vitest';
 let db:PGlite;
 const migration=readFileSync(new URL('../../supabase/migrations/20261006130101_qa_publication_recovery.sql',import.meta.url),'utf8');
+const isolationMigration=readFileSync(new URL('../../supabase/migrations/20261006140531_qa_publication_error_isolation.sql',import.meta.url),'utf8');
 const id='00000000-0000-4000-8000-000000000001';
 describe('publication recovery against exact persisted evidence',()=>{
   beforeEach(async()=>{
@@ -21,6 +22,7 @@ describe('publication recovery against exact persisted evidence',()=>{
       insert into qa_package_results values('profile','Example.App','1','x64','hash','https://github.com/owner/repo/actions/runs/123','2026-10-06T01:00Z','Passed',0);
     `);
     await db.exec(migration);
+    await db.exec(isolationMigration);
   });
   afterEach(async()=>{await db.close();});
   it('rejects an invalid credential',async()=>{await expect(db.query("select reconcile_qa_result_publication('bad')")).rejects.toThrow(/credential/);});
@@ -52,6 +54,22 @@ describe('publication recovery against exact persisted evidence',()=>{
     await db.exec("update qa_package_results set outcome='Failed',virustotal_malicious=2");
     await db.query("select reconcile_qa_result_publication('test')");
     expect((await db.query("select status,failure_summary from qa_candidates")).rows[0]).toMatchObject({status:'failed',failure_summary:'VirusTotal blocked the published exact installer.'});
+  });
+  it('rolls back a constraint failure for one row and settles the next candidate',async()=>{
+    await db.exec(`
+      insert into qa_candidates select '00000000-0000-4000-8000-000000000002',winget_id,version,architecture,installer_sha256,'profile2',github_run_url,started_at+interval '1 minute',dispatched_at,finished_at,updated_at,phase_started_at,phase_updated_at,activity_updated_at,log_updated_at,phase,status,test_level,attempts,github_run_id,live_activity,live_log,failure_summary from qa_candidates;
+      insert into qa_package_results select 'profile2',winget_id,tested_version,architecture,installer_sha256,github_run_url,tested_at_utc,outcome,virustotal_malicious from qa_package_results;
+      alter table qa_candidates add constraint result_check check(id<>'00000000-0000-4000-8000-000000000001' or status<>'passed');
+    `);
+    expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(1);
+    expect((await db.query('select status,attempts from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'error',attempts:1});
+    expect((await db.query("select status from qa_candidates where id='00000000-0000-4000-8000-000000000002'")).rows[0]).toEqual({status:'passed'});
+  });
+  it('propagates an authentication failure from the reporter and rolls back the transition',async()=>{
+    await db.exec(`create or replace function report_qa_candidate_result(secret text,candidate uuid,outcome text,summary text) returns boolean language plpgsql as $$
+      begin raise insufficient_privilege using message='Invalid reporting credential';end;$$;`);
+    await expect(db.query("select reconcile_qa_result_publication('test')")).rejects.toThrow(/credential/);
+    expect((await db.query('select status from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'error'});
   });
   it('does not reconcile a contradictory passing result with malicious detections',async()=>{
     await db.exec('update qa_package_results set virustotal_malicious=2');

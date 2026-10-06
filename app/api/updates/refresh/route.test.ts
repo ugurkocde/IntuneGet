@@ -26,4 +26,12 @@ describe('hosted update refresh',()=>{
     expect(response.status).toBe(200);expect(writes).toHaveLength(1);expect(mocks.notify).not.toHaveBeenCalled();expect(mocks.after).toHaveBeenCalledOnce();
     await mocks.after.mock.calls[0][0]();expect(mocks.notify).toHaveBeenCalledOnce();
   });
+  it('preserves a Graph permission rejection and leaves cached updates intact',async()=>{
+    const client={from:vi.fn()};mocks.client.mockReturnValue(client);
+    mocks.live.mockResolvedValue(Response.json({code:'UPDATE_SCAN_GRAPH_REJECTED'},{status:403}));
+    const response=await POST(request());
+    expect(response.status).toBe(403);expect(client.from).not.toHaveBeenCalled();
+    expect(response.headers.get('Retry-After')).toBeNull();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
 });

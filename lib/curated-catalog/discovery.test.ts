@@ -18,6 +18,30 @@ describe('next five publisher-sourced additions',()=>{
     const candidate=candidateFromMetadata(app('powershell-lts'),JSON.stringify([release('7.7.0'),release('7.6.6'),{...release('7.6.7'),prerelease:true}]));
     expect(candidate.version).toBe('7.6.6');
   });
+  it('finds the LTS release and upgrade baseline beyond the first GitHub page',async()=>{
+    const release=(v:string)=>({tag_name:'v'+v,html_url:'https://github.com/PowerShell/PowerShell/releases/tag/v'+v,assets:[{name:'PowerShell-'+v+'-win-x64.msi',browser_download_url:'https://github.com/PowerShell/PowerShell/releases/download/v'+v+'/PowerShell-'+v+'-win-x64.msi',digest:'sha256:'+pin('c')}]});
+    const pages=[...Array.from({length:3},(_,page)=>Array.from({length:10},(_,i)=>release('7.7.'+(page*10+i)))),
+      [release('7.6.6'),...Array.from({length:9},(_,i)=>release('7.7.'+(i+30)))],
+      [release('7.6.5')]];
+    const fetcher=vi.fn(async(url:string)=>{
+      const page=Number(new URL(url).searchParams.get('page')||1);
+      return text(JSON.stringify(pages[page-1]),'application/json');
+    });
+    const result=await discoverCandidate(app('powershell-lts'),fetcher);
+    expect(result.state).toBe('candidate');
+    if(result.state!=='candidate')throw new Error('Expected candidate');
+    expect(result.candidate.version).toBe('7.6.6');
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    fetcher.mockClear();
+    expect((await discoverPreviousCandidate(app('powershell-lts'),result.candidate,fetcher))?.version).toBe('7.6.5');
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher.mock.calls.every(([url])=>new URL(url).origin==='https://api.github.com' && new URL(url).searchParams.get('per_page')==='10')).toBe(true);
+  });
+  it('fails closed when the LTS channel remains beyond the bounded page limit',async()=>{
+    const fetcher=vi.fn(async()=>text(JSON.stringify(Array.from({length:10},()=>({tag_name:'v7.7.0',assets:[]}))),'application/json'));
+    await expect(discoverCandidate(app('powershell-lts'),fetcher)).rejects.toThrow(/bounded discovery limit/);
+    expect(fetcher).toHaveBeenCalledTimes(20);
+  });
   it('binds Zoom download builds to the MSI product version and versioned x64 payload',()=>{
     const candidate=candidateFromMetadata(app('zoom'),JSON.stringify({status:true,result:{downloadVO:{zoomX64:{version:'7.2.1.48556',archType:'x64',packageNameForIT:'ZoomInstallerFull.msi'}}}}));
     expect(candidate.version).toBe('7.2.48556');

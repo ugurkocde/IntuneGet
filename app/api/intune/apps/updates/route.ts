@@ -18,7 +18,7 @@ import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getCatalogSource } from '@/lib/catalog';
 import type { IntuneWin32App, AppUpdateInfo } from '@/types/inventory';
-import { fetchUpdateInventory, mapUpdateApps, UpdateScanUnavailable, withinUpdateScanBudget } from '@/lib/intune/update-scan';
+import { fetchUpdateInventory, mapUpdateApps, UpdateScanGraphError, UpdateScanUnavailable, withinUpdateScanBudget } from '@/lib/intune/update-scan';
 
 interface CheckedResult {
   app: string;
@@ -80,6 +80,9 @@ export async function GET(request: NextRequest) {
   try {
     return await withinUpdateScanBudget(scanUpdates(request, deadlineAt), deadlineAt);
   } catch (error) {
+    if (error instanceof UpdateScanGraphError) {
+      return NextResponse.json({ error: error.message, code: 'UPDATE_SCAN_GRAPH_REJECTED' }, { status: error.status });
+    }
     if (error instanceof UpdateScanUnavailable || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))) {
       return NextResponse.json({ error: 'The update scan could not finish. Please try again shortly.', code: 'UPDATE_SCAN_RETRYABLE' }, { status: 503, headers: { 'Retry-After': '30' } });
     }
@@ -425,7 +428,7 @@ async function scanUpdates(request: NextRequest, deadlineAt: number) {
       checkedApps: checked,
     });
   } catch (error) {
-    if (error instanceof UpdateScanUnavailable || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))) throw error;
+    if (error instanceof UpdateScanGraphError || error instanceof UpdateScanUnavailable || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))) throw error;
     return NextResponse.json(
       { error: 'Failed to check for updates' },
       { status: 500 }
