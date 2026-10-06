@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "2582e9fb93baee068ca8b0abb0e8f77e70bf54e4",
+    "runAttempt": "1",
+    "runId": "37543102681",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "38eddc3779d3553836b8271b21c05ef16c83ad34"
+  },
+  "candidate": {
+    "appId": "audacity",
+    "version": "4.0.1",
+    "installerUrl": "https://github.com/audacity/audacity/releases/download/Audacity-4.0.1/audacity-win-4.0.1-x86_64.msi",
+    "vendorSha256": "efb652bf04168f5d4893f28b7cefaaf5ef385d9251544540ac774e3bf54793a3",
+    "releaseNotesUrl": "https://github.com/audacity/audacity/releases/tag/Audacity-4.0.1",
+    "discoveredAt": "2026-10-06T17:45:18.593Z",
+    "id": "9a5ab395339038bd67c375f3"
+  },
+  "previous": {
+    "appId": "audacity",
+    "version": "4.0.0",
+    "installerUrl": "https://github.com/audacity/audacity/releases/download/Audacity-4.0.0/audacity-win-4.0.0-x86_64.msi",
+    "vendorSha256": "2aecc44d28a004d15ae7c23c099f232ba8c5b3e6b19ebdbaf7d6c596316dc5b3",
+    "releaseNotesUrl": "https://github.com/audacity/audacity/releases/tag/Audacity-4.0.0",
+    "discoveredAt": "2026-10-06T17:45:29.032Z",
+    "id": "3e4d8046f67f414079a383c4"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "9a5ab395339038bd67c375f3",
+      "installerSha256": "efb652bf04168f5d4893f28b7cefaaf5ef385d9251544540ac774e3bf54793a3",
+      "sourceUrl": "https://github.com/audacity/audacity/releases/download/Audacity-4.0.1/audacity-win-4.0.1-x86_64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "MUSECY SM LTD",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "suspicious": 0,
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "scannedAt": "2026-10-06T22:55:35.451781Z",
+        "scanner": "defender",
+        "signatureVersion": "1.459.576.0",
+        "installerSha256": "efb652bf04168f5d4893f28b7cefaaf5ef385d9251544540ac774e3bf54793a3"
+      }
+    },
+    "previous": {
+      "candidateId": "3e4d8046f67f414079a383c4",
+      "installerSha256": "2aecc44d28a004d15ae7c23c099f232ba8c5b3e6b19ebdbaf7d6c596316dc5b3",
+      "sourceUrl": "https://github.com/audacity/audacity/releases/download/Audacity-4.0.0/audacity-win-4.0.0-x86_64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "MUSECY SM LTD",
+        "status": "valid"
+      },
+      "security": {
+        "status": "clean",
+        "suspicious": 0,
+        "malicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "scannedAt": "2026-10-06T22:55:48.9474772Z",
+        "scanner": "defender",
+        "signatureVersion": "1.459.576.0",
+        "installerSha256": "2aecc44d28a004d15ae7c23c099f232ba8c5b3e6b19ebdbaf7d6c596316dc5b3"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "9a5ab395339038bd67c375f3",
+    "packageId": "IntuneGet.Curated.Audacity",
+    "installerUrl": "https://github.com/audacity/audacity/releases/download/Audacity-4.0.1/audacity-win-4.0.1-x86_64.msi",
+    "installerSha256": "efb652bf04168f5d4893f28b7cefaaf5ef385d9251544540ac774e3bf54793a3",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Audacity",
+      "displayName": "Audacity",
+      "publisher": "Muse Group",
+      "version": "4.0.1",
+      "architecture": "x64",
+      "installerSha256": "efb652bf04168f5d4893f28b7cefaaf5ef385d9251544540ac774e3bf54793a3",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Audacity",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Audacity\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.0.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Audacity\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.0.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "936CAC5BCEEC8F1505F01985422FDCD3EAD536508EA4B5A52F3777C3CC78A6C0",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Audacity\",\"publisher\":\"IntuneGet QA\",\"version\":\"4.0.1\",\"wingetId\":\"IntuneGet.Curated.Audacity\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.0.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Audacity\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"51CC0E19F12AC8403CE28A23B9E915539DF6C46F065DF00E64D9E794F4F22CE3\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"EFB652BF04168F5D4893F28B7CEFAAF5EF385D9251544540AC774E3BF54793A3\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Audacity\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.0.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Audacity\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"4635560C1C1F0E130B626C1121251F6B8715655A118F6A70F164F291CA71529E\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "4635560c1c1f0e130b626c1121251f6b8715655a118f6a70f164f291ca71529e",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testedAt": "2026-10-06T22:57:29.4270363Z",
+    "executionProfileSha256": "936CAC5BCEEC8F1505F01985422FDCD3EAD536508EA4B5A52F3777C3CC78A6C0",
+    "installerVersion": "4.0.1",
+    "installerSha256": "efb652bf04168f5d4893f28b7cefaaf5ef385d9251544540ac774e3bf54793a3",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "candidateId": "9a5ab395339038bd67c375f3",
+    "previousInstallerSha256": "2aecc44d28a004d15ae7c23c099f232ba8c5b3e6b19ebdbaf7d6c596316dc5b3",
+    "testLevel": "psadt-package",
+    "upgradeFromVersion": "4.0.0",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionContext": "LocalSystem"
+  },
+  "verifiedAt": "2026-10-06T22:57:32.2523694Z",
+  "authenticatedArtifact": {
+    "id": 11449439077,
+    "sha256": "6f783492d073635a3ce8546f6fcb81ec16e0d538ae5db4d16dd3c7b0d41de05d"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-06T23:23:09.592Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
