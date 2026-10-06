@@ -69,6 +69,23 @@ function demandInput(): QaDemandInput {
 }
 
 describe('ensureQaDemand app-version evidence reuse', () => {
+  it('retains a completed run while protected publication is pending', async () => {
+    let candidateCall = 0;
+    const updates: unknown[] = [];
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') return { select: vi.fn(() => query({data:null,error:null})) };
+        if (table !== 'qa_candidates') throw new Error('Unexpected table');
+        candidateCall++;
+        if (candidateCall === 1 || candidateCall === 3) return query({data:null,error:null});
+        if (candidateCall === 2) return {insert:vi.fn(()=>query({data:null,error:{message:'duplicate',code:'23505'}}))};
+        if (candidateCall === 4) return {select:vi.fn(()=>query({data:{id:'completed-run',status:'error',phase:'publishing',github_run_id:'123',priority:2000},error:null}))};
+        return {update:vi.fn(values=>{updates.push(values);return query({data:null,error:null});})};
+      })
+    };
+    await expect(ensureQaDemand(client as never,demandInput())).resolves.toMatchObject({state:'waiting',candidateId:'completed-run'});
+    expect(updates).toEqual([]);
+  });
   beforeEach(() => {
     resolveWingetPackageDependenciesMock.mockReset();
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);

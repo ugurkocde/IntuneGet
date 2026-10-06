@@ -7,8 +7,8 @@ import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVer
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
-  it('defines ten applications and commits only a catalog signed by a committed trust key', () => {
-    expect(validateDefinitions(CURATED_APPS)).toHaveLength(10);
+  it('defines fifteen applications and commits only a catalog signed by a committed trust key', () => {
+    expect(validateDefinitions(CURATED_APPS)).toHaveLength(15);
     // The automation re-signs after definition changes and before expiry, so
     // only the signer is checked here; deployment checks expiry and digest.
     const payload = verifyCatalogSignature(committed, committedKeys);
@@ -33,6 +33,11 @@ describe('curated approval trust boundary', () => {
   it('accepts an independently signed catalog with complete evidence', () => {
     const { envelope, keys } = signedFixture();
     expect(verifyCatalog(envelope, CURATED_APPS, keys).releases).toHaveLength(1);
+  });
+  it('requires a reviewed version comparison with at least three components', () => {
+    const app = CURATED_APPS.find(item => item.id === 'audacity')!;
+    expect(validateDefinitions([app])).toHaveLength(1);
+    expect(() => validateDefinitions([{ ...app, installedIdentity: { ...app.installedIdentity, versionComponents: 2 } }])).toThrow(/three release components/);
   });
   it('rejects an untrusted signing key and signed payload tampering', () => {
     const { envelope, keys } = signedFixture();

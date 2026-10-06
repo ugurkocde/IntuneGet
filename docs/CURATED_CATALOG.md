@@ -2,7 +2,7 @@
 
 The pilot is an IntuneGet-owned catalog sourced from publishers. It has independent `IntuneGet.Curated.*` identifiers, its own fully automated release pipeline, and a dashboard at `/dashboard/apps/curated`. It is distinct from the proposed tenant-private catalog. A definition's `wingetId` is a reference for humans; curated packaging and updates do not resolve it through Winget.
 
-## First ten definitions
+## Catalog definitions
 
 | Application | Selected installer | Discovery |
 | --- | --- | --- |
@@ -16,12 +16,19 @@ The pilot is an IntuneGet-owned catalog sourced from publishers. It has independ
 | VLC | Windows x64 EXE | VideoLAN release feed; SHA256 pinned from the `.sha256` file beside the installer |
 | WinSCP | x86 machine installer EXE (Program Files (x86)) | WinSCP update feed; official SourceForge distribution; SHA256 pinned from the release ReadMe on winscp.net |
 | PuTTY | Windows x64 MSI | Publisher-linked versioned archive metadata; SHA256 pinned from the versioned `sha256sums` |
+| Mozilla Firefox | Stable en-US x64 MSI | Separate stable release feed and versioned archive; publisher SHA256SUMS; earlier stable build for upgrade QA |
+| Zoom Workplace | Windows x64 enterprise MSI | Publisher download service; versioned CDN path; initial reviewed older MSI baseline for upgrade QA |
+| Audacity | Stable Windows x86_64 MSI | Publisher GitHub releases and asset SHA256; earlier MSI for upgrade QA |
+| PowerShell LTS | Windows x64 MSI, 7.6 channel | Publisher GitHub releases filtered to stable 7.6 builds; earlier LTS MSI for upgrade QA |
+| AWS CLI | Windows x64 MSI, v2 | Publisher GitHub v2 tags and versioned AWS MSI downloads; earlier v2 MSI for upgrade QA |
 
 Definitions are in `lib/curated-catalog/definitions.json`. Every definition is a machine install; WinSCP is x86 because its stable release ships only a 32-bit setup, and all others are x64. Definitions are the reviewed contract: payload architecture, unattended arguments, licensing and allowed download hosts are fixed in code review, and the automation applies them identically to every release.
 
 Trust rests on the SHA256 hash, not on Authenticode certificates (decided 2026-10-05). Signer names change whenever a publisher renews its certificate, and some publishers ship unsigned (7-Zip) or self-signed installers, so exact signer matching failed releases that were genuine. A release is bound to the publisher's own checksum where one exists (GitHub asset digests, SHA256SUMS, checksum files) and to the hash measured in the isolated VM otherwise; every deployment downloads the installer again and must match that exact hash. The observed Authenticode result (`valid`, `unsigned` or `untrusted`, with the signer name) is recorded in each release and shown in the catalog for transparency, but it is not a release gate. `signaturePublishers` in a definition documents the expected signer only.
 
 An app is deployable only once a release has passed verification and been signed into `catalog/curated/catalog.json`. The unit-test fixtures use synthetic evidence and must never become catalog records.
+
+The Audacity publisher's [Windows packaging source](https://github.com/audacity/audacity/blob/Audacity-4.0.1/buildscripts/packaging/Windows/SetupWindowsPackaging.cmake) appends a build number to the public three-part release version. Its reviewed installed identity compares three components, while the exact installer build remains pinned by SHA256 and must pass production detection and removal. All other definitions retain the default four-component installed-version comparison.
 
 ## Trust and deployment
 
@@ -39,12 +46,12 @@ Users can choose assignments, categories, enrollment profiles, update preference
 
 ### Custom PSADT execution settings
 
-PSADT presentation settings (branding, dialog and prompt text, balloon text, process descriptions) never change how the package executes and need no verification. Execution settings (which processes to close, deferrals, deploy mode, restart behaviour, whether prompts appear) do. The signed default is verified with each release. Any other execution configuration must pass its own VM verification for that release before it can deploy:
+PSADT presentation settings (branding, dialog and prompt text, balloon text, process descriptions) never change how the package executes and need no verification. Execution settings (which processes to close, deferrals, deploy mode, restart behaviour, whether prompts appear) do. The signed default is verified with each release. When requested execution settings have not passed QA, deployment uses those tested defaults and queues the requested configuration for verification:
 
-1. The first deployment with a new configuration is refused with `CURATED_CONFIG_VERIFICATION_REQUIRED` and queues a request in `curated_config_verifications`, keyed by release and the execution configuration hash (`psadtConfigSha256`).
+1. A new configuration queues a request in `curated_config_verifications`, keyed by release and the execution configuration hash (`psadtConfigSha256`). The cart shows that tested defaults will be used, and deployment can continue immediately with those defaults.
 2. The automation dispatches the verification workflow with the `psadt_config` input, using one of its two VM slots ahead of new releases. The run tests the same lifecycle as the release, including the upgrade where an earlier release exists.
 3. A pass for exactly that release and configuration is recorded and the configuration may deploy, including through hosted packaging, the local packager, MSP batches and auto-updates. Like releases, a pass stays valid across compatible packager releases and is verified again otherwise. A failure in the package lifecycle is final for that configuration (`CURATED_CONFIG_VERIFICATION_FAILED`, with the reason); failures before the lifecycle (Defender, download) are retried.
-4. When a new release is approved, every passed configuration of the app is queued for it automatically. A tenant's auto-update waits, skipped without counting a failure, until its settings pass for the new release.
+4. When a new release is approved, every passed configuration of the app is queued for it automatically. A tenant's auto-update uses the tested defaults while the requested settings are verified for the new release.
 
 Self-hosted installations cannot reach the hosted QA service and deploy curated apps with the verified default execution settings only. It never falls back to Winget. Vendor self-updaters remain enabled where disclosed in the definitions, so endpoint versions may advance independently of the catalog.
 
@@ -73,7 +80,7 @@ An acceptance never covers another tenant. Changing the `version` in a definitio
 
 The `Curated catalog automation` workflow runs every 30 minutes (`7,37 * * * *`) and needs no manual step. Each run:
 
-1. **Discovers** every app's current publisher release (`lib/curated-catalog/discovery.mjs`). Discovery reads bounded text metadata and publisher checksum files only, plus a HEAD request for Adobe's constructed installer URL. It never downloads an installer on the runner.
+1. **Discovers** every app's current publisher release (`lib/curated-catalog/discovery.mjs`). Discovery reads bounded text metadata and publisher checksum files only, plus HEAD requests for constructed Adobe, Zoom and AWS installer URLs. It never downloads an installer on the runner.
 2. **Dispatches verification** for releases newer than the approved one: the private `Curated catalog verification` workflow, labeled `App Version Arch [candidateId]`. At most two curated runs are queued at a time so ordinary QA keeps its share of the VM. The upgrade test uses the last approved release, or before the first approval the newest earlier official release (GitHub releases, the PuTTY archive). Vendor-managed apps without an immutable earlier installer (Chrome's mutable URL, first runs of Firefox ESR, VS Code, VLC, WinSCP and Adobe) run without an upgrade test under the exemption below.
 3. **Approves** each passing run whose authenticated evidence satisfies the release policy, then the `publish` job re-authenticates the evidence, signs the catalog with the environment key, writes the public evidence files and pushes branch `automation/curated-catalog`. The PR squash-merges automatically once the required checks pass, and the merge deploys.
 4. **Renews** the signature when it is within three days of expiry, and re-signs after a definitions change. Releases that no longer satisfy the current definitions or packaging profile are dropped and verified again.

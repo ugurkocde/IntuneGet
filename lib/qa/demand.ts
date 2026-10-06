@@ -297,7 +297,7 @@ export async function ensureQaDemand(
 
   const { data: existing, error: existingError } = await supabase
     .from('qa_candidates')
-    .select('id, status, priority, failure_summary')
+    .select('id, status, priority, failure_summary, phase, github_run_id')
     .eq('winget_id', input.wingetId)
     .eq('version', input.version)
     .eq('architecture', architecture)
@@ -328,6 +328,12 @@ export async function ensureQaDemand(
       failureSummary:
         existing.failure_summary || 'This installer is no longer available for deployment.',
     };
+  }
+
+  // A completed lifecycle awaiting protected result publication needs the
+  // existing run recovered, not another installation of the same package.
+  if (existing.status === 'error' && existing.phase === 'publishing' && existing.github_run_id) {
+    return { identity, candidateId: existing.id, state: 'waiting' };
   }
 
   if (['error', 'superseded'].includes(existing.status)) {

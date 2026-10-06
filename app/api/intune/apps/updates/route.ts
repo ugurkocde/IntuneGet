@@ -18,8 +18,7 @@ import { isSelfUpdatingApp } from '@/lib/self-updating-apps';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getCatalogSource } from '@/lib/catalog';
 import type { IntuneWin32App, AppUpdateInfo } from '@/types/inventory';
-
-const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
+import { fetchUpdateInventory, mapUpdateApps, UpdateScanUnavailable, withinUpdateScanBudget } from '@/lib/intune/update-scan';
 
 interface CheckedResult {
   app: string;
@@ -74,10 +73,21 @@ function extractWingetIdFromDescription(description: string | null): string | nu
   return isValidWingetId(candidate) ? candidate : null;
 }
 
-// Extend timeout for Vercel (Pro plan: up to 60s)
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
+  const deadlineAt = Date.now() + 45_000;
+  try {
+    return await withinUpdateScanBudget(scanUpdates(request, deadlineAt), deadlineAt);
+  } catch (error) {
+    if (error instanceof UpdateScanUnavailable || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))) {
+      return NextResponse.json({ error: 'The update scan could not finish. Please try again shortly.', code: 'UPDATE_SCAN_RETRYABLE' }, { status: 503, headers: { 'Retry-After': '30' } });
+    }
+    return NextResponse.json({ error: 'Failed to check for updates' }, { status: 500 });
+  }
+}
+
+async function scanUpdates(request: NextRequest, deadlineAt: number) {
   try {
     const user = await parseAccessToken(request.headers.get('Authorization'));
     if (!user) {
@@ -135,33 +145,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch Win32 apps from Intune using isof filter with pagination
-    // Note: We can't use $select with derived type fields (like displayVersion) when using type filters
-    const apps: IntuneWin32App[] = [];
-    let nextUrl: string | null = `${GRAPH_API_BASE}/deviceAppManagement/mobileApps?$filter=isof('microsoft.graph.win32LobApp')&$top=100`;
-
-    while (nextUrl) {
-      const graphResponse: Response = await fetch(nextUrl, {
-        headers: {
-          Authorization: `Bearer ${graphToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!graphResponse.ok) {
-        const errorText = await graphResponse.text();
-        return NextResponse.json(
-          { error: 'Failed to fetch apps from Intune', details: errorText },
-          { status: graphResponse.status }
-        );
-      }
-
-      const graphData = await graphResponse.json();
-      const pageApps: IntuneWin32App[] = graphData.value || [];
-      apps.push(...pageApps);
-
-      nextUrl = graphData['@odata.nextLink'] || null;
-    }
+    const apps = await fetchUpdateInventory(graphToken, deadlineAt);
 
     const liveIntuneAppIds = new Set(apps.map((a) => a.id));
 
@@ -232,6 +216,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Match apps to Winget IDs
+    const databaseMatches = new Map(await mapUpdateApps(apps, async (app) => {
+      const name = app.displayName.toLowerCase().trim();
+      if (uploadHistoryWingetMap.has(app.id) || extractWingetIdFromDescription(app.description) ||
+          claimedWingetByIntuneAppId.has(app.id) || manualWingetByName.has(name) || claimedWingetByName.has(name)) {
+        return [app.id, null] as const;
+      }
+      let match = matchAppToWinget(app);
+      if (!match || match.confidence === 'low') match = await matchAppToWingetWithDatabase(app, supabase);
+      return [app.id, match] as const;
+    }, deadlineAt));
     const updates: AppUpdateInfo[] = [];
     const checked: CheckedResult[] = [];
     const matchedApps: MatchedApp[] = [];
@@ -273,11 +267,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      let match = matchAppToWinget(app);
-
-      if (!match || match.confidence === 'low') {
-        match = await matchAppToWingetWithDatabase(app, supabase);
-      }
+      const match = databaseMatches.get(app.id);
 
       if (!match) {
         checked.push({
@@ -434,7 +424,8 @@ export async function GET(request: NextRequest) {
       totalApps: apps.length,
       checkedApps: checked,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof UpdateScanUnavailable || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))) throw error;
     return NextResponse.json(
       { error: 'Failed to check for updates' },
       { status: 500 }

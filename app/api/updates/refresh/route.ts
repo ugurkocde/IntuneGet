@@ -3,7 +3,7 @@
  * POST - Run an on-demand update scan and refresh cached update results
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { parseVersion } from '@/lib/version-compare';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase, isSqliteMode } from '@/lib/db';
@@ -17,6 +17,10 @@ import type { AppUpdateInfo } from '@/types/inventory';
 interface RefreshRequestBody {
   tenant_id?: string;
 }
+
+// Calling the live route does not inherit its Vercel duration configuration.
+// Leave time after the bounded scan to persist the complete result.
+export const maxDuration = 60;
 
 interface LiveUpdatesResponse {
   updates: AppUpdateInfo[];
@@ -216,26 +220,20 @@ export async function POST(request: NextRequest) {
     // user's email frequency, since they just ran an on-demand check. Failures
     // here must not fail the refresh; the daily cron remains the backstop.
     const hasPendingNotifications = rows.some((row) => row.notified_at === null);
-    let notified: { emailsSent: number; webhooksSent: number } | undefined;
     if (hasPendingNotifications) {
-      try {
-        const res = await notifyUserOfPendingUpdates(supabase, user.userId, {
-          respectFrequency: false,
-        });
-        notified = { emailsSent: res.emailsSent, webhooksSent: res.webhooksSent };
-      } catch (notifyError) {
-        console.error(
-          'On-demand update notification failed:',
-          notifyError instanceof Error ? notifyError.message : notifyError
-        );
-      }
+      after(async () => {
+        try {
+          await notifyUserOfPendingUpdates(supabase, user.userId, { respectFrequency: false });
+        } catch {
+          console.error('On-demand update notification failed; the scheduled notifier will retry.');
+        }
+      });
     }
 
     return NextResponse.json({
       success: true,
       refreshedCount: rows.length,
       removedCount: staleIds.length,
-      ...(notified ? { notified } : {}),
       updateCount: liveData.updateCount,
       matchingSummary: {
         totalChecked: liveData.checkedApps?.length || 0,

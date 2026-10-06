@@ -490,6 +490,7 @@ export async function POST(request: Request) {
     .eq('id', body.candidateId)
     .eq('test_level', 'psadt-package')
     .in('status', ['error', 'superseded'])
+    .or('phase.is.null,phase.neq.publishing')
     .select('id')
     .maybeSingle();
   if (error) throw error;

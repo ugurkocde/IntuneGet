@@ -334,5 +334,196 @@
     ],
     "autoUpdate": "none",
     "notes": "Publisher-linked versioned x64 MSI; standalone executables and development snapshots are excluded."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "vendor-managed",
+    "id": "firefox",
+    "packageId": "IntuneGet.Curated.Firefox",
+    "wingetId": "Mozilla.Firefox",
+    "name": "Mozilla Firefox",
+    "publisher": "Mozilla Corporation",
+    "channel": "Stable",
+    "category": "browsers",
+    "homepage": "https://www.firefox.com/",
+    "signaturePublishers": [
+      "Mozilla Corporation"
+    ],
+    "releaseSource": "https://product-details.mozilla.org/1.0/firefox_versions.json",
+    "discovery": "firefox-stable",
+    "checksumSource": {
+      "urlTemplate": "https://archive.mozilla.org/pub/firefox/releases/{version}/SHA256SUMS",
+      "entryTemplate": "win64/en-US/Firefox Setup {version}.msi",
+      "format": "sha256sums"
+    },
+    "allowedInstallerSources": [
+      {
+        "origin": "https://archive.mozilla.org",
+        "pathPrefix": "/pub/firefox/releases/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Mozilla Firefox.*$",
+      "executablePaths": [
+        "Mozilla Firefox/firefox.exe"
+      ]
+    },
+    "notes": "Stable Release channel, x64 en-US publisher MSI. Independent from ESR. Use a prior publisher release for upgrade QA; vendor updater remains enabled."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "zoom",
+    "packageId": "IntuneGet.Curated.Zoom",
+    "wingetId": "Zoom.Zoom",
+    "name": "Zoom Workplace",
+    "publisher": "Zoom Communications, Inc.",
+    "channel": "Stable",
+    "category": "communication",
+    "homepage": "https://www.zoom.com/",
+    "signaturePublishers": [
+      "Zoom Communications, Inc.",
+      "Zoom Video Communications, Inc."
+    ],
+    "releaseSource": "https://zoom.us/rest/download?os=win64",
+    "discovery": "zoom",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://cdn.zoom.us",
+        "pathPrefix": "/prod/"
+      }
+    ],
+    "initialUpgradeBaseline": {
+      "version": "7.1.41345",
+      "installerUrl": "https://cdn.zoom.us/prod/7.1.0.41345/x64/ZoomInstallerFull.msi"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^Zoom Workplace(?: \\(64-bit\\))?$",
+      "executablePaths": [
+        "Zoom/bin/Zoom.exe"
+      ]
+    },
+    "notes": "Publisher x64 enterprise MSI, all users. Publisher four-part download build maps to the MSI three-part ProductVersion (major.minor.build). MSI automatic update defaults stay disabled. The reviewed initial upgrade baseline is used only before an approved release exists."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "audacity",
+    "packageId": "IntuneGet.Curated.Audacity",
+    "wingetId": "Audacity.Audacity",
+    "name": "Audacity",
+    "publisher": "Muse Group",
+    "channel": "Stable",
+    "category": "multimedia",
+    "homepage": "https://www.audacityteam.org/",
+    "signaturePublishers": [
+      "MuseCY Limited",
+      "MuseCY LIMITED"
+    ],
+    "releaseSource": "https://api.github.com/repos/audacity/audacity/releases/latest",
+    "discovery": "github",
+    "releaseTagPrefix": "Audacity-",
+    "assetPattern": "^audacity-win-[0-9]+(?:\\.[0-9]+){2}-x86_64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/audacity/audacity/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^Audacity(?:\\s+[0-9.]+)?(?: \\(x64\\))?$",
+      "executablePaths": [
+        "Audacity 4/bin/Audacity4.exe"
+      ],
+      "versionComponents": 3
+    },
+    "notes": "Publisher x86_64 MSI with GitHub asset SHA-256. The publisher appends an MSI build number to its three-part public release; QA compares the reviewed release components and binds the exact build by hash. ARM and optional FFmpeg/AI payloads are separate; use a previous MSI release for upgrade QA."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart USE_MU=0 ENABLE_MU=0",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "powershell-lts",
+    "packageId": "IntuneGet.Curated.PowerShellLTS",
+    "wingetId": "Microsoft.PowerShell",
+    "name": "PowerShell 7",
+    "publisher": "Microsoft Corporation",
+    "channel": "7.6 LTS",
+    "category": "developer-tools",
+    "homepage": "https://learn.microsoft.com/powershell/",
+    "signaturePublishers": [
+      "Microsoft Corporation"
+    ],
+    "releaseSource": "https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=30",
+    "discovery": "github-channel",
+    "releaseVersionPattern": "^7\\.6\\.[0-9]+$",
+    "assetPattern": "^PowerShell-7\\.6\\.[0-9]+-win-x64\\.msi$",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://github.com",
+        "pathPrefix": "/PowerShell/PowerShell/releases/download/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^PowerShell 7(?:\\.6\\.[0-9.]+)?(?:[- ]x64| \\(x64\\))$",
+      "executablePaths": [
+        "PowerShell/7/pwsh.exe"
+      ]
+    },
+    "notes": "Explicit 7.6 LTS channel, x64 machine MSI, publisher asset SHA-256. Microsoft Update opt-in is disabled by installer properties; existing administrator update policy may override it. Never switch to the 7.7 MSIX distribution; updating the major/minor channel requires a reviewed definition."
+  },
+  {
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "neutral",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "allowUnsigned": false,
+    "autoUpdate": "none",
+    "id": "aws-cli",
+    "packageId": "IntuneGet.Curated.AWSCLI",
+    "wingetId": "Amazon.AWSCLI",
+    "name": "AWS Command Line Interface v2",
+    "publisher": "Amazon Web Services",
+    "channel": "v2",
+    "category": "developer-tools",
+    "homepage": "https://aws.amazon.com/cli/",
+    "signaturePublishers": [
+      "Amazon Web Services, Inc."
+    ],
+    "releaseSource": "https://api.github.com/repos/aws/aws-cli/tags?per_page=30",
+    "discovery": "aws-cli",
+    "allowedInstallerSources": [
+      {
+        "origin": "https://awscli.amazonaws.com",
+        "pathPrefix": "/"
+      }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^AWS Command Line Interface v2$",
+      "executablePaths": [
+        "Amazon/AWSCLIV2/aws.exe"
+      ]
+    },
+    "notes": "Publisher versioned x64 all-users MSI. Discover v2 releases from the official repository tags, measure SHA-256 in the isolated VM, and require an earlier official version for upgrade QA."
   }
 ]

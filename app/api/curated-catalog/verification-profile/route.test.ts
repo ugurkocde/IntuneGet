@@ -17,11 +17,11 @@ const request = (body: unknown, token = 'operator-test') => new NextRequest('htt
 });
 afterEach(() => vi.unstubAllEnvs());
 describe('curated catalog APIs', () => {
-  it('shows ten pending apps and no deployable cart items without signed releases', async () => {
+  it('shows every definition pending and no deployable cart items without signed releases', async () => {
     const response = await GET();
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.entries).toHaveLength(10);
+    expect(body.entries).toHaveLength(CURATED_APPS.length);
     expect(body.entries.every((entry: { status: string; cartItem: unknown }) => entry.status === 'pending' && !entry.cartItem)).toBe(true);
     const licences = body.entries.filter((entry: { app: { licenceAttestation: unknown } }) => entry.app.licenceAttestation);
     expect(licences.map((entry: { app: { id: string } }) => entry.app.id)).toEqual(['acrobat-reader']);

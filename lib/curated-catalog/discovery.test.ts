@@ -2,6 +2,40 @@ import { describe, expect, it, vi } from 'vitest';
 import { CURATED_APPS } from './definitions';
 import { candidateFromMetadata, discoverCandidate, discoverPreviousCandidate, vendorSha256FromChecksums } from './discovery.mjs';
 
+describe('next five publisher-sourced additions',()=>{
+  it('discovers Firefox Stable separately from ESR and binds its checksum',()=>{
+    const candidate=candidateFromMetadata(app('firefox'),JSON.stringify({LATEST_FIREFOX_VERSION:'157.0.1',FIREFOX_ESR:'140.17.0esr'}),new Date(),pin('a')+'  win64/en-US/Firefox Setup 157.0.1.msi');
+    expect(candidate.version).toBe('157.0.1');
+    expect(candidate.vendorSha256).toBe(pin('a'));
+    expect(candidate.installerUrl).not.toContain('esr');
+  });
+  it('recognizes Audacity publisher tags and only selects the x86_64 MSI',()=>{
+    const candidate=candidateFromMetadata(app('audacity'),JSON.stringify({tag_name:'Audacity-4.0.1',html_url:'https://github.com/audacity/audacity/releases/tag/Audacity-4.0.1',assets:[{name:'audacity-win-4.0.1-x86_64.msi',browser_download_url:'https://github.com/audacity/audacity/releases/download/Audacity-4.0.1/audacity-win-4.0.1-x86_64.msi',digest:'sha256:'+pin('b')}]}));
+    expect(candidate.version).toBe('4.0.1');expect(candidate.vendorSha256).toBe(pin('b'));
+  });
+  it('retains the PowerShell LTS MSI channel when a newer major/minor is released',()=>{
+    const release=(v:string)=>({tag_name:'v'+v,html_url:'https://github.com/PowerShell/PowerShell/releases/tag/v'+v,assets:[{name:'PowerShell-'+v+'-win-x64.msi',browser_download_url:'https://github.com/PowerShell/PowerShell/releases/download/v'+v+'/PowerShell-'+v+'-win-x64.msi',digest:'sha256:'+pin('c')}]});
+    const candidate=candidateFromMetadata(app('powershell-lts'),JSON.stringify([release('7.7.0'),release('7.6.6'),{...release('7.6.7'),prerelease:true}]));
+    expect(candidate.version).toBe('7.6.6');
+  });
+  it('binds Zoom download builds to the MSI product version and versioned x64 payload',()=>{
+    const candidate=candidateFromMetadata(app('zoom'),JSON.stringify({status:true,result:{downloadVO:{zoomX64:{version:'7.2.1.48556',archType:'x64',packageNameForIT:'ZoomInstallerFull.msi'}}}}));
+    expect(candidate.version).toBe('7.2.48556');
+    expect(candidate.installerUrl).toBe('https://cdn.zoom.us/prod/7.2.1.48556/x64/ZoomInstallerFull.msi');
+  });
+  it('selects the latest AWS v2 tag and constructs an immutable all-users MSI URL',()=>{
+    const candidate=candidateFromMetadata(app('aws-cli'),JSON.stringify([{name:'2.37.8'},{name:'2.37.9'},{name:'3.0.0'},{name:'2.38.0rc1'}]));
+    expect(candidate.version).toBe('2.37.9');expect(candidate.installerUrl).toBe('https://awscli.amazonaws.com/AWSCLIV2-2.37.9.msi');
+  });
+  it('reuses the reviewed Zoom publisher baseline for first-release upgrade QA',async()=>{
+    const current=candidateFromMetadata(app('zoom'),JSON.stringify({status:true,result:{downloadVO:{zoomX64:{version:'7.2.1.48556',archType:'x64',packageNameForIT:'ZoomInstallerFull.msi'}}}}));
+    const fetcher=vi.fn(async(_url:string,options:RequestInit)=>{expect(options.method).toBe('HEAD');return new Response(null,{status:200});});
+    const previous=await discoverPreviousCandidate(app('zoom'),current,fetcher);
+    expect(previous?.version).toBe('7.1.41345');expect(previous?.installerUrl).toContain('/7.1.0.41345/x64/');
+  });
+});
+
+
 const app = (id: string) => CURATED_APPS.find(app => app.id === id)!;
 const pin = (char: string) => char.repeat(64);
 const text = (body: string, contentType: string | null = 'text/plain') => new Response(body, { headers: contentType ? { 'content-type': contentType } : {} });

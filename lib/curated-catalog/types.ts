@@ -38,8 +38,12 @@ export interface CuratedAppDefinition {
   /** Reviewed reason that an unsigned installer is acceptable. Required exactly when allowUnsigned is true. */
   unsignedExceptionReason?: string;
   releaseSource: string;
-  discovery: 'github' | 'chrome' | 'firefox' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'manual';
+  discovery: 'github' | 'github-channel' | 'chrome' | 'firefox' | 'firefox-stable' | 'zoom' | 'aws-cli' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'manual';
   assetPattern?: string;
+  releaseTagPrefix?: string;
+  releaseVersionPattern?: string;
+  /** Publisher baseline used only before the first approved release exists. */
+  initialUpgradeBaseline?: { version: string; installerUrl: string };
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;
   /** Publisher checksum file fetched as text during discovery to pin vendorSha256. */
   checksumSource?: { urlTemplate: string; entryTemplate: string; format: 'sha256sums' | 'winscp-readme' };
@@ -47,7 +51,12 @@ export interface CuratedAppDefinition {
   installerRedirectPolicy?: 'any-https-mirror-with-pinned-sha256';
   autoUpdate: 'vendor-managed' | 'none';
   notes: string;
-  installedIdentity: { displayNamePattern: string; executablePaths: string[] };
+  installedIdentity: {
+    displayNamePattern: string;
+    executablePaths: string[];
+    /** Reviewed publisher release components; MSI build suffix remains hash-bound. Defaults to four. */
+    versionComponents?: 3 | 4;
+  };
   /** Apps and Features display name and exact uninstall key or MSI product code registered by the installer. */
   registeredUninstall?: { displayName: string; key: string };
   licenceAttestation?: CuratedLicenceAttestation;

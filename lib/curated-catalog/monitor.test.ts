@@ -12,7 +12,7 @@ describe('curated monitoring', () => {
       results: CURATED_APPS.map(app => app.id === release.candidate.appId ? { appId: app.id, state: 'candidate', candidate: releaseFixture(app, '121.0').candidate } : { appId: app.id, state: 'error' }) };
     const result = curatedMonitor(CURATED_APPS, payload, discovery);
     expect(result.approved).toBe(1); expect(result.pending[0]).toContain('121.0');
-    expect(result.alerts).toHaveLength(10); expect(result.alerts.at(-1)).toContain('expires');
+    expect(result.alerts).toHaveLength(CURATED_APPS.length); expect(result.alerts.at(-1)).toContain('expires');
     expect(() => curatedMonitor(CURATED_APPS, payload, { ...discovery, definitionsSha256: 'bad' })).toThrow();
   });
   it('alerts on replaced checksums without approving the replacement', () => {
