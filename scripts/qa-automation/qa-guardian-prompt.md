@@ -28,13 +28,18 @@ Operating rules
 
 Failure repair contract
 
-- On a material lifecycle failure, first verify production auto-paused and active lifecycle count is zero. Do not start another lifecycle while paused.
+- An application failure never stops the queue. A `failed` lifecycle creates a row in `qa_repair_requests`; the global pipeline stays enabled and other candidates keep running while you repair. Never pause `qa_pipeline_control` because one application failed. Pausing is reserved for infrastructure faults (runner, host, publication, pin mismatch) and must be resumed as soon as that fault is healthy.
+- Work the oldest `pending` repair request. Set it to `in_progress` first, then resolve it with exactly one outcome:
+  - `requeued`: a shared fix shipped (or the failure was transient), and the exact app/version/architecture is queued again via authenticated targeted enqueue.
+  - `blocked`: the failure is deterministic and not safely fixable (quarantine or compatibility block), with an honest `resolution` customers can read.
+  - `resolved`: a newer release or profile already superseded it.
+- Rows created as `blocked` (security verdicts, or three earlier re-queues for the same app and architecture) are final. Never retry them.
 - Diagnose from bounded, sanitized candidate telemetry, compact result JSON, GitHub job steps/logs, and official vendor/WinGet metadata. Do not expose customer configuration or secrets.
 - Prefer a deterministic, reviewed shared adapter or packager fix. A real fix must benefit both production QA and customer packages created from the IntuneGet web portal/catalog.
 - Work only in newly created clean git worktrees. Preserve the user's dirty linked website checkout and unrelated worktrees.
 - Add focused regression coverage for the adapter, normalized QA profile, and customer GitHub Actions payload where applicable. Run focused tests, full tests, lint, and production build in proportion to the change.
-- Merge through protected pull requests. Wait for required CI. Deploy production, update the guarded packager pin, supersede only safe undispatched old-pin rows, and resume only when required pin equals fresh scheduler pin and active count is zero.
-- Retest the exact failing app/version/architecture. Resume the general queue only after its strict audit passes or it is deterministically blocked/quarantined without weakening safety.
+- Merge through protected pull requests. Wait for required CI. Deploy production, update the guarded packager pin, and supersede only safe undispatched old-pin rows. A pin promotion is the only repair step that may briefly pause dispatch; resume as soon as the required pin equals the fresh scheduler pin.
+- Retest the exact failing app/version/architecture through the normal queue, then mark the repair request `requeued`. Do not hold the general queue for that retest.
 
 Completion and reporting
 

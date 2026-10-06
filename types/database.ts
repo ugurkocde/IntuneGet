@@ -29,6 +29,24 @@ export interface Database {
         Update: { value?: Json; updated_at?: string };
         Relationships: GenericRelationship[];
       };
+      qa_repair_requests: {
+        Row: {
+          id: string; candidate_id: string; winget_id: string; version: string; architecture: string;
+          failure_class: 'app_lifecycle' | 'security';
+          status: 'pending' | 'in_progress' | 'requeued' | 'blocked' | 'resolved';
+          prior_requeues: number; failure_summary: string | null; resolution: string | null;
+          created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; candidate_id: string; winget_id: string; version: string; architecture: string;
+          failure_class: 'app_lifecycle' | 'security';
+          status?: 'pending' | 'in_progress' | 'requeued' | 'blocked' | 'resolved';
+          prior_requeues?: number; failure_summary?: string | null; resolution?: string | null;
+          created_at?: string; updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['qa_repair_requests']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_source_backoff: {
         Row: { source_key: string; failure_count: number; next_retry_at: string; last_candidate_id: string; last_attempt: number; updated_at: string };
         Insert: { source_key: string; failure_count: number; next_retry_at: string; last_candidate_id: string; last_attempt: number; updated_at?: string };

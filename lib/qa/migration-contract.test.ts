@@ -154,6 +154,49 @@ describe('QA failed-lifecycle fail-close migration contract', () => {
   });
 });
 
+describe('QA per-application repair requests replace the global pause', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20261006094500_qa_repair_requests_without_global_pause.sql'
+    ),
+    'utf8'
+  );
+  const failureBlock = sql.slice(
+    sql.indexOf("if normalized_outcome = 'failed' then"),
+    sql.indexOf('-- Only catalog-default candidates')
+  );
+
+  it('never pauses the global dispatcher for a failed lifecycle', () => {
+    expect(failureBlock).not.toContain('qa_pipeline_control');
+    expect(sql).not.toContain("updated_by = 'qa-result-fail-close'");
+    expect(failureBlock).toContain('insert into public.qa_repair_requests');
+    expect(failureBlock).toContain('on conflict (candidate_id) do nothing');
+  });
+
+  it('blocks security verdicts and caps repairs at three re-queues per app and architecture', () => {
+    expect(failureBlock).toContain("ilike '%VirusTotal%'");
+    expect(failureBlock).toContain("earlier.status = 'requeued'");
+    expect(failureBlock).toContain('earlier.architecture = candidate.architecture');
+    expect(failureBlock).toContain(
+      "case when is_security_failure or prior_requeue_count >= 3 then 'blocked' else 'pending' end"
+    );
+  });
+
+  it('keeps the repair queue private', () => {
+    expect(sql).toContain('alter table public.qa_repair_requests enable row level security');
+    expect(sql).toContain('revoke all on table public.qa_repair_requests from public, anon, authenticated');
+  });
+
+  it('preserves the retry, promotion and credential contracts of the result function', () => {
+    expect(sql).toContain("when normalized_outcome = 'retry' and attempts < 2 then 'queued'");
+    expect(sql).toContain("when normalized_outcome = 'retry' then 'error'");
+    expect(sql).toContain('insert into public.version_history');
+    expect(sql).toContain("raise insufficient_privilege using message = 'Invalid QA synchronization credential'");
+    expect(sql).toContain('grant execute on function public.report_qa_candidate_result(text, uuid, text, text) to anon');
+  });
+});
+
 describe('QA dispatcher schema contract', () => {
   const sql = readFileSync(
     resolve(process.cwd(), 'supabase/migrations/20260807193111_qa_release_gate.sql'),
