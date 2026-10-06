@@ -1,9 +1,9 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-06T20:29:40.612Z",
-    "expiresAt": "2026-10-13T20:29:40.612Z",
-    "definitionsSha256": "c01202e5c641a5efab2631a2ac320543b6f7c213fa0b3bd31bac7fabb5589720",
+    "generatedAt": "2026-10-06T20:46:06.668Z",
+    "expiresAt": "2026-10-13T20:46:06.668Z",
+    "definitionsSha256": "8736f558638f76465f393e067fe6f596b2ebccba5c97d9f9d6da6ce1a50f872d",
     "releases": [
       {
         "id": "chrome:54d5c369f7bbf090a0e6e170",
@@ -1031,5 +1031,5 @@
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "jpXvxjVF4Sd/cypCCAD6gXEy7zN6NNcU5vRv9EX0JaoO5kVW43JBQo3S8xVsFCLpysSwD/9CfN2Y4EatQVyZDg=="
+  "signature": "XY/91T82Za6zjbJRviF/I2OGDL8ra9vM/ncJSIFrMb6WeOevHyGnh1Ha2nSsqirSMaiQp+PuFQ2rLMQZFlVWCA=="
 }
