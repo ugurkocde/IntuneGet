@@ -55,8 +55,11 @@ and other deterministic integrity failures retain their existing quarantine.
 
 ## Host verification after a VM or storage incident
 
-The repair agent runs without Hyper-V rights and must never be given them. When
-a pause requires clean VM restoration to be verified, the host owner runs
+The repair agent runs without Hyper-V rights and must never be given them. Only
+when a VM test was interrupted before its guest result (the VM job failed, was
+cancelled or timed out mid-test) does a pause need clean VM restoration
+verified. A completed VM job already proves restoration. In that case the host
+owner runs
 `Verify-HyperVHostState.ps1` once in an elevated PowerShell. The script is
 read-only (`Get-VM`, `Get-VMSnapshot`, `Get-VMHardDiskDrive`, `Test-VHD`,
 `Get-Volume`) and writes `hyperv-verification-<utc>.json` next to itself. The
