@@ -8,7 +8,7 @@ import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
   it('defines fifteen applications and commits only a catalog signed by a committed trust key', () => {
-    expect(validateDefinitions(CURATED_APPS)).toHaveLength(15);
+    expect(validateDefinitions(CURATED_APPS)).toHaveLength(20);
     // The automation re-signs after definition changes and before expiry, so
     // only the signer is checked here; deployment checks expiry and digest.
     const payload = verifyCatalogSignature(committed, committedKeys);
