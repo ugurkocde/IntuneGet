@@ -197,6 +197,33 @@ describe('QA per-application repair requests replace the global pause', () => {
   });
 });
 
+describe('QA repair requests block only with a confirmed root cause', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20261006124500_qa_repair_block_requires_confirmed_root_cause.sql'
+    ),
+    'utf8'
+  );
+
+  it('allows blocked only for security, a spent re-queue budget, or a confirmed root cause', () => {
+    expect(sql).toContain('add constraint qa_repair_requests_block_requires_root_cause check');
+    expect(sql).toContain("status <> 'blocked'");
+    expect(sql).toContain("or failure_class = 'security'");
+    expect(sql).toContain('or prior_requeues >= 3');
+    expect(sql).toContain("or coalesce(resolution, '') ~ '^Confirmed root cause: .{20,}'");
+  });
+
+  it('reopens app failures that were blocked without a confirmed root cause', () => {
+    const reopen = sql.slice(sql.indexOf('update public.qa_repair_requests'), sql.indexOf('alter table'));
+    expect(reopen).toContain("set status = 'pending'");
+    expect(reopen).toContain("failure_class = 'app_lifecycle'");
+    expect(reopen).toContain('prior_requeues < 3');
+    expect(reopen).toContain("!~ '^Confirmed root cause: '");
+    expect(sql.indexOf('update public.qa_repair_requests')).toBeLessThan(sql.indexOf('add constraint'));
+  });
+});
+
 describe('QA dispatcher schema contract', () => {
   const sql = readFileSync(
     resolve(process.cwd(), 'supabase/migrations/20260807193111_qa_release_gate.sql'),
