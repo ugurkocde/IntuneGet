@@ -1,0 +1,5 @@
+{
+  "title": "More reliable curated app refreshes",
+  "summary": "Curated app release checks can now recover automatically from temporary service limits, helping new versions reach verification without a manual restart.",
+  "type": "fixed"
+}

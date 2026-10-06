@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCatalog, validateRelease, verifyCatalog, verifyCatalogSignature } from '../lib/curated-catalog/core.mjs';
 import { discoverCandidate, discoverPreviousCandidate } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
+import { createCuratedGitHubClient } from './curated-github.mjs';
 import { enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
@@ -51,16 +52,7 @@ function tokenFor(args) {
   return args.some(arg => arg.startsWith(`repos/${QA}/`)) && process.env.CURATED_QA_TOKEN ? process.env.CURATED_QA_TOKEN : process.env.GH_TOKEN;
 }
 
-function gh(args, { input, raw = false, optional = false } = {}) {
-  const result = spawnSync('gh', args, { input, encoding: raw ? 'buffer' : 'utf8', maxBuffer: 16_777_216, env: { ...process.env, GH_TOKEN: tokenFor(args) } });
-  if (result.status !== 0) {
-    if (optional) return null;
-    const detail = String(result.stderr || '').split('\n').find(line => line.trim()) || 'no detail';
-    throw new Error(`GitHub request failed: ${args.slice(0, 3).map(arg => arg.split('?')[0]).join(' ')} (${detail.trim().slice(0, 200)})`);
-  }
-  if (raw) return result.stdout;
-  return result.stdout.trim() ? JSON.parse(result.stdout) : null;
-}
+const gh = createCuratedGitHubClient({ tokenFor });
 
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
 const appById = id => CURATED_APPS.find(app => app.id === id);
@@ -68,13 +60,13 @@ const releaseIdFor = candidate => `${candidate.appId}:${candidate.id}`;
 const trustedKeys = async () => ({ ...(await readJson(KEYS_PATH)), ...JSON.parse(process.env.CURATED_CATALOG_PUBLIC_KEYS || '{}') });
 
 /** Downloads one bounded evidence JSON entry and checks GitHub's artifact digest. */
-function runEvidence(runId) {
-  const artifacts = gh(['api', `repos/${QA}/actions/runs/${runId}/artifacts?per_page=100`]).artifacts
+async function runEvidence(runId) {
+  const artifacts = (await gh(['api', `repos/${QA}/actions/runs/${runId}/artifacts?per_page=100`])).artifacts
     .filter(item => item.name === 'curated-verification-evidence' && !item.expired);
   if (artifacts.length !== 1) throw new Error('Expected one immutable evidence artifact.');
   const artifact = artifacts[0];
   if (artifact.size_in_bytes > 2_097_152) throw new Error('Verification artifact is too large.');
-  const zip = gh(['api', `repos/${QA}/actions/artifacts/${artifact.id}/zip`], { raw: true });
+  const zip = await gh(['api', `repos/${QA}/actions/artifacts/${artifact.id}/zip`], { raw: true });
   const artifactSha256 = createHash('sha256').update(zip).digest('hex');
   if (artifact.digest !== `sha256:${artifactSha256}`) throw new Error('GitHub artifact checksum mismatch.');
   const archive = resolve(root, `${randomUUID()}.zip`);
@@ -90,14 +82,14 @@ function runEvidence(runId) {
 /** Builds a release only from a passing protected run on main with authenticated evidence. */
 async function approvedRelease(runId, approvedAt) {
   if (!/^[1-9][0-9]*$/.test(String(runId))) throw new Error('Invalid verification run ID.');
-  const run = gh(['api', `repos/${QA}/actions/runs/${runId}`]);
+  const run = await gh(['api', `repos/${QA}/actions/runs/${runId}`]);
   if (run.status !== 'completed' || run.conclusion !== 'success' || run.head_branch !== 'main' || run.path.split('@')[0] !== `.github/workflows/${VERIFY_WORKFLOW}`) {
     throw new Error('Verification has not passed on protected main.');
   }
   const { artifact, artifactSha256, report } = await runEvidence(runId);
   if (!/^[a-f0-9]{40}$/.test(report.provenance?.websiteCommit || '') || !/^[a-f0-9]{40}$/.test(run.head_sha)) throw new Error('Invalid verification commit.');
   for (const [repository, commit] of [[WEBSITE, report.provenance.websiteCommit], [QA, run.head_sha]]) {
-    const comparison = gh(['api', `repos/${repository}/compare/${commit}...main`]);
+    const comparison = await gh(['api', `repos/${repository}/compare/${commit}...main`]);
     if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('Verification source is outside protected main history.');
   }
   const app = appById(report.candidate?.appId);
@@ -120,14 +112,14 @@ async function dispatchVerification(inputs) {
 
 /** A passing run must come from protected main of both repositories. */
 async function authenticateRun(run, report) {
-  const current = gh(['api', `repos/${QA}/actions/runs/${run.id}`]);
+  const current = await gh(['api', `repos/${QA}/actions/runs/${run.id}`]);
   if (current.status !== 'completed' || current.conclusion !== 'success' || current.head_branch !== 'main' || current.path.split('@')[0] !== `.github/workflows/${VERIFY_WORKFLOW}`) {
     throw new Error('Verification has not passed on protected main.');
   }
   if (report.provenance?.runId !== String(run.id) || report.provenance?.workflowCommit !== current.head_sha) throw new Error('Verification report provenance is invalid.');
   for (const [repository, commit] of [[WEBSITE, report.provenance.websiteCommit], [QA, current.head_sha]]) {
     if (!/^[a-f0-9]{40}$/.test(commit || '')) throw new Error('Invalid verification commit.');
-    const comparison = gh(['api', `repos/${repository}/compare/${commit}...main`]);
+    const comparison = await gh(['api', `repos/${repository}/compare/${commit}...main`]);
     if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('Verification source is outside protected main history.');
   }
 }
@@ -178,21 +170,21 @@ async function setOutput(name, value) {
 }
 
 /** One open issue in the private QA repository tracks alerts; it closes when they clear. */
-function syncAlertIssue(alerts, runUrl) {
-  const open = (gh(['api', `repos/${QA}/issues?state=open&per_page=100`]) || []).filter(issue => !issue.pull_request && issue.title === ISSUE_TITLE);
+async function syncAlertIssue(alerts, runUrl) {
+  const open = (await gh(['api', `repos/${QA}/issues?state=open&per_page=100`]) || []).filter(issue => !issue.pull_request && issue.title === ISSUE_TITLE);
   if (!alerts.length) {
     for (const issue of open) {
-      gh(['api', '-X', 'POST', `repos/${QA}/issues/${issue.number}/comments`, '--input', '-'], { input: JSON.stringify({ body: `Resolved. All alerts cleared in ${runUrl}.` }) });
-      gh(['api', '-X', 'PATCH', `repos/${QA}/issues/${issue.number}`, '--input', '-'], { input: JSON.stringify({ state: 'closed', state_reason: 'completed' }) });
+      await gh(['api', '-X', 'POST', `repos/${QA}/issues/${issue.number}/comments`, '--input', '-'], { input: JSON.stringify({ body: `Resolved. All alerts cleared in ${runUrl}.` }) });
+      await gh(['api', '-X', 'PATCH', `repos/${QA}/issues/${issue.number}`, '--input', '-'], { input: JSON.stringify({ state: 'closed', state_reason: 'completed' }) });
     }
     return;
   }
   const body = ['The curated catalog automation found problems it cannot resolve on its own.', '', ...alerts.map(alert => `- ${alert}`), '', `Latest run: ${runUrl}`,
     '', 'This issue updates on every run and closes automatically when the alerts clear.'].join('\n');
   if (open.length) {
-    if (open[0].body !== body) gh(['api', '-X', 'PATCH', `repos/${QA}/issues/${open[0].number}`, '--input', '-'], { input: JSON.stringify({ body }) });
+    if (open[0].body !== body) await gh(['api', '-X', 'PATCH', `repos/${QA}/issues/${open[0].number}`, '--input', '-'], { input: JSON.stringify({ body }) });
   } else {
-    gh(['api', '-X', 'POST', `repos/${QA}/issues`, '--input', '-'], { input: JSON.stringify({ title: ISSUE_TITLE, body }) });
+    await gh(['api', '-X', 'POST', `repos/${QA}/issues`, '--input', '-'], { input: JSON.stringify({ title: ISSUE_TITLE, body }) });
   }
 }
 
@@ -214,15 +206,16 @@ async function plan() {
   const monitor = curatedMonitor(CURATED_APPS, payload, discovery, new Date());
   for (const alert of monitor.alerts) if (/changed an already approved/.test(alert)) alerts.push(alert);
 
-  const allRuns = (gh(['api', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/runs?per_page=100`]).workflow_runs || [])
+  const allRuns = ((await gh(['api', `repos/${QA}/actions/workflows/${VERIFY_WORKFLOW}/runs?per_page=100`])).workflow_runs || [])
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const runs = allRuns
     .map(run => ({ ...run, candidateId: /\[([a-f0-9]{24})\]\s*$/.exec(run.display_title || '')?.[1] || null }))
     .filter(run => run.candidateId);
-  const verifierChangedAt = Math.max(...VERIFIER_PATHS.map(([repository, path]) => {
-    const [latest] = gh(['api', `repos/${repository}/commits?sha=main&path=${encodeURIComponent(path)}&per_page=1`]) || [];
-    return latest ? Date.parse(latest.commit.committer.date) : 0;
-  }));
+  let verifierChangedAt = 0;
+  for (const [repository, path] of VERIFIER_PATHS) {
+    const [latest] = await gh(['api', `repos/${repository}/commits?sha=main&path=${encodeURIComponent(path)}&per_page=1`]) || [];
+    verifierChangedAt = Math.max(verifierChangedAt, latest ? Date.parse(latest.commit.committer.date) : 0);
+  }
 
   // Discover all requests independently of available VM slots. The minute
   // dispatcher orders this durable queue alongside ordinary customer QA.
@@ -312,10 +305,10 @@ async function plan() {
   const expiresSoon = hasReleases && (!payload.expiresAt || Date.parse(payload.expiresAt) - now.getTime() < RENEW_BEFORE_MS);
   const withdraw = (process.env.CURATED_WITHDRAW_RELEASE_ID || '').trim();
   let publish = approvals.length > 0 || catalog.dropped.length > 0 || (hasReleases && !catalog.current) || expiresSoon || withdraw !== '';
-  const open = gh(['api', `repos/${WEBSITE}/pulls?head=${WEBSITE.split('/')[0]}:${BRANCH}&state=open`]) || [];
+  const open = await gh(['api', `repos/${WEBSITE}/pulls?head=${WEBSITE.split('/')[0]}:${BRANCH}&state=open`]) || [];
   if (open.length && publish && !withdraw) {
     // An automation PR that already carries these changes is still merging.
-    const pending = gh(['api', '-H', 'Accept: application/vnd.github.raw+json', `repos/${WEBSITE}/contents/${CATALOG_PATH}?ref=${BRANCH}`], { optional: true });
+    const pending = await gh(['api', '-H', 'Accept: application/vnd.github.raw+json', `repos/${WEBSITE}/contents/${CATALOG_PATH}?ref=${BRANCH}`], { optional: true });
     try {
       const pendingPayload = verifyCatalog(pending, CURATED_APPS, await trustedKeys(), now);
       const ids = new Set(pendingPayload.releases.map(release => release.id));
@@ -346,7 +339,7 @@ async function plan() {
   await appendSummary([`### Curated catalog automation`, '', `${approvedCount}/${CURATED_APPS.length} applications deployable. Catalog expires: ${payload.expiresAt || 'not signed yet'}.`, '',
     summaryTable(rows), '', configStates.length ? ['**Custom PSADT configurations**', ...configStates.map(state => `- ${state}`), ''].join('\n') : '', alerts.length ? ['**Alerts**', ...alerts.map(alert => `- ${alert}`)].join('\n') : 'No alerts.', '',
     publish ? 'A signed catalog will be published in this run.' : 'No catalog change to publish.'].join('\n'));
-  if (process.env.CURATED_SYNC_ISSUE === 'true') syncAlertIssue(alerts, runUrl);
+  if (process.env.CURATED_SYNC_ISSUE === 'true') await syncAlertIssue(alerts, runUrl);
 }
 
 async function publish() {
@@ -401,7 +394,7 @@ async function publish() {
     if (result.status !== 0) throw new Error(`git ${args[0]} failed: ${(result.stderr || '').split('\n')[0]}`);
     return result.stdout.trim();
   };
-  const user = gh(['api', 'user']);
+  const user = await gh(['api', 'user']);
   git('config', 'user.name', user.login);
   git('config', 'user.email', `${user.id}+${user.login}@users.noreply.github.com`);
   git('checkout', '-B', BRANCH);
@@ -409,9 +402,9 @@ async function publish() {
   git('commit', '-m', `${title}\n\n${details}`);
   const basic = Buffer.from(`x-access-token:${process.env.GH_TOKEN}`).toString('base64');
   git('-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`, 'push', '--force', `https://github.com/${WEBSITE}.git`, `HEAD:refs/heads/${BRANCH}`);
-  let pr = (gh(['api', `repos/${WEBSITE}/pulls?head=${WEBSITE.split('/')[0]}:${BRANCH}&state=open`]) || [])[0];
-  if (pr) gh(['api', '-X', 'PATCH', `repos/${WEBSITE}/pulls/${pr.number}`, '--input', '-'], { input: JSON.stringify({ title, body: details }) });
-  else pr = gh(['api', '-X', 'POST', `repos/${WEBSITE}/pulls`, '--input', '-'], { input: JSON.stringify({ title, body: details, head: BRANCH, base: 'main' }) });
+  let pr = (await gh(['api', `repos/${WEBSITE}/pulls?head=${WEBSITE.split('/')[0]}:${BRANCH}&state=open`]) || [])[0];
+  if (pr) await gh(['api', '-X', 'PATCH', `repos/${WEBSITE}/pulls/${pr.number}`, '--input', '-'], { input: JSON.stringify({ title, body: details }) });
+  else pr = await gh(['api', '-X', 'POST', `repos/${WEBSITE}/pulls`, '--input', '-'], { input: JSON.stringify({ title, body: details, head: BRANCH, base: 'main' }) });
   // Auto-merge waits for the required checks, then squash-merges.
   const merge = spawnSync('gh', ['pr', 'merge', String(pr.number), '--repo', WEBSITE, '--squash', '--auto'], { encoding: 'utf8' });
   if (merge.status !== 0 && !/already/i.test(merge.stderr || '')) throw new Error('Enabling auto-merge failed.');

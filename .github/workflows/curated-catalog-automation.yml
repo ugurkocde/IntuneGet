@@ -29,7 +29,8 @@ jobs:
   plan:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Allow the API helper's shared 65-minute quota wait budget plus job work.
+    timeout-minutes: 85
     outputs:
       publish: ${{ steps.plan.outputs.publish }}
       approvals: ${{ steps.plan.outputs.approvals }}
@@ -66,7 +67,8 @@ jobs:
     # Holds the signing key. Restricted to protected branches; no reviewer gate.
     environment: curated-catalog-approval
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Publication uses the same bounded GitHub quota retry helper as planning.
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
