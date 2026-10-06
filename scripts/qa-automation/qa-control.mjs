@@ -1,11 +1,13 @@
 import { writeFile, rename } from 'node:fs/promises';
 import { recoverInfrastructure, recoverStalledPublication, rateLimitUntil } from './recovery.mjs';
 import { reconcileActive } from './active-health.mjs';
+import { decideDiskAction, diskGuardActor, lowDiskReason, parseHostFreeGb } from './host-disk-guard.mjs';
 
 const base = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const cronSecret = process.env.CRON_SECRET;
 const isDryRun = process.argv.includes('--dry-run');
+const hostFreeGb = parseHostFreeGb(process.argv);
 const stateFlagIndex = process.argv.indexOf('--state');
 const statePath = stateFlagIndex >= 0 ? process.argv[stateFlagIndex + 1] : null;
 const siteBase = 'https://www.intuneget.com';
@@ -265,6 +267,42 @@ function requireRepair(reason, key = 'pipeline-control') {
 try {
   let current = await snapshot();
   result.snapshot = current;
+
+  const diskAction = decideDiskAction({ freeGb: hostFreeGb, control: current.control });
+  if (hostFreeGb !== null) result.hostFreeGb = hostFreeGb;
+  if (diskAction === 'pause' || diskAction === 'hold') {
+    if (diskAction === 'pause') {
+      if (isDryRun) result.actions.push({ type: 'would_pause_low_disk', hostFreeGb });
+      else {
+        const paused = await patch('qa_pipeline_control', { id: 'eq.global', paused: 'eq.false' }, {
+          paused: true, reason: lowDiskReason(hostFreeGb),
+          updated_by: diskGuardActor, updated_at: new Date().toISOString(),
+        });
+        result.actions.push({ type: 'paused_low_disk', hostFreeGb, applied: paused.length === 1 });
+        result.snapshot = await snapshot();
+      }
+    }
+    // An active lifecycle may finish; only new dispatch is held. This pause is
+    // not a repair case, so the repair agent is not started for it.
+    result.action = 'host_disk_low';
+    result.ok = true;
+    await persist();
+    process.exit(0);
+  }
+  if (diskAction === 'resume') {
+    if (isDryRun) {
+      result.action = 'would_resume_after_disk_recovery';
+      result.ok = true;
+      await persist();
+      process.exit(0);
+    }
+    const resumed = await patch('qa_pipeline_control',
+      { id: 'eq.global', paused: 'eq.true', updated_by: `eq.${diskGuardActor}` },
+      { paused: false, reason: null, updated_by: diskGuardActor, updated_at: new Date().toISOString() });
+    result.actions.push({ type: 'resumed_after_disk_recovery', hostFreeGb, applied: resumed.length === 1 });
+    current = await snapshot();
+    result.snapshot = current;
+  }
 
   if (current.control.paused) {
     if (isDryRun) {

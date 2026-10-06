@@ -131,6 +131,17 @@ try {
     }
     $controllerArguments = @('env', 'run', '-e', 'production', '--', 'node', $controller, '--state', $cycleStateFile)
     if ($DryRun) { $controllerArguments += '--dry-run' }
+    # The QA VM's disks live on the system drive. The controller pauses new
+    # dispatch below its threshold and resumes on its own once space is back.
+    try {
+        $systemDrive = Get-PSDrive -Name $env:SystemDrive.TrimEnd(':') -ErrorAction Stop
+        $hostFreeGb = [math]::Floor($systemDrive.Free / 1GB)
+        $controllerArguments += @('--host-free-gb', [string]$hostFreeGb)
+        if ($hostFreeGb -lt 75) { Write-SupervisorLog "Host system drive low: $hostFreeGb GB free." }
+    }
+    catch {
+        Write-SupervisorLog "Host free space unavailable: $($_.Exception.Message)"
+    }
     Push-Location -LiteralPath $websiteRoot
     try {
         & $vercel @controllerArguments | Out-Null
