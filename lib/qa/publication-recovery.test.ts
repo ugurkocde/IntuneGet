@@ -4,6 +4,7 @@ import {beforeEach,afterEach,describe,it,expect} from 'vitest';
 let db:PGlite;
 const migration=readFileSync(new URL('../../supabase/migrations/20261006130101_qa_publication_recovery.sql',import.meta.url),'utf8');
 const isolationMigration=readFileSync(new URL('../../supabase/migrations/20261006140531_qa_publication_error_isolation.sql',import.meta.url),'utf8');
+const retryMigration=readFileSync(new URL('../../supabase/migrations/20261006142952_qa_publication_retry_fairness.sql',import.meta.url),'utf8');
 const id='00000000-0000-4000-8000-000000000001';
 describe('publication recovery against exact persisted evidence',()=>{
   beforeEach(async()=>{
@@ -23,6 +24,7 @@ describe('publication recovery against exact persisted evidence',()=>{
     `);
     await db.exec(migration);
     await db.exec(isolationMigration);
+    await db.exec(retryMigration);
   });
   afterEach(async()=>{await db.close();});
   it('rejects an invalid credential',async()=>{await expect(db.query("select reconcile_qa_result_publication('bad')")).rejects.toThrow(/credential/);});
@@ -62,7 +64,7 @@ describe('publication recovery against exact persisted evidence',()=>{
       alter table qa_candidates add constraint result_check check(id<>'00000000-0000-4000-8000-000000000001' or status<>'passed');
     `);
     expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(1);
-    expect((await db.query('select status,attempts from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'error',attempts:1});
+    expect((await db.query('select status,attempts,failure_summary from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'error',attempts:1,failure_summary:'Publication reconciliation deferred (SQLSTATE 23514).'});
     expect((await db.query("select status from qa_candidates where id='00000000-0000-4000-8000-000000000002'")).rows[0]).toEqual({status:'passed'});
   });
   it('propagates an authentication failure from the reporter and rolls back the transition',async()=>{
@@ -70,6 +72,32 @@ describe('publication recovery against exact persisted evidence',()=>{
       begin raise insufficient_privilege using message='Invalid reporting credential';end;$$;`);
     await expect(db.query("select reconcile_qa_result_publication('test')")).rejects.toThrow(/credential/);
     expect((await db.query('select status from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'error'});
+  });
+  it('lets fresh evidence bypass 100 poisoned rows and retries them after repair without leaking private errors',async()=>{
+    const recoverable='00000000-0000-4000-8000-000000000101';
+    await db.exec(`
+      insert into qa_candidates(id,winget_id,version,architecture,installer_sha256,package_profile_sha256,github_run_url,started_at,phase,status,test_level,attempts)
+        select ('00000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'Example.App','1','x64','hash','profile'||n,
+          'https://github.com/owner/repo/actions/runs/123','2026-10-06T00:00Z'::timestamptz+n*interval '1 second','publishing','error','psadt-package',1
+        from generate_series(2,101) n;
+      insert into qa_package_results
+        select 'profile'||n,'Example.App','1','x64','hash','https://github.com/owner/repo/actions/runs/123','2026-10-06T01:00Z','Passed',0
+        from generate_series(2,101) n;
+      create or replace function report_qa_candidate_result(secret text,candidate uuid,outcome text,summary text) returns boolean language plpgsql as $$
+      begin
+        if candidate<>'${recoverable}' then raise exception using errcode='23514',message='Private customer value from a constraint';end if;
+        update qa_candidates set status=outcome,failure_summary=summary where id=candidate and status='running';return found;
+      end;$$;
+    `);
+    expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(0);
+    expect((await db.query<{count:number}>("select count(*)::int count from qa_candidates where failure_summary='Publication reconciliation deferred (SQLSTATE 23514).'")).rows[0].count).toBe(100);
+    expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(1);
+    expect((await db.query('select status,attempts,github_run_url from qa_candidates where id=$1',[recoverable])).rows[0]).toEqual({status:'passed',attempts:1,github_run_url:'https://github.com/owner/repo/actions/runs/123'});
+    expect((await db.query<{leaked:boolean}>("select coalesce(bool_or(failure_summary like '%Private%'),false) leaked from qa_candidates")).rows[0].leaked).toBe(false);
+    await db.exec(`create or replace function report_qa_candidate_result(secret text,candidate uuid,outcome text,summary text) returns boolean language plpgsql as $$
+      begin update qa_candidates set status=outcome,failure_summary=summary where id=candidate and status='running';return found;end;$$;`);
+    expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(100);
+    expect((await db.query<{count:number}>("select count(*)::int count from qa_candidates where status='passed' and failure_summary is null and attempts=1")).rows[0].count).toBe(101);
   });
   it('does not reconcile a contradictory passing result with malicious detections',async()=>{
     await db.exec('update qa_package_results set virustotal_malicious=2');
