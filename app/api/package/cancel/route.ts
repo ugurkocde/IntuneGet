@@ -21,8 +21,13 @@ type PackagingJobUpdate = Database['public']['Tables']['packaging_jobs']['Update
 
 // Statuses that can be cancelled (active jobs)
 const CANCELLABLE_STATUSES = ['queued', 'packaging', 'uploading'];
+// Jobs waiting on a shared QA candidate have no workflow run of their own yet.
+// Cancelling only detaches this job; the candidate keeps serving other jobs.
+const QA_WAITING_STATUSES = ['awaiting_qa'];
 // Statuses that can be force-dismissed by the user
-const DISMISSABLE_STATUSES = ['queued', 'packaging', 'uploading', 'completed', 'failed'];
+const DISMISSABLE_STATUSES = [
+  'queued', 'packaging', 'uploading', 'awaiting_qa', 'completed', 'failed', 'qa_failed',
+];
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // If dismiss is set for a terminal job, soft-archive it. The row remains
     // available to upload history and update-policy audit references.
-    const terminalStatuses = ['completed', 'failed', 'cancelled', 'duplicate_skipped', 'deployed'];
+    const terminalStatuses = ['completed', 'failed', 'qa_failed', 'cancelled', 'duplicate_skipped', 'deployed'];
     if (dismiss && terminalStatuses.includes(typedJob.status)) {
       // Run auto-update cleanup before deleting (defense-in-depth for stuck jobs)
       if (typedJob.is_auto_update) {
@@ -153,8 +158,11 @@ export async function POST(request: NextRequest) {
 
     // Update the database only after GitHub accepted cancellation (or when the
     // job is handled by the local packager and no GitHub run exists).
+    const isQaWaitingJob = QA_WAITING_STATUSES.includes(typedJob.status);
     let errorMessage = 'Job cancelled by user';
-    if (!isActiveJob) {
+    if (isQaWaitingJob) {
+      errorMessage = 'Job cancelled by user while waiting for QA';
+    } else if (!isActiveJob) {
       errorMessage = `Job dismissed by user (was ${typedJob.status})`;
     }
 
@@ -178,7 +186,9 @@ export async function POST(request: NextRequest) {
 
     // Only use optimistic lock for active jobs (prevent race conditions)
     // For dismissed jobs (completed/failed), we allow updating regardless of current status
-    if (isActiveJob) {
+    // QA-waiting jobs are locked too, so a concurrent QA resume wins cleanly.
+    const useStatusLock = isActiveJob || isQaWaitingJob;
+    if (useStatusLock) {
       updateQuery = updateQuery.eq('status', typedJob.status);
     } else {
       // For non-active jobs, exclude already cancelled or deployed
@@ -201,7 +211,7 @@ export async function POST(request: NextRequest) {
         .update(minimalUpdateData)
         .eq('id', jobId);
 
-      if (isActiveJob) {
+      if (useStatusLock) {
         minimalQuery = minimalQuery.eq('status', typedJob.status);
       } else {
         minimalQuery = minimalQuery.not('status', 'in', '("cancelled","deployed")');
