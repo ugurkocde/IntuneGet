@@ -525,5 +525,152 @@
       ]
     },
     "notes": "Publisher versioned x64 all-users MSI. Discover v2 releases from the official repository tags, measure SHA-256 in the isolated VM, and require an earlier official version for upgrade QA."
+  },
+  {
+    "id": "teamviewer",
+    "packageId": "IntuneGet.Curated.TeamViewer",
+    "wingetId": "TeamViewer.TeamViewer",
+    "name": "TeamViewer",
+    "publisher": "TeamViewer Germany GmbH",
+    "channel": "Stable full client",
+    "category": "utilities",
+    "homepage": "https://www.teamviewer.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "nullsoft",
+    "silentArgs": "/S",
+    "signaturePublishers": ["TeamViewer Germany GmbH"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.teamviewer.com/en/download/windows/",
+    "discovery": "teamviewer",
+    "allowedInstallerSources": [
+      { "origin": "https://download.teamviewer.com", "pathPrefix": "/download/" },
+      { "origin": "https://dl.teamviewer.com", "pathPrefix": "/download/" }
+    ],
+    "installedIdentity": {
+      "displayNamePattern": "^TeamViewer(?: \\(64-bit\\))?$",
+      "executablePaths": ["TeamViewer/TeamViewer.exe"]
+    },
+    "autoUpdate": "vendor-managed",
+    "notes": "Publisher full x64 client, not QuickSupport, Host, or the licensed custom MSI. The publisher URL is mutable; the VM must verify the advertised installed version and measure the exact SHA-256. The vendor updater remains enabled. Commercial use requires the organization's TeamViewer licence; no account assignment or remote access configuration is included."
+  },
+  {
+    "id": "python-314",
+    "packageId": "IntuneGet.Curated.Python314",
+    "wingetId": "Python.Python.3.14",
+    "name": "Python 3.14",
+    "publisher": "Python Software Foundation",
+    "channel": "3.14 stable",
+    "category": "developer-tools",
+    "homepage": "https://www.python.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "exe",
+    "silentArgs": "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=0",
+    "signaturePublishers": ["Python Software Foundation"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.python.org/downloads/windows/",
+    "discovery": "python",
+    "allowedInstallerSources": [{ "origin": "https://www.python.org", "pathPrefix": "/ftp/python/" }],
+    "installedIdentity": {
+      "displayNamePattern": "^Python 3\\.14\\.[0-9]+ \\(64-bit\\)$",
+      "executablePaths": ["Python314/python.exe"],
+      "versionFormat": "python-msi"
+    },
+    "autoUpdate": "none",
+    "notes": "Fixed 3.14 channel, publisher x64 offline EXE; exclude prereleases, install manager, embeddable ZIPs, ARM and x86. Machine install with pip and PATH; omit the separate shared launcher. CPython's Windows ARP version uses patch*1000+150 for final releases, which QA must compare exactly. Upgrade QA uses an earlier 3.14 installer."
+  },
+  {
+    "id": "winrar",
+    "packageId": "IntuneGet.Curated.WinRAR",
+    "wingetId": "RARLab.WinRAR",
+    "name": "WinRAR",
+    "publisher": "win.rar GmbH",
+    "channel": "Stable English",
+    "category": "utilities",
+    "homepage": "https://www.rarlab.com/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "exe",
+    "silentArgs": "-s1",
+    "signaturePublishers": ["win.rar GmbH"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.rarlab.com/download.htm",
+    "discovery": "winrar",
+    "allowedInstallerSources": [{ "origin": "https://www.rarlab.com", "pathPrefix": "/rar/" }],
+    "installedIdentity": {
+      "displayNamePattern": "^WinRAR(?: [0-9.]+)? \\(64-bit\\)$",
+      "executablePaths": ["WinRAR/WinRAR.exe"]
+    },
+    "initialUpgradeBaseline": { "version": "7.22", "installerUrl": "https://www.rarlab.com/rar/winrar-x64-722.exe" },
+    "autoUpdate": "none",
+    "notes": "Publisher stable English x64 EXE; beta and localized filenames are excluded. The 7.22 publisher installer is the initial upgrade baseline. WinRAR is evaluation software; the deploying organization supplies its own licence. No licence key is bundled."
+  },
+  {
+    "id": "nodejs-lts",
+    "packageId": "IntuneGet.Curated.NodeJSLTS",
+    "wingetId": "OpenJS.NodeJS.LTS",
+    "name": "Node.js LTS",
+    "publisher": "OpenJS Foundation",
+    "channel": "24 LTS",
+    "category": "developer-tools",
+    "homepage": "https://nodejs.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": ["OpenJS Foundation"],
+    "allowUnsigned": false,
+    "releaseSource": "https://nodejs.org/dist/index.json",
+    "discovery": "node-lts",
+    "allowedInstallerSources": [{ "origin": "https://nodejs.org", "pathPrefix": "/dist/" }],
+    "checksumSource": {
+      "urlTemplate": "https://nodejs.org/dist/v{version}/SHASUMS256.txt",
+      "entryTemplate": "node-v{version}-x64.msi",
+      "format": "sha256sums"
+    },
+    "installedIdentity": {
+      "displayNamePattern": "^Node\\.js$",
+      "executablePaths": ["nodejs/node.exe"]
+    },
+    "autoUpdate": "none",
+    "notes": "Fixed major-24 LTS channel, publisher machine x64 MSI with npm and publisher SHA256SUMS. Current, older LTS majors and non-MSI payloads are excluded. Optional native-build tools are not enabled. An earlier major-24 MSI is required for upgrade QA."
+  },
+  {
+    "id": "wireshark",
+    "packageId": "IntuneGet.Curated.Wireshark",
+    "wingetId": "WiresharkFoundation.Wireshark",
+    "name": "Wireshark",
+    "publisher": "Wireshark Foundation",
+    "channel": "4.6 stable",
+    "category": "developer-tools",
+    "homepage": "https://www.wireshark.org/",
+    "architecture": "x64",
+    "scope": "machine",
+    "locale": "en-US",
+    "installerType": "msi",
+    "silentArgs": "/qn /norestart",
+    "signaturePublishers": ["Wireshark Foundation"],
+    "allowUnsigned": false,
+    "releaseSource": "https://www.wireshark.org/download.html",
+    "discovery": "wireshark",
+    "allowedInstallerSources": [{ "origin": "https://www.wireshark.org", "pathPrefix": "/download/win64/" }],
+    "checksumSource": {
+      "urlTemplate": "https://www.wireshark.org/download/SIGNATURES-{version}.txt",
+      "entryTemplate": "Wireshark-{version}-x64.msi",
+      "format": "bsd-sha256"
+    },
+    "installerRedirectPolicy": "any-https-mirror-with-pinned-sha256",
+    "initialUpgradeBaseline": { "version": "4.6.8", "installerUrl": "https://www.wireshark.org/download/win64/Wireshark-4.6.8-x64.msi" },
+    "installedIdentity": {
+      "displayNamePattern": "^Wireshark(?: [0-9.]+)?(?: \\(64-bit\\))?$",
+      "executablePaths": ["Wireshark/Wireshark.exe"]
+    },
+    "autoUpdate": "none",
+    "notes": "Fixed 4.6 stable channel, publisher machine x64 MSI, hash pinned by the publisher SIGNATURES file. The approved publisher URL may redirect to HTTPS mirrors only with that hash pin. Npcap and USBPcap are separate products and are not installed, upgraded or removed by this package. The reviewed 4.6.8 MSI is the initial upgrade baseline when the download page lists only the current stable release."
   }
 ]

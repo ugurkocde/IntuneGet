@@ -38,7 +38,7 @@ export interface CuratedAppDefinition {
   /** Reviewed reason that an unsigned installer is acceptable. Required exactly when allowUnsigned is true. */
   unsignedExceptionReason?: string;
   releaseSource: string;
-  discovery: 'github' | 'github-channel' | 'chrome' | 'firefox' | 'firefox-stable' | 'zoom' | 'aws-cli' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'manual';
+  discovery: 'github' | 'github-channel' | 'chrome' | 'firefox' | 'firefox-stable' | 'zoom' | 'aws-cli' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'teamviewer' | 'python' | 'winrar' | 'node-lts' | 'wireshark' | 'manual';
   assetPattern?: string;
   releaseTagPrefix?: string;
   releaseVersionPattern?: string;
@@ -46,7 +46,7 @@ export interface CuratedAppDefinition {
   initialUpgradeBaseline?: { version: string; installerUrl: string };
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;
   /** Publisher checksum file fetched as text during discovery to pin vendorSha256. */
-  checksumSource?: { urlTemplate: string; entryTemplate: string; format: 'sha256sums' | 'winscp-readme' };
+  checksumSource?: { urlTemplate: string; entryTemplate: string; format: 'sha256sums' | 'winscp-readme' | 'bsd-sha256' };
   /** Opt-in: verifier redirects may reach any HTTPS mirror because the SHA256 is pinned. */
   installerRedirectPolicy?: 'any-https-mirror-with-pinned-sha256';
   autoUpdate: 'vendor-managed' | 'none';
@@ -56,6 +56,8 @@ export interface CuratedAppDefinition {
     executablePaths: string[];
     /** Reviewed publisher release components; MSI build suffix remains hash-bound. Defaults to four. */
     versionComponents?: 3 | 4;
+    /** CPython's final Windows release encodes patch * 1000 + 150 in its ARP version. */
+    versionFormat?: 'python-msi';
   };
   /** Apps and Features display name and exact uninstall key or MSI product code registered by the installer. */
   registeredUninstall?: { displayName: string; key: string };
