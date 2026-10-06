@@ -50,4 +50,3 @@ export async function mapUpdateApps<T, R>(apps: T[], match: (app:T)=>Promise<R>,
   }
   return result;
 }
-

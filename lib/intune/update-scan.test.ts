@@ -35,4 +35,3 @@ describe('bounded update inventory scan',()=>{
     expect(max).toBe(10);expect(result).toEqual(input);
   });
 });
-

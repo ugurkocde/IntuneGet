@@ -27,4 +27,3 @@ describe('hosted update refresh',()=>{
     await mocks.after.mock.calls[0][0]();expect(mocks.notify).toHaveBeenCalledOnce();
   });
 });
-
