@@ -224,6 +224,43 @@ describe('QA repair requests block only with a confirmed root cause', () => {
   });
 });
 
+describe('QA repair requests track retests of the same candidate', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20261006143000_qa_repair_requeue_same_candidate.sql'
+    ),
+    'utf8'
+  );
+  const failureBlock = sql.slice(
+    sql.indexOf("if normalized_outcome = 'failed' then"),
+    sql.indexOf("if normalized_outcome = 'passed' then")
+  );
+
+  it('reopens a re-queued request when its candidate fails again and spends the budget', () => {
+    expect(failureBlock).toContain('on conflict (candidate_id) do update');
+    expect(failureBlock).toContain('set prior_requeues = public.qa_repair_requests.prior_requeues + 1');
+    expect(failureBlock).toContain('or public.qa_repair_requests.prior_requeues + 1 >= 3 then \'blocked\'');
+    expect(failureBlock).toContain("where public.qa_repair_requests.status = 'requeued'");
+    expect(failureBlock).not.toContain('do nothing');
+  });
+
+  it('resolves a re-queued request when its retest passes', () => {
+    const passBlock = sql.slice(
+      sql.indexOf("if normalized_outcome = 'passed' then"),
+      sql.indexOf('-- Only catalog-default candidates')
+    );
+    expect(passBlock).toContain("set status = 'resolved'");
+    expect(passBlock).toContain("and status = 'requeued'");
+  });
+
+  it('never pauses the dispatcher and keeps the credential and grant contract', () => {
+    expect(sql).not.toContain('qa_pipeline_control');
+    expect(sql).toContain("raise insufficient_privilege using message = 'Invalid QA synchronization credential'");
+    expect(sql).toContain('grant execute on function public.report_qa_candidate_result(text, uuid, text, text) to anon');
+  });
+});
+
 describe('QA dispatcher schema contract', () => {
   const sql = readFileSync(
     resolve(process.cwd(), 'supabase/migrations/20260807193111_qa_release_gate.sql'),
