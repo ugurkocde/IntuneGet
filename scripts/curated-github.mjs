@@ -63,7 +63,7 @@ export function createCuratedGitHubClient({
     const label = args.slice(0, 3).map(arg => arg.split('?')[0]).join(' ');
     for (let retry = 0; ; retry++) {
       const result = spawn('gh', [...args, '--include'], {
-        input, encoding: 'buffer', maxBuffer: 16_777_216, timeout: 120_000, env,
+        input, encoding: null, maxBuffer: 16_777_216, timeout: 120_000, env,
       });
       const response = responseParts(result.stdout);
       if (result.status === 0) {

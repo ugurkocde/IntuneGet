@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { createCuratedGitHubClient, GITHUB_RATE_LIMIT_WAIT_MS } from './curated-github.mjs';
 
 const start = Date.parse('2026-10-06T07:30:40Z');
@@ -32,6 +33,16 @@ function harness(responses: ReturnType<typeof response>[], options = {}) {
 }
 
 describe('curated GitHub quota recovery', () => {
+  it('reads evidence bytes through the real Node child-process API', async () => {
+    const archive = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xff, 0x00, 0xfe, 0x80]);
+    const output = response(200, { 'Content-Type': 'application/zip' }, archive).stdout;
+    const gh = createCuratedGitHubClient({
+      spawn: (_command: string, _args: string[], options: Parameters<typeof spawnSync>[2]) =>
+        spawnSync(process.execPath, ['-e', `process.stdout.write(Buffer.from('${output.toString('base64')}', 'base64'))`], options),
+    });
+    await expect(gh(['api', 'repos/ugurkocde/IntuneGet-Workflows/actions/artifacts/123/zip'], { raw: true })).resolves.toEqual(archive);
+  });
+
   it('resumes the incident commit-history request only after the primary quota resets', async () => {
     const reset = Date.parse('2026-10-06T07:42:22Z');
     const history = [{ commit: { committer: { date: '2026-10-05T22:00:00Z' } } }];
