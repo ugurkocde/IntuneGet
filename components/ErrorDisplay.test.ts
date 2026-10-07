@@ -38,4 +38,13 @@ describe('ErrorDisplay QA failure stage', () => {
     expect(html).toContain('unsupported installer format');
     expect(html).not.toContain('Installation check');
   });
+
+  it('keeps non-QA installer validation separate from an installation test', () => {
+    const html = renderToStaticMarkup(createElement(ErrorDisplay, {
+      errorCode: 'HASH_MISMATCH', errorStage: 'validation', errorCategory: 'validation',
+    }));
+    expect(html).toContain('Failed at: Validation');
+    expect(html).toContain('SHA256 hash mismatch');
+    expect(html).not.toContain('Installation check');
+  });
 });

@@ -46,7 +46,7 @@ const stageConfig: Record<string, { icon: typeof Download; label: string }> = {
   authenticate: { icon: Key, label: 'Authentication' },
   finalize: { icon: CheckCircle, label: 'Finalize' },
   duplicate_check: { icon: CheckCircle, label: 'Duplicate Check' },
-  validation: { icon: CheckCircle, label: 'Installation check' },
+  validation: { icon: CheckCircle, label: 'Validation' },
   unknown: { icon: Server, label: 'Unknown' },
 };
 
@@ -151,7 +151,7 @@ export function ErrorDisplay({
   }
 
   const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
-  const stage = qaFailed ? stageConfig.validation : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
+  const stage = qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
   // Older QA failures were stored with the installer category, whose hint
   // describes package creation. The exact QA code identifies the real stage.
