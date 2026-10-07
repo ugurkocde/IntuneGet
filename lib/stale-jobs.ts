@@ -27,10 +27,11 @@ interface ReconciliableJob {
 
 interface StaleJobOptions {
   /**
-   * Tenants with a job that is packaging or uploading right now. The workflow
-   * runs one job per tenant at a time, so a queued run is only legitimately
-   * waiting while its tenant has an executing job. Without this set, queued
-   * runs are never treated as stale.
+   * Tenants with a job that is packaging or uploading and has reported
+   * progress within the timeout window. The workflow runs one job per tenant
+   * at a time, so a queued run is only legitimately waiting while its tenant
+   * has an executing job. Without this set, queued runs are never treated as
+   * stale.
    */
   tenantsWithExecutingJobs?: ReadonlySet<string>;
 }

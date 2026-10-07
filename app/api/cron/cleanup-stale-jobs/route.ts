@@ -55,11 +55,14 @@ export async function GET(request: Request) {
     }
 
     // A queued run only waits legitimately while its tenant has an executing
-    // job, because the workflow runs one job per tenant at a time. Only the
+    // job, because the workflow runs one job per tenant at a time. A running
+    // workflow reports progress well inside the timeout, so only jobs updated
+    // since the cutoff count. That also keeps a stuck job, which may already be
+    // marked packaging, from counting as the job it waits behind. Only the
     // candidate tenants are queried so the result stays far below row limits.
     const candidateTenantIds = [...new Set(
       (staleJobs || [])
-        .filter((job) => job.status === 'queued' && job.tenant_id)
+        .filter((job) => job.tenant_id)
         .map((job) => job.tenant_id as string)
     )];
     const { data: executingJobs, error: executingError } = candidateTenantIds.length === 0
@@ -68,7 +71,8 @@ export async function GET(request: Request) {
         .from('packaging_jobs')
         .select('tenant_id')
         .in('status', ['packaging', 'uploading'])
-        .in('tenant_id', candidateTenantIds);
+        .in('tenant_id', candidateTenantIds)
+        .gte('updated_at', cutoffTime);
 
     if (executingError) {
       return NextResponse.json(
