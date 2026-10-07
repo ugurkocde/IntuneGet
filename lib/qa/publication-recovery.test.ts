@@ -5,6 +5,7 @@ let db:PGlite;
 const migration=readFileSync(new URL('../../supabase/migrations/20261006130101_qa_publication_recovery.sql',import.meta.url),'utf8');
 const isolationMigration=readFileSync(new URL('../../supabase/migrations/20261006140531_qa_publication_error_isolation.sql',import.meta.url),'utf8');
 const retryMigration=readFileSync(new URL('../../supabase/migrations/20261006142952_qa_publication_retry_fairness.sql',import.meta.url),'utf8');
+const terminalMigration=readFileSync(new URL('../../supabase/migrations/20261007111629_qa_publication_terminal_reconciliation.sql',import.meta.url),'utf8');
 const id='00000000-0000-4000-8000-000000000001';
 describe('publication recovery against exact persisted evidence',()=>{
   beforeEach(async()=>{
@@ -102,5 +103,54 @@ describe('publication recovery against exact persisted evidence',()=>{
   it('does not reconcile a contradictory passing result with malicious detections',async()=>{
     await db.exec('update qa_package_results set virustotal_malicious=2');
     expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(0);
+  });
+  describe('terminal reconciliation while another candidate is active or queued',()=>{
+    beforeEach(async()=>{
+      // Use the production reporter's predicate and parameter names so the
+      // guarded migration is exercised, including its exact-evidence gate.
+      await db.exec(`
+        drop function report_qa_candidate_result(text,uuid,text,text);
+        create function report_qa_candidate_result(p_secret text,p_candidate_id uuid,p_outcome text,p_summary text)
+        returns boolean language plpgsql as $$
+        declare normalized_outcome text := lower(p_outcome);
+        begin
+          if p_secret <> 'test' then raise insufficient_privilege using message='Invalid reporting credential';end if;
+          update public.qa_candidates set status=normalized_outcome,failure_summary=p_summary
+          where id = p_candidate_id and status in ('dispatched', 'running');
+          return found;
+        end;$$;
+        create unique index qa_candidates_single_active_idx on qa_candidates ((true)) where status in ('dispatched','running');
+        create unique index qa_candidates_one_active_payload_idx on qa_candidates (winget_id,version,architecture,installer_sha256) where status in ('queued','dispatched','running');
+      `);
+    });
+    it('reproduces the active-slot collision, then reconciles without disturbing the running VM',async()=>{
+      await db.exec(`insert into qa_candidates(id,winget_id,status,phase,attempts) values('00000000-0000-4000-8000-000000000002','Other.App','running','installing',1)`);
+      expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(0);
+      expect((await db.query('select failure_summary from qa_candidates where id=$1',[id])).rows[0].failure_summary).toContain('23505');
+      await db.exec(terminalMigration);
+      expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(1);
+      expect((await db.query('select status,attempts,github_run_url from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'passed',attempts:1,github_run_url:'https://github.com/owner/repo/actions/runs/123'});
+      expect((await db.query("select status,phase,attempts from qa_candidates where winget_id='Other.App'")).rows[0]).toEqual({status:'running',phase:'installing',attempts:1});
+    });
+    it('reconciles without activating a duplicate queued payload',async()=>{
+      await db.exec(`insert into qa_candidates(id,winget_id,version,architecture,installer_sha256,status,attempts) values('00000000-0000-4000-8000-000000000002','Example.App','1','x64','hash','queued',0)`);
+      await db.exec(terminalMigration);
+      expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(1);
+      expect((await db.query("select status,attempts from qa_candidates where id='00000000-0000-4000-8000-000000000002'")).rows[0]).toEqual({status:'queued',attempts:0});
+    });
+    it.each(["tested_version='2'","architecture='x86'","installer_sha256='other'","github_run_url='other'","tested_at_utc='2026-10-05T01:00Z'","outcome='Failed'","virustotal_malicious=1"])
+    ('the reporter refuses terminal settlement with mismatched evidence: %s',async change=>{
+      await db.exec(terminalMigration);
+      await db.exec('update qa_package_results set '+change);
+      expect((await db.query<{allowed:boolean}>("select report_qa_candidate_result('test',$1,'passed',null) allowed",[id])).rows[0].allowed).toBe(false);
+      expect((await db.query('select status from qa_candidates where id=$1',[id])).rows[0].status).toBe('error');
+    });
+    it('keeps security classification and authentication on the terminal path',async()=>{
+      await db.exec(terminalMigration);
+      await expect(db.query("select reconcile_qa_result_publication('bad')")).rejects.toThrow(/credential/);
+      await db.exec("update qa_package_results set outcome='Failed',virustotal_malicious=2");
+      expect((await db.query<{count:number}>("select reconcile_qa_result_publication('test') count")).rows[0].count).toBe(1);
+      expect((await db.query('select status,failure_summary from qa_candidates where id=$1',[id])).rows[0]).toEqual({status:'failed',failure_summary:'VirusTotal blocked the published exact installer.'});
+    });
   });
 });
