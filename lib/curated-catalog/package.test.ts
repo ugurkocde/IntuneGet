@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CURATED_APPS } from './definitions';
 import { assertCuratedPackageProfile, buildCuratedCartItem, curatedWorkflowInput } from './package';
 import { releaseFixture } from './test-fixtures';
+import { createCuratedVerificationProfile } from './verification-profile';
 import { canonicalQaJson, normalizeQaWorkflowPackageInput, QA_PACKAGER_RELEASE_HISTORY, QA_PSADT_TOOLCHAIN, qaSha256 } from '@/lib/qa/package-profile';
 
 // A release as if it had been tested on an earlier shared packager release.
@@ -46,6 +47,25 @@ describe('curated registered uninstall identity', () => {
 });
 
 describe('curated reviewed removal arguments', () => {
+  it('binds Firefox silent removal into both customer and verification profiles', () => {
+    const app = CURATED_APPS.find(app => app.id === 'firefox')!;
+    const release = releaseFixture(app, '157.0.1');
+    const item = buildCuratedCartItem(app, release);
+    expect(item.uninstallCommand).toBe('REGISTRY_UNINSTALL:Mozilla Firefox');
+    const input = curatedWorkflowInput(item);
+    const verification = createCuratedVerificationProfile(release.candidate, release.installerSha256);
+    expect(JSON.parse(verification.workflowInput.psadtConfig).reviewedUninstallArguments).toEqual(['/S']);
+    const current = normalizeQaWorkflowPackageInput(input).identity.executionProfileSha256;
+    expect(verification.executionProfileSha256).toBe(current);
+    const oldProfile = JSON.parse(normalizeQaWorkflowPackageInput(input).identity.canonicalJson);
+    oldProfile.psadtConfig.reviewedUninstallArguments = [];
+    oldProfile.psadtConfigSha256 = qaSha256(canonicalQaJson(oldProfile.psadtConfig));
+    const missing = qaSha256(canonicalQaJson(oldProfile));
+    expect(current).not.toBe(missing);
+    release.executionProfileSha256 = missing;
+    release.evidence.qa.executionProfileSha256 = missing;
+    expect(() => assertCuratedPackageProfile(app, release)).toThrow(/current packaging configuration/);
+  });
   it('uses the same hash-bound WinRAR removal contract for customer and QA packages', () => {
     const app = CURATED_APPS.find(app => app.id === 'winrar')!;
     const release = releaseFixture(app, '7.23');

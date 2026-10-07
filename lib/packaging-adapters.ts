@@ -829,6 +829,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // Stable Firefox uses the same Mozilla helper as ESR. Curated verification
+    // run 37675391823 left its registration present after an interactive removal.
+    // https://support.mozilla.org/en-US/kb/silently-install-uninstall-firefox-enterprise
+    wingetId: 'IntuneGet.Curated.Firefox',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // Waterfox uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
     // command contains only the helper path, so invoking it unchanged opens an
     // uninstall wizard that is invisible under SYSTEM and leaves the exact
