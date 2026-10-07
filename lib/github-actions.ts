@@ -155,11 +155,12 @@ export async function triggerPackagingWorkflow(
       inputs.wingetId,
       `REGISTRY_UNINSTALL:${inputs.displayName}`,
     );
-    // A display-name registry marker is the catalog fallback, not a customer
-    // override. Let live manifest reconciliation replace it with a stronger
-    // ProductCode or exact ARP key when the trusted installer now provides one.
+    // Generated catalog fallbacks are not customer overrides. Let trusted
+    // manifest reconciliation replace them with a ProductCode, exact ARP key
+    // or MSIX package identity; preserve real custom uninstall commands.
     const customerUninstallOverride = resolvedUninstallCommand.trim() &&
       resolvedUninstallCommand.trim() !== generatedDisplayUninstallCommand
+      && resolvedUninstallCommand.trim() !== 'MSIX_UNINSTALL:{PACKAGE_NAME}'
       ? resolvedUninstallCommand
       : undefined;
     try {

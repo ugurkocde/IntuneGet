@@ -81,6 +81,47 @@ reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
 }));
 
 describe('triggerPackagingWorkflow hash validation payload', () => {
+  it.each(['MSIX_UNINSTALL:{PACKAGE_NAME}', ' MSIX_UNINSTALL:{PACKAGE_NAME} '])(
+    'replaces the generated MSIX identity placeholder %s with trusted manifest identity',
+    async (uninstallCommand) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+      vi.stubGlobal('fetch', fetchMock);
+      reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+        item: {
+          ...item,
+          uninstallCommand: item.psadtConfig?.uninstallCommand || 'MSIX_UNINSTALL:Claude',
+        },
+        trustedInstallers: [],
+      }));
+      await triggerPackagingWorkflow(workflowInputs({
+        wingetId: 'Anthropic.Claude', displayName: 'Claude', sourceType: 'winget',
+        installerType: 'msix', uninstallCommand,
+        installerSha256: 'A'.repeat(64),
+      }), config, { skipRunCapture: true });
+      expect(reconcileCatalogInstallerMock).toHaveBeenCalledWith(expect.objectContaining({
+        psadtConfig: expect.objectContaining({ uninstallCommand: undefined }),
+      }));
+      const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+      expect(payload.client_payload.installer.uninstallCommand).toBe('MSIX_UNINSTALL:Claude');
+    },
+  );
+
+  it('preserves an explicit MSIX uninstall identity supplied by the customer', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    reconcileCatalogInstallerMock.mockImplementationOnce(async (item) => ({
+      item: { ...item, uninstallCommand: item.psadtConfig?.uninstallCommand || 'MSIX_UNINSTALL:Claude' },
+      trustedInstallers: [],
+    }));
+    await triggerPackagingWorkflow(workflowInputs({
+      wingetId: 'Anthropic.Claude', displayName: 'Claude', sourceType: 'winget',
+      installerType: 'msix', uninstallCommand: 'MSIX_UNINSTALL:Approved.Claude',
+      installerSha256: 'A'.repeat(64),
+    }), config, { skipRunCapture: true });
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload.client_payload.installer.uninstallCommand).toBe('MSIX_UNINSTALL:Approved.Claude');
+  });
+
   it('sends the exact Wacom driver registration to the shared customer packager', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
