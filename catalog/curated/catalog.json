@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-07T14:48:23.637Z",
-    "expiresAt": "2026-10-14T14:48:23.637Z",
+    "generatedAt": "2026-10-07T15:35:29.215Z",
+    "expiresAt": "2026-10-14T15:35:29.215Z",
     "definitionsSha256": "7f4349fca326db5b0bf35379f6430060877a58287048383e6dff2fe3b936481f",
     "releases": [
       {
@@ -1718,10 +1718,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/teamviewer/2cb5aa9783833f9b025427e7.json"
           }
         }
+      },
+      {
+        "id": "winrar:95623b7f3b96199511a323ab",
+        "candidate": {
+          "appId": "winrar",
+          "version": "7.23",
+          "installerUrl": "https://www.rarlab.com/rar/winrar-x64-723.exe",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://www.rarlab.com/",
+          "discoveredAt": "2026-10-07T03:52:57.991Z",
+          "id": "95623b7f3b96199511a323ab"
+        },
+        "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+        "executionProfileSha256": "6776BD4562B091C249FC1BA513A23511DA1627D18E783CC3367D683F3995003D",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-07T15:35:29.215Z",
+        "evidence": {
+          "verifiedAt": "2026-10-07T14:53:50.1078124Z",
+          "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+          "installerVersion": "7.23",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winrar/95623b7f3b96199511a323ab.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "win.rar GmbH"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "9cbcaf236c79093164c2088a87c4821bba9c6c5a",
+            "websiteCommit": "2038edf703a27944ec660fc50cf61eb218b676d1",
+            "runId": "37639165359",
+            "runAttempt": 1,
+            "artifactId": "11491319883",
+            "artifactSha256": "07d7e55280e19d40e397357569d265bec6ed9db69f0f0ad15d4a78e85491ed84"
+          },
+          "security": {
+            "suspicious": 0,
+            "signatureVersion": "1.459.601.0",
+            "malicious": 0,
+            "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+            "scanner": "defender",
+            "engineVersion": "1.1.26080.3",
+            "status": "clean",
+            "scannedAt": "2026-10-07T14:52:19.510891Z",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winrar/95623b7f3b96199511a323ab.json"
+          },
+          "qa": {
+            "testedAt": "2026-10-07T14:53:47.1695702Z",
+            "installerVersion": "7.23",
+            "architecture": "x64",
+            "executionContext": "LocalSystem",
+            "upgradeFromVersion": "7.22",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "installerSha256": "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "finalUninstallExitCode": 0,
+                "cleanUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "candidateId": "95623b7f3b96199511a323ab",
+            "previousInstallerSha256": "d669f4e15e9b8fde6e6dcc47697fc5a38b77e1fd5c608cf6423e4eba8df62498",
+            "executionProfileSha256": "6776BD4562B091C249FC1BA513A23511DA1627D18E783CC3367D683F3995003D",
+            "testLevel": "psadt-package",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/winrar/95623b7f3b96199511a323ab.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "BusEvNkfR1/8f4WgA6FDY5FS8vhsfXVQuNM6xSvT1vyvz6Es0K4qS1R5pc9ShkfbE7oXarHUu3rlc9EraD8hBQ=="
+  "signature": "MOe0OsoATFryMKi1W8PIuWJDTDcoUa3fBLVkVgsfxcSeUmGbb03DKWZOaSuBfQnWi6TY58kTr0tOVOmEMpmvAA=="
 }
