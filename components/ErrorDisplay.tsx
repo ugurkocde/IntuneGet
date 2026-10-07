@@ -46,6 +46,7 @@ const stageConfig: Record<string, { icon: typeof Download; label: string }> = {
   authenticate: { icon: Key, label: 'Authentication' },
   finalize: { icon: CheckCircle, label: 'Finalize' },
   duplicate_check: { icon: CheckCircle, label: 'Duplicate Check' },
+  validation: { icon: CheckCircle, label: 'Validation' },
   unknown: { icon: Server, label: 'Unknown' },
 };
 
@@ -149,9 +150,17 @@ export function ErrorDisplay({
     );
   }
 
-  const stage = stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
+  const qaFailed = errorCode === 'QA_FAILED_EXECUTION_PROFILE';
+  const stage = qaFailed ? { ...stageConfig.validation, label: 'Installation check' } : stageConfig[errorStage || 'unknown'] || stageConfig.unknown;
   const StageIcon = stage.icon;
-  const hint = categoryHints[errorCategory || ''];
+  // Older QA failures were stored with the installer category, whose hint
+  // describes package creation. The exact QA code identifies the real stage.
+  const hint = qaFailed ? {
+    message: errorMessage?.includes('MANIFEST_CHANGED')
+      ? 'Refresh the app catalog and select the current version. The selected installer no longer matches the trusted manifest, so it was blocked before testing or packaging.'
+      : 'This package did not pass the installation check. Review the failure details above before trying another version or configuration.',
+    showReVerify: false,
+  } : categoryHints[errorCategory || ''];
   const codeMessage = errorCodeMessages[errorCode || ''];
   const details = errorDetails as ErrorDetails | null;
 
