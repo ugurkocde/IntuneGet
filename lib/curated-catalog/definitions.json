@@ -577,7 +577,8 @@
     "installedIdentity": {
       "displayNamePattern": "^Python 3\\.14\\.[0-9]+ \\(64-bit\\)$",
       "executablePaths": ["Python314/python.exe"],
-      "versionFormat": "python-msi"
+      "versionFormat": "python-msi",
+      "registrationScope": "machine-and-localsystem-user"
     },
     "autoUpdate": "none",
     "notes": "Fixed 3.14 channel, publisher x64 offline EXE; exclude prereleases, install manager, embeddable ZIPs, ARM and x86. Machine install with pip and PATH; omit the separate shared launcher. CPython's Windows ARP version uses patch*1000+150 for final releases, which QA must compare exactly. Upgrade QA uses an earlier 3.14 installer."

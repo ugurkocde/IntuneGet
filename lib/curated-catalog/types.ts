@@ -58,6 +58,8 @@ export interface CuratedAppDefinition {
     versionComponents?: 3 | 4;
     /** CPython's final Windows release encodes patch * 1000 + 150 in its ARP version. */
     versionFormat?: 'python-msi';
+    /** Reviewed bundle registration in the LocalSystem user hive alongside machine registrations. */
+    registrationScope?: 'machine-and-localsystem-user';
   };
   /** Apps and Features display name and exact uninstall key or MSI product code registered by the installer. */
   registeredUninstall?: { displayName: string; key: string };

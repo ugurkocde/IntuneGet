@@ -7,6 +7,24 @@ import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVer
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
+  it('opts Python into its reviewed LocalSystem bundle registration without changing machine install identity', () => {
+    const app = CURATED_APPS.find(item => item.id === 'python-314')!;
+    expect(app.installedIdentity).toMatchObject({ registrationScope: 'machine-and-localsystem-user', versionFormat: 'python-msi' });
+    expect(app.scope).toBe('machine');
+    expect(app.architecture).toBe('x64');
+    expect(app.installedIdentity.executablePaths).toEqual(['Python314/python.exe']);
+    expect(validateDefinitions([app])).toHaveLength(1);
+  });
+  it('rejects arbitrary registry scopes and binds the reviewed scope into signed definitions', () => {
+    const app = CURATED_APPS.find(item => item.id === 'python-314')!;
+    for (const registrationScope of [null, '', 'HKCU', 'machine', 'S-1-5-21', 'Machine-and-localsystem-user']) {
+      expect(() => validateDefinitions([{ ...app, installedIdentity: { ...app.installedIdentity, registrationScope } }])).toThrow(/registration scope/);
+    }
+    const { envelope, keys } = signedFixture();
+    const changed = structuredClone(CURATED_APPS);
+    delete changed.find(item => item.id === 'python-314')!.installedIdentity.registrationScope;
+    expect(() => verifyCatalog(envelope, changed, keys)).toThrow(/definitions/);
+  });
   it('limits reviewed removal arguments to distinct switches for an exact EXE registration', () => {
     const app = CURATED_APPS.find(app => app.id === 'winrar')!;
     expect(validateDefinitions([app])).toHaveLength(1);
