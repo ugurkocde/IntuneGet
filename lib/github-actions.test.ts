@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  cancelWorkflowRun,
   triggerPackagingWorkflow,
   type GitHubActionsConfig,
   type WorkflowInputs,
@@ -1134,5 +1135,38 @@ describe('triggerPackagingWorkflow hash validation payload', () => {
     expect(enforceQaGateMock).toHaveBeenCalledWith(expect.objectContaining({ qaOverride: true }));
     const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
     expect(JSON.stringify(payload)).not.toContain('qaOverride');
+  });
+});
+
+describe('cancelWorkflowRun', () => {
+  it('falls back to force-cancel when GitHub rejects the normal cancel', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 409 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cancelWorkflowRun(42, config);
+
+    expect(result).toMatchObject({ success: true, status: 'cancelled' });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://api.github.com/repos/example/workflow-repo/actions/runs/42/cancel',
+      'https://api.github.com/repos/example/workflow-repo/actions/runs/42/force-cancel',
+    ]);
+  });
+
+  it('reports not cancellable when both endpoints reject the run', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await cancelWorkflowRun(42, config)).toMatchObject({ success: false, status: 'not_cancellable' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not force-cancel after a normal cancel is accepted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await cancelWorkflowRun(42, config)).toMatchObject({ success: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

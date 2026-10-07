@@ -478,7 +478,7 @@ export async function getWorkflowRuns(
 
 export interface CancelResult {
   success: boolean;
-  status: 'cancelled' | 'not_cancellable' | 'not_found' | 'error';
+  status: 'cancelled' | 'not_cancellable' | 'not_found' | 'not_started' | 'error';
   message: string;
 }
 
@@ -488,6 +488,10 @@ export interface CancelResult {
  * - 202: Accepted (cancellation initiated)
  * - 409: Conflict (workflow already completed or not cancellable)
  * - 404: Not found
+ *
+ * GitHub can leave a dispatched run reported as queued while refusing the
+ * normal cancel with 409 ("has not been queued yet"). The force-cancel
+ * endpoint is tried once before giving up so such runs are not left behind.
  */
 export async function cancelWorkflowRun(
   runId: number | string,
@@ -495,17 +499,21 @@ export async function cancelWorkflowRun(
 ): Promise<CancelResult> {
   const cfg = config || getGitHubActionsConfig();
   // Cancel in private workflows repository
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/runs/${runId}/cancel`;
+  const runUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.workflowsRepo}/actions/runs/${runId}`;
+  const post = (action: 'cancel' | 'force-cancel') => fetch(`${runUrl}/${action}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${cfg.token}`,
-        Accept: 'application/vnd.github.v3+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
+    let response = await post('cancel');
+    if (response.status === 409) {
+      response = await post('force-cancel');
+    }
 
     if (response.status === 202) {
       return {
@@ -545,6 +553,11 @@ export async function cancelWorkflowRun(
     };
   }
 }
+
+/**
+ * GitHub run statuses that mean no runner has started executing the run.
+ */
+export const UNSTARTED_WORKFLOW_RUN_STATUSES = ['queued', 'waiting', 'pending', 'requested'];
 
 /**
  * Get a specific workflow run by ID from the private workflows repository

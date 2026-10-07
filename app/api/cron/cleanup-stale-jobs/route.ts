@@ -1,8 +1,9 @@
 /**
  * Cleanup Stale Jobs Cron Job
  * Runs every 5 minutes via Vercel Cron to mark stuck packaging jobs as failed.
- * Jobs in intermediate states (queued/packaging/uploading) for over 30 minutes
- * are considered stale and marked as failed with a timeout error.
+ * Jobs in intermediate states (queued/packaging/uploading) without progress for
+ * longer than STALE_JOB_TIMEOUT_MINUTES are marked as failed with a timeout
+ * error.
  */
 
 import { NextResponse } from 'next/server';
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
     // Find stale jobs (include auto-update fields for cleanup)
     const { data: staleJobs, error: fetchError } = await supabase
       .from('packaging_jobs')
-      .select('id, status, winget_id, updated_at, created_at, github_run_id, is_auto_update, auto_update_policy_id')
+      .select('id, status, winget_id, tenant_id, updated_at, created_at, github_run_id, is_auto_update, auto_update_policy_id')
       .in('status', INTERMEDIATE_STATES)
       .lt('updated_at', cutoffTime);
 
@@ -53,7 +54,27 @@ export async function GET(request: Request) {
       );
     }
 
-    const confirmedStaleJobs = await keepActuallyStaleJobs(staleJobs || []);
+    // A queued run only waits legitimately while its tenant has an executing
+    // job, because the workflow runs one job per tenant at a time.
+    const { data: executingJobs, error: executingError } = await supabase
+      .from('packaging_jobs')
+      .select('tenant_id')
+      .in('status', ['packaging', 'uploading']);
+
+    if (executingError) {
+      return NextResponse.json(
+        { error: 'Failed to fetch executing jobs', details: executingError.message },
+        { status: 500 }
+      );
+    }
+
+    const tenantsWithExecutingJobs = new Set(
+      (executingJobs || [])
+        .map((job) => job.tenant_id)
+        .filter((tenantId): tenantId is string => typeof tenantId === 'string' && tenantId.length > 0)
+    );
+
+    const confirmedStaleJobs = await keepActuallyStaleJobs(staleJobs || [], { tenantsWithExecutingJobs });
 
     if (confirmedStaleJobs.length === 0) {
       return NextResponse.json({

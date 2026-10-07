@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   job: null as Record<string, unknown> | null,
   updates: [] as Array<{ data: Record<string, unknown>; filters: Array<[string, ...unknown[]]> }>,
   cancelWorkflowRun: vi.fn(),
+  getWorkflowRun: vi.fn(),
   deleteById: vi.fn(),
 }));
 
@@ -14,6 +15,8 @@ vi.mock('@/lib/auth-utils', () => ({
 vi.mock('@/lib/github-actions', () => ({
   isGitHubActionsConfigured: () => true,
   cancelWorkflowRun: state.cancelWorkflowRun,
+  getWorkflowRun: state.getWorkflowRun,
+  UNSTARTED_WORKFLOW_RUN_STATUSES: ['queued', 'waiting', 'pending', 'requested'],
 }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: async () => undefined }));
 vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { deleteById: state.deleteById } }) }));
@@ -47,6 +50,7 @@ describe('cancel packaging job', () => {
   beforeEach(() => {
     state.updates = [];
     state.cancelWorkflowRun.mockReset();
+    state.getWorkflowRun.mockReset();
     state.deleteById.mockReset();
   });
 
@@ -77,6 +81,39 @@ describe('cancel packaging job', () => {
   it('still refuses to cancel a deployed job', async () => {
     state.job = { id: 'job', user_id: 'user', status: 'deployed' };
     expect((await call({ jobId: 'job' })).status).toBe(400);
+    expect(state.updates).toHaveLength(0);
+  });
+
+  it('cancels a queued job whose GitHub run never started and cannot be cancelled there', async () => {
+    state.job = { id: 'job', user_id: 'user', status: 'queued', github_run_id: '37642391824' };
+    state.cancelWorkflowRun.mockResolvedValue({ success: false, status: 'not_cancellable', message: 'no' });
+    state.getWorkflowRun.mockResolvedValue({ status: 'queued' });
+
+    const response = await call({ jobId: 'job' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, githubCancelled: false });
+    expect(state.getWorkflowRun).toHaveBeenCalledWith(37642391824);
+    expect(state.updates).toHaveLength(1);
+    expect(state.updates[0].data).toMatchObject({ status: 'cancelled' });
+    expect(state.updates[0].filters).toContainEqual(['eq', 'status', 'queued']);
+  });
+
+  it('still refuses when GitHub cannot cancel a run that is already executing', async () => {
+    state.job = { id: 'job', user_id: 'user', status: 'packaging', github_run_id: '7' };
+    state.cancelWorkflowRun.mockResolvedValue({ success: false, status: 'not_cancellable', message: 'no' });
+    state.getWorkflowRun.mockResolvedValue({ status: 'in_progress' });
+
+    expect((await call({ jobId: 'job' })).status).toBe(409);
+    expect(state.updates).toHaveLength(0);
+  });
+
+  it('still refuses when the run state cannot be read after GitHub rejects cancellation', async () => {
+    state.job = { id: 'job', user_id: 'user', status: 'queued', github_run_id: '7' };
+    state.cancelWorkflowRun.mockResolvedValue({ success: false, status: 'not_cancellable', message: 'no' });
+    state.getWorkflowRun.mockRejectedValue(new Error('rate limited'));
+
+    expect((await call({ jobId: 'job' })).status).toBe(409);
     expect(state.updates).toHaveLength(0);
   });
 });

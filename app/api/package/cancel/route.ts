@@ -6,7 +6,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
-import { cancelWorkflowRun, isGitHubActionsConfigured } from '@/lib/github-actions';
+import {
+  cancelWorkflowRun,
+  getWorkflowRun,
+  isGitHubActionsConfigured,
+  UNSTARTED_WORKFLOW_RUN_STATUSES,
+} from '@/lib/github-actions';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { handleAutoUpdateJobCompletion } from '@/lib/auto-update/cleanup';
 import type { Database } from '@/types/database';
@@ -143,7 +148,21 @@ export async function POST(request: NextRequest) {
       }
 
       githubCancelResult = await cancelWorkflowRun(typedJob.github_run_id);
-      if (!githubCancelResult.success) {
+      if (!githubCancelResult.success && githubCancelResult.status === 'not_cancellable') {
+        // GitHub can report a run as queued while rejecting both cancel and
+        // force-cancel because it never really queued it. Nothing has run, so
+        // the job is released locally. The workflow stops on its first
+        // callback if GitHub ever starts the run.
+        const run = await getWorkflowRun(Number(typedJob.github_run_id)).catch(() => null);
+        if (run && UNSTARTED_WORKFLOW_RUN_STATUSES.includes(run.status)) {
+          githubCancelResult = {
+            success: false,
+            status: 'not_started',
+            message: 'GitHub never started this workflow run',
+          };
+        }
+      }
+      if (!githubCancelResult.success && githubCancelResult.status !== 'not_started') {
         const status = githubCancelResult.status === 'error' ? 502 : 409;
         return NextResponse.json(
           {
