@@ -87,6 +87,17 @@ describe('conflict-free QA candidate insertion', () => {
     await expect(insert({ ...candidate, winget_id: 'Missing.App' })).rejects.toThrow(/foreign key/);
   });
 
+  it.each(['failed', 'error', 'superseded', 'passed'])('joins another active profile before a terminal exact %s candidate', async status => {
+    await insert();
+    await db.query('update qa_candidates set status=$1,attempts=3,failure_summary=$2', [status, 'retained']);
+    const active = await insert({ ...candidate, package_profile_sha256: 'C'.repeat(64) });
+    const before = (await db.query('select * from qa_candidates order by id')).rows;
+    const result = await insert();
+    expect(result.outcome).toBe('active_conflict');
+    expect(result.candidate.id).toBe(active.candidate.id);
+    expect((await db.query('select * from qa_candidates order by id')).rows).toEqual(before);
+  });
+
   it('rejects lifecycle metadata and inconsistent terminal states', async () => {
     await expect(insert({ ...candidate, id: '00000000-0000-4000-8000-000000000001' } as typeof candidate)).rejects.toThrow('Unsupported QA candidate fields');
     await expect(insert({ ...candidate, github_run_id: '123' } as typeof candidate)).rejects.toThrow('Unsupported QA candidate fields');

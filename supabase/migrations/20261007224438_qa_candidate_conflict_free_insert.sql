@@ -10,6 +10,7 @@ as $$
 declare
   candidate public.qa_candidates;
   inserted public.qa_candidates;
+  active_candidate public.qa_candidates;
   conflict_name text;
   retry integer;
 begin
@@ -62,6 +63,18 @@ begin
         and q.architecture = candidate.architecture and q.installer_sha256 = candidate.installer_sha256
         and q.package_profile_sha256 = candidate.package_profile_sha256;
       if found then
+        if inserted.status not in ('queued', 'dispatched', 'running') then
+          -- Exact identity may have terminal history while another profile
+          -- already owns the payload. Join that active lifecycle first.
+          select q.* into active_candidate from public.qa_candidates q
+          where lower(q.winget_id) = lower(candidate.winget_id) and q.version = candidate.version
+            and lower(q.architecture) = lower(candidate.architecture)
+            and upper(q.installer_sha256) = upper(candidate.installer_sha256)
+            and q.test_level = 'psadt-package' and q.status in ('queued','dispatched','running');
+          if found then
+            return jsonb_build_object('outcome','active_conflict','candidate',to_jsonb(active_candidate));
+          end if;
+        end if;
         return jsonb_build_object('outcome','exact_conflict','candidate',to_jsonb(inserted));
       end if;
     else
