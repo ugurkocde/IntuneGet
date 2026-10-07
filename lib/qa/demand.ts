@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
 import {
@@ -260,52 +261,18 @@ export async function ensureQaDemand(
     updated_at: now,
   };
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('qa_candidates')
-    .insert(row)
-    .select('id, status, failure_summary')
-    .maybeSingle();
+  const { data: inserted, existing, outcome, error: insertError } = await insertQaCandidate(supabase, row);
   if (!insertError && inserted) {
     return { identity, candidateId: inserted.id, state: 'waiting' };
   }
-  if (insertError?.code !== '23505') {
+  if (insertError) {
     throw new Error(`Could not queue exact package QA: ${insertError?.message || 'unknown error'}`);
   }
 
-  // A database-level active-payload constraint closes the small race between
-  // the lookup above and this insert. If another request won that race, join
-  // its test even when it carries a different PSADT presentation profile.
-  const { data: concurrentCandidate, error: concurrentError } = await supabase
-    .from('qa_candidates')
-    .select('id, status, priority')
-    .eq('winget_id', input.wingetId)
-    .eq('version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .eq('test_level', 'psadt-package')
-    .in('status', ['queued', 'dispatched', 'running'])
-    .order('priority', { ascending: false })
-    .order('enqueued_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (concurrentError) {
-    throw new Error(`Could not resolve concurrent app-version QA: ${concurrentError.message}`);
-  }
-  if (concurrentCandidate) {
-    return { identity, candidateId: concurrentCandidate.id, state: 'waiting' };
-  }
-
-  const { data: existing, error: existingError } = await supabase
-    .from('qa_candidates')
-    .select('id, status, priority, failure_summary, phase, github_run_id')
-    .eq('winget_id', input.wingetId)
-    .eq('version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .eq('package_profile_sha256', profileSha256)
-    .maybeSingle();
-  if (existingError || !existing) {
-    throw new Error(`Could not resolve exact package QA candidate: ${existingError?.message || 'missing candidate'}`);
+  if (!existing) throw new Error('Could not resolve exact package QA candidate');
+  // The RPC resolves the winner using the same expressions as the unique index.
+  if (outcome === 'active_conflict') {
+    return { identity, candidateId: existing.id, state: 'waiting' };
   }
 
   if (existing.status === 'failed') {

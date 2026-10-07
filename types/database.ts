@@ -2599,6 +2599,10 @@ export interface Database {
       };
     };
     Functions: {
+      insert_qa_candidate_if_absent: {
+        Args: { p_candidate: Json };
+        Returns: Json;
+      };
       claim_qa_work: {
         Args: { p_kind: 'ordinary' | 'curated'; p_id: string; p_packager_commit: string };
         Returns: Json;

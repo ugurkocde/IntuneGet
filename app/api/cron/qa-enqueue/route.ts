@@ -1,4 +1,5 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
@@ -1153,9 +1154,7 @@ export async function GET(request: Request) {
               : previousMatches
                 ? 'passed'
                 : 'queued';
-            const { data: inserted, error: insertError } = await supabase!
-              .from('qa_candidates')
-              .insert({
+            const { data: inserted, existing: conflictingCandidate, outcome, error: insertError } = await insertQaCandidate(supabase!, {
                 winget_id: app.winget_id,
                 definition_path: recipe?.definition_path || null,
                 version: resolution.version,
@@ -1188,24 +1187,14 @@ export async function GET(request: Request) {
                     ? now
                     : previous?.tested_at_utc || now,
                 updated_at: now,
-              })
-              .select('id')
-              .single();
+              });
 
-            if (insertError?.code === '23505') {
+            if (insertError) throw insertError;
+            if (!inserted) {
               summary.alreadyKnown++;
-              const { data: existing, error: existingError } = await supabase!
-                .from('qa_candidates')
-                .select('id, status, failure_summary, priority')
-                .eq('winget_id', app.winget_id)
-                .eq('version', resolution.version)
-                .eq('architecture', architecture)
-                .eq('installer_sha256', installerSha256)
-                .eq('package_profile_sha256', packageIdentity.packageProfileSha256)
-                .maybeSingle();
-              if (existingError) {
-                throw new Error(`Could not read the existing QA candidate: ${existingError.message}`);
-              }
+              // A different active profile already owns this payload's lifecycle.
+              // Its run and configuration must remain untouched.
+              const existing = outcome === 'exact_conflict' ? conflictingCandidate : null;
               if (existing && shouldReactivateSupersededCandidate(
                 existing.status,
                 existing.failure_summary,
@@ -1251,7 +1240,6 @@ export async function GET(request: Request) {
               }
               return;
             }
-            if (insertError) throw insertError;
 
             summary.updatesFound++;
             if (initialStatus !== 'queued') {
