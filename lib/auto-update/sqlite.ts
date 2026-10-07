@@ -19,6 +19,7 @@
  */
 
 import type { DatabaseAdapter, UploadHistoryRecord } from '@/lib/db/types';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import type { Json } from '@/types/database';
 import { getCatalogSource } from '@/lib/catalog';
 import { compareVersions } from '@/lib/version-compare';
@@ -60,7 +61,7 @@ export interface SqliteTriggerResult {
   success: boolean;
   skipped?: boolean;
   skipReason?: string;
-  code?: 'CURATED_LICENCE_NOT_ACCEPTED';
+  code?: 'CURATED_LICENCE_NOT_ACCEPTED' | 'INTUNE_APPROVAL_PENDING';
   error?: string;
   packagingJobId?: string;
   historyId?: string;
@@ -175,6 +176,13 @@ export async function triggerSqliteAutoUpdate(
       if (!rateLimit.allowed) {
         return { success: false, skipped: true, skipReason: rateLimit.reason };
       }
+    }
+
+    const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
+      wingetIds: [updateInfo.wingetId] }, { db });
+    if (approvalBlocks.length) {
+      return { success: false, skipped: true, code: approvalBlocks[0].code,
+        skipReason: approvalBlocks[0].message };
     }
 
     const updateType = classifyUpdateType(updateInfo.currentVersion, updateInfo.latestVersion);

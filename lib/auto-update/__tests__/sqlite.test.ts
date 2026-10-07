@@ -95,6 +95,20 @@ async function seedDeployment(db: Awaited<ReturnType<typeof load>>['db'], withPr
 }
 
 describe('sqlite auto-update check', () => {
+  it('preserves an archived approval checkpoint and skips a new version even with manual bypass flags', async () => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const policy = await seedDeployment(db);
+    const job = await db.jobs.create({ user_id: 'another-user', tenant_id: 't1', winget_id: 'Vendor.App',
+      version: '1.0.0', display_name: 'App', installer_type: 'exe', installer_url: 'https://example.com/test.exe',
+      installer_sha256: 'A'.repeat(64), status: 'queued' });
+    await db.jobs.update(job.id, { status: 'failed', error_code: 'INTUNE_APPROVAL_REQUIRED', archived_at: new Date().toISOString() });
+    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info, currentIntuneAppId: null },
+      { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result).toMatchObject({ success: false, skipped: true, code: 'INTUNE_APPROVAL_PENDING' });
+    expect(await db.jobs.getByTenantId('t1')).toHaveLength(0);
+    expect(await db.autoUpdateHistory.list('u1', { limit: 50, offset: 0 })).toHaveLength(0);
+    expect((await db.updatePolicies.getById(policy.id, 'u1'))?.consecutive_failures).toBe(0);
+  });
   it('detects an available update and queues an auto-update job', async () => {
     const { db, runSqliteUpdateCheck } = await load();
     const policy = await seedDeployment(db);

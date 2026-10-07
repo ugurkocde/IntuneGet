@@ -173,6 +173,18 @@ export const sqliteDb: DatabaseAdapter = {
       return rows.map(parseJobRow);
     },
 
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const rows = getDb().prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE tenant_id = ? AND winget_id = ? AND status = 'failed'
+          AND (error_category = 'approval' OR error_code = 'INTUNE_APPROVAL_REQUIRED')
+          ${cursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
+        ORDER BY created_at DESC, id DESC LIMIT 100
+      `).all(tenantId, wingetId,
+        ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : [])) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
     /**
      * Create a new job
      */

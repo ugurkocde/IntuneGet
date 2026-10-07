@@ -8,6 +8,7 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { createServerClient } from '@/lib/supabase';
 import { getCatalogSource } from '@/lib/catalog';
 import { getDatabase } from '@/lib/db';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import {
   isGitHubActionsConfigured,
   triggerPackagingWorkflow,
@@ -349,6 +350,15 @@ async function startBatchItems(batchId: string): Promise<number> {
             error_message: error.message,
             completed_at: new Date().toISOString(),
           })
+          .eq('id', item.id);
+        continue;
+      }
+
+      const approvalBlocks = await findPendingApprovalBlocks({ tenantId: item.tenant_id,
+        wingetIds: [batch.winget_id] }, { db });
+      if (approvalBlocks.length) {
+        await supabase.from('msp_batch_deployment_items').update({ status: 'skipped',
+          error_message: approvalBlocks[0].message, completed_at: new Date().toISOString() })
           .eq('id', item.id);
         continue;
       }

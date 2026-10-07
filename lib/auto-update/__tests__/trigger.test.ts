@@ -16,6 +16,7 @@ const {
   getAppForInstallerMock,
   getVersionInstallerInfoMock,
   ensureQaDemandMock,
+  getApprovalFailuresMock,
   curatedState,
 } = vi.hoisted(() => ({
   curatedState: { envelope: {} as Record<string, unknown>, acceptances: new Set<string>() },
@@ -23,6 +24,7 @@ const {
   getAppForInstallerMock: vi.fn(),
   getVersionInstallerInfoMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
+  getApprovalFailuresMock: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({
@@ -41,6 +43,7 @@ vi.mock('@/catalog/curated/catalog.json', async (importOriginal) => {
 });
 vi.mock('@/lib/db', () => ({
   getDatabase: () => ({
+    jobs: { getApprovalFailures: getApprovalFailuresMock },
     curatedLicenceAttestations: {
       get: async (tenantId: string, id: string, version: string) => curatedState.acceptances.has(`${tenantId}|${id}|${version}`)
         ? { id: 'acceptance', tenant_id: tenantId, app_id: 'acrobat-reader', attestation_id: id, attestation_version: version,
@@ -149,6 +152,8 @@ const UPDATE_INFO = {
   nestedInstallerPath: 'setup-2.0.0.exe',
 };
 
+beforeEach(() => getApprovalFailuresMock.mockResolvedValue([]));
+
 function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoUpdateTrigger {
   const trigger = new AutoUpdateTrigger('https://stub.supabase.co', 'stub-key');
   (trigger as unknown as { supabase: unknown }).supabase = supabaseMock;
@@ -156,8 +161,22 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
+  it('skips unresolved approvals before history, jobs or QA demand even with manual bypass flags', async () => {
+    const insert = vi.fn();
+    const supabase = createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } });
+    const trigger = makeTrigger(supabase);
+    (trigger as unknown as { verifyTenantConsent: unknown }).verifyTenantConsent = vi.fn().mockResolvedValue(true);
+    getApprovalFailuresMock.mockResolvedValue([{ tenant_id: 'tenant-1', winget_id: 'Test.App',
+      status: 'failed', error_code: 'INTUNE_APPROVAL_REQUIRED', error_details: null }]);
+    const result = await trigger.triggerAutoUpdate({ ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 }, UPDATE_INFO,
+      { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result).toMatchObject({ success: false, skipped: true, code: 'INTUNE_APPROVAL_PENDING' });
+    expect(insert).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    getApprovalFailuresMock.mockResolvedValue([]);
     getQaResultMock.mockResolvedValue(null);
     getAppForInstallerMock.mockReset();
     getVersionInstallerInfoMock.mockReset();

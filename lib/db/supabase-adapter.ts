@@ -207,6 +207,24 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      let query = createServerClient().from('packaging_jobs').select('*')
+        .eq('tenant_id', tenantId).eq('winget_id', wingetId).eq('status', 'failed')
+        .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
+      if (cursor) {
+        // Cursor values come from database rows, but validate before using filter syntax.
+        if (!/^[0-9T:.+Z-]+$/.test(cursor.createdAt) ||
+            !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(cursor.id)) {
+          throw new Error('Invalid approval checkpoint cursor');
+        }
+        query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+      }
+      const { data, error } = await query;
+      if (error) throw new Error('Approval checkpoints unavailable');
+      return (data || []) as unknown as PackagingJob[];
+    },
+
     /**
      * Create a new job
      */

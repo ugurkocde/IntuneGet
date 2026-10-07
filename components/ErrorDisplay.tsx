@@ -11,6 +11,7 @@ import {
   Server,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { INTUNE_APPROVAL_PENDING_MESSAGE } from '@/lib/intune-approval';
 
 interface ErrorDetails {
   expectedHash?: string;
@@ -56,7 +57,7 @@ const categoryHints: Record<string, { message: string; showReVerify?: boolean }>
     showReVerify: true,
   },
   approval: {
-    message: 'Your organization requires another Intune administrator to approve this app change. Approve the pending request in the Intune admin center, then retry the upload.',
+    message: INTUNE_APPROVAL_PENDING_MESSAGE,
   },
   network: {
     message: 'This is a network-related error. The download server may be unavailable or rate-limiting requests. You can try again later or package a different version.',
@@ -101,6 +102,7 @@ const errorCodeMessages: Record<string, string> = {
   INTUNE_UNAUTHORIZED: 'Microsoft Graph rejected the service principal credentials (401)',
   INTUNE_FORBIDDEN: 'Access denied (403) - missing DeviceManagementApps.ReadWrite.All permission',
   INTUNE_APPROVAL_REQUIRED: 'Your organization requires administrator approval before Intune can apply this app change.',
+  INTUNE_APPROVAL_PENDING: INTUNE_APPROVAL_PENDING_MESSAGE,
   INTUNE_SERVICE_TRANSIENT: 'Intune returned a temporary backend error. A safe retry is recommended.',
   INTUNE_BAD_REQUEST: 'Intune rejected the app or content request. Review the workflow log for the rejected field.',
   INTUNE_API_ERROR: 'The Intune API returned an unexpected error',

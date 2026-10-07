@@ -42,6 +42,7 @@ import {
 import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
 import { DEFAULT_PSADT_CONFIG, type DetectionRule } from '@/types/psadt';
 import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 
 interface TriggerResult {
   success: boolean;
@@ -58,6 +59,7 @@ interface TriggerResult {
     | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
     | 'CURATED_LICENCE_NOT_ACCEPTED'
     | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+    | 'INTUNE_APPROVAL_PENDING'
     | 'CURATED_CONFIG_VERIFICATION_FAILED';
 }
 
@@ -239,6 +241,13 @@ export class AutoUpdateTrigger {
             error: 'Tenant consent is no longer active',
           };
         }
+      }
+
+      const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
+        wingetIds: [updateInfo.wingetId] });
+      if (approvalBlocks.length) {
+        return { success: false, skipped: true, code: approvalBlocks[0].code,
+          skipReason: approvalBlocks[0].message };
       }
 
       // Backfill PSADT settings from the original deployment for policies

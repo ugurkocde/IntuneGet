@@ -1,0 +1,97 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DatabaseAdapter, PackagingJob } from '@/lib/db/types';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
+import { acquireGraphToken } from '@/lib/graph-token';
+
+vi.mock('@/lib/db', () => ({ getDatabase: vi.fn() }));
+vi.mock('@/lib/graph-token', () => ({ acquireGraphToken: vi.fn() }));
+const appId = '11111111-1111-1111-1111-111111111111';
+const row = (overrides: Partial<PackagingJob> = {}): PackagingJob => ({
+  id: '22222222-2222-2222-2222-222222222222', tenant_id: 'tenant', user_id: 'other-user',
+  winget_id: 'Vendor.App', version: '1.0', status: 'failed', error_category: 'approval',
+  error_details: { intuneAppId: appId }, archived_at: '2026-10-07T00:00:00Z',
+  created_at: '2026-10-07T00:00:00Z', ...overrides,
+} as PackagingJob);
+const input = { tenantId: 'tenant', wingetIds: ['Vendor.App'] };
+const dbFor = (getApprovalFailures: ReturnType<typeof vi.fn>) =>
+  ({ jobs: { getApprovalFailures } } as unknown as DatabaseAdapter);
+
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(acquireGraphToken).mockResolvedValue({ accessToken: 'test-token', expiresIn: 3600 }); });
+afterEach(() => vi.unstubAllGlobals());
+
+describe('pending Intune approval guard', () => {
+  it('blocks retained apps across users, versions and dismissed checkpoints', async () => {
+    const query = vi.fn().mockResolvedValue([row()]);
+    const probe = vi.fn().mockResolvedValue('present');
+    const blocks = await findPendingApprovalBlocks(input, { db: dbFor(query), checkRetainedApp: probe });
+    expect(blocks).toMatchObject([{ code: 'INTUNE_APPROVAL_PENDING', reason: 'retained_app_present' }]);
+    expect(query).toHaveBeenCalledWith('tenant', 'Vendor.App', undefined);
+    expect(probe).toHaveBeenCalledWith('tenant', appId);
+    expect(JSON.stringify(blocks)).not.toContain('other-user');
+    expect(JSON.stringify(blocks)).not.toContain(appId);
+  });
+
+  it.each([null, {}, { intuneAppId: '../other' }])('blocks missing or malformed callback IDs without trusting the deployed column: %j', async details => {
+    const probe = vi.fn();
+    const query = vi.fn().mockResolvedValue([row({ error_category: 'system', error_code: 'INTUNE_APPROVAL_REQUIRED',
+      error_details: details, intune_app_id: appId })]);
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(query), checkRetainedApp: probe }))
+      .toMatchObject([{ reason: 'retained_app_unverified' }]);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('does not release a tenant using a row from another tenant', async () => {
+    const probe = vi.fn().mockResolvedValue('absent');
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row({ tenant_id: 'other' })])), checkRetainedApp: probe }))
+      .toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates retained IDs and follows the keyset cursor to an older blocker', async () => {
+    const first = Array.from({ length: 100 }, () => row());
+    const query = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce([row({ error_details: null })]);
+    const probe = vi.fn().mockResolvedValue('absent');
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(query), checkRetainedApp: probe }))
+      .toMatchObject([{ reason: 'retained_app_unverified' }]);
+    expect(query).toHaveBeenLastCalledWith('tenant', 'Vendor.App', { createdAt: first[99].created_at, id: first[99].id });
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed on query overflow and caps distinct Graph reads', async () => {
+    const many = Array.from({ length: 21 }, (_, i) => row({ error_details: { intuneAppId: `${String(i).padStart(8,'0')}-1111-1111-1111-111111111111` } }));
+    const probe = vi.fn().mockResolvedValue('absent');
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue(many)), checkRetainedApp: probe }))
+      .toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(probe).toHaveBeenCalledTimes(20);
+    let page = 0;
+    const query = vi.fn().mockImplementation(async () => Array.from({ length: 100 }, () => row({ id: `${String(page++).padStart(8, '0')}-1111-1111-1111-111111111111` })));
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(query), checkRetainedApp: vi.fn().mockResolvedValue('absent') }))
+      .toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(query).toHaveBeenCalledTimes(10);
+  });
+
+  it.each([200, 401, 403, 429, 500])('blocks Graph status %s using the application token path', async status => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: appId }), { status }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row()])) })).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(`https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/${appId}?$select=id`,
+      expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } }));
+    expect(acquireGraphToken).toHaveBeenCalledWith('tenant');
+  });
+
+  it('releases only when every retained app is confirmed absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 404 })));
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row()])) })).toEqual([]);
+  });
+
+  it.each(['token', 'network', 'invalid200', 'database'])('fails closed without publishing raw failures: %s', async mode => {
+    const query = vi.fn().mockResolvedValue([row()]);
+    if (mode === 'token') vi.mocked(acquireGraphToken).mockRejectedValue(new Error('sensitive token diagnostic'));
+    if (mode === 'database') query.mockRejectedValue(new Error('sensitive database diagnostic'));
+    vi.stubGlobal('fetch', mode === 'network' ? vi.fn().mockRejectedValue(new Error('sensitive request diagnostic'))
+      : vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
+    const result = await findPendingApprovalBlocks(input, { db: dbFor(query) });
+    expect(result).toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(JSON.stringify(result)).not.toContain('sensitive');
+  });
+});

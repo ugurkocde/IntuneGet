@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_SAFETY_CONFIG } from '@/types/update-policies';
 import type { AutoUpdateStatus } from '@/types/update-policies';
+import { isIntuneApprovalFailure } from '@/lib/intune-approval';
 
 type TerminalStatus = 'deployed' | 'duplicate_skipped' | 'failed' | 'cancelled';
 
@@ -51,7 +52,7 @@ export async function handleAutoUpdateJobCompletion(
   // Fetch the job to check if it's an auto-update
   const { data: job, error: fetchError } = await supabase
     .from('packaging_jobs')
-    .select('id, is_auto_update, auto_update_policy_id, package_config')
+    .select('id, is_auto_update, auto_update_policy_id, package_config, error_category, error_code')
     .eq('id', jobId)
     .single();
 
@@ -157,6 +158,13 @@ export async function handleAutoUpdateJobCompletion(
   // Successful deployments stay visible so users can see what was auto-deployed.
   if (!isSuccess) {
     try {
+      // Dismissing an approval failure must not erase the retained-app checkpoint.
+      if (isIntuneApprovalFailure(job)) {
+        const { error } = await supabase.from('packaging_jobs')
+          .update({ archived_at: new Date().toISOString() }).eq('id', jobId);
+        if (error) console.error('[AutoUpdate Cleanup] Approval checkpoint archive failed');
+        return;
+      }
       // Clear FK reference in msp_batch_deployment_items before deleting
       const { error: fkClearError } = await supabase
         .from('msp_batch_deployment_items')
