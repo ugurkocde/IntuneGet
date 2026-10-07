@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   cancelWorkflowRun: vi.fn(),
   getWorkflowRun: vi.fn(),
   deleteById: vi.fn(),
+  updatedRows: [{ id: 'job' }] as Array<{ id: string }>,
 }));
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -30,7 +31,9 @@ vi.mock('@/lib/supabase', () => ({
         const query = {
           eq: (...args: unknown[]) => { entry.filters.push(['eq', ...args]); return query; },
           not: (...args: unknown[]) => { entry.filters.push(['not', ...args]); return query; },
-          then: (resolve: (value: { error: null }) => unknown) => resolve({ error: null }),
+          select: () => query,
+          then: (resolve: (value: { data: Array<{ id: string }>; error: null }) => unknown) =>
+            resolve({ data: state.updatedRows, error: null }),
         };
         return query;
       },
@@ -51,6 +54,7 @@ describe('cancel packaging job', () => {
     state.updates = [];
     state.cancelWorkflowRun.mockReset();
     state.getWorkflowRun.mockReset();
+    state.updatedRows = [{ id: 'job' }];
     state.deleteById.mockReset();
   });
 
@@ -115,5 +119,17 @@ describe('cancel packaging job', () => {
 
     expect((await call({ jobId: 'job' })).status).toBe(409);
     expect(state.updates).toHaveLength(0);
+  });
+
+  it('reports a conflict when the job changed status before the cancel update', async () => {
+    state.job = { id: 'job', user_id: 'user', status: 'queued', github_run_id: '7' };
+    state.cancelWorkflowRun.mockResolvedValue({ success: false, status: 'not_cancellable', message: 'no' });
+    state.getWorkflowRun.mockResolvedValue({ status: 'queued' });
+    state.updatedRows = [];
+
+    const response = await call({ jobId: 'job' });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ retryable: true });
   });
 });

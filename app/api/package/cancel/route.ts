@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
       updateQuery = updateQuery.not('status', 'in', '("cancelled","deployed")');
     }
 
-    let { error: updateError } = await updateQuery;
+    let { data: updatedRows, error: updateError } = await updateQuery.select('id');
 
     // If full update fails (e.g., missing columns), try minimal update
     if (updateError) {
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
         minimalQuery = minimalQuery.not('status', 'in', '("cancelled","deployed")');
       }
 
-      const { error: minimalError } = await minimalQuery;
+      const { data: minimalRows, error: minimalError } = await minimalQuery.select('id');
 
       if (minimalError) {
         return NextResponse.json(
@@ -247,6 +247,16 @@ export async function POST(request: NextRequest) {
 
       // Minimal update succeeded
       updateError = null;
+      updatedRows = minimalRows;
+    }
+
+    // The status lock matched nothing: the job moved on (for example, its
+    // run started) between the read and this update.
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json(
+        { error: 'The job changed status while cancelling. Refresh and try again.', retryable: true },
+        { status: 409 }
+      );
     }
 
     // Clean up auto-update tracking

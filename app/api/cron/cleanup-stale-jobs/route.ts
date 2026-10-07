@@ -55,11 +55,20 @@ export async function GET(request: Request) {
     }
 
     // A queued run only waits legitimately while its tenant has an executing
-    // job, because the workflow runs one job per tenant at a time.
-    const { data: executingJobs, error: executingError } = await supabase
-      .from('packaging_jobs')
-      .select('tenant_id')
-      .in('status', ['packaging', 'uploading']);
+    // job, because the workflow runs one job per tenant at a time. Only the
+    // candidate tenants are queried so the result stays far below row limits.
+    const candidateTenantIds = [...new Set(
+      (staleJobs || [])
+        .filter((job) => job.status === 'queued' && job.tenant_id)
+        .map((job) => job.tenant_id as string)
+    )];
+    const { data: executingJobs, error: executingError } = candidateTenantIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+        .from('packaging_jobs')
+        .select('tenant_id')
+        .in('status', ['packaging', 'uploading'])
+        .in('tenant_id', candidateTenantIds);
 
     if (executingError) {
       return NextResponse.json(
@@ -84,10 +93,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // Mark stale jobs as failed
+    // Mark stale jobs as failed. The status and updated_at filters skip any
+    // job whose run started and reported progress after it was checked.
     const jobIds = confirmedStaleJobs.map((job) => job.id);
 
-    const { error: updateError } = await supabase
+    const { data: failedRows, error: updateError } = await supabase
       .from('packaging_jobs')
       .update({
         status: 'failed',
@@ -95,7 +105,10 @@ export async function GET(request: Request) {
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .in('id', jobIds);
+      .in('id', jobIds)
+      .in('status', INTERMEDIATE_STATES)
+      .lt('updated_at', cutoffTime)
+      .select('id');
 
     if (updateError) {
       return NextResponse.json(
@@ -104,8 +117,11 @@ export async function GET(request: Request) {
       );
     }
 
+    const failedIds = new Set((failedRows || []).map((row) => row.id));
+    const failedJobs = confirmedStaleJobs.filter((job) => failedIds.has(job.id));
+
     // Clean up auto-update tracking for stale auto-update jobs
-    const autoUpdateJobs = confirmedStaleJobs.filter((job) => job.is_auto_update);
+    const autoUpdateJobs = failedJobs.filter((job) => job.is_auto_update);
     if (autoUpdateJobs.length > 0) {
       const timeoutMessage = `Job timed out after ${STALE_JOB_TIMEOUT_MINUTES} minutes without progress`;
       const cleanupResults = await Promise.allSettled(
@@ -127,9 +143,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Marked ${confirmedStaleJobs.length} stale job(s) as failed`,
-      cleaned: confirmedStaleJobs.length,
-      jobs: confirmedStaleJobs.map((job) => ({
+      message: `Marked ${failedJobs.length} stale job(s) as failed`,
+      cleaned: failedJobs.length,
+      jobs: failedJobs.map((job) => ({
         id: job.id,
         previousStatus: job.status,
         wingetId: job.winget_id,
