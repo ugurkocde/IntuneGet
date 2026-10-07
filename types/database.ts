@@ -1777,8 +1777,6 @@ export interface Database {
           error_message: string | null;
           started_at: string | null;
           completed_at: string | null;
-          created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -1790,8 +1788,6 @@ export interface Database {
           error_message?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -1803,8 +1799,6 @@ export interface Database {
           error_message?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Relationships: GenericRelationship[];
       };

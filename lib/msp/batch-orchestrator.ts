@@ -33,6 +33,14 @@ import type { WingetInstaller } from '@/types/winget';
 // Stale timeout: items in_progress longer than this are marked failed
 const STALE_TIMEOUT_MINUTES = 45;
 
+/** Pending tenants in one batch have no individual creation timestamp. */
+export function loadPendingBatchItems(supabase: ReturnType<typeof createServerClient>, batchId: string, availableSlots: number) {
+  return supabase.from('msp_batch_deployment_items').select('*')
+    .eq('batch_id', batchId).eq('status', 'pending')
+    .order('tenant_display_name', { ascending: true })
+    .order('id', { ascending: true }).limit(availableSlots);
+}
+
 interface InstallerDetails {
   architecture: string;
   installer_url: string;
@@ -229,15 +237,15 @@ async function startBatchItems(batchId: string): Promise<number> {
   }
 
   // Get pending items
-  const { data: pendingItems, error: pendingError } = await supabase
-    .from('msp_batch_deployment_items')
-    .select('*')
-    .eq('batch_id', batchId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(availableSlots);
+  const { data: pendingItems, error: pendingError } = await loadPendingBatchItems(supabase, batchId, availableSlots);
 
-  if (pendingError || !pendingItems || pendingItems.length === 0) {
+  if (pendingError) {
+    // Database messages can include customer data. Log the code, never row values.
+    const code = /^[A-Z0-9_]{2,20}$/.test(pendingError.code || '') ? pendingError.code : 'unknown';
+    console.error(`[BatchOrchestrator] Failed to load pending items (${code})`);
+    return 0;
+  }
+  if (!pendingItems || pendingItems.length === 0) {
     return 0;
   }
 
