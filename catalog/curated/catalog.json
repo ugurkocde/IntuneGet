@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-07T12:37:57.810Z",
-    "expiresAt": "2026-10-14T12:37:57.810Z",
+    "generatedAt": "2026-10-07T14:48:23.637Z",
+    "expiresAt": "2026-10-14T14:48:23.637Z",
     "definitionsSha256": "7f4349fca326db5b0bf35379f6430060877a58287048383e6dff2fe3b936481f",
     "releases": [
       {
@@ -1636,10 +1636,92 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/aws-cli/fa3b10208e4add79a1eddda7.json"
           }
         }
+      },
+      {
+        "id": "teamviewer:2cb5aa9783833f9b025427e7",
+        "candidate": {
+          "appId": "teamviewer",
+          "version": "15.82.6",
+          "installerUrl": "https://download.teamviewer.com/download/TeamViewer_Setup_x64.exe",
+          "vendorSha256": null,
+          "releaseNotesUrl": "https://www.teamviewer.com/",
+          "discoveredAt": "2026-10-07T03:30:55.717Z",
+          "id": "2cb5aa9783833f9b025427e7"
+        },
+        "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+        "executionProfileSha256": "30E84F17906AF6F539C77E44D3F92ED128A488076E6649B4DBEBC4B058EC4D14",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-07T14:48:23.637Z",
+        "evidence": {
+          "verifiedAt": "2026-10-07T14:36:02.9219224Z",
+          "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+          "installerVersion": "15.82.6",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/teamviewer/2cb5aa9783833f9b025427e7.json",
+          "signature": {
+            "status": "valid",
+            "publisher": "TeamViewer Germany GmbH"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "9cbcaf236c79093164c2088a87c4821bba9c6c5a",
+            "websiteCommit": "2038edf703a27944ec660fc50cf61eb218b676d1",
+            "runId": "37636993858",
+            "runAttempt": 1,
+            "artifactId": "11489653941",
+            "artifactSha256": "f323b36ac569f0edcd3043a3e1ff02ada4ae75a6eaab08fbf65066c48147a9bf"
+          },
+          "security": {
+            "scannedAt": "2026-10-07T14:34:04.7493203Z",
+            "signatureVersion": "1.459.601.0",
+            "status": "clean",
+            "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+            "suspicious": 0,
+            "scanner": "defender",
+            "engineVersion": "1.1.26080.3",
+            "malicious": 0,
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/teamviewer/2cb5aa9783833f9b025427e7.json"
+          },
+          "qa": {
+            "testLevel": "psadt-package",
+            "installerVersion": "15.82.6",
+            "architecture": "x64",
+            "installerSha256": "24625b7445d456a13880bf52bfb8ae3ffe8a1cd5ec6d12a8415a15552d79de7a",
+            "candidateId": "2cb5aa9783833f9b025427e7",
+            "testedAt": "2026-10-07T14:35:57.384316Z",
+            "executionProfileSha256": "30E84F17906AF6F539C77E44D3F92ED128A488076E6649B4DBEBC4B058EC4D14",
+            "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+            "phases": {
+              "install": {
+                "exitCode": 0,
+                "passed": true
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "uninstall": {
+                "cleanUninstallExitCode": 0,
+                "passed": true
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "executionContext": "LocalSystem",
+            "upgrade": {
+              "tested": false,
+              "reason": "Automated policy: TeamViewer is updated by its publisher's own updater, and no earlier immutable official installer was available, so the upgrade was not tested."
+            },
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/teamviewer/2cb5aa9783833f9b025427e7.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "Tn/BEPFSDGzMMflHFkLco/jb6+VQesZJUzJWGD9FXl1YFcBc7C06OKIJYlDqpBUWb934dMLOXkRhRC298rFTCw=="
+  "signature": "BusEvNkfR1/8f4WgA6FDY5FS8vhsfXVQuNM6xSvT1vyvz6Es0K4qS1R5pc9ShkfbE7oXarHUu3rlc9EraD8hBQ=="
 }
