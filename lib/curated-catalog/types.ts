@@ -61,6 +61,8 @@ export interface CuratedAppDefinition {
   };
   /** Apps and Features display name and exact uninstall key or MSI product code registered by the installer. */
   registeredUninstall?: { displayName: string; key: string };
+  /** Reviewed switches appended by the shared packager to the exact registered uninstaller. */
+  reviewedUninstallArguments?: string[];
   licenceAttestation?: CuratedLicenceAttestation;
 }
 

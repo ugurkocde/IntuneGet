@@ -600,6 +600,8 @@
     "allowUnsigned": false,
     "releaseSource": "https://www.rarlab.com/download.htm",
     "discovery": "winrar",
+    "registeredUninstall": { "displayName": "WinRAR (64-bit)", "key": "WinRAR archiver" },
+    "reviewedUninstallArguments": ["/s"],
     "allowedInstallerSources": [{ "origin": "https://www.rarlab.com", "pathPrefix": "/rar/" }],
     "installedIdentity": {
       "displayNamePattern": "^WinRAR(?: [0-9.]+)? \\(64-bit\\)$",

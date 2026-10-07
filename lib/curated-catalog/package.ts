@@ -30,7 +30,10 @@ export function buildCuratedCartItem(app: CuratedAppDefinition, release: Curated
     installerType: app.installerType, installerUrl: installer.url, installerSha256: installer.sha256,
     installCommand: generateInstallCommand(installer, app.scope),
     uninstallCommand: generateUninstallCommand(installer, app.registeredUninstall?.displayName ?? app.name),
-    detectionRules, psadtConfig: { ...DEFAULT_PSADT_CONFIG, detectionRules },
+    detectionRules, psadtConfig: {
+      ...DEFAULT_PSADT_CONFIG, detectionRules,
+      ...(app.reviewedUninstallArguments ? { reviewedUninstallArguments: [...app.reviewedUninstallArguments] } : {}),
+    },
   };
 }
 

@@ -44,3 +44,24 @@ describe('curated registered uninstall identity', () => {
     expect(buildCuratedCartItem(app('vlc'), releaseFixture(app('vlc'), '3.0.24')).uninstallCommand).toBe('REGISTRY_UNINSTALL:VLC media player');
   });
 });
+
+describe('curated reviewed removal arguments', () => {
+  it('uses the same hash-bound WinRAR removal contract for customer and QA packages', () => {
+    const app = CURATED_APPS.find(app => app.id === 'winrar')!;
+    const release = releaseFixture(app, '7.23');
+    const item = buildCuratedCartItem(app, release);
+    expect(item.uninstallCommand).toBe('REGISTRY_UNINSTALL_KEY:WinRAR archiver:WinRAR (64-bit)');
+    expect(item.psadtConfig.reviewedUninstallArguments).toEqual(['/s']);
+    const input = curatedWorkflowInput(item);
+    expect(JSON.parse(input.psadtConfig).reviewedUninstallArguments).toEqual(['/s']);
+    const current = normalizeQaWorkflowPackageInput(input).identity.executionProfileSha256;
+    const missing = normalizeQaWorkflowPackageInput({ ...input, psadtConfig: JSON.stringify({ ...item.psadtConfig, reviewedUninstallArguments: [] }) }).identity.executionProfileSha256;
+    expect(current).not.toBe(missing);
+    release.executionProfileSha256 = current;
+    release.evidence.qa.executionProfileSha256 = current;
+    expect(() => assertCuratedPackageProfile(app, release)).not.toThrow();
+    expect(() => assertCuratedPackageProfile(app, release, { ...input, psadtConfig: JSON.stringify({ ...item.psadtConfig, reviewedUninstallArguments: [] }) })).toThrow(/differs/);
+    item.psadtConfig.reviewedUninstallArguments!.push('/changed');
+    expect(app.reviewedUninstallArguments).toEqual(['/s']);
+  });
+});

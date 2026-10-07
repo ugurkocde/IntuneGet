@@ -7,6 +7,15 @@ import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVer
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
+  it('limits reviewed removal arguments to distinct switches for an exact EXE registration', () => {
+    const app = CURATED_APPS.find(app => app.id === 'winrar')!;
+    expect(validateDefinitions([app])).toHaveLength(1);
+    for (const args of [null, '/s', [], ['/s', '/S'], [' /s'], ['/s & whoami'], ['/s\n'], ['C:\\uninstall.exe'], ['/' + 's'.repeat(65)], Array(21).fill('/s')]) {
+      expect(() => validateDefinitions([{ ...app, reviewedUninstallArguments: args } as typeof app])).toThrow(/Reviewed uninstall arguments/);
+    }
+    expect(() => validateDefinitions([{ ...app, registeredUninstall: undefined }])).toThrow(/exact EXE registration/);
+    expect(() => validateDefinitions([{ ...app, installerType: 'msi' }])).toThrow(/exact EXE registration/);
+  });
   it('defines fifteen applications and commits only a catalog signed by a committed trust key', () => {
     expect(validateDefinitions(CURATED_APPS)).toHaveLength(20);
     // The automation re-signs after definition changes and before expiry, so

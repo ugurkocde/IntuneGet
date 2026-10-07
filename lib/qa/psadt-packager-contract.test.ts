@@ -14,6 +14,9 @@ import { describe, expect, it } from 'vitest';
 import { applyApplicationPackagingAdapter, resolveApplicationUninstallCommand } from '@/lib/packaging-adapters';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { generateUninstallCommand } from '@/lib/detection-rules';
+import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
+import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalog/package';
+import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
 
 const packager = readFileSync(
   resolve(process.cwd(), '.github/scripts/Create-PSADTPackage.ps1'),
@@ -677,6 +680,40 @@ $path = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tablet\\Wacom\
       expect(uninstallFunction).toContain(
         '$registeredUninstallArguments += $reviewedArgument'
       );
+    }
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'executes curated WinRAR silent removal arguments on the exact registered route',
+    () => {
+      // Official regional support: https://winrar.es/soporte/instalar/19/como-se-desinstala-winrar
+      // The install-only -s1 switch is not the documented uninstall.exe /s contract.
+      const app = CURATED_APPS.find(app => app.id === 'winrar')!;
+      const input = curatedWorkflowInput(buildCuratedCartItem(app, releaseFixture(app, '7.23')));
+      const generated = generateRegistryUninstallPackage(
+        'exe', input.displayName, [], JSON.parse(input.psadtConfig), [], input.wingetId,
+        app.registeredUninstall!.displayName, input.version, input.uninstallCommand, input.silentSwitches
+      );
+      const uninstall = generated.slice(generated.indexOf('function Uninstall-ADTDeployment'));
+      const configLine = uninstall.split('\n').find(line => line.includes('$reviewedUninstallArguments ='));
+      const merge = uninstall.match(/foreach \(\$reviewedArgument in \$reviewedUninstallArguments\) \{[\s\S]*?\$registeredUninstallArguments \+= \$reviewedArgument\s*\}\s*\}/)?.[0];
+      expect(configLine).toBeTruthy();
+      expect(merge).toBeTruthy();
+      for (const captured of ['@()', "@('/S')"]) {
+        const result = spawnSync('pwsh', ['-NoProfile', '-Command', `
+${configLine}
+$registeredUninstallArguments = ${captured}
+${merge}
+${merge}
+ConvertTo-Json -InputObject @($registeredUninstallArguments) -Compress
+`], { encoding: 'utf8' });
+        expect(result.status, result.stderr).toBe(0);
+        expect(JSON.parse(result.stdout.trim())).toEqual(captured === '@()' ? ['/s'] : ['/S']);
+      }
+      expect(uninstall).toContain("'WinRAR archiver'");
+      expect(uninstall).toContain('Get-ADTApplication -FilterScript { $_.PSChildName -eq $registeredUninstallRegistryKey }');
+      expect(uninstall).toContain('The vendor uninstall command did not remove registration');
+      expect(configLine).not.toContain('-s1');
     }
   );
 
