@@ -1,0 +1,5 @@
+{
+  "title": "Restore pending tenant selection in batch deployments",
+  "summary": "MSP batch deployments can select pending customer tenants using stable tenant ordering while preserving the creation order between batches. Query failures now report a safe diagnostic code.",
+  "type": "fixed"
+}
