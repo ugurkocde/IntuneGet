@@ -72,15 +72,21 @@ jobs:
 
           const supabase = createClient(url, key);
           async function main() {
+            const { isScannerEligible, selectScanApps } = await import('./.github/scripts/scan-app-selection.mjs');
             let query = supabase
               .from('curated_apps')
               .select('winget_id, name, publisher, latest_version, popularity_rank')
               .not('latest_version', 'is', null);
             if (specific) query = query.in('winget_id', requested);
             else query = query.order('popularity_rank', { ascending: true, nullsFirst: false }).limit(Math.max(500, maxApps * 20));
-            const { data: candidates, error } = await query;
+            const { data, error } = await query;
             if (error) throw error;
-            if (!candidates?.length) throw new Error('No matching apps were found');
+            if (!data?.length) throw new Error('No matching apps were found');
+            const candidates = specific ? data : data.filter(isScannerEligible);
+            if (!specific && candidates.length !== data.length) {
+              console.log(`Excluded ${data.length - candidates.length} app(s) incompatible with scanner parameters`);
+            }
+            if (!candidates.length) throw new Error('No scanner-eligible apps were found');
 
             const lastScanned = new Map();
             for (let i = 0; i < candidates.length; i += 100) {
@@ -94,15 +100,7 @@ jobs:
               for (const row of data || []) if (!lastScanned.has(row.winget_id)) lastScanned.set(row.winget_id, row.scanned_at);
             }
 
-            candidates.sort((a, b) => {
-              const aTime = lastScanned.has(a.winget_id) ? Date.parse(lastScanned.get(a.winget_id)) : 0;
-              const bTime = lastScanned.has(b.winget_id) ? Date.parse(lastScanned.get(b.winget_id)) : 0;
-              return aTime - bTime || (a.popularity_rank ?? Number.MAX_SAFE_INTEGER) - (b.popularity_rank ?? Number.MAX_SAFE_INTEGER);
-            });
-            const apps = candidates.slice(0, maxApps).map(app => ({
-              winget_id: app.winget_id,
-              expected_version: app.latest_version,
-            }));
+            const apps = selectScanApps(candidates, lastScanned, maxApps);
             const matrix = JSON.stringify({ include: apps });
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${matrix}\napp_count=${apps.length}\n`);
             console.log(`Selected ${apps.length} app(s): ${apps.map(a => a.winget_id).join(', ')}`);
