@@ -33,6 +33,16 @@ const refresh = () => GET(new NextRequest('http://localhost/api/intune/unmanaged
   headers: { Authorization: 'Bearer offline-test-token' },
 }));
 describe('discovered apps cache preservation', () => {
+  it('returns the completed fresh scan and preserves the cache when the replacement rejects', async () => {
+    upsert.mockRejectedValue(new Error('cache unavailable'));
+    const response = await refresh();
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.fromCache).toBe(false);
+    expect(result.apps.map((app: { discoveredAppId: string }) => app.discoveredAppId)).toEqual(['app-one', 'app-two']);
+    expect(upsert).toHaveBeenCalledOnce();
+    expect(prune).not.toHaveBeenCalled();
+  });
   it('keeps the previous cache when the replacement write fails and still returns fresh results', async () => {
     upsert.mockResolvedValue({ error: { code: 'write-failed' } });
     const response = await refresh();

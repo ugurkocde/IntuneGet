@@ -630,11 +630,16 @@ export async function GET(request: NextRequest) {
     if (supabase) {
       let cacheWriteSucceeded = true;
       if (cacheRecords.length > 0) {
-        const { error: cacheWriteError } = await supabase
-          .from('discovered_apps_cache')
-          .upsert(cacheRecords, { onConflict: 'tenant_id,discovered_app_id' });
-        cacheWriteSucceeded = !cacheWriteError;
-        if (cacheWriteError) {
+        try {
+          const { error: cacheWriteError } = await supabase
+            .from('discovered_apps_cache')
+            .upsert(cacheRecords, { onConflict: 'tenant_id,discovered_app_id' });
+          cacheWriteSucceeded = !cacheWriteError;
+        } catch {
+          // Cache persistence is optional after the live scan has completed.
+          cacheWriteSucceeded = false;
+        }
+        if (!cacheWriteSucceeded) {
           console.warn('Discovered apps cache write failed; preserving previous cached results');
         }
       }
