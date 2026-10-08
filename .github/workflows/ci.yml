@@ -39,7 +39,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if git diff --quiet "$BASE_SHA...$HEAD_SHA" -- Dockerfile .dockerignore docker-compose.yml .github/workflows/ci.yml package.json package-lock.json next.config.js lib/db/index.ts 'lib/db/sqlite*' app/api/health; then
+          if git diff --quiet "$BASE_SHA...$HEAD_SHA" -- Dockerfile .dockerignore docker-compose.yml .github/workflows/ci.yml package.json package-lock.json next.config.js lib/db/index.ts scripts/ci/verify-docker-sqlite.sh 'lib/db/sqlite*' app/api/health; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
             result=$?
@@ -208,50 +208,15 @@ jobs:
 
       - name: Verify SQLite volume initialization and persistence
         shell: bash
+        run: bash scripts/ci/verify-docker-sqlite.sh intuneget:test
+
+      - name: Verify v0.7.1 SQLite upgrade and preserved completed job
+        shell: bash
         run: |
           set -euo pipefail
-          volume="intuneget-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          container_id=''
-          cleanup() {
-            if [[ -n "$container_id" ]]; then
-              docker logs "$container_id" || true
-              docker rm --force "$container_id" >/dev/null 2>&1 || true
-            fi
-            docker volume rm "$volume" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-          docker volume create "$volume" >/dev/null
-          start_container() {
-            container_id=$(docker run --detach --publish 127.0.0.1:3001:3000 \
-              --env DATABASE_MODE=sqlite --env DATABASE_PATH=/data/intuneget.db \
-              --env PACKAGER_MODE=local --mount "type=volume,source=$volume,target=/data" intuneget:test)
-            for _ in {1..30}; do
-              if health=$(curl --silent --show-error --max-time 5 http://127.0.0.1:3001/api/health) \
-                && jq --exit-status '.databaseMode == "sqlite" and .services.database == true' <<< "$health" >/dev/null; then
-                return 0
-              fi
-              sleep 2
-            done
-            echo 'SQLite database did not become available on the test volume' >&2
-            return 1
-          }
-          start_container
-          test "$(docker exec "$container_id" id -u)" = 1001
-          test "$(docker exec "$container_id" stat -c '%u:%g' /data)" = '1001:1001'
-          docker exec "$container_id" node -e '
-            const Database = require("better-sqlite3");
-            const db = new Database(process.env.DATABASE_PATH);
-            db.exec("CREATE TABLE intuneget_ci_volume_probe (value TEXT NOT NULL)");
-            db.prepare("INSERT INTO intuneget_ci_volume_probe VALUES (?)").run("persisted");
-            db.close();
-          '
-          docker rm --force "$container_id" >/dev/null
-          container_id=''
-          start_container
-          docker exec "$container_id" node -e '
-            const Database = require("better-sqlite3");
-            const db = new Database(process.env.DATABASE_PATH);
-            const row = db.prepare("SELECT value FROM intuneget_ci_volume_probe").get();
-            db.close();
-            if (row?.value !== "persisted") throw new Error("SQLite data did not survive container recreation");
-          '
+          baseline_digest=$(docker buildx imagetools inspect ghcr.io/ugurkocde/intuneget:0.7.1 \
+            --format '{{json .Manifest}}' | jq -er '.digest')
+          [[ "$baseline_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          baseline="ghcr.io/ugurkocde/intuneget@$baseline_digest"
+          docker pull "$baseline"
+          bash scripts/ci/verify-docker-sqlite.sh intuneget:test "$baseline"

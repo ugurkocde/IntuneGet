@@ -59,7 +59,7 @@ afterEach(() => {
 })
 
 describe('actual Docker input detector', () => {
-  it.each(['package.json', 'package-lock.json', 'next.config.js', 'lib/db/index.ts', 'lib/db/sqlite.ts'])
+  it.each(['package.json', 'package-lock.json', 'next.config.js', 'lib/db/index.ts', 'lib/db/sqlite.ts', 'scripts/ci/verify-docker-sqlite.sh'])
   ('tests image dependency or SQLite runtime input %s', path => {
     const f = fixture(path)
     expect(runDetector(f.directory, f.base, f.head)).toMatchObject({ status: 0, output: 'changed=true' })
