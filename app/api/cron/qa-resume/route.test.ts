@@ -48,12 +48,41 @@ import { PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'not', 'order', 'limit', 'update']) {
+  for (const method of ['select', 'eq', 'is', 'not', 'order', 'limit', 'update']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
   builder.then = (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve);
   return builder;
+}
+
+// Model conditional writes against a live row, not a predetermined response.
+// Each request's read snapshot is independent of later concurrent writes.
+function jobStore(initial: Record<string, unknown>) {
+  const row = structuredClone(initial);
+  const writes: ReturnType<typeof chain>[] = [];
+  function updateQuery() {
+    const filters: Array<[string, unknown]> = [];
+    let patch: Record<string, unknown> = {};
+    const builder = chain({ data: null, error: null });
+    builder.update = vi.fn((value) => { patch = value; return builder; });
+    builder.eq = vi.fn((column, value) => { filters.push([column, value]); return builder; });
+    builder.is = vi.fn((column, value) => { filters.push([column, value]); return builder; });
+    builder.maybeSingle = vi.fn(async () => {
+      const matches = filters.every(([column, value]) => {
+        const [field, key] = column.split('->>');
+        const actual = key ? (row[field] as Record<string, unknown> | null)?.[key] : row[field];
+        return (actual ?? null) === value;
+      });
+      if (!matches) return { data: null, error: null };
+      Object.assign(row, structuredClone(patch));
+      return { data: structuredClone(row), error: null };
+    });
+    builder.then = (resolve: (value: unknown) => unknown) => (builder.maybeSingle as () => Promise<unknown>)().then(resolve);
+    writes.push(builder);
+    return builder;
+  }
+  return { row, writes, updateQuery };
 }
 
 describe('GET /api/cron/qa-resume', () => {
@@ -69,6 +98,92 @@ describe('GET /api/cron/qa-resume', () => {
       item,
       trustedInstallers: [],
     }));
+  });
+
+  it.each([true, false].flatMap((localPackager) => [
+    'installer_sha256', 'architecture', 'qa_candidate_id',
+    'package_config->>installerSha256', 'package_config->>architecture', 'unchanged',
+  ].map((field) => [localPackager, field] as const)))('only fails the observed payload with localPackager=%s and concurrent change=%s', async (localPackager, field) => {
+    getFeatureFlagsMock.mockReturnValue({ localPackager });
+    const store = jobStore({
+      id: 'concurrent-job', status: 'awaiting_qa', qa_candidate_id: 'candidate-old',
+      winget_id: 'Example.App', version: '1.0', architecture: 'x64',
+      installer_sha256: 'A'.repeat(64), is_auto_update: true,
+      package_config: { installerSha256: 'A'.repeat(64), architecture: 'x64' },
+    });
+    getPackageCompatibilityBlockMock.mockImplementation(async () => {
+      const [column, key] = field.split('->>');
+      if (field !== 'unchanged') {
+        const value = field.includes('Sha256') || field === 'installer_sha256'
+          ? 'B'.repeat(64) : field.includes('architecture') ? 'arm64' : 'candidate-new';
+        if (key) (store.row[column] as Record<string, unknown>)[key] = value;
+        else store.row[column] = value;
+      }
+      return { code: 'failed_managed_lifecycle' };
+    });
+    let jobReads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++jobReads === 1
+        ? chain({ data: [structuredClone(store.row)], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') return chain({ data: { status: 'passed', package_profile_sha256: 'C'.repeat(64) }, error: null });
+      throw new Error(`Unexpected table ${table}`);
+    }) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    const unchanged = field === 'unchanged';
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: unchanged ? 1 : 0 });
+    expect(store.row.status).toBe(unchanged ? 'qa_failed' : 'awaiting_qa');
+    if (unchanged) expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledOnce();
+    else expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('checks and conditionally fails the row returned by a relink with localPackager=%s', async (localPackager) => {
+    getFeatureFlagsMock.mockReturnValue({ localPackager });
+    const store = jobStore({
+      id: 'relinked-block', status: 'awaiting_qa', qa_candidate_id: 'candidate-old',
+      winget_id: 'Example.App', version: '1.0', architecture: 'x64', installer_sha256: 'A'.repeat(64),
+      package_config: { sourceType: 'winget', architecture: 'x64', installerSha256: 'A'.repeat(64) },
+    });
+    reconcileCatalogInstallerMock.mockImplementation(async (item) => ({
+      item: { ...item, installerSha256: 'D'.repeat(64) }, trustedInstallers: [],
+    }));
+    ensureQaDemandMock.mockResolvedValue({
+      state: 'passed', candidateId: 'candidate-new',
+      identity: { executionProfileSha256: 'E'.repeat(64), presentationProfileSha256: 'F'.repeat(64) },
+    });
+    getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'failed_managed_lifecycle' });
+    let reads = 0;
+    const client = { from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1
+        ? chain({ data: [structuredClone(store.row)], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') return chain({ data: { status: 'superseded' }, error: null });
+      throw new Error(`Unexpected table ${table}`);
+    }) };
+    createServerClientMock.mockReturnValue(client);
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: 1 });
+    expect(getPackageCompatibilityBlockMock).toHaveBeenCalledWith(client, {
+      wingetId: 'Example.App', version: '1.0', architecture: 'x64', installerSha256: 'D'.repeat(64),
+    });
+    expect(store.writes[0].select).toHaveBeenCalledWith('qa_candidate_id, installer_sha256, architecture, package_config');
+    expect(store.writes[1].eq).toHaveBeenCalledWith('qa_candidate_id', 'candidate-new');
+    expect(store.row.status).toBe('qa_failed');
+    expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledOnce();
+  });
+
+  it('uses SQL null filters for absent observed identity values', async () => {
+    process.env.QA_MAINTENANCE_MODE = 'true';
+    const store = jobStore({ id: 'null-identity', status: 'awaiting_qa', winget_id: 'Example.App', version: '1.0' });
+    getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'failed_managed_lifecycle' });
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn(() => ++reads === 1
+      ? chain({ data: [structuredClone(store.row)], error: null }) : store.updateQuery()) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', { headers: { authorization: 'Bearer secret' } }));
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: 1 });
+    for (const column of ['qa_candidate_id', 'installer_sha256', 'architecture', 'package_config->>installerSha256', 'package_config->>architecture']) {
+      expect(store.writes[0].is).toHaveBeenCalledWith(column, null);
+      expect(store.writes[0].eq).not.toHaveBeenCalledWith(column, null);
+    }
   });
 
   it.each([
@@ -445,7 +560,7 @@ describe('GET /api/cron/qa-resume', () => {
     );
   });
 
-  it('rebuilds and relinks a superseded exact QA profile without failing the upload job', async () => {
+  it.each([true, false])('rebuilds a superseded exact QA profile when relink matches=%s', async (matches) => {
     const job = {
       id: 'job-superseded',
       qa_candidate_id: 'candidate-old',
@@ -474,7 +589,7 @@ describe('GET /api/cron/qa-resume', () => {
         presentationProfileSha256: 'D'.repeat(64),
       },
     });
-    const relinkUpdate = chain({ data: null, error: null });
+    const relinkUpdate = chain({ data: matches ? { ...job, qa_candidate_id: 'candidate-current' } : null, error: null });
     let packagingCall = 0;
     const client = {
       from: vi.fn((table: string) => {
@@ -505,7 +620,11 @@ describe('GET /api/cron/qa-resume', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: 1 });
+    expect(body).toMatchObject({ resumed: 0, failed: 0, waiting: matches ? 1 : 0 });
+    if (!matches) {
+      expect(getPackageCompatibilityBlockMock).not.toHaveBeenCalled();
+      expect(packagingCall).toBe(2);
+    }
     expect(ensureQaDemandMock).toHaveBeenCalledWith(client, expect.objectContaining({
       wingetId: 'Example.App',
       priority: QA_PRIORITY_CUSTOMER,
@@ -574,7 +693,10 @@ describe('GET /api/cron/qa-resume', () => {
       },
     });
     getPackageCompatibilityBlockMock.mockResolvedValue(blocked ? { code: 'failed_managed_lifecycle' } : null);
-    const relinkUpdate = chain({ data: blocked ? { id: job.id } : null, error: null });
+    const relinkUpdate = chain({ data: {
+      ...job, qa_candidate_id: 'candidate-current-manifest', installer_sha256: 'D'.repeat(64),
+      package_config: { ...job.package_config, installerSha256: 'D'.repeat(64) },
+    }, error: null });
     let packagingCall = 0;
     const client = {
       from: vi.fn((table: string) => {
@@ -654,7 +776,7 @@ describe('GET /api/cron/qa-resume', () => {
         presentationProfileSha256: 'D'.repeat(64),
       },
     });
-    const relinkUpdate = chain({ data: null, error: null });
+    const relinkUpdate = chain({ data: { ...job, qa_candidate_id: 'candidate-recovered' }, error: null });
     let packagingCall = 0;
     const client = {
       from: vi.fn((table: string) => {
@@ -715,7 +837,7 @@ describe('GET /api/cron/qa-resume', () => {
         presentationProfileSha256: 'D'.repeat(64),
       },
     });
-    const relinkUpdate = chain({ data: null, error: null });
+    const relinkUpdate = chain({ data: job, error: null });
     const claimUpdate = chain({ data: { id: job.id }, error: null });
     let packagingCall = 0;
     const client = {
