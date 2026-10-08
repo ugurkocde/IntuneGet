@@ -628,10 +628,15 @@ export async function GET(request: NextRequest) {
     // them. Upsert-then-prune (rather than delete-then-insert) also avoids a
     // race where concurrent requests see an empty cache and both hit Graph.
     if (supabase) {
+      let cacheWriteSucceeded = true;
       if (cacheRecords.length > 0) {
-        await supabase
+        const { error: cacheWriteError } = await supabase
           .from('discovered_apps_cache')
           .upsert(cacheRecords, { onConflict: 'tenant_id,discovered_app_id' });
+        cacheWriteSucceeded = !cacheWriteError;
+        if (cacheWriteError) {
+          console.warn('Discovered apps cache write failed; preserving previous cached results');
+        }
       }
 
       // Remove entries from previous syncs that are no longer present. Complete
@@ -639,7 +644,7 @@ export async function GET(request: NextRequest) {
       // This runs even when the complete scan found zero apps, so a tenant that
       // genuinely emptied out (every app uninstalled/now managed) is pruned
       // rather than left showing phantom rows from an earlier sync.
-      if (!budgetExceeded) {
+      if (!budgetExceeded && cacheWriteSucceeded) {
         await supabase
           .from('discovered_apps_cache')
           .delete()

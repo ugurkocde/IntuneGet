@@ -1,0 +1,5 @@
+{
+  "title": "Preserve discovered app results when a cache update fails",
+  "summary": "Discovered Apps keeps the previous cached results when saving a fresh scan fails, preserving a fallback during later Microsoft Graph throttling.",
+  "type": "fixed"
+}
