@@ -1,9 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+import type * as RootTypeScript from '../../node_modules/typescript';
 import { describe, expect, it } from 'vitest';
 import { JobProcessor } from '../src/job-processor';
 import type { PackagingJob } from '../src/job-poller';
+
+// The standalone packager uses TypeScript 7, which has no JS compiler API.
+const ts = createRequire(new URL('../../package.json', import.meta.url))('typescript') as typeof RootTypeScript;
 
 const generator = JobProcessor.prototype as unknown as {
   getPostInstallVerificationBlock(job: PackagingJob, name: string): string;
@@ -49,7 +53,7 @@ describe('local registry verification regexes', () => {
     const source = readFileSync(new URL('../src/job-processor.ts', import.meta.url), 'utf8');
     const file = ts.createSourceFile('job-processor.ts', source, ts.ScriptTarget.Latest, true);
     const violations: string[] = [];
-    function visit(node: ts.Node) {
+    function visit(node: RootTypeScript.Node) {
       if (ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)
         || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
         const raw = node.getText(file);
