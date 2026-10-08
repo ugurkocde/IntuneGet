@@ -12,6 +12,7 @@ import { ensureQaDemand } from '@/lib/qa/demand';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
   for (const job of jobs || []) {
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = job.package_config as unknown as Win32CartItem;
+    let relinked = false;
     let candidate: {
       id: string;
       status: string;
@@ -139,6 +141,52 @@ export async function GET(request: Request) {
         .eq('id', job.id)
         .eq('status', 'awaiting_qa');
       if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
+      relinked = true;
+    }
+
+    // Waiting jobs may have been linked before this payload was quarantined.
+    // Check the execution input after reconciliation, including continuity and
+    // maintenance releases: local packaging has no later workflow QA gate.
+    let compatibilityBlock;
+    try {
+      compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
+        wingetId: job.winget_id,
+        version: job.version,
+        architecture: features.localPackager
+          ? job.architecture || 'x64'
+          : item?.architecture || job.architecture || 'x64',
+        installerSha256: features.localPackager && !relinked
+          ? job.installer_sha256 || ''
+          : item?.installerSha256 || job.installer_sha256 || '',
+      });
+    } catch {
+      // An unavailable lookup is not evidence of eligibility. Keep this job
+      // waiting while allowing unrelated verified jobs in the batch to proceed.
+      waiting++;
+      continue;
+    }
+    if (compatibilityBlock) {
+      const now = new Date().toISOString();
+      const { data: blockedJob, error: blockError } = await supabase
+        .from('packaging_jobs')
+        .update({
+          status: 'qa_failed',
+          status_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
+          error_code: 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
+          error_stage: 'validation',
+          error_category: 'installer',
+          completed_at: now,
+        })
+        .eq('id', job.id)
+        .eq('status', 'awaiting_qa')
+        .select('id')
+        .maybeSingle();
+      if (blockError) throw new Error(`Could not hold quarantined QA job: ${blockError.message}`);
+      if (blockedJob) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', PACKAGE_VERSION_UNAVAILABLE_MESSAGE);
+      }
+      continue;
     }
 
     if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
