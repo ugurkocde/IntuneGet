@@ -2,8 +2,10 @@ import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
 
 import { createServerClient } from '@/lib/supabase';
-import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
+import { isQaFrameFresh } from '@/lib/qa/live-frame-freshness';
 import { getQaPipelineControl, type QaPipelineControl } from '@/lib/qa/pipeline-control';
+import { projectQaLiveCurated, type QaCuratedLiveBinding, type QaCuratedLiveFrameRow, type QaCuratedLiveSessionRow } from '@/lib/qa/live-curated';
+import { loadQaLiveCuratedSnapshot } from '@/lib/qa/live-session-data';
 import type { Json } from '@/types/database';
 import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResponse, QaLiveUiConfiguration, QaOutcome, QaVirusTotalStatus } from '@/types/qa';
 
@@ -78,6 +80,11 @@ export interface QaLiveSnapshotInput {
   apps: AppRow[];
   frame: FrameRow | null;
   control?: QaPipelineControl;
+  curated?: {
+    binding: QaCuratedLiveBinding | null;
+    session: QaCuratedLiveSessionRow | null;
+    frame: QaCuratedLiveFrameRow | null;
+  };
 }
 
 const VALID_PHASES = new Set<QaLivePhase>([
@@ -320,7 +327,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
   const frameIsCurrent = Boolean(
     input.current &&
     input.frame?.candidate_id === input.current.id &&
-    input.now.getTime() - new Date(input.frame.updated_at).getTime() <= QA_LIVE_FRAME_MAX_AGE_MS
+    isQaFrameFresh(input.frame, currentStartedAt, input.now.getTime())
   );
   const currentExpectedUi = input.current ? expectedUiConfiguration(input.current.test_config) : null;
   const currentActivity = input.current
@@ -330,7 +337,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     ? liveLog(input.current.live_log, input.current.log_updated_at, currentStartedAt)
     : null;
 
-  return {
+  const response: QaLiveResponse = {
     serverTime: input.now.toISOString(),
     active: Boolean(input.current),
     runner: {
@@ -346,6 +353,7 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     },
     current: input.current && currentStartedAt
       ? {
+          runKind: 'ordinary',
           wingetId: input.current.winget_id,
           displayName: currentApp?.name || input.current.winget_id,
           publisher: currentApp?.publisher || null,
@@ -395,6 +403,21 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
       virusTotalStatus: virusTotalStatus(result.virustotal_status),
     })),
   };
+  // The existing candidate is always authoritative if both sources are present.
+  // Curated telemetry mirrors dispatch ownership and never controls that ownership.
+  if (!input.current && input.curated) {
+    const curated = projectQaLiveCurated({ now: input.now, ...input.curated });
+    if (curated) {
+      response.active = true;
+      response.current = curated.current;
+      response.runner = curated.runner;
+      response.viewer = curated.viewer;
+      response.activity = null;
+      response.log = null;
+    }
+    response.vmBusy = input.curated.binding?.status === 'dispatched' ? 'catalog_verification' : null;
+  }
+  return response;
 }
 
 export function countConsecutiveFailedPolls(
@@ -419,7 +442,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const candidateColumns =
     'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config';
 
-  const [activeResult, queueResult, countResult, pollResult, recentResult, control] = await Promise.all([
+  const [activeResult, queueResult, countResult, pollResult, recentResult, control, curated] = await Promise.all([
     supabase
       .from('qa_candidates')
       .select(candidateColumns)
@@ -455,6 +478,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       // releases even when a bounded failure retry produced another profile.
       .limit(50),
     getQaPipelineControl(supabase),
+    loadQaLiveCuratedSnapshot(supabase),
   ]);
 
   for (const result of [activeResult, queueResult, countResult, pollResult, recentResult]) {
@@ -503,5 +527,6 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     apps,
     frame,
     control,
+    curated,
   });
 }
