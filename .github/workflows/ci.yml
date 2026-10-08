@@ -17,6 +17,36 @@ env:
   NODE_VERSION: "26.5.0"
 
 jobs:
+  docker-changes:
+    name: Docker input changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check Docker inputs
+        id: diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA...$HEAD_SHA" -- Dockerfile .dockerignore docker-compose.yml .github/workflows/ci.yml 'lib/db/sqlite*' app/api/health; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            result=$?
+            if [[ "$result" != 1 ]]; then exit "$result"; fi
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
   workflow-lint:
     name: Workflow lint
     runs-on: ubuntu-24.04
@@ -123,9 +153,10 @@ jobs:
 
   docker:
     name: Docker build and smoke test
-    # Keep the self-hosted QA repair loop responsive. The same commit is still
-    # built, scanned, and smoke-tested after it lands on main.
-    if: github.event_name == 'push'
+    needs: docker-changes
+    # Docker inputs are tested before merge. Other PRs keep the fast CI path;
+    # every main push still builds, scans, and smoke-tests the complete image.
+    if: always() && (github.event_name == 'push' || needs.docker-changes.outputs.changed == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -173,3 +204,53 @@ jobs:
             sleep 2
           done
           exit 1
+
+      - name: Verify SQLite volume initialization and persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          volume="intuneget-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          container_id=''
+          cleanup() {
+            if [[ -n "$container_id" ]]; then
+              docker logs "$container_id" || true
+              docker rm --force "$container_id" >/dev/null 2>&1 || true
+            fi
+            docker volume rm "$volume" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker volume create "$volume" >/dev/null
+          start_container() {
+            container_id=$(docker run --detach --publish 127.0.0.1:3001:3000 \
+              --env DATABASE_MODE=sqlite --env DATABASE_PATH=/data/intuneget.db \
+              --env PACKAGER_MODE=local --mount "type=volume,source=$volume,target=/data" intuneget:test)
+            for _ in {1..30}; do
+              if health=$(curl --silent --show-error --max-time 5 http://127.0.0.1:3001/api/health) \
+                && jq --exit-status '.databaseMode == "sqlite" and .services.database == true' <<< "$health" >/dev/null; then
+                return 0
+              fi
+              sleep 2
+            done
+            echo 'SQLite database did not become available on the test volume' >&2
+            return 1
+          }
+          start_container
+          test "$(docker exec "$container_id" id -u)" = 1001
+          test "$(docker exec "$container_id" stat -c '%u:%g' /data)" = '1001:1001'
+          docker exec "$container_id" node -e '
+            const Database = require("better-sqlite3");
+            const db = new Database(process.env.DATABASE_PATH);
+            db.exec("CREATE TABLE intuneget_ci_volume_probe (value TEXT NOT NULL)");
+            db.prepare("INSERT INTO intuneget_ci_volume_probe VALUES (?)").run("persisted");
+            db.close();
+          '
+          docker rm --force "$container_id" >/dev/null
+          container_id=''
+          start_container
+          docker exec "$container_id" node -e '
+            const Database = require("better-sqlite3");
+            const db = new Database(process.env.DATABASE_PATH);
+            const row = db.prepare("SELECT value FROM intuneget_ci_volume_probe").get();
+            db.close();
+            if (row?.value !== "persisted") throw new Error("SQLite data did not survive container recreation");
+          '
