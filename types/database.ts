@@ -682,6 +682,7 @@ export interface Database {
           github_run_id: number; github_run_attempt: number; state: 'active' | 'ended';
           end_reason: 'ended' | 'superseded' | 'dispatch_inactive' | 'expired' | null;
           phase: string | null; phase_started_at: string | null; started_at: string; heartbeat_at: string; ended_at: string | null;
+          frames_cleaned_at: string | null;
         };
         Insert: {
           id?: string; run_kind?: 'curated'; queue_id: string; verification: 'release' | 'custom-settings';
@@ -689,6 +690,7 @@ export interface Database {
           github_run_id: number; github_run_attempt: number; state?: 'active' | 'ended';
           end_reason?: 'ended' | 'superseded' | 'dispatch_inactive' | 'expired' | null;
           phase?: string | null; phase_started_at?: string | null; started_at?: string; heartbeat_at?: string; ended_at?: string | null;
+          frames_cleaned_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['qa_live_sessions']['Insert']>;
         Relationships: GenericRelationship[];

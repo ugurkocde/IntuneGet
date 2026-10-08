@@ -19,21 +19,25 @@ export async function cleanupCuratedLiveSessions(db: SupabaseClient) {
     const bucket = db.storage.from(BUCKET);
     try {
       const { data: objects, error: listError } = await bucket.list(prefix, { limit: 100 });
-      if (listError) continue;
+      if (listError) { console.error('Curated live cleanup could not list frames', session.id, listError.message); continue; }
       const paths = (objects ?? []).filter(object => /^frame-\d+\.jpg$/.test(object.name)).map(object => `${prefix}/${object.name}`);
       if (paths.length) {
         const { error: removeError } = await bucket.remove(paths);
-        if (removeError) continue;
+        if (removeError) { console.error('Curated live cleanup could not remove frames', session.id, removeError.message); continue; }
         removedObjects += paths.length;
       }
       const { data: remaining, error: remainingError } = await bucket.list(prefix, { limit: 1 });
-      if (remainingError || remaining?.length) continue; // Another bounded cron pass handles overflow.
+      if (remainingError) { console.error('Curated live cleanup could not check remaining frames', session.id, remainingError.message); continue; }
+      if (remaining?.length) continue; // Another bounded cron pass handles overflow.
       const { error: frameError } = await db.from('qa_live_session_frames').delete().eq('session_id', session.id);
-      if (frameError) continue;
+      if (frameError) { console.error('Curated live cleanup could not remove frame metadata', session.id, frameError.message); continue; }
       const { error: updateError } = await db.from('qa_live_sessions').update({ frames_cleaned_at: new Date().toISOString() })
         .eq('id', session.id).eq('state', 'ended');
-      if (!updateError) cleanedSessions++;
-    } catch { /* Storage outages remain retryable; no active owner is touched. */ }
+      if (updateError) console.error('Curated live cleanup could not mark session cleaned', session.id, updateError.message);
+      else cleanedSessions++;
+    } catch (error) {
+      console.error('Curated live cleanup failed', session.id, error instanceof Error ? error.message : 'Unknown error');
+    }
   }
   return { cleanedSessions, skippedSessions: (sessions?.length ?? 0) - cleanedSessions, removedObjects };
 }
