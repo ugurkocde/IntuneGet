@@ -17,7 +17,13 @@ export async function prepareCuratedPublication({ gh, repo, branch, title, detai
     if (verified.state !== 'open' || verified.auto_merge !== null) throw new Error('Publication auto merge state is unverified.');
     return verified;
   };
-  let pr = (await gh(['api', `repos/${repo}/pulls?head=${repo.split('/')[0]}:${branch}&state=open`]) || [])[0];
+  const matches = await gh(['api', `repos/${repo}/pulls?head=${repo.split('/')[0]}:${branch}&state=open&per_page=100`]);
+  if (!Array.isArray(matches)) throw new Error('Publication PR lookup returned an invalid response.');
+  // Do not filter by base here: that would hide a PR sharing this branch with
+  // an unexpected target and leave its merge state unchecked before the push.
+  if (matches.some(match => match.base?.ref !== 'main')) throw new Error('Publication PR has an unexpected base.');
+  if (matches.length > 1) throw new Error('Multiple publication PRs match the branch.');
+  let pr = matches[0];
   if (pr) await disarm(pr);
   await push();
   const body = `${details}\n\nHead: \`${headSha}\`. Merge requires independent review of this exact revision and passing required checks.`;

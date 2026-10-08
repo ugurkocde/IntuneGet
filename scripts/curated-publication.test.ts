@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { prepareCuratedPublication } from './curated-publication.mjs';
 
 const headSha = 'a'.repeat(40);
-const pr = { number: 42, html_url: 'https://github.com/ugurkocde/IntuneGet/pull/42', state: 'open', auto_merge: null, head: { sha: headSha } };
+const pr = { number: 42, html_url: 'https://github.com/ugurkocde/IntuneGet/pull/42', state: 'open', auto_merge: null, head: { sha: headSha }, base: { ref: 'main' } };
 function harness(existing = true, armed = false) {
   let current = { ...pr, auto_merge: armed ? { merge_method: 'squash' } : null };
   const events: string[] = [];
@@ -19,6 +19,31 @@ function harness(existing = true, armed = false) {
   return { gh, spawn, push, wait, events, run, set: (value: typeof current) => { current = value; } };
 }
 describe('curated publication review handoff', () => {
+  it('refuses to push when the matching PR targets another base', async () => {
+    const h = harness();
+    h.set({ ...pr, base: { ref: 'other' } });
+    await expect(h.run()).rejects.toThrow('unexpected base');
+    expect(h.push).not.toHaveBeenCalled();
+    expect(h.spawn).not.toHaveBeenCalled();
+  });
+  it('rejects an unexpected base even when a valid match is listed first', async () => {
+    const h = harness();
+    h.gh.mockResolvedValueOnce([pr, { ...pr, number: 43, base: { ref: 'other' } }]);
+    await expect(h.run()).rejects.toThrow('unexpected base');
+    expect(h.push).not.toHaveBeenCalled();
+  });
+  it('rejects multiple matching PRs without choosing an arbitrary merge state', async () => {
+    const h = harness();
+    h.gh.mockResolvedValueOnce([pr, { ...pr, number: 43 }]);
+    await expect(h.run()).rejects.toThrow('Multiple');
+    expect(h.push).not.toHaveBeenCalled();
+  });
+  it('rejects a malformed lookup rather than assuming no PR exists', async () => {
+    const h = harness();
+    h.gh.mockResolvedValueOnce(null as never);
+    await expect(h.run()).rejects.toThrow('invalid response');
+    expect(h.push).not.toHaveBeenCalled();
+  });
   it('disables a legacy merge request and verifies it before pushing a replacement', async () => {
     const h = harness(true, true);
     expect(await h.run()).toEqual({ number: 42, url: pr.html_url, headSha });
