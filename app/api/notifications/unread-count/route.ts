@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = getServerClientOrNull();
     if (!supabase) {
-      return NextResponse.json({ count: 0 });
+      return NextResponse.json({ unread_count: 0 });
     }
 
     const { count, error } = await supabase
