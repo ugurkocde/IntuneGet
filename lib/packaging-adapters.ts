@@ -836,6 +836,13 @@ export const APPLICATION_PACKAGING_ADAPTERS: readonly ApplicationPackagingAdapte
     reviewedUninstallArguments: ['/S'],
   },
   {
+    // The curated Thunderbird MSI wraps the same Mozilla NSIS helper.exe
+    // lifecycle as Firefox, so its captured removal command needs the same
+    // documented /S switch to stay silent under SYSTEM.
+    wingetId: 'IntuneGet.Curated.Thunderbird',
+    reviewedUninstallArguments: ['/S'],
+  },
+  {
     // Waterfox uses Mozilla's NSIS helper.exe lifecycle. Its captured ARP
     // command contains only the helper path, so invoking it unchanged opens an
     // uninstall wizard that is invisible under SYSTEM and leaves the exact

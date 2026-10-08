@@ -39,8 +39,8 @@ describe('curated approval trust boundary', () => {
     expect(() => validateDefinitions([{ ...app, registeredUninstall: undefined }])).toThrow(/exact EXE registration/);
     expect(() => validateDefinitions([{ ...app, installerType: 'msi' }])).toThrow(/exact EXE registration/);
   });
-  it('defines fifteen applications and commits only a catalog signed by a committed trust key', () => {
-    expect(validateDefinitions(CURATED_APPS)).toHaveLength(20);
+  it('defines fifty applications and commits only a catalog signed by a committed trust key', () => {
+    expect(validateDefinitions(CURATED_APPS)).toHaveLength(50);
     // The automation re-signs after definition changes and before expiry, so
     // only the signer is checked here; deployment checks expiry and digest.
     const payload = verifyCatalogSignature(committed, committedKeys);

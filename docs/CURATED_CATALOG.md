@@ -26,10 +26,24 @@ The pilot is an IntuneGet-owned catalog sourced from publishers. It has independ
 | WinRAR | Stable English x64 EXE | Publisher download-page links; exclude beta and localized files; reviewed 7.22 initial upgrade baseline |
 | Node.js LTS | Windows x64 MSI, fixed 24 LTS channel | Publisher release index and SHA256SUMS; earlier major-24 MSI for upgrade QA |
 | Wireshark | Windows x64 MSI, fixed 4.6 stable channel | Publisher download page and exact MSI SHA256 in the SIGNATURES file; earlier 4.6 MSI for upgrade QA |
+| LibreOffice | Newest stable x64 MSI | Publisher stable directory listing; mirror redirects allowed only with the SHA256 from the `.sha256` file beside the installer; earlier listed release for upgrade QA |
+| Mozilla Thunderbird | Stable en-US x64 MSI | Mozilla release metadata and archive `SHA256SUMS`; previous major release for upgrade QA |
+| Go | Latest stable x64 MSI | go.dev release index with publisher SHA256; previous supported minor release for upgrade QA |
+| CMake, GitHub CLI, Azure CLI, LLVM, Neovim | x64 machine MSI | Publisher GitHub releases and asset SHA256 |
+| VSCodium | Stable system x64 installer | Publisher GitHub releases and asset SHA256 |
+| DBeaver Community | x86_64 all-users installer | Publisher GitHub releases and asset SHA256 |
+| MongoDB Compass | Full edition x64 MSI | Publisher GitHub releases filtered to stable 1.x builds |
+| Azure Storage Explorer | x64 all-users installer | Publisher GitHub releases and asset SHA256 |
+| KeePassXC, Nextcloud Desktop, Mattermost Desktop, RustDesk | x64 machine MSI | Publisher GitHub releases and asset SHA256 |
+| OBS Studio | x64 installer | Publisher GitHub releases and asset SHA256 |
+| MuseScore Studio, ImageGlass, Arduino IDE, Transmission | x64 MSI, all users | Publisher GitHub releases and asset SHA256 |
+| calibre | 64-bit MSI | Publisher GitHub release; reviewed 9.14.0 MSI on the publisher download host as the initial upgrade baseline |
+| PDFsam Basic, Flameshot, WinDirStat, DB Browser for SQLite | x64 machine MSI | Publisher GitHub releases; DB Browser has no publisher digest, so the VM-measured SHA256 is pinned |
+| ShareX, WinMerge, PeaZip, qBittorrent | x64 installer | Publisher GitHub releases and asset SHA256 |
 
 Definitions are in `lib/curated-catalog/definitions.json`. Every definition is a machine install; WinSCP is x86 because its stable release ships only a 32-bit setup, and all others are x64. Definitions are the reviewed contract: payload architecture, unattended arguments, licensing and allowed download hosts are fixed in code review, and the automation applies them identically to every release.
 
-There are 20 definitions; that count is not a claim that 20 applications already have signed QA approvals. The latest five were selected from the catalog's Chocolatey download rankings after checking publisher-source and machine-lifecycle compatibility. Those rankings are a popularity proxy, not a measurement of worldwide downloads. Higher-ranked Edge, Teams, Visual C++ Redistributable, Office, Google Drive, Foxit, paint.net, and Slack remain separate work because they need OS-aware uninstall, shared-runtime or side-by-side handling, additional publisher contract review, archive extraction, or MSIX support.
+There are 50 definitions; that count is not a claim that 50 applications already have signed QA approvals. Each application becomes deployable only after its own VM verification passes. The 30 added on 2026-10-08 were selected from the catalog's Chocolatey download rankings and earlier passing IntuneGet QA runs, then checked against the publisher MSI or setup metadata for a fixed Program Files path, a machine-wide registration and a reachable earlier release. Those rankings are a popularity proxy, not a measurement of worldwide downloads. Higher-ranked Edge, Teams, Visual C++ Redistributable, Office, Google Drive, Foxit, paint.net, and Slack remain separate work because they need OS-aware uninstall, shared-runtime or side-by-side handling, additional publisher contract review, archive extraction, or MSIX support. PowerToys, Bitwarden, draw.io, GIMP, Everything and the Java runtimes were also deferred: their bundle registrations, unbraced uninstall keys, version-specific install folders or missing publisher hashes for an earlier release need separate review.
 
 Python's definition opts into `installedIdentity.versionFormat: "python-msi"`. The verifier compares a final 3.14 release with CPython's exact Windows registration encoding `3.14.(patch * 1000 + 150).0`, as defined in the publisher's [Windows build properties](https://github.com/python/cpython/blob/3.14/PCbuild/python.props) and [MSI properties](https://github.com/python/cpython/blob/3.14/Tools/msi/msi.props). It rejects prerelease, test-marker, different-patch and different-channel builds. The separate Python launcher is omitted so install and uninstall do not affect a shared product. Wireshark's MSI does not deploy Npcap or USBPcap; those drivers are separate packages.
 
