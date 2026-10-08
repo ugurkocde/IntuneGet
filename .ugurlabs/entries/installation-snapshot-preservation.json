@@ -1,0 +1,5 @@
+{
+  "title": "Preserve successful installation scan evidence",
+  "summary": "Failed or skipped rescans retain previous successful installation evidence while reporting the current attempt accurately.",
+  "type": "fixed"
+}

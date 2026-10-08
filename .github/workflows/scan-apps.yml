@@ -234,7 +234,9 @@ jobs:
 
           const supabase = createClient(url, key);
           async function main() {
+            const { writeSnapshot } = await import('./.github/scripts/scan-snapshot-ingest.mjs');
             let uploaded = 0;
+            let preserved = 0;
             for (const result of results) {
               if (!result.winget_id || !result.version || !['completed', 'failed', 'skipped'].includes(result.status)) {
                 throw new Error(`Invalid scan result: ${JSON.stringify(result).slice(0, 300)}`);
@@ -258,9 +260,13 @@ jobs:
                 architecture: result.architecture,
                 updated_at: new Date().toISOString(),
               };
-              const { error } = await supabase.from('installation_snapshots').upsert(record, { onConflict: 'winget_id,version' });
-              if (error) throw error;
-              uploaded++;
+              const outcome = await writeSnapshot(supabase, record);
+              if (outcome === 'preserved') {
+                preserved++;
+                console.log(`Preserved completed snapshot for ${result.winget_id} ${result.version}; current attempt ${result.status}`);
+              } else {
+                uploaded++;
+              }
             }
 
             const completed = results.filter(r => r.status === 'completed').length;
@@ -273,12 +279,12 @@ jobs:
               last_run_status: status,
               items_processed: completed,
               error_message: failed || skipped ? `${failed} failed, ${skipped} skipped` : null,
-              metadata: { total: results.length, uploaded, completed, failed, skipped },
+              metadata: { total: results.length, uploaded, preserved, completed, failed, skipped },
               updated_at: new Date().toISOString(),
             });
             if (statusError) throw statusError;
 
-            fs.writeFileSync('scan-summary.json', JSON.stringify({ completed, failed, skipped, results }, null, 2));
+            fs.writeFileSync('scan-summary.json', JSON.stringify({ uploaded, preserved, completed, failed, skipped, results }, null, 2));
             if (failed > 0) process.exitCode = 1;
           }
           main().catch(error => { console.error(error); process.exit(1); });
@@ -292,5 +298,7 @@ jobs:
           echo "- **Completed:** $(jq -r .completed scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Failed:** $(jq -r .failed scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Skipped:** $(jq -r .skipped scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Snapshots written:** $(jq -r .uploaded scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Completed snapshots preserved:** $(jq -r .preserved scan-summary.json)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           jq -r '.results[] | "- `\(.winget_id)` — \(.status)\(if .error then ": " + .error else "" end)"' scan-summary.json >> "$GITHUB_STEP_SUMMARY"
