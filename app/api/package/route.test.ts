@@ -1927,6 +1927,19 @@ describe('POST /api/package (curated licence attestation)', () => {
     body: JSON.stringify({ items }),
   }));
 
+  it('checks the canonical curated package ID before any demand or job for mixed casing', async () => {
+    getApprovalFailuresMock.mockImplementation(async (_tenant: string, packageId: string) => packageId === acrobat.packageId
+      ? [{ tenant_id: 'tenant-1', winget_id: acrobat.packageId, status: 'failed', error_category: 'approval', error_details: null }]
+      : []);
+    const response = await post([{ ...acrobatItem, wingetId: acrobat.packageId.toUpperCase() }]);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INTUNE_APPROVAL_PENDING', package: { wingetId: acrobat.packageId } });
+    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', acrobat.packageId, undefined);
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('blocks a curated app whose agreement the tenant has not accepted, before any job exists', async () => {
     const response = await post([acrobatItem]);
     expect(response.status).toBe(409);

@@ -4,6 +4,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
 import type {
   AppUpdatePolicy,
@@ -209,7 +210,7 @@ export const supabaseDb: DatabaseAdapter = {
 
     async getApprovalFailures(tenantId, wingetId, cursor) {
       let query = createServerClient().from('packaging_jobs').select('*')
-        .eq('tenant_id', tenantId).eq('winget_id', wingetId).eq('status', 'failed')
+        .eq('tenant_id', tenantId).eq('winget_id', wingetId).in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
         .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
         .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
       if (cursor) {

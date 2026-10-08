@@ -1,7 +1,7 @@
 import { getDatabase } from '@/lib/db';
 import type { DatabaseAdapter } from '@/lib/db/types';
 import { acquireGraphToken } from '@/lib/graph-token';
-import { isIntuneApprovalFailure, INTUNE_APPROVAL_PENDING_MESSAGE } from '@/lib/intune-approval';
+import { isIntuneApprovalFailure, INTUNE_APPROVAL_PENDING_MESSAGE, INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 
 type RetainedAppState = 'present' | 'absent' | 'unknown';
 type Dependencies = {
@@ -46,7 +46,7 @@ export async function findPendingApprovalBlocks(
         const jobs = await db.jobs.getApprovalFailures(input.tenantId, wingetId, cursor);
         for (const job of jobs) {
           if (job.tenant_id !== input.tenantId || job.winget_id !== wingetId ||
-              job.status !== 'failed' || !isIntuneApprovalFailure(job)) {
+              !INTUNE_APPROVAL_CHECKPOINT_STATUSES.some(status => status === job.status) || !isIntuneApprovalFailure(job)) {
             reason = 'release_check_failed'; break;
           }
           const details = job.error_details;

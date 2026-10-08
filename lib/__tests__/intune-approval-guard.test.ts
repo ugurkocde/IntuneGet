@@ -20,6 +20,23 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(acquireGraphToken).mockResolved
 afterEach(() => vi.unstubAllGlobals());
 
 describe('pending Intune approval guard', () => {
+  it.each(['present', 'absent', 'unknown'] as const)('reconciles cancelled approval checkpoints with retained state %s', async state => {
+    const probe = vi.fn().mockResolvedValue(state);
+    const result = await findPendingApprovalBlocks(input, {
+      db: dbFor(vi.fn().mockResolvedValue([row({ status: 'cancelled' })])), checkRetainedApp: probe,
+    });
+    expect(probe).toHaveBeenCalledWith('tenant', appId);
+    expect(result).toEqual(state === 'absent' ? [] : [expect.objectContaining({
+      reason: state === 'present' ? 'retained_app_present' : 'release_check_failed',
+    })]);
+  });
+  it.each(['deployed', 'queued', 'uploading'] as const)('rejects unsupported checkpoint status %s without probing Graph', async status => {
+    const probe = vi.fn();
+    expect(await findPendingApprovalBlocks(input, {
+      db: dbFor(vi.fn().mockResolvedValue([row({ status })])), checkRetainedApp: probe,
+    })).toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(probe).not.toHaveBeenCalled();
+  });
   it('blocks retained apps across users, versions and dismissed checkpoints', async () => {
     const query = vi.fn().mockResolvedValue([row()]);
     const probe = vi.fn().mockResolvedValue('present');

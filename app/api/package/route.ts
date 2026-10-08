@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 /**
  * Package API Route
@@ -187,8 +188,14 @@ export async function POST(request: NextRequest) {
 
     // This checkpoint precedes every Store/Win32 insert and curated QA demand.
     // Neither request-level nor item-level forceCreate bypasses approval safety.
+    // Check the stored canonical ID and any legacy submitted casing before demand.
     const approvalBlocks = await findPendingApprovalBlocks({ tenantId,
-      wingetIds: items.map(item => item.wingetId) }, { db });
+      wingetIds: items.flatMap(item => {
+        const curated = typeof item.wingetId === 'string' &&
+          (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated')
+          ? findCuratedApp(item.wingetId) : undefined;
+        return curated ? [curated.packageId, item.wingetId] : [item.wingetId];
+      }) }, { db });
     if (approvalBlocks.length) {
       const block = approvalBlocks[0];
       return NextResponse.json({ error: 'Intune approval unresolved', code: block.code,
