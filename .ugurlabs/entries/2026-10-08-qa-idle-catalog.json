@@ -1,0 +1,5 @@
+{
+  "title": "Keep application testing moving during download retries",
+  "summary": "The QA pipeline can test other eligible catalog applications while temporarily unavailable installers wait for their scheduled retry. Existing workload priorities and safety checks remain in place.",
+  "type": "fixed"
+}
