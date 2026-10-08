@@ -38,7 +38,7 @@ export interface CuratedAppDefinition {
   /** Reviewed reason that an unsigned installer is acceptable. Required exactly when allowUnsigned is true. */
   unsignedExceptionReason?: string;
   releaseSource: string;
-  discovery: 'github' | 'github-channel' | 'chrome' | 'firefox' | 'firefox-stable' | 'zoom' | 'aws-cli' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'teamviewer' | 'python' | 'winrar' | 'node-lts' | 'wireshark' | 'manual';
+  discovery: 'github' | 'github-channel' | 'chrome' | 'firefox' | 'firefox-stable' | 'zoom' | 'aws-cli' | 'vscode' | 'vlc' | 'winscp' | 'putty' | 'adobe' | 'teamviewer' | 'python' | 'winrar' | 'node-lts' | 'wireshark' | 'golang' | 'libreoffice' | 'thunderbird' | 'manual';
   assetPattern?: string;
   releaseTagPrefix?: string;
   releaseVersionPattern?: string;
