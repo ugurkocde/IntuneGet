@@ -31,7 +31,7 @@ export interface CuratedAppDefinition {
   architecture: CuratedArchitecture;
   scope: 'machine';
   locale: string;
-  installerType: 'msi' | 'exe' | 'inno' | 'nullsoft';
+  installerType: 'msi' | 'exe' | 'inno' | 'nullsoft' | 'burn';
   silentArgs: string;
   signaturePublishers: string[];
   allowUnsigned: boolean;

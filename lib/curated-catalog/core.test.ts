@@ -7,6 +7,11 @@ import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVer
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
+  it('accepts reviewed Burn bundles and rejects unknown installer engines', () => {
+    const app = CURATED_APPS.find(item => item.id === 'python-314')!;
+    expect(validateDefinitions([{ ...app, installerType: 'burn' }])).toHaveLength(1);
+    expect(() => validateDefinitions([{ ...app, installerType: 'unknown' }])).toThrow(/unattended installer contract/);
+  });
   it('opts Python into its reviewed LocalSystem bundle registration without changing machine install identity', () => {
     const app = CURATED_APPS.find(item => item.id === 'python-314')!;
     expect(app.installedIdentity).toMatchObject({ registrationScope: 'machine-and-localsystem-user', versionFormat: 'python-msi' });

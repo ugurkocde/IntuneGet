@@ -567,7 +567,7 @@
     "architecture": "x64",
     "scope": "machine",
     "locale": "en-US",
-    "installerType": "exe",
+    "installerType": "burn",
     "silentArgs": "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=0",
     "signaturePublishers": ["Python Software Foundation"],
     "allowUnsigned": false,
