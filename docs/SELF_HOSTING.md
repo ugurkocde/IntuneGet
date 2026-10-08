@@ -45,6 +45,23 @@ docker-compose up -d
 
 The application will be available at `http://localhost:3000`.
 
+#### SQLite storage in Docker
+
+With `DATABASE_MODE=sqlite`, the supplied Compose configuration stores the
+database at `/data/intuneget.db` in the `intuneget-data` named volume. The image
+prepares `/data` for the application's nonroot user, UID and GID 1001. Docker
+copies that ownership into a new or empty named volume when the container is
+created, allowing the first health check to initialize SQLite.
+
+Rebuilding and recreating the container preserves the named volume and its
+database. The image does not change ownership of existing data at startup.
+Nonempty volumes retain their existing permissions; bind mounts use the host
+directory's permissions and must allow UID 1001 to write. A custom container
+user or `volume-nocopy` requires matching storage permissions.
+
+For a manual `docker run`, set `DATABASE_PATH=/data/intuneget.db` and mount your
+persistent volume at `/data` to use the same prepared directory.
+
 > **Note on environment variables and Docker**: The Docker image is built without
 > any `NEXT_PUBLIC_*` environment variables baked in. Instead, these values are
 > injected at runtime when the container starts. This means you only need to
