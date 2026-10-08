@@ -108,6 +108,13 @@ describe('actual SQLite image probe with command adapters', () => {
 
 describe('release gates', () => {
   const jobs = parse(readFileSync('.github/workflows/release.yml', 'utf8')).jobs
+  it('qualifies the old database upgrade with the actual candidate image before tagging', () => {
+    const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8')).jobs
+    const upgrade = ci.docker.steps.find((step: { name: string }) => step.name === 'Verify v0.7.1 SQLite upgrade and preserved completed job')
+    expect(upgrade.run).toContain('ghcr.io/ugurkocde/intuneget:0.7.1')
+    expect(upgrade.run).toContain('docker pull "$baseline"')
+    expect(upgrade.run).toContain('bash scripts/ci/verify-docker-sqlite.sh intuneget:test "$baseline"')
+  })
   it('verifies both native architectures before scanning and signing the exact digest', () => {
     expect(jobs.verify.strategy.matrix.include.map((row: { platform: string }) => row.platform)).toEqual(['linux/amd64', 'linux/arm64'])
     expect(jobs.secure.needs).toContain('verify')

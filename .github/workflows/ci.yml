@@ -209,3 +209,14 @@ jobs:
       - name: Verify SQLite volume initialization and persistence
         shell: bash
         run: bash scripts/ci/verify-docker-sqlite.sh intuneget:test
+
+      - name: Verify v0.7.1 SQLite upgrade and preserved completed job
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline_digest=$(docker buildx imagetools inspect ghcr.io/ugurkocde/intuneget:0.7.1 \
+            --format '{{json .Manifest}}' | jq -er '.digest')
+          [[ "$baseline_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          baseline="ghcr.io/ugurkocde/intuneget@$baseline_digest"
+          docker pull "$baseline"
+          bash scripts/ci/verify-docker-sqlite.sh intuneget:test "$baseline"
