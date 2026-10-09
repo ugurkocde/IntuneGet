@@ -102,6 +102,41 @@ describe('local registry verification regexes', () => {
       })));
     });
 
+    it.runIf(available)(`selects only the exact version-suffixed delta on ${shell}`, () => {
+      const slice = (from: string, to: string) => {
+        const start = block.indexOf(from);
+        const end = block.indexOf(to, start);
+        expect(start).toBeGreaterThan(-1);
+        expect(end).toBeGreaterThan(start);
+        return block.slice(start, end);
+      };
+      const identity = slice('$configuredUninstallComparableName = ((', '$configuredLocaleSuffixPattern = ');
+      const branchEnd = block.indexOf('\n', block.indexOf('if ($versionSuffixedMatches.Count -eq 1)'));
+      const branch = block.slice(block.indexOf('$versionSuffixedMatches = @('), branchEnd);
+      const app = (Id: string, DisplayName: string, DisplayVersion: string) => ({ Id, DisplayName, DisplayVersion });
+      const scenarios = [
+        { apps: [app('match', 'Example Runtime 10.0.12 (x64)', '10.0.12'), app('helper', 'Example Runtime Helper', '10.0.12')], selected: 'match' },
+        { apps: [app('wrong-version', 'Example Runtime 10.0.12', '10.0.11')], selected: '' },
+        { apps: [app('wrong-name', 'Example Runtime 10.0.11', '10.0.12')], selected: '' },
+        { apps: [app('a', 'Example Runtime 10.0.12', '10.0.12'), app('b', 'Example Runtime  10.0.12 (x86)', '10.0.12')], selected: '' },
+      ];
+      const script = `$ErrorActionPreference = 'Stop'
+        $configuredUninstallDisplayName = '${job.display_name}'
+        $adtSession = [pscustomobject]@{ AppVersion = '${job.version}' }
+        ${identity}
+        $scenarios = '${JSON.stringify(scenarios)}' | ConvertFrom-Json
+        $results = @(foreach ($scenario in $scenarios) {
+          $changedApplications = @($scenario.apps)
+          $selectedApplications = @()
+          ${branch}
+          (@($selectedApplications | ForEach-Object { $_.Id }) -join ',')
+        })
+        ConvertTo-Json -InputObject $results -Compress`;
+      const result = runPureScript(shell, script);
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout.trim())).toEqual(scenarios.map(item => item.selected));
+    });
+
     it.runIf(available)(`parses the complete generated deployment script on ${shell}`, () => {
       const deployment = generator.generateDeployScript(job, 'runtime.exe');
       const script = `$tokens = $null; $errors = $null
