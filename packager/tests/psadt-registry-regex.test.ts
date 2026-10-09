@@ -57,7 +57,7 @@ describe('local registry verification regexes', () => {
       if (ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)
         || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
         const raw = node.getText(file);
-        if (/(?<!\\)(?:\\\\)*\\[()sSdDwWbB]/.test(raw)) {
+        if (/(?<!\\)(?:\\\\)*\\(?:[()sSdDwWbB.{}$|]|\[|\])/.test(raw)) {
           violations.push(`line ${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`);
         }
       }
