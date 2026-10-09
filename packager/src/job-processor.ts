@@ -868,6 +868,62 @@ catch
   }
 
   /**
+   * An install override that starts with the packaged installer file is the
+   * generated install command with edited arguments, for example
+   *   "setup.exe" /s REBOOT=0 EXTRA=1
+   * Returns those arguments so the installer runs through the same native
+   * Start-ADTProcess path as the generated command, or null when the override
+   * must run verbatim through cmd.exe, including any override that uses the
+   * cmd.exe operators & | < >.
+   */
+  private getPackagedInstallerOverrideArguments(
+    job: PackagingJob,
+    fileName: string,
+    installOverride: string
+  ): string | null {
+    if (
+      !['exe', 'inno', 'nullsoft', 'burn'].includes(job.installer_type.toLowerCase()) ||
+      ['.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip'].includes(path.extname(fileName).toLowerCase()) ||
+      /[\x00-\x1F\x7F\u2018-\u201B&|<>]/.test(installOverride)
+    ) {
+      return null;
+    }
+    const invocation = /^(?:"([^"]+)"|([^\s"]+))\s+(\S.*)$/.exec(installOverride);
+    if (!invocation) {
+      return null;
+    }
+    const overrideFile = (invocation[1] ?? invocation[2]).replace(/^\.[\\/]/, '').toLowerCase();
+    const packagedNames = [fileName, this.getDisplayedInstallerFileName(job)]
+      .filter((name): name is string => Boolean(name))
+      .map((name) => name.toLowerCase());
+    if (!packagedNames.includes(overrideFile)) {
+      return null;
+    }
+    return invocation[3].trim();
+  }
+
+  /**
+   * The installer file name IntuneGet shows in the generated install command
+   * (lib/installer-filename.ts). It differs from the downloaded file name when
+   * the URL has no file extension, for example .../download/AutoDL?BundleId=1,
+   * shown as AutoDL.exe but stored here as installer.exe.
+   */
+  private getDisplayedInstallerFileName(job: PackagingJob): string | null {
+    try {
+      const rawFileName = new URL(job.installer_url).pathname.split('/').pop();
+      const displayed = rawFileName ? decodeURIComponent(rawFileName).trim() : '';
+      if (!displayed) {
+        return null;
+      }
+      return /\.(?:exe|msi|msix|msixbundle|appx|appxbundle|zip)$/i.test(displayed)
+        ? displayed
+        : `${displayed}.exe`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Read the bounded, declarative arguments supplied by a reviewed application
    * adapter. These are appended only to the exact captured vendor uninstaller.
    */
@@ -1335,14 +1391,23 @@ ${steps}
    * A custom install command override from psadtConfig takes precedence
    */
   private getInstallCommand(job: PackagingJob, fileName: string, silentSwitches: string): string {
-    const installOverride = this.getCommandOverride(job, 'installCommand');
-    if (installOverride) {
-      const overrideEscaped = installOverride.replace(/'/g, "''");
-      return `Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\cmd.exe" -ArgumentList '/c ${overrideEscaped}' -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden`;
-    }
-
     const installerType = job.installer_type;
     const ext = path.extname(fileName).toLowerCase();
+
+    const installOverride = this.getCommandOverride(job, 'installCommand');
+    if (installOverride) {
+      const overrideArguments = this.getPackagedInstallerOverrideArguments(job, fileName, installOverride);
+      if (overrideArguments === null) {
+        // PowerShell also ends a single-quoted string at the typographic quotes
+        // U+2018 to U+201B. /s with one outer quote pair makes cmd.exe run the
+        // override exactly as written instead of stripping its first and last quote.
+        const overrideEscaped = installOverride
+          .replace(/[\r\n]+/g, ' ')
+          .replace(/['\u2018-\u201B]/g, '$&$&');
+        return `Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\cmd.exe" -ArgumentList '/s /c "${overrideEscaped}"' -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden`;
+      }
+      silentSwitches = overrideArguments.replace(/'/g, "''");
+    }
 
     if (ext === '.msi' || installerType === 'msi' || installerType === 'wix') {
       const msiProperties = this.extractMsiProperties(silentSwitches);
