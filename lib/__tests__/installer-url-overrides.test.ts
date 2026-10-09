@@ -52,6 +52,20 @@ describe('applyInstallerUrlOverride', () => {
     )).toBe(original);
   });
 
+  it.each(['5.2.1', '5.2.2'])('routes the affected Blender %s x64 source to the official mirror', (version) => {
+    const original = `https://download.blender.org/release/Blender5.2/blender-${version}-windows-x64.msi`;
+    expect(applyInstallerUrlOverride('BlenderFoundation.Blender', version, 'x64', original))
+      .toBe(`https://mirror.blender.org/release/Blender5.2/blender-${version}-windows-x64.msi`);
+  });
+
+  it.each([
+    ['5.2.2', 'arm64'], ['5.2.2', 'x86'], ['5.2', 'x64'],
+    ['5.2.2-beta', 'x64'], ['5.3.0', 'x64'],
+  ])('keeps the manifest source for an unreviewed Blender tuple %s %s', (version, architecture) => {
+    const original = 'https://download.blender.org/unreviewed-installer.msi';
+    expect(applyInstallerUrlOverride('BlenderFoundation.Blender', version, architecture, original)).toBe(original);
+  });
+
   it('routes the affected ImageGlass x64 release to its renamed official asset', () => {
     const url = applyInstallerUrlOverride(
       'DuongDieuPhap.ImageGlass',
