@@ -129,6 +129,29 @@ export interface CuratedLicenceAttestationRecord {
 
 export type CuratedLicenceAttestationInput = Omit<CuratedLicenceAttestationRecord, 'id' | 'accepted_at'>;
 
+export type ClaimedAppStatus = 'pending' | 'deploying' | 'deployed' | 'failed';
+
+/**
+ * A discovered app a user claimed for deployment, one per tenant and app
+ */
+export interface ClaimedAppRecord {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  discovered_app_id: string;
+  discovered_app_name: string;
+  winget_package_id: string;
+  intune_app_id: string | null;
+  device_count_at_claim: number | null;
+  claimed_at: string;
+  status: ClaimedAppStatus;
+}
+
+export type ClaimedAppInput = Pick<
+  ClaimedAppRecord,
+  'user_id' | 'tenant_id' | 'discovered_app_id' | 'discovered_app_name' | 'winget_package_id' | 'device_count_at_claim'
+>;
+
 /**
  * Upload history record
  */
@@ -375,5 +398,27 @@ export interface DatabaseAdapter {
      * agreement version is returned unchanged.
      */
     accept(record: CuratedLicenceAttestationInput): Promise<CuratedLicenceAttestationRecord>;
+  };
+
+  claimedApps: {
+    /**
+     * Record a claim. Claiming an app again in the same tenant resets the
+     * existing claim to pending for the new claimant.
+     */
+    upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord>;
+
+    /**
+     * Every claim recorded for a tenant, newest first
+     */
+    listByTenant(tenantId: string): Promise<ClaimedAppRecord[]>;
+
+    /**
+     * Update a claim in the tenant. Returns null when no row matched.
+     */
+    update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null>;
   };
 }

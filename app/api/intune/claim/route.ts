@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { getDatabase, isSqliteMode } from '@/lib/db';
+import type { ClaimedAppRecord } from '@/lib/db';
 import type { ClaimAppRequest, ClaimedApp } from '@/types/unmanaged';
 import type { Database } from '@/types/database';
 
@@ -15,6 +17,33 @@ type ClaimedAppRow = Database['public']['Tables']['claimed_apps']['Row'];
 type ClaimedAppInsert = Database['public']['Tables']['claimed_apps']['Insert'];
 type ClaimedAppUpdate = Database['public']['Tables']['claimed_apps']['Update'];
 type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert'];
+
+const CLAIM_STATUSES: ReadonlyArray<ClaimedApp['status']> = ['pending', 'deploying', 'deployed', 'failed'];
+
+function formatClaim(claim: ClaimedAppRecord): ClaimedApp {
+  return {
+    id: claim.id,
+    userId: claim.user_id,
+    tenantId: claim.tenant_id,
+    discoveredAppId: claim.discovered_app_id,
+    discoveredAppName: claim.discovered_app_name,
+    wingetPackageId: claim.winget_package_id,
+    intuneAppId: claim.intune_app_id,
+    deviceCountAtClaim: claim.device_count_at_claim,
+    claimedAt: claim.claimed_at,
+    status: claim.status,
+  };
+}
+
+/**
+ * Claims are stored in Supabase when it is configured. A SQLite self hosted
+ * deployment without Supabase stores them in its own database for the
+ * signed in tenant; any other deployment without Supabase cannot store them.
+ */
+function claimStorage(): 'supabase' | 'sqlite' | null {
+  if (isSupabaseServerConfigured()) return 'supabase';
+  return isSqliteMode() ? 'sqlite' : null;
+}
 
 /**
  * Ensure user profile exists in the database
@@ -57,7 +86,8 @@ async function ensureUserProfile(
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!isSupabaseServerConfigured()) {
+    const storage = claimStorage();
+    if (!storage) {
       return NextResponse.json({ error: 'App claims require hosted services' }, { status: 503 });
     }
     const user = await parseAccessToken(request.headers.get('Authorization'));
@@ -75,6 +105,18 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields' },
         { status: 400 }
       );
+    }
+
+    if (storage === 'sqlite') {
+      const claim = await getDatabase().claimedApps.upsert({
+        user_id: user.userId,
+        tenant_id: user.tenantId,
+        discovered_app_id: body.discoveredAppId,
+        discovered_app_name: body.discoveredAppName,
+        winget_package_id: body.wingetPackageId,
+        device_count_at_claim: body.deviceCount || 0,
+      });
+      return NextResponse.json({ claim: formatClaim(claim) }, { status: 201 });
     }
 
     const supabase = createServerClient();
@@ -178,7 +220,8 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!isSupabaseServerConfigured()) {
+    const storage = claimStorage();
+    if (!storage) {
       return NextResponse.json({ claims: [] });
     }
     const user = await parseAccessToken(request.headers.get('Authorization'));
@@ -187,6 +230,11 @@ export async function GET(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 }
       );
+    }
+
+    if (storage === 'sqlite') {
+      const claims = await getDatabase().claimedApps.listByTenant(user.tenantId);
+      return NextResponse.json({ claims: claims.map(formatClaim) });
     }
 
     const supabase = createServerClient();
@@ -245,7 +293,8 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    if (!isSupabaseServerConfigured()) {
+    const storage = claimStorage();
+    if (!storage) {
       return NextResponse.json({ error: 'App claims require hosted services' }, { status: 503 });
     }
     const user = await parseAccessToken(request.headers.get('Authorization'));
@@ -264,6 +313,20 @@ export async function PATCH(request: NextRequest) {
         { error: 'Missing claim ID' },
         { status: 400 }
       );
+    }
+
+    if (storage === 'sqlite') {
+      if (status && !CLAIM_STATUSES.includes(status)) {
+        return NextResponse.json({ error: 'Invalid claim status' }, { status: 400 });
+      }
+      const claim = await getDatabase().claimedApps.update(claimId, user.tenantId, {
+        ...(status ? { status } : {}),
+        ...(intuneAppId ? { intune_app_id: intuneAppId } : {}),
+      });
+      if (!claim) {
+        return NextResponse.json({ error: 'Failed to update claim' }, { status: 500 });
+      }
+      return NextResponse.json({ claim: formatClaim(claim) });
     }
 
     const supabase = createServerClient();
