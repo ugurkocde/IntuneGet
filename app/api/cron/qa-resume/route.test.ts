@@ -100,6 +100,87 @@ describe('GET /api/cron/qa-resume', () => {
     }));
   });
 
+  it.each([1, 2, 3].flatMap((jobCount) => [true, false].flatMap((localPackager) =>
+    [true, false].flatMap((isAutoUpdate) => [true, false].map((continuity) =>
+      ({ jobCount, localPackager, isAutoUpdate, continuity }))))))(
+    'keeps pending publication waiting: %j',
+    async ({ jobCount, localPackager, isAutoUpdate, continuity }) => {
+    getFeatureFlagsMock.mockReturnValue({ localPackager });
+    if (continuity) process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(Date.now() + 60_000).toISOString();
+    const jobs = Array.from({ length: jobCount }, (_, index) => ({
+      id: `publication-job-${index}`,
+      status: 'awaiting_qa',
+      is_auto_update: isAutoUpdate,
+      qa_candidate_id: 'candidate-publication-pending',
+      execution_profile_sha256: 'A'.repeat(64),
+      installer_sha256: 'B'.repeat(64),
+      architecture: 'x64',
+      created_at: '2026-10-09T08:00:00Z',
+      package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64' },
+    }));
+    const updates = chain({ data: { id: 'publication-job' }, error: null });
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') {
+        return ++reads === 1 ? chain({ data: jobs, error: null }) : updates;
+      }
+      if (table === 'qa_candidates') return chain({
+        data: {
+          id: 'candidate-publication-pending', status: 'error', phase: 'publishing',
+          github_run_id: '123456789',
+          failure_summary: 'The workflow finished but required result publication did not complete.',
+          package_profile_sha256: 'A'.repeat(64),
+        },
+        error: null,
+      });
+      throw new Error(`Unexpected table ${table}`);
+    }) });
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    expect.soft(await response.json()).toEqual({ success: true, scanned: jobCount, resumed: 0, failed: 0, waiting: jobCount });
+    expect.soft(updates.update).not.toHaveBeenCalled();
+    expect.soft(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(assertCuratedLicenceAcceptedMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { status: 'error', phase: 'publishing', run: null, quarantined: false },
+    { status: 'error', phase: 'installing', run: '123456789', quarantined: false },
+    { status: 'error', phase: 'verifying', run: '123456789', quarantined: false },
+    { status: 'error', phase: null, run: '123456789', quarantined: false },
+    { status: 'failed', phase: 'publishing', run: '123456789', quarantined: false },
+    { status: 'error', phase: 'publishing', run: '123456789', quarantined: true },
+  ])('preserves actual failure and quarantine handling: %j', async ({ status, phase, run, quarantined }) => {
+    const job = {
+      id: 'failure-job', status: 'awaiting_qa', qa_candidate_id: 'failure-candidate',
+      installer_sha256: 'B'.repeat(64), architecture: 'x64',
+      package_config: { installerSha256: 'B'.repeat(64), architecture: 'x64' },
+    };
+    const updates = chain({ data: { id: job.id }, error: null });
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1 ? chain({ data: [job], error: null }) : updates;
+      if (table === 'qa_candidates') return chain({ data: {
+        id: 'failure-candidate', status, phase, github_run_id: run,
+        failure_summary: 'Required verification failed', package_profile_sha256: 'A'.repeat(64),
+      }, error: null });
+      throw new Error(`Unexpected table ${table}`);
+    }) });
+    if (quarantined) getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'failed_managed_lifecycle' });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: 1, waiting: 0 });
+    expect(updates.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'qa_failed', error_code: quarantined ? 'QA_PACKAGE_COMPATIBILITY_BLOCKED' : 'QA_FAILED_EXECUTION_PROFILE',
+    }));
+    expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledTimes(1);
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it.each([true, false].flatMap((localPackager) => [
     'installer_sha256', 'architecture', 'qa_candidate_id',
     'package_config->>installerSha256', 'package_config->>architecture', 'unchanged',

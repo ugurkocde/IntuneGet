@@ -55,13 +55,15 @@ export async function GET(request: Request) {
     let candidate: {
       id: string;
       status: string;
+      phase: string | null;
+      github_run_id: string | null;
       failure_summary: string | null;
       package_profile_sha256: string | null;
     } | null = null;
     if (job.qa_candidate_id && !skipCustomerQa) {
       const { data, error: candidateError } = await supabase
         .from('qa_candidates')
-        .select('id, status, failure_summary, package_profile_sha256')
+        .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
         .eq('id', job.qa_candidate_id)
         .maybeSingle();
       if (candidateError) throw candidateError;
@@ -210,6 +212,15 @@ export async function GET(request: Request) {
         failed++;
         await handleAutoUpdateJobCompletion(job.id, 'failed', PACKAGE_VERSION_UNAVAILABLE_MESSAGE);
       }
+      continue;
+    }
+
+    // A completed VM run may still be awaiting result publication. Keep its
+    // customer jobs waiting for normal QA reconciliation, including during
+    // continuity, without treating publication failure as installer failure.
+    if (!skipCustomerQa && candidateStatus === 'error' &&
+        candidate?.phase === 'publishing' && candidate.github_run_id) {
+      waiting++;
       continue;
     }
 
