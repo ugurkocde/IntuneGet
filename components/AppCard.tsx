@@ -9,6 +9,7 @@ import type { NormalizedPackage } from '@/types/winget';
 import { cleanPackageName } from '@/lib/locale-utils';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { TenantDeploymentBadge } from '@/components/TenantDeploymentBadge';
 import { QaBadge } from '@/components/qa/QaBadge';
 import type { QaStatus } from '@/types/qa';
 import { CuratedReleaseBadge } from '@/components/CuratedReleaseBadge';
@@ -38,6 +39,7 @@ interface AppCardProps {
   package: NormalizedPackage;
   onSelect?: (pkg: NormalizedPackage) => void;
   isDeployed?: boolean;
+  tenantDeployedBy?: string | null;
   isBulkSelectMode?: boolean;
   isBulkSelected?: boolean;
   onBulkToggle?: (pkg: NormalizedPackage) => void;
@@ -45,7 +47,7 @@ interface AppCardProps {
   curatedAppId?: string;
 }
 
-function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus, curatedAppId }: AppCardProps) {
+function AppCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus, curatedAppId }: AppCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -195,6 +197,8 @@ function AppCardComponent({ package: pkg, onSelect, isDeployed = false, isBulkSe
             )}
           </div>
 
+          <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
+
           {isDeployed ? (
             <Button
               size="sm"
@@ -241,6 +245,7 @@ export const AppCard = memo(AppCardComponent, (prevProps, nextProps) => {
   return prevProps.package.id === nextProps.package.id &&
          prevProps.package.version === nextProps.package.version &&
          prevProps.isDeployed === nextProps.isDeployed &&
+         prevProps.tenantDeployedBy === nextProps.tenantDeployedBy &&
          prevProps.isBulkSelectMode === nextProps.isBulkSelectMode &&
          prevProps.isBulkSelected === nextProps.isBulkSelected &&
          prevProps.curatedAppId === nextProps.curatedAppId &&
