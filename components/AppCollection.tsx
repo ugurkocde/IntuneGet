@@ -10,6 +10,7 @@ import { cleanPackageName } from '@/lib/locale-utils';
 import { usePackagesByCategory } from '@/hooks/use-packages';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { TenantDeploymentBadge } from '@/components/TenantDeploymentBadge';
 import { cn } from '@/lib/utils';
 import { getCategoryLabel } from '@/lib/category-utils';
 
@@ -32,9 +33,10 @@ interface AppCollectionProps {
   onSelect?: (pkg: NormalizedPackage) => void;
   onSeeAll?: (category: string) => void;
   deployedSet?: Set<string>;
+  tenantDeployments?: Map<string, string | null>;
 }
 
-export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: AppCollectionProps) {
+export function AppCollection({ category, onSelect, onSeeAll, deployedSet, tenantDeployments }: AppCollectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -138,6 +140,7 @@ export function AppCollection({ category, onSelect, onSeeAll, deployedSet }: App
               package={pkg}
               onSelect={onSelect}
               isDeployed={deployedSet?.has(pkg.id)}
+              tenantDeployedBy={tenantDeployments?.get(pkg.id)}
             />
           ))}
 
@@ -178,9 +181,10 @@ interface CollectionCardProps {
   package: NormalizedPackage;
   onSelect?: (pkg: NormalizedPackage) => void;
   isDeployed?: boolean;
+  tenantDeployedBy?: string | null;
 }
 
-function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false }: CollectionCardProps) {
+function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy }: CollectionCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -237,6 +241,7 @@ function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false }:
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-overlay/10">
         <span className="text-xs text-text-muted">v{pkg.version}</span>
+        <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
         {isDeployed ? (
           <Button
             size="sm"
@@ -279,5 +284,6 @@ function CollectionCardComponent({ package: pkg, onSelect, isDeployed = false }:
 const CollectionCard = memo(CollectionCardComponent, (prev, next) =>
   prev.package.id === next.package.id &&
   prev.package.version === next.package.version &&
-  prev.isDeployed === next.isDeployed
+  prev.isDeployed === next.isDeployed &&
+  prev.tenantDeployedBy === next.tenantDeployedBy
 );
