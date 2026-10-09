@@ -28,9 +28,12 @@ export function validateCustomDetectionRules(rules: unknown): { valid: boolean; 
     if (r.type === 'registry' && !nonempty(r.keyPath)) fail('Enter a registry key path.');
     if (r.valueName !== undefined && typeof r.valueName !== 'string') fail('Invalid registry value name.');
     if (r.check32BitOn64System !== undefined && typeof r.check32BitOn64System !== 'boolean') fail('Invalid architecture setting.');
-    const types = r.type === 'file' ? ['exists', 'notExists', 'version', 'dateModified', 'dateCreated', 'string', 'sizeInMB'] : ['exists', 'notExists', 'string', 'integer', 'version'];
+    const types = r.type === 'file' ? ['exists', 'notExists', 'version', 'sizeInMB'] : ['exists', 'notExists', 'string', 'integer', 'version'];
     if (!types.includes(String(r.detectionType))) fail('Select a supported detection type.');
     else if (!['exists', 'notExists'].includes(String(r.detectionType)) && (!operators.has(String(r.operator)) || !nonempty(r.detectionValue))) fail('Select an operator and comparison value.');
+    else if (r.detectionType === 'integer' && !/^-?\d+$/.test(String(r.detectionValue))) fail('Enter a whole number.');
+    else if (r.detectionType === 'sizeInMB' && !/^\d+$/.test(String(r.detectionValue))) fail('Enter a nonnegative whole number of MiB.');
+    else if (r.detectionType === 'version' && !/^\d+(\.\d+){1,3}$/.test(String(r.detectionValue))) fail('Enter a version such as 1.2.3.');
   });
   return { valid: errors.length === 0, errors };
 }

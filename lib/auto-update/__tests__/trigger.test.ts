@@ -699,6 +699,28 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
   });
 
   describe('ensurePsadtConfig', () => {
+    it('holds custom rules introduced by the legacy packaging job backfill before QA or dispatch', async () => {
+      const updateSpy = vi.fn();
+      const insertSpy = vi.fn();
+      const psadtConfig = { ...DEFAULT_PSADT_CONFIG, customDetection: true };
+      const supabase = createSupabaseMock({
+        upload_history: { maybeSingleResult: { data: { packaging_job_id: 'job-1' }, error: null } },
+        packaging_jobs: { maybeSingleResult: { data: { package_config: { psadtConfig } }, error: null }, insertSpy },
+        app_update_policies: { updateSpy },
+      });
+      const trigger = makeTrigger(supabase);
+      vi.spyOn(trigger as never, 'verifyTenantConsent').mockResolvedValue(true as never);
+      const createJob = vi.spyOn(trigger as never, 'createPackagingJob');
+      const policy = makePolicy({ displayName: 'Test App' });
+      policy.consecutive_failures = 0;
+      const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+      expect(result).toEqual({ success: false, skipped: true, skipReason: 'Custom detection rules are fixed. Deploy 2.0.0 from the catalog with updated rules.' });
+      expect(policy.deployment_config.psadtConfig).toEqual(psadtConfig);
+      expect(updateSpy).toHaveBeenCalledWith({ deployment_config: policy.deployment_config });
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(insertSpy).not.toHaveBeenCalled();
+      expect(createJob).not.toHaveBeenCalled();
+    });
     it('backfills psadtConfig from the most recent packaging job and persists it', async () => {
       const updateSpy = vi.fn();
       const supabase = createSupabaseMock({

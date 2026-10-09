@@ -428,6 +428,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     );
     setConfig((prev) => {
       if (prev.customDetection !== true) return { ...prev, detectionRules: rules };
+      lastCustomRulesRef.current = prev.detectionRules;
       const { customDetection: _customDetection, ...rest } = prev;
       return { ...rest, detectionRules: rules };
     });

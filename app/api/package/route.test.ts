@@ -433,7 +433,10 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
-  it.each([[], [{type:'script',scriptContent:'exit 0'}], [{type:'file',path:'',fileOrFolderName:'app.exe',detectionType:'exists'}]])('rejects invalid opted in detection before preflight and job creation', async rules => {
+  it.each([[], [{type:'script',scriptContent:'exit 0'}], [{type:'file',path:'',fileOrFolderName:'app.exe',detectionType:'exists'}],
+    [{type:'file',path:'C:\\Example',fileOrFolderName:'app.exe',detectionType:'dateModified',operator:'equal',detectionValue:'2026-10-09'}],
+    [{type:'registry',keyPath:'HKEY_LOCAL_MACHINE\\Software\\Example',detectionType:'integer',operator:'equal',detectionValue:'abc'}],
+  ])('rejects invalid opted in detection before preflight and job creation', async rules => {
     const response = await POST(new NextRequest('http://localhost:3000/api/package', {
       method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
       body: JSON.stringify({items:[makeWin32Item({psadtConfig:{customDetection:true},detectionRules:rules})]}),

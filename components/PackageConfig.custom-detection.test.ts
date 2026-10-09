@@ -228,6 +228,23 @@ describe('custom detection rules', () => {
     expect(item?.psadtConfig.customDetection).toBe(true);
   });
 
+  it('remembers authored rules after switching through an unsupported installer', async () => {
+    await render();
+    await click(customToggle());
+    const keyPath = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Contoso\\Example';
+    await setValue(field('Rule 1 key path'), keyPath);
+    await render({ installers: [{ ...installer, type: 'msix' }] });
+    expect(customToggle()).toBeUndefined();
+    await render();
+    expect(customToggle()?.getAttribute('aria-checked')).toBe('false');
+    await click(customToggle());
+    expect(field('Rule 1 key path').value).toBe(keyPath);
+    const item = await save();
+    expect(item?.psadtConfig.customDetection).toBe(true);
+    expect(item?.detectionRules).toEqual([{ type: 'registry', keyPath, detectionType: 'exists', check32BitOn64System: false }]);
+    expect(item?.psadtConfig.detectionRules).toEqual(item?.detectionRules);
+  });
+
   it.each([
     ['MSIX', { installers: [{ ...installer, type: 'msix' }] }],
     ['APPX', { installers: [{ ...installer, type: 'appx' }] }],

@@ -249,6 +249,9 @@ export class AutoUpdateTrigger {
       // Backfill PSADT settings from the original deployment for policies
       // created before psadtConfig was stored on deployment_config
       await this.ensurePsadtConfig(policy);
+      if (policy.deployment_config.psadtConfig?.customDetection) {
+        return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
+      }
 
       // Policies created by older IntuneGet releases can contain generated
       // defaults that were never valid at runtime (for example an MSI

@@ -2,6 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { canUseCustomDetection, validateCustomDetectionRules } from './custom-detection';
 
 describe('explicit custom detection contract', () => {
+  it.each(['string', 'dateModified', 'dateCreated'])('rejects unsupported file comparison %s', detectionType => {
+    expect(validateCustomDetectionRules([{ type: 'file', path: 'C:\\Example', fileOrFolderName: 'app.exe', detectionType, operator: 'equal', detectionValue: '2026-10-09' }]).valid).toBe(false);
+  });
+  it.each([
+    ['integer', '1.5'], ['integer', 'abc'], ['integer', ' 5'],
+    ['sizeInMB', '-1'], ['sizeInMB', '1.5'], ['sizeInMB', 'ten'],
+    ['version', '1'], ['version', '1.2.x'], ['version', 'v1.2'], ['version', '1.2.3.4.5'],
+  ])('rejects invalid %s value %s', (detectionType, detectionValue) => {
+    const rule = detectionType === 'sizeInMB'
+      ? { type: 'file', path: 'C:\\Example', fileOrFolderName: 'app.exe', detectionType, detectionValue, operator: 'equal' }
+      : { type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Example', detectionType, detectionValue, operator: 'equal' };
+    expect(validateCustomDetectionRules([rule]).valid).toBe(false);
+  });
+  it.each([
+    ['integer', '0'], ['integer', '-1'], ['sizeInMB', '10'], ['version', '1.2'], ['version', '1.2.3.4'], ['string', 'any text'],
+  ])('accepts valid %s value %s without rewriting it', (detectionType, detectionValue) => {
+    const rule = detectionType === 'sizeInMB'
+      ? { type: 'file', path: 'C:\\Example', fileOrFolderName: 'app.exe', detectionType, detectionValue, operator: 'equal' }
+      : { type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Example', detectionType, detectionValue, operator: 'equal' };
+    const before = JSON.stringify(rule);
+    expect(validateCustomDetectionRules([rule])).toEqual({ valid: true, errors: [] });
+    expect(JSON.stringify(rule)).toBe(before);
+  });
   it.each([
     { type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\Software\\Vendor', valueName: 'Version', detectionType: 'version', operator: 'greaterThanOrEqual', detectionValue: '1.2.3' },
     { type: 'file', path: '%ProgramFiles%\\Vendor', fileOrFolderName: 'app.exe', detectionType: 'exists' },
