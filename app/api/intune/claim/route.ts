@@ -316,8 +316,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (storage === 'sqlite') {
-      if (status && !CLAIM_STATUSES.includes(status)) {
+      if (status !== undefined && !CLAIM_STATUSES.includes(status)) {
         return NextResponse.json({ error: 'Invalid claim status' }, { status: 400 });
+      }
+      if (status === undefined && !intuneAppId) {
+        return NextResponse.json({ error: 'No claim fields to update' }, { status: 400 });
       }
       const claim = await getDatabase().claimedApps.update(claimId, user.tenantId, {
         ...(status ? { status } : {}),

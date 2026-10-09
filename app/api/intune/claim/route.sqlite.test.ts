@@ -94,9 +94,11 @@ describe('app claims with the SQLite adapter', () => {
     expect((await stored()).find(row => row.id === claim.id)?.status).toBe('deployed');
   });
 
-  it('rejects an unknown claim status', async () => {
+  it('rejects an unknown claim status or an empty update', async () => {
     const { claim } = await (await POST(request('POST', claimBody()))).json();
     expect((await PATCH(request('PATCH', { claimId: claim.id, status: 'archived' }))).status).toBe(400);
+    expect((await PATCH(request('PATCH', { claimId: claim.id, status: '' }))).status).toBe(400);
+    expect((await PATCH(request('PATCH', { claimId: claim.id }))).status).toBe(400);
     expect((await stored()).find(row => row.id === claim.id)?.status).toBe('pending');
   });
 
