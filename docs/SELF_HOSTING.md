@@ -45,6 +45,23 @@ docker-compose up -d
 
 The application will be available at `http://localhost:3000`.
 
+#### SQLite storage in Docker
+
+With `DATABASE_MODE=sqlite`, the supplied Compose configuration stores the
+database at `/data/intuneget.db` in the `intuneget-data` named volume. The image
+prepares `/data` for the application's nonroot user, UID and GID 1001. Docker
+copies that ownership into a new or empty named volume when the container is
+created, allowing the first health check to initialize SQLite.
+
+Rebuilding and recreating the container preserves the named volume and its
+database. The image does not change ownership of existing data at startup.
+Nonempty volumes retain their existing permissions; bind mounts use the host
+directory's permissions and must allow UID 1001 to write. A custom container
+user or `volume-nocopy` requires matching storage permissions.
+
+For a manual `docker run`, set `DATABASE_PATH=/data/intuneget.db` and mount your
+persistent volume at `/data` to use the same prepared directory.
+
 > **Note on environment variables and Docker**: The Docker image is built without
 > any `NEXT_PUBLIC_*` environment variables baked in. Instead, these values are
 > injected at runtime when the container starts. This means you only need to
@@ -158,6 +175,22 @@ Optional catalog snapshot overrides (sensible defaults, normally unset):
 > SQLite. Other Supabase-backed surfaces (dashboard history, notifications,
 > automatic update triggering, and MSP features) still require Supabase; the
 > catalog and update policies run Supabase-less.
+
+### Notification Configuration
+
+Email preferences, webhook configurations, and notification history require
+Supabase. A deployment using only SQLite cannot store these settings. Webhook
+creation returns an explicit configuration message when Supabase is absent.
+
+To enable notifications, complete the [Supabase setup](DATABASE_SETUP.md),
+including its migrations, and configure the server environment variables
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY`. Keep the service role key on the server.
+
+For email delivery, also set `RESEND_API_KEY` and `RESEND_FROM_EMAIL`. The sender
+must use a [domain verified with your Resend account](https://resend.com/docs/dashboard/domains/introduction). Restart the deployment after
+changing its environment, then use **Settings → Notifications** to save your
+preferences and send a test email. Webhook delivery does not require Resend.
 
 ### Pipeline Configuration
 

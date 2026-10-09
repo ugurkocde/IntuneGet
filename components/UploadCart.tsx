@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AppIcon } from '@/components/AppIcon';
 import { useCartStore } from '@/stores/cart-store';
+import { describeDeploymentFailure } from '@/lib/deployment-failure-message';
 import dynamic from 'next/dynamic';
 const CartItemConfig = dynamic(() => import('@/components/CartItemConfig').then(m => m.CartItemConfig));
 const PackageConfig = dynamic(() => import('@/components/PackageConfig').then(m => m.PackageConfig));
@@ -295,7 +296,7 @@ export function UploadCart() {
       const data: PackageApiResponse = await response.json();
 
       if (!data.success || !data.jobs || data.jobs.length === 0) {
-        throw new Error(data.message || 'No jobs were created');
+        throw new Error(describeDeploymentFailure(data, items));
       }
 
       const jobCount = data.jobs.length;
@@ -583,7 +584,7 @@ export function UploadCart() {
                             .join(' ')}
                         </p>
                       )}
-                      <p className="text-status-error/70 mt-1">{error.message}</p>
+                      <p className="text-status-error/70 mt-1 whitespace-pre-line break-words">{error.message}</p>
                       {error.blockedBeforeDispatch && (
                         <p className="text-text-muted mt-2">
                           No packaging pipeline was started and no changes were made in Intune.

@@ -1,0 +1,5 @@
+{
+  "title": "Waiting deployments respect version availability",
+  "summary": "Deployments waiting for installation validation now recheck whether their exact installer version is available before packaging starts. Unavailable versions stay blocked even after a previous test passed or during a deferred validation window. A temporary availability lookup failure holds the affected job while other verified jobs can proceed.",
+  "type": "fixed"
+}

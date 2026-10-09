@@ -1811,6 +1811,20 @@ describe('QA idle catalog backfill migration contract', () => {
   });
 });
 
+describe('Retry-aware idle catalog backfill migration contract', () => {
+  const sql = readFileSync(resolve(process.cwd(),
+    'supabase/migrations/20261008080541_qa_idle_catalog_backfill_due_waiting_work.sql'), 'utf8');
+  it('yields to due or active work and preserves private execution', () => {
+    expect(sql).toContain("waiting_work.status = 'queued' and waiting_work.next_retry_at <= now()");
+    expect(sql).toContain("active_work.status in ('dispatched', 'running')");
+    expect(sql).toContain('security invoker');
+    expect(sql).toContain("set search_path = ''");
+    expect(sql).toContain('from public, anon, authenticated');
+    expect(sql).toContain('to service_role');
+    expect(sql).not.toContain('alter table');
+  });
+});
+
 describe('DesktopOK managed uninstall block migration contract', () => {
   const sql = readFileSync(
     resolve(

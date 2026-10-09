@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchQaStatuses, QA_STATUS_FRESH_MS } from '@/lib/qa/client-status-cache';
+import { qaLiveRefetchInterval } from '@/lib/qa/live-view';
 import type { CuratedQaRun, QaDetailsResponse, QaLiveResponse, QaStatus } from '@/types/qa';
 
 interface QaStatusesResponse {
@@ -88,11 +89,7 @@ export function useQaLive() {
       return response.json();
     },
     staleTime: 500,
-    refetchInterval: (query) => {
-      const phase = query.state.data?.current?.phase;
-      if (phase === 'installing' || phase === 'uninstalling') return 1_000;
-      return query.state.data?.active ? 2_000 : 10_000;
-    },
+    refetchInterval: (query) => qaLiveRefetchInterval(query.state.data),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: 'always',
   });

@@ -48,6 +48,7 @@ import {
   ManifestFetchError,
 } from '@/hooks/use-packages';
 import { useDeployedPackages } from '@/hooks/use-deployed-packages';
+import { useTenantDeployments } from '@/hooks/use-tenant-deployments';
 import { useDeployedConfig } from '@/hooks/use-deployed-config';
 import { useBulkAdd } from '@/hooks/use-bulk-add';
 import { useQaStatuses } from '@/hooks/use-qa';
@@ -237,6 +238,7 @@ export default function AppCatalogPage() {
     fetchNextPage,
   } = useInfinitePackages(20, selectedCategory, sortBy, !hasSearched);
   const { deployedSet } = useDeployedPackages();
+  const { tenantDeployments } = useTenantDeployments();
   const {
     data: deploymentIntentData,
     isLoading: isLoadingDeploymentIntent,
@@ -619,7 +621,8 @@ export default function AppCatalogPage() {
       renderItem={pkg => {
         const Item = viewMode === 'grid' ? AppCard : AppListItem;
         return <Item package={pkg} onSelect={handleSelectPackage}
-          isDeployed={deployedSet.has(pkg.id)} isBulkSelectMode={isBulkSelectMode}
+          isDeployed={deployedSet.has(pkg.id)}
+          tenantDeployedBy={tenantDeployments.get(pkg.id)} isBulkSelectMode={isBulkSelectMode}
           isBulkSelected={selectedPackageIds.has(pkg.id)} onBulkToggle={handleBulkToggle}
           qaStatus={qaStatusesData?.statuses[pkg.id] ?? null}
           curatedAppId={curatedAppIds.get(pkg.id.toLowerCase())} />;
@@ -934,6 +937,7 @@ export default function AppCatalogPage() {
                         onSelect={handleSelectPackage}
                         isLoading={isLoadingFeatured}
                         deployedSet={deployedSet}
+                        tenantDeployments={tenantDeployments}
                       />
                     </div>
 
@@ -945,6 +949,7 @@ export default function AppCatalogPage() {
                           onSelect={handleSelectPackage}
                           onSeeAll={handleSeeAll}
                           deployedSet={deployedSet}
+                        tenantDeployments={tenantDeployments}
                         />
                       ))}
                     </div>

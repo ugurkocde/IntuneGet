@@ -32,6 +32,8 @@ import {
   getQaPhasePresentation,
 } from '@/lib/qa/presentation';
 import { cn } from '@/lib/utils';
+import { qaLiveFrameSrc, qaLiveViewerKey } from '@/lib/qa/live-view';
+import { QaCuratedCurrent } from './QaCuratedCurrent';
 import type { QaLivePhase, QaLiveResponse, QaVirusTotalStatus } from '@/types/qa';
 import styles from './QaLiveClient.module.css';
 
@@ -116,6 +118,7 @@ function QaVirusTotalCell({ status }: { status: QaVirusTotalStatus | null }) {
 }
 
 function ServiceHealth({ data }: { data: QaLiveResponse }) {
+  const catalogBusyWithoutProgress = !data.current && data.vmBusy === 'catalog_verification';
   const runnerAge = formatRelativeTime(data.runner.heartbeatAt, data.serverTime);
   const pollAge = formatRelativeTime(data.scheduler.lastPollAt, data.serverTime);
   const pollIsRunning = data.scheduler.lastOutcome === 'running';
@@ -141,11 +144,11 @@ function ServiceHealth({ data }: { data: QaLiveResponse }) {
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-wide text-text-muted"><T>Runner</T></p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <StatusBadge tone={healthTone(data.runner.state)}>
-                <T>{data.runner.state === 'testing' ? 'Testing' : data.runner.state === 'stalled' ? 'Stalled' : 'Ready'}</T>
+              <StatusBadge tone={catalogBusyWithoutProgress ? 'neutral' : healthTone(data.runner.state)}>
+                <T>{catalogBusyWithoutProgress ? 'Busy' : data.runner.state === 'testing' ? 'Testing' : data.runner.state === 'stalled' ? 'Stalled' : 'Ready'}</T>
               </StatusBadge>
               <span className="text-xs text-text-muted">
-                {runnerAge ? <T>Heartbeat <Var>{runnerAge}</Var></T> : <T>No active test</T>}
+                {catalogBusyWithoutProgress ? <T>Waiting for live progress</T> : runnerAge ? <T>Heartbeat <Var>{runnerAge}</Var></T> : <T>No active test</T>}
               </span>
             </div>
           </div>
@@ -217,6 +220,14 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
   });
 
   if (!data.current) {
+    if (data.vmBusy === 'catalog_verification') {
+      return (
+        <section className="rounded-2xl border border-overlay/10 bg-bg-elevated px-5 py-4" aria-labelledby="current-test-heading">
+          <h2 id="current-test-heading" className="font-semibold text-text-primary"><T>Catalog verification is running</T></h2>
+          <p className="mt-1 text-sm text-text-secondary" role="status"><T>The test VM is in use. Live progress is not available yet.</T></p>
+        </section>
+      );
+    }
     const next = data.queue.next[0];
     if (next) {
       return (
@@ -236,9 +247,9 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
                       icon={Loader2}
                       iconClassName="animate-spin motion-reduce:animate-none"
                     >
-                      <T>Preparing next test</T>
+                      <T>Next in queue</T>
                     </StatusBadge>
-                    <span className="text-xs text-text-muted"><T>Starting automatically</T></span>
+                    <span className="text-xs text-text-muted"><T>Waiting for the runner</T></span>
                   </div>
                   <h2 id="current-test-heading" className="truncate text-xl font-semibold text-text-primary">
                     {next.displayName}
@@ -269,7 +280,7 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
               <div
                 className="relative isolate aspect-video w-full self-start rounded-xl"
-                aria-label={`Preparing the isolated QA VM for ${next.displayName}`}
+                aria-label={`Waiting for the isolated QA VM to test ${next.displayName}`}
               >
                 <span className={styles.viewerBorder} aria-hidden="true" />
                 <div className="absolute inset-0 overflow-hidden rounded-[inherit] bg-black">
@@ -280,9 +291,9 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
                       <Monitor className="h-7 w-7" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="font-medium text-white/85"><T>Preparing a clean test VM</T></p>
+                      <p className="font-medium text-white/85"><T>Waiting for the next test</T></p>
                       <p className="mt-1 max-w-md text-sm text-white/50">
-                        <T>The runner will start <Var>{next.displayName}</Var> automatically and the live preview will appear here.</T>
+                        <T>The live preview will appear here when <Var>{next.displayName}</Var> starts.</T>
                       </p>
                     </div>
                   </div>
@@ -325,6 +336,8 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
       </section>
     );
   }
+
+  if (data.current.runKind === 'curated') return <QaCuratedCurrent data={data} elapsed={elapsed.formattedTime} />;
 
   const phase = getQaPhasePresentation(data.current.phase);
   const frameState = getQaFrameState({
@@ -392,10 +405,8 @@ function CurrentTest({ data }: { data: QaLiveResponse }) {
             <span className={styles.viewerBorder} aria-hidden="true" />
             <h3 id="live-console-heading" className="sr-only"><T>Live test VM</T></h3>
             <QaVmViewer
-              key={`${data.current.wingetId}-${data.current.startedAt}`}
-              src={data.viewer.available && data.viewer.sequence != null && data.viewer.candidateId
-                ? `/api/qa/live/frame?candidate=${encodeURIComponent(data.viewer.candidateId)}&sequence=${data.viewer.sequence}`
-                : null}
+              key={qaLiveViewerKey(data)}
+              src={qaLiveFrameSrc(data)}
               appName={data.current.displayName}
               phaseLabel={phase.label}
               frameState={frameState}
