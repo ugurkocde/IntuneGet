@@ -1,0 +1,5 @@
+{
+  "title": "Clear notification setup guidance for self hosted deployments",
+  "summary": "Webhook settings now explain missing notification configuration. The self hosting guide documents the required services and email sender setup.",
+  "type": "fixed"
+}
