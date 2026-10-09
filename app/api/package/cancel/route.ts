@@ -58,17 +58,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createServerClient();
-
     // Fetch the job to verify ownership and check status
-    const { data: job, error: fetchError } = await supabase
-      .from('packaging_jobs')
-      .select('*')
-      .eq('id', jobId)
-      .single();
+    const db = getDatabase();
+    const job = await db.jobs.getById(jobId);
 
-    if (fetchError || !job) {
+    if (!job) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -98,7 +92,6 @@ export async function POST(request: NextRequest) {
           console.error('[Cancel] Auto-update cleanup error on dismiss:', err);
         });
       }
-      const db = getDatabase();
       await db.jobs.deleteById(jobId);
       return NextResponse.json({
         success: true,
@@ -107,6 +100,10 @@ export async function POST(request: NextRequest) {
         archived: true,
       });
     }
+
+    // Active cancellation still uses the hosted status-lock update below.
+    // Create its client before attempting to cancel a workflow.
+    const supabase = createServerClient();
 
     // Check if job is already cancelled or deployed (cannot be modified)
     if (typedJob.status === 'cancelled') {
