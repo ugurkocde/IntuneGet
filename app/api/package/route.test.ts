@@ -492,11 +492,13 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
-  it('preflights Blender through its official mirror while preserving manifest identity', async () => {
-    const manifestUrl =
-      'https://download.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi';
-    const mirrorUrl =
-      'https://mirror.blender.org/release/Blender4.2/blender-4.2.16-windows-x64.msi';
+  it.each([
+    ['BlenderFoundation.Blender.LTS.4.2', '4.2.16', '4.2'],
+    ['BlenderFoundation.Blender', '5.2.1', '5.2'],
+    ['BlenderFoundation.Blender', '5.2.2', '5.2'],
+  ])('preflights %s %s through its official mirror while preserving manifest identity', async (wingetId, version, release) => {
+    const manifestUrl = `https://download.blender.org/release/Blender${release}/blender-${version}-windows-x64.msi`;
+    const mirrorUrl = `https://mirror.blender.org/release/Blender${release}/blender-${version}-windows-x64.msi`;
     getLiveInstallersMock.mockResolvedValueOnce([{
       architecture: 'x64',
       url: manifestUrl,
@@ -514,9 +516,9 @@ describe('POST /api/package (workflow dispatch)', () => {
       },
       body: JSON.stringify({
         items: [makeWin32Item({
-          wingetId: 'BlenderFoundation.Blender.LTS.4.2',
-          displayName: 'Blender 4.2 LTS',
-          version: '4.2.16',
+          wingetId,
+          displayName: 'Blender',
+          version,
           installerType: 'wix',
           installerUrl: manifestUrl,
           installerSha256: 'A'.repeat(64),
@@ -530,7 +532,7 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        wingetId: 'BlenderFoundation.Blender.LTS.4.2',
+        wingetId,
         installerUrl: mirrorUrl,
         manifestInstallerUrl: manifestUrl,
         installerSha256: 'A'.repeat(64),

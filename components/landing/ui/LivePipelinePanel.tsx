@@ -300,8 +300,10 @@ export function LivePipelinePanel() {
         kindLine: `${current.wingetId} @ ${current.version} · ${formatDuration(
           (current.elapsedSeconds ?? 0) + Math.max(0, (Date.now() - receivedAtRef.current) / 1000)
         )}`,
-        activeStep: STEP_INDEX[current.phase] ?? 0,
-        activeDetail: phaseDetail[current.phase] ?? current.phase,
+        activeStep: current.runKind === "curated" ? -1 : STEP_INDEX[current.phase],
+        activeDetail: current.runKind === "curated"
+          ? t(current.phase ? "catalog verification" : "waiting for lifecycle progress")
+          : phaseDetail[current.phase],
         outcome: "running" as const,
       }
     : nextUp

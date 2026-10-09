@@ -176,6 +176,22 @@ Optional catalog snapshot overrides (sensible defaults, normally unset):
 > automatic update triggering, and MSP features) still require Supabase; the
 > catalog and update policies run Supabase-less.
 
+### Notification Configuration
+
+Email preferences, webhook configurations, and notification history require
+Supabase. A deployment using only SQLite cannot store these settings. Webhook
+creation returns an explicit configuration message when Supabase is absent.
+
+To enable notifications, complete the [Supabase setup](DATABASE_SETUP.md),
+including its migrations, and configure the server environment variables
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY`. Keep the service role key on the server.
+
+For email delivery, also set `RESEND_API_KEY` and `RESEND_FROM_EMAIL`. The sender
+must use a [domain verified with your Resend account](https://resend.com/docs/dashboard/domains/introduction). Restart the deployment after
+changing its environment, then use **Settings → Notifications** to save your
+preferences and send a test email. Webhook delivery does not require Resend.
+
 ### Pipeline Configuration
 
 | Variable | Description |
