@@ -741,7 +741,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       await postSingleItem();
 
       expect(errorSpy).toHaveBeenCalledWith(
-        '[Package] Deployment of Test.App could not start: Failed to trigger GitHub Actions workflow: 502 Bad Gateway'
+        '[Package] Deployment of Test.App failed: Failed to trigger GitHub Actions workflow: 502 Bad Gateway'
       );
     } finally {
       errorSpy.mockRestore();

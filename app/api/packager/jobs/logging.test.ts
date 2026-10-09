@@ -75,6 +75,19 @@ describe('local packager job lifecycle logging', () => {
     );
   });
 
+  it('redacts signed URLs and line breaks in the reported error', async () => {
+    state.update.mockResolvedValue({ ...job, status: 'failed' });
+
+    await patch({
+      status: 'failed',
+      error: 'Download failed: https://cdn.example.com/setup.exe?sig=secret\nforged line',
+    });
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[Packager Jobs API] Job job-1 (Test.App 1.0.0) failed: Download failed: [redacted URL] forged line'
+    );
+  });
+
   it('logs a failure only once when the packager repeats the status', async () => {
     state.getById.mockResolvedValue({ ...job, status: 'failed' });
     state.update.mockResolvedValue({ ...job, status: 'failed' });

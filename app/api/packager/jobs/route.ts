@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logValue } from '@/lib/server-log';
 import { getDatabase, verifyPackagerApiKey } from '@/lib/db';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
         error_message: message,
         completed_at: new Date().toISOString(),
       }, { status: 'packaging' });
-      console.error(`[Packager Jobs API] Job ${job.id} (${job.winget_id} ${job.version}) failed: ${message}`);
+      console.error(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) failed: ${message}`);
       return NextResponse.json({ claimed: false, error: 'This curated release is unavailable.' }, { status: 409 });
     }
     try {
@@ -127,10 +128,10 @@ export async function POST(request: NextRequest) {
         status: 'failed', error_code: error.code, error_message: error.message,
         completed_at: new Date().toISOString(),
       }, { status: 'packaging' });
-      console.error(`[Packager Jobs API] Job ${job.id} (${job.winget_id} ${job.version}) failed: ${error.message}`);
+      console.error(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) failed: ${logValue(error.message)}`);
       return NextResponse.json({ claimed: false, error: error.message, code: error.code }, { status: 409 });
     }
-    console.info(`[Packager Jobs API] Job ${job.id} (${job.winget_id} ${job.version}) claimed by packager ${packagerId}`);
+    console.info(`[Packager Jobs API] Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)}) claimed by packager ${logValue(packagerId)}`);
     return NextResponse.json({
       claimed: true,
       job,
@@ -231,9 +232,9 @@ export async function PATCH(request: NextRequest) {
     // Log terminal transitions once, so the server log shows the outcome of
     // every deployment the local packager runs.
     if (status && status !== existingJob?.status) {
-      const label = `Job ${job.id} (${job.winget_id} ${job.version})`;
+      const label = `Job ${logValue(job.id)} (${logValue(job.winget_id)} ${logValue(job.version)})`;
       if (status === 'failed') {
-        console.error(`[Packager Jobs API] ${label} failed: ${errorMessage || 'Unknown error'}`);
+        console.error(`[Packager Jobs API] ${label} failed: ${logValue(errorMessage) || 'Unknown error'}`);
       } else if (status === 'deployed') {
         console.info(`[Packager Jobs API] ${label} deployed to Intune`);
       } else if (status === 'duplicate_skipped') {

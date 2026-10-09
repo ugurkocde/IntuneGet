@@ -9,6 +9,7 @@ import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import {
@@ -875,11 +876,11 @@ export async function POST(request: NextRequest) {
     // can trace actions that change Intune without opening the web UI.
     for (const job of jobs) {
       console.info(
-        `[Package] Deployment job ${job.id} created for ${job.winget_id} ${job.version} (status: ${job.status})`
+        `[Package] Deployment job ${logValue(job.id)} created for ${logValue(job.winget_id)} ${logValue(job.version)} (status: ${logValue(job.status)})`
       );
     }
     for (const failure of errors) {
-      console.error(`[Package] Deployment of ${failure.wingetId} could not start: ${failure.error}`);
+      console.error(`[Package] Deployment of ${logValue(failure.wingetId)} failed: ${logValue(failure.error)}`);
     }
 
     // Return results
