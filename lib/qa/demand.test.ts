@@ -2,16 +2,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 
 const {
   resolveWingetPackageDependenciesMock,
   getPackageCompatibilityBlockMock,
   getPackageEligibilityBlocksMock,
+  enforceInstallerPreflightMock,
 } = vi.hoisted(() => ({
   resolveWingetPackageDependenciesMock: vi.fn(),
   getPackageCompatibilityBlockMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
+  enforceInstallerPreflightMock: vi.fn(),
 }));
+
+vi.mock('@/lib/installer-preflight', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/installer-preflight')>();
+  return {
+    ...original,
+    enforceInstallerPreflight: enforceInstallerPreflightMock,
+  };
+});
 
 vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/winget-dependencies')>();
@@ -107,6 +118,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     expect(updates).toEqual([]);
   });
   beforeEach(() => {
+    enforceInstallerPreflightMock.mockReset();
     resolveWingetPackageDependenciesMock.mockReset();
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);
     getPackageEligibilityBlocksMock.mockReset();
@@ -1224,10 +1236,10 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     ]);
   });
 
-  it('does not reactivate an installer source quarantined by dispatch preflight', async () => {
-    const input = demandInput();
-    const quarantineSummary =
-      'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.';
+  function quarantinedCandidateClient(
+    existing: Record<string, unknown>,
+    updates: Array<Record<string, unknown>>,
+  ) {
     let candidateCall = 0;
     const client = {
       from: vi.fn((table: string) => {
@@ -1236,41 +1248,109 @@ describe('ensureQaDemand app-version evidence reuse', () => {
         }
         if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
         candidateCall++;
-        if (candidateCall === 1) return query({ data: null, error: null });
+        if (candidateCall === 1 || candidateCall === 3) return query({ data: null, error: null });
         if (candidateCall === 2) {
-          return {
-            insert: vi.fn(() => query({
-              data: null,
-              error: null,
-            })),
-          };
+          return { insert: vi.fn(() => query({ data: null, error: null })) };
         }
-        if (candidateCall === 3) return query({ data: null, error: null });
         if (candidateCall === 4) {
-          return {
-            select: vi.fn(() => query({
-              data: {
-                id: 'candidate-quarantined',
-                status: 'superseded',
-                priority: 500,
-                failure_summary: quarantineSummary,
-              },
-              error: null,
-            })),
-          };
+          return { select: vi.fn(() => query({ data: existing, error: null })) };
         }
-        throw new Error('Quarantined candidate must not be updated');
+        return {
+          update: vi.fn((values: Record<string, unknown>) => {
+            updates.push(values);
+            return query({ data: null, error: null });
+          }),
+        };
       }),
     };
+    return withCandidateRpc(client);
+  }
 
-    const result = await ensureQaDemand(withCandidateRpc(client), input);
+  const quarantinedUserScopeCandidate = (failureSummary: string) => ({
+    id: 'candidate-quarantined',
+    status: 'superseded',
+    priority: 500,
+    winget_id: 'Example.App',
+    version: '1.2.3',
+    architecture: 'x64',
+    installer_url: 'https://example.test/setup.exe',
+    installer_sha256: 'A'.repeat(64),
+    installer_type: 'exe',
+    test_config: { mode: 'psadt-package', profileKind: 'deployment-config' },
+    failure_summary: failureSummary,
+  });
+
+  it('does not reactivate an installer source quarantined by dispatch preflight', async () => {
+    const input = { ...demandInput(), installScope: 'user' as const };
+    const quarantineSummary =
+      'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.';
+    enforceInstallerPreflightMock.mockRejectedValueOnce(new InstallerPreflightError(
+      'MANIFEST_CHANGED',
+      'The selected installer no longer matches the trusted WinGet manifest',
+    ));
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(quarantineSummary), updates),
+      input,
+    );
 
     expect(result).toMatchObject({
       state: 'failed',
       candidateId: 'candidate-quarantined',
       failureSummary: quarantineSummary,
     });
-    expect(candidateCall).toBe(4);
+    expect(updates).toEqual([]);
+  });
+
+  it('reactivates a manifest quarantine only after the exact dispatch preflight passes again', async () => {
+    const input = { ...demandInput(), installScope: 'user' as const };
+    enforceInstallerPreflightMock.mockResolvedValueOnce({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(
+        'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer for Example.App 1.2.3 no longer matches the trusted WinGet manifest',
+      ), updates),
+      input,
+    );
+
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-quarantined' });
+    // The customer's user scope lives in the canonical profile. Verifying the
+    // candidate as machine scope rejects a valid user-scope WinGet installer.
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith({
+      wingetId: 'Example.App',
+      version: '1.2.3',
+      architecture: 'x64',
+      installerUrl: 'https://example.test/setup.exe',
+      manifestInstallerUrl: 'https://example.test/setup.exe',
+      installerSha256: 'A'.repeat(64),
+      installerType: 'exe',
+      installScope: 'user',
+      sourceType: 'winget',
+    });
+    expect(updates).toEqual([
+      expect.objectContaining({ status: 'queued', failure_summary: null }),
+    ]);
+  });
+
+  it('keeps a hash mismatch quarantine terminal without another preflight', async () => {
+    const quarantineSummary =
+      'Installer source quarantined before QA: HASH_MISMATCH. Publisher bytes changed.';
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(quarantineSummary), updates),
+      demandInput(),
+    );
+
+    expect(result).toMatchObject({ state: 'failed', failureSummary: quarantineSummary });
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
   });
 
   it('joins the active payload test when a concurrent insert wins the race', async () => {
