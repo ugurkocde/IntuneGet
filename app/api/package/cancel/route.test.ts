@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   getWorkflowRun: vi.fn(),
   deleteById: vi.fn(),
   updatedRows: [{ id: 'job' }] as Array<{ id: string }>,
+  lookupError: false,
 }));
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -20,7 +21,10 @@ vi.mock('@/lib/github-actions', () => ({
   UNSTARTED_WORKFLOW_RUN_STATUSES: ['queued', 'waiting', 'pending', 'requested'],
 }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: async () => undefined }));
-vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { deleteById: state.deleteById } }) }));
+vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: {
+  getById: async () => { if (state.lookupError) throw new Error('Database unavailable'); return state.job; },
+  deleteById: state.deleteById,
+} }) }));
 vi.mock('@/lib/supabase', () => ({
   createServerClient: () => ({
     from: () => ({
@@ -56,6 +60,29 @@ describe('cancel packaging job', () => {
     state.getWorkflowRun.mockReset();
     state.updatedRows = [{ id: 'job' }];
     state.deleteById.mockReset();
+    state.lookupError = false;
+  });
+
+  it('returns not found without archiving or cancelling', async () => {
+    state.job = null;
+    expect((await call({ jobId: 'missing', dismiss: true })).status).toBe(404);
+    expect(state.deleteById).not.toHaveBeenCalled();
+    expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it('rejects another owner without archiving or cancelling', async () => {
+    state.job = { id: 'job', user_id: 'other-user', status: 'failed' };
+    expect((await call({ jobId: 'job', dismiss: true })).status).toBe(403);
+    expect(state.deleteById).not.toHaveBeenCalled();
+    expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed lookup as a server error without mutation', async () => {
+    state.lookupError = true;
+    expect((await call({ jobId: 'job', dismiss: true })).status).toBe(500);
+    expect(state.deleteById).not.toHaveBeenCalled();
+    expect(state.cancelWorkflowRun).not.toHaveBeenCalled();
+    expect(state.updates).toHaveLength(0);
   });
 
   it('cancels a job waiting on QA without a workflow run and locks on its status', async () => {
