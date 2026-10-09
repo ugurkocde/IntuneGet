@@ -1205,10 +1205,10 @@ ${steps}
     ## Capture and verify the exact uninstall identity observed for this installation.
     $selectedApplications = @()
     $changedApplications = @()
-    $configuredUninstallComparableName = (($configuredUninstallDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+    $configuredUninstallComparableName = (($configuredUninstallDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\\(\\s*\\)', '' -replace '\\(\\s+', '(' -replace '\\s+\\)', ')' -replace '\\s{2,}', ' ')).Trim()
     $configuredUninstallPublisherName = '${escapedPublisher}'
     $configuredUninstallPublisherAgnosticName = if ($configuredUninstallPublisherName) {
-        ($configuredUninstallComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\s+|[._-]+)'), '').Trim()
+        ($configuredUninstallComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\\s+|[._-]+)'), '').Trim()
     } else { $configuredUninstallComparableName }
     $configuredUninstallVersion = [string]$adtSession.AppVersion
     $configuredUninstallVersionedName = if (-not [string]::IsNullOrWhiteSpace($configuredUninstallVersion)) {
@@ -1242,16 +1242,16 @@ ${steps}
         if ($selectedApplications.Count -eq 0 -and $configuredUninstallComparableName) {
             $architectureAgnosticMatches = @($changedApplications | Where-Object {
                 $candidateDisplayName = [string]$_.DisplayName
-                $candidateComparableName = (($candidateDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+                $candidateComparableName = (($candidateDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\\(\\s*\\)', '' -replace '\\(\\s+', '(' -replace '\\s+\\)', ')' -replace '\\s{2,}', ' ')).Trim()
                 $candidateComparableName -eq $configuredUninstallComparableName
             })
             if ($architectureAgnosticMatches.Count -eq 1) { $selectedApplications = $architectureAgnosticMatches }
         }
         if ($selectedApplications.Count -eq 0 -and $configuredUninstallPublisherAgnosticName) {
             $publisherAgnosticMatches = @($changedApplications | Where-Object {
-                $candidateComparableName = (([string]$_.DisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+                $candidateComparableName = (([string]$_.DisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\\(\\s*\\)', '' -replace '\\(\\s+', '(' -replace '\\s+\\)', ')' -replace '\\s{2,}', ' ')).Trim()
                 $candidatePublisherAgnosticName = if ($configuredUninstallPublisherName) {
-                    ($candidateComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\s+|[._-]+)'), '').Trim()
+                    ($candidateComparableName -replace ('(?i)^' + [regex]::Escape($configuredUninstallPublisherName) + '(?:\\s+|[._-]+)'), '').Trim()
                 } else { $candidateComparableName }
                 $candidatePublisherAgnosticName -eq $configuredUninstallPublisherAgnosticName
             })
@@ -1263,7 +1263,7 @@ ${steps}
             # equal the requested package identity; a different version remains rejected.
             $versionSuffixedMatches = @($changedApplications | Where-Object {
                 $candidateDisplayName = [string]$_.DisplayName
-                $candidateComparableName = (($candidateDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\(\s*\)', '' -replace '\(\s+', '(' -replace '\s+\)', ')' -replace '\s{2,}', ' ')).Trim()
+                $candidateComparableName = (($candidateDisplayName -replace '(?i)(?<![A-Za-z0-9])(x86_64|aarch64|amd64|arm64|x64|x86|win64|win32|64-bit|32-bit)(?![A-Za-z0-9])', '' -replace '\\(\\s*\\)', '' -replace '\\(\\s+', '(' -replace '\\s+\\)', ')' -replace '\\s{2,}', ' ')).Trim()
                 $candidateComparableName -eq $configuredUninstallVersionedName -and
                     [string]$_.DisplayVersion -eq $configuredUninstallVersion
             })
