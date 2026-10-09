@@ -9,6 +9,7 @@ import type { NormalizedPackage } from '@/types/winget';
 import { cleanPackageName } from '@/lib/locale-utils';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { TenantDeploymentBadge } from '@/components/TenantDeploymentBadge';
 import { QaBadge } from '@/components/qa/QaBadge';
 import type { QaStatus } from '@/types/qa';
 import { CuratedReleaseBadge } from '@/components/CuratedReleaseBadge';
@@ -42,6 +43,7 @@ interface AppListItemProps {
   package: NormalizedPackage;
   onSelect?: (pkg: NormalizedPackage) => void;
   isDeployed?: boolean;
+  tenantDeployedBy?: string | null;
   isBulkSelectMode?: boolean;
   isBulkSelected?: boolean;
   onBulkToggle?: (pkg: NormalizedPackage) => void;
@@ -49,7 +51,7 @@ interface AppListItemProps {
   curatedAppId?: string;
 }
 
-function AppListItemComponent({ package: pkg, onSelect, isDeployed = false, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus, curatedAppId }: AppListItemProps) {
+function AppListItemComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy, isBulkSelectMode = false, isBulkSelected = false, onBulkToggle, qaStatus, curatedAppId }: AppListItemProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -167,6 +169,7 @@ function AppListItemComponent({ package: pkg, onSelect, isDeployed = false, isBu
             </div>
           )}
 
+          <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
           {!isBulkSelectMode && (
             isDeployed ? (
               <Button
@@ -209,6 +212,7 @@ export const AppListItem = memo(AppListItemComponent, (prevProps, nextProps) => 
   return prevProps.package.id === nextProps.package.id &&
          prevProps.package.version === nextProps.package.version &&
          prevProps.isDeployed === nextProps.isDeployed &&
+         prevProps.tenantDeployedBy === nextProps.tenantDeployedBy &&
          prevProps.isBulkSelectMode === nextProps.isBulkSelectMode &&
          prevProps.isBulkSelected === nextProps.isBulkSelected &&
          prevProps.curatedAppId === nextProps.curatedAppId &&
