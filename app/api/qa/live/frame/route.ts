@@ -8,7 +8,7 @@ import {
   QA_LIVE_FRAME_RATE_LIMIT,
   QA_LIVE_INGEST_RATE_LIMIT,
 } from '@/lib/rate-limit';
-import { QA_LIVE_FRAME_MAX_AGE_MS } from '@/lib/qa/constants';
+import { isQaFrameFresh } from '@/lib/qa/live-frame-freshness';
 import { isQaLivePublicEnabled } from '@/lib/qa/public-access';
 
 export const dynamic = 'force-dynamic';
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     const supabase = createServerClient();
     const { data: active, error: activeError } = await supabase
       .from('qa_candidates')
-      .select('id')
+      .select('id, started_at, dispatched_at, enqueued_at')
       .eq('id', requestedCandidate)
       .eq('test_level', 'psadt-package')
       .in('status', ['dispatched', 'running'])
@@ -116,7 +116,8 @@ export async function GET(request: Request) {
     // capture cadence the producer can publish the next frame between the
     // live-status request and this image request. Serve that newer frame for
     // the same active candidate instead of flashing an avoidable 404.
-    if (!frame || Date.now() - new Date(frame.updated_at).getTime() > QA_LIVE_FRAME_MAX_AGE_MS) {
+    const attemptStartedAt = active.started_at || active.dispatched_at || active.enqueued_at;
+    if (!frame || !isQaFrameFresh(frame, attemptStartedAt)) {
       return new NextResponse(null, { status: 404, headers: noStoreHeaders() });
     }
 
@@ -128,6 +129,14 @@ export async function GET(request: Request) {
     }
     if (downloadError || !image) throw new Error(`Could not download QA live frame: ${downloadError?.message || 'missing object'}`);
 
+    // A finish or requeue during Storage I/O invalidates this attempt's image.
+    const { data: latest, error: latestError } = await supabase.from('qa_candidates')
+      .select('started_at, dispatched_at, enqueued_at').eq('id', active.id)
+      .in('status', ['dispatched', 'running']).maybeSingle();
+    if (latestError || !latest || (latest.started_at || latest.dispatched_at || latest.enqueued_at) !== attemptStartedAt ||
+      !isQaFrameFresh(frame, attemptStartedAt) || image.size > MAX_FRAME_BYTES) {
+      return new NextResponse(null, { status: 404, headers: noStoreHeaders() });
+    }
     return new NextResponse(await image.arrayBuffer(), {
       headers: frameHeaders({
         'Content-Type': 'image/jpeg',

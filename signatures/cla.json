@@ -15,6 +15,13 @@
       "created_at": "2026-02-20T08:55:33Z",
       "repoId": 988380262,
       "pullRequestNo": 50
+    },
+    {
+      "name": "ugurlabs-agent[bot]",
+      "id": 339532809,
+      "created_at": "2026-10-08T12:48:17.868Z",
+      "repoId": 988380262,
+      "pullRequestNo": 1433
     }
   ]
 }

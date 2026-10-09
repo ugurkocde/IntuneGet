@@ -9,15 +9,17 @@ import type { NormalizedPackage } from '@/types/winget';
 import { cleanPackageName } from '@/lib/locale-utils';
 import { useCartStore } from '@/stores/cart-store';
 import { useQuickAdd } from '@/hooks/useQuickAdd';
+import { TenantDeploymentBadge } from '@/components/TenantDeploymentBadge';
 
 interface FeaturedAppsProps {
   packages: NormalizedPackage[];
   onSelect?: (pkg: NormalizedPackage) => void;
   isLoading?: boolean;
   deployedSet?: Set<string>;
+  tenantDeployments?: Map<string, string | null>;
 }
 
-export function FeaturedApps({ packages, onSelect, isLoading, deployedSet }: FeaturedAppsProps) {
+export function FeaturedApps({ packages, onSelect, isLoading, deployedSet, tenantDeployments }: FeaturedAppsProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-[minmax(140px,auto)]">
@@ -40,7 +42,7 @@ export function FeaturedApps({ packages, onSelect, isLoading, deployedSet }: Fea
       {/* Main featured card - spans 2 columns and 2 rows */}
       {mainFeature && (
         <div className="md:col-span-2 md:row-span-2">
-          <FeaturedMainCard package={mainFeature} onSelect={onSelect} isDeployed={deployedSet?.has(mainFeature.id)} />
+          <FeaturedMainCard package={mainFeature} onSelect={onSelect} isDeployed={deployedSet?.has(mainFeature.id)} tenantDeployedBy={tenantDeployments?.get(mainFeature.id)} />
         </div>
       )}
 
@@ -51,6 +53,7 @@ export function FeaturedApps({ packages, onSelect, isLoading, deployedSet }: Fea
           package={pkg}
           onSelect={onSelect}
           isDeployed={deployedSet?.has(pkg.id)}
+          tenantDeployedBy={tenantDeployments?.get(pkg.id)}
         />
       ))}
     </div>
@@ -61,9 +64,10 @@ interface FeaturedCardProps {
   package: NormalizedPackage;
   onSelect?: (pkg: NormalizedPackage) => void;
   isDeployed?: boolean;
+  tenantDeployedBy?: string | null;
 }
 
-function FeaturedMainCardComponent({ package: pkg, onSelect, isDeployed = false }: FeaturedCardProps) {
+function FeaturedMainCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy }: FeaturedCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -151,6 +155,7 @@ function FeaturedMainCardComponent({ package: pkg, onSelect, isDeployed = false 
         </div>
 
         <div className="flex items-center gap-3 mt-6 pt-4 border-t border-overlay/10">
+          <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
           {isDeployed ? (
             <Button
               size="lg"
@@ -208,10 +213,11 @@ function FeaturedMainCardComponent({ package: pkg, onSelect, isDeployed = false 
 const FeaturedMainCard = memo(FeaturedMainCardComponent, (prev, next) =>
   prev.package.id === next.package.id &&
   prev.package.version === next.package.version &&
-  prev.isDeployed === next.isDeployed
+  prev.isDeployed === next.isDeployed &&
+  prev.tenantDeployedBy === next.tenantDeployedBy
 );
 
-function FeaturedSecondaryCardComponent({ package: pkg, onSelect, isDeployed = false }: FeaturedCardProps) {
+function FeaturedSecondaryCardComponent({ package: pkg, onSelect, isDeployed = false, tenantDeployedBy }: FeaturedCardProps) {
   const { quickAdd, isLoading } = useQuickAdd(pkg);
 
   const inCart = useCartStore(
@@ -273,6 +279,7 @@ function FeaturedSecondaryCardComponent({ package: pkg, onSelect, isDeployed = f
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-overlay/10">
         <span className="text-xs text-text-muted">v{pkg.version}</span>
+        <TenantDeploymentBadge deployedBy={tenantDeployedBy} />
         {isDeployed ? (
           <Button
             size="sm"
@@ -311,5 +318,6 @@ function FeaturedSecondaryCardComponent({ package: pkg, onSelect, isDeployed = f
 const FeaturedSecondaryCard = memo(FeaturedSecondaryCardComponent, (prev, next) =>
   prev.package.id === next.package.id &&
   prev.package.version === next.package.version &&
-  prev.isDeployed === next.isDeployed
+  prev.isDeployed === next.isDeployed &&
+  prev.tenantDeployedBy === next.tenantDeployedBy
 );

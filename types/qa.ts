@@ -117,6 +117,28 @@ export type QaLivePhase =
   | 'verifying_removal'
   | 'publishing';
 
+export type QaCuratedLivePhase =
+  | 'restoring_vm' | 'inspecting_installer' | 'preparing_package' | 'testing_lifecycle'
+  | 'installing' | 'detecting_install' | 'uninstalling' | 'verifying_removal'
+  | 'installing_previous' | 'detecting_previous' | 'upgrading' | 'detecting_upgrade' | 'final_uninstall' | 'verifying_final_removal' | 'cleaning_up';
+
+export interface QaCuratedLiveCurrent {
+  runKind: 'curated';
+  verification: 'release' | 'custom-settings';
+  wingetId: string;
+  displayName: string;
+  publisher: string;
+  version: string;
+  catalogVersion: string;
+  architecture: QaArchitecture;
+  executionContext: 'LocalSystem';
+  phase: QaCuratedLivePhase | null;
+  phaseStartedAt: string | null;
+  startedAt: string;
+  elapsedSeconds: number;
+  upgradePlanned: boolean;
+}
+
 export interface QaLiveResponse {
   serverTime: string;
   active: boolean;
@@ -132,6 +154,8 @@ export interface QaLiveResponse {
     consecutiveFailures: number;
   };
   current: {
+    /** Optional while an older ordinary response remains in a browser cache. */
+    runKind?: 'ordinary';
     wingetId: string;
     displayName: string;
     publisher: string | null;
@@ -146,9 +170,12 @@ export interface QaLiveResponse {
     phaseStartedAt: string | null;
     startedAt: string;
     elapsedSeconds: number;
-  } | null;
+  } | QaCuratedLiveCurrent | null;
+  /** Busy without live telemetry never promises that the next candidate started. */
+  vmBusy?: 'catalog_verification' | null;
   viewer: {
     candidateId: string | null;
+    sessionId?: string | null;
     available: boolean;
     capturedAt: string | null;
     sequence: number | null;
