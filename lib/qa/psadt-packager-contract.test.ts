@@ -4676,6 +4676,9 @@ describe('PSADT install command override', () => {
     );
     expect(packager).toContain("-ArgumentList '/s /c `\"$customInstallCommandEscaped`\"'");
     expect(packager).toContain('-not $customInstallUsesPackagedInstaller');
+    expect(packager).toContain(
+      "[System.IO.Path]::GetExtension($installerFileName).ToLowerInvariant() -notin @('.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip') -and"
+    );
   });
 
   it.runIf(canRunWindowsPowerShellPackager)(
