@@ -106,10 +106,14 @@ export async function GET(
       assignments = assignmentsData.value || [];
     }
 
+    const groupLookup = await resolveAssignmentGroupNames(assignments, graphToken, request.signal);
     const app: IntuneAppWithAssignments = {
       ...appData,
       assignments,
-      assignmentGroupNames: await resolveAssignmentGroupNames(assignments, graphToken, request.signal),
+      assignmentGroupNames: groupLookup.names,
+      ...(Object.keys(groupLookup.failures).length > 0
+        ? { assignmentGroupLookupFailures: groupLookup.failures }
+        : {}),
     };
 
     return NextResponse.json({ app });
