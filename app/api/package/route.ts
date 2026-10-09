@@ -871,6 +871,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Record each deployment start and failure in the server log so operators
+    // can trace actions that change Intune without opening the web UI.
+    for (const job of jobs) {
+      console.info(
+        `[Package] Deployment job ${job.id} created for ${job.winget_id} ${job.version} (status: ${job.status})`
+      );
+    }
+    for (const failure of errors) {
+      console.error(`[Package] Deployment of ${failure.wingetId} could not start: ${failure.error}`);
+    }
+
     // Return results
     const totalJobs = jobs.length;
     const storeDeployed = jobs.filter(j => j.status === 'deployed').length;

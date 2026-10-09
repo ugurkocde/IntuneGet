@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
     const jobs = await db.jobs.getByStatus(status, limit, true);
 
     return NextResponse.json({ jobs: jobs || [] });
-  } catch {
+  } catch (error) {
+    console.error('[Packager Jobs API] Failed to list jobs:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -109,11 +110,13 @@ export async function POST(request: NextRequest) {
     try {
       await validateCuratedPackagingJob(job);
     } catch {
+      const message = 'The curated release is no longer approved for this packaging configuration.';
       await db.jobs.update(job.id, {
         status: 'failed', error_code: 'CURATED_RELEASE_UNAVAILABLE',
-        error_message: 'The curated release is no longer approved for this packaging configuration.',
+        error_message: message,
         completed_at: new Date().toISOString(),
       }, { status: 'packaging' });
+      console.error(`[Packager Jobs API] Job ${job.id} (${job.winget_id} ${job.version}) failed: ${message}`);
       return NextResponse.json({ claimed: false, error: 'This curated release is unavailable.' }, { status: 409 });
     }
     try {
@@ -124,13 +127,16 @@ export async function POST(request: NextRequest) {
         status: 'failed', error_code: error.code, error_message: error.message,
         completed_at: new Date().toISOString(),
       }, { status: 'packaging' });
+      console.error(`[Packager Jobs API] Job ${job.id} (${job.winget_id} ${job.version}) failed: ${error.message}`);
       return NextResponse.json({ claimed: false, error: error.message, code: error.code }, { status: 409 });
     }
+    console.info(`[Packager Jobs API] Job ${job.id} (${job.winget_id} ${job.version}) claimed by packager ${packagerId}`);
     return NextResponse.json({
       claimed: true,
       job,
     });
-  } catch {
+  } catch (error) {
+    console.error('[Packager Jobs API] Failed to claim job:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -222,6 +228,19 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // Log terminal transitions once, so the server log shows the outcome of
+    // every deployment the local packager runs.
+    if (status && status !== existingJob?.status) {
+      const label = `Job ${job.id} (${job.winget_id} ${job.version})`;
+      if (status === 'failed') {
+        console.error(`[Packager Jobs API] ${label} failed: ${errorMessage || 'Unknown error'}`);
+      } else if (status === 'deployed') {
+        console.info(`[Packager Jobs API] ${label} deployed to Intune`);
+      } else if (status === 'duplicate_skipped') {
+        console.info(`[Packager Jobs API] ${label} skipped as a duplicate of an existing Intune app`);
+      }
+    }
+
     // Record deployments in upload_history so update checks can track versions.
     if (status === 'deployed' && existingJob?.status !== 'deployed' && job.intune_app_id) {
       try {
@@ -280,7 +299,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ updated: true, job });
-  } catch {
+  } catch (error) {
+    console.error('[Packager Jobs API] Failed to update job:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
