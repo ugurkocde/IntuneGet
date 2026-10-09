@@ -94,6 +94,7 @@ export interface IntuneAppAssignment {
 
 export interface IntuneAppWithAssignments extends IntuneWin32App {
   assignments: IntuneAppAssignment[];
+  assignmentGroupNames?: Record<string, string>;
 }
 
 export interface InventoryFilters {
