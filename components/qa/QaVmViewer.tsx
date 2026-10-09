@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Maximize2, Minimize2, Monitor } from 'lucide-react';
 import { T } from 'gt-next';
@@ -18,20 +18,30 @@ export function QaVmViewer({ src, appName, phaseLabel, frameState }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [visibleSrc, setVisibleSrc] = useState<string | null>(null);
+  const [frameExpired, setFrameExpired] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // A stopped status feed or failed image download cannot leave the last
+  // decoded screenshot labeled live indefinitely. Run changes remount us.
+  useEffect(() => {
+    if (!visibleSrc) return;
+    const timer = window.setTimeout(() => setFrameExpired(true), 15_000);
+    return () => window.clearTimeout(timer);
+  }, [visibleSrc]);
+  const showFrame = Boolean(src && visibleSrc && !frameExpired);
   const alt = `Read-only live view of the isolated QA VM while testing ${appName}`;
 
   // Both surfaces retain their image through the dialog's entrance and exit.
   // A single persistent loader swaps frames only after decoding.
   const frame = (
     <>
-      {src && visibleSrc ? <Image src={visibleSrc} alt={alt} fill unoptimized loading="eager" className="object-contain" /> : null}
-      {!src || !visibleSrc ? (
+      {showFrame ? <Image src={visibleSrc!} alt={alt} fill unoptimized loading="eager" className="object-contain" /> : null}
+      {!showFrame ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
           <Monitor className="h-8 w-8 text-white/30" aria-hidden="true" />
-          <p className="max-w-md text-sm text-white/60"><T>{src ? 'Loading the live VM view…' : 'Waiting for the next VM frame.'}</T></p>
+          <p className="max-w-md text-sm text-white/60"><T>{failedSrc === src && src ? 'Live VM view unavailable. Waiting for the next frame.' : src && !frameExpired ? 'Loading the live VM view…' : 'Waiting for the next VM frame.'}</T></p>
         </div>
       ) : null}
-      {frameState === 'live' ? (
+      {frameState === 'live' && showFrame ? (
         <span className="absolute right-4 top-4 z-10 animate-pulse text-xs font-semibold uppercase tracking-[0.16em] text-status-success drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] motion-reduce:animate-none"><T>Live</T></span>
       ) : frameState === 'paused' ? (
         <span className="absolute right-4 top-4 z-10 rounded-md bg-black/70 px-2 py-1 text-xs text-white/80"><T>Waiting for updates</T></span>
@@ -44,7 +54,7 @@ export function QaVmViewer({ src, appName, phaseLabel, frameState }: {
       <div className="absolute inset-0 overflow-hidden rounded-[inherit] bg-black">
         {frame}
         {src && src !== visibleSrc ? (
-          <Image key={src} src={src} alt="" aria-hidden="true" fill unoptimized loading="eager" fetchPriority="high" className="pointer-events-none object-contain opacity-0" onLoad={() => setVisibleSrc(src)} />
+          <Image key={src} src={src} alt="" aria-hidden="true" fill unoptimized loading="eager" fetchPriority="high" className="pointer-events-none object-contain opacity-0" onLoad={() => { setVisibleSrc(src); setFrameExpired(false); setFailedSrc(null); }} onError={() => setFailedSrc(src)} />
         ) : null}
         <DialogTrigger asChild>
           <button type="button" className={`absolute left-3 top-3 z-20 ${CONTROL_CLASS}`} title="Expand VM view" aria-label="Expand VM view">

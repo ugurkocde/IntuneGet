@@ -160,6 +160,8 @@ jobs:
     needs: [prepare, docker]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -186,28 +188,83 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=ref,event=tag
-            type=raw,value=latest,enable=${{ needs.prepare.outputs.prerelease != 'true' }}
 
       - name: Create manifest list and push
+        id: manifest
         working-directory: ${{ runner.temp }}/digests
         shell: bash
         run: |
           set -euo pipefail
           docker buildx imagetools create \
+            --metadata-file "$RUNNER_TEMP/release-manifest.json" \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+          digest=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/release-manifest.json")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Inspect image
-        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }}
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.manifest.outputs.digest }}
+
+  verify:
+    name: Verify SQLite (${{ matrix.platform }})
+    needs: [prepare, merge]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Log in to Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve exact published images
+        env:
+          RELEASE_DIGEST: ${{ needs.merge.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/$IMAGE_NAME@$RELEASE_DIGEST"
+          docker buildx imagetools inspect "$image" --raw | jq -e '
+            [.manifests[].platform | select(.os == "linux") | .architecture] |
+            contains(["amd64", "arm64"])' >/dev/null
+          baseline_digest=$(docker buildx imagetools inspect "$REGISTRY/$IMAGE_NAME:0.7.1" \
+            --format '{{json .Manifest}}' | jq -er '.digest')
+          [[ "$baseline_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          baseline="$REGISTRY/$IMAGE_NAME@$baseline_digest"
+          docker pull "$image"
+          docker pull "$baseline"
+          echo "RELEASE_IMAGE=$image" >> "$GITHUB_ENV"
+          echo "BASELINE_IMAGE=$baseline" >> "$GITHUB_ENV"
+      - name: Verify fresh SQLite volume and recreation
+        run: bash scripts/ci/verify-docker-sqlite.sh "$RELEASE_IMAGE"
+      - name: Verify v0.7.1 SQLite upgrade and preserved completed job
+        run: bash scripts/ci/verify-docker-sqlite.sh "$RELEASE_IMAGE" "$BASELINE_IMAGE"
 
   secure:
     name: Scan and sign image
-    needs: [prepare, merge]
+    needs: [prepare, merge, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -225,7 +282,7 @@ jobs:
       - name: Scan release image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.merge.outputs.digest }}
           format: table
           severity: CRITICAL
           ignore-unfixed: true
@@ -237,11 +294,46 @@ jobs:
       - name: Sign release image with GitHub OIDC
         env:
           COSIGN_EXPERIMENTAL: "1"
-        run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }}
+        run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.merge.outputs.digest }}
+
+  promote:
+    name: Promote verified stable image
+    needs: [prepare, merge, secure]
+    if: needs.prepare.outputs.prerelease != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Log in to Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote aliases from the verified digest
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_DIGEST: ${{ needs.merge.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/$IMAGE_NAME"
+          major=${VERSION%%.*}
+          minor=${VERSION%.*}
+          docker buildx imagetools create --prefer-index=false \
+            -t "$image:latest" -t "$image:$minor" -t "$image:$major" "$image@$RELEASE_DIGEST"
 
   publish:
     name: Publish GitHub release
-    needs: [prepare, secure]
+    needs: [prepare, secure, promote]
+    if: >-
+      !cancelled() && needs.secure.result == 'success' &&
+      (needs.promote.result == 'success' ||
+       (needs.prepare.outputs.prerelease == 'true' && needs.promote.result == 'skipped'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

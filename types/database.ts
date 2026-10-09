@@ -675,6 +675,32 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['qa_poll_runs']['Insert']>;
         Relationships: GenericRelationship[];
       };
+      qa_live_sessions: {
+        Row: {
+          id: string; run_kind: 'curated'; queue_id: string; verification: 'release' | 'custom-settings';
+          app_id: string; version: string; architecture: string; upgrade_planned: boolean; public_frames: boolean;
+          github_run_id: number; github_run_attempt: number; state: 'active' | 'ended';
+          end_reason: 'ended' | 'superseded' | 'dispatch_inactive' | 'expired' | null;
+          phase: string | null; phase_started_at: string | null; started_at: string; heartbeat_at: string; ended_at: string | null;
+          frames_cleaned_at: string | null;
+        };
+        Insert: {
+          id?: string; run_kind?: 'curated'; queue_id: string; verification: 'release' | 'custom-settings';
+          app_id: string; version: string; architecture: string; upgrade_planned: boolean; public_frames: boolean;
+          github_run_id: number; github_run_attempt: number; state?: 'active' | 'ended';
+          end_reason?: 'ended' | 'superseded' | 'dispatch_inactive' | 'expired' | null;
+          phase?: string | null; phase_started_at?: string | null; started_at?: string; heartbeat_at?: string; ended_at?: string | null;
+          frames_cleaned_at?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['qa_live_sessions']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
+      qa_live_session_frames: {
+        Row: { session_id: string; object_path: string; sequence: number; captured_at: string; width: number; height: number; byte_size: number; updated_at: string };
+        Insert: { session_id: string; object_path: string; sequence: number; captured_at: string; width: number; height: number; byte_size: number; updated_at?: string };
+        Update: Partial<Database['public']['Tables']['qa_live_session_frames']['Insert']>;
+        Relationships: GenericRelationship[];
+      };
       qa_live_frames: {
         Row: {
           candidate_id: string;
@@ -1777,8 +1803,6 @@ export interface Database {
           error_message: string | null;
           started_at: string | null;
           completed_at: string | null;
-          created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -1790,8 +1814,6 @@ export interface Database {
           error_message?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -1803,8 +1825,6 @@ export interface Database {
           error_message?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Relationships: GenericRelationship[];
       };
@@ -2599,6 +2619,30 @@ export interface Database {
       };
     };
     Functions: {
+      begin_qa_live_curated_session: {
+        Args: { p_app_id: string; p_version: string; p_architecture: string; p_upgrade_planned: boolean; p_host_custom_config: boolean; p_run_id: number | string; p_run_attempt: number };
+        Returns: Json;
+      };
+      publish_qa_live_curated_phase: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number; p_phase: string; p_observed_at: string };
+        Returns: boolean;
+      };
+      authorize_qa_live_curated_frame: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number; p_captured_at: string };
+        Returns: boolean;
+      };
+      publish_qa_live_curated_frame_metadata: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number; p_object_path: string; p_sequence: number; p_captured_at: string; p_width: number; p_height: number; p_byte_size: number };
+        Returns: boolean;
+      };
+      end_qa_live_curated_session: {
+        Args: { p_session_id: string; p_run_id: number | string; p_run_attempt: number };
+        Returns: Json;
+      };
+      insert_qa_candidate_if_absent: {
+        Args: { p_candidate: Json };
+        Returns: Json;
+      };
       claim_qa_work: {
         Args: { p_kind: 'ordinary' | 'curated'; p_id: string; p_packager_commit: string };
         Returns: Json;

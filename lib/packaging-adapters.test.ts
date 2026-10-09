@@ -37,6 +37,12 @@ describe('application packaging adapters', () => {
       expect(applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG).reviewedUninstallArguments || []).toEqual([]);
     }
   });
+  it('adds Mozilla silent removal only to the exact curated Thunderbird identity', () => {
+    expect(applyApplicationPackagingAdapter('IntuneGet.Curated.Thunderbird', DEFAULT_PSADT_CONFIG).reviewedUninstallArguments).toEqual(['/S']);
+    for (const id of ['Mozilla.Thunderbird', 'IntuneGet.Curated.ThunderbirdBeta']) {
+      expect(applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG).reviewedUninstallArguments || []).toEqual([]);
+    }
+  });
   it('binds ZWCAD packaged removal only to the reviewed 2025 and 2026 editions', () => {
     for (const id of ['ZWSOFT.ZWCAD.2025', ' zwsoft.zwcad.2025 ', 'ZWSOFT.ZWCAD.2026', ' zwsoft.zwcad.2026 ']) {
       const adapted = applyApplicationPackagingAdapter(id, DEFAULT_PSADT_CONFIG);

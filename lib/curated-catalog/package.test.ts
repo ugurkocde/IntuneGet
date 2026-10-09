@@ -33,6 +33,25 @@ describe('curated packager compatibility', () => {
 });
 
 describe('curated registered uninstall identity', () => {
+  it('binds Python customer and verification packages to the Burn uninstall profile', () => {
+    const app = CURATED_APPS.find(app => app.id === 'python-314')!;
+    const release = releaseFixture(app, '3.14.8');
+    const item = buildCuratedCartItem(app, release);
+    const input = curatedWorkflowInput(item);
+    expect(item.installerType).toBe('burn');
+    expect(input.installerType).toBe('burn');
+    expect(input.silentSwitches).toBe('/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_launcher=0');
+    expect(input.uninstallCommand).toBe('REGISTRY_UNINSTALL:Python 3.14');
+    const legacy = curatedWorkflowInput(buildCuratedCartItem({ ...app, installerType: 'exe' }, release));
+    expect(item.detectionRules).toEqual(JSON.parse(legacy.detectionRules!));
+    const current = normalizeQaWorkflowPackageInput(input).identity;
+    expect(JSON.parse(current.canonicalJson).installer.sourceType).toBe('burn');
+    expect(current.executionProfileSha256).not.toBe(normalizeQaWorkflowPackageInput(legacy).identity.executionProfileSha256);
+    expect(createCuratedVerificationProfile(release.candidate, release.installerSha256).executionProfileSha256).toBe(current.executionProfileSha256);
+    release.executionProfileSha256 = normalizeQaWorkflowPackageInput(legacy).identity.executionProfileSha256;
+    release.evidence.qa.executionProfileSha256 = release.executionProfileSha256;
+    expect(() => assertCuratedPackageProfile(app, release)).toThrow(/current packaging configuration/);
+  });
   const app = (id: string) => CURATED_APPS.find(app => app.id === id)!;
   it('uses the exact Apps and Features key or MSI product code instead of the catalog title', () => {
     expect(buildCuratedCartItem(app('vscode'), releaseFixture(app('vscode'), '1.140.0')).uninstallCommand)

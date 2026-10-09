@@ -1,6 +1,6 @@
 # Curated catalog status (2026-10-04)
 
-The curated catalog runs without manual steps. Every 30 minutes the `Curated catalog automation` workflow reads each publisher's release metadata, dispatches isolated VM verification for new versions, approves passing runs under a fixed policy, signs the catalog and publishes it through an auto-merging PR. The merge deploys, and existing curated update policies pick up the new version. Reliability is modelled on PatchMyPC: releases are pinned by publisher hash, IntuneGet never hosts installer binaries, and the vendor download goes straight into the customer's own tenant.
+The curated catalog runs without manual steps. Every 30 minutes the `Curated catalog automation` workflow reads each publisher's release metadata, dispatches isolated VM verification for new versions, approves passing runs under a fixed policy, signs the catalog and opens a publication PR. The QA owner thread obtains independent final patch review of its exact head and merges only that reviewed SHA after required checks pass. The merge deploys, and existing curated update policies pick up the new version. Reliability is modelled on PatchMyPC: releases are pinned by publisher hash, IntuneGet never hosts installer binaries, and the vendor download goes straight into the customer's own tenant.
 
 Read [CURATED_CATALOG.md](./CURATED_CATALOG.md) for the pipeline, trust model and withdrawal procedure, and the private repository's `qa/curated/README.md` for the verifier.
 

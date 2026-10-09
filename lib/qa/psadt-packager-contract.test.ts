@@ -3502,6 +3502,20 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
     );
   });
 
+  it.runIf(canRunWindowsPowerShellPackager)('generates Python with the existing packaged Burn fallback and exact registration completion', () => {
+    const app = CURATED_APPS.find(app => app.id === 'python-314')!;
+    const input = curatedWorkflowInput(buildCuratedCartItem(app, releaseFixture(app, '3.14.8')));
+    const generated = generateRegistryUninstallPackage(
+      input.installerType as 'burn', input.displayName, [], JSON.parse(input.psadtConfig!), [],
+      input.wingetId, app.name, input.version, input.uninstallCommand, input.silentSwitches,
+    );
+    expect(generated).toContain('The registered Burn uninstaller is unavailable; using the hash-verified packaged bundle');
+    expect(generated).toContain('$burnUninstaller = $bundledUninstaller');
+    expect(generated).toContain('Start-ADTProcess -FilePath $burnUninstaller');
+    expect(generated).toContain('Waiting for Burn uninstall registration [$registeredUninstallRegistryKey] to be removed.');
+    expect(generated).not.toContain('The registered vendor uninstaller was not found:');
+  }, 30_000);
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'narrows an ambiguous executable-wrapper display-name match to the single top-level entry',
     () => {

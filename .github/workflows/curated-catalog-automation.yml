@@ -3,7 +3,7 @@ run-name: Curated catalog automation${{ inputs.withdraw_release_id && format(' -
 
 # Every 30 minutes: read publisher release metadata, enqueue priority VM
 # verification for new releases, then sign passing releases into the catalog
-# and publish it through an auto-merging PR. No step needs manual approval.
+# and open a PR for automated final patch review by the QA owner thread.
 on:
   schedule:
     - cron: '7,37 * * * *'
@@ -79,7 +79,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: node scripts/build-curated-runtime.mjs
-      - name: Re-authenticate evidence, sign and open the auto-merging catalog PR
+      - name: Re-authenticate evidence, sign and open the catalog review PR
         env:
           GH_TOKEN: ${{ secrets.PAT }}
           CURATED_QA_TOKEN: ${{ secrets.CURATED_QA_TOKEN }}
@@ -88,3 +88,11 @@ jobs:
           CURATED_WITHDRAW_RELEASE_ID: ${{ inputs.withdraw_release_id }}
           CURATED_WITHDRAW_REASON: ${{ inputs.withdraw_reason }}
         run: node scripts/curated-automation.mjs publish
+      - name: Retain publication review metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: curated-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/curated/automation/publication.json
+          if-no-files-found: warn
+          retention-days: 14

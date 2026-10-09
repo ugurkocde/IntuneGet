@@ -7,6 +7,11 @@ import { assertInstallerSource, canonicalJson, catalogEntries, compareReleaseVer
 import { releaseFixture, signedFixture } from './test-fixtures';
 
 describe('curated approval trust boundary', () => {
+  it('accepts reviewed Burn bundles and rejects unknown installer engines', () => {
+    const app = CURATED_APPS.find(item => item.id === 'python-314')!;
+    expect(validateDefinitions([{ ...app, installerType: 'burn' }])).toHaveLength(1);
+    expect(() => validateDefinitions([{ ...app, installerType: 'unknown' }])).toThrow(/unattended installer contract/);
+  });
   it('opts Python into its reviewed LocalSystem bundle registration without changing machine install identity', () => {
     const app = CURATED_APPS.find(item => item.id === 'python-314')!;
     expect(app.installedIdentity).toMatchObject({ registrationScope: 'machine-and-localsystem-user', versionFormat: 'python-msi' });
@@ -34,8 +39,8 @@ describe('curated approval trust boundary', () => {
     expect(() => validateDefinitions([{ ...app, registeredUninstall: undefined }])).toThrow(/exact EXE registration/);
     expect(() => validateDefinitions([{ ...app, installerType: 'msi' }])).toThrow(/exact EXE registration/);
   });
-  it('defines fifteen applications and commits only a catalog signed by a committed trust key', () => {
-    expect(validateDefinitions(CURATED_APPS)).toHaveLength(20);
+  it('defines fifty applications and commits only a catalog signed by a committed trust key', () => {
+    expect(validateDefinitions(CURATED_APPS)).toHaveLength(50);
     // The automation re-signs after definition changes and before expiry, so
     // only the signer is checked here; deployment checks expiry and digest.
     const payload = verifyCatalogSignature(committed, committedKeys);

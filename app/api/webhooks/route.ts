@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { validateWebhookUrl, detectWebhookType } from '@/lib/webhooks/service';
 import type {
@@ -24,6 +24,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Webhook notifications require Supabase to be configured for this deployment.' },
+        { status: 503 }
       );
     }
 
@@ -110,6 +117,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid webhook type' },
         { status: 400 }
+      );
+    }
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(
+        { error: 'Webhook notifications require Supabase to be configured for this deployment.' },
+        { status: 503 }
       );
     }
 

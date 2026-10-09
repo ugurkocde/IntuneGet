@@ -91,11 +91,13 @@ function createSupabaseStub(options: {
   pollState?: Record<string, unknown>;
   packageResults?: Array<Record<string, unknown>>;
   installerHealth?: Array<Record<string, unknown>>;
+  candidateInsertResult?: QueryResult;
 }) {
   const pollRunInserts: Array<Record<string, unknown>> = [];
   const pollRunUpdates: Array<Record<string, unknown>> = [];
   const cursorUpdates: Array<Record<string, unknown>> = [];
   const candidateInserts: Array<Record<string, unknown>> = [];
+  const candidateUpdates: Array<Record<string, unknown>> = [];
   const compatibilityBlocks: Array<Record<string, unknown>> = [];
   const catalogReconciliations: Array<Record<string, unknown>> = [];
   const pipelineControlUpdates: Array<Record<string, unknown>> = [];
@@ -106,6 +108,11 @@ function createSupabaseStub(options: {
   const client = {
     rpc: vi.fn((name: string, args: Record<string, unknown>) => {
       rpcCalls.push({ name, args });
+      if (name === 'insert_qa_candidate_if_absent') {
+        candidateInserts.push(args.p_candidate as Record<string, unknown>);
+        if (options.candidateInsertResult) return Promise.resolve(options.candidateInsertResult);
+        return Promise.resolve({ data: { outcome: 'inserted', candidate: { id: `candidate-${candidateInserts.length}` } }, error: null });
+      }
       if (name === 'qa_toolchain_backfill_page') return Promise.resolve({
         data: options.candidatePages ? options.candidatePages[candidatePageIndex++] || [] : options.candidates || [],
         error: options.backfillError ? { message: options.backfillError } : null,
@@ -241,11 +248,10 @@ function createSupabaseStub(options: {
       }
       if (table === 'qa_candidates') {
         return {
-          insert: vi.fn((row: Record<string, unknown>) => {
-            candidateInserts.push(row);
-            return query({ data: { id: `candidate-${candidateInserts.length}` }, error: null });
+          update: vi.fn((values: Record<string, unknown>) => {
+            candidateUpdates.push(values);
+            return query({ data: null, error: null });
           }),
-          update: vi.fn(() => query({ data: null, error: null })),
           select: vi.fn(() =>
             query({
               data: options.candidatePages
@@ -265,6 +271,7 @@ function createSupabaseStub(options: {
     pollRunUpdates,
     cursorUpdates,
     candidateInserts,
+    candidateUpdates,
     compatibilityBlocks,
     catalogReconciliations,
     pipelineControlUpdates,
@@ -631,6 +638,34 @@ describe('GET /api/cron/qa-enqueue', () => {
       expect.objectContaining({ github_rate_limited_until: resetAt }),
     ]);
     expect(pollRunUpdates[0]).toMatchObject({ status: 'partial', error_count: 1 });
+  });
+
+  it.each(['exact_conflict', 'active_conflict'])('retains a known candidate on %s without inserting another lifecycle', async outcome => {
+    const { client, candidateInserts, candidateUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Missing.App'],
+      supportedApps: [{ winget_id: 'Missing.App', name: 'Missing', publisher: 'Contoso', latest_version: '1.0.0' }],
+      candidateInsertResult: { data: { outcome, candidate: { id: 'existing-run', status: 'running', priority: 2000 } }, error: null },
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest());
+    expect(await response.json()).toMatchObject({ queued: 0, alreadyKnown: 1, errorCount: 0 });
+    expect(candidateInserts).toHaveLength(1);
+    expect(candidateUpdates).toEqual([]);
+  });
+
+  it('reports an unavailable enqueue RPC and keeps the pipeline running', async () => {
+    const { client, pipelineControlUpdates } = createSupabaseStub({
+      demandBackfillApps: ['Missing.App'],
+      supportedApps: [{ winget_id: 'Missing.App', name: 'Missing', publisher: 'Contoso', latest_version: '1.0.0' }],
+      candidateInsertResult: { data: null, error: { code: 'PGRST202', message: 'Missing QA enqueue function' } },
+    });
+    createServerClientMock.mockReturnValue(client);
+    resolveManifestMock.mockResolvedValue(resolvedManifest());
+    const response = await GET(cronRequest());
+    expect(response.status).toBe(207);
+    expect(await response.json()).toMatchObject({ queued: 0, errorCount: 1 });
+    expect(pipelineControlUpdates).not.toContainEqual(expect.objectContaining({ paused: true }));
   });
 
   it('queues a demanded app missing latest-version catalog QA without a WinGet change', async () => {
