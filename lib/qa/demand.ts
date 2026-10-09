@@ -60,20 +60,22 @@ const MANIFEST_CHANGED_QUARANTINE_PREFIX =
  * candidate only when the same preflight that QA dispatch enforces now accepts
  * it against the live manifest. HASH_MISMATCH and every other quarantine stay
  * terminal, and dispatch still repeats the full preflight before any VM run.
+ * A retryable preflight failure keeps the candidate quarantined without
+ * turning a temporary outage into a terminal result.
  */
-async function manifestQuarantineNoLongerApplies(
+async function recheckManifestQuarantine(
   existing: QaCandidatePreflightInput & { failure_summary: string | null },
   testConfig: Json,
-): Promise<boolean> {
-  if (!existing.failure_summary?.startsWith(MANIFEST_CHANGED_QUARANTINE_PREFIX)) return false;
+): Promise<'recovered' | 'quarantined' | 'retry'> {
+  if (!existing.failure_summary?.startsWith(MANIFEST_CHANGED_QUARANTINE_PREFIX)) return 'quarantined';
   try {
     await enforceInstallerPreflight(buildQaCandidatePreflightRequest({
       ...existing,
       test_config: testConfig,
     }));
-    return true;
+    return 'recovered';
   } catch (error) {
-    if (error instanceof InstallerPreflightError) return false;
+    if (error instanceof InstallerPreflightError) return error.retryable ? 'retry' : 'quarantined';
     throw error;
   }
 }
@@ -316,11 +318,15 @@ export async function ensureQaDemand(
     };
   }
 
-  if (
+  const quarantineRecheck =
     existing.status === 'superseded' &&
-    !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary, true) &&
-    !(await manifestQuarantineNoLongerApplies(existing, testConfig as unknown as Json))
-  ) {
+    !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary, true)
+      ? await recheckManifestQuarantine(existing, testConfig as unknown as Json)
+      : null;
+  if (quarantineRecheck === 'retry') {
+    return { identity, candidateId: existing.id, state: 'waiting' };
+  }
+  if (quarantineRecheck === 'quarantined') {
     return {
       identity,
       candidateId: existing.id,

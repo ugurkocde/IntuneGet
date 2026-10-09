@@ -1338,6 +1338,26 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     ]);
   });
 
+  it('keeps a manifest quarantine waiting while the live recheck is temporarily unavailable', async () => {
+    const input = { ...demandInput(), installScope: 'user' as const };
+    enforceInstallerPreflightMock.mockRejectedValueOnce(new InstallerPreflightError(
+      'PREFLIGHT_STATE_UNAVAILABLE',
+      'Installer health state is unavailable',
+      true,
+    ));
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(
+        'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.',
+      ), updates),
+      input,
+    );
+
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-quarantined' });
+    expect(updates).toEqual([]);
+  });
+
   it('keeps a hash mismatch quarantine terminal without another preflight', async () => {
     const quarantineSummary =
       'Installer source quarantined before QA: HASH_MISMATCH. Publisher bytes changed.';
