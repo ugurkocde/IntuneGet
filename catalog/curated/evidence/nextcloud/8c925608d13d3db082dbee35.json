@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "79698e1e2acc480f0a9194ba000795140403286c",
+    "runId": "37806325614",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "nextcloud",
+    "version": "34.0.5",
+    "installerUrl": "https://github.com/nextcloud-releases/desktop/releases/download/v34.0.5/Nextcloud-34.0.5-x64.msi",
+    "vendorSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+    "releaseNotesUrl": "https://github.com/nextcloud-releases/desktop/releases/tag/v34.0.5",
+    "discoveredAt": "2026-10-08T13:29:05.778Z",
+    "id": "8c925608d13d3db082dbee35"
+  },
+  "previous": {
+    "appId": "nextcloud",
+    "version": "34.0.4",
+    "installerUrl": "https://github.com/nextcloud-releases/desktop/releases/download/v34.0.4/Nextcloud-34.0.4-x64.msi",
+    "vendorSha256": "1df758add8cb685f5573223e8db18caa18ad7d356913c89d937cab0dc8444d07",
+    "releaseNotesUrl": "https://github.com/nextcloud-releases/desktop/releases/tag/v34.0.4",
+    "discoveredAt": "2026-10-08T13:29:27.191Z",
+    "id": "b06818dffad5fab54d948f38"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "8c925608d13d3db082dbee35",
+      "installerSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+      "sourceUrl": "https://github.com/nextcloud-releases/desktop/releases/download/v34.0.5/Nextcloud-34.0.5-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Nextcloud GmbH",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+        "scannedAt": "2026-10-08T16:13:52.6999351Z",
+        "suspicious": 0,
+        "status": "clean"
+      }
+    },
+    "previous": {
+      "candidateId": "b06818dffad5fab54d948f38",
+      "installerSha256": "1df758add8cb685f5573223e8db18caa18ad7d356913c89d937cab0dc8444d07",
+      "sourceUrl": "https://github.com/nextcloud-releases/desktop/releases/download/v34.0.4/Nextcloud-34.0.4-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Nextcloud GmbH",
+        "status": "valid"
+      },
+      "security": {
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "1df758add8cb685f5573223e8db18caa18ad7d356913c89d937cab0dc8444d07",
+        "scannedAt": "2026-10-08T16:14:16.8075596Z",
+        "suspicious": 0,
+        "status": "clean"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "8c925608d13d3db082dbee35",
+    "packageId": "IntuneGet.Curated.Nextcloud",
+    "installerUrl": "https://github.com/nextcloud-releases/desktop/releases/download/v34.0.5/Nextcloud-34.0.5-x64.msi",
+    "installerSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Nextcloud",
+      "displayName": "Nextcloud Desktop",
+      "publisher": "Nextcloud GmbH",
+      "version": "34.0.5",
+      "architecture": "x64",
+      "installerSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart REBOOT=ReallySuppress ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Nextcloud Desktop",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Nextcloud\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"34.0.5\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Nextcloud\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"34.0.5\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "F8F7D1D34673DCF1A0F7F47378144343B5DED055DBDFF87C29C124F3413757F1",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Nextcloud\",\"publisher\":\"IntuneGet QA\",\"version\":\"34.0.5\",\"wingetId\":\"IntuneGet.Curated.Nextcloud\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"34.0.5\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Nextcloud\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"8E2D503E2F6D524F8CD854696ED90CB2114285921EE514B6C2E8C67781BD7F89\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"AD048C193F9BBB577DC8B7BFDE2F3F0A3BE845BCD1585105CE62BE0AF4AB57CE\",\"silentArgs\":\"/qn /norestart REBOOT=ReallySuppress ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Nextcloud Desktop\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"34.0.5\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Nextcloud\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"8C1D6B82777295416865A69C37F3BDE85C20E26439E863CF0CD64A7E9BD726FA\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "8c1d6b82777295416865a69c37f3bde85c20e26439e863cf0cd64a7e9bd726fa",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "previousInstallerSha256": "1df758add8cb685f5573223e8db18caa18ad7d356913c89d937cab0dc8444d07",
+    "installerVersion": "34.0.5",
+    "installerSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "upgradeFromVersion": "34.0.4",
+    "architecture": "x64",
+    "executionContext": "LocalSystem",
+    "testLevel": "psadt-package",
+    "candidateId": "8c925608d13d3db082dbee35",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "testedAt": "2026-10-08T16:16:42.8409475Z",
+    "executionProfileSha256": "F8F7D1D34673DCF1A0F7F47378144343B5DED055DBDFF87C29C124F3413757F1"
+  },
+  "verifiedAt": "2026-10-08T16:16:47.3587259Z",
+  "authenticatedArtifact": {
+    "id": 11562609373,
+    "sha256": "592ad57a3787efbd1703a0589950efa7d251c4953e4b7b3d0dc66bf137c6a6a0"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

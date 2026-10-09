@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1",
+    "workflowCommit": "06ea82ae9fa8eed110a1a6877ae7789c2a3e883c",
+    "runId": "37823656821",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "imageglass",
+    "version": "10.0.6.906",
+    "installerUrl": "https://github.com/d2phap/ImageGlass/releases/download/10.0.6.906/ImageGlass_10.0.6.906_win-x64.msi",
+    "vendorSha256": "c0ad65830cc75bd7bb23190c99e2fcb0d08c5ae3c5d982f1590c72539ce9e73d",
+    "releaseNotesUrl": "https://github.com/d2phap/ImageGlass/releases/tag/10.0.6.906",
+    "discoveredAt": "2026-10-08T13:29:08.71Z",
+    "id": "4ae2439cbc439168ab1cacd5"
+  },
+  "previous": {
+    "appId": "imageglass",
+    "version": "10.0.5.825",
+    "installerUrl": "https://github.com/d2phap/ImageGlass/releases/download/10.0.5.825/ImageGlass_10.0.5.825_win-x64.msi",
+    "vendorSha256": "b1f06d3c38b9ab8d732e9d430542eb5bbe69c9030be5691498b01b2a34f59e98",
+    "releaseNotesUrl": "https://github.com/d2phap/ImageGlass/releases/tag/10.0.5.825",
+    "discoveredAt": "2026-10-08T13:29:38.014Z",
+    "id": "8daa86a89ebcd8866e6b678a"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "4ae2439cbc439168ab1cacd5",
+      "installerSha256": "c0ad65830cc75bd7bb23190c99e2fcb0d08c5ae3c5d982f1590c72539ce9e73d",
+      "sourceUrl": "https://github.com/d2phap/ImageGlass/releases/download/10.0.6.906/ImageGlass_10.0.6.906_win-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Duong Dieu Phap"
+      },
+      "security": {
+        "scannedAt": "2026-10-08T18:27:16.5260741Z",
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0,
+        "suspicious": 0,
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "c0ad65830cc75bd7bb23190c99e2fcb0d08c5ae3c5d982f1590c72539ce9e73d"
+      }
+    },
+    "previous": {
+      "candidateId": "8daa86a89ebcd8866e6b678a",
+      "installerSha256": "b1f06d3c38b9ab8d732e9d430542eb5bbe69c9030be5691498b01b2a34f59e98",
+      "sourceUrl": "https://github.com/d2phap/ImageGlass/releases/download/10.0.5.825/ImageGlass_10.0.5.825_win-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Duong Dieu Phap"
+      },
+      "security": {
+        "scannedAt": "2026-10-08T18:27:23.895883Z",
+        "engineVersion": "1.1.26080.3",
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0,
+        "suspicious": 0,
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "b1f06d3c38b9ab8d732e9d430542eb5bbe69c9030be5691498b01b2a34f59e98"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "4ae2439cbc439168ab1cacd5",
+    "packageId": "IntuneGet.Curated.ImageGlass",
+    "installerUrl": "https://github.com/d2phap/ImageGlass/releases/download/10.0.6.906/ImageGlass_10.0.6.906_win-x64.msi",
+    "installerSha256": "c0ad65830cc75bd7bb23190c99e2fcb0d08c5ae3c5d982f1590c72539ce9e73d",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.ImageGlass",
+      "displayName": "ImageGlass",
+      "publisher": "Duong Dieu Phap",
+      "version": "10.0.6.906",
+      "architecture": "x64",
+      "installerSha256": "c0ad65830cc75bd7bb23190c99e2fcb0d08c5ae3c5d982f1590c72539ce9e73d",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:ImageGlass",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ImageGlass\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"10.0.6.906\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ImageGlass\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"10.0.6.906\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "4B641C4244E426118A4295A69AEC89844CA4E785A144C724D412BB21496DCB9A",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.ImageGlass\",\"publisher\":\"IntuneGet QA\",\"version\":\"10.0.6.906\",\"wingetId\":\"IntuneGet.Curated.ImageGlass\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"10.0.6.906\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ImageGlass\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"9056CE61520E74F05288606965782C7F8D384D0A5C61C9994EAE6E7C6D415209\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"C0AD65830CC75BD7BB23190C99E2FCB0D08C5AE3C5D982F1590C72539CE9E73D\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:ImageGlass\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"10.0.6.906\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_ImageGlass\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"23747D1C559D1C8FE6BE4739832B8EAC4853A99EC8987100FD27B0C1D3F5BBF3\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "23747d1c559d1c8fe6be4739832b8eac4853a99ec8987100fd27b0c1d3f5bbf3",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "previousInstallerSha256": "b1f06d3c38b9ab8d732e9d430542eb5bbe69c9030be5691498b01b2a34f59e98",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testLevel": "psadt-package",
+    "installerVersion": "10.0.6.906",
+    "executionProfileSha256": "4B641C4244E426118A4295A69AEC89844CA4E785A144C724D412BB21496DCB9A",
+    "executionContext": "LocalSystem",
+    "architecture": "x64",
+    "candidateId": "4ae2439cbc439168ab1cacd5",
+    "upgradeFromVersion": "10.0.5.825",
+    "installerSha256": "c0ad65830cc75bd7bb23190c99e2fcb0d08c5ae3c5d982f1590c72539ce9e73d",
+    "testedAt": "2026-10-08T18:29:07.5573983Z"
+  },
+  "verifiedAt": "2026-10-08T18:29:11.6290739Z",
+  "authenticatedArtifact": {
+    "id": 11571250562,
+    "sha256": "c9cb58bcbe76ff6d3ca62a1d29fdcb6d4137f66b6b413deccf85dacd1aba724e"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
