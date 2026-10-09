@@ -26,6 +26,11 @@ import {
   PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
 import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
+import {
+  buildQaCandidatePreflightRequest,
+  type QaCandidatePreflightInput,
+} from '@/lib/qa/candidate-preflight';
+import { enforceInstallerPreflight, InstallerPreflightError } from '@/lib/installer-preflight';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
@@ -44,6 +49,35 @@ export interface QaDemandResult {
   candidateId: string | null;
   state: QaDemandState;
   failureSummary?: string;
+}
+
+const MANIFEST_CHANGED_QUARANTINE_PREFIX =
+  'Installer source quarantined before QA: MANIFEST_CHANGED.';
+
+/**
+ * A MANIFEST_CHANGED dispatch quarantine is evidence about the trusted WinGet
+ * manifest at that time, not about the installer bytes. Reuse the exact
+ * candidate only when the same preflight that QA dispatch enforces now accepts
+ * it against the live manifest. HASH_MISMATCH and every other quarantine stay
+ * terminal, and dispatch still repeats the full preflight before any VM run.
+ * A retryable preflight failure keeps the candidate quarantined without
+ * turning a temporary outage into a terminal result.
+ */
+async function recheckManifestQuarantine(
+  existing: QaCandidatePreflightInput & { failure_summary: string | null },
+  testConfig: Json,
+): Promise<'recovered' | 'quarantined' | 'retry'> {
+  if (!existing.failure_summary?.startsWith(MANIFEST_CHANGED_QUARANTINE_PREFIX)) return 'quarantined';
+  try {
+    await enforceInstallerPreflight(buildQaCandidatePreflightRequest({
+      ...existing,
+      test_config: testConfig,
+    }));
+    return 'recovered';
+  } catch (error) {
+    if (error instanceof InstallerPreflightError) return error.retryable ? 'retry' : 'quarantined';
+    throw error;
+  }
 }
 
 export async function ensureQaDemand(
@@ -284,10 +318,15 @@ export async function ensureQaDemand(
     };
   }
 
-  if (
+  const quarantineRecheck =
     existing.status === 'superseded' &&
     !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary, true)
-  ) {
+      ? await recheckManifestQuarantine(existing, testConfig as unknown as Json)
+      : null;
+  if (quarantineRecheck === 'retry') {
+    return { identity, candidateId: existing.id, state: 'waiting' };
+  }
+  if (quarantineRecheck === 'quarantined') {
     return {
       identity,
       candidateId: existing.id,
