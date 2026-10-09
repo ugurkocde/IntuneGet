@@ -23,6 +23,12 @@ export const INSTALLER_URL_OVERRIDES: Record<string, OverrideFn> = {
     architecture.toLowerCase() === 'x64'
       ? `https://mirror.blender.org/release/Blender4.2/blender-${version}-windows-x64.msi`
       : null,
+  // These exact releases hit the same hosted download 403. Keep the original
+  // manifest hash and use Blender's official mirror only for reviewed tuples.
+  'BlenderFoundation.Blender': (version, architecture) =>
+    architecture.toLowerCase() === 'x64' && ['5.2.1', '5.2.2'].includes(version)
+      ? `https://mirror.blender.org/release/Blender5.2/blender-${version}-windows-x64.msi`
+      : null,
   // ImageGlass 10.0.4.819 was published to WinGet with the correct trusted
   // hash, but the release asset was renamed after publication. Keep this
   // exact tuple on the official GitHub release without guessing future names.
