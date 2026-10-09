@@ -1,5 +1,5 @@
 {
   "title": "Show existing tenant deployments in the app catalog",
   "summary": "Catalog cards now show when an app has already been deployed in the selected tenant before selection. The warning includes existing deployer attribution and keeps teammate deployments selectable.",
-  "type": "added"
+  "type": "new"
 }
