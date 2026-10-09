@@ -81,6 +81,78 @@ describe('dispatchQaCandidate', () => {
     });
   });
 
+  it('preflights a customer deployment candidate with the user scope from its canonical profile', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const installerUrl =
+      'https://downloads.claude.ai/releases/win32/x64/2.19675.1/Claude-8613680e2e16d90700c039e084a7883f321ed4e3.exe';
+
+    // Customer deployment-config candidates do not store a top-level scope.
+    // WinGet publishes this exact entry as Scope: user, so a machine-scope
+    // preflight rejects the trusted installer as MANIFEST_CHANGED.
+    await dispatchQaCandidate({
+      id: '55555555-5555-4555-8555-555555555555',
+      winget_id: 'Anthropic.Claude',
+      definition_path: null,
+      version: '2.19675.1',
+      architecture: 'x64',
+      installer_url: installerUrl,
+      installer_sha256: '692DE1F6B82850FB92A5ECA4F7A64A8C41FA6BD8CF5D97F5105D0E68C0F28980',
+      installer_file_name: 'Claude-8613680e2e16d90700c039e084a7883f321ed4e3.exe',
+      installer_type: 'exe',
+      test_level: 'psadt-package',
+      package_profile_sha256: 'C'.repeat(64),
+      test_config: {
+        mode: 'psadt-package',
+        profileKind: 'deployment-config',
+        packageProfileCanonicalJson: JSON.stringify({
+          profileKind: 'deployment-config',
+          installer: { installScope: 'user', sourceType: 'exe' },
+        }),
+      },
+    });
+
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(expect.objectContaining({
+      wingetId: 'Anthropic.Claude',
+      installerUrl,
+      installerType: 'exe',
+      installScope: 'user',
+    }));
+  });
+
+  it('keeps machine scope when a candidate profile is missing or malformed', async () => {
+    enforceInstallerPreflightMock.mockResolvedValue({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    await dispatchQaCandidate({
+      id: '66666666-6666-4666-8666-666666666666',
+      winget_id: 'Example.App',
+      definition_path: null,
+      version: '2.0.0',
+      architecture: 'x64',
+      installer_url: 'https://example.test/setup.exe',
+      installer_sha256: 'A'.repeat(64),
+      installer_file_name: 'setup.exe',
+      installer_type: 'exe',
+      test_level: 'psadt-package',
+      package_profile_sha256: 'B'.repeat(64),
+      test_config: { mode: 'psadt-package', packageProfileCanonicalJson: '{not json' },
+    });
+
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith(expect.objectContaining({
+      installScope: 'machine',
+    }));
+  });
+
   it('uses a reviewed mirror for both QA preflight and the runner payload', async () => {
     enforceInstallerPreflightMock.mockResolvedValue({
       cacheKey: 'healthy',
