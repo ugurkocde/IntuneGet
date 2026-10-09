@@ -87,10 +87,11 @@ For other hosting providers or bare metal.
 
 Prerequisites:
 
-- **Node.js 20 or 22 LTS recommended.** The optional `better-sqlite3`
-  dependency ships prebuilt binaries for these versions. Other Node.js
-  versions trigger a source build, which requires Python 3 and, on Windows,
-  Visual Studio Build Tools.
+- **Node.js 22 or later is required.** An [LTS release](https://nodejs.org/en/about/previous-releases)
+  is recommended. The optional `better-sqlite3` dependency uses a prebuilt
+  binary when one is available for your Node.js version and platform.
+  Otherwise, it builds from source, which requires Python 3 and a C/C++
+  build toolchain (Visual Studio Build Tools on Windows).
 - If the optional `better-sqlite3` install fails, the app still runs in
   Supabase mode, but `DATABASE_MODE=sqlite` will not work until
   `better-sqlite3` is installed successfully.
@@ -297,7 +298,7 @@ PACKAGER_MODE=local
 
 #### 5.2 Install the Packager on Windows
 
-On a Windows machine with Node.js 18+:
+On a Windows machine with Node.js 22 or later:
 
 ```bash
 # Install globally
