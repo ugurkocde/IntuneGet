@@ -38,6 +38,13 @@ const metadata = {
 };
 
 describe('upgradeLegacyPackageDefaults', () => {
+  it('never migrates an explicitly fixed rule that resembles a legacy generated default', () => {
+    const config = zoomConfig();
+    config.psadtConfig!.customDetection = true;
+    const before = JSON.stringify(config);
+    expect(upgradeLegacyPackageDefaults(config, metadata)).toEqual({config,changed:false,upgradedUninstallCommand:false,upgradedDetectionRules:false,reconciledManagedDetectionRules:false});
+    expect(JSON.stringify(config)).toBe(before);
+  });
   it('upgrades the exact legacy MSI defaults used by existing update policies', () => {
     const result = upgradeLegacyPackageDefaults(zoomConfig(), metadata);
 

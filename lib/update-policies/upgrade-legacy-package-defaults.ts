@@ -109,6 +109,9 @@ export function upgradeLegacyPackageDefaults(
   current: DeploymentConfig,
   metadata: CurrentPackageMetadata
 ): LegacyPackageUpgradeResult {
+  if (current.psadtConfig?.customDetection) {
+    return { config: current, changed: false, upgradedUninstallCommand: false, upgradedDetectionRules: false, reconciledManagedDetectionRules: false };
+  }
   const config: DeploymentConfig = {
     ...current,
     detectionRules: [...(current.detectionRules || [])],

@@ -184,6 +184,11 @@ export interface PSADTConfig {
   // Detection
   detectionRules: DetectionRule[];
 
+  // When true, detectionRules are customer-authored registry, file or MSI
+  // rules that replace the generated version marker rules. They stay fixed
+  // until the customer edits them. Absent means generated rules (default).
+  customDetection?: boolean;
+
   // Registry marker root: subpath under the hive (HKLM/HKCU) where the
   // IntuneGet detection marker key is written, without a hive prefix.
   // Example: 'SOFTWARE\\Contoso\\Apps'. Absent/empty means the default

@@ -121,6 +121,15 @@ describe('ensureUpdatePolicy', () => {
     );
   });
 
+  it('refreshes fixed rules only from a completed explicit redeployment', async () => {
+    const config = {...DEPLOYMENT_CONFIG, detectionRules:[{type:'registry',keyPath:'HKEY_LOCAL_MACHINE\\Vendor',detectionType:'exists'}],psadtConfig:{customDetection:true,detectionRules:[{type:'registry',keyPath:'HKEY_LOCAL_MACHINE\\Vendor',detectionType:'exists'}]}};
+    buildDeploymentConfigForAppMock.mockResolvedValue({status:'ok',deploymentConfig:config,originalUploadHistoryId:'new-history'});
+    expect(parseCartUpdatePolicy({psadtConfig:config.psadtConfig})).toBeNull();
+    expect(upsertMock).not.toHaveBeenCalled();
+    await ensureUpdatePolicy({...ARGS,policyType:'auto_update'});
+    expect(upsertMock).toHaveBeenCalledWith(expect.objectContaining({deployment_config:config,original_upload_history_id:'new-history'}),expect.anything());
+  });
+
   it('skips auto_update instead of writing a null-config row when no config can be built', async () => {
     buildDeploymentConfigForAppMock.mockResolvedValue({ status: 'orphaned_job' });
 

@@ -210,6 +210,11 @@ export class AutoUpdateTrigger {
         };
       }
 
+      // Custom detection belongs to the administrator and stays fixed until edited.
+      if (policy.deployment_config.psadtConfig?.customDetection) {
+        return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
+      }
+
       // Safety check 3: Verify prior deployment exists (if required)
       if (this.safetyConfig.requirePriorDeployment && !options?.skipPriorDeploymentCheck && !policy.original_upload_history_id) {
         return {
@@ -1119,3 +1124,4 @@ export async function getLatestInstallerInfo(
     },
   };
 }
+import { customDetectionUpdateHold } from '@/lib/custom-detection';

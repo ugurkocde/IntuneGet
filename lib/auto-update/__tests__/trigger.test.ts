@@ -156,6 +156,19 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
+  it('holds fixed rules before any database, QA or rate limit work, including manual bypass options', async () => {
+    const supabase = createSupabaseMock({});
+    const config = zoomConfigForTrigger();
+    config.psadtConfig = { ...DEFAULT_PSADT_CONFIG, customDetection: true, detectionRules: config.detectionRules };
+    const policy = makePolicy(config);
+    policy.consecutive_failures = 0;
+    const before = JSON.stringify(policy);
+    const result = await makeTrigger(supabase).triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result).toEqual({ success: false, skipped: true, skipReason: 'Custom detection rules are fixed. Deploy 2.0.0 from the catalog with updated rules.' });
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(policy)).toBe(before);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     getQaResultMock.mockResolvedValue(null);
