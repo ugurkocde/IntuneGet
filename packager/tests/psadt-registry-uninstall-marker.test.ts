@@ -99,6 +99,36 @@ describe('local packager registry uninstall marker', () => {
     }
   });
 
+  it('refuses a malformed marker for an MSI job instead of using a GUID embedded in it', () => {
+    for (const marker of [
+      'REGISTRY_UNINSTALL_PRODUCT:invalid:{12345678-1234-1234-1234-123456789ABC}:Contoso App',
+      'REGISTRY_UNINSTALL {12345678-1234-1234-1234-123456789ABC}',
+    ]) {
+      const script = generator.generateDeployScript(
+        job({ installer_type: 'msi', install_command: '"setup.msi" /qn', uninstall_command: marker }),
+        'setup.msi'
+      );
+      expectNoMarkerOnCommandLine(script);
+      expect(script, marker).not.toContain("$configuredUninstallProductCode = '{12345678-1234-1234-1234-123456789ABC}'");
+      expect(script, marker).not.toContain("-ProductCode '{12345678-1234-1234-1234-123456789ABC}'");
+      expect(script, marker).toMatch(/throw "The (?:registry|exact vendor) uninstall identity is malformed/);
+    }
+  });
+
+  it('keeps an Inno Setup registry key on the exact identity path', () => {
+    const script = generator.generateDeployScript(
+      job({
+        installer_type: 'inno',
+        uninstall_command: 'REGISTRY_UNINSTALL_KEY:{22222222-2222-2222-2222-222222222222}_is1:Inno App',
+      }),
+      'setup.exe'
+    );
+    expectNoMarkerOnCommandLine(script);
+    expect(script).toContain("$configuredUninstallProductCode = '{22222222-2222-2222-2222-222222222222}_is1'");
+    expect(script).toContain("$configuredUninstallDisplayName = 'Inno App'");
+    expect(script).not.toContain('uninstall identity is malformed');
+  });
+
   it('still runs a plain vendor uninstall command through cmd.exe', () => {
     const script = generator.generateDeployScript(
       job({ uninstall_command: '"C:\\Program Files\\Contoso\\uninstall.exe" /S' }),
