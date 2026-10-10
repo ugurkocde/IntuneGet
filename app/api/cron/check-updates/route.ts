@@ -27,6 +27,7 @@ interface UploadHistoryRecord {
   display_name: string;
   intune_app_id: string;
   intune_tenant_id: string | null;
+  deployed_at?: string | null;
 }
 
 interface UpdateCheckInsert {
@@ -57,6 +58,48 @@ interface ExistingUpdateCheckRow {
   tenant_id: string;
   winget_id: string;
   intune_app_id: string;
+  current_version: string;
+  display_name: string;
+  latest_version: string;
+  notified_at: string | null;
+}
+
+interface FilterPolicyRow {
+  user_id: string;
+  tenant_id: string;
+  winget_id: string;
+  policy_type: string;
+  pinned_version: string | null;
+}
+
+// PostgREST caps every response (1000 rows by default), so list reads are
+// paged to make sure a large result is never silently truncated.
+const PAGE_SIZE = 1000;
+const DELETE_CHUNK_SIZE = 200;
+
+async function fetchAllRows(
+  query: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
+): Promise<{ data: unknown[]; error: { message: string } | null }> {
+  const rows: unknown[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await query(from, from + PAGE_SIZE - 1);
+    if (error) {
+      return { data: rows, error };
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
+function deployedAtMs(record: UploadHistoryRecord): number {
+  const time = record.deployed_at ? Date.parse(record.deployed_at) : NaN;
+  return Number.isNaN(time) ? 0 : time;
 }
 
 /**
@@ -261,9 +304,9 @@ export async function GET(request: Request) {
 
     // Always include users that have deployed apps tracked in upload_history.
     // Without this, updates can stay at zero for users who did not enable notifications.
-    const { data: deploymentUsers, error: deploymentUsersError } = await supabase
-      .from('upload_history')
-      .select('user_id');
+    const { data: deploymentUsers, error: deploymentUsersError } = await fetchAllRows(
+      (from, to) => supabase.from('upload_history').select('user_id').order('id').range(from, to)
+    );
 
     if (deploymentUsersError) {
       throw deploymentUsersError;
@@ -274,7 +317,7 @@ export async function GET(request: Request) {
     notificationUsers?.forEach((u) => userIds.add(u.user_id));
     webhookUsers?.forEach((u) => userIds.add(u.user_id));
     autoUpdateUsers?.forEach((u) => userIds.add(u.user_id));
-    deploymentUsers?.forEach((u) => userIds.add(u.user_id));
+    (deploymentUsers as Array<{ user_id: string }>).forEach((u) => userIds.add(u.user_id));
 
     if (userIds.size === 0) {
       return NextResponse.json({
@@ -298,15 +341,26 @@ export async function GET(request: Request) {
     });
 
     // Get all ignore/pin policies to filter out updates
-    const { data: filterPolicies } = await supabase
-      .from('app_update_policies')
-      .select('user_id, tenant_id, winget_id, policy_type, pinned_version')
-      .in('policy_type', ['ignore', 'pin_version']);
+    // A missing policy would let an ignored or pinned app through, so a
+    // failed read stops the run.
+    const { data: filterPolicies, error: filterPoliciesError } = await fetchAllRows(
+      (from, to) =>
+        supabase
+          .from('app_update_policies')
+          .select('user_id, tenant_id, winget_id, policy_type, pinned_version')
+          .in('policy_type', ['ignore', 'pin_version'])
+          .order('id')
+          .range(from, to)
+    );
+
+    if (filterPoliciesError) {
+      throw filterPoliciesError;
+    }
 
     // Create lookup for ignored apps
     const ignoredApps = new Set<string>();
     const pinnedVersions = new Map<string, string>();
-    filterPolicies?.forEach((policy) => {
+    (filterPolicies as FilterPolicyRow[]).forEach((policy) => {
       const key = `${policy.user_id}:${policy.tenant_id}:${policy.winget_id}`;
       if (policy.policy_type === 'ignore') {
         ignoredApps.add(key);
@@ -319,13 +373,6 @@ export async function GET(request: Request) {
     let totalUsersChecked = 0;
     const errors: string[] = [];
     const allUpdates: UpdateCheckInsert[] = [];
-    const activeUpdateKeys = new Set<string>();
-    // Row keys whose app this run actually compared against the catalog. Only
-    // these may be removed by the stale cleanup below. Rows written by the
-    // on-demand refresh for apps the cron never scans (teammate deployments,
-    // claimed apps, manual mappings, catalog matches) are left alone; the
-    // refresh recomputes them and the 30 day cleanup is their backstop.
-    const evaluatedUpdateKeys = new Set<string>();
 
     // Process users in batches
     const userIdArray = Array.from(userIds);
@@ -334,17 +381,22 @@ export async function GET(request: Request) {
       const batch = userIdArray.slice(i, i + BATCH_SIZE);
 
       // Get deployed apps for this batch of users
-      const { data: deployedApps, error: deployedError } = await supabase
-        .from('upload_history')
-        .select('*')
-        .in('user_id', batch);
+      const { data: deployedRows, error: deployedError } = await fetchAllRows((from, to) =>
+        supabase
+          .from('upload_history')
+          .select('*')
+          .in('user_id', batch)
+          .order('id')
+          .range(from, to)
+      );
 
       if (deployedError) {
         errors.push(`Error fetching deployed apps: ${deployedError.message}`);
         continue;
       }
 
-      if (!deployedApps || deployedApps.length === 0) {
+      const deployedApps = deployedRows as UploadHistoryRecord[];
+      if (deployedApps.length === 0) {
         continue;
       }
 
@@ -352,18 +404,38 @@ export async function GET(request: Request) {
       // notified_at for unchanged updates but reset it to null when
       // latest_version changed. Without the reset, an app that was already
       // notified for an older version never notifies again on the next bump.
-      const { data: priorRows } = await supabase
-        .from('update_check_results')
-        .select('user_id, tenant_id, winget_id, intune_app_id, latest_version, notified_at')
-        .in('user_id', batch);
-      const priorMap = new Map<string, { latest_version: string; notified_at: string | null }>();
-      (priorRows as Array<{ user_id: string; tenant_id: string; winget_id: string; intune_app_id: string; latest_version: string; notified_at: string | null }> | null)?.forEach(
-        (r) =>
-          priorMap.set(`${r.user_id}:${r.tenant_id}:${r.winget_id}:${r.intune_app_id}`, {
-            latest_version: r.latest_version,
-            notified_at: r.notified_at,
-          })
+      // Without these rows every pending update would look new and be
+      // notified again, so the batch is skipped when they cannot be loaded.
+      const { data: priorData, error: priorError } = await fetchAllRows((from, to) =>
+        supabase
+          .from('update_check_results')
+          .select('id, user_id, tenant_id, winget_id, intune_app_id, current_version, display_name, latest_version, notified_at')
+          .in('user_id', batch)
+          .order('id')
+          .range(from, to)
       );
+
+      if (priorError) {
+        errors.push(`Skipped a batch, could not load existing update rows: ${priorError.message}`);
+        continue;
+      }
+
+      const priorRows = priorData as ExistingUpdateCheckRow[];
+      const priorMap = new Map<string, ExistingUpdateCheckRow>();
+      const priorRowsByApp = new Map<string, ExistingUpdateCheckRow[]>();
+      priorRows.forEach((row) => {
+        priorMap.set(`${row.user_id}:${row.tenant_id}:${row.winget_id}:${row.intune_app_id}`, row);
+        const appKey = `${row.user_id}:${row.tenant_id}:${row.winget_id}`;
+        priorRowsByApp.set(appKey, [...(priorRowsByApp.get(appKey) ?? []), row]);
+      });
+
+      // Row keys whose app this batch compared against the catalog. Only these
+      // may be removed by the stale cleanup below. Rows written by the
+      // on-demand refresh for apps the cron never scans (teammate deployments,
+      // claimed apps, manual mappings, catalog matches) are left alone; the
+      // refresh recomputes them and the 30 day cleanup is their backstop.
+      const evaluatedUpdateKeys = new Set<string>();
+      const activeUpdateKeys = new Set<string>();
 
       // Group by user and tenant
       const userTenantApps = new Map<string, UploadHistoryRecord[]>();
@@ -382,11 +454,21 @@ export async function GET(request: Request) {
         const [userId, tenantId] = key.split(':');
         totalUsersChecked++;
 
-        // Get unique apps by winget_id (keep the latest deployment)
+        // Get unique apps by winget_id (keep the latest deployment). Ties go
+        // to the most recent deployment, the closest match without a Graph
+        // call to the refresh, which prefers the most recently modified
+        // Intune object. The cron cannot see objects deleted in Intune: if the
+        // newest deployment was deleted there, the refresh compares an older
+        // object, and the two can still disagree about that app.
         const uniqueApps = new Map<string, UploadHistoryRecord>();
         apps.forEach((app) => {
           const existing = uniqueApps.get(app.winget_id);
-          if (!existing || compareVersions(app.version, existing.version) > 0) {
+          if (!existing) {
+            uniqueApps.set(app.winget_id, app);
+            return;
+          }
+          const comparison = compareVersions(app.version, existing.version);
+          if (comparison > 0 || (comparison === 0 && deployedAtMs(app) > deployedAtMs(existing))) {
             uniqueApps.set(app.winget_id, app);
           }
         });
@@ -410,53 +492,80 @@ export async function GET(request: Request) {
           // Every deployment of this app by this user is covered by the
           // comparison below: the newest one is compared and older Intune
           // objects of the same app are superseded by it.
-          for (const deployment of apps) {
-            if (deployment.winget_id === app.winget_id) {
-              evaluatedUpdateKeys.add(
-                `${userId}:${tenantId}:${app.winget_id}:${deployment.intune_app_id}`
-              );
-            }
+          const ownIntuneAppIds = new Set(
+            apps
+              .filter((deployment) => deployment.winget_id === app.winget_id)
+              .map((deployment) => deployment.intune_app_id)
+          );
+          for (const intuneAppId of ownIntuneAppIds) {
+            evaluatedUpdateKeys.add(`${appKey}:${intuneAppId}`);
           }
 
           // Compare versions
           if (compareVersions(app.version, latestVersion) < 0) {
-            // Update available
-            const currentParsed = parseVersion(app.version);
-            const latestParsed = parseVersion(latestVersion);
+            // The refresh keeps one row per app, for the newest Intune object
+            // in the tenant. When that is an object this user did not deploy
+            // (for example a teammate's newer copy), update that row instead
+            // of adding a second row for the same app.
+            const refreshRow = (priorRowsByApp.get(appKey) ?? [])
+              .filter((row) => !ownIntuneAppIds.has(row.intune_app_id))
+              .reduce<ExistingUpdateCheckRow | null>(
+                (newest, row) =>
+                  !newest || compareVersions(row.current_version, newest.current_version) > 0
+                    ? row
+                    : newest,
+                null
+              );
+            const target =
+              refreshRow && compareVersions(refreshRow.current_version, latestVersion) < 0
+                ? {
+                    intune_app_id: refreshRow.intune_app_id,
+                    display_name: refreshRow.display_name,
+                    current_version: refreshRow.current_version,
+                  }
+                : {
+                    intune_app_id: app.intune_app_id,
+                    display_name: app.display_name,
+                    current_version: app.version,
+                  };
 
             // Check if it's a critical update (major version change)
-            const isCritical = latestParsed.major > currentParsed.major;
+            const latestMajor = parseVersion(latestVersion).major;
+            const isCritical = latestMajor > parseVersion(target.current_version).major;
 
             // Preserve notified_at only when the same version is still pending;
             // a changed latest_version resets it so the new version notifies.
-            const prior = priorMap.get(
-              `${userId}:${tenantId}:${app.winget_id}:${app.intune_app_id}`
-            );
+            const targetKey = `${appKey}:${target.intune_app_id}`;
+            const prior = priorMap.get(targetKey);
             const notifiedAt =
               prior && prior.latest_version === latestVersion ? prior.notified_at : null;
+            const now = new Date().toISOString();
 
             const updateRecord = {
               user_id: userId,
               tenant_id: tenantId,
               winget_id: app.winget_id,
-              intune_app_id: app.intune_app_id,
-              display_name: app.display_name,
-              current_version: app.version,
+              ...target,
               latest_version: latestVersion,
               is_critical: isCritical,
               // The cron only ever scans apps from upload_history, so every
               // detected update here is for an IntuneGet-managed app.
               is_managed: true,
               notified_at: notifiedAt,
-              detected_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              detected_at: now,
+              updated_at: now,
             };
 
             updates.push(updateRecord);
-            allUpdates.push(updateRecord);
-            activeUpdateKeys.add(
-              `${userId}:${tenantId}:${app.winget_id}:${app.intune_app_id}`
-            );
+            // Auto-updates act on this user's own deployment.
+            allUpdates.push({
+              ...updateRecord,
+              intune_app_id: app.intune_app_id,
+              display_name: app.display_name,
+              current_version: app.version,
+              is_critical: latestMajor > parseVersion(app.version).major,
+            });
+            activeUpdateKeys.add(targetKey);
           }
         }
       }
@@ -476,42 +585,32 @@ export async function GET(request: Request) {
         }
       }
 
+      // Remove stale rows for apps this batch evaluated that are no longer
+      // outdated. This clears outdated entries from older Intune app objects
+      // and resolved updates. Rows for apps the batch did not evaluate are
+      // kept with their notified and dismissed state, so they are not
+      // notified again.
+      const staleIds = priorRows
+        .filter((row) => {
+          const rowKey = `${row.user_id}:${row.tenant_id}:${row.winget_id}:${row.intune_app_id}`;
+          return evaluatedUpdateKeys.has(rowKey) && !activeUpdateKeys.has(rowKey);
+        })
+        .map((row) => row.id);
+
+      for (let start = 0; start < staleIds.length; start += DELETE_CHUNK_SIZE) {
+        const { error: staleDeleteError } = await supabase
+          .from('update_check_results')
+          .delete()
+          .in('id', staleIds.slice(start, start + DELETE_CHUNK_SIZE));
+
+        if (staleDeleteError) {
+          errors.push(`Error deleting stale updates: ${staleDeleteError.message}`);
+        }
+      }
+
       // Rate limiting between batches
       if (i + BATCH_SIZE < userIdArray.length) {
         await new Promise((r) => setTimeout(r, 100));
-      }
-    }
-
-    // Remove stale rows for apps this run evaluated that are no longer
-    // outdated. This clears outdated entries from older Intune app objects and
-    // resolved updates. Rows for apps the run did not evaluate are kept with
-    // their notified and dismissed state, so they are not notified again.
-    if (evaluatedUpdateKeys.size > 0) {
-      const { data: existingRows, error: existingRowsError } = await supabase
-        .from('update_check_results')
-        .select('id, user_id, tenant_id, winget_id, intune_app_id')
-        .in('user_id', userIdArray);
-
-      if (existingRowsError) {
-        errors.push(`Error loading existing update rows: ${existingRowsError.message}`);
-      } else if (existingRows) {
-        const staleIds = (existingRows as ExistingUpdateCheckRow[])
-          .filter((row) => {
-            const key = `${row.user_id}:${row.tenant_id}:${row.winget_id}:${row.intune_app_id}`;
-            return evaluatedUpdateKeys.has(key) && !activeUpdateKeys.has(key);
-          })
-          .map((row) => row.id);
-
-        if (staleIds.length > 0) {
-          const { error: staleDeleteError } = await supabase
-            .from('update_check_results')
-            .delete()
-            .in('id', staleIds);
-
-          if (staleDeleteError) {
-            errors.push(`Error deleting stale updates: ${staleDeleteError.message}`);
-          }
-        }
       }
     }
 
