@@ -180,8 +180,9 @@ Optional catalog snapshot overrides (sensible defaults, normally unset):
 ### Notification Configuration
 
 Email preferences, webhook configurations, and notification history require
-Supabase. A deployment using only SQLite cannot store these settings. Webhook
-creation returns an explicit configuration message when Supabase is absent.
+Supabase. A deployment using only SQLite cannot store these settings.
+**Settings → Notifications** shows which configuration is missing and links to
+this section.
 
 To enable notifications, complete the [Supabase setup](DATABASE_SETUP.md),
 including its migrations, and configure the server environment variables
