@@ -1976,7 +1976,7 @@ ${merge}
   });
 
   it('does not rewrite dollar signs or backticks in generic silent switches', () => {
-    expect(packager).toContain('$silentSwitchesEscaped = $effectiveSilentSwitches -replace "\'", "\'\'"');
+    expect(packager).toContain('$silentSwitchesEscaped = ConvertTo-PSSingleQuotedContent $effectiveSilentSwitches');
     const assignment = packager.match(/^\$silentSwitchesEscaped\s*=.*$/m)?.[0] ?? '';
     expect(assignment).not.toContain("-replace '`'");
     expect(assignment).not.toContain("-replace '\\$'");
@@ -3076,7 +3076,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
     expect(packager).toContain('$registryUninstallProductCode = $Matches[1]');
     expect(packager).toContain('$registryUninstallDisplayName = $DisplayName');
-    expect(packager).toContain('$registryUninstallDisplayNameEscaped = $registryUninstallDisplayName -replace');
+    expect(packager).toContain('$registryUninstallDisplayNameEscaped = ConvertTo-PSSingleQuotedContent $registryUninstallDisplayName');
   });
 
   it.runIf(canRunWindowsPowerShellPackager)('emits apostrophe-safe registry identity strings', () => {
@@ -3551,10 +3551,10 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
       "if ($originalInstallerType -in @('burn', 'exe'))"
     );
     expect(hostedPackager).toContain(
-      "if ($selectedApplications.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe'))"
+      "if ($selectedApplications.Count -gt 1 -and '${psSingleQuotedContent(registeredInstallerType)}' -in @('burn', 'exe'))"
     );
     expect(hostedPackager).toContain(
-      "if ($installedApps.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe'))"
+      "if ($installedApps.Count -gt 1 -and '${psSingleQuotedContent(registeredInstallerType)}' -in @('burn', 'exe'))"
     );
     expect(hostedPackager).toContain(
       "if (registeredInstallerType === 'burn')"
@@ -4316,9 +4316,9 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
 
   it('carries the effective nested installer engine into uninstall normalization', () => {
     expect(packager).toContain("$registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip'");
-    expect(packager).toContain("`$registeredInstallerType = '$registeredInstallerTypeLower'");
+    expect(packager).toContain("`$registeredInstallerType = '$(ConvertTo-PSSingleQuotedContent $registeredInstallerTypeLower)'");
     expect(hostedPackager).toContain("const registeredInstallerType = installerType === 'zip'");
-    expect(hostedPackager).toContain("'${registeredInstallerType}' -eq 'inno'");
+    expect(hostedPackager).toContain("'${psSingleQuotedContent(registeredInstallerType)}' -eq 'inno'");
   });
 
   it('monitors exact registry removal for both quiet and fallback EXE uninstall commands', () => {
@@ -4527,7 +4527,7 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
 
   it('keeps non-MSI fallback visible, non-WindowsInstaller, and fail-closed', () => {
     expect(packager).toContain(
-      "$allowContainsFallback = '$registeredInstallerTypeLower' -notin @('msi', 'wix')"
+      "$allowContainsFallback = '$(ConvertTo-PSSingleQuotedContent $registeredInstallerTypeLower)' -notin @('msi', 'wix')"
     );
     expect(packager).toContain(
       "$systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']"
@@ -4653,7 +4653,7 @@ $calls = @($install.FindAll({ param($node) $node -is [System.Management.Automati
 })
 ConvertTo-Json -InputObject $calls -Compress`;
   const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
-    '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { input: script, encoding: 'utf8' });
+    '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { input: script, encoding: 'utf8', timeout: 30_000 });
   if (result.status !== 0) {
     throw new Error(`Could not read the generated install calls:\n${result.stdout}\n${result.stderr}`);
   }

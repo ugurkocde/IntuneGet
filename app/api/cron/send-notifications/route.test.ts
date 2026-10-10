@@ -262,22 +262,62 @@ describe('send-notifications cron pending update paging', () => {
     expect(body).toMatchObject({ success: true, channelUsers: 1, pendingUpdates: 1 });
   });
 
-  it('stops at the time budget, reports the users left, and serves the longest waiting users first', async () => {
+  it('stops at the time budget and reports the users left for the next run', async () => {
     // Every user takes 13 s, so one batch of 20 users uses up the 240 s budget.
     state.msPerUser = 13_000;
     const owners = Array.from({ length: 50 }, (_, n) => userId(n));
-    // Row n belongs to owner 49 - (n % 50): the oldest rows belong to the
-    // highest user ids, so serving by id order would pick the wrong users.
-    state.tables.update_check_results = Array.from({ length: 1500 }, (_, n) =>
-      pendingRow(n, owners[49 - (n % 50)])
-    );
+    state.tables.update_check_results = Array.from({ length: 1500 }, (_, n) => pendingRow(n, owners[n % 50]));
     state.tables.webhook_configurations = owners.map((owner, n) => webhook(`hook-${pad(n)}`, owner));
 
     const { status, body } = await runCron();
 
     expect(status).toBe(200);
     expect(body).toMatchObject({ success: false, usersProcessed: 20, usersRemaining: 30 });
-    expect(Array.from(state.notified.keys()).sort()).toEqual(owners.slice(30));
+    expect(state.notified.size).toBe(20);
+  });
+
+  it('reaches different users on consecutive days when the budget cuts every run short', async () => {
+    state.msPerUser = 13_000;
+    const owners = Array.from({ length: 50 }, (_, n) => userId(n));
+    state.tables.update_check_results = Array.from({ length: 1500 }, (_, n) => pendingRow(n, owners[n % 50]));
+    state.tables.webhook_configurations = owners.map((owner, n) => webhook(`hook-${pad(n)}`, owner));
+
+    // Like the 03:30 update check, which rewrites detected_at on every upsert,
+    // so pending age says nothing about how long a user has waited. Nothing
+    // gets marked notified here, as if every delivery had failed.
+    const runOnDay = async (day: number) => {
+      const runAt = Date.parse('2026-10-11T04:00:00.000Z') + day * 24 * 60 * 60 * 1000;
+      state.tables.update_check_results.forEach((row) => {
+        row.detected_at = new Date(runAt - 30 * 60 * 1000).toISOString();
+      });
+      state.clock = runAt;
+      state.notified = new Map();
+      const { body } = await runCron();
+      expect(body).toMatchObject({ usersProcessed: 20, usersRemaining: 30 });
+      return new Set(state.notified.keys());
+    };
+
+    const firstDay = await runOnDay(0);
+    const secondDay = await runOnDay(1);
+    const skippedOnFirstDay = owners.filter((owner) => !firstDay.has(owner));
+    expect(skippedOnFirstDay.filter((owner) => secondDay.has(owner)).length).toBeGreaterThan(0);
+
+    // Over a month of cut short runs, nobody is left out every night.
+    const reached = new Set([...firstDay, ...secondDay]);
+    for (let day = 2; day < 30; day++) {
+      (await runOnDay(day)).forEach((owner) => reached.add(owner));
+    }
+    expect(Array.from(reached).sort()).toEqual(owners);
+  });
+
+  it('reports the channel user count when nothing is pending', async () => {
+    state.tables.webhook_configurations = [webhook('hook-1', userId(1))];
+    state.tables.update_check_results = [pendingRow(1, userId(2))];
+
+    const { body } = await runCron();
+
+    expect(body).toMatchObject({ success: true, channelUsers: 1, pendingUpdates: 0, emailsSent: 0 });
+    expect(state.notified.size).toBe(0);
   });
 
   it.each(['webhook_configurations', 'notification_preferences', 'update_check_results'])(
