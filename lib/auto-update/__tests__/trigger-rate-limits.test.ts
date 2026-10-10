@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   failTable: null as string | null,
   // Fails only the cooldown read (a non-count read of the history).
   failCooldownRead: false,
+  reads: {} as Record<string, number>,
 }));
 
 // Longest `in` filter value list the fake accepts, like a URL length limit.
@@ -26,6 +27,7 @@ function query(table: string) {
   let inFilterChars = 0;
 
   const run = () => {
+    state.reads[table] = (state.reads[table] ?? 0) + 1;
     if (
       state.failTable === table ||
       inFilterChars > MAX_IN_FILTER_CHARS ||
@@ -113,11 +115,19 @@ function history(policyIds: string[], status = 'completed') {
   }));
 }
 
-function checkRateLimits(userId: string, tenantId: string, policyId: string): Promise<RateLimitCheck> {
-  const trigger = new AutoUpdateTrigger('https://stub.supabase.co', 'stub-key', {
+function createTrigger() {
+  return new AutoUpdateTrigger('https://stub.supabase.co', 'stub-key', {
     ...DEFAULT_SAFETY_CONFIG,
     rateLimits: { maxUpdatesPerHour: 5, maxUpdatesPerTenant: 3, cooldownMinutes: 5 },
   });
+}
+
+function checkRateLimits(
+  userId: string,
+  tenantId: string,
+  policyId: string,
+  trigger = createTrigger()
+): Promise<RateLimitCheck> {
   return (
     trigger as unknown as {
       checkRateLimits: (userId: string, tenantId: string, policyId: string) => Promise<RateLimitCheck>;
@@ -129,6 +139,7 @@ describe('auto-update rate limits', () => {
   beforeEach(() => {
     state.failTable = null;
     state.failCooldownRead = false;
+    state.reads = {};
     state.tables = { app_update_policies: [], auto_update_history: [] };
   });
 
@@ -208,5 +219,29 @@ describe('auto-update rate limits', () => {
 
     expect(result).toMatchObject({ allowed: false, code: 'RATE_LIMIT_UNVERIFIED' });
     expect(result.reason).toContain('policy read failed: request failed');
+  });
+
+  it('reads each policy list once per run and stops checking a scope at its limit', async () => {
+    const userPolicies = policies(250, { tenant_id: 'tenant-1', user_id: 'user-1' });
+    state.tables.app_update_policies = userPolicies;
+    const trigger = createTrigger();
+
+    expect(await checkRateLimits('user-1', 'tenant-1', userPolicies[0].id, trigger)).toEqual({ allowed: true });
+    const policyReads = state.reads.app_update_policies;
+
+    // Five pending updates reach the user limit of five per hour.
+    state.tables.auto_update_history = history(
+      userPolicies.slice(100, 105).map((p) => p.id),
+      'pending'
+    );
+    const limited = await checkRateLimits('user-1', 'tenant-1', userPolicies[1].id, trigger);
+    expect(limited).toMatchObject({ allowed: false });
+    expect(limited.reason).toContain('5 updates per hour');
+    expect(state.reads.app_update_policies).toBe(policyReads);
+
+    const historyReads = state.reads.auto_update_history;
+    const again = await checkRateLimits('user-1', 'tenant-1', userPolicies[2].id, trigger);
+    expect(again).toEqual(limited);
+    expect(state.reads.auto_update_history).toBe(historyReads);
   });
 });

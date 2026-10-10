@@ -192,6 +192,12 @@ const RATE_LIMIT_ID_CHUNK_SIZE = 100;
 export class AutoUpdateTrigger {
   private supabase: SupabaseClient;
   private safetyConfig: AutoUpdateSafetyConfig;
+  // Per instance (one cron run or one request) rate limit state, so many
+  // candidates in one run do not rescan the same policy lists. Policy ids
+  // hardly change within a run, and a scope at its limit stays there for the
+  // few minutes a run takes, because the counted window is one hour.
+  private ratePolicyIds = new Map<string, string[]>();
+  private rateLimitedScopes = new Map<string, RateLimitCheck>();
 
   constructor(
     supabaseUrl: string,
@@ -440,9 +446,11 @@ export class AutoUpdateTrigger {
     since: string,
     completedOnly: boolean
   ): Promise<RecentUpdateCount> {
-    const policyIds: string[] = [];
+    const scopeKey = `${scope.column}:${scope.value}`;
+    const cachedIds = this.ratePolicyIds.get(scopeKey);
+    const policyIds: string[] = cachedIds ? [...cachedIds] : [];
     let afterId: string | null = null;
-    for (;;) {
+    while (!cachedIds) {
       const query = this.supabase
         .from('app_update_policies')
         .select('id')
@@ -458,6 +466,7 @@ export class AutoUpdateTrigger {
         return { count: null, error: `policy read failed: ${readErrorMessage(error)}` };
       }
       if (data.length === 0) {
+        this.ratePolicyIds.set(scopeKey, [...policyIds]);
         break;
       }
       const lastId: unknown = data[data.length - 1].id;
@@ -501,6 +510,13 @@ export class AutoUpdateTrigger {
       code: 'RATE_LIMIT_UNVERIFIED',
     });
 
+    const tenantScope = `tenant_id:${tenantId}`;
+    const userScope = `user_id:${userId}`;
+    const limited = this.rateLimitedScopes.get(tenantScope) ?? this.rateLimitedScopes.get(userScope);
+    if (limited) {
+      return limited;
+    }
+
     // Check per-tenant rate limit
     const tenantCount = await this.countRecentUpdates(
       { column: 'tenant_id', value: tenantId },
@@ -511,11 +527,13 @@ export class AutoUpdateTrigger {
       return unverified(tenantCount.error);
     }
     if (tenantCount.count >= rateLimits.maxUpdatesPerTenant) {
-      return {
+      const denial: RateLimitCheck = {
         allowed: false,
         reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerTenant} updates per tenant per hour`,
         retryAfterMinutes: 60,
       };
+      this.rateLimitedScopes.set(tenantScope, denial);
+      return denial;
     }
 
     // Check global hourly rate limit for this user
@@ -528,11 +546,13 @@ export class AutoUpdateTrigger {
       return unverified(userCount.error);
     }
     if (userCount.count >= rateLimits.maxUpdatesPerHour) {
-      return {
+      const denial: RateLimitCheck = {
         allowed: false,
         reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerHour} updates per hour`,
         retryAfterMinutes: 60,
       };
+      this.rateLimitedScopes.set(userScope, denial);
+      return denial;
     }
 
     // Check cooldown since last update for this specific policy
