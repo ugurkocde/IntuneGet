@@ -7,9 +7,17 @@ const state = vi.hoisted(() => ({
   catalog: [] as Array<{ winget_id: string; latest_version: string }>,
   failDeployedFetch: false,
   failPriorFetch: false,
+  failUpsert: false,
   // PostgREST returns at most this many rows per response (1000 by default).
   maxRows: 1000,
+  // Called after every read, to simulate concurrent writes between pages.
+  afterSelect: null as null | ((table: string) => void),
+  triggerAutoUpdate: vi.fn(),
+  getLatestInstallerInfo: vi.fn(),
 }));
+
+// Longest `in` filter value list the fake accepts, like a URL length limit.
+const MAX_IN_FILTER_CHARS = 8000;
 
 // Minimal in-memory stand-in for the Supabase query builder calls the cron uses.
 function query(table: string) {
@@ -18,11 +26,14 @@ function query(table: string) {
   let single = false;
   let limit: number | null = null;
   let orderBy: string | null = null;
-  let range: [number, number] | null = null;
+  let inFilterChars = 0;
   const rows = () => (state.tables[table] ??= []);
 
   const run = () => {
-    if (table === 'upload_history' && mode === 'select' && state.failDeployedFetch && filters.length > 0) {
+    if (inFilterChars > MAX_IN_FILTER_CHARS) {
+      return { data: null, error: { message: 'URI too long' } };
+    }
+    if (table === 'upload_history' && mode === 'select' && state.failDeployedFetch && inFilterChars > 0) {
       return { data: null, error: { message: 'temporary failure' } };
     }
     if (table === 'update_check_results' && mode === 'select' && state.failPriorFetch) {
@@ -35,11 +46,15 @@ function query(table: string) {
     }
     if (orderBy) {
       const column = orderBy;
-      matched.sort((a, b) => String(a[column]).localeCompare(String(b[column])));
+      matched.sort((a, b) => {
+        const left = String(a[column]);
+        const right = String(b[column]);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
     }
-    const ranged = range ? matched.slice(range[0], range[1] + 1) : matched;
-    const limited = ranged.slice(0, Math.min(limit ?? state.maxRows, state.maxRows));
+    const limited = matched.slice(0, Math.min(limit ?? state.maxRows, state.maxRows));
     const copies = limited.map((row) => ({ ...row }));
+    state.afterSelect?.(table);
     return { data: single ? copies[0] ?? null : copies, error: null };
   };
 
@@ -54,7 +69,12 @@ function query(table: string) {
       return builder;
     },
     in: (column: string, values: unknown[]) => {
+      inFilterChars += values.map(String).join(',').length;
       filters.push((row) => values.includes(row[column]));
+      return builder;
+    },
+    gt: (column: string, value: string) => {
+      filters.push((row) => String(row[column]) > value);
       return builder;
     },
     lt: (column: string, value: string) => {
@@ -63,10 +83,6 @@ function query(table: string) {
     },
     order: (column: string) => {
       orderBy = column;
-      return builder;
-    },
-    range: (from: number, to: number) => {
-      range = [from, to];
       return builder;
     },
     limit: (count: number) => {
@@ -78,6 +94,9 @@ function query(table: string) {
       return builder;
     },
     upsert: (values: Row[], options: { onConflict: string }) => {
+      if (state.failUpsert) {
+        return Promise.resolve({ error: { message: 'temporary failure' } });
+      }
       const keys = options.onConflict.split(',');
       for (const value of values) {
         const existing = rows().find((row) => keys.every((key) => row[key] === value[key]));
@@ -101,8 +120,10 @@ vi.mock('@supabase/supabase-js', () => ({
 vi.mock('@/lib/db', () => ({ isSqliteMode: () => false, getDatabase: vi.fn() }));
 vi.mock('@/lib/auto-update/sqlite', () => ({ runSqliteUpdateCheck: vi.fn() }));
 vi.mock('@/lib/auto-update/trigger', () => ({
-  AutoUpdateTrigger: class {},
-  getLatestInstallerInfo: vi.fn(),
+  AutoUpdateTrigger: class {
+    triggerAutoUpdate = state.triggerAutoUpdate;
+  },
+  getLatestInstallerInfo: state.getLatestInstallerInfo,
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({ getAllLatestVersions: async () => state.catalog }),
@@ -173,6 +194,10 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     state.failDeployedFetch = false;
     state.failPriorFetch = false;
     state.maxRows = 1000;
+    state.failUpsert = false;
+    state.afterSelect = null;
+    state.triggerAutoUpdate.mockReset();
+    state.getLatestInstallerInfo.mockReset();
     state.catalog = [
       { winget_id: 'Own.Outdated', latest_version: '2.0.0' },
       { winget_id: 'Own.Current', latest_version: '3.0.0' },
@@ -254,7 +279,7 @@ describe('check-updates cron stale cleanup (hosted)', () => {
   it('keeps rows for apps it skipped because of an ignore policy', async () => {
     state.tables.upload_history.push(deployment('h4', 'Own.Ignored', 'intune-ignored', '1.0.0'));
     state.tables.app_update_policies = [
-      { user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Own.Ignored', policy_type: 'ignore', pinned_version: null },
+      { id: 'policy-ignore', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Own.Ignored', policy_type: 'ignore', pinned_version: null },
     ];
     state.tables.update_check_results = [
       updateRow('ignored', 'Own.Ignored', 'intune-ignored', { latest_version: '4.0.0' }),
@@ -422,8 +447,8 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     state.tables.upload_history.push(deployment('h6', 'Own.Pinned', 'intune-pinned', '1.0.0'));
     state.catalog.push({ winget_id: 'Own.Pinned', latest_version: '3.0.0' });
     state.tables.app_update_policies = [
-      { user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Own.Pinned', policy_type: 'pin_version', pinned_version: '2.0.0' },
-      { user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Own.Current', policy_type: 'pin_version', pinned_version: '3.0.0' },
+      { id: 'policy-pin-a', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Own.Pinned', policy_type: 'pin_version', pinned_version: '2.0.0' },
+      { id: 'policy-pin-b', user_id: 'user-1', tenant_id: 'tenant-1', winget_id: 'Own.Current', policy_type: 'pin_version', pinned_version: '3.0.0' },
     ];
     state.tables.update_check_results = [
       updateRow('pinned', 'Own.Pinned', 'intune-pinned', { latest_version: '3.0.0' }),
@@ -450,5 +475,106 @@ describe('check-updates cron stale cleanup (hosted)', () => {
 
     expect(rowIds()).toEqual(['later']);
     expect(rowById('later')).toMatchObject({ notified_at: NOTIFIED_AT });
+  });
+
+  it('does not skip rows when another request deletes rows between pages', async () => {
+    state.catalog.push({ winget_id: 'Bulk.App', latest_version: '9.0.0' });
+    for (let index = 0; index < 1000; index += 1) {
+      const suffix = String(index).padStart(4, '0');
+      state.tables.update_check_results.push(
+        updateRow(`bulk-${suffix}`, 'Bulk.App', `intune-bulk-${suffix}`, { latest_version: '9.0.0' })
+      );
+    }
+    // The 1001st row by id: an offset read would skip it once a row on the
+    // first page is deleted before the second page is read.
+    state.tables.update_check_results.push(updateRow('zz-outdated', 'Own.Outdated', 'intune-outdated'));
+    let deleted = false;
+    state.afterSelect = (table) => {
+      if (table === 'update_check_results' && !deleted) {
+        deleted = true;
+        state.tables.update_check_results = state.tables.update_check_results.filter(
+          (row) => row.id !== 'bulk-0000'
+        );
+      }
+    };
+
+    await runCron();
+
+    expect(rowById('zz-outdated')).toMatchObject({ notified_at: NOTIFIED_AT, latest_version: '2.0.0' });
+  });
+
+  it('runs auto-updates when more than 500 users have outdated apps', async () => {
+    const userIds = Array.from(
+      { length: 600 },
+      (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
+    );
+    state.tables.notification_preferences = [];
+    state.tables.upload_history = userIds.map((userId, index) => ({
+      ...deployment(`h-${String(index).padStart(4, '0')}`, 'Own.Outdated', `intune-${index}`, '1.0.0'),
+      user_id: userId,
+    }));
+    state.tables.app_update_policies = [
+      {
+        id: 'policy-1',
+        user_id: userIds[599],
+        tenant_id: 'tenant-1',
+        winget_id: 'Own.Outdated',
+        policy_type: 'auto_update',
+        is_enabled: true,
+        deployment_config: {},
+      },
+    ];
+    state.getLatestInstallerInfo.mockResolvedValue({ ok: true, info: { version: '2.0.0' } });
+    state.triggerAutoUpdate.mockResolvedValue({ success: true });
+
+    const body = await runCron();
+
+    expect(body.errors).toBeUndefined();
+    expect(body.updatesFound).toBe(600);
+    expect(body.autoUpdates).toMatchObject({ triggered: 1, failed: 0 });
+    expect(state.triggerAutoUpdate).toHaveBeenCalledOnce();
+    expect(state.triggerAutoUpdate.mock.calls[0][1]).toMatchObject({
+      currentVersion: '1.0.0',
+      currentIntuneAppId: 'intune-599',
+    });
+  });
+
+  it('keeps its own row when the teammate copy is older than its deployment', async () => {
+    state.tables.update_check_results = [
+      updateRow('teammate-copy', 'Own.Outdated', 'intune-teammate-copy', { current_version: '0.5.0' }),
+    ];
+
+    await runCron();
+
+    expect(rowIds()).toEqual(['generated-2', 'teammate-copy']);
+    expect(rowById('generated-2')).toMatchObject({ intune_app_id: 'intune-outdated', current_version: '1.0.0' });
+    expect(rowById('teammate-copy')).toMatchObject({ current_version: '0.5.0', notified_at: NOTIFIED_AT });
+  });
+
+  it('keeps the provenance of a teammate copy row it updates', async () => {
+    state.tables.update_check_results = [
+      updateRow('teammate-copy', 'Own.Outdated', 'intune-teammate-copy', {
+        current_version: '1.5.0',
+        latest_version: '1.8.0',
+        is_managed: false,
+      }),
+    ];
+
+    await runCron();
+
+    expect(rowById('teammate-copy')).toMatchObject({ latest_version: '2.0.0', is_managed: false });
+  });
+
+  it('removes nothing from a batch whose upsert failed', async () => {
+    state.failUpsert = true;
+    state.tables.update_check_results = [
+      updateRow('resolved', 'Own.Current', 'intune-current', { current_version: '2.0.0', latest_version: '3.0.0' }),
+      updateRow('outdated', 'Own.Outdated', 'intune-outdated', { latest_version: '1.5.0' }),
+    ];
+
+    const body = await runCron();
+
+    expect(body.success).toBe(false);
+    expect(rowIds()).toEqual(['outdated', 'resolved']);
   });
 });

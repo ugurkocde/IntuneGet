@@ -61,6 +61,7 @@ interface ExistingUpdateCheckRow {
   current_version: string;
   display_name: string;
   latest_version: string;
+  is_managed: boolean | null;
   notified_at: string | null;
 }
 
@@ -75,19 +76,25 @@ interface FilterPolicyRow {
 // PostgREST caps every response (1000 rows by default), so list reads are
 // paged to make sure a large result is never silently truncated.
 const PAGE_SIZE = 1000;
-const DELETE_CHUNK_SIZE = 200;
+// Keeps each `id=in.(...)` delete well inside URL length limits.
+const DELETE_CHUNK_SIZE = 100;
 
+/**
+ * Read every row of a query with keyset paging on `id`. The callback must
+ * return the query filtered to `id > afterId` (when set), ordered by `id`
+ * and limited to PAGE_SIZE. Keyset paging does not skip rows when other
+ * requests delete rows between pages, and a project can lower max-rows
+ * below PAGE_SIZE, so only an empty page ends the read.
+ */
 async function fetchAllRows(
   query: (
-    from: number,
-    to: number
+    afterId: string | null
   ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
 ): Promise<{ data: unknown[]; error: { message: string } | null }> {
   const rows: unknown[] = [];
-  // A project can lower max-rows below PAGE_SIZE, so a short page does not
-  // mean the end. Advance by what was returned and stop on an empty page.
-  for (let from = 0; ; ) {
-    const { data, error } = await query(from, from + PAGE_SIZE - 1);
+  let afterId: string | null = null;
+  for (;;) {
+    const { data, error } = await query(afterId);
     if (error) {
       return { data: rows, error };
     }
@@ -96,7 +103,12 @@ async function fetchAllRows(
       return { data: rows, error: null };
     }
     rows.push(...page);
-    from += page.length;
+    const lastId = (page[page.length - 1] as { id?: unknown }).id;
+    if (typeof lastId !== 'string' || lastId === afterId) {
+      // Never loop on a page that cannot advance the key.
+      return { data: rows, error: { message: 'Paged read did not return an advancing id' } };
+    }
+    afterId = lastId;
   }
 }
 
@@ -120,34 +132,30 @@ async function processAutoUpdates(
     errors: [],
   };
 
-  // Get all policies for the users/tenants/apps with updates
-  const policyKeys = updates.map((u) => ({
-    user_id: u.user_id,
-    tenant_id: u.tenant_id,
-    winget_id: u.winget_id,
-  }));
-
-  // Fetch policies in batches
-  const uniqueUserIds = [...new Set(policyKeys.map((p) => p.user_id))];
-  const { data: policies, error: policyError } = await supabase
-    .from('app_update_policies')
-    .select('*')
-    .in('user_id', uniqueUserIds)
-    .eq('policy_type', 'auto_update')
-    .eq('is_enabled', true);
+  // Read every enabled auto-update policy. Few users have one, while a user
+  // filter would list every user with an update and exceed URL limits.
+  const { data: policyRows, error: policyError } = await fetchAllRows((afterId) => {
+    const query = supabase
+      .from('app_update_policies')
+      .select('*')
+      .eq('policy_type', 'auto_update')
+      .eq('is_enabled', true);
+    return (afterId ? query.gt('id', afterId) : query).order('id').limit(PAGE_SIZE);
+  });
 
   if (policyError) {
     result.errors.push(`Failed to fetch policies: ${policyError.message}`);
     return result;
   }
 
-  if (!policies || policies.length === 0) {
+  const policies = policyRows as AppUpdatePolicy[];
+  if (policies.length === 0) {
     return result;
   }
 
   // Create lookup map for policies
   const policyMap = new Map<string, AppUpdatePolicy>();
-  policies.forEach((policy: AppUpdatePolicy) => {
+  policies.forEach((policy) => {
     const key = `${policy.user_id}:${policy.tenant_id}:${policy.winget_id}`;
     policyMap.set(key, policy);
   });
@@ -307,9 +315,10 @@ export async function GET(request: Request) {
 
     // Always include users that have deployed apps tracked in upload_history.
     // Without this, updates can stay at zero for users who did not enable notifications.
-    const { data: deploymentUsers, error: deploymentUsersError } = await fetchAllRows(
-      (from, to) => supabase.from('upload_history').select('user_id').order('id').range(from, to)
-    );
+    const { data: deploymentUsers, error: deploymentUsersError } = await fetchAllRows((afterId) => {
+      const query = supabase.from('upload_history').select('id, user_id');
+      return (afterId ? query.gt('id', afterId) : query).order('id').limit(PAGE_SIZE);
+    });
 
     if (deploymentUsersError) {
       throw deploymentUsersError;
@@ -346,15 +355,13 @@ export async function GET(request: Request) {
     // Get all ignore/pin policies to filter out updates
     // A missing policy would let an ignored or pinned app through, so a
     // failed read stops the run.
-    const { data: filterPolicies, error: filterPoliciesError } = await fetchAllRows(
-      (from, to) =>
-        supabase
-          .from('app_update_policies')
-          .select('user_id, tenant_id, winget_id, policy_type, pinned_version')
-          .in('policy_type', ['ignore', 'pin_version'])
-          .order('id')
-          .range(from, to)
-    );
+    const { data: filterPolicies, error: filterPoliciesError } = await fetchAllRows((afterId) => {
+      const query = supabase
+        .from('app_update_policies')
+        .select('id, user_id, tenant_id, winget_id, policy_type, pinned_version')
+        .in('policy_type', ['ignore', 'pin_version']);
+      return (afterId ? query.gt('id', afterId) : query).order('id').limit(PAGE_SIZE);
+    });
 
     if (filterPoliciesError) {
       throw filterPoliciesError;
@@ -384,17 +391,15 @@ export async function GET(request: Request) {
       const batch = userIdArray.slice(i, i + BATCH_SIZE);
 
       // Get deployed apps for this batch of users
-      const { data: deployedRows, error: deployedError } = await fetchAllRows((from, to) =>
-        supabase
-          .from('upload_history')
-          .select('*')
-          .in('user_id', batch)
-          .order('id')
-          .range(from, to)
-      );
+      const { data: deployedRows, error: deployedError } = await fetchAllRows((afterId) => {
+        const query = supabase.from('upload_history').select('*').in('user_id', batch);
+        return (afterId ? query.gt('id', afterId) : query).order('id').limit(PAGE_SIZE);
+      });
 
       if (deployedError) {
-        errors.push(`Error fetching deployed apps: ${deployedError.message}`);
+        const message = `Skipped a batch, could not load deployed apps: ${deployedError.message}`;
+        console.error(`[check-updates] ${message}`);
+        errors.push(message);
         continue;
       }
 
@@ -409,17 +414,18 @@ export async function GET(request: Request) {
       // notified for an older version never notifies again on the next bump.
       // Without these rows every pending update would look new and be
       // notified again, so the batch is skipped when they cannot be loaded.
-      const { data: priorData, error: priorError } = await fetchAllRows((from, to) =>
-        supabase
+      const { data: priorData, error: priorError } = await fetchAllRows((afterId) => {
+        const query = supabase
           .from('update_check_results')
-          .select('id, user_id, tenant_id, winget_id, intune_app_id, current_version, display_name, latest_version, notified_at')
-          .in('user_id', batch)
-          .order('id')
-          .range(from, to)
-      );
+          .select('id, user_id, tenant_id, winget_id, intune_app_id, current_version, display_name, latest_version, is_managed, notified_at')
+          .in('user_id', batch);
+        return (afterId ? query.gt('id', afterId) : query).order('id').limit(PAGE_SIZE);
+      });
 
       if (priorError) {
-        errors.push(`Skipped a batch, could not load existing update rows: ${priorError.message}`);
+        const message = `Skipped a batch, could not load existing update rows: ${priorError.message}`;
+        console.error(`[check-updates] ${message}`);
+        errors.push(message);
         continue;
       }
 
@@ -508,7 +514,8 @@ export async function GET(request: Request) {
           if (compareVersions(app.version, latestVersion) < 0) {
             // The refresh keeps one row per app, for the newest Intune object
             // in the tenant. When that is an object this user did not deploy
-            // (for example a teammate's newer copy), update that row instead
+            // (for example a teammate's copy) that is at least as new as the
+            // user's deployment and still outdated, update that row instead
             // of adding a second row for the same app.
             const refreshRow = (priorRowsByApp.get(appKey) ?? [])
               .filter((row) => !ownIntuneAppIds.has(row.intune_app_id))
@@ -520,16 +527,24 @@ export async function GET(request: Request) {
                 null
               );
             const target =
-              refreshRow && compareVersions(refreshRow.current_version, latestVersion) < 0
+              refreshRow &&
+              compareVersions(refreshRow.current_version, app.version) >= 0 &&
+              compareVersions(refreshRow.current_version, latestVersion) < 0
                 ? {
                     intune_app_id: refreshRow.intune_app_id,
                     display_name: refreshRow.display_name,
                     current_version: refreshRow.current_version,
+                    // Keep the refresh's provenance for an object this user
+                    // did not deploy.
+                    is_managed: refreshRow.is_managed ?? true,
                   }
                 : {
                     intune_app_id: app.intune_app_id,
                     display_name: app.display_name,
                     current_version: app.version,
+                    // The cron only scans apps from upload_history, so its
+                    // own rows are for IntuneGet-managed apps.
+                    is_managed: true,
                   };
 
             // Check if it's a critical update (major version change)
@@ -551,9 +566,6 @@ export async function GET(request: Request) {
               ...target,
               latest_version: latestVersion,
               is_critical: isCritical,
-              // The cron only ever scans apps from upload_history, so every
-              // detected update here is for an IntuneGet-managed app.
-              is_managed: true,
               notified_at: notifiedAt,
               detected_at: now,
               updated_at: now,
@@ -567,6 +579,7 @@ export async function GET(request: Request) {
               display_name: app.display_name,
               current_version: app.version,
               is_critical: latestMajor > parseVersion(app.version).major,
+              is_managed: true,
             });
             activeUpdateKeys.add(targetKey);
           }
@@ -574,6 +587,7 @@ export async function GET(request: Request) {
       }
 
       // Upsert updates
+      let upsertFailed = false;
       if (updates.length > 0) {
         const { error: upsertError } = await supabase
           .from('update_check_results')
@@ -582,7 +596,10 @@ export async function GET(request: Request) {
           });
 
         if (upsertError) {
-          errors.push(`Error upserting updates: ${upsertError.message}`);
+          upsertFailed = true;
+          const message = `Error upserting updates, kept the batch's existing rows: ${upsertError.message}`;
+          console.error(`[check-updates] ${message}`);
+          errors.push(message);
         } else {
           totalUpdatesFound += updates.length;
         }
@@ -592,8 +609,9 @@ export async function GET(request: Request) {
       // outdated. This clears outdated entries from older Intune app objects
       // and resolved updates. Rows for apps the batch did not evaluate are
       // kept with their notified and dismissed state, so they are not
-      // notified again.
-      const staleIds = priorRows
+      // notified again. When the upsert failed, nothing is removed, so the
+      // batch keeps a consistent set of rows until the next run.
+      const staleIds = upsertFailed ? [] : priorRows
         .filter((row) => {
           const rowKey = `${row.user_id}:${row.tenant_id}:${row.winget_id}:${row.intune_app_id}`;
           return evaluatedUpdateKeys.has(rowKey) && !activeUpdateKeys.has(rowKey);
@@ -660,7 +678,13 @@ export async function GET(request: Request) {
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof (error as { message?: unknown })?.message === 'string'
+          ? (error as { message: string }).message
+          : 'Unknown error';
+    console.error(`[check-updates] Update check failed: ${errorMessage}`);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
