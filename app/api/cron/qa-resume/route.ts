@@ -14,6 +14,7 @@ import { ensureQaDemand } from '@/lib/qa/demand';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import { QA_PRIORITY_CUSTOMER, QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
 import { reconcileCatalogInstaller } from '@/lib/catalog-installer-reconciliation';
+import { getPackageCompatibilityBlock, PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
@@ -65,6 +66,12 @@ export async function GET(request: Request) {
     visited++;
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = job.package_config as unknown as Win32CartItem;
+    let observed = {
+      qa_candidate_id: job.qa_candidate_id,
+      installer_sha256: job.installer_sha256,
+      architecture: job.architecture,
+      package_config: job.package_config,
+    };
     let candidate: {
       id: string;
       status: string;
@@ -138,7 +145,7 @@ export async function GET(request: Request) {
       candidateFailureSummary = demand.failureSummary || null;
       appVersionAlreadyPassed = demand.state === 'passed';
 
-      const { error: relinkError } = await supabase
+      const { data: relinkedJob, error: relinkError } = await supabase
         .from('packaging_jobs')
         .update({
           qa_candidate_id: demand.candidateId || job.qa_candidate_id,
@@ -157,8 +164,74 @@ export async function GET(request: Request) {
             : job.status_message,
         })
         .eq('id', job.id)
-        .eq('status', 'awaiting_qa');
+        .eq('status', 'awaiting_qa')
+        .select('qa_candidate_id, installer_sha256, architecture, package_config')
+        .maybeSingle();
       if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
+      if (!relinkedJob) continue;
+      observed = relinkedJob;
+    }
+
+    // Waiting jobs may have been linked before this payload was quarantined.
+    // Check the execution input after reconciliation, including continuity and
+    // maintenance releases: local packaging has no later workflow QA gate.
+    let compatibilityBlock;
+    const observedConfig = observed.package_config as unknown as Win32CartItem | null;
+    try {
+      compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
+        wingetId: job.winget_id,
+        version: job.version,
+        architecture: features.localPackager
+          ? observed.architecture || 'x64'
+          : observedConfig?.architecture || observed.architecture || 'x64',
+        installerSha256: features.localPackager
+          ? observed.installer_sha256 || ''
+          : observedConfig?.installerSha256 || observed.installer_sha256 || '',
+      });
+    } catch {
+      // An unavailable lookup is not evidence of eligibility. Keep this job
+      // waiting while allowing unrelated verified jobs in the batch to proceed.
+      waitingIds.push(job.id);
+      waiting++;
+      continue;
+    }
+    if (compatibilityBlock) {
+      const now = new Date().toISOString();
+      let failureUpdate = supabase
+        .from('packaging_jobs')
+        .update({
+          status: 'qa_failed',
+          status_message: PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
+          error_code: 'QA_PACKAGE_COMPATIBILITY_BLOCKED',
+          error_stage: 'validation',
+          error_category: 'installer',
+          completed_at: now,
+        })
+        .eq('id', job.id)
+        .eq('status', 'awaiting_qa');
+      // Another invocation can relink this job without changing its status.
+      // Fail only the raw stored identity that the lookup actually observed.
+      const identityFields = [
+        ['qa_candidate_id', observed.qa_candidate_id],
+        ['installer_sha256', observed.installer_sha256],
+        ['architecture', observed.architecture],
+        ['package_config->>installerSha256', observedConfig?.installerSha256],
+        ['package_config->>architecture', observedConfig?.architecture],
+      ] as const;
+      for (const [column, value] of identityFields) {
+        failureUpdate = value == null
+          ? failureUpdate.is(column, null)
+          : failureUpdate.eq(column, value);
+      }
+      const { data: blockedJob, error: blockError } = await failureUpdate
+        .select('id')
+        .maybeSingle();
+      if (blockError) throw new Error(`Could not hold quarantined QA job: ${blockError.message}`);
+      if (blockedJob) {
+        failed++;
+        await handleAutoUpdateJobCompletion(job.id, 'failed', PACKAGE_VERSION_UNAVAILABLE_MESSAGE);
+      }
+      continue;
     }
 
     if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {

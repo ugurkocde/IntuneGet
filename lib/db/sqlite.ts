@@ -15,6 +15,8 @@ import type {
   UpdateCheckQuery,
   CuratedLicenceAttestationRecord,
   CuratedLicenceAttestationInput,
+  ClaimedAppInput,
+  ClaimedAppRecord,
 } from './types';
 import type {
   AppUpdatePolicy,
@@ -23,6 +25,7 @@ import type {
   AutoUpdateStatus,
 } from '@/types/update-policies';
 import { runSqliteMigrations } from './sqlite-migrations';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 
 // Singleton database instance
 let db: Database.Database | null = null;
@@ -176,11 +179,11 @@ export const sqliteDb: DatabaseAdapter = {
     async getApprovalFailures(tenantId, wingetId, cursor) {
       const rows = getDb().prepare(`
         SELECT * FROM packaging_jobs
-        WHERE tenant_id = ? AND winget_id = ? AND status = 'failed'
+        WHERE tenant_id = ? AND winget_id = ? AND status IN (${INTUNE_APPROVAL_CHECKPOINT_STATUSES.map(() => '?').join(',')})
           AND (error_category = 'approval' OR error_code = 'INTUNE_APPROVAL_REQUIRED')
           ${cursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
         ORDER BY created_at DESC, id DESC LIMIT 100
-      `).all(tenantId, wingetId,
+      `).all(tenantId, wingetId, ...INTUNE_APPROVAL_CHECKPOINT_STATUSES,
         ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : [])) as Record<string, unknown>[];
       return rows.map(parseJobRow);
     },
@@ -914,6 +917,69 @@ export const sqliteDb: DatabaseAdapter = {
       );
       if (!stored) throw new Error('Failed to record licence acceptance');
       return stored;
+    },
+  },
+
+  claimedApps: {
+    async upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord> {
+      const database = getDb();
+      // Re-claiming keeps the row id and original app name, matching the
+      // hosted route, and resets the claim to pending for the new claimant.
+      database
+        .prepare(
+          `INSERT INTO claimed_apps (
+             id, user_id, tenant_id, discovered_app_id, discovered_app_name,
+             winget_package_id, device_count_at_claim, status, claimed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+           ON CONFLICT (tenant_id, discovered_app_id) DO UPDATE SET
+             user_id = excluded.user_id,
+             winget_package_id = excluded.winget_package_id,
+             device_count_at_claim = excluded.device_count_at_claim,
+             status = 'pending',
+             claimed_at = excluded.claimed_at`
+        )
+        .run(
+          crypto.randomUUID(),
+          claim.user_id,
+          claim.tenant_id,
+          claim.discovered_app_id,
+          claim.discovered_app_name,
+          claim.winget_package_id,
+          claim.device_count_at_claim ?? 0,
+          new Date().toISOString()
+        );
+      const stored = database
+        .prepare('SELECT * FROM claimed_apps WHERE tenant_id = ? AND discovered_app_id = ?')
+        .get(claim.tenant_id, claim.discovered_app_id) as ClaimedAppRecord | undefined;
+      if (!stored) throw new Error('Failed to record claim');
+      return stored;
+    },
+
+    async listByTenant(tenantId: string): Promise<ClaimedAppRecord[]> {
+      const database = getDb();
+      return database
+        .prepare('SELECT * FROM claimed_apps WHERE tenant_id = ? ORDER BY claimed_at DESC')
+        .all(tenantId) as ClaimedAppRecord[];
+    },
+
+    async update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null> {
+      const database = getDb();
+      const fields: Record<string, unknown> = {};
+      if (data.status !== undefined) fields.status = data.status;
+      if (data.intune_app_id !== undefined) fields.intune_app_id = data.intune_app_id;
+      const { clause, values } = buildSetClause(fields);
+      if (!clause) return null;
+      const result = database
+        .prepare(`UPDATE claimed_apps SET ${clause} WHERE id = ? AND tenant_id = ?`)
+        .run(...values, id, tenantId);
+      if (result.changes === 0) return null;
+      return (database
+        .prepare('SELECT * FROM claimed_apps WHERE id = ?')
+        .get(id) as ClaimedAppRecord | undefined) ?? null;
     },
   },
 };

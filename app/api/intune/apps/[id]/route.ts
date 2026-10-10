@@ -8,6 +8,7 @@ import { getServerClientOrNull } from '@/lib/supabase';
 import { resolveTargetTenantId } from '@/lib/msp/tenant-resolution';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { getServicePrincipalToken } from '@/lib/intune/graph-client';
+import { resolveAssignmentGroupNames } from '@/lib/intune/assignment-group-names';
 import type { IntuneAppWithAssignments, IntuneAppAssignment } from '@/types/inventory';
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/beta';
@@ -105,9 +106,14 @@ export async function GET(
       assignments = assignmentsData.value || [];
     }
 
+    const groupLookup = await resolveAssignmentGroupNames(assignments, graphToken, request.signal);
     const app: IntuneAppWithAssignments = {
       ...appData,
       assignments,
+      assignmentGroupNames: groupLookup.names,
+      ...(Object.keys(groupLookup.failures).length > 0
+        ? { assignmentGroupLookupFailures: groupLookup.failures }
+        : {}),
     };
 
     return NextResponse.json({ app });

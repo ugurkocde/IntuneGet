@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { cleanupCuratedLiveSessions } from '@/lib/qa/live-session-cleanup';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -45,10 +46,12 @@ export async function GET(request: Request) {
       if (deleteError) throw new Error(`Could not remove stale QA frame metadata: ${deleteError.message}`);
     }
 
+    const curated = await cleanupCuratedLiveSessions(supabase);
     return NextResponse.json({
       cleanedCandidates: cleanedCandidateIds.length,
       skippedCandidates: (staleFrames || []).length - cleanedCandidateIds.length,
       removedObjects,
+      curated,
     });
   } catch (error) {
     console.error('QA live-frame cleanup failed:', error);

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { authorizeCuratedWorkflow } from '@/lib/curated-catalog/server';
 import {
@@ -25,6 +26,11 @@ import {
   PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
 import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
+import {
+  buildQaCandidatePreflightRequest,
+  type QaCandidatePreflightInput,
+} from '@/lib/qa/candidate-preflight';
+import { enforceInstallerPreflight, InstallerPreflightError } from '@/lib/installer-preflight';
 
 export type QaDemandSource = 'customer' | 'auto_update' | 'managed' | 'operator';
 export type QaDemandState = 'passed' | 'failed' | 'waiting';
@@ -43,6 +49,35 @@ export interface QaDemandResult {
   candidateId: string | null;
   state: QaDemandState;
   failureSummary?: string;
+}
+
+const MANIFEST_CHANGED_QUARANTINE_PREFIX =
+  'Installer source quarantined before QA: MANIFEST_CHANGED.';
+
+/**
+ * A MANIFEST_CHANGED dispatch quarantine is evidence about the trusted WinGet
+ * manifest at that time, not about the installer bytes. Reuse the exact
+ * candidate only when the same preflight that QA dispatch enforces now accepts
+ * it against the live manifest. HASH_MISMATCH and every other quarantine stay
+ * terminal, and dispatch still repeats the full preflight before any VM run.
+ * A retryable preflight failure keeps the candidate quarantined without
+ * turning a temporary outage into a terminal result.
+ */
+async function recheckManifestQuarantine(
+  existing: QaCandidatePreflightInput & { failure_summary: string | null },
+  testConfig: Json,
+): Promise<'recovered' | 'quarantined' | 'retry'> {
+  if (!existing.failure_summary?.startsWith(MANIFEST_CHANGED_QUARANTINE_PREFIX)) return 'quarantined';
+  try {
+    await enforceInstallerPreflight(buildQaCandidatePreflightRequest({
+      ...existing,
+      test_config: testConfig,
+    }));
+    return 'recovered';
+  } catch (error) {
+    if (error instanceof InstallerPreflightError) return error.retryable ? 'retry' : 'quarantined';
+    throw error;
+  }
 }
 
 export async function ensureQaDemand(
@@ -260,52 +295,18 @@ export async function ensureQaDemand(
     updated_at: now,
   };
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('qa_candidates')
-    .insert(row)
-    .select('id, status, failure_summary')
-    .maybeSingle();
+  const { data: inserted, existing, outcome, error: insertError } = await insertQaCandidate(supabase, row);
   if (!insertError && inserted) {
     return { identity, candidateId: inserted.id, state: 'waiting' };
   }
-  if (insertError?.code !== '23505') {
+  if (insertError) {
     throw new Error(`Could not queue exact package QA: ${insertError?.message || 'unknown error'}`);
   }
 
-  // A database-level active-payload constraint closes the small race between
-  // the lookup above and this insert. If another request won that race, join
-  // its test even when it carries a different PSADT presentation profile.
-  const { data: concurrentCandidate, error: concurrentError } = await supabase
-    .from('qa_candidates')
-    .select('id, status, priority')
-    .eq('winget_id', input.wingetId)
-    .eq('version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .eq('test_level', 'psadt-package')
-    .in('status', ['queued', 'dispatched', 'running'])
-    .order('priority', { ascending: false })
-    .order('enqueued_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (concurrentError) {
-    throw new Error(`Could not resolve concurrent app-version QA: ${concurrentError.message}`);
-  }
-  if (concurrentCandidate) {
-    return { identity, candidateId: concurrentCandidate.id, state: 'waiting' };
-  }
-
-  const { data: existing, error: existingError } = await supabase
-    .from('qa_candidates')
-    .select('id, status, priority, failure_summary, phase, github_run_id')
-    .eq('winget_id', input.wingetId)
-    .eq('version', input.version)
-    .eq('architecture', architecture)
-    .eq('installer_sha256', installerSha256)
-    .eq('package_profile_sha256', profileSha256)
-    .maybeSingle();
-  if (existingError || !existing) {
-    throw new Error(`Could not resolve exact package QA candidate: ${existingError?.message || 'missing candidate'}`);
+  if (!existing) throw new Error('Could not resolve exact package QA candidate');
+  // The RPC resolves the winner using the same expressions as the unique index.
+  if (outcome === 'active_conflict') {
+    return { identity, candidateId: existing.id, state: 'waiting' };
   }
 
   if (existing.status === 'failed') {
@@ -317,10 +318,15 @@ export async function ensureQaDemand(
     };
   }
 
-  if (
+  const quarantineRecheck =
     existing.status === 'superseded' &&
     !shouldReactivateSupersededCandidate(existing.status, existing.failure_summary, true)
-  ) {
+      ? await recheckManifestQuarantine(existing, testConfig as unknown as Json)
+      : null;
+  if (quarantineRecheck === 'retry') {
+    return { identity, candidateId: existing.id, state: 'waiting' };
+  }
+  if (quarantineRecheck === 'quarantined') {
     return {
       identity,
       candidateId: existing.id,

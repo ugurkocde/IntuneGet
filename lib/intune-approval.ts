@@ -1,3 +1,5 @@
+export const INTUNE_APPROVAL_CHECKPOINT_STATUSES = ['failed', 'cancelled'] as const;
+
 export const INTUNE_APPROVAL_PENDING_MESSAGE =
   'An earlier deployment requires Intune administrator approval. A new deployment could create another app. Resolve the retained app and pending request in Intune before deploying again; approving the request alone does not resume this upload.';
 

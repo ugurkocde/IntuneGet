@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SlidePanel } from '@/components/dashboard/animations/SlidePanel';
 import { useAppDetails } from '@/hooks/use-inventory';
 import type { IntuneAppAssignment } from '@/types/inventory';
+import { assignmentTargetLabel } from '@/lib/intune/assignment-group-names';
 
 interface InventoryAppDetailsProps {
   appId: string | null;
@@ -164,14 +165,15 @@ export function InventoryAppDetails({ appId, onClose, onUpdate }: InventoryAppDe
                           <Users className="w-4 h-4 text-text-muted" />
                         </div>
                         <div>
-                          <p className="text-sm text-text-primary">
-                            {assignment.target['@odata.type']?.includes('allDevices')
-                              ? 'All Devices'
-                              : assignment.target['@odata.type']?.includes('allUsers')
-                              ? 'All Users'
-                              : assignment.target.groupId
-                              ? `Group: ${assignment.target.groupId.slice(0, 8)}...`
-                              : 'Unknown Target'}
+                          <p
+                            className="text-sm text-text-primary"
+                            title={assignment.target.groupId || undefined}
+                          >
+                            {assignmentTargetLabel(
+                              assignment.target,
+                              app.assignmentGroupNames,
+                              app.assignmentGroupLookupFailures
+                            )}
                           </p>
                         </div>
                       </div>

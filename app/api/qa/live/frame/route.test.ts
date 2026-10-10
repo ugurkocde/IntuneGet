@@ -125,7 +125,7 @@ describe('/api/qa/live/frame ingest boundary', () => {
       query.limit.mockReturnValue(query);
       return query;
     };
-    const activeQuery = chain({ data: { id: candidateId }, error: null });
+    const activeQuery = chain({ data: { id: candidateId, started_at: new Date(Date.now() - 5000).toISOString() }, error: null });
     const frameQuery = chain({
       data: {
         object_path: `${candidateId}/slot-0.jpg`,
@@ -137,7 +137,8 @@ describe('/api/qa/live/frame ingest boundary', () => {
     });
     const from = vi.fn()
       .mockReturnValueOnce(activeQuery)
-      .mockReturnValueOnce(frameQuery);
+      .mockReturnValueOnce(frameQuery)
+      .mockReturnValueOnce(activeQuery);
     const download = vi.fn().mockResolvedValue({
       data: new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }),
       error: null,
@@ -157,6 +158,16 @@ describe('/api/qa/live/frame ingest boundary', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store, max-age=0');
   });
 
+  it.each(['finished', 'requeued'])('discards a downloaded frame when its attempt is %s during Storage I/O', async (transition) => {
+    const now = new Date().toISOString();
+    const query = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), maybeSingle: vi.fn() };
+    query.maybeSingle.mockResolvedValueOnce({ data: { id: candidateId, started_at: now }, error: null })
+      .mockResolvedValueOnce({ data: { object_path: `${candidateId}/slot-0.jpg`, captured_at: now, updated_at: now, sequence: 42 }, error: null })
+      .mockResolvedValueOnce({ data: transition === 'finished' ? null : { started_at: new Date(Date.now() + 1000).toISOString() }, error: null });
+    createServerClientMock.mockReturnValueOnce({ rpc: rpcMock, from: vi.fn(() => query), storage: { from: () => ({ download: vi.fn().mockResolvedValue({ data: new Blob([new Uint8Array([255,216,255,217])]), error: null }) }) } } as never);
+    expect((await GET(new Request(`https://www.intuneget.com/api/qa/live/frame?candidate=${candidateId}&sequence=42`))).status).toBe(404);
+  });
+
   it('returns a quiet 404 when cleanup removes the object after metadata is read', async () => {
     const chain = (result: unknown) => {
       const query = {
@@ -174,7 +185,7 @@ describe('/api/qa/live/frame ingest boundary', () => {
       query.limit.mockReturnValue(query);
       return query;
     };
-    const activeQuery = chain({ data: { id: candidateId }, error: null });
+    const activeQuery = chain({ data: { id: candidateId, started_at: new Date(Date.now() - 5000).toISOString() }, error: null });
     const frameQuery = chain({
       data: {
         object_path: `${candidateId}/slot-1.jpg`,

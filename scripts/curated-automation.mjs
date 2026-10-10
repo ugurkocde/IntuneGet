@@ -5,7 +5,7 @@
 //          new releases, selects passing runs whose authenticated evidence
 //          satisfies the release policy, and decides whether to re-sign.
 // publish: re-authenticates the selected evidence, signs the catalog with the
-//          environment key and opens an auto-merging website PR.
+//          environment key and opens a website PR for independent final patch review.
 //
 // Neither mode downloads, extracts or runs an installer on this machine. The
 // isolated QA VM does that; this script only handles bounded JSON evidence.
@@ -18,6 +18,7 @@ import { catalogEntries, compareReleaseVersions, sha256, canonicalJson, signCata
 import { discoverCandidate, discoverPreviousCandidate } from '../lib/curated-catalog/discovery.mjs';
 import { curatedMonitor } from '../lib/curated-catalog/monitor.mjs';
 import { createCuratedGitHubClient } from './curated-github.mjs';
+import { prepareCuratedPublication } from './curated-publication.mjs';
 import { enqueueCuratedVerification, processConfigVerifications, supabaseConfigured, syncHistory } from './curated-qa-store.mjs';
 
 const WEBSITE = 'ugurkocde/IntuneGet';
@@ -34,7 +35,7 @@ const MAX_FAILURES_PER_VERIFIER = 2;
 const MAX_FAILURES_PER_DAY = 8;
 const VERIFIER_PATHS = [[QA, 'qa/curated'], [QA, '.github/workflows/curated-catalog-verification.yml'], [WEBSITE, 'lib/curated-catalog'], [WEBSITE, 'lib/packaging-adapters.ts']];
 const RETRY_COOLDOWN_MS = 2 * 3_600_000;
-const RENEW_BEFORE_MS = 3 * 86_400_000;
+const RENEW_BEFORE_MS = 4 * 86_400_000;
 const STALE_PR_MS = 3 * 3_600_000;
 const CATALOG_PATH = 'catalog/curated/catalog.json';
 const KEYS_PATH = 'catalog/curated/trusted-keys.json';
@@ -47,7 +48,7 @@ const { CURATED_APPS, releaseFromVerification, automatedApprovalExceptions, asse
 await mkdir(root, { recursive: true });
 
 // The private QA repository needs its own credential; GH_TOKEN covers the
-// website repository (catalog branch, PR and auto-merge).
+// website repository (catalog branch and publication PR).
 function tokenFor(args) {
   return args.some(arg => arg.startsWith(`repos/${QA}/`)) && process.env.CURATED_QA_TOKEN ? process.env.CURATED_QA_TOKEN : process.env.GH_TOKEN;
 }
@@ -386,7 +387,7 @@ async function publish() {
     withdraw ? `Withdraws \`${withdraw}\`: ${process.env.CURATED_WITHDRAW_REASON.trim()}` : '',
     catalog.dropped.length ? `Drops ${catalog.dropped.length} release(s) that no longer match the current definitions or packaging profile; they are verified again automatically.` : '',
     `Signed catalog valid until ${envelope.payload.expiresAt}.`,
-    '', 'Opened and merged by the curated catalog automation. No manual review is required; CI validates the signature and definitions.',
+    '', 'CI validates the signature and definitions. Publication requires independent final patch review of the exact revision.',
   ].filter((line, index, all) => line !== '' || (index > 0 && all[index - 1] !== '')).join('\n');
 
   const git = (...args) => {
@@ -401,14 +402,12 @@ async function publish() {
   git('add', CATALOG_PATH, ...evidenceFiles.map(([path]) => path));
   git('commit', '-m', `${title}\n\n${details}`);
   const basic = Buffer.from(`x-access-token:${process.env.GH_TOKEN}`).toString('base64');
-  git('-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`, 'push', '--force', `https://github.com/${WEBSITE}.git`, `HEAD:refs/heads/${BRANCH}`);
-  let pr = (await gh(['api', `repos/${WEBSITE}/pulls?head=${WEBSITE.split('/')[0]}:${BRANCH}&state=open`]) || [])[0];
-  if (pr) await gh(['api', '-X', 'PATCH', `repos/${WEBSITE}/pulls/${pr.number}`, '--input', '-'], { input: JSON.stringify({ title, body: details }) });
-  else pr = await gh(['api', '-X', 'POST', `repos/${WEBSITE}/pulls`, '--input', '-'], { input: JSON.stringify({ title, body: details, head: BRANCH, base: 'main' }) });
-  // Auto-merge waits for the required checks, then squash-merges.
-  const merge = spawnSync('gh', ['pr', 'merge', String(pr.number), '--repo', WEBSITE, '--squash', '--auto'], { encoding: 'utf8' });
-  if (merge.status !== 0 && !/already/i.test(merge.stderr || '')) throw new Error('Enabling auto-merge failed.');
-  await appendSummary(`Published ${title} as ${pr.html_url}.`);
+  const headSha = git('rev-parse', 'HEAD');
+  const pr = await prepareCuratedPublication({ gh, repo: WEBSITE, branch: BRANCH, title, details, headSha,
+    push: () => git('-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`, 'push', '--force', `https://github.com/${WEBSITE}.git`, `HEAD:refs/heads/${BRANCH}`) });
+  const publication = { ...pr, kind: withdraw ? 'withdraw' : added.length ? 'publish' : 'renew', expiresAt: payload.expiresAt, reviewRequired: true };
+  await writeFile(resolve(root, 'publication.json'), `${JSON.stringify(publication, null, 2)}\n`);
+  await appendSummary(`Prepared ${title} as ${pr.url}.\n\nHead: \`${headSha}\`. Kind: ${publication.kind}. Expires: ${publication.expiresAt}.\n\nAwaiting independent final patch review and a merge guarded by this exact SHA in the QA owner thread.`);
 }
 
 try {

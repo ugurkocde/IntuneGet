@@ -4,6 +4,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
 import type {
   AppUpdatePolicy,
@@ -12,6 +13,8 @@ import type {
   AutoUpdateStatus,
 } from '@/types/update-policies';
 import type {
+  ClaimedAppInput,
+  ClaimedAppRecord,
   CuratedLicenceAttestationInput,
   CuratedLicenceAttestationRecord,
   UpdateCheckQuery,
@@ -209,7 +212,7 @@ export const supabaseDb: DatabaseAdapter = {
 
     async getApprovalFailures(tenantId, wingetId, cursor) {
       let query = createServerClient().from('packaging_jobs').select('*')
-        .eq('tenant_id', tenantId).eq('winget_id', wingetId).eq('status', 'failed')
+        .eq('tenant_id', tenantId).eq('winget_id', wingetId).in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
         .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
         .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
       if (cursor) {
@@ -1019,6 +1022,79 @@ export const supabaseDb: DatabaseAdapter = {
       );
       if (!stored) throw new Error('Failed to record licence acceptance');
       return stored;
+    },
+  },
+
+  claimedApps: {
+    async upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord> {
+      const supabase = createServerClient();
+      const { data: existing, error: readError } = await supabase
+        .from('claimed_apps')
+        .select('id')
+        .eq('tenant_id', claim.tenant_id)
+        .eq('discovered_app_id', claim.discovered_app_id)
+        .maybeSingle();
+      if (isError(readError)) {
+        console.error('Error reading claim:', readError);
+        throw readError;
+      }
+      const result = existing
+        ? await supabase
+            .from('claimed_apps')
+            .update({
+              user_id: claim.user_id,
+              winget_package_id: claim.winget_package_id,
+              device_count_at_claim: claim.device_count_at_claim ?? 0,
+              status: 'pending',
+              claimed_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+            .select()
+            .single()
+        : await supabase
+            .from('claimed_apps')
+            .insert({ ...claim, device_count_at_claim: claim.device_count_at_claim ?? 0, status: 'pending' })
+            .select()
+            .single();
+      if (isError(result.error) || !result.data) {
+        console.error('Error recording claim:', result.error);
+        throw result.error ?? new Error('Failed to record claim');
+      }
+      return result.data as ClaimedAppRecord;
+    },
+
+    async listByTenant(tenantId: string): Promise<ClaimedAppRecord[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('claimed_apps')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('claimed_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing claims:', error);
+        throw error;
+      }
+      return (data ?? []) as ClaimedAppRecord[];
+    },
+
+    async update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('claimed_apps')
+        .update(data)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select()
+        .maybeSingle();
+      if (isError(error)) {
+        console.error('Error updating claim:', error);
+        throw error;
+      }
+      return (updated as ClaimedAppRecord | null) ?? null;
     },
   },
 };

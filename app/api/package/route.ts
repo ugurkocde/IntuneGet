@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 /**
  * Package API Route
@@ -9,6 +10,7 @@ import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logValue } from '@/lib/server-log';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { getDatabase } from '@/lib/db';
 import {
@@ -44,6 +46,7 @@ import {
 } from '@/lib/installer-preflight';
 import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import { ensureQaDemand } from '@/lib/qa/demand';
+import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import {
   applyApplicationPackagingAdapter,
@@ -187,8 +190,14 @@ export async function POST(request: NextRequest) {
 
     // This checkpoint precedes every Store/Win32 insert and curated QA demand.
     // Neither request-level nor item-level forceCreate bypasses approval safety.
+    // Check the stored canonical ID and any legacy submitted casing before demand.
     const approvalBlocks = await findPendingApprovalBlocks({ tenantId,
-      wingetIds: items.map(item => item.wingetId) }, { db });
+      wingetIds: items.flatMap(item => {
+        const curated = typeof item.wingetId === 'string' &&
+          (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated')
+          ? findCuratedApp(item.wingetId) : undefined;
+        return curated ? [curated.packageId, item.wingetId] : [item.wingetId];
+      }) }, { db });
     if (approvalBlocks.length) {
       const block = approvalBlocks[0];
       return NextResponse.json({ error: 'Intune approval unresolved', code: block.code,
@@ -852,14 +861,20 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
-            const dispatchError = result.reason instanceof Error ? result.reason.message : 'Unknown error';
+            // The final dispatch boundary re-checks QA, security and
+            // compatibility evidence. A block there is a validation outcome
+            // with its own reason, not a failure to start the workflow.
+            const qaGateError = isQaGateError(result.reason) ? result.reason : null;
+            const dispatchError = qaGateError
+              ? describeQaGateError(qaGateError)
+              : result.reason instanceof Error ? result.reason.message : 'Unknown error';
             if (dispatch) {
               await db.jobs.update(dispatch.jobId, {
                 status: 'failed',
                 progress_percent: 0,
-                error_stage: 'authenticate',
-                error_category: 'network',
-                error_code: 'WORKFLOW_DISPATCH_FAILED',
+                error_stage: qaGateError ? 'validation' : 'authenticate',
+                error_category: qaGateError ? null : 'network',
+                error_code: qaGateError ? qaGateError.code : 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
                 completed_at: new Date().toISOString(),
               }).catch((updateError) => {
@@ -873,6 +888,17 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }
+
+    // Record each deployment start and failure in the server log so operators
+    // can trace actions that change Intune without opening the web UI.
+    for (const job of jobs) {
+      console.info(
+        `[Package] Deployment job ${logValue(job.id)} created for ${logValue(job.winget_id)} ${logValue(job.version)} (status: ${logValue(job.status)})`
+      );
+    }
+    for (const failure of errors) {
+      console.error(`[Package] Deployment of ${logValue(failure.wingetId)} failed: ${logValue(failure.error)}`);
     }
 
     // Return results

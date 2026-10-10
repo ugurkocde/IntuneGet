@@ -1976,7 +1976,7 @@ ${merge}
   });
 
   it('does not rewrite dollar signs or backticks in generic silent switches', () => {
-    expect(packager).toContain('$silentSwitchesEscaped = $effectiveSilentSwitches -replace "\'", "\'\'"');
+    expect(packager).toContain('$silentSwitchesEscaped = ConvertTo-PSSingleQuotedContent $effectiveSilentSwitches');
     const assignment = packager.match(/^\$silentSwitchesEscaped\s*=.*$/m)?.[0] ?? '';
     expect(assignment).not.toContain("-replace '`'");
     expect(assignment).not.toContain("-replace '\\$'");
@@ -2426,7 +2426,7 @@ describe('PSADT registry uninstall identity contract', () => {
 
   it('parses and persists a manifest product code for multi-entry installers', () => {
     expect(packager).toContain(
-      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):(.+)$"
+      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):([\\s\\S]+)\\z"
     );
     expect(packager).toContain(
       "throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'"
@@ -3076,7 +3076,7 @@ $ambiguous = Select-Localized @('Mozilla Firefox (x64 de)', 'Mozilla Firefox (x8
     );
     expect(packager).toContain('$registryUninstallProductCode = $Matches[1]');
     expect(packager).toContain('$registryUninstallDisplayName = $DisplayName');
-    expect(packager).toContain('$registryUninstallDisplayNameEscaped = $registryUninstallDisplayName -replace');
+    expect(packager).toContain('$registryUninstallDisplayNameEscaped = ConvertTo-PSSingleQuotedContent $registryUninstallDisplayName');
   });
 
   it.runIf(canRunWindowsPowerShellPackager)('emits apostrophe-safe registry identity strings', () => {
@@ -3502,6 +3502,20 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
     );
   });
 
+  it.runIf(canRunWindowsPowerShellPackager)('generates Python with the existing packaged Burn fallback and exact registration completion', () => {
+    const app = CURATED_APPS.find(app => app.id === 'python-314')!;
+    const input = curatedWorkflowInput(buildCuratedCartItem(app, releaseFixture(app, '3.14.8')));
+    const generated = generateRegistryUninstallPackage(
+      input.installerType as 'burn', input.displayName, [], JSON.parse(input.psadtConfig!), [],
+      input.wingetId, app.name, input.version, input.uninstallCommand, input.silentSwitches,
+    );
+    expect(generated).toContain('The registered Burn uninstaller is unavailable; using the hash-verified packaged bundle');
+    expect(generated).toContain('$burnUninstaller = $bundledUninstaller');
+    expect(generated).toContain('Start-ADTProcess -FilePath $burnUninstaller');
+    expect(generated).toContain('Waiting for Burn uninstall registration [$registeredUninstallRegistryKey] to be removed.');
+    expect(generated).not.toContain('The registered vendor uninstaller was not found:');
+  }, 30_000);
+
   it.runIf(canRunWindowsPowerShellPackager)(
     'narrows an ambiguous executable-wrapper display-name match to the single top-level entry',
     () => {
@@ -3537,10 +3551,10 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
       "if ($originalInstallerType -in @('burn', 'exe'))"
     );
     expect(hostedPackager).toContain(
-      "if ($selectedApplications.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe'))"
+      "if ($selectedApplications.Count -gt 1 -and '${psSingleQuotedContent(registeredInstallerType)}' -in @('burn', 'exe'))"
     );
     expect(hostedPackager).toContain(
-      "if ($installedApps.Count -gt 1 -and '${registeredInstallerType}' -in @('burn', 'exe'))"
+      "if ($installedApps.Count -gt 1 -and '${psSingleQuotedContent(registeredInstallerType)}' -in @('burn', 'exe'))"
     );
     expect(hostedPackager).toContain(
       "if (registeredInstallerType === 'burn')"
@@ -4302,9 +4316,9 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
 
   it('carries the effective nested installer engine into uninstall normalization', () => {
     expect(packager).toContain("$registeredInstallerTypeLower = if ($installerTypeLower -eq 'zip'");
-    expect(packager).toContain("`$registeredInstallerType = '$registeredInstallerTypeLower'");
+    expect(packager).toContain("`$registeredInstallerType = '$(ConvertTo-PSSingleQuotedContent $registeredInstallerTypeLower)'");
     expect(hostedPackager).toContain("const registeredInstallerType = installerType === 'zip'");
-    expect(hostedPackager).toContain("'${registeredInstallerType}' -eq 'inno'");
+    expect(hostedPackager).toContain("'${psSingleQuotedContent(registeredInstallerType)}' -eq 'inno'");
   });
 
   it('monitors exact registry removal for both quiet and fallback EXE uninstall commands', () => {
@@ -4513,7 +4527,7 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
 
   it('keeps non-MSI fallback visible, non-WindowsInstaller, and fail-closed', () => {
     expect(packager).toContain(
-      "$allowContainsFallback = '$registeredInstallerTypeLower' -notin @('msi', 'wix')"
+      "$allowContainsFallback = '$(ConvertTo-PSSingleQuotedContent $registeredInstallerTypeLower)' -notin @('msi', 'wix')"
     );
     expect(packager).toContain(
       "$systemComponentProperty = $_.PSObject.Properties[''SystemComponent'']"
@@ -4543,7 +4557,7 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
     expect(repairIndex).toBeGreaterThan(-1);
     expect(repairedRegistryBranchIndex).toBeGreaterThan(repairIndex);
     expect(unresolvedSentinelIndex).toBeGreaterThan(repairedRegistryBranchIndex);
-    expect(packager).toContain("$msixPackageName -notmatch '^[A-Za-z0-9.-]+$'");
+    expect(packager).toContain("$msixPackageName -cnotmatch '^[A-Za-z0-9.-]+\\z'");
     expect(packager).toContain("$usesAppxLifecycle = $installerTypeLower -in @('msix', 'appx') -or");
     expect(packager).toContain("$NestedInstallerType.Trim().ToLowerInvariant() -in @('msix', 'appx')");
     expect(packager).toContain('[string]::IsNullOrWhiteSpace($msixPackageName) -and');
@@ -4614,4 +4628,175 @@ describe('PSADT MSIX scope contract', () => {
     );
     expect(packager).toContain('if ($IsUserScope)');
   });
+});
+// Reads every Start-ADTProcess call in Install-ADTDeployment through the
+// PowerShell parser, so each asserted ArgumentList is the exact runtime value.
+function installProcessCalls(generated: string): Array<{ FilePath: string; ArgumentList: string }> {
+  // The packager writes a UTF-8 BOM; ParseInput expects text without it.
+  const source = generated.charCodeAt(0) === 0xfeff ? generated.slice(1) : generated;
+  const script = `[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$source = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(source).toString('base64')}'))
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw ($errors | ForEach-Object { $_.Message } | Out-String) }
+$install = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Install-ADTDeployment' }, $true)
+$calls = @($install.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Start-ADTProcess' }, $true) | ForEach-Object {
+  $elements = @($_.CommandElements)
+  $values = @{}
+  for ($index = 1; $index -lt $elements.Count - 1; $index++) {
+    if ($elements[$index] -is [System.Management.Automation.Language.CommandParameterAst]) {
+      $value = $elements[$index + 1]
+      $values[$elements[$index].ParameterName] = if ($value -is [System.Management.Automation.Language.StringConstantExpressionAst]) { $value.Value } else { $value.Extent.Text }
+    }
+  }
+  [pscustomobject]@{ FilePath = [string]$values['FilePath']; ArgumentList = [string]$values['ArgumentList'] }
+})
+ConvertTo-Json -InputObject $calls -Compress`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+    '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { input: script, encoding: 'utf8', timeout: 30_000 });
+  if (result.status !== 0) {
+    throw new Error(`Could not read the generated install calls:\n${result.stdout}\n${result.stderr}`);
+  }
+  return JSON.parse(result.stdout.trim());
+}
+
+describe('PSADT install command override', () => {
+  const generateWithInstallOverride = (
+    installCommand: string,
+    installerType: 'exe' | 'inno' = 'exe'
+  ) => generateRegistryUninstallPackage(
+    installerType, 'Java 8 Update 501', [], { installCommand }, [],
+    'Oracle.JavaRuntimeEnvironment', 'Java 8 Update 501', '8.0.5010.8',
+    'REGISTRY_UNINSTALL:Java 8 Update 501', '/s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0'
+  );
+
+  it('encodes overrides for PowerShell and runs other commands through cmd.exe quote preservation', () => {
+    expect(packager).toContain(
+      '$customInstallCommandEscaped = [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent('
+    );
+    expect(packager).toContain("-ArgumentList '/s /c `\"$customInstallCommandEscaped`\"'");
+    expect(packager).toContain('-not $customInstallUsesPackagedInstaller');
+    expect(packager).toContain(
+      "[System.IO.Path]::GetExtension($installerFileName).ToLowerInvariant() -notin @('.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip') -and"
+    );
+  });
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'runs an override of the packaged installer natively with the edited arguments',
+    () => {
+      const generated = generateWithInstallOverride(
+        '"setup.exe" /s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0 REMOVEOUTOFDATEJRES=1'
+      );
+
+      expect(installProcessCalls(generated)).toEqual([{
+        FilePath: '"$($adtSession.DirFiles)\\setup.exe"',
+        ArgumentList: '/s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0 REMOVEOUTOFDATEJRES=1',
+      }]);
+      expect(generated).toContain(
+        "Start-ADTProcess -FilePath \"$($adtSession.DirFiles)\\setup.exe\" -ArgumentList '/s REBOOT=0 SPONSORS=0 AUTO_UPDATE=0 REMOVEOUTOFDATEJRES=1' -WindowStyle Hidden -WaitForMsiExec -Timeout (New-TimeSpan -Minutes 15) -TimeoutAction Stop"
+      );
+      expect(generated).not.toContain('Custom install command override');
+      expect(generated).not.toContain('System32\\cmd.exe');
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps quoted and apostrophe arguments exact for an unquoted, case-insensitive installer name',
+    () => {
+      const generated = generateWithInstallOverride(
+        'SETUP.EXE /s INSTALLDIR="C:\\Program Files\\Contoso\'s Java"'
+      );
+
+      expect(installProcessCalls(generated)).toEqual([{
+        FilePath: '"$($adtSession.DirFiles)\\setup.exe"',
+        ArgumentList: '/s INSTALLDIR="C:\\Program Files\\Contoso\'s Java"',
+      }]);
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'keeps Inno Setup handling for a native override',
+    () => {
+      const generated = generateWithInstallOverride('"setup.exe" /VERYSILENT /NORESTART', 'inno');
+
+      expect(installProcessCalls(generated)).toEqual([{
+        FilePath: '"$($adtSession.DirFiles)\\setup.exe"',
+        ArgumentList: '/VERYSILENT /NORESTART /SP-',
+      }]);
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'runs any other command verbatim through cmd.exe without stripping its quotes',
+    () => {
+      const generated = generateWithInstallOverride('"other.exe" /s "C:\\Data Files\\setup.cfg"');
+
+      expect(installProcessCalls(generated)).toEqual([{
+        FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
+        ArgumentList: '/s /c ""other.exe" /s "C:\\Data Files\\setup.cfg""',
+      }]);
+      expect(installProcessCalls(generateWithInstallOverride('"setup.exe" /s && echo installed'))).toEqual([{
+        FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
+        ArgumentList: '/s /c ""setup.exe" /s && echo installed"',
+      }]);
+      expect(installProcessCalls(generateWithInstallOverride('"setup.exe" /s NAME=a^b'))).toEqual([{
+        FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
+        ArgumentList: '/s /c ""setup.exe" /s NAME=a^b"',
+      }]);
+      expect(installProcessCalls(generateWithInstallOverride('"setup.exe" /s /LOG="%CD%\\install.log"'))).toEqual([{
+        FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
+        ArgumentList: '/s /c ""setup.exe" /s /LOG="%CD%\\install.log""',
+      }]);
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'encodes typographic single quotes so an override cannot leave its PowerShell string',
+    () => {
+      const leftQuote = String.fromCharCode(0x2018);
+      const rightQuote = String.fromCharCode(0x2019);
+      const override = `"setup.exe" /s NAME=${rightQuote}; Write-Host injected; ${leftQuote}`;
+      const generated = generateWithInstallOverride(override);
+
+      expect(installProcessCalls(generated)).toEqual([{
+        FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
+        ArgumentList: `/s /c "${override}"`,
+      }]);
+      expect(generated).not.toMatch(/^\s*Write-Host injected/m);
+    },
+    30_000
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager)(
+    'executes the cmd.exe override command line exactly as written',
+    () => {
+      const generated = generateWithInstallOverride('"probe one.cmd" "first value" second');
+      const [call] = installProcessCalls(generated);
+      const fixtureRoot = mkdtempSync(join(tmpdir(), 'intuneget-cmd-override-'));
+      try {
+        writeFileSync(join(fixtureRoot, 'probe one.cmd'), '@echo [%~1] [%~2]\r\n');
+        // Model the Intune process environment, where cmd.exe resolves commands
+        // from its working directory (the package Files directory).
+        const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+          'Remove-Item Env:NoDefaultCurrentDirectoryInExePath -ErrorAction SilentlyContinue; $info = [Diagnostics.ProcessStartInfo]::new("$env:SystemRoot\\System32\\cmd.exe", $env:OVERRIDE_ARGUMENTS); $info.WorkingDirectory = $env:OVERRIDE_DIRECTORY; $info.UseShellExecute = $false; $info.RedirectStandardOutput = $true; $process = [Diagnostics.Process]::Start($info); $process.StandardOutput.ReadToEnd(); $process.WaitForExit(); exit $process.ExitCode',
+        ], {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            OVERRIDE_ARGUMENTS: call.ArgumentList,
+            OVERRIDE_DIRECTORY: fixtureRoot,
+          },
+        });
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout.trim()).toBe('[first value] [second]');
+      } finally {
+        rmSync(fixtureRoot, { recursive: true, force: true });
+      }
+    },
+    30_000
+  );
 });

@@ -14,11 +14,13 @@ vi.mock('@/lib/curated-catalog/licence', () => ({ assertCuratedLicenceAccepted: 
 vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: vi.fn() }));
 vi.mock('@/lib/catalog-installer-reconciliation', () => ({ reconcileCatalogInstaller: vi.fn() }));
 import { GET } from './route';
+import * as packageEligibility from '@/lib/package-eligibility';
 
 type Row = Record<string, unknown> & { id: string; status: string; qa_resume_due_at: string };
 const epoch = Date.parse('2026-10-08T00:00:00Z');
 function job(i: number, extra: Record<string, unknown> = {}): Row {
   return { id: String(i).padStart(4, '0'), tenant_id: 'tenant-a', winget_id: 'Vendor.App',
+    version: '1.0',
     status: 'awaiting_qa', created_at: new Date(epoch - 60_000 + i).toISOString(),
     qa_resume_due_at: new Date(epoch - 60_000 + i).toISOString(), qa_candidate_id: 'candidate',
     is_auto_update: false, package_config: { sourceType: 'winget', version: '1.0', installerType: 'exe' }, ...extra };
@@ -84,6 +86,22 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks();
   delete process.env.QA_MAINTENANCE_MODE; delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL; });
 
 describe('approval holds and fair QA release', () => {
+  it('rotates unavailable compatibility lookups without releasing them or starving the next job', async () => {
+    const rows = [...Array.from({ length: 25 }, (_, i) => job(i, { winget_id: 'Fixture.Unverified' })),
+      job(26, { winget_id: 'Fixture.Verified' })];
+    database(rows);
+    vi.spyOn(packageEligibility, 'getPackageCompatibilityBlock').mockImplementation(async (_client, input) => {
+      if (input.wingetId === 'Fixture.Unverified') throw new Error('Synthetic lookup failure');
+      return null;
+    });
+    expect(await cycle()).toMatchObject({ waiting: 25, resumed: 0, failed: 0 });
+    expect(rows.slice(0, 25).every(row => row.status === 'awaiting_qa' && row.qa_resume_due_at === new Date(epoch + 60_000).toISOString())).toBe(true);
+    expect(mocks.guard).not.toHaveBeenCalled();
+    vi.setSystemTime(epoch + 1000);
+    expect(await cycle()).toMatchObject({ resumed: 1, waiting: 0 });
+    expect(rows[25].status).toBe('queued');
+    expect(rows.slice(0, 25).every(row => row.status === 'awaiting_qa')).toBe(true);
+  });
   it.each([true, false])('holds every unresolved reason without releasing local=%s', async local => {
     mocks.flags.mockReturnValue({ localPackager: local });
     for (const reason of ['retained_app_present', 'retained_app_unverified', 'release_check_failed']) {

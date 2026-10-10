@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { getDatabase } from '@/lib/db';
+import { getDatabase, isSqliteMode } from '@/lib/db';
 import {
   cancelWorkflowRun,
   getWorkflowRun,
@@ -58,17 +58,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create Supabase client
-    const supabase = createServerClient();
-
     // Fetch the job to verify ownership and check status
-    const { data: job, error: fetchError } = await supabase
-      .from('packaging_jobs')
-      .select('*')
-      .eq('id', jobId)
-      .single();
+    const db = getDatabase();
+    const job = await db.jobs.getById(jobId);
 
-    if (fetchError || !job) {
+    if (!job) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -98,7 +92,6 @@ export async function POST(request: NextRequest) {
           console.error('[Cancel] Auto-update cleanup error on dismiss:', err);
         });
       }
-      const db = getDatabase();
       await db.jobs.deleteById(jobId);
       return NextResponse.json({
         success: true,
@@ -107,6 +100,10 @@ export async function POST(request: NextRequest) {
         archived: true,
       });
     }
+
+    // SQLite self-hosted installs keep jobs in the adapter. Hosted installs
+    // create their client before attempting to cancel a workflow.
+    const supabase = isSqliteMode() ? null : createServerClient();
 
     // Check if job is already cancelled or deployed (cannot be modified)
     if (typedJob.status === 'cancelled') {
@@ -187,6 +184,31 @@ export async function POST(request: NextRequest) {
 
     // Use token email, or fall back to job's stored user_email
     const cancelledByEmail = userEmail || typedJob.user_email || 'unknown';
+
+    if (!supabase) {
+      // Lock on the status read above: a job the local packager claimed or
+      // finished in the meantime is reported instead of overwritten.
+      const cancelledJob = await db.jobs.update(jobId, {
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: cancelledByEmail,
+        error_message: errorMessage,
+      }, { status: typedJob.status });
+
+      if (!cancelledJob) {
+        return NextResponse.json(
+          { error: 'The job changed status while cancelling. Refresh and try again.', retryable: true },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Job cancelled successfully',
+        jobId,
+        githubCancelled: githubCancelResult?.success ?? null,
+      });
+    }
 
     // Try full update first with all cancellation fields
     const fullUpdateData: PackagingJobUpdate = {

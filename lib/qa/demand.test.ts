@@ -2,16 +2,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureQaDemand, type QaDemandInput } from '@/lib/qa/demand';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { WingetDependencyCompatibilityError } from '@/lib/winget-dependencies';
+import { InstallerPreflightError } from '@/lib/installer-preflight';
 
 const {
   resolveWingetPackageDependenciesMock,
   getPackageCompatibilityBlockMock,
   getPackageEligibilityBlocksMock,
+  enforceInstallerPreflightMock,
 } = vi.hoisted(() => ({
   resolveWingetPackageDependenciesMock: vi.fn(),
   getPackageCompatibilityBlockMock: vi.fn(),
   getPackageEligibilityBlocksMock: vi.fn(),
+  enforceInstallerPreflightMock: vi.fn(),
 }));
+
+vi.mock('@/lib/installer-preflight', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/installer-preflight')>();
+  return {
+    ...original,
+    enforceInstallerPreflight: enforceInstallerPreflightMock,
+  };
+});
 
 vi.mock('@/lib/winget-dependencies', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/winget-dependencies')>();
@@ -48,6 +59,26 @@ function query(result: QueryResult) {
   return builder;
 }
 
+// Keep the existing per-query fixtures while exercising the new RPC call contract.
+function withCandidateRpc(client: { from: (table: string) => unknown }) {
+  return Object.assign(client, {
+    rpc: vi.fn(async (name: string, args: { p_candidate: unknown }) => {
+      expect(name).toBe('insert_qa_candidate_if_absent');
+      const fixture = client.from('qa_candidates') as { insert: (row: unknown) => PromiseLike<QueryResult> };
+      const result = await fixture.insert(args.p_candidate);
+      if (result.error) return result;
+      if (result.data) return { data: { outcome: 'inserted', candidate: result.data }, error: null };
+      const lookup = () => (client.from('qa_candidates') as {
+        select: (columns: string) => { maybeSingle: () => Promise<QueryResult> }
+      }).select('*').maybeSingle();
+      const active = await lookup();
+      if (active.data) return { data: { outcome: 'active_conflict', candidate: active.data }, error: null };
+      const exact = await lookup();
+      return { data: { outcome: 'exact_conflict', candidate: exact.data }, error: exact.error };
+    }),
+  }) as never;
+}
+
 function demandInput(): QaDemandInput {
   return {
     wingetId: 'Example.App',
@@ -78,15 +109,16 @@ describe('ensureQaDemand app-version evidence reuse', () => {
         if (table !== 'qa_candidates') throw new Error('Unexpected table');
         candidateCall++;
         if (candidateCall === 1 || candidateCall === 3) return query({data:null,error:null});
-        if (candidateCall === 2) return {insert:vi.fn(()=>query({data:null,error:{message:'duplicate',code:'23505'}}))};
+        if (candidateCall === 2) return {insert:vi.fn(()=>query({data:null,error:null}))};
         if (candidateCall === 4) return {select:vi.fn(()=>query({data:{id:'completed-run',status:'error',phase:'publishing',github_run_id:'123',priority:2000},error:null}))};
         return {update:vi.fn(values=>{updates.push(values);return query({data:null,error:null});})};
       })
     };
-    await expect(ensureQaDemand(client as never,demandInput())).resolves.toMatchObject({state:'waiting',candidateId:'completed-run'});
+    await expect(ensureQaDemand(withCandidateRpc(client),demandInput())).resolves.toMatchObject({state:'waiting',candidateId:'completed-run'});
     expect(updates).toEqual([]);
   });
   beforeEach(() => {
+    enforceInstallerPreflightMock.mockReset();
     resolveWingetPackageDependenciesMock.mockReset();
     resolveWingetPackageDependenciesMock.mockResolvedValue([]);
     getPackageEligibilityBlocksMock.mockReset();
@@ -111,7 +143,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     ]);
     const client = { from: vi.fn() };
 
-    const result = await ensureQaDemand(client as never, { ...demandInput(), wingetId });
+    const result = await ensureQaDemand(withCandidateRpc(client), { ...demandInput(), wingetId });
 
     expect(result).toMatchObject({
       state: 'failed',
@@ -124,7 +156,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
 
   it('fails closed before queueing an ARM64 payload on the x64 QA runner', async () => {
     const client = { from: vi.fn() };
-    const result = await ensureQaDemand(client as never, {
+    const result = await ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(),
       architecture: 'arm64',
     });
@@ -151,7 +183,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     });
     const client = { from: vi.fn() };
 
-    const result = await ensureQaDemand(client as never, {
+    const result = await ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(),
       wingetId: 'r12f.DivoomGateway',
       version: '0.1.42.0',
@@ -182,7 +214,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Reviewed compatibility quarantine.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'user',
       silentSwitches: '--quiet --start -p',
       uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft 365 Copilot',
@@ -201,7 +233,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'SSEI install returned -1; exact registration absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
       silentSwitches: '/IACCEPTSQLSERVERLICENSETERMS /ENU /ACTION=Install /quiet /InstallPath="c:\\Program Files\\Microsoft SQL Server"',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Microsoft SQL Server SQL2025:Microsoft SQL Server 2025 Developer',
@@ -223,7 +255,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'MSI uninstall returned 1601.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'msi', installScope: 'machine',
       silentSwitches: '/qn /norestart ALLUSERS=1',
       uninstallCommand: 'REGISTRY_UNINSTALL:Zoom Workplace',
@@ -242,7 +274,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained after exit 1.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'inno', installScope: 'machine',
       silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
       uninstallCommand: 'REGISTRY_UNINSTALL:MrCode',
@@ -262,7 +294,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled; no exact uninstall identity.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'inno', installScope: 'machine',
       silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:ZoiteChat_is1:ZoiteChat',
@@ -281,7 +313,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after silent uninstall.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:tutor-electron-student:猿辅导',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -300,7 +332,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured vendor uninstaller is missing.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
       silentSwitches: 'update', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:HeyboxChat:黑盒语音',
     })).resolves.toMatchObject({
@@ -321,7 +353,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured vendor uninstaller is missing.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:Wardian',
     })).resolves.toMatchObject({
@@ -342,7 +374,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after vendor removal.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
       silentSwitches: '/install /quiet',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{B53D2C4E-E455-4441-B2D2-539C6D889782}:ZWSOFT Network License Manager',
@@ -364,7 +396,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Installer launch failed twice before product registration.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'user',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:DeviceShelf',
     })).resolves.toMatchObject({
@@ -385,7 +417,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact YandexDisk2 registration remained after vendor removal.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope: 'machine',
       silentSwitches: '-silent -norestart -permachine',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:YandexDisk2:Yandex.Disk',
@@ -407,7 +439,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:Bitig',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null });
@@ -425,7 +457,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'inno',
       silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
       uninstallCommand: 'REGISTRY_UNINSTALL:IVT Secure Access Free Edition',
@@ -444,7 +476,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained after silent removal.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'inno', installScope: 'user',
       silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:{61022144-7D0A-4E54-94F2-C329A8F58656}_is1:Nebula Terminal',
@@ -463,7 +495,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent after exact-key repair.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:d4ef7abc-e624-5946-b915-b84166f8a4bf:tldv',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null });
@@ -481,7 +513,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller absent; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:CuteCut Pro',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null });
@@ -499,7 +531,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Installer launch canceled; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'user',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:美图云修Pro',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null });
@@ -517,7 +549,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Inno registration remained.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'inno', installScope: 'machine',
       silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
       uninstallCommand: 'REGISTRY_UNINSTALL:TubeDigger',
@@ -537,7 +569,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
       silentSwitches: '-silent', uninstallCommand: 'REGISTRY_UNINSTALL:Twinkstar',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null });
@@ -556,7 +588,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Install failed with exit 1626.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'burn', installScope: 'machine',
       silentSwitches: '/quiet /norestart',
       uninstallCommand: 'REGISTRY_UNINSTALL:SQL Server Integration Services Projects',
@@ -578,7 +610,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:Pithflow',
     })).resolves.toMatchObject({
@@ -599,7 +631,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact RadioMaximus_is1 registration remained.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, displayName: 'RadioMaximus', publisher: 'Raimersoft',
       installerType: 'inno', installScope: 'machine',
       silentSwitches: '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-',
@@ -622,7 +654,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact ima.copilot registration remained.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, displayName: 'ima', publisher: 'Tencent',
       installerType: 'exe', installScope: 'machine', silentSwitches: 'quiet',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:ima.copilot:ima',
@@ -644,7 +676,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'LocalSystem lifecycle remains unsupported.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:ba1bb1f3-0069-5c64-9a11-479ebc0471d9:GreenTunnel',
     })).resolves.toMatchObject({
@@ -665,7 +697,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
       silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Ubiquiti UniFi:Ubiquiti UniFi Network Server',
@@ -687,7 +719,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registration remained after silent uninstall.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope, silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:{EA77EC9A-C82F-4F80-8B7D-D32C09A9C25F}:네이트온',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -706,7 +738,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL:SJMCL',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -725,7 +757,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
       silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL:DockMapper',
@@ -747,7 +779,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
       silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{932B644F-CF07-5D84-AEF8-0B37BF9D7CE1}:TimeScribe',
@@ -769,7 +801,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope,
       silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{932B644F-CF07-5D84-AEF8-0B37BF9D7CE1}:TimeScribe',
@@ -791,7 +823,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact Opera registration remained after the reviewed uninstall command.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope,
       silentSwitches: '/silent /allusers=1',
       uninstallCommand: 'REGISTRY_UNINSTALL:Opera Stable',
@@ -813,7 +845,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'No exact vendor identity was captured.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope,
       silentSwitches: '--quiet --wait --campaign "winget"',
       uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft SQL Server Management Studio 22',
@@ -835,7 +867,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Squirrel exited -1; exact registration remained.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope,
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_KEY:proton_mail:Proton Mail',
     })).resolves.toMatchObject({
@@ -856,7 +888,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Burn removal exceeded its deadline; detection remained positive.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'burn', installScope,
       silentSwitches: '/quiet /norestart ACCEPT_EULA=1',
       uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft PowerBI Desktop',
@@ -878,7 +910,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'MSI install failed with 1603; no unambiguous uninstall identity.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'msi', installScope,
       silentSwitches: '/qn /norestart ALLUSERS=1',
       uninstallCommand: 'REGISTRY_UNINSTALL:Microsoft Edge',
@@ -900,7 +932,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled and post-install detection failed.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope, silentSwitches: '/silent /install',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:Microsoft EdgeWebView:Microsoft Edge WebView2 Runtime',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -919,7 +951,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Install stalled; no exact uninstall identity.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope, silentSwitches: '/s',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:WeType:微信输入法',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -938,7 +970,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact registered uninstaller was absent; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope, silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{E9197887-EFB3-55E0-985E-D6D3B5DD594A}:T3 Code',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -957,7 +989,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Exact thunder_is1 registration remained; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'exe', installScope, silentSwitches: '/Silent',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:thunder_is1:迅雷',
     })).resolves.toMatchObject({ state: 'failed', candidateId: null,
@@ -976,7 +1008,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Captured MSI registration disappeared.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'msi', installScope: 'machine',
       silentSwitches: '/qn /norestart ALLUSERS=1',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{76CCDAB5-94FA-4CE5-9B0D-6F8304D801A3}:XplicitTrust Network Access',
@@ -1000,7 +1032,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Registered uninstaller was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, installerType: 'nullsoft', installScope: 'machine',
       silentSwitches: '/S', uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{2B325EC9-0ED1-575F-AD70-E08307AEE879}:Orca',
     })).resolves.toMatchObject({
@@ -1021,7 +1053,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest launcher identity was absent.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, displayName: 'MTGA Launcher', publisher: 'WizardsoftheCoast',
       installerType: 'exe', installScope: 'machine', silentSwitches: '/quiet',
       uninstallCommand: 'REGISTRY_UNINSTALL_PRODUCT:{BB91E8E1-8030-43C7-8461-1E54166F3AAB}:MTGA Launcher',
@@ -1043,7 +1075,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Manifest ARP key was absent; reputation unverified.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, displayName: 'IntelliJ IDEA Ultimate Edition (EAP)', publisher: 'JetBrains',
       installerType: 'exe', installScope: 'machine', silentSwitches: '/S',
       uninstallCommand: 'REGISTRY_UNINSTALL_KEY:IntelliJ IDEA 252.26199.7:IntelliJ IDEA Ultimate Edition (EAP)',
@@ -1065,7 +1097,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       ...tuple, code: 'failed_managed_lifecycle', detail: 'Vendor removal requires interactive confirmation.',
     });
     const client = { from: vi.fn() };
-    await expect(ensureQaDemand(client as never, {
+    await expect(ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(), ...tuple, displayName: 'FreSH - First-Run Experience Shell', publisher: 'S42yt',
       installerType: 'exe', installScope: 'user', silentSwitches: '/silent /user',
     })).resolves.toMatchObject({
@@ -1115,7 +1147,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
 
     expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-1' });
     expect(resolveWingetPackageDependenciesMock).toHaveBeenCalledWith({
@@ -1170,7 +1202,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
           return {
             insert: vi.fn(() => query({
               data: null,
-              error: { message: 'duplicate', code: '23505' },
+              error: null,
             })),
           };
         }
@@ -1192,7 +1224,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
 
     expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-1' });
     expect(updates).toEqual([
@@ -1204,10 +1236,10 @@ describe('ensureQaDemand app-version evidence reuse', () => {
     ]);
   });
 
-  it('does not reactivate an installer source quarantined by dispatch preflight', async () => {
-    const input = demandInput();
-    const quarantineSummary =
-      'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.';
+  function quarantinedCandidateClient(
+    existing: Record<string, unknown>,
+    updates: Array<Record<string, unknown>>,
+  ) {
     let candidateCall = 0;
     const client = {
       from: vi.fn((table: string) => {
@@ -1216,41 +1248,129 @@ describe('ensureQaDemand app-version evidence reuse', () => {
         }
         if (table !== 'qa_candidates') throw new Error(`Unexpected table: ${table}`);
         candidateCall++;
-        if (candidateCall === 1) return query({ data: null, error: null });
+        if (candidateCall === 1 || candidateCall === 3) return query({ data: null, error: null });
         if (candidateCall === 2) {
-          return {
-            insert: vi.fn(() => query({
-              data: null,
-              error: { message: 'duplicate', code: '23505' },
-            })),
-          };
+          return { insert: vi.fn(() => query({ data: null, error: null })) };
         }
-        if (candidateCall === 3) return query({ data: null, error: null });
         if (candidateCall === 4) {
-          return {
-            select: vi.fn(() => query({
-              data: {
-                id: 'candidate-quarantined',
-                status: 'superseded',
-                priority: 500,
-                failure_summary: quarantineSummary,
-              },
-              error: null,
-            })),
-          };
+          return { select: vi.fn(() => query({ data: existing, error: null })) };
         }
-        throw new Error('Quarantined candidate must not be updated');
+        return {
+          update: vi.fn((values: Record<string, unknown>) => {
+            updates.push(values);
+            return query({ data: null, error: null });
+          }),
+        };
       }),
     };
+    return withCandidateRpc(client);
+  }
 
-    const result = await ensureQaDemand(client as never, input);
+  const quarantinedUserScopeCandidate = (failureSummary: string) => ({
+    id: 'candidate-quarantined',
+    status: 'superseded',
+    priority: 500,
+    winget_id: 'Example.App',
+    version: '1.2.3',
+    architecture: 'x64',
+    installer_url: 'https://example.test/setup.exe',
+    installer_sha256: 'A'.repeat(64),
+    installer_type: 'exe',
+    test_config: { mode: 'psadt-package', profileKind: 'deployment-config' },
+    failure_summary: failureSummary,
+  });
+
+  it('does not reactivate an installer source quarantined by dispatch preflight', async () => {
+    const input = { ...demandInput(), installScope: 'user' as const };
+    const quarantineSummary =
+      'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.';
+    enforceInstallerPreflightMock.mockRejectedValueOnce(new InstallerPreflightError(
+      'MANIFEST_CHANGED',
+      'The selected installer no longer matches the trusted WinGet manifest',
+    ));
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(quarantineSummary), updates),
+      input,
+    );
 
     expect(result).toMatchObject({
       state: 'failed',
       candidateId: 'candidate-quarantined',
       failureSummary: quarantineSummary,
     });
-    expect(candidateCall).toBe(4);
+    expect(updates).toEqual([]);
+  });
+
+  it('reactivates a manifest quarantine only after the exact dispatch preflight passes again', async () => {
+    const input = { ...demandInput(), installScope: 'user' as const };
+    enforceInstallerPreflightMock.mockResolvedValueOnce({
+      cacheKey: 'healthy',
+      status: 'healthy',
+      source: 'live',
+    });
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(
+        'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer for Example.App 1.2.3 no longer matches the trusted WinGet manifest',
+      ), updates),
+      input,
+    );
+
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-quarantined' });
+    // The customer's user scope lives in the canonical profile. Verifying the
+    // candidate as machine scope rejects a valid user-scope WinGet installer.
+    expect(enforceInstallerPreflightMock).toHaveBeenCalledWith({
+      wingetId: 'Example.App',
+      version: '1.2.3',
+      architecture: 'x64',
+      installerUrl: 'https://example.test/setup.exe',
+      manifestInstallerUrl: 'https://example.test/setup.exe',
+      installerSha256: 'A'.repeat(64),
+      installerType: 'exe',
+      installScope: 'user',
+      sourceType: 'winget',
+    });
+    expect(updates).toEqual([
+      expect.objectContaining({ status: 'queued', failure_summary: null }),
+    ]);
+  });
+
+  it('keeps a manifest quarantine waiting while the live recheck is temporarily unavailable', async () => {
+    const input = { ...demandInput(), installScope: 'user' as const };
+    enforceInstallerPreflightMock.mockRejectedValueOnce(new InstallerPreflightError(
+      'PREFLIGHT_STATE_UNAVAILABLE',
+      'Installer health state is unavailable',
+      true,
+    ));
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(
+        'Installer source quarantined before QA: MANIFEST_CHANGED. The selected installer is stale.',
+      ), updates),
+      input,
+    );
+
+    expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-quarantined' });
+    expect(updates).toEqual([]);
+  });
+
+  it('keeps a hash mismatch quarantine terminal without another preflight', async () => {
+    const quarantineSummary =
+      'Installer source quarantined before QA: HASH_MISMATCH. Publisher bytes changed.';
+    const updates: Array<Record<string, unknown>> = [];
+
+    const result = await ensureQaDemand(
+      quarantinedCandidateClient(quarantinedUserScopeCandidate(quarantineSummary), updates),
+      demandInput(),
+    );
+
+    expect(result).toMatchObject({ state: 'failed', failureSummary: quarantineSummary });
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
   });
 
   it('joins the active payload test when a concurrent insert wins the race', async () => {
@@ -1268,7 +1388,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
           return {
             insert: vi.fn(() => query({
               data: null,
-              error: { message: 'duplicate active payload', code: '23505' },
+              error: null,
             })),
           };
         }
@@ -1281,7 +1401,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
 
     expect(result).toMatchObject({
       state: 'waiting',
@@ -1305,7 +1425,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
 
     expect(result.state).toBe('passed');
     expect(result.candidateId).toBeNull();
@@ -1333,7 +1453,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
 
     expect(result).toMatchObject({ state: 'waiting', candidateId: 'candidate-active' });
     expect(priorityUpdate.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -1359,7 +1479,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
     const profile = JSON.parse(result.identity.canonicalJson) as {
       installer: { installScope: string };
     };
@@ -1394,7 +1514,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       }),
     };
 
-    const result = await ensureQaDemand(client as never, input);
+    const result = await ensureQaDemand(withCandidateRpc(client), input);
 
     expect(result.state).toBe('failed');
     expect(failedResultQuery.eq).toHaveBeenCalledWith(
@@ -1409,7 +1529,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       new Error('Unreviewed package dependency')
     );
 
-    await expect(ensureQaDemand(client as never, demandInput())).rejects.toThrow(
+    await expect(ensureQaDemand(withCandidateRpc(client), demandInput())).rejects.toThrow(
       'Unreviewed package dependency'
     );
     expect(client.from).not.toHaveBeenCalled();
@@ -1430,7 +1550,7 @@ describe('ensureQaDemand app-version evidence reuse', () => {
       )
     );
 
-    const result = await ensureQaDemand(client as never, {
+    const result = await ensureQaDemand(withCandidateRpc(client), {
       ...demandInput(),
       installScope: 'user',
     });
