@@ -1378,8 +1378,11 @@ $customUninstallCommandEscaped = ConvertTo-PSSingleQuotedContent $customUninstal
 # Run it through the same native Start-ADTProcess path as the generated command,
 # with the override arguments verbatim and authoritative, instead of cmd.exe.
 # Every other override, including one that uses the cmd.exe operators & | < > ^,
-# still runs verbatim through cmd.exe. The file extension is checked as well
-# because the installer type is corrected from it only further below.
+# still runs verbatim through cmd.exe. So does an override that uses a cmd.exe
+# dynamic variable such as %CD% or the %NAME:~0,3% syntax, which only cmd.exe
+# resolves; plain %NAME% references are expanded on the native path. The file
+# extension is checked as well because the installer type is corrected from it
+# only further below.
 $customInstallUsesPackagedInstaller = $false
 $customInstallInvocation = [regex]::Match(
     $customInstallCommand,
@@ -1388,6 +1391,7 @@ if ($customInstallInvocation.Success -and
     $installerTypeLower -in @('exe', 'inno', 'nullsoft', 'burn') -and
     [System.IO.Path]::GetExtension($installerFileName).ToLowerInvariant() -notin @('.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip') -and
     $customInstallCommand -notmatch '[\x00-\x1F\x7F\u2018-\u201B&|<>^]' -and
+    $customInstallCommand -inotmatch '%(?:CD|__CD__|__APPDIR__|DATE|TIME|RANDOM|ERRORLEVEL|CMDEXTVERSION|CMDCMDLINE|HIGHESTNUMANODENUMBER)%|%[^%]*:[^%]*%' -and
     [string]::Equals(
         ($customInstallInvocation.Groups['file'].Value -replace '^\.[\\/]', ''),
         $installerFileName,

@@ -888,7 +888,9 @@ catch
    * Returns those arguments so the installer runs through the same native
    * Start-ADTProcess path as the generated command, or null when the override
    * must run verbatim through cmd.exe, including any override that uses the
-   * cmd.exe operators & | < > ^.
+   * cmd.exe operators & | < > ^ or a variable only cmd.exe resolves (%CD%,
+   * %RANDOM%, the %NAME:~0,3% syntax). Plain %NAME% references are expanded
+   * on the native path.
    */
   private getPackagedInstallerOverrideArguments(
     job: PackagingJob,
@@ -898,7 +900,8 @@ catch
     if (
       !['exe', 'inno', 'nullsoft', 'burn'].includes(job.installer_type.toLowerCase()) ||
       ['.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip'].includes(path.extname(fileName).toLowerCase()) ||
-      /[\x00-\x1F\x7F\u2018-\u201B&|<>^]/.test(installOverride)
+      /[\x00-\x1F\x7F\u2018-\u201B&|<>^]/.test(installOverride) ||
+      /%(?:CD|__CD__|__APPDIR__|DATE|TIME|RANDOM|ERRORLEVEL|CMDEXTVERSION|CMDCMDLINE|HIGHESTNUMANODENUMBER)%|%[^%]*:[^%]*%/i.test(installOverride)
     ) {
       return null;
     }
