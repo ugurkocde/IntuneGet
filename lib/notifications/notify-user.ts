@@ -269,7 +269,7 @@ export async function notifyUserOfPendingUpdates(
 
 type NotificationPolicy = Pick<
   AppUpdatePolicy,
-  'tenant_id' | 'winget_id' | 'policy_type' | 'pinned_version'
+  'id' | 'tenant_id' | 'winget_id' | 'policy_type' | 'pinned_version'
 >;
 
 const POLICY_PAGE_SIZE = 1000;
@@ -277,28 +277,34 @@ const POLICY_PAGE_SIZE = 1000;
 /**
  * Load every update policy of the user. Paged so a user with more policies
  * than the Supabase row limit (an MSP across many tenants) still has all of
- * their ignore and pin policies applied.
+ * their ignore and pin policies applied. Keyset paged on the primary key and
+ * ended only by an empty page, so a server max-rows setting below
+ * POLICY_PAGE_SIZE cannot end the read early and drop policies.
  */
 async function loadUpdatePolicies(
   supabase: SupabaseClient,
   userId: string
 ): Promise<{ rows: NotificationPolicy[] } | { error: string }> {
   const rows: NotificationPolicy[] = [];
-  for (let from = 0; ; from += POLICY_PAGE_SIZE) {
-    const { data, error } = await supabase
+  let lastId: string | null = null;
+  for (;;) {
+    let query = supabase
       .from('app_update_policies')
       .select('id, tenant_id, winget_id, policy_type, pinned_version')
-      .eq('user_id', userId)
-      .order('id', { ascending: true })
-      .range(from, from + POLICY_PAGE_SIZE - 1);
+      .eq('user_id', userId);
+    if (lastId !== null) {
+      query = query.gt('id', lastId);
+    }
+    const { data, error } = await query.order('id', { ascending: true }).limit(POLICY_PAGE_SIZE);
     if (error) {
       return { error: error.message };
     }
     const page = (data as NotificationPolicy[] | null) || [];
-    rows.push(...page);
-    if (page.length < POLICY_PAGE_SIZE) {
+    if (page.length === 0) {
       return { rows };
     }
+    rows.push(...page);
+    lastId = page[page.length - 1].id;
   }
 }
 
