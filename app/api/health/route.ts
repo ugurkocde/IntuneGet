@@ -49,8 +49,25 @@ export async function GET() {
         const supabase = createClient(supabaseUrl, supabaseKey);
         // Probe a real public catalog table. The legacy "apps" table was
         // removed, which made healthy hosted deployments report degraded.
-        const { error } = await supabase.from("curated_apps").select("winget_id").limit(1);
-        status.services.database = !error;
+        const controller = new AbortController();
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const probe = Promise.resolve(
+            supabase.from("curated_apps").select("winget_id").limit(1)
+              .abortSignal(controller.signal)
+          );
+          // Also bound clients that fail to settle when their signal is aborted.
+          const timeout = new Promise<{ error: Error }>((resolve) => {
+            deadline = setTimeout(() => {
+              controller.abort();
+              resolve({ error: new Error("Database health probe timed out") });
+            }, 5000);
+          });
+          const { error } = await Promise.race([probe, timeout]);
+          status.services.database = !error;
+        } finally {
+          clearTimeout(deadline);
+        }
       }
     }
   } catch {
