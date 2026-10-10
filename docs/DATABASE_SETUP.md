@@ -8,19 +8,13 @@ Supabase CLI migrations use the version prefix before the first underscore as
 their unique history identifier. A different filename suffix does not create a
 different version. See the [Supabase migration history reference](https://supabase.com/docs/reference/cli/supabase-migration-repair).
 
-This repository currently contains two `014_` migrations and two `015_`
-migrations. As reported in [issue #449](https://github.com/ugurkocde/IntuneGet/issues/449),
-`supabase db push` can fail with `schema_migrations_pkey` and SQLSTATE `23505`
-when it records the second file with the same version. Sorting the complete
-filenames does not resolve that history conflict.
+Migration versions are unique. The former duplicate versions reported in
+[issue #449](https://github.com/ugurkocde/IntuneGet/issues/449) are separated into
+`014_sccm_integration.sql`, `0141_winget_index_v2.sql`,
+`015_enhanced_error_handling.sql`, and `0151_msp_batch_and_webhooks.sql`.
+Use the CLI's migration version order rather than sorting complete filenames.
 
-Keep both files: they contain different schema changes. Do not skip a file,
-rename historical migrations or delete migration history to get past the error.
-An existing installation needs its applied schema and migration history checked
-before choosing a compatible version transition. The instructions below do not
-resolve the duplicate versions.
-
-For migrations with unique versions and matching history, install the CLI using
+For a fresh installation, install the CLI using
 the [official installation guide](https://supabase.com/docs/guides/local-development/cli/getting-started),
 then use the normal deployment commands:
 
@@ -63,9 +57,43 @@ Before applying an update, inspect the linked project's history with
 `supabase migration list`. Once version uniqueness and history alignment have
 been established, `supabase db push` applies pending migrations.
 
-`supabase migration repair` changes history records; it does not execute the
-SQL in a missing migration. Marking a version as applied therefore does not
-establish that both files sharing that version have run.
+`supabase migration repair` changes history records; it does not execute SQL.
+Mark a version as applied only after verifying that its complete schema changes
+already exist. Do not delete history or mark missing schema as applied.
+
+### Upgrading an installation created before the version correction
+
+Back up the database and inspect `supabase migration list` before any write.
+Existing `014` and `015` records do not prove that both formerly duplicated
+files ran. If `0141` or `0151` is local only, check each migration separately:
+
+* For `0141`, compare `curated_apps.winget_last_update` and
+  `idx_curated_apps_winget_last_update` with
+  [`0141_winget_index_v2.sql`](../supabase/migrations/0141_winget_index_v2.sql).
+* For `0151`, compare the complete definitions in
+  [`0151_msp_batch_and_webhooks.sql`](../supabase/migrations/0151_msp_batch_and_webhooks.sql):
+  the four `msp_batch_deployments`, `msp_batch_deployment_items`,
+  `msp_webhook_configurations`, and `msp_webhook_deliveries` tables, their indexes,
+  the `update_msp_webhook_updated_at` function,
+  `trigger_update_msp_webhook_updated_at`, the four service role policies and
+  enabled row level security, and the `msp_batch_deployment_stats` view.
+
+If all changes for a local only version already match, reconcile only that
+version's history, for example `supabase migration repair --status applied 0141`.
+Use `0151` instead only after its own complete schema has been verified.
+Preserve the original `014` and `015` records.
+
+If all changes for a pending version are absent, inspect
+`supabase db push --include-all --dry-run` and confirm every listed migration is
+appropriate before running `supabase db push --include-all`. This allows missing
+versions older than the latest recorded version to run in migration order.
+If only some changes exist, definitions differ, or history is ambiguous, stop
+and reconcile that installation before pushing. The `0151` trigger and policies
+are not replay safe and can fail with SQLSTATE `42710` if executed again.
+
+Recheck history and schema afterwards. These instructions provide an upgrade
+decision path; they do not establish that a particular existing installation
+has been repaired.
 
 ## Troubleshooting
 
@@ -74,6 +102,5 @@ establish that both files sharing that version have run.
 - For `schema_migrations_pkey` / SQLSTATE `23505`, check duplicate version
   prefixes and the existing history. This error does not indicate missing API
   credentials.
-- Preserve both `014_` files and both `015_` files while reconciling which schema
-  changes actually ran. Migration version normalization remains tracked in
-  issue #449; this guide does not claim that it is resolved.
+- For an older installation, follow the schema and history checks above before
+  applying the renamed migrations. File names alone do not prove applied schema.
