@@ -1,0 +1,5 @@
+{
+  "title": "Reliable database setup",
+  "summary": "Fresh database setup now applies legacy migrations in the correct order and creates the installer metadata column before search functions use it.",
+  "type": "fixed"
+}
