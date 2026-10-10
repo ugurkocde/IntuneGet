@@ -43,9 +43,10 @@ const SEPARATOR_AWARE_REDACTIONS: Array<[RegExp, string]> = [
   // Basic credentials are base64 of at least four characters containing an
   // uppercase letter, digit, plus or slash, or ending in padding that is not
   // followed by a quote (so `Basic realm="x"` stays readable). The scheme
-  // match is case sensitive so prose such as "basic authentication" does too.
+  // matches in any case, as HTTP requires, while the value test stays case
+  // sensitive, so prose such as "basic authentication" stays readable too.
   [
-    /\b([Bb]asic|BASIC)[\s\u200b]+(?=[A-Za-z0-9+/]*[A-Z0-9+/]|[A-Za-z0-9+/]+={1,2}(?![\w"'+/=]))[A-Za-z0-9+/]{4,}[A-Za-z0-9+/=\u200b]*/g,
+    /\b([Bb][Aa][Ss][Ii][Cc])[\s\u200b]+(?=[A-Za-z0-9+/]*[A-Z0-9+/]|[A-Za-z0-9+/]+={1,2}(?![\w"'+/=]))[A-Za-z0-9+/]{4,}[A-Za-z0-9+/=\u200b]*/g,
     '$1 [redacted]',
   ],
   [/(^|[^\w-])eyJ[\w-]+\.[\w-]+\.[\w-]+/g, '$1[redacted JWT]'],

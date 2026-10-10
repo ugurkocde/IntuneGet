@@ -73,6 +73,10 @@ describe('logValue', () => {
     );
   });
 
+  it('matches the Basic scheme in any case', () => {
+    expect(logValue('Authorization: bAsIc dXNlcjpwYXNz')).toBe('Authorization: bAsIc [redacted]');
+  });
+
   it('redacts short Basic credentials', () => {
     expect(logValue('Basic YWI6Y2Q= rejected')).toBe('Basic [redacted] rejected');
   });
