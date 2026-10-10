@@ -1325,9 +1325,43 @@ $psadtVersion = '4.1.8'
 # Non-empty values replace the synthesized install/uninstall commands entirely
 $customInstallCommand = if ($psadtConfig.installCommand) { ([string]$psadtConfig.installCommand).Trim() } else { '' }
 $customUninstallCommand = if ($psadtConfig.uninstallCommand) { ([string]$psadtConfig.uninstallCommand).Trim() } else { '' }
-# Only escape single quotes - overrides are embedded in single-quoted strings in the generated script
-$customInstallCommandEscaped = $customInstallCommand -replace "'", "''"
+# Overrides are embedded in single-quoted strings in the generated script.
+# PowerShell also ends a single-quoted string at the typographic quotes
+# U+2018 to U+201B, so the install override is escaped with the PowerShell
+# encoder. A cmd.exe command line is a single line.
+$customInstallCommandEscaped = [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent(
+    ($customInstallCommand -replace '[\r\n]+', ' '))
 $customUninstallCommandEscaped = $customUninstallCommand -replace "'", "''"
+
+# An install override that starts with the packaged installer file is the
+# generated install command with edited arguments, for example
+#   "setup.exe" /s REBOOT=0 EXTRA=1
+# Run it through the same native Start-ADTProcess path as the generated command,
+# with the override arguments verbatim and authoritative, instead of cmd.exe.
+# Every other override, including one that uses the cmd.exe operators & | < > ^,
+# still runs verbatim through cmd.exe. So does an override that uses a cmd.exe
+# dynamic variable such as %CD% or the %NAME:~0,3% syntax, which only cmd.exe
+# resolves; plain %NAME% references are expanded on the native path. The file
+# extension is checked as well because the installer type is corrected from it
+# only further below.
+$customInstallUsesPackagedInstaller = $false
+$customInstallInvocation = [regex]::Match(
+    $customInstallCommand,
+    '^(?:"(?<file>[^"]+)"|(?<file>[^\s"]+))\s+(?<arguments>\S.*)$')
+if ($customInstallInvocation.Success -and
+    $installerTypeLower -in @('exe', 'inno', 'nullsoft', 'burn') -and
+    [System.IO.Path]::GetExtension($installerFileName).ToLowerInvariant() -notin @('.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip') -and
+    $customInstallCommand -notmatch '[\x00-\x1F\x7F\u2018-\u201B&|<>^]' -and
+    $customInstallCommand -inotmatch '%(?:CD|__CD__|__APPDIR__|DATE|TIME|RANDOM|ERRORLEVEL|CMDEXTVERSION|CMDCMDLINE|HIGHESTNUMANODENUMBER)%|%[^%]*:[^%]*%' -and
+    [string]::Equals(
+        ($customInstallInvocation.Groups['file'].Value -replace '^\.[\\/]', ''),
+        $installerFileName,
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+    $customInstallUsesPackagedInstaller = $true
+    $effectiveSilentSwitches = $customInstallInvocation.Groups['arguments'].Value.Trim()
+    $silentSwitchesEscaped = $effectiveSilentSwitches -replace "'", "''"
+    Write-Host "Install command override runs the packaged installer natively with the override arguments"
+}
 
 # Additional post-install / post-uninstall commands (issue #118). Each runs as its
 # own Start-ADTProcess (cmd.exe /c) step after the main install/uninstall, in order.
@@ -2515,12 +2549,15 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
         '        }'
         '    }'
     )
-} elseif (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
+} elseif (-not [string]::IsNullOrWhiteSpace($customInstallCommand) -and -not $customInstallUsesPackagedInstaller) {
     Write-Host "Using custom install command override from PSADT config"
+    # /s with one outer quote pair makes cmd.exe run the override exactly as
+    # written; without it cmd.exe strips the first and last quote whenever the
+    # command starts with a quoted path and contains further quotes.
     $lines += @(
         '    # Custom install command override (user-specified)'
         "    Write-ADTLogEntry -Message 'Executing custom install command' -Severity 'Info' -Source 'Install-ADTDeployment'"
-        "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/c $customInstallCommandEscaped' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
+        "    Start-ADTProcess -FilePath `"`$env:SystemRoot\System32\cmd.exe`" -ArgumentList '/s /c `"$customInstallCommandEscaped`"' -WorkingDirectory `$adtSession.DirFiles -WindowStyle Hidden"
     )
 } else {
     $effectiveInstallerArgumentsEscaped = $silentSwitchesEscaped

@@ -17,6 +17,11 @@ import {
 import { cn } from '@/lib/utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { useMspOptional } from '@/hooks/useMspOptional';
+import {
+  ASSIGNMENT_INTENT_OPTIONS,
+  buildGroupAssignment,
+  type AssignmentIntent,
+} from '@/lib/assignment-intents';
 import type { PackageAssignment } from '@/types/upload';
 import type { EntraIDGroup, IntuneAssignmentFilter } from '@/types/intune';
 
@@ -33,6 +38,7 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [assignmentMode, setAssignmentMode] = useState<'include' | 'exclude'>('include');
+  const [newGroupIntent, setNewGroupIntent] = useState<AssignmentIntent>('required');
 
   // Filter state
   const [availableFilters, setAvailableFilters] = useState<IntuneAssignmentFilter[]>([]);
@@ -197,18 +203,7 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
       return;
     }
 
-    const type = assignmentMode === 'exclude' ? 'exclusionGroup' : 'group';
-    const intent = assignmentMode === 'exclude' ? 'required' : 'required';
-
-    onChange([
-      ...assignments,
-      {
-        type,
-        intent,
-        groupId: group.id,
-        groupName: group.displayName,
-      },
-    ]);
+    onChange([...assignments, buildGroupAssignment(group, assignmentMode, newGroupIntent)]);
 
     setSearchQuery('');
     setSearchResults([]);
@@ -216,7 +211,7 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
   };
 
   // Update assignment intent
-  const updateIntent = (index: number, intent: 'required' | 'available' | 'uninstall' | 'updateOnly') => {
+  const updateIntent = (index: number, intent: AssignmentIntent) => {
     const updated = [...assignments];
     updated[index] = { ...updated[index], intent };
     onChange(updated);
@@ -421,6 +416,45 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
               </span>
             </div>
 
+            {/* Intent for newly added groups (each row can still be changed below) */}
+            {assignmentMode === 'include' && (
+              <div className="mb-2">
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="assignment-new-group-intent"
+                    className="text-xs text-text-muted flex-shrink-0"
+                  >
+                    Add groups as
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="assignment-new-group-intent"
+                      value={newGroupIntent}
+                      onChange={(e) => setNewGroupIntent(e.target.value as AssignmentIntent)}
+                      className={cn(
+                        'appearance-none pl-3 pr-8 py-1.5 rounded border text-xs font-medium cursor-pointer focus:outline-none',
+                        getIntentColor(newGroupIntent)
+                      )}
+                    >
+                      {ASSIGNMENT_INTENT_OPTIONS.map((option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          className="bg-bg-elevated text-text-primary"
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" />
+                  </div>
+                </div>
+                <p className="text-text-muted text-xs mt-1">
+                  {ASSIGNMENT_INTENT_OPTIONS.find((option) => option.value === newGroupIntent)?.description}
+                </p>
+              </div>
+            )}
+
             <div className="relative">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
@@ -559,25 +593,22 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
                             <select
                               value={assignment.intent}
                               onChange={(e) =>
-                                updateIntent(index, e.target.value as 'required' | 'available' | 'uninstall' | 'updateOnly')
+                                updateIntent(index, e.target.value as AssignmentIntent)
                               }
                               className={cn(
                                 'appearance-none pl-3 pr-8 py-1.5 rounded border text-xs font-medium cursor-pointer focus:outline-none',
                                 getIntentColor(assignment.intent)
                               )}
                             >
-                              <option value="required" className="bg-bg-elevated text-text-primary">
-                                Required
-                              </option>
-                              <option value="available" className="bg-bg-elevated text-text-primary">
-                                Available
-                              </option>
-                              <option value="uninstall" className="bg-bg-elevated text-text-primary">
-                                Uninstall
-                              </option>
-                              <option value="updateOnly" className="bg-bg-elevated text-text-primary">
-                                Update Only
-                              </option>
+                              {ASSIGNMENT_INTENT_OPTIONS.map((option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                  className="bg-bg-elevated text-text-primary"
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
                             </select>
                             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" />
                           </div>
@@ -787,6 +818,7 @@ export function AssignmentConfig({ assignments, onChange }: AssignmentConfigProp
             <div className="p-4 bg-bg-elevated/30 rounded-lg border border-overlay/[0.07] text-center">
               <p className="text-text-muted text-sm">
                 Select a quick assignment option or search for groups above.
+                Groups can be added as Required, Available in Company Portal, or Uninstall.
               </p>
             </div>
           )}

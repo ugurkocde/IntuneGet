@@ -79,7 +79,7 @@ describe('actual SQLite image probe with command adapters', () => {
     expect(result.log).toContain('--user 0 --entrypoint sh --mount type=volume,source=intuneget-ci-')
     expect(result.log).toContain('baseline-image -c chown 1001:1001 /data')
     expect(result.code).toContain('ci-release-fixture')
-    expect(result.code).toContain('db.pragma("user_version", {simple:true}) !== 4')
+    expect(result.code).toContain('db.pragma("user_version", {simple:true}) !== 5')
   })
   it.each(['health', 'owner', 'persistence', 'migration'])('fails truthfully on %s and cleans owned fixtures', scenario => {
     const result = probe(scenario, scenario === 'migration')
