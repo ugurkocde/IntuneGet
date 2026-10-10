@@ -124,6 +124,7 @@ vi.mock('@/lib/store-app-deploy', () => ({
 
 import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 
 beforeEach(() => getApprovalFailuresMock.mockResolvedValue([]));
@@ -675,6 +676,80 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
     expect(triggerPackagingWorkflowMock.mock.calls[0][0].relationships).toBeUndefined();
+  });
+
+  function postSingleItem() {
+    return POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    }));
+  }
+
+  it('records a security verdict at the dispatch gate as a validation block with its reason', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaSecurityGateError({
+      wingetId: 'Test.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      malicious: 3,
+      totalEngines: 71,
+    }));
+
+    const body = await (await postSingleItem()).json();
+
+    const reason = 'VirusTotal reported 3 malicious verdicts for the Test.App 1.0.0 (x64) installer. '
+      + 'Packaging is blocked for this version until the finding is reviewed. '
+      + 'Earlier versions with a clean verdict remain available.';
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'failed',
+      error_stage: 'validation',
+      error_category: null,
+      error_code: 'QA_SECURITY_FLAGGED_CURRENT_VERSION',
+      error_message: reason,
+    }));
+    expect(body.errors).toEqual([{ wingetId: 'Test.App', error: reason }]);
+  });
+
+  it('records a pending installation test at the dispatch gate with its own code', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaGateNotPassedError({
+      wingetId: 'Test.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: 'A'.repeat(64),
+      packageProfileSha256: 'B'.repeat(64),
+      reason: 'package_profile',
+    }));
+
+    await postSingleItem();
+
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      error_stage: 'validation',
+      error_code: 'QA_NOT_PASSED_CURRENT_VERSION',
+      error_message: expect.stringContaining('Installation testing has not passed yet for Test.App 1.0.0 (x64)'),
+    }));
+  });
+
+  it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(
+      new Error('Failed to trigger GitHub Actions workflow: 502 Bad Gateway')
+    );
+
+    const body = await (await postSingleItem()).json();
+
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'failed',
+      error_stage: 'authenticate',
+      error_category: 'network',
+      error_code: 'WORKFLOW_DISPATCH_FAILED',
+      error_message: 'Failed to trigger GitHub Actions workflow: 502 Bad Gateway',
+    }));
+    expect(body.errors).toEqual([{
+      wingetId: 'Test.App',
+      error: 'Failed to trigger GitHub Actions workflow: 502 Bad Gateway',
+    }]);
   });
 
   it('queues a customer deployment strictly above the shared auto_update/managed demand tier', async () => {

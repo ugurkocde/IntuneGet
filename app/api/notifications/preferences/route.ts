@@ -9,6 +9,7 @@ import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
 import { sendTestEmail, isEmailConfigured } from '@/lib/email/service';
 import type {
+  EmailSetupRequirement,
   NotificationPreferences,
   NotificationPreferencesInput,
 } from '@/types/notifications';
@@ -41,8 +42,11 @@ export async function GET(request: NextRequest) {
           notify_critical_only: false,
         },
         isEmailConfigured: false,
+        emailSetupRequirement: 'supabase',
       });
     }
+
+    const emailSetupRequirement: EmailSetupRequirement | null = isEmailConfigured() ? null : 'resend';
 
     const supabase = createServerClient();
 
@@ -72,12 +76,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         preferences: defaultPreferences,
         isEmailConfigured: isEmailConfigured(),
+        emailSetupRequirement,
       });
     }
 
     return NextResponse.json({
       preferences: preferences as NotificationPreferences,
       isEmailConfigured: isEmailConfigured(),
+      emailSetupRequirement,
     });
   } catch {
     return NextResponse.json(

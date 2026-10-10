@@ -1,0 +1,5 @@
+{
+  "title": "Advanced options when editing apps in the cart",
+  "summary": "Editing an app that is already in the cart now offers the same advanced options as the catalog configuration: a description override plus post-install and post-uninstall commands, alongside the install and uninstall command overrides.",
+  "type": "fixed"
+}

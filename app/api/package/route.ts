@@ -45,6 +45,7 @@ import {
 } from '@/lib/installer-preflight';
 import { applyInstallerUrlOverride } from '@/lib/installer-url-overrides';
 import { ensureQaDemand } from '@/lib/qa/demand';
+import { describeQaGateError, isQaGateError } from '@/lib/qa/gate';
 import { isDeferredCustomerQaEnabled } from '@/lib/qa/continuity';
 import {
   applyApplicationPackagingAdapter,
@@ -859,14 +860,20 @@ export async function POST(request: NextRequest) {
             });
           } else {
             const dispatch = pendingDispatches[idx];
-            const dispatchError = result.reason instanceof Error ? result.reason.message : 'Unknown error';
+            // The final dispatch boundary re-checks QA, security and
+            // compatibility evidence. A block there is a validation outcome
+            // with its own reason, not a failure to start the workflow.
+            const qaGateError = isQaGateError(result.reason) ? result.reason : null;
+            const dispatchError = qaGateError
+              ? describeQaGateError(qaGateError)
+              : result.reason instanceof Error ? result.reason.message : 'Unknown error';
             if (dispatch) {
               await db.jobs.update(dispatch.jobId, {
                 status: 'failed',
                 progress_percent: 0,
-                error_stage: 'authenticate',
-                error_category: 'network',
-                error_code: 'WORKFLOW_DISPATCH_FAILED',
+                error_stage: qaGateError ? 'validation' : 'authenticate',
+                error_category: qaGateError ? null : 'network',
+                error_code: qaGateError ? qaGateError.code : 'WORKFLOW_DISPATCH_FAILED',
                 error_message: dispatchError,
                 completed_at: new Date().toISOString(),
               }).catch((updateError) => {
