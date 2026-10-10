@@ -142,6 +142,7 @@ export async function triggerSqliteAutoUpdate(
       return { success: false, error: 'No deployment configuration saved for this policy' };
     }
     let curatedLicenceAcceptance: CuratedLicenceAcceptanceSnapshot | null = null;
+    let approvalIds = [updateInfo.wingetId];
     if (isCuratedPackageId(updateInfo.wingetId)) {
       const approved = assertCuratedInstaller({
         wingetId: updateInfo.wingetId, version: updateInfo.latestVersion,
@@ -149,6 +150,7 @@ export async function triggerSqliteAutoUpdate(
         installerUrl: updateInfo.installerUrl, installerSha256: updateInfo.installerSha256,
         installerType: updateInfo.installerType, curatedReleaseId: updateInfo.curatedReleaseId,
       });
+      approvalIds = [approved.app.packageId, updateInfo.wingetId];
       const item = buildCuratedCartItem(approved.app, approved.release);
       config = { ...config, ...item };
       updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id,
@@ -179,7 +181,7 @@ export async function triggerSqliteAutoUpdate(
     }
 
     const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
-      wingetIds: [updateInfo.wingetId] }, { db });
+      wingetIds: approvalIds }, { db });
     if (approvalBlocks.length) {
       return { success: false, skipped: true, code: approvalBlocks[0].code,
         skipReason: approvalBlocks[0].message };
