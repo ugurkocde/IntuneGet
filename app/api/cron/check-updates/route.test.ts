@@ -7,10 +7,9 @@ const state = vi.hoisted(() => ({
   catalog: [] as Array<{ winget_id: string; latest_version: string }>,
   failDeployedFetch: false,
   failPriorFetch: false,
+  // PostgREST returns at most this many rows per response (1000 by default).
+  maxRows: 1000,
 }));
-
-// PostgREST returns at most this many rows per response by default.
-const MAX_ROWS = 1000;
 
 // Minimal in-memory stand-in for the Supabase query builder calls the cron uses.
 function query(table: string) {
@@ -39,7 +38,7 @@ function query(table: string) {
       matched.sort((a, b) => String(a[column]).localeCompare(String(b[column])));
     }
     const ranged = range ? matched.slice(range[0], range[1] + 1) : matched;
-    const limited = ranged.slice(0, Math.min(limit ?? MAX_ROWS, MAX_ROWS));
+    const limited = ranged.slice(0, Math.min(limit ?? state.maxRows, state.maxRows));
     const copies = limited.map((row) => ({ ...row }));
     return { data: single ? copies[0] ?? null : copies, error: null };
   };
@@ -173,6 +172,7 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role';
     state.failDeployedFetch = false;
     state.failPriorFetch = false;
+    state.maxRows = 1000;
     state.catalog = [
       { winget_id: 'Own.Outdated', latest_version: '2.0.0' },
       { winget_id: 'Own.Current', latest_version: '3.0.0' },
@@ -317,6 +317,23 @@ describe('check-updates cron stale cleanup (hosted)', () => {
       );
     }
     // Sorts after the 1100 rows above, so a single capped read would miss it.
+    state.tables.update_check_results.push(updateRow('zz-outdated', 'Own.Outdated', 'intune-outdated'));
+
+    await runCron();
+
+    expect(rowById('zz-outdated')).toMatchObject({ notified_at: NOTIFIED_AT, latest_version: '2.0.0' });
+    expect(state.tables.update_check_results.filter((row) => row.winget_id === 'Own.Outdated')).toHaveLength(1);
+  });
+
+  it('reads every existing row when the project lowers the row cap below the page size', async () => {
+    state.maxRows = 300;
+    state.catalog.push({ winget_id: 'Bulk.App', latest_version: '9.0.0' });
+    for (let index = 0; index < 700; index += 1) {
+      const suffix = String(index).padStart(4, '0');
+      state.tables.update_check_results.push(
+        updateRow(`bulk-${suffix}`, 'Bulk.App', `intune-bulk-${suffix}`, { latest_version: '9.0.0' })
+      );
+    }
     state.tables.update_check_results.push(updateRow('zz-outdated', 'Own.Outdated', 'intune-outdated'));
 
     await runCron();

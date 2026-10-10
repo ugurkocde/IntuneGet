@@ -84,16 +84,19 @@ async function fetchAllRows(
   ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
 ): Promise<{ data: unknown[]; error: { message: string } | null }> {
   const rows: unknown[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
+  // A project can lower max-rows below PAGE_SIZE, so a short page does not
+  // mean the end. Advance by what was returned and stop on an empty page.
+  for (let from = 0; ; ) {
     const { data, error } = await query(from, from + PAGE_SIZE - 1);
     if (error) {
       return { data: rows, error };
     }
     const page = data ?? [];
-    rows.push(...page);
-    if (page.length < PAGE_SIZE) {
+    if (page.length === 0) {
       return { data: rows, error: null };
     }
+    rows.push(...page);
+    from += page.length;
   }
 }
 
