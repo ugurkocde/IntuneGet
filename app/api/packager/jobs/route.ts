@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ jobs: jobs || [] });
   } catch (error) {
-    console.error('[Packager Jobs API] Failed to list jobs:', error);
+    console.error(`[Packager Jobs API] Failed to list jobs: ${logValue(error instanceof Error ? error.message : String(error))}`);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       job,
     });
   } catch (error) {
-    console.error('[Packager Jobs API] Failed to claim job:', error);
+    console.error(`[Packager Jobs API] Failed to claim job: ${logValue(error instanceof Error ? error.message : String(error))}`);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -301,7 +301,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ updated: true, job });
   } catch (error) {
-    console.error('[Packager Jobs API] Failed to update job:', error);
+    console.error(`[Packager Jobs API] Failed to update job: ${logValue(error instanceof Error ? error.message : String(error))}`);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

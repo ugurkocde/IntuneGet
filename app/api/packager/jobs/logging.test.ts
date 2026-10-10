@@ -120,7 +120,7 @@ describe('local packager job lifecycle logging', () => {
     const response = await patch({ status: 'failed', error: 'x' });
 
     expect(response.status).toBe(500);
-    expect(errorSpy).toHaveBeenCalledWith('[Packager Jobs API] Failed to update job:', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith('[Packager Jobs API] Failed to update job: database is locked');
   });
 
   it('logs which packager claimed a job', async () => {
