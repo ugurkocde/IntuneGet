@@ -16,6 +16,7 @@ import type {
 import type { NormalizedInstaller, WingetInstallerType, WingetScope } from '@/types/winget';
 import { resolveInstallerFileName } from '@/lib/installer-filename';
 import { normalizeMarkerPath } from '@/lib/registry-marker';
+import { psCommentContent, psDoubleQuotedContent } from '@/lib/powershell-encoding';
 
 /**
  * Generate detection rules based on installer metadata
@@ -190,7 +191,9 @@ function generateMsixDetectionRules(
   installer: NormalizedInstaller,
   displayName: string
 ): DetectionRule[] {
-  if (installer.packageFamilyName) {
+  // A package family name is printable ASCII. Anything else is not embedded
+  // in a detection script that Windows PowerShell may decode as ANSI.
+  if (installer.packageFamilyName && /^[\x20-\x7E]+$/.test(installer.packageFamilyName)) {
     return [
       {
         type: 'script',
@@ -278,7 +281,7 @@ function generateMsixDetectionScript(
   scope?: WingetScope
 ): string {
   // Extract the package name (before the underscore in family name)
-  const packageName = packageFamilyName.split('_')[0];
+  const packageName = psDoubleQuotedContent(packageFamilyName.split('_')[0]);
   const packageLookup =
     scope === 'user'
       ? [
@@ -290,7 +293,7 @@ function generateMsixDetectionScript(
 
   const lines = [
     '# MSIX Detection Script',
-    `# Package Family Name: ${packageFamilyName}`,
+    `# Package Family Name: ${psCommentContent(packageFamilyName)}`,
     '',
     '$ErrorActionPreference = "SilentlyContinue"',
     packageLookup,
@@ -501,7 +504,12 @@ function generateRegistryUninstallCommand(
   displayName: string,
   productCode?: string
 ): string {
-  const normalizedDisplayName = displayName.trim();
+  // The marker is a single line of internal data. Collapse control characters
+  // and Unicode line terminators from the manifest name so no packager regex
+  // can fail to recognize the marker and treat it as a command line.
+  const normalizedDisplayName = displayName
+    .replace(/[\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, ' ')
+    .trim();
   if (!normalizedDisplayName) {
     return '# Manual uninstall required';
   }
