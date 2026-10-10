@@ -244,6 +244,28 @@ export const MIGRATIONS: SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    name: 'claimed apps',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS claimed_apps (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          tenant_id TEXT NOT NULL,
+          discovered_app_id TEXT NOT NULL,
+          discovered_app_name TEXT NOT NULL,
+          winget_package_id TEXT NOT NULL,
+          intune_app_id TEXT,
+          device_count_at_claim INTEGER DEFAULT 0,
+          claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (status IN ('pending', 'deploying', 'deployed', 'failed')),
+          UNIQUE (tenant_id, discovered_app_id)
+        );
+      `);
+    },
+  },
 ];
 
 export function getSqliteSchemaVersion(db: BetterSqlite3.Database): number {
