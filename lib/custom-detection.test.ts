@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { canUseCustomDetection, validateCustomDetectionRules } from './custom-detection';
 
 describe('explicit custom detection contract', () => {
+  it.each(['abc', '1.x', '1', '1.2', '1.2.3.4.5', '256.0.0', '0.256.0', '0.0.65536', '-1.2.3', '1.2.3 ', '1.2.3.x'])('rejects invalid MSI comparison version %s', productVersion => {
+    expect(validateCustomDetectionRules([{ type: 'msi', productCode: '{11111111-2222-3333-4444-555555555555}', productVersionOperator: 'equal', productVersion }]).valid).toBe(false);
+  });
+  it.each(['0.0.0', '255.255.65535', '1.2.3.4', '1.2.3.999999999999999999999999'])('preserves valid MSI comparison version %s', productVersion => {
+    const rule = { type: 'msi', productCode: '{11111111-2222-3333-4444-555555555555}', productVersionOperator: 'equal', productVersion };
+    const before = JSON.stringify(rule);
+    expect(validateCustomDetectionRules([rule])).toEqual({ valid: true, errors: [] });
+    expect(JSON.stringify(rule)).toBe(before);
+  });
   it.each(['string', 'dateModified', 'dateCreated'])('rejects unsupported file comparison %s', detectionType => {
     expect(validateCustomDetectionRules([{ type: 'file', path: 'C:\\Example', fileOrFolderName: 'app.exe', detectionType, operator: 'equal', detectionValue: '2026-10-09' }]).valid).toBe(false);
   });

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { normalizeCatalogDetectionRules } from '@/lib/catalog-detection';
 import { assertPackagingContract } from '@/lib/packaging-contract';
 import { inferSavedCustomMarkerPath } from '@/lib/registry-marker';
+import { validateCustomDetectionRules } from '@/lib/custom-detection';
 import type { DetectionRule } from '@/types/intune';
 import { DEFAULT_PSADT_CONFIG, type PSADTConfig } from '@/types/psadt';
 import {
@@ -1360,12 +1361,17 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     : [];
   const parsedConfig = parseJsonObject<unknown>(input.psadtConfig, {});
   const rawConfig = (record(parsedConfig) || {}) as Partial<PSADTConfig>;
+  const preserveCustomDetection = rawConfig.customDetection === true;
+  if (preserveCustomDetection) {
+    const validation = validateCustomDetectionRules(parsedDetectionRulesValue);
+    if (!validation.valid) throw new Error(validation.errors.join(' '));
+  }
   const preliminaryConfig = normalizeQaPsadtConfig(rawConfig, parsedDetectionRules);
   const installScope = resolveApplicationInstallScope(
     input.wingetId,
     input.installScope || 'machine'
   );
-  let detectionRules = normalizeCatalogDetectionRules({
+  let detectionRules = preserveCustomDetection ? parsedDetectionRules : normalizeCatalogDetectionRules({
     detectionRules: parsedDetectionRules,
     fallbackDetectionRules: rawConfig.detectionRules,
     wingetId: input.wingetId,
@@ -1374,7 +1380,7 @@ export function normalizeQaWorkflowPackageInput(input: QaWorkflowPackageInput): 
     markerPath: preliminaryConfig.registryMarkerPath,
     installerType: input.nestedInstallerType || input.installerType,
   });
-  const inferredMarkerPath = preliminaryConfig.registryMarkerPath
+  const inferredMarkerPath = preserveCustomDetection || preliminaryConfig.registryMarkerPath
     ? null
     : inferSavedCustomMarkerPath({
         detectionRules,

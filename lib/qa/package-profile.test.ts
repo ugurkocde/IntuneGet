@@ -721,6 +721,37 @@ describe('PSADT QA package identity', () => {
     ).toEqual(profile.psadtConfig);
   });
 
+  it('keeps authored marker rules and their execution identity fixed during customer dispatch normalization', () => {
+    const rules = [{ type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Example_App', valueName: 'Version', detectionType: 'version', operator: 'equal', detectionValue: '1.2.3' }];
+    const workflowInput = { wingetId: 'Example.App', displayName: 'Example', publisher: 'Example', version: '2.0.0', architecture: 'x64', installerSha256: 'b'.repeat(64), installerType: 'exe', silentSwitches: '/quiet', uninstallCommand: 'REGISTRY_UNINSTALL:Example', installScope: 'user' as const, detectionRules: JSON.stringify(rules), psadtConfig: JSON.stringify({ customDetection: true, detectionRules: rules }) };
+    const normalized = normalizeQaWorkflowPackageInput(workflowInput);
+    expect(normalized.detectionRules).toEqual(rules);
+    expect(JSON.parse(normalized.detectionRulesJson)).toEqual(rules);
+    expect(normalized.psadtConfig.detectionRules).toEqual(rules);
+    expect(normalized.psadtConfig.registryMarkerPath).toBe(DEFAULT_PSADT_CONFIG.registryMarkerPath);
+    const profile = normalized.identity.profile as { detectionRules: unknown[]; psadtConfig: { detectionRules: unknown[] } };
+    expect(profile.detectionRules).toEqual(rules);
+    expect(profile.psadtConfig.detectionRules).toEqual(rules);
+    expect(buildQaPackageIdentityFromWorkflowInput(workflowInput)).toEqual(normalized.identity);
+    const otherRules = [{ ...rules[0], detectionValue: '1.2.4' }];
+    const other = normalizeQaWorkflowPackageInput({ ...workflowInput, detectionRules: JSON.stringify(otherRules), psadtConfig: JSON.stringify({ customDetection: true, detectionRules: otherRules }) });
+    expect(other.identity.packageProfileSha256).not.toBe(normalized.identity.packageProfileSha256);
+  });
+
+  it.each([[], [{ type: 'script', scriptContent: 'exit 0' }], [{ type: 'msi', productCode: '{11111111-2222-3333-4444-555555555555}', productVersionOperator: 'equal', productVersion: '256.0.0' }]])('rejects invalid authored rules before creating a workflow identity: %j', rules => {
+    expect(() => normalizeQaWorkflowPackageInput({ wingetId: 'Example.App', displayName: 'Example', publisher: 'Example', version: '2.0.0', architecture: 'x64', installerSha256: 'b'.repeat(64), installerType: 'exe', silentSwitches: '/quiet', uninstallCommand: 'REGISTRY_UNINSTALL:Example', installScope: 'machine', detectionRules: JSON.stringify(rules), psadtConfig: JSON.stringify({ customDetection: true }) })).toThrow();
+  });
+
+  it('infers a custom marker root only for generated rules', () => {
+    const rules = [{ type: 'registry', keyPath: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Example\\Apps\\Example_App', valueName: 'Version', detectionType: 'version', operator: 'greaterThanOrEqual', detectionValue: '2.0.0', check32BitOn64System: false }];
+    const workflowInput = { wingetId: 'Example.App', displayName: 'Example', publisher: 'Example', version: '2.0.0', architecture: 'x64', installerSha256: 'b'.repeat(64), installerType: 'exe', silentSwitches: '/quiet', uninstallCommand: 'REGISTRY_UNINSTALL:Example', installScope: 'machine' as const, detectionRules: JSON.stringify(rules), psadtConfig: JSON.stringify({ detectionRules: rules }) };
+    expect(normalizeQaWorkflowPackageInput(workflowInput).psadtConfig.registryMarkerPath).toBe('SOFTWARE\\Example\\Apps');
+    const authored = normalizeQaWorkflowPackageInput({ ...workflowInput, psadtConfig: JSON.stringify({ customDetection: true, detectionRules: rules }) });
+    expect(authored.psadtConfig.registryMarkerPath).toBe(DEFAULT_PSADT_CONFIG.registryMarkerPath);
+    expect(authored.detectionRules).toEqual(rules);
+    expect(authored.identity.packageProfileSha256).not.toBe(normalizeQaWorkflowPackageInput(workflowInput).identity.packageProfileSha256);
+  });
+
   it('repairs a legacy deployment profile that has no detection rules', () => {
     const normalized = normalizeQaWorkflowPackageInput({
       wingetId: 'Anysphere.Cursor',

@@ -1,5 +1,11 @@
 const operators = new Set(['equal', 'notEqual', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual']);
 const nonempty = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+const validMsiProductVersion = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  const parts = value.split('.');
+  return parts.length >= 3 && parts.length <= 4 && parts.every(part => /^\d+$/.test(part)) &&
+    Number(parts[0]) <= 255 && Number(parts[1]) <= 255 && Number(parts[2]) <= 65535;
+};
 
 export function canUseCustomDetection(input: {
   wingetId?: string; sourceType?: string; installerType?: string; nestedInstallerType?: string;
@@ -20,6 +26,7 @@ export function validateCustomDetectionRules(rules: unknown): { valid: boolean; 
     if (r.type === 'msi') {
       if (typeof r.productCode !== 'string' || !/^\{[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\}$/i.test(r.productCode)) fail('Enter a valid MSI product code.');
       if (r.productVersionOperator !== undefined && (!operators.has(String(r.productVersionOperator)) || !nonempty(r.productVersion))) fail('Select a version operator and value.');
+      else if (r.productVersionOperator !== undefined && !validMsiProductVersion(r.productVersion)) fail('Enter an MSI version such as 1.2.3.');
       if (r.productVersion !== undefined && r.productVersionOperator === undefined) fail('Select a version operator.');
       return;
     }

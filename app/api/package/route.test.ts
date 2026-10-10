@@ -437,6 +437,7 @@ describe('POST /api/package (workflow dispatch)', () => {
   it.each([[], [{type:'script',scriptContent:'exit 0'}], [{type:'file',path:'',fileOrFolderName:'app.exe',detectionType:'exists'}],
     [{type:'file',path:'C:\\Example',fileOrFolderName:'app.exe',detectionType:'dateModified',operator:'equal',detectionValue:'2026-10-09'}],
     [{type:'registry',keyPath:'HKEY_LOCAL_MACHINE\\Software\\Example',detectionType:'integer',operator:'equal',detectionValue:'abc'}],
+    [{type:'msi',productCode:'{11111111-2222-3333-4444-555555555555}',productVersionOperator:'equal',productVersion:'256.1.2'}],
   ])('rejects invalid opted in detection before preflight and job creation', async rules => {
     const response = await POST(new NextRequest('http://localhost:3000/api/package', {
       method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
