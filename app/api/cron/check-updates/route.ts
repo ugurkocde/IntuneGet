@@ -320,6 +320,12 @@ export async function GET(request: Request) {
     const errors: string[] = [];
     const allUpdates: UpdateCheckInsert[] = [];
     const activeUpdateKeys = new Set<string>();
+    // Row keys whose app this run actually compared against the catalog. Only
+    // these may be removed by the stale cleanup below. Rows written by the
+    // on-demand refresh for apps the cron never scans (teammate deployments,
+    // claimed apps, manual mappings, catalog matches) are left alone; the
+    // refresh recomputes them and the 30 day cleanup is their backstop.
+    const evaluatedUpdateKeys = new Set<string>();
 
     // Process users in batches
     const userIdArray = Array.from(userIds);
@@ -401,6 +407,17 @@ export async function GET(request: Request) {
             continue; // Skip if pinned to different version
           }
 
+          // Every deployment of this app by this user is covered by the
+          // comparison below: the newest one is compared and older Intune
+          // objects of the same app are superseded by it.
+          for (const deployment of apps) {
+            if (deployment.winget_id === app.winget_id) {
+              evaluatedUpdateKeys.add(
+                `${userId}:${tenantId}:${app.winget_id}:${deployment.intune_app_id}`
+              );
+            }
+          }
+
           // Compare versions
           if (compareVersions(app.version, latestVersion) < 0) {
             // Update available
@@ -465,9 +482,11 @@ export async function GET(request: Request) {
       }
     }
 
-    // Remove stale rows for processed users that are no longer active.
-    // This clears outdated entries from older Intune app objects and resolved updates.
-    if (userIdArray.length > 0) {
+    // Remove stale rows for apps this run evaluated that are no longer
+    // outdated. This clears outdated entries from older Intune app objects and
+    // resolved updates. Rows for apps the run did not evaluate are kept with
+    // their notified and dismissed state, so they are not notified again.
+    if (evaluatedUpdateKeys.size > 0) {
       const { data: existingRows, error: existingRowsError } = await supabase
         .from('update_check_results')
         .select('id, user_id, tenant_id, winget_id, intune_app_id')
@@ -479,7 +498,7 @@ export async function GET(request: Request) {
         const staleIds = (existingRows as ExistingUpdateCheckRow[])
           .filter((row) => {
             const key = `${row.user_id}:${row.tenant_id}:${row.winget_id}:${row.intune_app_id}`;
-            return !activeUpdateKeys.has(key);
+            return evaluatedUpdateKeys.has(key) && !activeUpdateKeys.has(key);
           })
           .map((row) => row.id);
 
