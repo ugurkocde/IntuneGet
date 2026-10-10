@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useMicrosoftAuth } from '@/hooks/useMicrosoftAuth';
 import { WebhookFormModal } from './WebhookFormModal';
+import { NOTIFICATION_SETUP_GUIDE_URL } from '@/types/notifications';
 import type { WebhookConfiguration, WebhookType } from '@/types/notifications';
 
 interface WebhookManagerProps {
@@ -36,6 +37,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [webhooks, setWebhooks] = useState<WebhookConfiguration[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [unavailableMessage, setUnavailableMessage] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfiguration | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -62,6 +64,16 @@ export function WebhookManager({ className }: WebhookManagerProps) {
       if (response.ok) {
         const data = await response.json();
         setWebhooks(data.webhooks);
+        setUnavailableMessage(null);
+      } else if (response.status === 503) {
+        // The server cannot store webhooks (for example a SQLite only
+        // deployment), so explain the setup instead of offering a form.
+        const data = await response.json().catch(() => ({}));
+        setUnavailableMessage(
+          typeof data.error === 'string' && data.error
+            ? data.error
+            : 'Webhook notifications are not available on this server.'
+        );
       }
     } catch (err) {
       console.error('Failed to fetch webhooks:', err);
@@ -265,7 +277,7 @@ export function WebhookManager({ className }: WebhookManagerProps) {
 
         <Button
           onClick={() => setIsModalOpen(true)}
-          disabled={webhooks.length >= 10}
+          disabled={webhooks.length >= 10 || unavailableMessage !== null}
           size="sm"
           className="bg-accent-violet hover:bg-accent-violet/80 text-white"
         >
@@ -274,7 +286,24 @@ export function WebhookManager({ className }: WebhookManagerProps) {
         </Button>
       </div>
 
-      {webhooks.length === 0 ? (
+      {unavailableMessage && (
+        <div className="mb-6 p-3 bg-status-warning/10 border border-status-warning/20 rounded-lg flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-status-warning flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-status-warning">
+            {unavailableMessage}{' '}
+            <a
+              href={NOTIFICATION_SETUP_GUIDE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:no-underline"
+            >
+              See the notification setup guide
+            </a>
+          </p>
+        </div>
+      )}
+
+      {unavailableMessage ? null : webhooks.length === 0 ? (
         <div className="text-center py-8">
           <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-overlay/5 flex items-center justify-center">
             <Webhook className="w-6 h-6 text-text-muted" />
