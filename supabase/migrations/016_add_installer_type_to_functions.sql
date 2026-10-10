@@ -1,3 +1,6 @@
+-- Ensure fresh installations have the column before RPC definitions reference it.
+ALTER TABLE public.curated_apps ADD COLUMN IF NOT EXISTS installer_type TEXT;
+
 -- Add installer_type to RPC function return types
 -- The column already exists on curated_apps; this exposes it through the RPC functions
 
