@@ -18,10 +18,16 @@ const canRunHostedPackager =
 
 // Windows PowerShell 5.1 (powershell.exe) runs Invoke-AppDeployToolkit.exe on
 // customer devices and reads files without a byte order mark as ANSI.
+// A PSModulePath inherited from pwsh 7 hides the Windows PowerShell 5.1
+// modules, so the 5.1 child process builds its own default path.
+const windowsPowerShellEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => name.toLowerCase() !== 'psmodulepath')
+);
 const powershell51Available =
   process.platform === 'win32' &&
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
     encoding: 'utf8',
+    env: windowsPowerShellEnv,
     timeout: 30_000,
   }).stdout?.trim() === '5';
 
@@ -58,6 +64,8 @@ interface HostedOutput {
   strings: string;
   /** The PSADT data files exactly as written to disk. */
   dataFileBytes: { config: Buffer; strings: Buffer };
+  /** Everything the packager wrote to the job log. */
+  log: string;
 }
 
 type HostedSourceFile = 'script' | 'config' | 'strings';
@@ -133,6 +141,7 @@ function runHostedPackager(scenario: HostedScenario): HostedOutput {
         config: readFileSync(join(fixtureRoot, 'package', 'Config/Config.psd1')),
         strings: readFileSync(join(fixtureRoot, 'package', 'Strings/strings.psd1')),
       },
+      log: `${result.stdout}${result.stderr}`,
     };
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -521,6 +530,68 @@ describe.runIf(canRunHostedPackager)('hosted PSADT generator string encoding', (
     }
   }, 300_000);
 
+  it('refuses a marker hidden behind invisible or lookalike characters', () => {
+    // Full-width forms are the ASCII letters shifted by 0xFEE0.
+    const fullWidth = (text: string) => [...text].map((ch) => char(ch.charCodeAt(0) + 0xfee0)).join('');
+    for (const marker of [
+      `${char(0x200b)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${char(0x85)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${fullWidth('REGISTRY_UNINSTALL')}:Contoso & whoami`,
+      // U+E0020 TAG SPACE is an astral format character (two UTF-16 units).
+      `REGISTRY${String.fromCodePoint(0xe0020)}_UNINSTALL:Contoso & whoami`,
+    ]) {
+      expect(() => runHostedPackager(markerScenario(marker)), JSON.stringify(marker))
+        .toThrow(/registry uninstall identity is malformed/);
+    }
+    // A line break inside an MSIX identity reaches the MSIX validation, not a fallback.
+    expect(() => runHostedPackager({
+      ...markerScenario(`MSIX_UNINSTALL:Contoso.App${char(0x0a)}whoami`),
+      installerType: 'msix',
+      installerFileName: 'app.msix',
+    })).toThrow(/MSIX\/APPX package identity is missing or unsafe/);
+    // A WiX package must not take a product code from a hidden marker either.
+    expect(() => runHostedPackager({
+      ...markerScenario(`REGISTRY${String.fromCodePoint(0xe0020)}_UNINSTALL:Contoso {12345678-1234-1234-1234-123456789ABC}`),
+      installerType: 'wix',
+      installerFileName: 'setup.msi',
+    })).toThrow(/registry uninstall identity is malformed/);
+  }, 300_000);
+
+  it('lets a custom uninstall command replace a malformed marker', () => {
+    // The local packager already lets the custom command win over any marker.
+    for (const marker of [
+      'REGISTRY_UNINSTALL_PRODUCT:not-a-guid:Contoso',
+      ' REGISTRY_UNINSTALL:Contoso',
+      `${char(0x200b)}REGISTRY_UNINSTALL:Contoso`,
+    ]) {
+      const { script } = runHostedPackager(markerScenario(marker, {
+        uninstallCommand: '"C:\\Contoso\\remove.exe" /quiet',
+      }));
+      expect(script, JSON.stringify(marker)).toContain("-ArgumentList '/c \"C:\\Contoso\\remove.exe\" /quiet'");
+      expect(script, JSON.stringify(marker)).not.toMatch(/REGISTRY_UNINSTALL/i);
+    }
+  }, 300_000);
+
+  it('logs manifest values on one line without starting a workflow command', () => {
+    const names = [
+      `Contoso${char(0x0a)}::add-mask::x`,
+      `Contoso${char(0x0d)}${char(0x0a)}::stop-commands::x`,
+      `Contoso${char(0x2028)}::add-mask::x`,
+      `Contoso${char(0x85)}##[group]x`,
+      'Contoso ##[add-mask]x',
+      'Contoso ##[stop-commands]tok',
+    ];
+    for (const displayName of names) {
+      const { log } = runHostedPackager(markerScenario(`REGISTRY_UNINSTALL:${displayName}`));
+      const lines = log.split(/\r\n|\n|\r/);
+      expect(lines.filter((line) => /^\s*::/.test(line) || line.includes('##[')), JSON.stringify(displayName)).toEqual([]);
+      expect(
+        lines.filter((line) => line.startsWith('Using registry-based uninstall for: Contoso ')),
+        JSON.stringify(displayName)
+      ).toHaveLength(1);
+    }
+  }, 300_000);
+
   it('writes the PSADT data files with a UTF-8 byte order mark that Windows PowerShell 5.1 reads exactly', () => {
     const companyName = `Contoso ${char(0xfc)}ber ${char(0x451)} ${char(0x2019)}quoted${char(0x2019)}`;
     const welcomeMessage = `Willkommen ${char(0xe4)}${char(0xf6)}${char(0xfc)} ${char(0x451)}${char(0x452)}`;
@@ -548,7 +619,7 @@ describe.runIf(canRunHostedPackager)('hosted PSADT generator string encoding', (
       const result = spawnSync(
         'powershell.exe',
         ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', check],
-        { encoding: 'utf8', timeout: 60_000 }
+        { encoding: 'utf8', env: windowsPowerShellEnv, timeout: 60_000 }
       );
       expect(result.status, result.stderr).toBe(0);
       const [company, welcome] = result.stdout.trim().split(' ').map((encoded) => Buffer.from(encoded, 'base64').toString('utf8'));

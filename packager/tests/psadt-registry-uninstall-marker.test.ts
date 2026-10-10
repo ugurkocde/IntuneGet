@@ -49,10 +49,17 @@ function expectNoMarkerOnCommandLine(script: string): void {
   expect(script).not.toMatch(/'\/c\s*REGISTRY_UNINSTALL/i);
 }
 
+// A PSModulePath inherited from pwsh 7 hides the Windows PowerShell 5.1
+// modules, so the 5.1 child process builds its own default path.
+const windowsPowerShellEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => name.toLowerCase() !== 'psmodulepath')
+);
+
 const powershell51Available =
   process.platform === 'win32' &&
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
     encoding: 'utf8',
+    env: windowsPowerShellEnv,
     timeout: 30_000,
   }).stdout?.trim() === '5';
 
@@ -129,6 +136,59 @@ describe('local packager registry uninstall marker', () => {
     expect(script).not.toContain('uninstall identity is malformed');
   });
 
+  it('refuses a marker hidden behind invisible or lookalike characters', () => {
+    const c = (code: number) => String.fromCharCode(code);
+    // Full-width forms are the ASCII letters shifted by 0xFEE0.
+    const fullWidth = (text: string) => [...text].map((ch) => c(ch.charCodeAt(0) + 0xfee0)).join('');
+    for (const marker of [
+      `${c(0x200b)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${c(0x85)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${c(0xfeff)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `REGISTRY${c(0xad)}_UNINSTALL:Contoso & whoami`,
+      `${fullWidth('REGISTRY_UNINSTALL')}:Contoso & whoami`,
+      // U+E0020 TAG SPACE is an astral format character (two UTF-16 units).
+      `REGISTRY${String.fromCodePoint(0xe0020)}_UNINSTALL:Contoso & whoami`,
+      `${c(0x200b)}MSIX_UNINSTALL:Contoso & whoami`,
+      'echo & REGISTRY_UNINSTALL:Contoso',
+    ]) {
+      for (const installerType of ['exe', 'msi']) {
+        const script = generator.generateDeployScript(
+          job({
+            installer_type: installerType,
+            uninstall_command: `${marker} {12345678-1234-1234-1234-123456789ABC}`,
+          }),
+          installerType === 'msi' ? 'setup.msi' : 'setup.exe'
+        );
+        const name = `${installerType} ${JSON.stringify(marker)}`;
+        expect(cmdExeLines(script).filter((line) => line.includes("-ArgumentList '/c")), name).toEqual([]);
+        expect(script, name).not.toContain("-ProductCode '{12345678-1234-1234-1234-123456789ABC}'");
+        expect(script, name).not.toContain("$configuredUninstallProductCode = '{12345678-1234-1234-1234-123456789ABC}'");
+        expect(script, name).toContain('throw "The registry uninstall identity is malformed; refusing to run it as a command."');
+      }
+    }
+  });
+
+  it('lets a custom uninstall command replace a malformed marker', () => {
+    const script = generator.generateDeployScript(
+      job({
+        uninstall_command: `${String.fromCharCode(0x200b)}REGISTRY_UNINSTALL:Contoso`,
+        package_config: { psadtConfig: { uninstallCommand: '"C:\\Contoso\\remove.exe" /quiet' } },
+      }),
+      'setup.exe'
+    );
+    expect(script).toContain("-ArgumentList '/c \"C:\\Contoso\\remove.exe\" /quiet'");
+    expect(script).not.toContain('uninstall identity is malformed');
+  });
+
+  it('does not mistake a vendor uninstaller named like the marker for a marker', () => {
+    const script = generator.generateDeployScript(
+      job({ uninstall_command: '"C:\\Contoso\\registry_uninstaller.exe" /S' }),
+      'setup.exe'
+    );
+    expect(script).toContain("-ArgumentList '/c \"C:\\Contoso\\registry_uninstaller.exe\" /S'");
+    expect(script).not.toContain('uninstall identity is malformed');
+  });
+
   it('still runs a plain vendor uninstall command through cmd.exe', () => {
     const script = generator.generateDeployScript(
       job({ uninstall_command: '"C:\\Program Files\\Contoso\\uninstall.exe" /S' }),
@@ -181,7 +241,7 @@ for ($index = 0; $index -lt $expected.Count; $index++) {
         const result = spawnSync(
           'powershell.exe',
           ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', check],
-          { encoding: 'utf8', timeout: 60_000 }
+          { encoding: 'utf8', env: windowsPowerShellEnv, timeout: 60_000 }
         );
         expect(`${result.stdout}${result.stderr}`.trim()).toBe('ok');
         // The generated script on disk keeps its byte order mark.

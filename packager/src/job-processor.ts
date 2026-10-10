@@ -17,6 +17,23 @@ import {
   UTF8_BOM,
 } from './powershell-encoding.js';
 
+/**
+ * True when an uninstall value carries an internal REGISTRY_UNINSTALL or
+ * MSIX_UNINSTALL marker that is not one of the exact marker forms, including
+ * a marker hidden behind invisible or lookalike characters such as a
+ * zero-width space, U+0085 or full-width letters. Such a value names an
+ * application and must never run as a command line. Mirrors
+ * Test-IntuneGetMalformedUninstallMarker in .github/scripts/Create-PSADTPackage.ps1.
+ */
+function isMalformedUninstallMarker(value: string): boolean {
+  if (/^MSIX_UNINSTALL:/.test(value)) {
+    return false;
+  }
+  const probe = value.normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu, '');
+  // A following letter or digit is a different word (registry_uninstaller.exe).
+  return /(?:REGISTRY|MSIX)_UNINSTALL(?![A-Za-z0-9])/i.test(probe);
+}
+
 interface PackagingResult {
   intunewinPath: string;
   // Path to the inner AES-encrypted payload extracted from the .intunewin zip.
@@ -1225,9 +1242,9 @@ ${steps}
       };
     }
 
-    // A malformed registry uninstall marker supplies no identity, not even a
-    // GUID embedded in it. getUninstallCommand refuses it.
-    if (/^\s*REGISTRY_UNINSTALL/i.test(job.uninstall_command || '')) {
+    // A malformed uninstall marker supplies no identity, not even a GUID
+    // embedded in it. getUninstallCommand refuses it.
+    if (isMalformedUninstallMarker(job.uninstall_command || '')) {
       return null;
     }
 
@@ -2232,10 +2249,10 @@ ${nestedPath ? `        $declaredNestedPath = [System.IO.Path]::GetFullPath((Joi
       return 'throw "The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code."';
     }
 
-    // Any other registry uninstall marker that did not resolve to an identity
-    // above is malformed. It names an application and is never a command line,
-    // so it must not reach cmd.exe.
-    if (/^\s*REGISTRY_UNINSTALL/i.test(job.uninstall_command)) {
+    // Any other uninstall marker that did not resolve to an identity above is
+    // malformed. It names an application and is never a command line, so it
+    // must not reach cmd.exe.
+    if (isMalformedUninstallMarker(job.uninstall_command)) {
       return 'throw "The registry uninstall identity is malformed; refusing to run it as a command."';
     }
 

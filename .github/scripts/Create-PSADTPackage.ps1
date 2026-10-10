@@ -41,6 +41,41 @@ function ConvertTo-PSCommentContent {
         ($Value -replace '[\x00-\x1F\x7F\u0085\u2028\u2029]+', ' '))
 }
 
+# Text written to the GitHub Actions log stays on one line and can never form
+# a workflow command, whatever a manifest or configuration value contains. The
+# runner reads ::command:: only at the start of a line, but the legacy
+# ##[command] form anywhere in a line, so every ##[ is broken up.
+function ConvertTo-LogSafeText {
+    param([AllowNull()][AllowEmptyString()][string]$Value)
+    $text = ([string]$Value -replace '\p{Cf}', '') -replace '[\p{Cc}\p{Zl}\p{Zp}]+', ' '
+    return ($text -replace '^(\s*)::', '$1: :') -replace '##\[', '# #['
+}
+
+# True when an uninstall value carries an internal REGISTRY_UNINSTALL or
+# MSIX_UNINSTALL marker that is not one of the exact marker forms, including a
+# marker hidden behind invisible or lookalike characters such as a zero-width
+# space, U+0085 or full-width letters. Mirrors isMalformedUninstallMarker in
+# packager/src/job-processor.ts.
+function Test-IntuneGetMalformedUninstallMarker {
+    param([AllowNull()][AllowEmptyString()][string]$Value)
+    if ([string]$Value -cmatch '^MSIX_UNINSTALL:') {
+        return $false
+    }
+    $probe = [string]$Value
+    try {
+        $probe = $probe.Normalize([System.Text.NormalizationForm]::FormKC)
+    } catch {
+        # An invalid surrogate cannot be normalized; inspect the raw text.
+        $probe = [string]$Value
+    }
+    # .NET matches UTF-16 code units, so \p{Cf} misses astral format characters
+    # such as U+E0020. NFKC has already folded astral lookalike letters to
+    # ASCII, so every remaining surrogate (\p{Cs}) is removed as well.
+    $probe = $probe -replace '[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]', ''
+    # A following letter or digit is a different word (registry_uninstaller.exe).
+    return $probe -match '(?:REGISTRY|MSIX)_UNINSTALL(?![A-Za-z0-9])'
+}
+
 # Numbers from the customer configuration are embedded as bare tokens.
 function ConvertTo-PSUnsignedIntegerLiteral {
     param($Value, [string]$Name)
@@ -71,7 +106,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:INPUT_INSTALLER_SUCCESS_CODES)) {
 $InstallerSuccessCodes = @($InstallerSuccessCodes | ForEach-Object {
     $parsedCode = 0
     if (-not [int]::TryParse([string]$_, [ref]$parsedCode)) {
-        throw "Invalid installer success exit code: $_"
+        throw "Invalid installer success exit code: $(ConvertTo-LogSafeText $_)"
     }
     $parsedCode
 } | Sort-Object -Unique)
@@ -114,7 +149,7 @@ foreach ($dependency in $PackageDependencies) {
     $isPowerShell = $dependencyIdentifier -eq 'Microsoft.PowerShell'
     $isVCLibsDesktop = $dependencyIdentifier -eq 'Microsoft.VCLibs.Desktop.14'
     if (-not ($isVCRedistributable -or $isDotNetDesktopRuntime -or $isDotNetAspNetCoreRuntime -or $isPowerShell -or $isVCLibsDesktop)) {
-        throw "Package dependency is not in the reviewed redistribution allowlist: $($dependency.packageIdentifier)"
+        throw "Package dependency is not in the reviewed redistribution allowlist: $(ConvertTo-LogSafeText $dependency.packageIdentifier)"
     }
     $reviewedInstallerTypes = if ($isPowerShell) {
         @('msi', 'wix')
@@ -126,7 +161,7 @@ foreach ($dependency in $PackageDependencies) {
         @('exe', 'burn')
     }
     if ($dependencyInstallerType -notin $reviewedInstallerTypes) {
-        throw "Package dependency uses an unreviewed installer type: $($dependency.installerType)"
+        throw "Package dependency uses an unreviewed installer type: $(ConvertTo-LogSafeText $dependency.installerType)"
     }
     if ($isVCLibsDesktop) {
         $dependencyNestedType = ([string]$dependency.nestedInstallerType).ToLowerInvariant()
@@ -142,15 +177,15 @@ foreach ($dependency in $PackageDependencies) {
     }
     if ([string]$dependency.fileName -match '[\\/:*?"<>|]' -or
         [System.IO.Path]::GetFileName([string]$dependency.fileName) -ne [string]$dependency.fileName) {
-        throw "Package dependency filename is unsafe: $($dependency.fileName)"
+        throw "Package dependency filename is unsafe: $(ConvertTo-LogSafeText $dependency.fileName)"
     }
     if ([string]$dependency.installerSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
-        throw "Package dependency SHA-256 is invalid: $($dependency.packageIdentifier)"
+        throw "Package dependency SHA-256 is invalid: $(ConvertTo-LogSafeText $dependency.packageIdentifier)"
     }
     foreach ($exitCode in @($dependency.successCodes) + @($dependency.rebootCodes)) {
         $parsedDependencyExitCode = 0
         if (-not [int]::TryParse([string]$exitCode, [ref]$parsedDependencyExitCode)) {
-            throw "Package dependency exit code is invalid: $exitCode"
+            throw "Package dependency exit code is invalid: $(ConvertTo-LogSafeText $exitCode)"
         }
     }
 }
@@ -210,11 +245,11 @@ if ($PackageDependencies.Count -gt 0) {
     foreach ($dependency in $PackageDependencies) {
         $dependencySource = Join-Path $env:DEPENDENCIES_PATH ([string]$dependency.fileName)
         if (-not (Test-Path -LiteralPath $dependencySource -PathType Leaf)) {
-            throw "Verified package dependency file was not found: $($dependency.packageIdentifier)"
+            throw "Verified package dependency file was not found: $(ConvertTo-LogSafeText $dependency.packageIdentifier)"
         }
         $dependencyHash = (Get-FileHash -LiteralPath $dependencySource -Algorithm SHA256).Hash
         if ($dependencyHash -ne ([string]$dependency.installerSha256).ToUpperInvariant()) {
-            throw "Package dependency hash changed before packaging: $($dependency.packageIdentifier)"
+            throw "Package dependency hash changed before packaging: $(ConvertTo-LogSafeText $dependency.packageIdentifier)"
         }
         Copy-Item -LiteralPath $dependencySource -Destination (Join-Path $dependencyFilesDir ([string]$dependency.fileName)) -Force
     }
@@ -229,7 +264,7 @@ if ($env:PSADT_CONFIG -and $env:PSADT_CONFIG -ne '{}') {
             throw 'The top-level PSADT_CONFIG value must be a JSON object.'
         }
     } catch {
-        throw "PSADT_CONFIG must be valid JSON; refusing to package with different defaults. $($_.Exception.Message)"
+        throw "PSADT_CONFIG must be valid JSON; refusing to package with different defaults. $(ConvertTo-LogSafeText $_.Exception.Message)"
     }
 }
 
@@ -314,7 +349,7 @@ if ($psadtConfig.Contains('reviewedInstallShieldAdministrativeImage') -and
     }
     foreach ($installShieldAdministrativeImageKey in $rawInstallShieldAdministrativeImage.Keys) {
         if ([string]$installShieldAdministrativeImageKey -notin @('expectedMsiFileName')) {
-            throw "PSADT reviewedInstallShieldAdministrativeImage contains an unsupported property: $installShieldAdministrativeImageKey"
+            throw "PSADT reviewedInstallShieldAdministrativeImage contains an unsupported property: $(ConvertTo-LogSafeText $installShieldAdministrativeImageKey)"
         }
     }
     if (-not $rawInstallShieldAdministrativeImage.Contains('expectedMsiFileName') -or
@@ -377,7 +412,7 @@ if ($psadtConfig.Contains('reviewedUninstallWindowAutomation') -and
     }
     foreach ($windowAutomationKey in $rawWindowAutomation.Keys) {
         if ([string]$windowAutomationKey -notin @('processName', 'steps')) {
-            throw "PSADT reviewedUninstallWindowAutomation contains an unsupported property: $windowAutomationKey"
+            throw "PSADT reviewedUninstallWindowAutomation contains an unsupported property: $(ConvertTo-LogSafeText $windowAutomationKey)"
         }
     }
     $windowAutomationProcessName = ([string]$rawWindowAutomation['processName']).Trim()
@@ -398,7 +433,7 @@ if ($psadtConfig.Contains('reviewedUninstallWindowAutomation') -and
         }
         foreach ($windowAutomationStepKey in $rawWindowAutomationStep.Keys) {
             if ([string]$windowAutomationStepKey -notin @('windowText', 'buttonIndex', 'timeoutSeconds')) {
-                throw "PSADT reviewed uninstall window-automation step contains an unsupported property: $windowAutomationStepKey"
+                throw "PSADT reviewed uninstall window-automation step contains an unsupported property: $(ConvertTo-LogSafeText $windowAutomationStepKey)"
             }
         }
         $windowText = if ($rawWindowAutomationStep.Contains('windowText')) {
@@ -646,7 +681,7 @@ if ($psadtConfig.Contains('reviewedRegistryInstallEvidence') -and
     $allowedRegistryEvidenceKeys = @('keyPath', 'valueName', 'minimumDword')
     foreach ($registryEvidenceKey in @($rawRegistryEvidence.Keys)) {
         if ([string]$registryEvidenceKey -notin $allowedRegistryEvidenceKeys) {
-            throw "PSADT reviewedRegistryInstallEvidence contains an unsupported property: $registryEvidenceKey"
+            throw "PSADT reviewedRegistryInstallEvidence contains an unsupported property: $(ConvertTo-LogSafeText $registryEvidenceKey)"
         }
     }
     foreach ($requiredRegistryEvidenceKey in $allowedRegistryEvidenceKeys) {
@@ -704,7 +739,7 @@ if ($psadtConfig.Contains('reviewedAppxInstallEvidence') -and
     $allowedAppxEvidenceKeys = @('packageName', 'publisherId', 'minimumVersion')
     foreach ($appxEvidenceKey in @($rawAppxEvidence.Keys)) {
         if ([string]$appxEvidenceKey -notin $allowedAppxEvidenceKeys) {
-            throw "PSADT reviewedAppxInstallEvidence contains an unsupported property: $appxEvidenceKey"
+            throw "PSADT reviewedAppxInstallEvidence contains an unsupported property: $(ConvertTo-LogSafeText $appxEvidenceKey)"
         }
     }
     foreach ($requiredAppxEvidenceKey in $allowedAppxEvidenceKeys) {
@@ -1148,7 +1183,7 @@ function Get-MsiPropertyValue {
             }
         }
     } catch {
-        Write-Warning "Could not read MSI property [$Property] from [$Path]: $($_.Exception.Message)"
+        Write-Warning "Could not read MSI property [$Property] from [$(ConvertTo-LogSafeText $Path)]: $(ConvertTo-LogSafeText $_.Exception.Message)"
     } finally {
         if ($view) {
             try { [void]$view.Close() } catch { }
@@ -1256,7 +1291,7 @@ function Use-PSADTBrandAsset {
             Invoke-WebRequest -Uri $Source -OutFile $targetFile -UseBasicParsing
             return $true
         } catch {
-            Write-Host "Warning: Could not download branding asset '$Source': $($_.Exception.Message)"
+            Write-Host "Warning: Could not download branding asset '$(ConvertTo-LogSafeText $Source)': $(ConvertTo-LogSafeText $_.Exception.Message)"
             return $false
         }
     }
@@ -1272,7 +1307,7 @@ function Use-PSADTBrandAsset {
         return $true
     }
 
-    Write-Host "Warning: Branding asset not found: $Source"
+    Write-Host "Warning: Branding asset not found: $(ConvertTo-LogSafeText $Source)"
     return $false
 }
 
@@ -1295,7 +1330,7 @@ function Get-PSADTAssetFileName {
                 return $fileName
             }
         } catch {
-            Write-Host "Warning: Could not parse branding URL: $trimmed"
+            Write-Host "Warning: Could not parse branding URL: $(ConvertTo-LogSafeText $trimmed)"
         }
     }
 
@@ -1543,7 +1578,7 @@ if ($extensionTypeMap.ContainsKey($fileExtension)) {
 
     if ($shouldOverride) {
         $installerTypeLower = $detectedType
-        Write-Host "WARNING: Installer type overridden from '$originalInstallerType' to '$installerTypeLower' based on file extension"
+        Write-Host "WARNING: Installer type overridden from '$(ConvertTo-LogSafeText $originalInstallerType)' to '$(ConvertTo-LogSafeText $installerTypeLower)' based on file extension"
     }
 }
 
@@ -1559,7 +1594,7 @@ if ($installerTypeLower -eq 'zip' -and -not [string]::IsNullOrWhiteSpace($Nested
         $NestedInstallerPath.Contains(':') -or
         $NestedInstallerPath -match '[\x00-\x1f]'
     if ($nestedPathIsUnsafe) {
-        throw "Unsafe nested installer path: $NestedInstallerPath"
+        throw "Unsafe nested installer path: $(ConvertTo-LogSafeText $NestedInstallerPath)"
     }
 }
 
@@ -1628,11 +1663,19 @@ if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortabl
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_(PRODUCT|KEY):') {
-    throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'
-} elseif ($uninstallCmd -match '^\s*REGISTRY_UNINSTALL') {
-    # Any other registry uninstall marker is malformed. It names an application
-    # and is never a command line, so it must not reach the uninstall fallback.
-    throw 'The registry uninstall identity is malformed; refusing to run it as a command.'
+    # A custom uninstall command replaces the marker, as in the local packager.
+    if ([string]::IsNullOrWhiteSpace($customUninstallCommand)) {
+        throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'
+    }
+    Write-Host 'Ignoring a malformed vendor uninstall identity because a custom uninstall command is configured.'
+} elseif (Test-IntuneGetMalformedUninstallMarker $uninstallCmd) {
+    # Any other uninstall marker, including one hidden behind invisible or
+    # lookalike characters, is malformed. It names an application and is never
+    # a command line, so it must not reach the uninstall fallback.
+    if ([string]::IsNullOrWhiteSpace($customUninstallCommand)) {
+        throw 'The registry uninstall identity is malformed; refusing to run it as a command.'
+    }
+    Write-Host 'Ignoring a malformed uninstall identity because a custom uninstall command is configured.'
 } elseif ($installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match '(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\})') {
     # Deployment profiles commonly carry the concrete msiexec uninstall command
     # instead of the internal REGISTRY_UNINSTALL_PRODUCT marker. Treat its product
@@ -1668,7 +1711,7 @@ if (-not [string]::IsNullOrWhiteSpace($reviewedRegistryUninstallDisplayName)) {
     $useRegistryUninstall = $true
     $registryUninstallProductCode = ''
     $registryUninstallDisplayName = $reviewedRegistryUninstallDisplayName
-    Write-Host "Using reviewed registry display identity: $registryUninstallDisplayName"
+    Write-Host "Using reviewed registry display identity: $(ConvertTo-LogSafeText $registryUninstallDisplayName)"
 }
 
 $useManagedDirectoryLifecycle = -not [string]::IsNullOrWhiteSpace($reviewedManagedInstallDirectory)
@@ -1676,7 +1719,7 @@ if ($useManagedDirectoryLifecycle) {
     # A reviewed extractor lifecycle is deliberately not an ARP lifecycle.
     # Never let unrelated background servicing become the captured identity.
     $useRegistryUninstall = $false
-    Write-Host "Using reviewed managed-directory lifecycle: $reviewedManagedInstallDirectory"
+    Write-Host "Using reviewed managed-directory lifecycle: $(ConvertTo-LogSafeText $reviewedManagedInstallDirectory)"
 }
 
 if ($reviewedAppxInstallEvidenceConfigured) {
@@ -1686,14 +1729,14 @@ if ($reviewedAppxInstallEvidenceConfigured) {
     if ($IsUserScope) {
         throw 'PSADT reviewedAppxInstallEvidence requires a machine-scope package.'
     }
-    Write-Host "Using reviewed Appx framework evidence: $reviewedAppxInstallEvidencePackageName"
+    Write-Host "Using reviewed Appx framework evidence: $(ConvertTo-LogSafeText $reviewedAppxInstallEvidencePackageName)"
 }
 
 if ($reviewedRegistryInstallEvidenceConfigured) {
     if (-not $useRegistryUninstall -or $IsUserScope) {
         throw 'PSADT reviewedRegistryInstallEvidence requires a machine-scope registry uninstall package.'
     }
-    Write-Host "Using reviewed registry installation evidence: $reviewedRegistryInstallEvidenceKeyPath"
+    Write-Host "Using reviewed registry installation evidence: $(ConvertTo-LogSafeText $reviewedRegistryInstallEvidenceKeyPath)"
 }
 
 if ($reviewedInstallShieldAdministrativeImageConfigured) {
@@ -1707,7 +1750,7 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
     if (-not [string]::IsNullOrWhiteSpace($customInstallCommand)) {
         throw 'PSADT reviewedInstallShieldAdministrativeImage cannot be combined with a custom install command.'
     }
-    Write-Host "Using reviewed InstallShield administrative-image lifecycle: $reviewedInstallShieldMsiExpectedFileName"
+    Write-Host "Using reviewed InstallShield administrative-image lifecycle: $(ConvertTo-LogSafeText $reviewedInstallShieldMsiExpectedFileName)"
 }
 
 if ($reviewedUninstallWindowAutomationConfigured) {
@@ -1731,7 +1774,7 @@ if ($reviewedUninstallWindowAutomationConfigured) {
         throw 'The reviewed uninstall window-automation helper source is missing.'
     }
     Copy-Item -LiteralPath $windowAutomationHelperSource -Destination (Join-Path $supportFilesDir 'Invoke-IntuneGetReviewedUninstallWindowAutomation.ps1') -Force
-    Write-Host "Embedded reviewed uninstall window automation for: $windowAutomationProcessName"
+    Write-Host "Embedded reviewed uninstall window automation for: $(ConvertTo-LogSafeText $windowAutomationProcessName)"
 }
 
 if ($reviewedArchiveUninstallConfigured) {
@@ -1760,7 +1803,7 @@ if ($reviewedArchiveUninstallConfigured) {
         throw 'The reviewed archive uninstall helper source is missing.'
     }
     Copy-Item -LiteralPath $archiveUninstallHelperSource -Destination (Join-Path $supportFilesDir 'Invoke-IntuneGetReviewedArchiveUninstall.ps1') -Force
-    Write-Host "Embedded reviewed archive uninstall contract for: $reviewedArchiveUninstallRelativePath"
+    Write-Host "Embedded reviewed archive uninstall contract for: $(ConvertTo-LogSafeText $reviewedArchiveUninstallRelativePath)"
 }
 
 if ($useRegistryUninstall) {
@@ -1783,11 +1826,11 @@ if ($useRegistryUninstall) {
     $registryUninstallDisplayNameEscaped = ConvertTo-PSSingleQuotedContent $registryUninstallDisplayName
 
     $registryIdentity = if ($registryUninstallProductCode) { "product $registryUninstallProductCode" } else { 'display name fallback' }
-    Write-Host "Using registry-based uninstall for: $registryUninstallDisplayName ($registryIdentity)"
-} elseif (-not $usePortableUninstall -and $uninstallCmd -match '^MSIX_UNINSTALL:(.+)$') {
+    Write-Host "Using registry-based uninstall for: $(ConvertTo-LogSafeText $registryUninstallDisplayName) ($registryIdentity)"
+} elseif (-not $usePortableUninstall -and $uninstallCmd -cmatch '^MSIX_UNINSTALL:([\s\S]*)\z') {
     $useMsixUninstall = $true
     $msixPackageName = $Matches[1]
-    if ($msixPackageName -notmatch '^[A-Za-z0-9.-]+$') {
+    if ($msixPackageName -cnotmatch '^[A-Za-z0-9.-]+\z') {
         throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous deployment."
     }
     Write-Host "Using MSIX uninstall for package: $msixPackageName"
@@ -1836,20 +1879,20 @@ if ($psadtConfig.ContainsKey('processesToClose') -and $null -ne $psadtConfig.pro
         if ([string]::IsNullOrWhiteSpace($procName) -or
             $procName.Length -gt 260 -or
             $procName -match '[\x00-\x1F\x7F\\/:*?"<>|]') {
-            throw "Invalid PSADT process name [$($process.name)]. Use an executable name without a path or .exe suffix."
+            throw "Invalid PSADT process name [$(ConvertTo-LogSafeText $process.name)]. Use an executable name without a path or .exe suffix."
         }
 
         $procDesc = $procName
         if ($process.Contains('description') -and $null -ne $process.description) {
             if ($process.description -isnot [string]) {
-                throw "The PSADT process description for [$procName] must be a string."
+                throw "The PSADT process description for [$(ConvertTo-LogSafeText $procName)] must be a string."
             }
             if (-not [string]::IsNullOrWhiteSpace([string]$process.description)) {
                 $procDesc = ([string]$process.description).Trim() -replace '[\x00-\x1F\x7F]+', ' '
             }
         }
         if ($procDesc.Length -gt 260) {
-            throw "The PSADT process description for [$procName] cannot exceed 260 characters."
+            throw "The PSADT process description for [$(ConvertTo-LogSafeText $procName)] cannot exceed 260 characters."
         }
 
         if ($configuredProcessNames.Add($procName)) {
@@ -1937,7 +1980,7 @@ $persistPrompt = Get-StrictPSADTBoolean -Config $psadtConfig -Name 'persistPromp
 $minimizeWindows = Get-StrictPSADTBoolean -Config $psadtConfig -Name 'minimizeWindows'
 $windowLocation = if ($psadtConfig.windowLocation) { [string]$psadtConfig.windowLocation } else { 'Default' }
 if ($windowLocation -notin @('Default', 'Center', 'Top', 'Bottom', 'TopLeft', 'TopRight', 'BottomLeft', 'BottomRight')) {
-    throw "Unsupported PSADT windowLocation [$windowLocation]."
+    throw "Unsupported PSADT windowLocation [$(ConvertTo-LogSafeText $windowLocation)]."
 }
 $checkDiskSpace = Get-StrictPSADTBoolean -Config $psadtConfig -Name 'checkDiskSpace'
 $requiredDiskSpace = $null
@@ -1959,11 +2002,11 @@ $customPrompts = $psadtConfig.customPrompts
 $restartPromptConfig = $psadtConfig.restartPrompt
 $balloonTips = $psadtConfig.balloonTips
 
-Write-Host "Install scope: $InstallScope (IsUserScope: $IsUserScope)"
+Write-Host "Install scope: $(ConvertTo-LogSafeText $InstallScope) (IsUserScope: $IsUserScope)"
 Write-Host "Close prompt enabled: $showClosePrompt"
 Write-Host "Processes to close: $($processesToClose.Count)"
 if ($processesToClose.Count -gt 0) {
-    Write-Host "  - $($processesToClose | ForEach-Object { $_.name } | Join-String -Separator ', ')"
+    Write-Host "  - $(ConvertTo-LogSafeText ($processesToClose | ForEach-Object { $_.name } | Join-String -Separator ', '))"
 }
 
 # Build the PSADT v4.1 AppProcessesToClose session value.
