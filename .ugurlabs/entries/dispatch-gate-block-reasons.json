@@ -1,0 +1,5 @@
+{
+  "title": "Clear reasons when a deployment is blocked before packaging",
+  "summary": "Deployments stopped at the final check before packaging by installation test results, a VirusTotal finding or a compatibility block now show that reason instead of a generic message that the packaging workflow could not be started.",
+  "type": "fixed"
+}
