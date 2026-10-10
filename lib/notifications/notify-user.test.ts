@@ -16,11 +16,30 @@ vi.mock('@/lib/webhooks/service', () => ({
 
 import { notifyUserOfPendingUpdates } from '@/lib/notifications/notify-user';
 
-// Like PostgREST, a list read returns at most 1000 rows unless a range is set.
-function page(rows: unknown, from?: number, to?: number) {
+interface ListOptions {
+  orderBy?: string;
+  gt?: [string, string];
+  from?: number;
+  to?: number;
+  limit?: number;
+}
+
+// Like PostgREST, a list read returns at most maxRows rows (1000 by default)
+// whatever range or limit it asks for.
+function page(rows: unknown, opts: ListOptions, maxRows: number) {
   if (!Array.isArray(rows)) return rows;
-  if (from === undefined || to === undefined) return rows.slice(0, 1000);
-  return rows.slice(from, Math.min(to + 1, from + 1000));
+  let list = rows;
+  if (opts.orderBy) {
+    const column = opts.orderBy;
+    list = [...list].sort((a, b) => String(a[column]).localeCompare(String(b[column])));
+  }
+  if (opts.gt) {
+    const [column, value] = opts.gt;
+    list = list.filter((row) => String(row[column]) > value);
+  }
+  const from = opts.from ?? 0;
+  const to = opts.limit !== undefined ? from + opts.limit - 1 : opts.to ?? Number.POSITIVE_INFINITY;
+  return list.slice(from, Math.min(to + 1, from + maxRows));
 }
 
 // Minimal chainable Supabase stub. Per-table results; webhook_configurations is
@@ -28,15 +47,19 @@ function page(rows: unknown, from?: number, to?: number) {
 function makeSupabase(
   tables: Record<string, unknown>,
   calls: { markNotified: string[][]; histInserts: string[] },
-  errors: Record<string, string> = {}
+  errors: Record<string, string> = {},
+  maxRows = 1000
 ) {
   function builder(table: string) {
+    const opts: ListOptions = {};
     const b: any = {
       select: () => b,
       eq: () => b,
       is: () => b,
-      order: () => b,
-      range: (from: number, to: number) => { b.rangeFrom = from; b.rangeTo = to; return b; },
+      gt: (column: string, value: string) => { opts.gt = [column, value]; return b; },
+      order: (column: string) => { opts.orderBy = column; return b; },
+      range: (from: number, to: number) => { opts.from = from; opts.to = to; return b; },
+      limit: (count: number) => { opts.limit = count; return b; },
       maybeSingle: () => Promise.resolve({ data: tables[table] ?? null, error: null }),
       insert: (row: any) => { if (table === 'notification_history') calls.histInserts.push(row.status); return Promise.resolve({ data: null, error: null }); },
       update: () => ({
@@ -47,7 +70,7 @@ function makeSupabase(
         res(
           errors[table]
             ? { data: null, error: { message: errors[table] } }
-            : { data: page(tables[table] ?? [], b.rangeFrom, b.rangeTo), error: null }
+            : { data: page(tables[table] ?? [], opts, maxRows), error: null }
         ),
     };
     return b;
@@ -255,6 +278,26 @@ describe('notifyUserOfPendingUpdates', () => {
 
       const res = await notifyUserOfPendingUpdates(supabase, 'u1', {
         pendingUpdates: [row('upd1', 'Google.Chrome', '2.0'), row('upd2', 'Ignored.App', '2.0')] as any,
+      });
+
+      expect(notifiedApps()).toEqual(['Google.Chrome']);
+      expect(res.notifiedUpdateIds).toEqual(['upd1']);
+    });
+
+    it('applies every policy when the server returns fewer rows per page than requested', async () => {
+      const calls = { markNotified: [] as string[][], histInserts: [] as string[] };
+      // With max-rows at 300 every page is short. The ignore policy sorts last
+      // by id ('p-Zz' after 'p-Other'), so it is only seen if paging goes on.
+      const otherPolicies = Array.from({ length: 700 }, (_, i) => policy(`Other.App${i}`, 'notify'));
+      const supabase = makeSupabase({
+        notification_preferences: prefs,
+        webhook_configurations: webhooks,
+        user_profiles: profile,
+        app_update_policies: [...otherPolicies, policy('Zz.Ignored', 'ignore')],
+      }, calls, {}, 300);
+
+      const res = await notifyUserOfPendingUpdates(supabase, 'u1', {
+        pendingUpdates: [row('upd1', 'Google.Chrome', '2.0'), row('upd2', 'Zz.Ignored', '2.0')] as any,
       });
 
       expect(notifiedApps()).toEqual(['Google.Chrome']);

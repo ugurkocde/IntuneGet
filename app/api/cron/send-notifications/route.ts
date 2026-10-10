@@ -3,6 +3,7 @@
  * Runs daily to send email and webhook notifications for detected updates
  */
 
+import { createHash } from 'crypto';
 import { NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isEmailConfigured } from '@/lib/email/service';
@@ -22,6 +23,8 @@ const USER_CHUNK_SIZE = 50;
 // maxDuration (300 s) with room for the batch already in flight. Users that
 // are not reached keep their rows pending and are picked up by the next run.
 const PROCESSING_BUDGET_MS = 240_000;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type PageResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
 
@@ -115,6 +118,21 @@ async function loadPendingUpdates(
   return rows;
 }
 
+/**
+ * Order the users for this run. Every UTC day gets its own stable shuffle, so
+ * a run that hits the time budget does not leave the same users at the tail
+ * night after night: each user has the same chance of being reached early on
+ * any day. Pending age cannot drive this order because the update check and
+ * the refresh route rewrite detected_at on every upsert, so it reflects the
+ * last check rather than how long a user has waited.
+ */
+function orderUsersForDay(userIds: string[], dayNumber: number): string[] {
+  const rank = new Map(
+    userIds.map((id) => [id, createHash('sha256').update(`${dayNumber}:${id}`).digest('hex')])
+  );
+  return [...userIds].sort((a, b) => rank.get(a)!.localeCompare(rank.get(b)!) || a.localeCompare(b));
+}
+
 export async function GET(request: Request) {
   const startedAt = Date.now();
 
@@ -146,6 +164,8 @@ export async function GET(request: Request) {
         message: 'No pending updates to notify',
         emailsSent: 0,
         webhooksSent: 0,
+        channelUsers: channelUserIds.length,
+        pendingUpdates: 0,
       });
     }
 
@@ -170,15 +190,7 @@ export async function GET(request: Request) {
     let updatesProcessed = 0;
     const errors: string[] = [];
 
-    // Users whose oldest pending update has waited longest go first, so a run
-    // that hits the time budget cannot starve the same users every day.
-    const oldestPending = (userId: string) => {
-      const updates = userUpdates.get(userId)!;
-      return detectedAt(updates[updates.length - 1]);
-    };
-    const userIds = Array.from(userUpdates.keys()).sort(
-      (a, b) => oldestPending(a).localeCompare(oldestPending(b)) || a.localeCompare(b)
-    );
+    const userIds = orderUsersForDay(Array.from(userUpdates.keys()), Math.floor(startedAt / DAY_MS));
 
     // Process users in batches, delegating per-user delivery to the shared
     // helper that the on-demand refresh path also uses.
