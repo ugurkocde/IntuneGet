@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "d029128a0136281b5e1ac7b8c9cf30b376d7e897",
+    "runAttempt": "1",
+    "workflowCommit": "26be03c010b5b091debc9eb30f69a9fce672850a",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "37858891670",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "musescore",
+    "version": "4.7.5",
+    "installerUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.msi",
+    "vendorSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+    "releaseNotesUrl": "https://github.com/musescore/MuseScore/releases/tag/v4.7.5",
+    "discoveredAt": "2026-10-08T19:22:25.164Z",
+    "id": "952b596dbae30fa02c64239f"
+  },
+  "previous": {
+    "appId": "musescore",
+    "version": "4.7.4",
+    "installerUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.4/MuseScore-Studio-4.7.4.260706075-x86_64.msi",
+    "vendorSha256": "64fe70e5cb9ffe159d047d1e88db567bd101f60d36b0de28feb674716929a378",
+    "releaseNotesUrl": "https://github.com/musescore/MuseScore/releases/tag/v4.7.4",
+    "discoveredAt": "2026-10-08T19:23:07.387Z",
+    "id": "e7664e11de157ad033d77346"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "952b596dbae30fa02c64239f",
+      "installerSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+      "sourceUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "MUSECY SM LTD",
+        "status": "valid"
+      },
+      "security": {
+        "installerSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+        "suspicious": 0,
+        "malicious": 0,
+        "signatureVersion": "1.459.629.0",
+        "scannedAt": "2026-10-08T23:26:18.2731172Z",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "status": "clean"
+      }
+    },
+    "previous": {
+      "candidateId": "e7664e11de157ad033d77346",
+      "installerSha256": "64fe70e5cb9ffe159d047d1e88db567bd101f60d36b0de28feb674716929a378",
+      "sourceUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.4/MuseScore-Studio-4.7.4.260706075-x86_64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "MuseCY SM Ltd",
+        "status": "valid"
+      },
+      "security": {
+        "installerSha256": "64fe70e5cb9ffe159d047d1e88db567bd101f60d36b0de28feb674716929a378",
+        "suspicious": 0,
+        "malicious": 0,
+        "signatureVersion": "1.459.629.0",
+        "scannedAt": "2026-10-08T23:26:43.1242079Z",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "status": "clean"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "952b596dbae30fa02c64239f",
+    "packageId": "IntuneGet.Curated.MuseScore",
+    "installerUrl": "https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.msi",
+    "installerSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.MuseScore",
+      "displayName": "MuseScore Studio",
+      "publisher": "MuseScore Limited",
+      "version": "4.7.5",
+      "architecture": "x64",
+      "installerSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:MuseScore Studio",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MuseScore\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.7.5\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MuseScore\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"4.7.5\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "A8DC60F98FBD4FB50687307934A4586D0D4485E55D8710032F76EF3293B1B93B",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.MuseScore\",\"publisher\":\"IntuneGet QA\",\"version\":\"4.7.5\",\"wingetId\":\"IntuneGet.Curated.MuseScore\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.7.5\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MuseScore\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"A929D3AABC809D64DA0E10CE3551BEF0064A7C935BFA43DF7A9CD9BDC5452B48\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"07B0F3292612E2DF4C7E0632DEB790ADD51B218F0EE33F7FECAA6111DD279EC6\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:MuseScore Studio\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"4.7.5\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MuseScore\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"DE05BB63FD608029D01B93F30B3312AA476419F877B4D128D44668BCCE1F1A16\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "de05bb63fd608029d01b93f30b3312aa476419f877b4d128d44668bcce1f1a16",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "upgradeFromVersion": "4.7.4",
+    "previousInstallerSha256": "64fe70e5cb9ffe159d047d1e88db567bd101f60d36b0de28feb674716929a378",
+    "installerVersion": "4.7.5",
+    "installerSha256": "07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testLevel": "psadt-package",
+    "candidateId": "952b596dbae30fa02c64239f",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "testedAt": "2026-10-08T23:29:47.777936Z",
+    "executionProfileSha256": "A8DC60F98FBD4FB50687307934A4586D0D4485E55D8710032F76EF3293B1B93B",
+    "executionContext": "LocalSystem",
+    "architecture": "x64"
+  },
+  "verifiedAt": "2026-10-08T23:29:56.0242385Z",
+  "authenticatedArtifact": {
+    "id": 11585537179,
+    "sha256": "1b46fe3d3e50272bb4e40d545c43f0cc5073fa9ddfdb0032b625d84629524bc3"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

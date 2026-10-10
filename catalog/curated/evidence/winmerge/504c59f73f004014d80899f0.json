@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runAttempt": "1",
+    "runId": "37819295933",
+    "workflowCommit": "fb8e3ebc831f181ae4b767adc8ecec004d35f613"
+  },
+  "candidate": {
+    "appId": "winmerge",
+    "version": "2.16.58.2",
+    "installerUrl": "https://github.com/WinMerge/winmerge/releases/download/v2.16.58.2/WinMerge-2.16.58.2-x64-Setup.exe",
+    "vendorSha256": "26f794838bc4e545d7b9f36dc8beeb5a65a12bd4627fa3b4fe87068abef925b0",
+    "releaseNotesUrl": "https://github.com/WinMerge/winmerge/releases/tag/v2.16.58.2",
+    "discoveredAt": "2026-10-08T13:29:07.831Z",
+    "id": "504c59f73f004014d80899f0"
+  },
+  "previous": {
+    "appId": "winmerge",
+    "version": "2.16.58",
+    "installerUrl": "https://github.com/WinMerge/winmerge/releases/download/v2.16.58/WinMerge-2.16.58-x64-Setup.exe",
+    "vendorSha256": "af00357fdbbfef71a31a350974cec98e3cb0548cfa6fd54a3cd3a0cce28f2ab3",
+    "releaseNotesUrl": "https://github.com/WinMerge/winmerge/releases/tag/v2.16.58",
+    "discoveredAt": "2026-10-08T13:29:35.094Z",
+    "id": "07b908293252403eeb4a467e"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "504c59f73f004014d80899f0",
+      "installerSha256": "26f794838bc4e545d7b9f36dc8beeb5a65a12bd4627fa3b4fe87068abef925b0",
+      "sourceUrl": "https://github.com/WinMerge/winmerge/releases/download/v2.16.58.2/WinMerge-2.16.58.2-x64-Setup.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Takashi Sawanaka",
+        "status": "valid"
+      },
+      "security": {
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0",
+        "installerSha256": "26f794838bc4e545d7b9f36dc8beeb5a65a12bd4627fa3b4fe87068abef925b0",
+        "scannedAt": "2026-10-08T17:53:26.1189798Z",
+        "status": "clean",
+        "engineVersion": "1.1.26080.3",
+        "suspicious": 0,
+        "malicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "07b908293252403eeb4a467e",
+      "installerSha256": "af00357fdbbfef71a31a350974cec98e3cb0548cfa6fd54a3cd3a0cce28f2ab3",
+      "sourceUrl": "https://github.com/WinMerge/winmerge/releases/download/v2.16.58/WinMerge-2.16.58-x64-Setup.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Takashi Sawanaka",
+        "status": "valid"
+      },
+      "security": {
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0",
+        "installerSha256": "af00357fdbbfef71a31a350974cec98e3cb0548cfa6fd54a3cd3a0cce28f2ab3",
+        "scannedAt": "2026-10-08T17:53:28.8906596Z",
+        "status": "clean",
+        "engineVersion": "1.1.26080.3",
+        "suspicious": 0,
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "504c59f73f004014d80899f0",
+    "packageId": "IntuneGet.Curated.WinMerge",
+    "installerUrl": "https://github.com/WinMerge/winmerge/releases/download/v2.16.58.2/WinMerge-2.16.58.2-x64-Setup.exe",
+    "installerSha256": "26f794838bc4e545d7b9f36dc8beeb5a65a12bd4627fa3b4fe87068abef925b0",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.WinMerge",
+      "displayName": "WinMerge",
+      "publisher": "WinMerge",
+      "version": "2.16.58.2",
+      "architecture": "x64",
+      "installerSha256": "26f794838bc4e545d7b9f36dc8beeb5a65a12bd4627fa3b4fe87068abef925b0",
+      "installerType": "inno",
+      "installScope": "machine",
+      "silentSwitches": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:WinMerge_is1:WinMerge",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinMerge\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.16.58.2\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinMerge\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.16.58.2\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "A8B84FE332A71A0BABFB75E4BB3A19BAA64E8AFC1E69404903D84BF3C2386199",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.WinMerge\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.16.58.2\",\"wingetId\":\"IntuneGet.Curated.WinMerge\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.16.58.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinMerge\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"2C62BD87C2FFFCB13180C3B748E90AEDBEB2E9D760A52E266E932305FF02BBD1\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"26F794838BC4E545D7B9F36DC8BEEB5A65A12BD4627FA3B4FE87068ABEF925B0\",\"silentArgs\":\"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-\",\"sourceType\":\"inno\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:WinMerge_is1:WinMerge\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.16.58.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinMerge\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"8898845FD2DBF91603D01CC1D28F584BE41BD78CB3337060FDD56C9A6A36B7C6\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "8898845fd2dbf91603d01cc1d28f584be41bd78cb3337060fdd56c9a6a36b7c6",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionContext": "LocalSystem",
+    "testLevel": "psadt-package",
+    "previousInstallerSha256": "af00357fdbbfef71a31a350974cec98e3cb0548cfa6fd54a3cd3a0cce28f2ab3",
+    "testedAt": "2026-10-08T17:55:29.8534641Z",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "candidateId": "504c59f73f004014d80899f0",
+    "executionProfileSha256": "A8B84FE332A71A0BABFB75E4BB3A19BAA64E8AFC1E69404903D84BF3C2386199",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "installerSha256": "26f794838bc4e545d7b9f36dc8beeb5a65a12bd4627fa3b4fe87068abef925b0",
+    "installerVersion": "2.16.58.2",
+    "upgradeFromVersion": "2.16.58"
+  },
+  "verifiedAt": "2026-10-08T17:55:32.7169123Z",
+  "authenticatedArtifact": {
+    "id": 11569032049,
+    "sha256": "c8bfdd7e4f6541cf124b73efb5f84afbdab4f59789b628811268dfd797c5842b"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

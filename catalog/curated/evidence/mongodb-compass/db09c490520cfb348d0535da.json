@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "ce419be6b40088360c93ced62caedfb28b5a0186",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "runAttempt": "1",
+    "runId": "37802567043",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml"
+  },
+  "candidate": {
+    "appId": "mongodb-compass",
+    "version": "1.52.0",
+    "installerUrl": "https://github.com/mongodb-js/compass/releases/download/v1.52.0/mongodb-compass-1.52.0-win32-x64.msi",
+    "vendorSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+    "releaseNotesUrl": "https://github.com/mongodb-js/compass/releases/tag/v1.52.0",
+    "discoveredAt": "2026-10-08T13:29:04.321Z",
+    "id": "db09c490520cfb348d0535da"
+  },
+  "previous": {
+    "appId": "mongodb-compass",
+    "version": "1.51.0",
+    "installerUrl": "https://github.com/mongodb-js/compass/releases/download/v1.51.0/mongodb-compass-1.51.0-win32-x64.msi",
+    "vendorSha256": "ea98be9e4f62087a53bc2c411ebc2594e238836c807a3a1f7c9d5c266e2407ac",
+    "releaseNotesUrl": "https://github.com/mongodb-js/compass/releases/tag/v1.51.0",
+    "discoveredAt": "2026-10-08T13:29:24.394Z",
+    "id": "b419c872d4c544d97becc151"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "db09c490520cfb348d0535da",
+      "installerSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+      "sourceUrl": "https://github.com/mongodb-js/compass/releases/download/v1.52.0/mongodb-compass-1.52.0-win32-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "MongoDB, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "engineVersion": "1.1.26080.3",
+        "malicious": 0,
+        "scannedAt": "2026-10-08T15:45:41.2282938Z",
+        "signatureVersion": "1.459.601.0",
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "b419c872d4c544d97becc151",
+      "installerSha256": "ea98be9e4f62087a53bc2c411ebc2594e238836c807a3a1f7c9d5c266e2407ac",
+      "sourceUrl": "https://github.com/mongodb-js/compass/releases/download/v1.51.0/mongodb-compass-1.51.0-win32-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "MongoDB, Inc.",
+        "status": "valid"
+      },
+      "security": {
+        "engineVersion": "1.1.26080.3",
+        "malicious": 0,
+        "scannedAt": "2026-10-08T15:46:20.726637Z",
+        "signatureVersion": "1.459.601.0",
+        "scanner": "defender",
+        "status": "clean",
+        "installerSha256": "ea98be9e4f62087a53bc2c411ebc2594e238836c807a3a1f7c9d5c266e2407ac",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "db09c490520cfb348d0535da",
+    "packageId": "IntuneGet.Curated.MongoDBCompass",
+    "installerUrl": "https://github.com/mongodb-js/compass/releases/download/v1.52.0/mongodb-compass-1.52.0-win32-x64.msi",
+    "installerSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.MongoDBCompass",
+      "displayName": "MongoDB Compass",
+      "publisher": "MongoDB, Inc.",
+      "version": "1.52.0",
+      "architecture": "x64",
+      "installerSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:MongoDB Compass",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MongoDBCompass\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.52.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MongoDBCompass\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.52.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "E6E8CB9227D132017817F7028EEE84BBC25F1992DC78EDB05CAC344314165A4B",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.MongoDBCompass\",\"publisher\":\"IntuneGet QA\",\"version\":\"1.52.0\",\"wingetId\":\"IntuneGet.Curated.MongoDBCompass\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.52.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MongoDBCompass\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"39AF29B8B32D13A49D745C4C5CFAC3BF4E7264EBC2455A6C95390B417063786C\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"74936797EB2BBFF0756AA1F20276D95256355344A4AF2C824C45C34CCF884344\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:MongoDB Compass\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.52.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_MongoDBCompass\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"BA351B4306378303106071A1F0C44B6967AC4BB15DC5DA485A6A68436BD9B06A\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "ba351b4306378303106071a1f0c44b6967ac4bb15dc5da485a6a68436bd9b06a",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "installerSha256": "74936797eb2bbff0756aa1f20276d95256355344a4af2c824c45c34ccf884344",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "executionProfileSha256": "E6E8CB9227D132017817F7028EEE84BBC25F1992DC78EDB05CAC344314165A4B",
+    "testLevel": "psadt-package",
+    "upgradeFromVersion": "1.51.0",
+    "testedAt": "2026-10-08T15:48:03.0422005Z",
+    "installerVersion": "1.52.0",
+    "candidateId": "db09c490520cfb348d0535da",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionContext": "LocalSystem",
+    "previousInstallerSha256": "ea98be9e4f62087a53bc2c411ebc2594e238836c807a3a1f7c9d5c266e2407ac"
+  },
+  "verifiedAt": "2026-10-08T15:48:07.2318659Z",
+  "authenticatedArtifact": {
+    "id": 11561274189,
+    "sha256": "1181cba1952586c0958f5220184a8cd1b44817825ece82e6e6de3ab4f589653c"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "67286e00b9b33b767f11a820f6c4b45bf19332c6",
+    "runAttempt": "1",
+    "workflowCommit": "443145413b065582b8b18c92979333e6bc8f4b49",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "37957553529",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "neovim",
+    "version": "0.12.6",
+    "installerUrl": "https://github.com/neovim/neovim/releases/download/v0.12.6/nvim-win64.msi",
+    "vendorSha256": "72ec7df85655528952e086858ca6b3add8498f60977108ba8e7f3ede34a7cca5",
+    "releaseNotesUrl": "https://github.com/neovim/neovim/releases/tag/v0.12.6",
+    "discoveredAt": "2026-10-09T15:47:37.22Z",
+    "id": "3f14ab60670b5e4fcf0a6ed9"
+  },
+  "previous": {
+    "appId": "neovim",
+    "version": "0.12.5",
+    "installerUrl": "https://github.com/neovim/neovim/releases/download/v0.12.5/nvim-win64.msi",
+    "vendorSha256": "bcc9fedb87e696e76fae7494d9c2e184026f8ff0c6d0bf830acdb2277b5bad3f",
+    "releaseNotesUrl": "https://github.com/neovim/neovim/releases/tag/v0.12.5",
+    "discoveredAt": "2026-10-09T15:48:03.8Z",
+    "id": "32637232c57f8a43341e507f"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "3f14ab60670b5e4fcf0a6ed9",
+      "installerSha256": "72ec7df85655528952e086858ca6b3add8498f60977108ba8e7f3ede34a7cca5",
+      "sourceUrl": "https://github.com/neovim/neovim/releases/download/v0.12.6/nvim-win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": null,
+        "status": "unsigned"
+      },
+      "security": {
+        "malicious": 0,
+        "suspicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "72ec7df85655528952e086858ca6b3add8498f60977108ba8e7f3ede34a7cca5",
+        "status": "clean",
+        "signatureVersion": "1.459.639.0",
+        "scannedAt": "2026-10-09T16:18:50.6858222Z"
+      }
+    },
+    "previous": {
+      "candidateId": "32637232c57f8a43341e507f",
+      "installerSha256": "bcc9fedb87e696e76fae7494d9c2e184026f8ff0c6d0bf830acdb2277b5bad3f",
+      "sourceUrl": "https://github.com/neovim/neovim/releases/download/v0.12.5/nvim-win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": null,
+        "status": "unsigned"
+      },
+      "security": {
+        "malicious": 0,
+        "suspicious": 0,
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "bcc9fedb87e696e76fae7494d9c2e184026f8ff0c6d0bf830acdb2277b5bad3f",
+        "status": "clean",
+        "signatureVersion": "1.459.639.0",
+        "scannedAt": "2026-10-09T16:19:09.6021871Z"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "3f14ab60670b5e4fcf0a6ed9",
+    "packageId": "IntuneGet.Curated.Neovim",
+    "installerUrl": "https://github.com/neovim/neovim/releases/download/v0.12.6/nvim-win64.msi",
+    "installerSha256": "72ec7df85655528952e086858ca6b3add8498f60977108ba8e7f3ede34a7cca5",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Neovim",
+      "displayName": "Neovim",
+      "publisher": "Neovim",
+      "version": "0.12.6",
+      "architecture": "x64",
+      "installerSha256": "72ec7df85655528952e086858ca6b3add8498f60977108ba8e7f3ede34a7cca5",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Neovim",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Neovim\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"0.12.6\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Neovim\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"0.12.6\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "F6BC424DAF921EE9B1EDF6E41FF379473451F90F2087BC58C39E8579FAA8FE3C",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Neovim\",\"publisher\":\"IntuneGet QA\",\"version\":\"0.12.6\",\"wingetId\":\"IntuneGet.Curated.Neovim\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"0.12.6\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Neovim\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"24FD5380F7BFD08AB5A1174EF4DE692588F087D2C3DB27268D36EC33954F96C9\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"72EC7DF85655528952E086858CA6B3ADD8498F60977108BA8E7F3EDE34A7CCA5\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Neovim\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"0.12.6\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Neovim\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"B224CBF7650874D3C5C407274EC37B75CBE6F307732B61E784EF849F360F7032\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "b224cbf7650874d3c5c407274ec37b75cbe6f307732b61e784ef849f360f7032",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionContext": "LocalSystem",
+    "executionProfileSha256": "F6BC424DAF921EE9B1EDF6E41FF379473451F90F2087BC58C39E8579FAA8FE3C",
+    "upgradeFromVersion": "0.12.5",
+    "previousInstallerSha256": "bcc9fedb87e696e76fae7494d9c2e184026f8ff0c6d0bf830acdb2277b5bad3f",
+    "testLevel": "psadt-package",
+    "installerSha256": "72ec7df85655528952e086858ca6b3add8498f60977108ba8e7f3ede34a7cca5",
+    "candidateId": "3f14ab60670b5e4fcf0a6ed9",
+    "architecture": "x64",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testedAt": "2026-10-09T16:21:56.4617602Z",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "installerVersion": "0.12.6"
+  },
+  "verifiedAt": "2026-10-09T16:22:04.4701691Z",
+  "authenticatedArtifact": {
+    "id": 11629975938,
+    "sha256": "929e1b7c80ce4a1eeb1300fdbd40dbe764d0c866ed815836a8ebbbbff257d1a7"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
