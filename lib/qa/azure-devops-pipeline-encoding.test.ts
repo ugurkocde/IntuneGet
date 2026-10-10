@@ -24,7 +24,7 @@ const scriptOf = (step: PipelineStep) => step.inputs?.script ?? step.inputs?.inl
 
 const windowsPowerShellAvailable =
   process.platform === 'win32' &&
-  spawnSync('powershell.exe', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
+  spawnSync('powershell.exe', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8', timeout: 30_000 }).status === 0;
 
 const quotes = [0x27, 0x2018, 0x2019, 0x201a, 0x201b, 0x22, 0x201c, 0x201d, 0x201e].map(char).join('');
 const LINE = `q${quotes} tick\`t\`$ $(Get-Date) \${env:TEMP} $HOME <# c #>`;

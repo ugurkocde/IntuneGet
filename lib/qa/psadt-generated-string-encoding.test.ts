@@ -14,7 +14,7 @@ const packagerPath = resolve(process.cwd(), '.github/scripts/Create-PSADTPackage
 
 const canRunHostedPackager =
   process.platform === 'win32' &&
-  spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()']).status === 0;
+  spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'], { timeout: 30_000 }).status === 0;
 
 const quotes = [0x27, 0x2018, 0x2019, 0x201a, 0x201b, 0x22, 0x201c, 0x201d, 0x201e].map(char).join('');
 // One line with every quote variant, backtick escapes, subexpressions,
@@ -83,6 +83,8 @@ function runHostedPackager(scenario: HostedScenario): HostedOutput {
     const result = spawnSync('pwsh', ['-NoProfile', '-File', packagerPath], {
       cwd: fixtureRoot,
       encoding: 'utf8',
+      // spawnSync blocks the event loop, so the test timeout cannot stop a hung pwsh.
+      timeout: 90_000,
       env: {
         ...process.env,
         GITHUB_WORKSPACE: fixtureRoot,
