@@ -29,8 +29,9 @@ function isMalformedUninstallMarker(value: string): boolean {
   if (/^MSIX_UNINSTALL:/.test(value)) {
     return false;
   }
-  const probe = value.normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '');
-  return /REGISTRY_UNINSTALL|MSIX_UNINSTALL/i.test(probe);
+  const probe = value.normalize('NFKC').replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu, '');
+  // A following letter or digit is a different word (registry_uninstaller.exe).
+  return /(?:REGISTRY|MSIX)_UNINSTALL(?![A-Za-z0-9])/i.test(probe);
 }
 
 interface PackagingResult {

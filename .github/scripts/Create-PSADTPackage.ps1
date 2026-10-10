@@ -41,13 +41,14 @@ function ConvertTo-PSCommentContent {
         ($Value -replace '[\x00-\x1F\x7F\u0085\u2028\u2029]+', ' '))
 }
 
-# Text written to the GitHub Actions log stays on one line and can never start
-# a workflow command such as ::add-mask:: or ##[group], whatever a manifest or
-# configuration value contains.
+# Text written to the GitHub Actions log stays on one line and can never form
+# a workflow command, whatever a manifest or configuration value contains. The
+# runner reads ::command:: only at the start of a line, but the legacy
+# ##[command] form anywhere in a line, so every ##[ is broken up.
 function ConvertTo-LogSafeText {
     param([AllowNull()][AllowEmptyString()][string]$Value)
     $text = ([string]$Value -replace '\p{Cf}', '') -replace '[\p{Cc}\p{Zl}\p{Zp}]+', ' '
-    return ($text -replace '^(\s*)::', '$1: :') -replace '^(\s*)##\[', '$1# #['
+    return ($text -replace '^(\s*)::', '$1: :') -replace '##\[', '# #['
 }
 
 # True when an uninstall value carries an internal REGISTRY_UNINSTALL or
@@ -57,7 +58,7 @@ function ConvertTo-LogSafeText {
 # packager/src/job-processor.ts.
 function Test-IntuneGetMalformedUninstallMarker {
     param([AllowNull()][AllowEmptyString()][string]$Value)
-    if ([string]$Value -match '^MSIX_UNINSTALL:') {
+    if ([string]$Value -cmatch '^MSIX_UNINSTALL:') {
         return $false
     }
     $probe = [string]$Value
@@ -67,8 +68,12 @@ function Test-IntuneGetMalformedUninstallMarker {
         # An invalid surrogate cannot be normalized; inspect the raw text.
         $probe = [string]$Value
     }
-    $probe = $probe -replace '[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]', ''
-    return $probe -match 'REGISTRY_UNINSTALL|MSIX_UNINSTALL'
+    # .NET matches UTF-16 code units, so \p{Cf} misses astral format characters
+    # such as U+E0020. NFKC has already folded astral lookalike letters to
+    # ASCII, so every remaining surrogate (\p{Cs}) is removed as well.
+    $probe = $probe -replace '[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]', ''
+    # A following letter or digit is a different word (registry_uninstaller.exe).
+    return $probe -match '(?:REGISTRY|MSIX)_UNINSTALL(?![A-Za-z0-9])'
 }
 
 # Numbers from the customer configuration are embedded as bare tokens.
@@ -1822,10 +1827,10 @@ if ($useRegistryUninstall) {
 
     $registryIdentity = if ($registryUninstallProductCode) { "product $registryUninstallProductCode" } else { 'display name fallback' }
     Write-Host "Using registry-based uninstall for: $(ConvertTo-LogSafeText $registryUninstallDisplayName) ($registryIdentity)"
-} elseif (-not $usePortableUninstall -and $uninstallCmd -match '^MSIX_UNINSTALL:(.+)$') {
+} elseif (-not $usePortableUninstall -and $uninstallCmd -cmatch '^MSIX_UNINSTALL:([\s\S]*)\z') {
     $useMsixUninstall = $true
     $msixPackageName = $Matches[1]
-    if ($msixPackageName -notmatch '^[A-Za-z0-9.-]+$') {
+    if ($msixPackageName -cnotmatch '^[A-Za-z0-9.-]+\z') {
         throw "The MSIX/APPX package identity is missing or unsafe; refusing an ambiguous deployment."
     }
     Write-Host "Using MSIX uninstall for package: $msixPackageName"

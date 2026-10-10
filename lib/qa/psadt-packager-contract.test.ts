@@ -4557,7 +4557,7 @@ if (@($selectedApplications).Count -le 1) { throw 'Ambiguity accepted' }
     expect(repairIndex).toBeGreaterThan(-1);
     expect(repairedRegistryBranchIndex).toBeGreaterThan(repairIndex);
     expect(unresolvedSentinelIndex).toBeGreaterThan(repairedRegistryBranchIndex);
-    expect(packager).toContain("$msixPackageName -notmatch '^[A-Za-z0-9.-]+$'");
+    expect(packager).toContain("$msixPackageName -cnotmatch '^[A-Za-z0-9.-]+\\z'");
     expect(packager).toContain("$usesAppxLifecycle = $installerTypeLower -in @('msix', 'appx') -or");
     expect(packager).toContain("$NestedInstallerType.Trim().ToLowerInvariant() -in @('msix', 'appx')");
     expect(packager).toContain('[string]::IsNullOrWhiteSpace($msixPackageName) -and');

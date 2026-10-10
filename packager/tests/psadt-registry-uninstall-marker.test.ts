@@ -49,10 +49,17 @@ function expectNoMarkerOnCommandLine(script: string): void {
   expect(script).not.toMatch(/'\/c\s*REGISTRY_UNINSTALL/i);
 }
 
+// A PSModulePath inherited from pwsh 7 hides the Windows PowerShell 5.1
+// modules, so the 5.1 child process builds its own default path.
+const windowsPowerShellEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => name.toLowerCase() !== 'psmodulepath')
+);
+
 const powershell51Available =
   process.platform === 'win32' &&
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
     encoding: 'utf8',
+    env: windowsPowerShellEnv,
     timeout: 30_000,
   }).stdout?.trim() === '5';
 
@@ -139,6 +146,8 @@ describe('local packager registry uninstall marker', () => {
       `${c(0xfeff)}REGISTRY_UNINSTALL:Contoso & whoami`,
       `REGISTRY${c(0xad)}_UNINSTALL:Contoso & whoami`,
       `${fullWidth('REGISTRY_UNINSTALL')}:Contoso & whoami`,
+      // U+E0020 TAG SPACE is an astral format character (two UTF-16 units).
+      `REGISTRY${String.fromCodePoint(0xe0020)}_UNINSTALL:Contoso & whoami`,
       `${c(0x200b)}MSIX_UNINSTALL:Contoso & whoami`,
       'echo & REGISTRY_UNINSTALL:Contoso',
     ]) {
@@ -168,6 +177,15 @@ describe('local packager registry uninstall marker', () => {
       'setup.exe'
     );
     expect(script).toContain("-ArgumentList '/c \"C:\\Contoso\\remove.exe\" /quiet'");
+    expect(script).not.toContain('uninstall identity is malformed');
+  });
+
+  it('does not mistake a vendor uninstaller named like the marker for a marker', () => {
+    const script = generator.generateDeployScript(
+      job({ uninstall_command: '"C:\\Contoso\\registry_uninstaller.exe" /S' }),
+      'setup.exe'
+    );
+    expect(script).toContain("-ArgumentList '/c \"C:\\Contoso\\registry_uninstaller.exe\" /S'");
     expect(script).not.toContain('uninstall identity is malformed');
   });
 
@@ -223,7 +241,7 @@ for ($index = 0; $index -lt $expected.Count; $index++) {
         const result = spawnSync(
           'powershell.exe',
           ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', check],
-          { encoding: 'utf8', timeout: 60_000 }
+          { encoding: 'utf8', env: windowsPowerShellEnv, timeout: 60_000 }
         );
         expect(`${result.stdout}${result.stderr}`.trim()).toBe('ok');
         // The generated script on disk keeps its byte order mark.
