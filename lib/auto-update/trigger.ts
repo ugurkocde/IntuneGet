@@ -168,6 +168,11 @@ function normalizeCategories(config: DeploymentConfig): IntuneAppCategorySelecti
   return normalized;
 }
 
+// Rate limit reads: keyset page size for policy ids, and how many ids go into
+// one `policy_id=in.(...)` count so the request stays inside URL limits.
+const RATE_LIMIT_PAGE_SIZE = 1000;
+const RATE_LIMIT_ID_CHUNK_SIZE = 100;
+
 /**
  * Main service for triggering auto-updates
  */
@@ -411,61 +416,104 @@ export class AutoUpdateTrigger {
   }
 
   /**
-   * Check rate limits for auto-updates
+   * Count auto-update history rows since `since` for every policy of one
+   * tenant or one user. Policy ids are read with keyset paging and counted in
+   * small chunks, so a large policy list cannot exceed URL limits. Returns
+   * null when any read fails, so callers can fail closed.
+   */
+  private async countRecentUpdates(
+    scope: { column: 'tenant_id' | 'user_id'; value: string },
+    since: string,
+    completedOnly: boolean
+  ): Promise<number | null> {
+    const policyIds: string[] = [];
+    let afterId: string | null = null;
+    for (;;) {
+      const query = this.supabase
+        .from('app_update_policies')
+        .select('id')
+        .eq(scope.column, scope.value);
+      const { data, error } = await (afterId ? query.gt('id', afterId) : query)
+        .order('id')
+        .limit(RATE_LIMIT_PAGE_SIZE);
+      if (error || !data) {
+        return null;
+      }
+      if (data.length === 0) {
+        break;
+      }
+      const lastId = (data[data.length - 1] as { id?: unknown }).id;
+      if (typeof lastId !== 'string' || lastId === afterId) {
+        return null;
+      }
+      policyIds.push(...data.map((row: { id: string }) => row.id));
+      afterId = lastId;
+    }
+
+    let total = 0;
+    for (let start = 0; start < policyIds.length; start += RATE_LIMIT_ID_CHUNK_SIZE) {
+      let query = this.supabase
+        .from('auto_update_history')
+        .select('id', { count: 'exact', head: true })
+        .gte('triggered_at', since)
+        .in('policy_id', policyIds.slice(start, start + RATE_LIMIT_ID_CHUNK_SIZE));
+      if (completedOnly) {
+        query = query.eq('status', 'completed');
+      }
+      const { count, error } = await query;
+      if (error || typeof count !== 'number') {
+        return null;
+      }
+      total += count;
+    }
+    return total;
+  }
+
+  /**
+   * Check rate limits for auto-updates. A count that cannot be read counts as
+   * a reached limit, so a failed or oversized query never lets updates through.
    */
   private async checkRateLimits(userId: string, tenantId: string, policyId: string): Promise<RateLimitCheck> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { rateLimits } = this.safetyConfig;
+    const unverified: RateLimitCheck = {
+      allowed: false,
+      reason: 'Rate limit could not be verified, the update will be retried later',
+      retryAfterMinutes: rateLimits.cooldownMinutes,
+    };
 
-    // First, get the policy IDs for this tenant
-    const { data: tenantPolicies } = await this.supabase
-      .from('app_update_policies')
-      .select('id')
-      .eq('tenant_id', tenantId);
-
-    if (tenantPolicies && tenantPolicies.length > 0) {
-      const tenantPolicyIds = tenantPolicies.map((p) => p.id);
-
-      // Check per-tenant rate limit
-      const { count: tenantCount } = await this.supabase
-        .from('auto_update_history')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'completed')
-        .gte('triggered_at', oneHourAgo)
-        .in('policy_id', tenantPolicyIds);
-
-      if (tenantCount && tenantCount >= rateLimits.maxUpdatesPerTenant) {
-        return {
-          allowed: false,
-          reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerTenant} updates per tenant per hour`,
-          retryAfterMinutes: 60,
-        };
-      }
+    // Check per-tenant rate limit
+    const tenantCount = await this.countRecentUpdates(
+      { column: 'tenant_id', value: tenantId },
+      oneHourAgo,
+      true
+    );
+    if (tenantCount === null) {
+      return unverified;
+    }
+    if (tenantCount >= rateLimits.maxUpdatesPerTenant) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerTenant} updates per tenant per hour`,
+        retryAfterMinutes: 60,
+      };
     }
 
-    // Get policy IDs for this user
-    const { data: userPolicies } = await this.supabase
-      .from('app_update_policies')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (userPolicies && userPolicies.length > 0) {
-      const userPolicyIds = userPolicies.map((p) => p.id);
-
-      // Check global hourly rate limit
-      const { count: globalCount } = await this.supabase
-        .from('auto_update_history')
-        .select('id', { count: 'exact', head: true })
-        .gte('triggered_at', oneHourAgo)
-        .in('policy_id', userPolicyIds);
-
-      if (globalCount && globalCount >= rateLimits.maxUpdatesPerHour) {
-        return {
-          allowed: false,
-          reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerHour} updates per hour`,
-          retryAfterMinutes: 60,
-        };
-      }
+    // Check global hourly rate limit for this user
+    const userCount = await this.countRecentUpdates(
+      { column: 'user_id', value: userId },
+      oneHourAgo,
+      false
+    );
+    if (userCount === null) {
+      return unverified;
+    }
+    if (userCount >= rateLimits.maxUpdatesPerHour) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerHour} updates per hour`,
+        retryAfterMinutes: 60,
+      };
     }
 
     // Check cooldown since last update for this specific policy
@@ -473,12 +521,16 @@ export class AutoUpdateTrigger {
       Date.now() - rateLimits.cooldownMinutes * 60 * 1000
     ).toISOString();
 
-    const { data: recentUpdate } = await this.supabase
+    const { data: recentUpdate, error: recentUpdateError } = await this.supabase
       .from('auto_update_history')
       .select('id')
       .eq('policy_id', policyId)
       .gte('triggered_at', cooldownTime)
       .limit(1);
+
+    if (recentUpdateError) {
+      return unverified;
+    }
 
     if (recentUpdate && recentUpdate.length > 0) {
       return {

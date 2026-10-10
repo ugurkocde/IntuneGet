@@ -666,6 +666,14 @@ export async function GET(request: Request) {
       errors.push(`Cleanup error: ${cleanupError.message}`);
     }
 
+    // Surface every collected error (auto-update policy reads, stale deletes,
+    // the 30 day cleanup) in the server log, not only in the response body.
+    if (errors.length > 0) {
+      console.error(
+        `[check-updates] Finished with ${errors.length} error(s): ${errors.join(' | ')}`
+      );
+    }
+
     return NextResponse.json({
       success: errors.length === 0,
       usersChecked: totalUsersChecked,

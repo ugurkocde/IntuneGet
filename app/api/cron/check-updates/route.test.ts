@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
   failDeployedFetch: false,
   failPriorFetch: false,
   failUpsert: false,
+  // Paged reads (ordered by id) filtered with this `column=value` pair fail.
+  failEq: null as string | null,
   // PostgREST returns at most this many rows per response (1000 by default).
   maxRows: 1000,
   // Called after every read, to simulate concurrent writes between pages.
@@ -27,10 +29,11 @@ function query(table: string) {
   let limit: number | null = null;
   let orderBy: string | null = null;
   let inFilterChars = 0;
+  const eqPairs: string[] = [];
   const rows = () => (state.tables[table] ??= []);
 
   const run = () => {
-    if (inFilterChars > MAX_IN_FILTER_CHARS) {
+    if (inFilterChars > MAX_IN_FILTER_CHARS || (state.failEq && orderBy === 'id' && eqPairs.includes(state.failEq))) {
       return { data: null, error: { message: 'URI too long' } };
     }
     if (table === 'upload_history' && mode === 'select' && state.failDeployedFetch && inFilterChars > 0) {
@@ -65,6 +68,7 @@ function query(table: string) {
       return builder;
     },
     eq: (column: string, value: unknown) => {
+      eqPairs.push(`${column}=${String(value)}`);
       filters.push((row) => row[column] === value);
       return builder;
     },
@@ -195,6 +199,7 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     state.failPriorFetch = false;
     state.maxRows = 1000;
     state.failUpsert = false;
+    state.failEq = null;
     state.afterSelect = null;
     state.triggerAutoUpdate.mockReset();
     state.getLatestInstallerInfo.mockReset();
@@ -331,6 +336,22 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     // Nothing is rewritten with notified_at reset and nothing is deleted.
     expect(rowIds()).toEqual(['outdated', 'resolved']);
     expect(rowById('outdated')).toMatchObject({ notified_at: NOTIFIED_AT });
+  });
+
+  it('logs every collected error once the run finishes', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.failEq = 'policy_type=auto_update';
+
+    try {
+      const body = await runCron();
+
+      expect(body.errors).toEqual([expect.stringContaining('Failed to fetch policies')]);
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.stringMatching(/^\[check-updates\] Finished with 1 error\(s\): Failed to fetch policies/)
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('reads every existing row past the PostgREST row cap', async () => {
