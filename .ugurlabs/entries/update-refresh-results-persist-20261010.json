@@ -1,0 +1,5 @@
+{
+  "title": "Refreshed update results stay put overnight",
+  "summary": "Updates found by refreshing the Updates page, such as apps deployed by teammates or linked to a catalog package, are no longer removed by the nightly update check. They keep their notified and dismissed state, so the same update is not announced again after the next refresh. The nightly check still clears updates for your own deployments once they are current.",
+  "type": "fixed"
+}
