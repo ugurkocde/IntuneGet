@@ -1190,8 +1190,13 @@ ${steps}
     productCode: string;
     displayName: string;
   } | null {
+    // A display name can contain line terminators, which '.' does not match.
+    // [\s\S] keeps such a name on the exact identity path below instead of
+    // letting the marker fall through to the cmd.exe uninstall fallback.
+    // The key forms match lib/detection-rules.ts and the hosted packager: a
+    // named ARP key, or an Inno Setup key such as {GUID}_is1.
     const exactRegistryKeyMatch = job.uninstall_command?.match(
-      /^REGISTRY_UNINSTALL_KEY:([A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}):(.+)$/
+      /^REGISTRY_UNINSTALL_KEY:((?:[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}|\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}_[A-Za-z0-9._+-]{1,32})):([\s\S]+)$/
     );
     if (exactRegistryKeyMatch) {
       return {
@@ -1203,7 +1208,7 @@ ${steps}
     }
 
     const exactProductMatch = job.uninstall_command?.match(
-      /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$/
+      /^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):([\s\S]+)$/
     );
     if (exactProductMatch) {
       return {
@@ -1212,12 +1217,18 @@ ${steps}
       };
     }
 
-    const displayNameMatch = job.uninstall_command?.match(/^REGISTRY_UNINSTALL:(.+)$/);
+    const displayNameMatch = job.uninstall_command?.match(/^REGISTRY_UNINSTALL:([\s\S]+)$/);
     if (displayNameMatch) {
       return {
         productCode: '',
         displayName: psSingleQuotedContent(displayNameMatch[1]),
       };
+    }
+
+    // A malformed registry uninstall marker supplies no identity, not even a
+    // GUID embedded in it. getUninstallCommand refuses it.
+    if (/^\s*REGISTRY_UNINSTALL/i.test(job.uninstall_command || '')) {
+      return null;
     }
 
     const installerType = job.installer_type.toLowerCase();
@@ -2219,6 +2230,13 @@ ${nestedPath ? `        $declaredNestedPath = [System.IO.Path]::GetFullPath((Joi
 
     if (/^REGISTRY_UNINSTALL_(?:PRODUCT|KEY):/.test(job.uninstall_command)) {
       return 'throw "The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code."';
+    }
+
+    // Any other registry uninstall marker that did not resolve to an identity
+    // above is malformed. It names an application and is never a command line,
+    // so it must not reach cmd.exe.
+    if (/^\s*REGISTRY_UNINSTALL/i.test(job.uninstall_command)) {
+      return 'throw "The registry uninstall identity is malformed; refusing to run it as a command."';
     }
 
     // MSI uninstall: use the product code with Start-ADTMsiProcess

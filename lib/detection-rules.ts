@@ -504,7 +504,12 @@ function generateRegistryUninstallCommand(
   displayName: string,
   productCode?: string
 ): string {
-  const normalizedDisplayName = displayName.trim();
+  // The marker is a single line of internal data. Collapse control characters
+  // and Unicode line terminators from the manifest name so no packager regex
+  // can fail to recognize the marker and treat it as a command line.
+  const normalizedDisplayName = displayName
+    .replace(/[\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, ' ')
+    .trim();
   if (!normalizedDisplayName) {
     return '# Manual uninstall required';
   }
