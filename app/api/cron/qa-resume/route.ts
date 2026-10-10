@@ -152,6 +152,27 @@ export async function GET(request: Request) {
       if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
       if (!relinkedJob) continue;
       observed = relinkedJob;
+      if (demand.state === 'waiting') {
+        // Demand can reuse a completed run awaiting publication. Read its
+        // actual state before continuity decides whether packaging may start.
+        if (!demand.candidateId) {
+          waiting++;
+          continue;
+        }
+        const { data, error: candidateError } = await supabase
+          .from('qa_candidates')
+          .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
+          .eq('id', demand.candidateId)
+          .maybeSingle();
+        if (candidateError) throw candidateError;
+        candidate = data;
+        if (!candidate) {
+          waiting++;
+          continue;
+        }
+        candidateStatus = candidate.status;
+        candidateFailureSummary = candidate.failure_summary;
+      }
     }
 
     // Waiting jobs may have been linked before this payload was quarantined.
