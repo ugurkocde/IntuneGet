@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
+import {
+  ASSIGNMENT_INTENT_OPTIONS,
+  buildGroupAssignment,
+  sanitizeAssignmentsForDispatch,
+} from '@/lib/assignment-intents';
 import type { PackageAssignment } from '@/types/upload';
 
 describe('sanitizeAssignmentsForDispatch', () => {
@@ -33,5 +37,39 @@ describe('sanitizeAssignmentsForDispatch', () => {
     ];
 
     expect(sanitizeAssignmentsForDispatch(assignments, false)).toEqual(assignments);
+  });
+});
+
+describe('buildGroupAssignment', () => {
+  const group = { id: 'group-1', displayName: 'Pilot devices' };
+
+  it('uses the chosen intent for included groups', () => {
+    expect(buildGroupAssignment(group, 'include', 'available')).toEqual({
+      type: 'group',
+      intent: 'available',
+      groupId: 'group-1',
+      groupName: 'Pilot devices',
+    });
+    expect(buildGroupAssignment(group, 'include', 'uninstall').intent).toBe('uninstall');
+  });
+
+  it('keeps exclusions on the required intent regardless of the chosen intent', () => {
+    expect(buildGroupAssignment(group, 'exclude', 'available')).toEqual({
+      type: 'exclusionGroup',
+      intent: 'required',
+      groupId: 'group-1',
+      groupName: 'Pilot devices',
+    });
+  });
+});
+
+describe('ASSIGNMENT_INTENT_OPTIONS', () => {
+  it('lists every intent the assignment payload supports', () => {
+    expect(ASSIGNMENT_INTENT_OPTIONS.map((option) => option.value)).toEqual([
+      'required',
+      'available',
+      'uninstall',
+      'updateOnly',
+    ]);
   });
 });
