@@ -124,8 +124,8 @@ async function evidencePrevious(app, release) {
  * dispatches queued requests and carries passed configurations forward to
  * each app's newest release so tenant auto-updates keep their settings.
  */
-export async function processConfigVerifications({ runs, releases, apps, readEvidence, authenticate, dispatch, slots, now }) {
-  const rows = await rest('curated_config_verifications?select=*&status=in.(requested,verifying,passed)&order=requested_at.asc');
+export async function processConfigVerifications({ runs, releases, apps, readEvidence, authenticate, dispatch, rebuildConfig, slots, now }) {
+  const rows = await rest('curated_config_verifications?select=*&status=in.(requested,verifying,passed,failed)&order=requested_at.asc');
   const states = []; let dispatched = 0;
   const update = (id, patch) => rest(`curated_config_verifications?id=eq.${id}`, { method: 'PATCH', body: { ...patch, updated_at: now.toISOString() } });
 
@@ -137,16 +137,23 @@ export async function processConfigVerifications({ runs, releases, apps, readEvi
   }
   for (const row of rows.filter(item => item.status === 'passed')) {
     const latest = newest.get(row.app_id);
-    if (!latest || latest.id === row.release_id || rows.some(item => item.release_id === latest.id && item.psadt_config_sha256 === row.psadt_config_sha256)) continue;
+    if (!latest || latest.id === row.release_id) continue;
+    let rebuilt;
+    try { rebuilt = rebuildConfig(latest, row.psadt_config); } catch {
+      states.push(`${row.app_id} settings could not be carried to ${latest.candidate.version}.`);
+      continue;
+    }
+    if (rows.some(item => item.release_id === latest.id && item.psadt_config_sha256 === rebuilt.psadtConfigSha256)) continue;
     await rest('curated_config_verifications?on_conflict=release_id,psadt_config_sha256', { method: 'POST', prefer: 'resolution=ignore-duplicates', body: [{
       release_id: latest.id, app_id: row.app_id, winget_id: row.winget_id, version: latest.candidate.version,
-      psadt_config_sha256: row.psadt_config_sha256, psadt_config: row.psadt_config, status: 'requested', tenant_id: row.tenant_id, requested_by_user_id: row.requested_by_user_id,
+      psadt_config_sha256: rebuilt.psadtConfigSha256, psadt_config: rebuilt.executionConfig, status: 'requested', tenant_id: row.tenant_id, requested_by_user_id: row.requested_by_user_id,
     }] });
-    rows.push({ ...row, id: null, release_id: latest.id, status: 'requested', carried: true });
+    rows.push({ ...row, id: null, release_id: latest.id, psadt_config_sha256: rebuilt.psadtConfigSha256,
+      psadt_config: rebuilt.executionConfig, status: 'requested', carried: true });
   }
 
   for (const row of rows) {
-    if (row.status === 'passed' || !row.id) continue;
+    if (row.status === 'passed' || row.status === 'failed' || !row.id) continue;
     const release = releases.find(item => item.id === row.release_id);
     const app = apps.find(item => item.id === row.app_id);
     if (!release || !app) { await update(row.id, { status: 'failed', failure_detail: 'The curated release is no longer available.' }); continue; }
