@@ -12,6 +12,7 @@ it('backfills waiting chronology, preserves customer state and defaults new jobs
       ('new','awaiting_qa','2026-02-01',null,null),
       ('done','completed','2026-01-01',null,'2026-01-02');`);
     await db.exec(readFileSync(new URL('../../supabase/migrations/20261010190933_qa_resume_due_schedule.sql', import.meta.url), 'utf8'));
+    await db.exec(readFileSync(new URL('../../supabase/migrations/20261010194921_qa_resume_due_index.sql', import.meta.url), 'utf8'));
     const rows = await db.query<{ id: string; qa_resume_due_at: Date }>(`select id, qa_resume_due_at
       from public.packaging_jobs where status='awaiting_qa' order by qa_resume_due_at,id`);
     expect(rows.rows.map(r => r.id)).toEqual(['old', 'new']);
@@ -23,7 +24,8 @@ it('backfills waiting chronology, preserves customer state and defaults new jobs
     expect(due.rows.map(r => r.id)).toEqual(['new', 'fresh']);
     expect((await db.query(`select id from public.packaging_jobs where id='done' and status='completed'
       and completed_at='2026-01-02'`)).rows).toHaveLength(1);
-    expect((await db.query(`select indexname from pg_indexes where indexname='idx_packaging_jobs_qa_resume_due'`)).rows)
+    expect((await db.query(`select c.relname from pg_index i join pg_class c on c.oid=i.indexrelid
+      where c.relname='idx_packaging_jobs_qa_resume_due' and i.indisvalid`)).rows)
       .toHaveLength(1);
   } finally { await db.close(); }
 });

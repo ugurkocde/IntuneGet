@@ -63,6 +63,19 @@ Before applying an update, inspect the linked project's history with
 `supabase migration list`. Once version uniqueness and history alignment have
 been established, `supabase db push` applies pending migrations.
 
+The QA resume due-time column migration must run before the separate
+`qa_resume_due_index` migration. The latter uses `CREATE INDEX CONCURRENTLY`
+and must run outside a transaction. CLI 2.115.0 executes that statement
+separately from its transactional migration batches. Do not apply it through
+a runner that wraps the SQL in a transaction.
+
+If the concurrent build fails, inspect the index before retrying. An invalid
+index can remain after a failure; remove that incomplete index with
+`DROP INDEX CONCURRENTLY IF EXISTS public.idx_packaging_jobs_qa_resume_due`
+outside a transaction, then rerun the pending index migration. Confirm
+`pg_index.indisvalid` is true afterwards. The migration deliberately omits
+`IF NOT EXISTS` so an incomplete index cannot silently count as success.
+
 `supabase migration repair` changes history records; it does not execute SQL.
 Mark a version as applied only after verifying that its complete schema changes
 already exist. Do not delete history or mark missing schema as applied.
