@@ -56,6 +56,56 @@ describe('logValue', () => {
 
   it('keeps prose that mentions Basic authentication readable', () => {
     expect(logValue('Basic authentication is not supported')).toBe('Basic authentication is not supported');
+    expect(logValue('basic authentication is not supported')).toBe('basic authentication is not supported');
+  });
+
+  it('redacts letters only base64 Basic credentials', () => {
+    expect(logValue('Authorization: Basic dXNlcjpwYXNz')).toBe('Authorization: Basic [redacted]');
+  });
+
+  it('keeps a Basic challenge realm readable', () => {
+    expect(logValue('WWW-Authenticate: Basic realm="intune"')).toBe('WWW-Authenticate: Basic realm="intune"');
+  });
+
+  it('keeps one marker for a JWT assigned to a credential key', () => {
+    expect(logValue('token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl end')).toBe(
+      'token=[redacted JWT] end'
+    );
+  });
+
+  it('redacts short Basic credentials', () => {
+    expect(logValue('Basic YWI6Y2Q= rejected')).toBe('Basic [redacted] rejected');
+  });
+
+  it('redacts a Bearer token joined to its scheme by an invisible character', () => {
+    expect(logValue('Bearer\u200bsecret-token-value')).toBe('Bearer [redacted]');
+  });
+
+  it('redacts a Basic credential joined to its scheme by an invisible character', () => {
+    expect(logValue('Basic\u2060dXNlcjpwYXNz')).toBe('Basic [redacted]');
+  });
+
+  it('redacts a JWT joined to a preceding word by an invisible character', () => {
+    expect(logValue('abc\ufeffeyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl end')).toBe(
+      'abc[redacted JWT] end'
+    );
+  });
+
+  it('redacts a GitHub token joined to a preceding word by an invisible character', () => {
+    expect(logValue(`abc\u200dghp_${'A1b2'.repeat(9)} end`)).toBe('abc[redacted GitHub token] end');
+  });
+
+  it('removes the remaining invisible characters, including tag characters', () => {
+    const invisible = [
+      '\u034f', '\u061c', '\u180e', '\u206a', '\u206f', '\u3164', '\ufe00', '\ufe0f',
+      '\udb40\udc00', '\udb40\udc41', '\udb40\udc7f',
+    ];
+    for (const character of invisible) {
+      expect(logValue(`a${character}b`)).toBe('ab');
+    }
+    expect(logValue('pass\udb40\udc20word=S3cr3t to\ufe0fken=S3cr3t')).toBe(
+      'password=[redacted] token=[redacted]'
+    );
   });
 
   it('redacts spaced key value credentials', () => {
@@ -105,6 +155,14 @@ describe('logValue', () => {
       'key-'.repeat(25_000),
       'eyJa-'.repeat(20_000),
       '3f2b1c9e-1a2b-4c3d-8e9f-0a1b2c3d4e5f'.repeat(2_800),
+      'basic a\u200b'.repeat(14_000),
+      'Basic a\u200b'.repeat(14_000),
+      'Bearer \u200b'.repeat(12_000),
+      '\u200beyJa'.repeat(20_000),
+      'Basic ' + '\u200b'.repeat(100_000) + 'authentication',
+      'Basic ' + ' '.repeat(100_000) + 'authentication',
+      'Basic ' + 'a'.repeat(100_000),
+      '\udb40\udc41'.repeat(50_000),
     ];
     for (const input of inputs) {
       const started = performance.now();
