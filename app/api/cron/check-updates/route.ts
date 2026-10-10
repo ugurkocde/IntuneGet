@@ -16,6 +16,7 @@ import {
 } from '@/lib/auto-update/trigger';
 import { AppUpdatePolicy, shouldSkipUpdate } from '@/types/update-policies';
 import { getCatalogSource } from '@/lib/catalog';
+import { logValue } from '@/lib/server-log';
 
 const BATCH_SIZE = 50;
 
@@ -221,6 +222,13 @@ async function processAutoUpdates(
         result.triggered++;
       } else if (triggerResult.skipped) {
         result.skipped++;
+        // A failed rate limit read must not look like an ordinary skip, or a
+        // persistent failure would stop auto-updates without any trace.
+        if (triggerResult.code === 'RATE_LIMIT_UNVERIFIED') {
+          result.errors.push(
+            `Rate limit could not be verified for ${update.winget_id}: ${triggerResult.skipReason}`
+          );
+        }
         if (triggerResult.code === 'CURATED_LICENCE_NOT_ACCEPTED' || triggerResult.code?.startsWith('CURATED_CONFIG_VERIFICATION')) {
           console.warn(`[auto-update] ${update.winget_id} skipped for tenant ${update.tenant_id}: ${triggerResult.skipReason}`);
         }
@@ -664,6 +672,15 @@ export async function GET(request: Request) {
 
     if (cleanupError) {
       errors.push(`Cleanup error: ${cleanupError.message}`);
+    }
+
+    // Surface every collected error (auto-update policy reads, stale deletes,
+    // the 30 day cleanup) in the server log, not only in the response body.
+    if (errors.length > 0) {
+      // Errors carry upstream exception text, so redact and bound them.
+      console.error(
+        `[check-updates] Finished with ${errors.length} error(s): ${logValue(errors.join(' | '), 4000)}`
+      );
     }
 
     return NextResponse.json({

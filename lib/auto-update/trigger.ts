@@ -58,7 +58,8 @@ interface TriggerResult {
     | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
     | 'CURATED_LICENCE_NOT_ACCEPTED'
     | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
-    | 'CURATED_CONFIG_VERIFICATION_FAILED';
+    | 'CURATED_CONFIG_VERIFICATION_FAILED'
+    | 'RATE_LIMIT_UNVERIFIED';
 }
 
 export interface UpdateInfo {
@@ -106,6 +107,18 @@ interface RateLimitCheck {
   allowed: boolean;
   reason?: string;
   retryAfterMinutes?: number;
+  // Set when a read failed, so callers can report it instead of treating it
+  // as an ordinary skip.
+  code?: 'RATE_LIMIT_UNVERIFIED';
+}
+
+type RecentUpdateCount = { count: number } | { count: null; error: string };
+
+function readErrorMessage(error: unknown): string {
+  if (error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return 'no data returned';
 }
 
 function buildCurrentVersionInstallCommand(installer: NormalizedInstaller): string {
@@ -168,12 +181,23 @@ function normalizeCategories(config: DeploymentConfig): IntuneAppCategorySelecti
   return normalized;
 }
 
+// Rate limit reads: keyset page size for policy ids, and how many ids go into
+// one `policy_id=in.(...)` count so the request stays inside URL limits.
+const RATE_LIMIT_PAGE_SIZE = 1000;
+const RATE_LIMIT_ID_CHUNK_SIZE = 100;
+
 /**
  * Main service for triggering auto-updates
  */
 export class AutoUpdateTrigger {
   private supabase: SupabaseClient;
   private safetyConfig: AutoUpdateSafetyConfig;
+  // Per instance (one cron run or one request) rate limit state, so many
+  // candidates in one run do not rescan the same policy lists. Policy ids
+  // hardly change within a run, and a scope at its limit stays there for the
+  // few minutes a run takes, because the counted window is one hour.
+  private ratePolicyIds = new Map<string, string[]>();
+  private rateLimitedScopes = new Map<string, RateLimitCheck>();
 
   constructor(
     supabaseUrl: string,
@@ -226,6 +250,7 @@ export class AutoUpdateTrigger {
             success: false,
             skipped: true,
             skipReason: rateLimitResult.reason,
+            code: rateLimitResult.code,
           };
         }
       }
@@ -411,61 +436,123 @@ export class AutoUpdateTrigger {
   }
 
   /**
-   * Check rate limits for auto-updates
+   * Count auto-update history rows since `since` for every policy of one
+   * tenant or one user. Policy ids are read with keyset paging and counted in
+   * small chunks, so a large policy list cannot exceed URL limits. Returns
+   * the read error when any read fails, so callers can fail closed and say why.
+   */
+  private async countRecentUpdates(
+    scope: { column: 'tenant_id' | 'user_id'; value: string },
+    since: string,
+    completedOnly: boolean
+  ): Promise<RecentUpdateCount> {
+    const scopeKey = `${scope.column}:${scope.value}`;
+    const cachedIds = this.ratePolicyIds.get(scopeKey);
+    const policyIds: string[] = cachedIds ? [...cachedIds] : [];
+    let afterId: string | null = null;
+    while (!cachedIds) {
+      const query = this.supabase
+        .from('app_update_policies')
+        .select('id')
+        .eq(scope.column, scope.value);
+      const page: { data: Array<{ id: unknown }> | null; error: unknown } = await (afterId
+        ? query.gt('id', afterId)
+        : query
+      )
+        .order('id')
+        .limit(RATE_LIMIT_PAGE_SIZE);
+      const { data, error } = page;
+      if (error || !data) {
+        return { count: null, error: `policy read failed: ${readErrorMessage(error)}` };
+      }
+      if (data.length === 0) {
+        this.ratePolicyIds.set(scopeKey, [...policyIds]);
+        break;
+      }
+      const lastId: unknown = data[data.length - 1].id;
+      if (typeof lastId !== 'string' || lastId === afterId) {
+        return { count: null, error: 'policy read did not return an advancing id' };
+      }
+      policyIds.push(...data.map((row) => String(row.id)));
+      afterId = lastId;
+    }
+
+    let total = 0;
+    for (let start = 0; start < policyIds.length; start += RATE_LIMIT_ID_CHUNK_SIZE) {
+      let query = this.supabase
+        .from('auto_update_history')
+        .select('id', { count: 'exact', head: true })
+        .gte('triggered_at', since)
+        .in('policy_id', policyIds.slice(start, start + RATE_LIMIT_ID_CHUNK_SIZE));
+      if (completedOnly) {
+        query = query.eq('status', 'completed');
+      }
+      const { count, error } = await query;
+      if (error || typeof count !== 'number') {
+        return { count: null, error: `update count failed: ${readErrorMessage(error)}` };
+      }
+      total += count;
+    }
+    return { count: total };
+  }
+
+  /**
+   * Check rate limits for auto-updates. A count that cannot be read counts as
+   * a reached limit, so a failed or oversized query never lets updates through.
    */
   private async checkRateLimits(userId: string, tenantId: string, policyId: string): Promise<RateLimitCheck> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { rateLimits } = this.safetyConfig;
+    const unverified = (error: string): RateLimitCheck => ({
+      allowed: false,
+      reason: `Rate limit could not be verified (${error}), the update will be retried later`,
+      retryAfterMinutes: rateLimits.cooldownMinutes,
+      code: 'RATE_LIMIT_UNVERIFIED',
+    });
 
-    // First, get the policy IDs for this tenant
-    const { data: tenantPolicies } = await this.supabase
-      .from('app_update_policies')
-      .select('id')
-      .eq('tenant_id', tenantId);
-
-    if (tenantPolicies && tenantPolicies.length > 0) {
-      const tenantPolicyIds = tenantPolicies.map((p) => p.id);
-
-      // Check per-tenant rate limit
-      const { count: tenantCount } = await this.supabase
-        .from('auto_update_history')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'completed')
-        .gte('triggered_at', oneHourAgo)
-        .in('policy_id', tenantPolicyIds);
-
-      if (tenantCount && tenantCount >= rateLimits.maxUpdatesPerTenant) {
-        return {
-          allowed: false,
-          reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerTenant} updates per tenant per hour`,
-          retryAfterMinutes: 60,
-        };
-      }
+    const tenantScope = `tenant_id:${tenantId}`;
+    const userScope = `user_id:${userId}`;
+    const limited = this.rateLimitedScopes.get(tenantScope) ?? this.rateLimitedScopes.get(userScope);
+    if (limited) {
+      return limited;
     }
 
-    // Get policy IDs for this user
-    const { data: userPolicies } = await this.supabase
-      .from('app_update_policies')
-      .select('id')
-      .eq('user_id', userId);
+    // Check per-tenant rate limit
+    const tenantCount = await this.countRecentUpdates(
+      { column: 'tenant_id', value: tenantId },
+      oneHourAgo,
+      true
+    );
+    if (tenantCount.count === null) {
+      return unverified(tenantCount.error);
+    }
+    if (tenantCount.count >= rateLimits.maxUpdatesPerTenant) {
+      const denial: RateLimitCheck = {
+        allowed: false,
+        reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerTenant} updates per tenant per hour`,
+        retryAfterMinutes: 60,
+      };
+      this.rateLimitedScopes.set(tenantScope, denial);
+      return denial;
+    }
 
-    if (userPolicies && userPolicies.length > 0) {
-      const userPolicyIds = userPolicies.map((p) => p.id);
-
-      // Check global hourly rate limit
-      const { count: globalCount } = await this.supabase
-        .from('auto_update_history')
-        .select('id', { count: 'exact', head: true })
-        .gte('triggered_at', oneHourAgo)
-        .in('policy_id', userPolicyIds);
-
-      if (globalCount && globalCount >= rateLimits.maxUpdatesPerHour) {
-        return {
-          allowed: false,
-          reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerHour} updates per hour`,
-          retryAfterMinutes: 60,
-        };
-      }
+    // Check global hourly rate limit for this user
+    const userCount = await this.countRecentUpdates(
+      { column: 'user_id', value: userId },
+      oneHourAgo,
+      false
+    );
+    if (userCount.count === null) {
+      return unverified(userCount.error);
+    }
+    if (userCount.count >= rateLimits.maxUpdatesPerHour) {
+      const denial: RateLimitCheck = {
+        allowed: false,
+        reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerHour} updates per hour`,
+        retryAfterMinutes: 60,
+      };
+      this.rateLimitedScopes.set(userScope, denial);
+      return denial;
     }
 
     // Check cooldown since last update for this specific policy
@@ -473,12 +560,16 @@ export class AutoUpdateTrigger {
       Date.now() - rateLimits.cooldownMinutes * 60 * 1000
     ).toISOString();
 
-    const { data: recentUpdate } = await this.supabase
+    const { data: recentUpdate, error: recentUpdateError } = await this.supabase
       .from('auto_update_history')
       .select('id')
       .eq('policy_id', policyId)
       .gte('triggered_at', cooldownTime)
       .limit(1);
+
+    if (recentUpdateError) {
+      return unverified(`cooldown read failed: ${readErrorMessage(recentUpdateError)}`);
+    }
 
     if (recentUpdate && recentUpdate.length > 0) {
       return {

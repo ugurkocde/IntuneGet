@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
   failDeployedFetch: false,
   failPriorFetch: false,
   failUpsert: false,
+  // Paged reads (ordered by id) filtered with this `column=value` pair fail.
+  failEq: null as string | null,
   // PostgREST returns at most this many rows per response (1000 by default).
   maxRows: 1000,
   // Called after every read, to simulate concurrent writes between pages.
@@ -27,10 +29,11 @@ function query(table: string) {
   let limit: number | null = null;
   let orderBy: string | null = null;
   let inFilterChars = 0;
+  const eqPairs: string[] = [];
   const rows = () => (state.tables[table] ??= []);
 
   const run = () => {
-    if (inFilterChars > MAX_IN_FILTER_CHARS) {
+    if (inFilterChars > MAX_IN_FILTER_CHARS || (state.failEq && orderBy === 'id' && eqPairs.includes(state.failEq))) {
       return { data: null, error: { message: 'URI too long' } };
     }
     if (table === 'upload_history' && mode === 'select' && state.failDeployedFetch && inFilterChars > 0) {
@@ -65,6 +68,7 @@ function query(table: string) {
       return builder;
     },
     eq: (column: string, value: unknown) => {
+      eqPairs.push(`${column}=${String(value)}`);
       filters.push((row) => row[column] === value);
       return builder;
     },
@@ -195,6 +199,7 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     state.failPriorFetch = false;
     state.maxRows = 1000;
     state.failUpsert = false;
+    state.failEq = null;
     state.afterSelect = null;
     state.triggerAutoUpdate.mockReset();
     state.getLatestInstallerInfo.mockReset();
@@ -331,6 +336,90 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     // Nothing is rewritten with notified_at reset and nothing is deleted.
     expect(rowIds()).toEqual(['outdated', 'resolved']);
     expect(rowById('outdated')).toMatchObject({ notified_at: NOTIFIED_AT });
+  });
+
+  it('logs every collected error once the run finishes', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.failEq = 'policy_type=auto_update';
+
+    try {
+      const body = await runCron();
+
+      expect(body.errors).toEqual([expect.stringContaining('Failed to fetch policies')]);
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.stringMatching(/^\[check-updates\] Finished with 1 error\(s\): Failed to fetch policies/)
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('redacts and bounds the collected errors it logs', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.tables.app_update_policies = [
+      {
+        id: 'policy-auto',
+        user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        winget_id: 'Own.Outdated',
+        policy_type: 'auto_update',
+        is_enabled: true,
+        deployment_config: {},
+      },
+    ];
+    state.getLatestInstallerInfo.mockResolvedValue({ ok: true, info: { version: '2.0.0' } });
+    state.triggerAutoUpdate.mockResolvedValue({
+      success: false,
+      error: 'Upload failed for https://blob.example.test/app.intunewin?sig=SIGNED123 with Bearer TOKEN456',
+    });
+
+    try {
+      await runCron();
+
+      const summary = consoleError.mock.calls
+        .map((call) => String(call[0]))
+        .find((line) => line.startsWith('[check-updates] Finished with'));
+      expect(summary).toContain('Failed to trigger auto-update for Own.Outdated');
+      expect(summary).toContain('[redacted URL]');
+      expect(summary).toContain('Bearer [redacted]');
+      expect(summary).not.toContain('SIGNED123');
+      expect(summary).not.toContain('TOKEN456');
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('reports a rate limit that could not be verified as an error', async () => {
+    state.tables.app_update_policies = [
+      {
+        id: 'policy-auto',
+        user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        winget_id: 'Own.Outdated',
+        policy_type: 'auto_update',
+        is_enabled: true,
+        deployment_config: {},
+      },
+    ];
+    state.getLatestInstallerInfo.mockResolvedValue({ ok: true, info: { version: '2.0.0' } });
+    state.triggerAutoUpdate.mockResolvedValue({
+      success: false,
+      skipped: true,
+      code: 'RATE_LIMIT_UNVERIFIED',
+      skipReason: 'Rate limit could not be verified (update count failed: timeout), the update will be retried later',
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const body = await runCron();
+
+      expect(body.autoUpdates).toMatchObject({ skipped: 1, failed: 0 });
+      expect(body.errors).toEqual([
+        expect.stringMatching(/^Rate limit could not be verified for Own\.Outdated: .*update count failed: timeout/),
+      ]);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('reads every existing row past the PostgREST row cap', async () => {
