@@ -18,6 +18,7 @@ import type {
   NotificationPayload,
   AppUpdate,
 } from '@/types/notifications';
+import { shouldSkipUpdate, type AppUpdatePolicy } from '@/types/update-policies';
 
 interface UserProfile {
   id: string;
@@ -48,7 +49,8 @@ export function shouldSendBasedOnFrequency(frequency: string): boolean {
 
 /**
  * Send email + webhook notifications for a single user's pending updates and
- * mark the delivered ones notified.
+ * mark the delivered ones notified. Updates skipped by the user's ignore or
+ * pin policy are neither sent nor marked notified.
  *
  * @param pendingUpdates Optional preloaded pending rows for the user. When
  *   omitted, the function loads update_check_results rows with notified_at and
@@ -89,6 +91,39 @@ export async function notifyUserOfPendingUpdates(
     }
     updates = (data as UpdateCheckResult[]) || [];
   }
+
+  if (updates.length === 0) {
+    return result;
+  }
+
+  // Respect the per-app update policies the same way the update check and
+  // auto-update paths do: an ignored app, or a pinned app whose detected
+  // version is not the pinned one, never produces a notification. The refresh
+  // route stores rows for those apps too (the Updates page shows them), so
+  // they have to be filtered here.
+  //
+  // Skipped rows are deliberately NOT marked notified. They stay pending and
+  // are skipped again on every run while the policy applies. If the admin
+  // removes the ignore policy or the detected version becomes the pinned one,
+  // the next run notifies about it instead of the update being silently
+  // swallowed. If the policies cannot be loaded, send nothing and leave every
+  // row pending so the next run retries; a late notification is better than
+  // one for an app the admin chose to ignore.
+  const { data: policyRows, error: policyError } = await supabase
+    .from('app_update_policies')
+    .select('*')
+    .eq('user_id', userId);
+  if (policyError) {
+    result.errors.push(`Error fetching update policies: ${policyError.message}`);
+    return result;
+  }
+  const policyByApp = new Map<string, AppUpdatePolicy>();
+  ((policyRows as AppUpdatePolicy[] | null) || []).forEach((policy) => {
+    policyByApp.set(`${policy.tenant_id}:${policy.winget_id}`, policy);
+  });
+  updates = updates.filter(
+    (u) => !shouldSkipUpdate(policyByApp.get(`${u.tenant_id}:${u.winget_id}`), u.latest_version)
+  );
 
   if (updates.length === 0) {
     return result;
