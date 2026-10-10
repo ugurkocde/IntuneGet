@@ -165,8 +165,15 @@ export function InventoryAppDetails({ appId, onClose, onUpdate }: InventoryAppDe
                           <Users className="w-4 h-4 text-text-muted" />
                         </div>
                         <div>
-                          <p className="text-sm text-text-primary">
-                            {assignmentTargetLabel(assignment.target, app.assignmentGroupNames)}
+                          <p
+                            className="text-sm text-text-primary"
+                            title={assignment.target.groupId || undefined}
+                          >
+                            {assignmentTargetLabel(
+                              assignment.target,
+                              app.assignmentGroupNames,
+                              app.assignmentGroupLookupFailures
+                            )}
                           </p>
                         </div>
                       </div>
