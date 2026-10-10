@@ -16,6 +16,7 @@ import {
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
 import { assertCuratedInstaller, authorizeCuratedWorkflow, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { CuratedConfigVerificationError } from '@/lib/curated-catalog/custom-config';
 import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalog/package';
@@ -268,8 +269,10 @@ export class AutoUpdateTrigger {
         }
       }
 
+      const curated = isCuratedPackageId(updateInfo.wingetId) || updateInfo.sourceType === 'curated'
+        ? findCuratedApp(updateInfo.wingetId) : undefined;
       const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
-        wingetIds: [updateInfo.wingetId] });
+        wingetIds: curated ? [curated.packageId, updateInfo.wingetId] : [updateInfo.wingetId] });
       if (approvalBlocks.length) {
         return { success: false, skipped: true, code: approvalBlocks[0].code,
           skipReason: approvalBlocks[0].message };

@@ -161,6 +161,41 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
+  it.each(['canonical', 'submitted'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
+    const canonical = CURATED_APPS[0].packageId;
+    const submitted = canonical.toUpperCase();
+    expect(submitted).not.toBe(canonical);
+    const storedId = storedCase === 'canonical' ? canonical : submitted;
+    const insert = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } }));
+    (trigger as unknown as { verifyTenantConsent: unknown }).verifyTenantConsent = vi.fn().mockResolvedValue(true);
+    getApprovalFailuresMock.mockImplementation(async (_tenant: string, id: string) => id === storedId ? [{
+      tenant_id: 'tenant-1', winget_id: storedId, status: 'failed',
+      error_code: 'INTUNE_APPROVAL_REQUIRED', error_details: null,
+    }] : []);
+    const result = await trigger.triggerAutoUpdate({ ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 },
+      { ...UPDATE_INFO, wingetId: submitted, sourceType: 'curated' }, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result).toMatchObject({ success: false, skipped: true, code: 'INTUNE_APPROVAL_PENDING' });
+    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', canonical, undefined);
+    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', submitted, undefined);
+    expect(insert).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+  });
+
+  it('checks curated rate limits before either approval ID', async () => {
+    const insert = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } }));
+    (trigger as unknown as { checkRateLimits: unknown }).checkRateLimits = vi.fn().mockResolvedValue({
+      allowed: false, code: 'RATE_LIMIT_UNVERIFIED', reason: 'Synthetic rate count failure',
+    });
+    const result = await trigger.triggerAutoUpdate({ ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 },
+      { ...UPDATE_INFO, wingetId: CURATED_APPS[0].packageId.toUpperCase() }, { skipPriorDeploymentCheck: true });
+    expect(result.code).toBe('RATE_LIMIT_UNVERIFIED');
+    expect(getApprovalFailuresMock).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+  });
+
   it.each([true, false])('keeps approval and rate limit failures separate before writes (rate allowed %s)', async allowed => {
     const insert = vi.fn();
     const trigger = makeTrigger(createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } }));
@@ -193,6 +228,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     const result = await trigger.triggerAutoUpdate({ ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 }, UPDATE_INFO,
       { skipRateLimits: true, skipPriorDeploymentCheck: true });
     expect(result).toMatchObject({ success: false, skipped: true, code: 'INTUNE_APPROVAL_PENDING' });
+    expect(getApprovalFailuresMock).toHaveBeenCalledExactlyOnceWith('tenant-1', 'Test.App', undefined);
     expect(insert).not.toHaveBeenCalled();
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
   });
