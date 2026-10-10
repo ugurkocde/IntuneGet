@@ -95,6 +95,20 @@ async function seedDeployment(db: Awaited<ReturnType<typeof load>>['db'], withPr
 }
 
 describe('sqlite auto-update check', () => {
+  it('holds fixed rules without changing policy, history or jobs in automatic and manual modes', async () => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const policy = await seedDeployment(db);
+    const config = { ...deploymentConfig, psadtConfig: { ...((await import('@/types/psadt')).DEFAULT_PSADT_CONFIG), customDetection: true } };
+    const saved = await db.updatePolicies.upsert({ ...policy, deployment_config: config });
+    const before = await db.updatePolicies.getById(policy.id, 'u1');
+    for (const options of [undefined, { skipRateLimits: true, skipPriorDeploymentCheck: true }]) {
+      const result = await triggerSqliteAutoUpdate(db, saved, installerResolution().info, options);
+      expect(result).toEqual({ success: false, skipped: true, skipReason: 'Custom detection rules are fixed. Deploy 1.1.0 from the catalog with updated rules.' });
+    }
+    expect(await db.jobs.getByTenantId('t1')).toHaveLength(0);
+    expect(await db.autoUpdateHistory.list('u1', { limit: 50, offset: 0 })).toHaveLength(0);
+    expect(await db.updatePolicies.getById(policy.id, 'u1')).toEqual(before);
+  });
   it('detects an available update and queues an auto-update job', async () => {
     const { db, runSqliteUpdateCheck } = await load();
     const policy = await seedDeployment(db);

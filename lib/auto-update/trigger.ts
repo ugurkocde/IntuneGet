@@ -234,6 +234,11 @@ export class AutoUpdateTrigger {
         };
       }
 
+      // Custom detection belongs to the administrator and stays fixed until edited.
+      if (policy.deployment_config.psadtConfig?.customDetection) {
+        return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
+      }
+
       // Safety check 3: Verify prior deployment exists (if required)
       if (this.safetyConfig.requirePriorDeployment && !options?.skipPriorDeploymentCheck && !policy.original_upload_history_id) {
         return {
@@ -269,6 +274,9 @@ export class AutoUpdateTrigger {
       // Backfill PSADT settings from the original deployment for policies
       // created before psadtConfig was stored on deployment_config
       await this.ensurePsadtConfig(policy);
+      if (policy.deployment_config.psadtConfig?.customDetection) {
+        return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
+      }
 
       // Policies created by older IntuneGet releases can contain generated
       // defaults that were never valid at runtime (for example an MSI
@@ -1210,3 +1218,4 @@ export async function getLatestInstallerInfo(
     },
   };
 }
+import { customDetectionUpdateHold } from '@/lib/custom-detection';

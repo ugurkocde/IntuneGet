@@ -70,6 +70,8 @@ import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { generateDetectionRules, generateInstallCommand, generateUninstallCommand } from '@/lib/detection-rules';
 import { INTUNE_APP_SOURCE_MARKER } from '@/lib/intune-description';
 import { buildCartItemRequirementRules } from '@/lib/requirement-rules';
+import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';
+import { CustomDetectionEditor, createEmptyDetectionRule } from '@/components/CustomDetectionEditor';
 
 // Strip the auto-appended "Source: IntuneGet.com" marker so the description
 // editor shows only the human-authored text. The marker is re-appended at
@@ -229,6 +231,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   const [expandedSection, setExpandedSection] = useState<ConfigSection | null>(isStoreApp ? 'assignment' : 'detection');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [processesError, setProcessesError] = useState<string | null>(null);
+  const [customDetectionErrors, setCustomDetectionErrors] = useState<string[]>([]);
   const [addedToCartSuccess, setAddedToCartSuccess] = useState(false);
   const [configMode, setConfigMode] = useState<'quick' | 'advanced'>('quick');
 
@@ -318,6 +321,20 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     architectureInstallers.some(
       (installer) => !installer.scope || installer.scope === scope
     );
+  // Customer-authored detection rules are offered only for ordinary catalog
+  // Win32 installers. Curated, MSIX/APPX (including nested) and custom-source
+  // items keep their generated detection.
+  const customDetectionSupported =
+    !isStoreApp &&
+    !!selectedInstaller &&
+    canUseCustomDetection({
+      wingetId: effectiveWingetId,
+      sourceType: deployedConfig?.sourceType ?? 'winget',
+      installerType: selectedInstaller.type,
+      nestedInstallerType: selectedInstaller.nestedInstallerType,
+    });
+  const customDetectionActive = config.customDetection === true && customDetectionSupported;
+  const lastCustomRulesRef = useRef<DetectionRule[] | null>(null);
   const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
@@ -397,22 +414,39 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
   }, [effectiveInstallers, selectedArch]);
 
   // Generate detection rules when installer, version, locale, or marker path changes
-  // Pass effectiveWingetId so locale variant packages get correct detection markers
+  // Pass effectiveWingetId so locale variant packages get correct detection markers.
+  // Customer-authored rules stay fixed while custom detection is on; switching it
+  // off (or selecting an installer that does not support it) restores generated rules.
   useEffect(() => {
-    if (selectedInstaller) {
-      const rules = generateDetectionRules(
-        selectedInstaller,
-        pkg.name,
-        effectiveWingetId,
-        selectedVersion,
-        config.registryMarkerPath
-      );
-      setConfig((prev) => ({
-        ...prev,
-        detectionRules: rules,
-      }));
+    if (!selectedInstaller || customDetectionActive) return;
+    const rules = generateDetectionRules(
+      selectedInstaller,
+      pkg.name,
+      effectiveWingetId,
+      selectedVersion,
+      config.registryMarkerPath
+    );
+    setConfig((prev) => {
+      if (prev.customDetection !== true) return { ...prev, detectionRules: rules };
+      lastCustomRulesRef.current = prev.detectionRules;
+      const { customDetection: _customDetection, ...rest } = prev;
+      return { ...rest, detectionRules: rules };
+    });
+  }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath, customDetectionActive]);
+
+  const setCustomDetection = (enabled: boolean) => {
+    setCustomDetectionErrors([]);
+    if (enabled) {
+      const rules = lastCustomRulesRef.current ?? [createEmptyDetectionRule('registry')];
+      setConfig((prev) => ({ ...prev, customDetection: true, detectionRules: rules }));
+    } else {
+      lastCustomRulesRef.current = config.detectionRules;
+      setConfig((prev) => {
+        const { customDetection: _customDetection, ...rest } = prev;
+        return rest;
+      });
     }
-  }, [selectedInstaller, pkg.name, effectiveWingetId, selectedVersion, config.registryMarkerPath]);
+  };
 
   const handleAddToCart = async () => {
     if (addedToCartSuccess) return;
@@ -436,6 +470,15 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
       );
       setExpandedSection('behavior');
       return;
+    }
+
+    if (customDetectionActive) {
+      const validation = validateCustomDetectionRules(config.detectionRules);
+      if (!validation.valid) {
+        setCustomDetectionErrors(validation.errors);
+        setExpandedSection('detection');
+        return;
+      }
     }
 
     setIsAddingToCart(true);
@@ -1753,6 +1796,24 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                 onToggle={() => toggleSection('detection')}
               >
                 <div className="space-y-3">
+                  {customDetectionSupported && (
+                    <ToggleOption
+                      label="Use my own detection rules"
+                      description="Your registry, file or MSI rules replace the IntuneGet version marker. They stay fixed, so edit them before you deploy a newer version."
+                      checked={customDetectionActive}
+                      onChange={setCustomDetection}
+                    />
+                  )}
+                  {customDetectionActive ? (
+                    <CustomDetectionEditor
+                      rules={config.detectionRules}
+                      onChange={(detectionRules) => {
+                        setCustomDetectionErrors([]);
+                        updateConfig({ detectionRules });
+                      }}
+                      errors={customDetectionErrors}
+                    />
+                  ) : <>
                   {config.detectionRules.length === 0 ? (
                     <p className="text-text-muted text-sm italic">No detection rules configured</p>
                   ) : (
@@ -1770,6 +1831,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                   <p className="text-text-muted text-xs">
                     Detection rules are auto-generated based on installer type. They determine how Intune verifies the app is installed.
                   </p>
+                  </>}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-1.5">
                       Detection marker registry path
@@ -1783,6 +1845,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                     />
                     <p className="text-text-muted text-xs mt-1.5">
                       Registry key under HKLM/HKCU where the detection marker is written. Customize to track deployments under your own key, e.g. SOFTWARE\CompanyName\Apps.
+                      {customDetectionActive && ' The marker is still written during install, but Intune uses your own rules for detection.'}
                     </p>
                   </div>
                 </div>

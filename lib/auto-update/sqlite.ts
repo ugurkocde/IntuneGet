@@ -140,6 +140,9 @@ export async function triggerSqliteAutoUpdate(
     if (!config) {
       return { success: false, error: 'No deployment configuration saved for this policy' };
     }
+    if (config.psadtConfig?.customDetection) {
+      return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
+    }
     let curatedLicenceAcceptance: CuratedLicenceAcceptanceSnapshot | null = null;
     if (isCuratedPackageId(updateInfo.wingetId)) {
       const approved = assertCuratedInstaller({
@@ -410,3 +413,4 @@ export async function runSqliteUpdateCheck(
 
   return { available, triggered, skipped, errors };
 }
+import { customDetectionUpdateHold } from '@/lib/custom-detection';
