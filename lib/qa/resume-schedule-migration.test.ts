@@ -11,7 +11,7 @@ it('backfills waiting chronology, preserves customer state and defaults new jobs
       ('old','awaiting_qa','2026-01-01',null,null),
       ('new','awaiting_qa','2026-02-01',null,null),
       ('done','completed','2026-01-01',null,'2026-01-02');`);
-    await db.exec(readFileSync(new URL('../../supabase/migrations/20261007233707_qa_resume_due_schedule.sql', import.meta.url), 'utf8'));
+    await db.exec(readFileSync(new URL('../../supabase/migrations/20261010190933_qa_resume_due_schedule.sql', import.meta.url), 'utf8'));
     const rows = await db.query<{ id: string; qa_resume_due_at: Date }>(`select id, qa_resume_due_at
       from public.packaging_jobs where status='awaiting_qa' order by qa_resume_due_at,id`);
     expect(rows.rows.map(r => r.id)).toEqual(['old', 'new']);
