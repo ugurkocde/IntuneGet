@@ -433,20 +433,24 @@ export class AutoUpdateTrigger {
         .from('app_update_policies')
         .select('id')
         .eq(scope.column, scope.value);
-      const { data, error } = await (afterId ? query.gt('id', afterId) : query)
+      const page: { data: Array<{ id: unknown }> | null; error: unknown } = await (afterId
+        ? query.gt('id', afterId)
+        : query
+      )
         .order('id')
         .limit(RATE_LIMIT_PAGE_SIZE);
+      const { data, error } = page;
       if (error || !data) {
         return null;
       }
       if (data.length === 0) {
         break;
       }
-      const lastId = (data[data.length - 1] as { id?: unknown }).id;
+      const lastId: unknown = data[data.length - 1].id;
       if (typeof lastId !== 'string' || lastId === afterId) {
         return null;
       }
-      policyIds.push(...data.map((row: { id: string }) => row.id));
+      policyIds.push(...data.map((row) => String(row.id)));
       afterId = lastId;
     }
 
