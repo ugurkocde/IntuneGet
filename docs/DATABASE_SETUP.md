@@ -14,6 +14,12 @@ Migration versions are unique. The former duplicate versions reported in
 `015_enhanced_error_handling.sql`, and `0151_msp_batch_and_webhooks.sql`.
 Use the CLI's migration version order rather than sorting complete filenames.
 
+Use Supabase CLI 2.115.0 or later for these migrations and confirm the installed
+version with `supabase --version` before following either installation path.
+The migration version ordering was checked with CLI 2.115.0. A tool that sorts
+complete filenames places `0141_...` before `014_...` and `0151_...` before
+`015_...`, which does not match version order.
+
 For a fresh installation, install the CLI using
 the [official installation guide](https://supabase.com/docs/guides/local-development/cli/getting-started),
 then use the normal deployment commands:
