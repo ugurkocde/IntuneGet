@@ -25,6 +25,7 @@ import type {
   AutoUpdateStatus,
 } from '@/types/update-policies';
 import { runSqliteMigrations } from './sqlite-migrations';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 
 // Singleton database instance
 let db: Database.Database | null = null;
@@ -172,6 +173,18 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       const rows = stmt.all(tenantId, limit) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const rows = getDb().prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE tenant_id = ? AND winget_id = ? AND status IN (${INTUNE_APPROVAL_CHECKPOINT_STATUSES.map(() => '?').join(',')})
+          AND (error_category = 'approval' OR error_code = 'INTUNE_APPROVAL_REQUIRED')
+          ${cursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
+        ORDER BY created_at DESC, id DESC LIMIT 100
+      `).all(tenantId, wingetId, ...INTUNE_APPROVAL_CHECKPOINT_STATUSES,
+        ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : [])) as Record<string, unknown>[];
       return rows.map(parseJobRow);
     },
 

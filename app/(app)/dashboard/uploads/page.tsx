@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { isIntuneApprovalFailure } from '@/lib/intune-approval';
 import { T, Var } from "gt-next";
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -979,7 +980,8 @@ function UploadJobCard({
           )}
 
           {/* Retry button for failures */}
-          {['failed', 'qa_failed'].includes(job.status) && (
+            {['failed', 'qa_failed'].includes(job.status) &&
+              !isIntuneApprovalFailure(job) && (
             <div className="mt-3">
               <Button
                 size="sm"

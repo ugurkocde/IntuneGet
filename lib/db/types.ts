@@ -208,6 +208,10 @@ export interface DatabaseAdapter {
      */
     getByTenantId(tenantId: string, limit?: number): Promise<PackagingJob[]>;
 
+    /** Failed and cancelled approval checkpoints include dismissed jobs and every user/version in the tenant. */
+    getApprovalFailures(tenantId: string, wingetId: string,
+      cursor?: { createdAt: string; id: string }): Promise<PackagingJob[]>;
+
     /**
      * Create a new job
      */

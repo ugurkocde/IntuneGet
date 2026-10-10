@@ -16,6 +16,7 @@ import {
 import type { IntuneAppCategorySelection, PackageAssignment } from '@/types/upload';
 import { getCatalogSource } from '@/lib/catalog';
 import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
 import { assertCuratedInstaller, authorizeCuratedWorkflow, getApprovedCuratedRelease } from '@/lib/curated-catalog/server';
 import { CuratedConfigVerificationError } from '@/lib/curated-catalog/custom-config';
 import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalog/package';
@@ -42,6 +43,7 @@ import {
 import type { NormalizedInstaller, WingetInstaller, WingetScope } from '@/types/winget';
 import { DEFAULT_PSADT_CONFIG, type DetectionRule } from '@/types/psadt';
 import { QA_PRIORITY_DEMAND } from '@/lib/qa/constants';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 
 interface TriggerResult {
   success: boolean;
@@ -58,6 +60,7 @@ interface TriggerResult {
     | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
     | 'CURATED_LICENCE_NOT_ACCEPTED'
     | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+    | 'INTUNE_APPROVAL_PENDING'
     | 'CURATED_CONFIG_VERIFICATION_FAILED'
     | 'RATE_LIMIT_UNVERIFIED';
 }
@@ -264,6 +267,15 @@ export class AutoUpdateTrigger {
             error: 'Tenant consent is no longer active',
           };
         }
+      }
+
+      const curated = isCuratedPackageId(updateInfo.wingetId) || updateInfo.sourceType === 'curated'
+        ? findCuratedApp(updateInfo.wingetId) : undefined;
+      const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
+        wingetIds: curated ? [curated.packageId, updateInfo.wingetId] : [updateInfo.wingetId] });
+      if (approvalBlocks.length) {
+        return { success: false, skipped: true, code: approvalBlocks[0].code,
+          skipReason: approvalBlocks[0].message };
       }
 
       // Backfill PSADT settings from the original deployment for policies
