@@ -2,9 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
+import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
 
 const getAppsByWingetIdsMock = vi.hoisted(() => vi.fn());
 const getLatestInstallerInfoMock = vi.hoisted(() => vi.fn());
+const curatedApproval = vi.hoisted(() => ({ value: null as unknown }));
+const acquireGraphTokenMock = vi.hoisted(() => vi.fn(() => { throw new Error('No Graph in fixture tests'); }));
+vi.mock('@/lib/curated-catalog/server', async importOriginal => ({
+  ...(await importOriginal<object>()),
+  assertCuratedInstaller: vi.fn(() => curatedApproval.value),
+}));
+vi.mock('@/lib/graph-token', () => ({ acquireGraphToken: acquireGraphTokenMock }));
 
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({
@@ -25,6 +34,8 @@ beforeEach(() => {
   process.env.DATABASE_PATH = join(tempDir, 'app.db');
   getAppsByWingetIdsMock.mockReset();
   getLatestInstallerInfoMock.mockReset();
+  acquireGraphTokenMock.mockClear();
+  curatedApproval.value = null;
 });
 
 afterEach(async () => {
@@ -95,6 +106,43 @@ async function seedDeployment(db: Awaited<ReturnType<typeof load>>['db'], withPr
 }
 
 describe('sqlite auto-update check', () => {
+  it.each(['canonical', 'submitted'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const app = { ...CURATED_APPS[0], id: 'fixture-app', packageId: 'IntuneGet.Curated.FixtureApp' };
+    curatedApproval.value = { app, release: releaseFixture(app), installer: {} };
+    const submitted = app.packageId.toUpperCase();
+    expect(submitted).not.toBe(app.packageId);
+    const policy = await db.updatePolicies.upsert({ user_id: 'u1', tenant_id: 't1', winget_id: submitted,
+      policy_type: 'auto_update', deployment_config: deploymentConfig, original_upload_history_id: null, is_enabled: true });
+    const checkpoint = await db.jobs.create({ user_id: 'another-user', tenant_id: 't1',
+      winget_id: storedCase === 'canonical' ? app.packageId : submitted,
+      version: '1.0.0', display_name: 'Fixture App', installer_type: 'exe',
+      installer_url: 'https://example.test/fixture.exe', installer_sha256: 'A'.repeat(64), status: 'queued' });
+    await db.jobs.update(checkpoint.id, { status: 'failed', error_code: 'INTUNE_APPROVAL_REQUIRED', archived_at: new Date().toISOString() });
+    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info, wingetId: submitted, currentIntuneAppId: null },
+      { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result).toMatchObject({ success: false, skipped: true, code: 'INTUNE_APPROVAL_PENDING' });
+    expect(await db.jobs.getByTenantId('t1')).toHaveLength(0);
+    expect((await db.jobs.getById(checkpoint.id))?.error_code).toBe('INTUNE_APPROVAL_REQUIRED');
+    expect(await db.autoUpdateHistory.list('u1', { limit: 50, offset: 0 })).toHaveLength(0);
+    expect((await db.updatePolicies.getById(policy.id, 'u1'))?.consecutive_failures).toBe(0);
+    expect(acquireGraphTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('queues a curated update when no approval checkpoint exists', async () => {
+    const { db, triggerSqliteAutoUpdate } = await load();
+    const app = { ...CURATED_APPS[0], id: 'fixture-app', packageId: 'IntuneGet.Curated.FixtureApp' };
+    curatedApproval.value = { app, release: releaseFixture(app), installer: {} };
+    const policy = await db.updatePolicies.upsert({ user_id: 'u1', tenant_id: 't1', winget_id: app.packageId.toUpperCase(),
+      policy_type: 'auto_update', deployment_config: deploymentConfig, original_upload_history_id: null, is_enabled: true });
+    const result = await triggerSqliteAutoUpdate(db, policy, { ...installerResolution().info, wingetId: policy.winget_id },
+      { skipRateLimits: true, skipPriorDeploymentCheck: true });
+    expect(result.success).toBe(true);
+    expect(await db.jobs.getByTenantId('t1')).toHaveLength(1);
+    expect((await db.jobs.getByTenantId('t1'))[0].package_config).toMatchObject({ sourceType: 'curated' });
+    expect(acquireGraphTokenMock).not.toHaveBeenCalled();
+  });
+
   it('preserves an archived approval checkpoint and skips a new version even with manual bypass flags', async () => {
     const { db, triggerSqliteAutoUpdate } = await load();
     const policy = await seedDeployment(db);
