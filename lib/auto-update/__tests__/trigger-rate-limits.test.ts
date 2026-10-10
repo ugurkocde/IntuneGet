@@ -10,6 +10,8 @@ type Row = Record<string, unknown>;
 const state = vi.hoisted(() => ({
   tables: {} as Record<string, Array<Record<string, unknown>>>,
   failTable: null as string | null,
+  // Fails only the cooldown read (a non-count read of the history).
+  failCooldownRead: false,
 }));
 
 // Longest `in` filter value list the fake accepts, like a URL length limit.
@@ -24,7 +26,11 @@ function query(table: string) {
   let inFilterChars = 0;
 
   const run = () => {
-    if (state.failTable === table || inFilterChars > MAX_IN_FILTER_CHARS) {
+    if (
+      state.failTable === table ||
+      inFilterChars > MAX_IN_FILTER_CHARS ||
+      (state.failCooldownRead && table === 'auto_update_history' && !head)
+    ) {
       return { data: null, count: null, error: { message: 'request failed' } };
     }
     const matched = (state.tables[table] ?? []).filter((row) => filters.every((filter) => filter(row)));
@@ -83,6 +89,7 @@ import { AutoUpdateTrigger } from '../trigger';
 interface RateLimitCheck {
   allowed: boolean;
   reason?: string;
+  code?: string;
 }
 
 const uuid = (prefix: number, index: number) =>
@@ -121,6 +128,7 @@ function checkRateLimits(userId: string, tenantId: string, policyId: string): Pr
 describe('auto-update rate limits', () => {
   beforeEach(() => {
     state.failTable = null;
+    state.failCooldownRead = false;
     state.tables = { app_update_policies: [], auto_update_history: [] };
   });
 
@@ -151,6 +159,18 @@ describe('auto-update rate limits', () => {
     expect(result.reason).toContain('5 updates per hour');
   });
 
+  it('sums counts across id chunks', async () => {
+    const tenantPolicies = policies(250, { tenant_id: 'tenant-1' });
+    state.tables.app_update_policies = tenantPolicies;
+    // One completed update in each of the three chunks of 100 ids.
+    state.tables.auto_update_history = history([10, 150, 240].map((index) => tenantPolicies[index].id));
+
+    const result = await checkRateLimits('user-1', 'tenant-1', tenantPolicies[0].id);
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('3 updates per tenant per hour');
+  });
+
   it('allows an update when many policies stay under every limit', async () => {
     const tenantPolicies = policies(250, { tenant_id: 'tenant-1', user_id: 'user-1' });
     state.tables.app_update_policies = tenantPolicies;
@@ -167,8 +187,18 @@ describe('auto-update rate limits', () => {
 
     const result = await checkRateLimits('user-1', 'tenant-1', uuid(1, 0));
 
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('could not be verified');
+    expect(result).toMatchObject({ allowed: false, code: 'RATE_LIMIT_UNVERIFIED' });
+    expect(result.reason).toContain('update count failed: request failed');
+  });
+
+  it('fails closed when the cooldown read fails', async () => {
+    state.tables.app_update_policies = policies(3, { tenant_id: 'tenant-1', user_id: 'user-1' });
+    state.failCooldownRead = true;
+
+    const result = await checkRateLimits('user-1', 'tenant-1', uuid(1, 0));
+
+    expect(result).toMatchObject({ allowed: false, code: 'RATE_LIMIT_UNVERIFIED' });
+    expect(result.reason).toContain('cooldown read failed');
   });
 
   it('fails closed when the policy list cannot be read', async () => {
@@ -176,7 +206,7 @@ describe('auto-update rate limits', () => {
 
     const result = await checkRateLimits('user-1', 'tenant-1', uuid(1, 0));
 
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('could not be verified');
+    expect(result).toMatchObject({ allowed: false, code: 'RATE_LIMIT_UNVERIFIED' });
+    expect(result.reason).toContain('policy read failed: request failed');
   });
 });

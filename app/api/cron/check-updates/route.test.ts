@@ -354,6 +354,74 @@ describe('check-updates cron stale cleanup (hosted)', () => {
     }
   });
 
+  it('redacts and bounds the collected errors it logs', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.tables.app_update_policies = [
+      {
+        id: 'policy-auto',
+        user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        winget_id: 'Own.Outdated',
+        policy_type: 'auto_update',
+        is_enabled: true,
+        deployment_config: {},
+      },
+    ];
+    state.getLatestInstallerInfo.mockResolvedValue({ ok: true, info: { version: '2.0.0' } });
+    state.triggerAutoUpdate.mockResolvedValue({
+      success: false,
+      error: 'Upload failed for https://blob.example.test/app.intunewin?sig=SIGNED123 with Bearer TOKEN456',
+    });
+
+    try {
+      await runCron();
+
+      const summary = consoleError.mock.calls
+        .map((call) => String(call[0]))
+        .find((line) => line.startsWith('[check-updates] Finished with'));
+      expect(summary).toContain('Failed to trigger auto-update for Own.Outdated');
+      expect(summary).toContain('[redacted URL]');
+      expect(summary).toContain('Bearer [redacted]');
+      expect(summary).not.toContain('SIGNED123');
+      expect(summary).not.toContain('TOKEN456');
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('reports a rate limit that could not be verified as an error', async () => {
+    state.tables.app_update_policies = [
+      {
+        id: 'policy-auto',
+        user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        winget_id: 'Own.Outdated',
+        policy_type: 'auto_update',
+        is_enabled: true,
+        deployment_config: {},
+      },
+    ];
+    state.getLatestInstallerInfo.mockResolvedValue({ ok: true, info: { version: '2.0.0' } });
+    state.triggerAutoUpdate.mockResolvedValue({
+      success: false,
+      skipped: true,
+      code: 'RATE_LIMIT_UNVERIFIED',
+      skipReason: 'Rate limit could not be verified (update count failed: timeout), the update will be retried later',
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const body = await runCron();
+
+      expect(body.autoUpdates).toMatchObject({ skipped: 1, failed: 0 });
+      expect(body.errors).toEqual([
+        expect.stringMatching(/^Rate limit could not be verified for Own\.Outdated: .*update count failed: timeout/),
+      ]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('reads every existing row past the PostgREST row cap', async () => {
     state.catalog.push({ winget_id: 'Bulk.App', latest_version: '9.0.0' });
     for (let index = 0; index < 1100; index += 1) {

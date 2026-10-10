@@ -58,7 +58,8 @@ interface TriggerResult {
     | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
     | 'CURATED_LICENCE_NOT_ACCEPTED'
     | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
-    | 'CURATED_CONFIG_VERIFICATION_FAILED';
+    | 'CURATED_CONFIG_VERIFICATION_FAILED'
+    | 'RATE_LIMIT_UNVERIFIED';
 }
 
 export interface UpdateInfo {
@@ -106,6 +107,18 @@ interface RateLimitCheck {
   allowed: boolean;
   reason?: string;
   retryAfterMinutes?: number;
+  // Set when a read failed, so callers can report it instead of treating it
+  // as an ordinary skip.
+  code?: 'RATE_LIMIT_UNVERIFIED';
+}
+
+type RecentUpdateCount = { count: number } | { count: null; error: string };
+
+function readErrorMessage(error: unknown): string {
+  if (error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return 'no data returned';
 }
 
 function buildCurrentVersionInstallCommand(installer: NormalizedInstaller): string {
@@ -231,6 +244,7 @@ export class AutoUpdateTrigger {
             success: false,
             skipped: true,
             skipReason: rateLimitResult.reason,
+            code: rateLimitResult.code,
           };
         }
       }
@@ -419,13 +433,13 @@ export class AutoUpdateTrigger {
    * Count auto-update history rows since `since` for every policy of one
    * tenant or one user. Policy ids are read with keyset paging and counted in
    * small chunks, so a large policy list cannot exceed URL limits. Returns
-   * null when any read fails, so callers can fail closed.
+   * the read error when any read fails, so callers can fail closed and say why.
    */
   private async countRecentUpdates(
     scope: { column: 'tenant_id' | 'user_id'; value: string },
     since: string,
     completedOnly: boolean
-  ): Promise<number | null> {
+  ): Promise<RecentUpdateCount> {
     const policyIds: string[] = [];
     let afterId: string | null = null;
     for (;;) {
@@ -441,14 +455,14 @@ export class AutoUpdateTrigger {
         .limit(RATE_LIMIT_PAGE_SIZE);
       const { data, error } = page;
       if (error || !data) {
-        return null;
+        return { count: null, error: `policy read failed: ${readErrorMessage(error)}` };
       }
       if (data.length === 0) {
         break;
       }
       const lastId: unknown = data[data.length - 1].id;
       if (typeof lastId !== 'string' || lastId === afterId) {
-        return null;
+        return { count: null, error: 'policy read did not return an advancing id' };
       }
       policyIds.push(...data.map((row) => String(row.id)));
       afterId = lastId;
@@ -466,11 +480,11 @@ export class AutoUpdateTrigger {
       }
       const { count, error } = await query;
       if (error || typeof count !== 'number') {
-        return null;
+        return { count: null, error: `update count failed: ${readErrorMessage(error)}` };
       }
       total += count;
     }
-    return total;
+    return { count: total };
   }
 
   /**
@@ -480,11 +494,12 @@ export class AutoUpdateTrigger {
   private async checkRateLimits(userId: string, tenantId: string, policyId: string): Promise<RateLimitCheck> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { rateLimits } = this.safetyConfig;
-    const unverified: RateLimitCheck = {
+    const unverified = (error: string): RateLimitCheck => ({
       allowed: false,
-      reason: 'Rate limit could not be verified, the update will be retried later',
+      reason: `Rate limit could not be verified (${error}), the update will be retried later`,
       retryAfterMinutes: rateLimits.cooldownMinutes,
-    };
+      code: 'RATE_LIMIT_UNVERIFIED',
+    });
 
     // Check per-tenant rate limit
     const tenantCount = await this.countRecentUpdates(
@@ -492,10 +507,10 @@ export class AutoUpdateTrigger {
       oneHourAgo,
       true
     );
-    if (tenantCount === null) {
-      return unverified;
+    if (tenantCount.count === null) {
+      return unverified(tenantCount.error);
     }
-    if (tenantCount >= rateLimits.maxUpdatesPerTenant) {
+    if (tenantCount.count >= rateLimits.maxUpdatesPerTenant) {
       return {
         allowed: false,
         reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerTenant} updates per tenant per hour`,
@@ -509,10 +524,10 @@ export class AutoUpdateTrigger {
       oneHourAgo,
       false
     );
-    if (userCount === null) {
-      return unverified;
+    if (userCount.count === null) {
+      return unverified(userCount.error);
     }
-    if (userCount >= rateLimits.maxUpdatesPerHour) {
+    if (userCount.count >= rateLimits.maxUpdatesPerHour) {
       return {
         allowed: false,
         reason: `Rate limit exceeded: ${rateLimits.maxUpdatesPerHour} updates per hour`,
@@ -533,7 +548,7 @@ export class AutoUpdateTrigger {
       .limit(1);
 
     if (recentUpdateError) {
-      return unverified;
+      return unverified(`cooldown read failed: ${readErrorMessage(recentUpdateError)}`);
     }
 
     if (recentUpdate && recentUpdate.length > 0) {
