@@ -8,12 +8,20 @@ import {
 describe('QA toolchain targeted retries', () => {
   it('adds only Wacom while carrying approved unconsumed retry targets', () => {
     const previous = '60395492a3d51b2ff6f14b50ed7cd0c7f558be70';
-    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual([
+    expect(terminalToolchainRetryTargets('25849ac512c211e616c135149ef1e059db367ebc')).toEqual([
       'Wacom.WacomTabletDriver', ...terminalToolchainRetryTargets(previous),
     ]);
     expect(shouldRetryTerminalToolchainCandidate(previous, { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(false);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(true);
-    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Wacom.OtherDriver', status: 'failed' })).toBe(false);
+    expect(shouldRetryTerminalToolchainCandidate('25849ac512c211e616c135149ef1e059db367ebc', { wingetId: 'Wacom.WacomTabletDriver', status: 'failed' })).toBe(true);
+    expect(shouldRetryTerminalToolchainCandidate('25849ac512c211e616c135149ef1e059db367ebc', { wingetId: 'Wacom.OtherDriver', status: 'failed' })).toBe(false);
+  });
+  it('carries the preceding unconsumed retry targets without adding applications', () => {
+    const previous = terminalToolchainRetryTargets('25849ac512c211e616c135149ef1e059db367ebc');
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(previous);
+    const current = terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit);
+    current.push('Unapproved.Extra');
+    expect(terminalToolchainRetryTargets(QA_PSADT_TOOLCHAIN.packagerCommit)).toEqual(previous);
+    expect(shouldRetryTerminalToolchainCandidate(QA_PSADT_TOOLCHAIN.packagerCommit, { wingetId: 'Unapproved.Extra', status: 'failed' })).toBe(false);
   });
   it('retries Bandizip only on the reviewed silent-removal release', () => {
     const previous = '4b4637967c6e2b0188f5713d262dd1219a02465e';
