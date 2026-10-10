@@ -17,6 +17,12 @@ const CREDENTIAL_KEY = String.raw`[\w-]*(?:sig|token|secret|key|password|passwd|
 const UNSAFE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g;
 
 const REDACTIONS: Array<[RegExp, string]> = [
+  // Query and connection string form: sig=value, Pwd=value; runs before the
+  // URL rule so a value split from its key by a normalized separator inside
+  // a URL is still redacted.
+  [new RegExp(String.raw`\b(${CREDENTIAL_KEY})=\s*[^\s&)"',;]+`, 'gi'), '$1=[redacted]'],
+  // URL encoded form: sig%3Dvalue
+  [new RegExp(String.raw`\b(${CREDENTIAL_KEY})%3D\s*[^\s&%]+`, 'gi'), '$1%3D[redacted]'],
   [/https?:\/\/\S+/gi, '[redacted URL]'],
   [/\b(Bearer|Basic)\s+[\w.~+/-]+=*/gi, '$1 [redacted]'],
   [/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[redacted JWT]'],
@@ -29,10 +35,6 @@ const REDACTIONS: Array<[RegExp, string]> = [
   [new RegExp(String.raw`\b(${CREDENTIAL_KEY})(\s*[=:]\s*)'[^']*'`, 'gi'), "$1$2'[redacted]'"],
   // Header form without quotes: x-api-key: value
   [/\b((?:x-)?api-key|ocp-apim-subscription-key)(\s*:\s*)[^\s,;]+/gi, '$1$2[redacted]'],
-  // Query and connection string form: sig=value, Pwd=value;
-  [new RegExp(String.raw`\b(${CREDENTIAL_KEY})=[^\s&)"',;]+`, 'gi'), '$1=[redacted]'],
-  // URL encoded form: sig%3Dvalue
-  [new RegExp(String.raw`\b(${CREDENTIAL_KEY})%3D[^\s&%]+`, 'gi'), '$1%3D[redacted]'],
 ];
 
 export function logValue(value: unknown, maxLength = 500): string {

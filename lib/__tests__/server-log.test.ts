@@ -79,6 +79,12 @@ describe('logValue', () => {
     );
   });
 
+  it('redacts a signed URL credential split by a line break', () => {
+    const value = logValue('Download failed: https://host/file?sig=\nsecret-value end');
+    expect(value).toBe('Download failed: [redacted URL] end');
+    expect(value).not.toContain('secret-value');
+  });
+
   it('bounds the length', () => {
     expect(logValue('a'.repeat(20), 5)).toBe('aaaaa...');
   });
