@@ -96,6 +96,7 @@ export interface PackagingJob {
   qa_candidate_id: string | null;
   qa_requested_at: string | null;
   qa_completed_at: string | null;
+  qa_resume_due_at?: string;
   is_auto_update?: boolean | null;
   auto_update_policy_id?: string | null;
   packager_id: string | null;

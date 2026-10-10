@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  findPendingApprovalBlocksMock,
   createServerClientMock,
   getFeatureFlagsMock,
   handleAutoUpdateJobCompletionMock,
@@ -10,6 +11,7 @@ const {
   assertCuratedLicenceAcceptedMock,
   getPackageCompatibilityBlockMock,
 } = vi.hoisted(() => ({
+  findPendingApprovalBlocksMock: vi.fn(),
   createServerClientMock: vi.fn(),
   getFeatureFlagsMock: vi.fn(),
   handleAutoUpdateJobCompletionMock: vi.fn(),
@@ -20,6 +22,8 @@ const {
   getPackageCompatibilityBlockMock: vi.fn(),
 }));
 
+vi.mock('@/lib/intune-approval-guard', () => ({ findPendingApprovalBlocks: findPendingApprovalBlocksMock }));
+vi.mock('@/lib/db', () => ({ getDatabase: () => ({}) }));
 vi.mock('@/lib/supabase', () => ({ createServerClient: createServerClientMock }));
 vi.mock('@/lib/features', () => ({ getFeatureFlags: getFeatureFlagsMock }));
 vi.mock('@/lib/config', () => ({ getAppConfig: () => ({ app: { url: 'https://example.test' } }) }));
@@ -48,7 +52,7 @@ import { PACKAGE_VERSION_UNAVAILABLE_MESSAGE } from '@/lib/package-eligibility';
 
 function chain(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'is', 'not', 'order', 'limit', 'update']) {
+  for (const method of ['select', 'eq', 'is', 'not', 'order', 'limit', 'update', 'lte', 'in']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -88,6 +92,7 @@ function jobStore(initial: Record<string, unknown>) {
 describe('GET /api/cron/qa-resume', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    findPendingApprovalBlocksMock.mockResolvedValue([]);
     delete process.env.QA_MAINTENANCE_MODE;
     delete process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL;
     process.env.CRON_SECRET = 'secret';
@@ -244,6 +249,7 @@ describe('GET /api/cron/qa-resume', () => {
   it('holds an unverified compatibility lookup while releasing an unrelated verified job', async () => {
     getPackageCompatibilityBlockMock.mockRejectedValueOnce(new Error('lookup unavailable')).mockResolvedValueOnce(null);
     const jobs = ['unverified', 'verified'].map((id) => ({
+      tenant_id: 'tenant-1',
       id, qa_candidate_id: id, winget_id: 'Example.App', version: '1.0',
       architecture: 'x64', installer_sha256: 'A'.repeat(64), package_config: {},
     }));
@@ -264,12 +270,12 @@ describe('GET /api/cron/qa-resume', () => {
 
   it('atomically releases a waiting local-packager job after an exact QA pass', async () => {
     const job = {
-      id: 'job-1',
+      tenant_id: 'tenant-1', id: 'job-1',
       qa_candidate_id: 'candidate-1',
       execution_profile_sha256: 'A'.repeat(64),
       created_at: '2026-08-09T12:00:00Z',
     };
-    const packagingUpdate = chain({ data: { id: 'job-1' }, error: null });
+    const packagingUpdate = chain({ data: { tenant_id: 'tenant-1', id: 'job-1' }, error: null });
     const client = {
       from: vi.fn((table: string) => {
         if (table === 'packaging_jobs') {
@@ -477,7 +483,7 @@ describe('GET /api/cron/qa-resume', () => {
       Date.now() + 7 * 24 * 60 * 60 * 1000
     ).toISOString();
     const job = {
-      id: 'job-auto-update',
+      tenant_id: 'tenant-1', id: 'job-auto-update',
       qa_candidate_id: 'candidate-queued',
       created_at: '2026-09-01T12:00:00Z',
       is_auto_update: true,
@@ -512,7 +518,7 @@ describe('GET /api/cron/qa-resume', () => {
 
   it('finalizes auto-update tracking when the required QA candidate fails', async () => {
     const job = {
-      id: 'job-failed-qa',
+      tenant_id: 'tenant-1', id: 'job-failed-qa',
       qa_candidate_id: 'candidate-failed',
       execution_profile_sha256: 'A'.repeat(64),
       created_at: '2026-08-09T12:00:00Z',
@@ -562,7 +568,7 @@ describe('GET /api/cron/qa-resume', () => {
 
   it.each([true, false])('rebuilds a superseded exact QA profile when relink matches=%s', async (matches) => {
     const job = {
-      id: 'job-superseded',
+      tenant_id: 'tenant-1', id: 'job-superseded',
       qa_candidate_id: 'candidate-old',
       execution_profile_sha256: 'A'.repeat(64),
       status_message: 'Waiting',
@@ -642,7 +648,7 @@ describe('GET /api/cron/qa-resume', () => {
     const refreshedCommand =
       'msiexec /i Macabacus-9.9.2.msi /qn /norestart OFFICE2016X64FOUND=1 EULA=1 ALLUSERS=1';
     const job = {
-      id: 'job-stale-manifest-command',
+      tenant_id: 'tenant-1', id: 'job-stale-manifest-command',
       qa_candidate_id: 'candidate-stale-toolchain',
       execution_profile_sha256: 'A'.repeat(64),
       status_message: 'Waiting',
@@ -749,7 +755,7 @@ describe('GET /api/cron/qa-resume', () => {
 
   it('rebuilds a legacy waiting job that has no QA candidate link', async () => {
     const job = {
-      id: 'job-unlinked',
+      tenant_id: 'tenant-1', id: 'job-unlinked',
       qa_candidate_id: null,
       execution_profile_sha256: 'A'.repeat(64),
       status_message: 'Testing the app installation before upload',
@@ -810,7 +816,7 @@ describe('GET /api/cron/qa-resume', () => {
 
   it('releases an unlinked upload immediately when the app payload already passed QA', async () => {
     const job = {
-      id: 'job-already-passed',
+      tenant_id: 'tenant-1', id: 'job-already-passed',
       qa_candidate_id: null,
       execution_profile_sha256: 'A'.repeat(64),
       status_message: 'Testing the app installation before upload',
@@ -870,7 +876,7 @@ describe('GET /api/cron/qa-resume', () => {
     getFeatureFlagsMock.mockReturnValue({ localPackager: false });
     triggerPackagingWorkflowMock.mockRejectedValue(new Error('GitHub dispatch unavailable'));
     const job = {
-      id: 'job-dispatch-failed',
+      tenant_id: 'tenant-1', id: 'job-dispatch-failed',
       qa_candidate_id: 'candidate-passed',
       execution_profile_sha256: 'B'.repeat(64),
       created_at: '2026-08-09T12:00:00Z',

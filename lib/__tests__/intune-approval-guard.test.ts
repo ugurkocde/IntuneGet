@@ -19,6 +19,77 @@ const dbFor = (getApprovalFailures: ReturnType<typeof vi.fn>) =>
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(acquireGraphToken).mockResolvedValue({ accessToken: 'test-token', expiresIn: 3600 }); });
 afterEach(() => vi.unstubAllGlobals());
 
+describe('optional approval cancellation and aggregate budgets', () => {
+  it('does not read or probe when already cancelled', async () => {
+    const controller = new AbortController(); controller.abort();
+    const query = vi.fn().mockResolvedValue([]); const probe = vi.fn();
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(query), signal: controller.signal,
+      checkRetainedApp: probe })).toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(query).not.toHaveBeenCalled(); expect(probe).not.toHaveBeenCalled();
+  });
+  it('does not release an empty page that arrives after cancellation', async () => {
+    const controller = new AbortController();
+    const query = vi.fn().mockImplementation(async () => { controller.abort(); return []; });
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(query), signal: controller.signal }))
+      .toMatchObject([{ reason: 'release_check_failed' }]);
+  });
+  it('returns on cancellation of a pending read without probing its delayed result', async () => {
+    const controller = new AbortController();
+    let finish!: (rows: PackagingJob[]) => void;
+    const query = vi.fn().mockImplementation(() => new Promise<PackagingJob[]>(resolve => { finish = resolve; }));
+    const probe = vi.fn();
+    const pending = findPendingApprovalBlocks(input, { db: dbFor(query), signal: controller.signal, checkRetainedApp: probe });
+    await Promise.resolve(); controller.abort();
+    expect(await pending).toMatchObject([{ reason: 'release_check_failed' }]);
+    finish([row()]); await Promise.resolve(); expect(probe).not.toHaveBeenCalled();
+  });
+  it('propagates cancellation to the active Graph fetch and stops further probes', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockImplementation(async (_url, options) => {
+      const signal = options.signal as AbortSignal;
+      controller.abort(); signal.throwIfAborted();
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row(), row()])),
+      signal: controller.signal })).toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+  });
+  it('cannot begin a Graph fetch after a delayed token read was cancelled', async () => {
+    const controller = new AbortController();
+    let finish!: (token: { accessToken: string; expiresIn: number }) => void;
+    vi.mocked(acquireGraphToken).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
+    const pending = findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row()])), signal: controller.signal });
+    for (let i = 0; i < 10 && !finish; i++) await Promise.resolve();
+    expect(finish).toBeDefined(); controller.abort();
+    expect(await pending).toMatchObject([{ reason: 'release_check_failed' }]);
+    finish({ accessToken: 'test-token', expiresIn: 3600 });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it.each([0, -1, NaN, 1.5])('fails closed before a probe with invalid/exhausted budget %s', async remaining => {
+    const probe = vi.fn().mockResolvedValue('absent');
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row()])),
+      checkRetainedApp: probe, probeBudget: { remaining } })).toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(probe).not.toHaveBeenCalled();
+  });
+  it('shares the budget across calls and does not charge duplicate app identities twice', async () => {
+    const budget = { remaining: 1 }; const probe = vi.fn().mockResolvedValue('absent');
+    const deps = { db: dbFor(vi.fn().mockResolvedValue([row(), row()])), checkRetainedApp: probe, probeBudget: budget };
+    expect(await findPendingApprovalBlocks(input, deps)).toEqual([]);
+    expect(budget.remaining).toBe(0); expect(probe).toHaveBeenCalledTimes(1);
+    expect(await findPendingApprovalBlocks(input, deps)).toMatchObject([{ reason: 'release_check_failed' }]);
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+  it('rejects an absent probe result received after cancellation', async () => {
+    const controller = new AbortController();
+    const probe = vi.fn().mockImplementation(async () => { controller.abort(); return 'absent'; });
+    expect(await findPendingApprovalBlocks(input, { db: dbFor(vi.fn().mockResolvedValue([row()])),
+      signal: controller.signal, checkRetainedApp: probe })).toMatchObject([{ reason: 'release_check_failed' }]);
+  });
+});
+
 describe('pending Intune approval guard', () => {
   it.each(['present', 'absent', 'unknown'] as const)('reconciles cancelled approval checkpoints with retained state %s', async state => {
     const probe = vi.fn().mockResolvedValue(state);

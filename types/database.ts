@@ -1000,6 +1000,7 @@ export interface Database {
           presentation_profile_sha256: string | null;
           qa_candidate_id: string | null;
           qa_requested_at: string | null;
+          qa_resume_due_at: string;
           qa_completed_at: string | null;
         };
         Insert: {
@@ -1052,6 +1053,7 @@ export interface Database {
           presentation_profile_sha256?: string | null;
           qa_candidate_id?: string | null;
           qa_requested_at?: string | null;
+          qa_resume_due_at?: string;
           qa_completed_at?: string | null;
         };
         Update: {
@@ -1104,6 +1106,7 @@ export interface Database {
           presentation_profile_sha256?: string | null;
           qa_candidate_id?: string | null;
           qa_requested_at?: string | null;
+          qa_resume_due_at?: string;
           qa_completed_at?: string | null;
         };
         Relationships: GenericRelationship[];
