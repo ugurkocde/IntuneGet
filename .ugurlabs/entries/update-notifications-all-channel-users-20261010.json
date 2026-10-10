@@ -1,0 +1,5 @@
+{
+  "title": "Daily update notifications reach every subscribed user",
+  "summary": "The daily notification run now reads every pending update for users with email or webhook notifications turned on, instead of stopping at the first 1,000 pending updates across all users. Users without a notification channel no longer take up that run, so a growing backlog cannot silently skip anyone who subscribed.",
+  "type": "fixed"
+}
