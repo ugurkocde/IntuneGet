@@ -71,12 +71,29 @@ already exist. Do not delete history or mark missing schema as applied.
 
 Back up the database and inspect `supabase migration list` before any write.
 Existing `014` and `015` records do not prove that both formerly duplicated
-files ran. If `0141` or `0151` is local only, check each migration separately:
+files ran. Each record may belong to either file that shared its version, so
+check all four migrations separately. Do not treat a recorded `014` or `015`
+as proof of its schema:
 
-* For `0141`, compare `curated_apps.winget_last_update` and
+* For `014`, compare the complete definitions in
+  [`014_sccm_migration.sql`](../supabase/migrations/014_sccm_migration.sql):
+  the `sccm_migrations`, `sccm_apps`, `sccm_winget_mappings`, and
+  `sccm_migration_history` tables with their columns, foreign keys, and indexes,
+  including the generated `fts` column and its GIN index, enabled row level
+  security and the five policies, the seven `sccm` functions, and the four
+  triggers. The global mapping seed rows are data, not schema; their absence
+  alone does not establish a schema mismatch.
+* For `015`, compare the `error_stage`, `error_category`, and `error_code`
+  columns (TEXT), `error_details` (JSONB), their column comments, and the
+  `idx_packaging_jobs_error_code` and `idx_packaging_jobs_error_category`
+  partial indexes on the `packaging_jobs` table from `001_packaging_jobs.sql`
+  with
+  [`015_enhanced_error_handling.sql`](../supabase/migrations/015_enhanced_error_handling.sql).
+  If `packaging_jobs` is missing, stop and reconcile the installation.
+* For `0141`, if it is local only, compare `curated_apps.winget_last_update` and
   `idx_curated_apps_winget_last_update` with
   [`0141_winget_index_v2.sql`](../supabase/migrations/0141_winget_index_v2.sql).
-* For `0151`, compare the complete definitions in
+* For `0151`, if it is local only, compare the complete definitions in
   [`0151_msp_batch_and_webhooks.sql`](../supabase/migrations/0151_msp_batch_and_webhooks.sql):
   the four `msp_batch_deployments`, `msp_batch_deployment_items`,
   `msp_webhook_configurations`, and `msp_webhook_deliveries` tables, their indexes,
@@ -96,6 +113,10 @@ versions older than the latest recorded version to run in migration order.
 If only some changes exist, definitions differ, or history is ambiguous, stop
 and reconcile that installation before pushing. The `0151` trigger and policies
 are not replay safe and can fail with SQLSTATE `42710` if executed again.
+
+If a recorded `014` or `015` lacks its complete schema, stop and reconcile that
+installation before pushing. `db push` will not run a version that is already
+recorded, and `trigger_sccm_apps_stats_update` is not replay safe.
 
 Recheck history and schema afterwards. These instructions provide an upgrade
 decision path; they do not establish that a particular existing installation
