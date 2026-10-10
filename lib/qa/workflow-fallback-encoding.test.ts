@@ -39,7 +39,7 @@ beforeAll(() => {
     '$unsafeNodes = @($assignmentAsts | ForEach-Object { $_.Right.FindAll({param($node) $node -is [System.Management.Automation.Language.SubExpressionAst] -or $node -is [System.Management.Automation.Language.ExpandableStringExpressionAst]}, $true) })',
     '[pscustomobject]@{expression=(ConvertTo-IntuneGetAsciiStringExpression $row.value);comment=(ConvertTo-IntuneGetAsciiCommentContent $row.value);app=$binding.app;id=$binding.id;parseErrors=@($errors).Count;ascii=($detectionScript -cmatch "^[\\x00-\\x7F]*\\z");legacyDecodeEqual=([System.Text.Encoding]::GetEncoding(1252).GetString([System.Text.Encoding]::UTF8.GetBytes($detectionScript)) -ceq $detectionScript);unsafeAssignmentNodes=$unsafeNodes.Count}',
     '}',
-    'ConvertTo-Json -InputObject @($output) -Depth 8 -Compress',
+    'ConvertTo-Json -InputObject @($output) -Depth 8 -Compress -EscapeHandling EscapeNonAscii',
   ].join('\n');
   writeFileSync(scriptPath, command, 'utf8');
   const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-File', scriptPath], {
