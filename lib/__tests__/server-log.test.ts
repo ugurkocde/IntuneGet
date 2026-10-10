@@ -14,6 +14,13 @@ describe('logValue', () => {
     ).toBe('Download failed for [redacted URL] (token=[redacted])');
   });
 
+  it('redacts quoted credentials and Bearer tokens', () => {
+    expect(logValue('Request failed: token="abc123", Authorization: Bearer eyJ0.abc-def_1=')).toBe(
+      'Request failed: token="[redacted]", Authorization: Bearer [redacted]'
+    );
+    expect(logValue("password: 'hunter2' secret=xyz")).toBe("password: '[redacted]' secret=[redacted]");
+  });
+
   it('bounds the length', () => {
     expect(logValue('a'.repeat(20), 5)).toBe('aaaaa...');
   });
