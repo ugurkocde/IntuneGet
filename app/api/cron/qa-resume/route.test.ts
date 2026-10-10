@@ -56,6 +56,34 @@ function chain(result: { data: unknown; error: unknown }) {
   return builder;
 }
 
+// Respect PostgREST projection and equality filters instead of returning fields
+// the route did not request. A missing candidate behaves like maybeSingle().
+function candidateQuery(rows: Record<string, unknown>[]) {
+  const builder = chain({ data: null, error: null });
+  let columns: string[] = [];
+  const filters: Array<[string, unknown]> = [];
+  builder.select = vi.fn((projection: string) => {
+    columns = projection.split(',').map((column) => column.trim());
+    return builder;
+  });
+  builder.eq = vi.fn((column: string, value: unknown) => {
+    filters.push([column, value]);
+    return builder;
+  });
+  builder.maybeSingle = vi.fn(async () => {
+    const matches = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
+    if (matches.length > 1) return { data: null, error: { code: 'PGRST116' } };
+    if (!matches.length) return { data: null, error: null };
+    const row = matches[0];
+    return {
+      data: columns.includes('*') ? structuredClone(row)
+        : Object.fromEntries(columns.map((column) => [column, row[column]])),
+      error: null,
+    };
+  });
+  return builder;
+}
+
 // Model conditional writes against a live row, not a predetermined response.
 // Each request's read snapshot is independent of later concurrent writes.
 function jobStore(initial: Record<string, unknown>) {
@@ -124,15 +152,15 @@ describe('GET /api/cron/qa-resume', () => {
       if (table === 'packaging_jobs') {
         return ++reads === 1 ? chain({ data: jobs, error: null }) : updates;
       }
-      if (table === 'qa_candidates') return chain({
-        data: {
+      if (table === 'qa_candidates') return candidateQuery([
+        { id: 'unrelated-candidate', status: 'failed', phase: 'installing', github_run_id: null },
+        {
           id: 'candidate-publication-pending', status: 'error', phase: 'publishing',
           github_run_id: '123456789',
           failure_summary: 'The workflow finished but required result publication did not complete.',
           package_profile_sha256: 'A'.repeat(64),
         },
-        error: null,
-      });
+      ]);
       throw new Error(`Unexpected table ${table}`);
     }) });
 
