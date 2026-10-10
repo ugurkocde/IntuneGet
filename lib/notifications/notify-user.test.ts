@@ -16,6 +16,13 @@ vi.mock('@/lib/webhooks/service', () => ({
 
 import { notifyUserOfPendingUpdates } from '@/lib/notifications/notify-user';
 
+// Like PostgREST, a list read returns at most 1000 rows unless a range is set.
+function page(rows: unknown, from?: number, to?: number) {
+  if (!Array.isArray(rows)) return rows;
+  if (from === undefined || to === undefined) return rows.slice(0, 1000);
+  return rows.slice(from, Math.min(to + 1, from + 1000));
+}
+
 // Minimal chainable Supabase stub. Per-table results; webhook_configurations is
 // awaited as a thenable list, prefs/profile via maybeSingle.
 function makeSupabase(
@@ -29,6 +36,7 @@ function makeSupabase(
       eq: () => b,
       is: () => b,
       order: () => b,
+      range: (from: number, to: number) => { b.rangeFrom = from; b.rangeTo = to; return b; },
       maybeSingle: () => Promise.resolve({ data: tables[table] ?? null, error: null }),
       insert: (row: any) => { if (table === 'notification_history') calls.histInserts.push(row.status); return Promise.resolve({ data: null, error: null }); },
       update: () => ({
@@ -39,7 +47,7 @@ function makeSupabase(
         res(
           errors[table]
             ? { data: null, error: { message: errors[table] } }
-            : { data: tables[table] ?? [], error: null }
+            : { data: page(tables[table] ?? [], b.rangeFrom, b.rangeTo), error: null }
         ),
     };
     return b;
@@ -233,6 +241,24 @@ describe('notifyUserOfPendingUpdates', () => {
       expect(sendEmailMock).not.toHaveBeenCalled();
       expect(res.notifiedUpdateIds).toEqual(['upd1']);
       expect(calls.markNotified.flat()).not.toContain('upd2');
+    });
+
+    it('applies an ignore policy beyond the first 1000 policies', async () => {
+      const calls = { markNotified: [] as string[][], histInserts: [] as string[] };
+      const otherPolicies = Array.from({ length: 1000 }, (_, i) => policy(`Other.App${i}`, 'notify'));
+      const supabase = makeSupabase({
+        notification_preferences: prefs,
+        webhook_configurations: webhooks,
+        user_profiles: profile,
+        app_update_policies: [...otherPolicies, policy('Ignored.App', 'ignore')],
+      }, calls);
+
+      const res = await notifyUserOfPendingUpdates(supabase, 'u1', {
+        pendingUpdates: [row('upd1', 'Google.Chrome', '2.0'), row('upd2', 'Ignored.App', '2.0')] as any,
+      });
+
+      expect(notifiedApps()).toEqual(['Google.Chrome']);
+      expect(res.notifiedUpdateIds).toEqual(['upd1']);
     });
 
     it('sends nothing and marks nothing when the policies cannot be loaded', async () => {

@@ -109,16 +109,13 @@ export async function notifyUserOfPendingUpdates(
   // swallowed. If the policies cannot be loaded, send nothing and leave every
   // row pending so the next run retries; a late notification is better than
   // one for an app the admin chose to ignore.
-  const { data: policyRows, error: policyError } = await supabase
-    .from('app_update_policies')
-    .select('*')
-    .eq('user_id', userId);
-  if (policyError) {
-    result.errors.push(`Error fetching update policies: ${policyError.message}`);
+  const policies = await loadUpdatePolicies(supabase, userId);
+  if ('error' in policies) {
+    result.errors.push(`Error fetching update policies: ${policies.error}`);
     return result;
   }
-  const policyByApp = new Map<string, AppUpdatePolicy>();
-  ((policyRows as AppUpdatePolicy[] | null) || []).forEach((policy) => {
+  const policyByApp = new Map<string, NotificationPolicy>();
+  policies.rows.forEach((policy) => {
     policyByApp.set(`${policy.tenant_id}:${policy.winget_id}`, policy);
   });
   updates = updates.filter(
@@ -268,6 +265,41 @@ export async function notifyUserOfPendingUpdates(
 
   await markNotified(supabase, result.notifiedUpdateIds);
   return result;
+}
+
+type NotificationPolicy = Pick<
+  AppUpdatePolicy,
+  'tenant_id' | 'winget_id' | 'policy_type' | 'pinned_version'
+>;
+
+const POLICY_PAGE_SIZE = 1000;
+
+/**
+ * Load every update policy of the user. Paged so a user with more policies
+ * than the Supabase row limit (an MSP across many tenants) still has all of
+ * their ignore and pin policies applied.
+ */
+async function loadUpdatePolicies(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ rows: NotificationPolicy[] } | { error: string }> {
+  const rows: NotificationPolicy[] = [];
+  for (let from = 0; ; from += POLICY_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('app_update_policies')
+      .select('id, tenant_id, winget_id, policy_type, pinned_version')
+      .eq('user_id', userId)
+      .order('id', { ascending: true })
+      .range(from, from + POLICY_PAGE_SIZE - 1);
+    if (error) {
+      return { error: error.message };
+    }
+    const page = (data as NotificationPolicy[] | null) || [];
+    rows.push(...page);
+    if (page.length < POLICY_PAGE_SIZE) {
+      return { rows };
+    }
+  }
 }
 
 async function markNotified(supabase: SupabaseClient, ids: string[]): Promise<void> {
