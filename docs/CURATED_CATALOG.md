@@ -136,6 +136,10 @@ The authenticated operator profile endpoint remains available for diagnostics. `
 
 ## Verification and current limits
 
+The physical QA host is the runner host. Never download, extract or execute vendor installers there, and never access the protected runner directory directly. Keep private signing keys, tenant credentials and raw host or guest logs out of the repository.
+
+If the isolated guest cannot update Defender signatures through Windows Update, the verifier can fall back to Microsoft's offline definition package. Persistent failures at `defenderStatus` require an operator to refresh the golden checkpoint on the runner host; the automation never changes the host.
+
 Run `npm test`, `npx tsc --noEmit`, `npm run lint`, and `npm run build:ci`. Tests exercise tampering, unknown keys, expiration, re-signing, source spoofing, evidence/hash mismatches, failed lifecycle phases, unsigned exceptions, packager compatibility, withdrawal, changed package inputs, local-worker validation, and operator endpoint access. They establish software behavior; they are not application installation evidence. Only a passing VM verification run can qualify a release.
 
 WinSCP downloads from SourceForge, which rate limits GitHub-hosted runners; hosted packaging of WinSCP can therefore fail even after it qualifies. PuTTY discovery uses the publisher-linked official archive directory, avoiding its unavailable primary HTML page, and allows only the exact redirect from `latest/w64/` to a numeric version directory on the same publisher host.
