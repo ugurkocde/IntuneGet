@@ -135,4 +135,70 @@ describe('local install command override', () => {
       ArgumentList: `/s /c "${override}"`,
     }]);
   });
+
+  it('keeps cmd.exe semantics for an installer override that uses the caret escape', () => {
+    const deployment = generator.generateDeployScript(packagingJob('"AutoDL.exe" /s NAME=a^b'), 'installer.exe');
+
+    expect(deployment).toContain("-ArgumentList '/s /c \"\"AutoDL.exe\" /s NAME=a^b\"'");
+  });
+
+  it.runIf(pwshAvailable)('expands %VAR% references in native override arguments as cmd.exe did', () => {
+    const deployment = generator.generateDeployScript(
+      packagingJob('"AutoDL.exe" /s INSTALLDIR="%ProgramFiles%\\Contoso\'s App"'),
+      'installer.exe'
+    );
+
+    expect(installProcessCalls(deployment)).toEqual([{
+      FilePath: '"$($adtSession.DirFiles)\\installer.exe"',
+      ArgumentList: '$effectiveInstallerArguments',
+    }]);
+    expect(runInstallLines(deployment, /^\s*\$effectiveInstallerArguments = /, '$effectiveInstallerArguments'))
+      .toBe(`/s INSTALLDIR="${PROGRAM_FILES}\\Contoso's App"`);
+  });
+
+  it.runIf(pwshAvailable)('passes apostrophes, braces and %VAR% in Inno override arguments to the installer exactly', () => {
+    const deployment = generator.generateDeployScript(
+      packagingJob('"setup.exe" /DIR="{autopf}\\Bob\'s App" /GROUP="%ProgramFiles%"', {
+        installer_type: 'inno', installer_url: 'https://example.com/setup.exe',
+      }),
+      'setup.exe'
+    );
+
+    expect(runInstallLines(deployment, /^\s*\$innoArguments = /, '$innoArguments'))
+      .toBe(`/DIR="{autopf}\\Bob's App" /GROUP="${PROGRAM_FILES}" /SP- /LOG="${INNO_LOG}"`);
+  });
+
+  it.runIf(pwshAvailable)('keeps generated Inno switches with apostrophes and braces exact', () => {
+    const deployment = generator.generateDeployScript(
+      packagingJob('', {
+        installer_type: 'inno', installer_url: 'https://example.com/setup.exe',
+        install_command: '"setup.exe" /VERYSILENT /DIR="{autopf}\\Bob\'s App"', package_config: {},
+      }),
+      'setup.exe'
+    );
+
+    expect(runInstallLines(deployment, /^\s*\$innoArguments = /, '$innoArguments'))
+      .toBe(`/VERYSILENT /DIR="{autopf}\\Bob's App" /SP- /LOG="${INNO_LOG}"`);
+  });
 });
+
+const PROGRAM_FILES = 'C:\\Fixture Program Files';
+const INNO_LOG = 'C:\\Fixture Temp\\IntuneGet-Inno-Install.log';
+
+// Executes only the generated argument assignment lines, with fixed
+// environment values, and returns the resulting argument string.
+function runInstallLines(deployment: string, linePattern: RegExp, variable: string): string {
+  const lines = deployment.split(/\r?\n/).filter((line) => linePattern.test(line)).join('\n');
+  const script = `[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$ErrorActionPreference = 'Stop'
+$env:ProgramFiles = '${PROGRAM_FILES}'
+$innoLogPath = '${INNO_LOG}'
+${lines}
+${variable}`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+    '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { input: script, encoding: 'utf8', timeout: 30_000 });
+  if (result.status !== 0) {
+    throw new Error(`Generated argument lines failed:\n${lines}\n${result.stderr}`);
+  }
+  return result.stdout.trim();
+}

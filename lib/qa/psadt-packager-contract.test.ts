@@ -4742,6 +4742,10 @@ describe('PSADT install command override', () => {
         FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
         ArgumentList: '/s /c ""setup.exe" /s && echo installed"',
       }]);
+      expect(installProcessCalls(generateWithInstallOverride('"setup.exe" /s NAME=a^b'))).toEqual([{
+        FilePath: '"$env:SystemRoot\\System32\\cmd.exe"',
+        ArgumentList: '/s /c ""setup.exe" /s NAME=a^b"',
+      }]);
     },
     30_000
   );

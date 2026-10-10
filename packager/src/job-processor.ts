@@ -874,7 +874,7 @@ catch
    * Returns those arguments so the installer runs through the same native
    * Start-ADTProcess path as the generated command, or null when the override
    * must run verbatim through cmd.exe, including any override that uses the
-   * cmd.exe operators & | < >.
+   * cmd.exe operators & | < > ^.
    */
   private getPackagedInstallerOverrideArguments(
     job: PackagingJob,
@@ -884,7 +884,7 @@ catch
     if (
       !['exe', 'inno', 'nullsoft', 'burn'].includes(job.installer_type.toLowerCase()) ||
       ['.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip'].includes(path.extname(fileName).toLowerCase()) ||
-      /[\x00-\x1F\x7F\u2018-\u201B&|<>]/.test(installOverride)
+      /[\x00-\x1F\x7F\u2018-\u201B&|<>^]/.test(installOverride)
     ) {
       return null;
     }
@@ -1394,6 +1394,7 @@ ${steps}
     const installerType = job.installer_type;
     const ext = path.extname(fileName).toLowerCase();
 
+    let expandArgumentVariables = false;
     const installOverride = this.getCommandOverride(job, 'installCommand');
     if (installOverride) {
       const overrideArguments = this.getPackagedInstallerOverrideArguments(job, fileName, installOverride);
@@ -1407,7 +1408,14 @@ ${steps}
         return `Start-ADTProcess -FilePath "$env:SystemRoot\\System32\\cmd.exe" -ArgumentList '/s /c "${overrideEscaped}"' -WorkingDirectory $adtSession.DirFiles -WindowStyle Hidden`;
       }
       silentSwitches = overrideArguments.replace(/'/g, "''");
+      // cmd.exe expanded %VAR% references in the override; Start-ADTProcess does not.
+      expandArgumentVariables = /%[A-Za-z][A-Za-z0-9()_]*%/.test(overrideArguments);
     }
+    const argumentLines = expandArgumentVariables
+      ? `$effectiveInstallerArguments = [Environment]::ExpandEnvironmentVariables('${silentSwitches}')
+    `
+      : '';
+    const argumentExpression = expandArgumentVariables ? '$effectiveInstallerArguments' : `'${silentSwitches}'`;
 
     if (ext === '.msi' || installerType === 'msi' || installerType === 'wix') {
       const msiProperties = this.extractMsiProperties(silentSwitches);
@@ -1448,14 +1456,18 @@ ${steps}
       const innoSwitches = /(^|\s)\/SP-(\s|$)/i.test(silentSwitches)
         ? silentSwitches
         : `${silentSwitches} /SP-`.trim();
-      const escapedSwitches = innoSwitches.replace(/'/g, "''");
+      // innoSwitches is already escaped for a single-quoted string. Concatenate the
+      // log path instead of using -f, which would reject braces such as {autopf}.
+      const innoArgumentExpression = expandArgumentVariables
+        ? `[Environment]::ExpandEnvironmentVariables('${innoSwitches}')`
+        : `'${innoSwitches}'`;
       return `$innoLogPath = Join-Path $env:TEMP 'IntuneGet-Inno-Install.log'
-    $innoArguments = '${escapedSwitches} /LOG="{0}"' -f $innoLogPath
+    $innoArguments = ${innoArgumentExpression} + ' /LOG="' + $innoLogPath + '"'
     Write-ADTLogEntry -Message "Inno Setup verbose logging enabled" -Severity 'Info' -Source 'Install-ADTDeployment'
     Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\${fileName}" -ArgumentList $innoArguments -WindowStyle Hidden -WaitForMsiExec`;
     }
 
-    return `Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\${fileName}" -ArgumentList '${silentSwitches}' -WindowStyle Hidden -WaitForMsiExec`;
+    return `${argumentLines}Start-ADTProcess -FilePath "$($adtSession.DirFiles)\\${fileName}" -ArgumentList ${argumentExpression} -WindowStyle Hidden -WaitForMsiExec`;
   }
 
   /**

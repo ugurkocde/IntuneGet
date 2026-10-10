@@ -1338,7 +1338,7 @@ $customUninstallCommandEscaped = $customUninstallCommand -replace "'", "''"
 #   "setup.exe" /s REBOOT=0 EXTRA=1
 # Run it through the same native Start-ADTProcess path as the generated command,
 # with the override arguments verbatim and authoritative, instead of cmd.exe.
-# Every other override, including one that uses the cmd.exe operators & | < >,
+# Every other override, including one that uses the cmd.exe operators & | < > ^,
 # still runs verbatim through cmd.exe. The file extension is checked as well
 # because the installer type is corrected from it only further below.
 $customInstallUsesPackagedInstaller = $false
@@ -1348,7 +1348,7 @@ $customInstallInvocation = [regex]::Match(
 if ($customInstallInvocation.Success -and
     $installerTypeLower -in @('exe', 'inno', 'nullsoft', 'burn') -and
     [System.IO.Path]::GetExtension($installerFileName).ToLowerInvariant() -notin @('.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip') -and
-    $customInstallCommand -notmatch '[\x00-\x1F\x7F\u2018-\u201B&|<>]' -and
+    $customInstallCommand -notmatch '[\x00-\x1F\x7F\u2018-\u201B&|<>^]' -and
     [string]::Equals(
         ($customInstallInvocation.Groups['file'].Value -replace '^\.[\\/]', ''),
         $installerFileName,
