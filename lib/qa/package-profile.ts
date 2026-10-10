@@ -14,7 +14,7 @@ import type { PackagedWingetDependency } from '@/lib/winget-dependencies';
 
 export const QA_PSADT_TOOLCHAIN = {
   packagerRepository: 'ugurkocde/IntuneGet',
-  packagerCommit: '25849ac512c211e616c135149ef1e059db367ebc',
+  packagerCommit: '5e8c0455f3408f14a68db3b9b78d13aa169286b5',
   packagerScriptPath: '.github/scripts/Create-PSADTPackage.ps1',
   psadtVersion: '4.1.8',
   templateUrl:
@@ -639,6 +639,10 @@ export const QA_PACKAGER_RELEASE_HISTORY = [
   // Wacom's exact registered removal gains /s. Preserve unrelated coverage;
   // the release-aware check below requires affected Wacom profiles to retest.
   '60395492a3d51b2ff6f14b50ed7cd0c7f558be70',
+  // Retain the Wacom release and its per-profile compatibility exclusion.
+  // The next activation still requires isolated guest qualification and
+  // reviewed exclusions for the intervening generator changes.
+  '25849ac512c211e616c135149ef1e059db367ebc',
   QA_PSADT_TOOLCHAIN.packagerCommit,
 ] as const;
 
