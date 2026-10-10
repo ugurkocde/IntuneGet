@@ -10,7 +10,7 @@ different version. See the [Supabase migration history reference](https://supaba
 
 Migration versions are unique. The former duplicate versions reported in
 [issue #449](https://github.com/ugurkocde/IntuneGet/issues/449) are separated into
-`014_sccm_integration.sql`, `0141_winget_index_v2.sql`,
+`014_sccm_migration.sql`, `0141_winget_index_v2.sql`,
 `015_enhanced_error_handling.sql`, and `0151_msp_batch_and_webhooks.sql`.
 Use the CLI's migration version order rather than sorting complete filenames.
 
