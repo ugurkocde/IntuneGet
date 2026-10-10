@@ -440,6 +440,7 @@ describe('POST /api/package (workflow dispatch)', () => {
   });
 
   it.each([false, true])('blocks approval checkpoints before creating or dispatching a forced job (%s)', async forceCreate => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const item = { ...makeWin32Item(), forceCreate };
     getApprovalFailuresMock.mockResolvedValue([{ tenant_id: 'tenant-1', winget_id: item.wingetId,
       user_id: 'another-user', version: 'older', status: 'failed', error_category: 'approval', error_details: null,
@@ -453,6 +454,8 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(createMock).not.toHaveBeenCalled();
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(infoSpy.mock.calls.some(([message]) => String(message).startsWith('[Package] Deployment job'))).toBe(false);
+    infoSpy.mockRestore();
   });
 
   it('returns an actionable conflict for removed versions before creating or dispatching jobs', async () => {
@@ -750,6 +753,39 @@ describe('POST /api/package (workflow dispatch)', () => {
       wingetId: 'Test.App',
       error: 'Failed to trigger GitHub Actions workflow: 502 Bad Gateway',
     }]);
+  });
+
+  it('logs a deployment that could not start to the server log', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(
+      new Error('Failed to trigger GitHub Actions workflow: 502 Bad Gateway')
+    );
+
+    try {
+      await postSingleItem();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[Package] Deployment of Test.App failed: Failed to trigger GitHub Actions workflow: 502 Bad Gateway'
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('logs each created deployment job to the server log', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: true });
+
+    try {
+      const body = await (await postSingleItem()).json();
+
+      expect(body.jobs).toHaveLength(1);
+      expect(infoSpy).toHaveBeenCalledWith(
+        `[Package] Deployment job ${body.jobs[0].id} created for Test.App 1.0.0 (status: queued)`
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
   });
 
   it('queues a customer deployment strictly above the shared auto_update/managed demand tier', async () => {

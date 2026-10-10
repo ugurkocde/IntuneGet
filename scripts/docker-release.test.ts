@@ -136,10 +136,10 @@ describe('release gates', () => {
     expect(jobs.publish.if).toContain("needs.secure.result == 'success'")
     expect(jobs.publish.if).toContain("needs.prepare.outputs.prerelease == 'true' && needs.promote.result == 'skipped'")
   })
-  it('keeps candidate package versions and maintained release notes consistent', () => {
+  it('keeps release package versions and maintained release notes consistent', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
     const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'))
-    expect(pkg.version).toBe('0.8.0-rc.1')
+    expect(pkg.version).toBe('0.8.0')
     expect(lock.version).toBe(pkg.version)
     expect(lock.packages[''].version).toBe(pkg.version)
     expect(readFileSync(`release-notes/v${pkg.version}.md`, 'utf8')).toContain('Windows Docker Desktop confirmation')

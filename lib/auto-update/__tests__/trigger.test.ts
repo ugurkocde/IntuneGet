@@ -161,6 +161,28 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
+  it.each([true, false])('keeps approval and rate limit failures separate before writes (rate allowed %s)', async allowed => {
+    const insert = vi.fn();
+    const trigger = makeTrigger(createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } }));
+    const rate = vi.fn().mockResolvedValue(allowed ? { allowed: true } : {
+      allowed: false, code: 'RATE_LIMIT_UNVERIFIED', reason: 'Synthetic rate count read failure',
+    });
+    (trigger as unknown as { checkRateLimits: unknown }).checkRateLimits = rate;
+    (trigger as unknown as { verifyTenantConsent: unknown }).verifyTenantConsent = vi.fn().mockResolvedValue(true);
+    getApprovalFailuresMock.mockResolvedValue([{ tenant_id: 'tenant-1', winget_id: 'Test.App',
+      status: 'failed', error_code: 'INTUNE_APPROVAL_REQUIRED', error_details: null }]);
+
+    const result = await trigger.triggerAutoUpdate({ ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 }, UPDATE_INFO,
+      { skipPriorDeploymentCheck: true });
+
+    expect(result).toMatchObject({ success: false, skipped: true,
+      code: allowed ? 'INTUNE_APPROVAL_PENDING' : 'RATE_LIMIT_UNVERIFIED' });
+    expect(rate).toHaveBeenCalledOnce();
+    if (!allowed) expect(getApprovalFailuresMock).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+  });
+
   it('skips unresolved approvals before history, jobs or QA demand even with manual bypass flags', async () => {
     const insert = vi.fn();
     const supabase = createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } });
