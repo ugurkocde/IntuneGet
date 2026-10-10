@@ -759,6 +759,39 @@ describe('POST /api/package (workflow dispatch)', () => {
     }]);
   });
 
+  it('logs a deployment that could not start to the server log', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(
+      new Error('Failed to trigger GitHub Actions workflow: 502 Bad Gateway')
+    );
+
+    try {
+      await postSingleItem();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[Package] Deployment of Test.App failed: Failed to trigger GitHub Actions workflow: 502 Bad Gateway'
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('logs each created deployment job to the server log', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: true });
+
+    try {
+      const body = await (await postSingleItem()).json();
+
+      expect(body.jobs).toHaveLength(1);
+      expect(infoSpy).toHaveBeenCalledWith(
+        `[Package] Deployment job ${body.jobs[0].id} created for Test.App 1.0.0 (status: queued)`
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
   it('queues a customer deployment strictly above the shared auto_update/managed demand tier', async () => {
     const request = new NextRequest('http://localhost:3000/api/package', {
       method: 'POST',
