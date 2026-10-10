@@ -1390,7 +1390,7 @@ $customInstallInvocation = [regex]::Match(
 if ($customInstallInvocation.Success -and
     $installerTypeLower -in @('exe', 'inno', 'nullsoft', 'burn') -and
     [System.IO.Path]::GetExtension($installerFileName).ToLowerInvariant() -notin @('.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip') -and
-    $customInstallCommand -notmatch '[\x00-\x1F\x7F\u2018-\u201B&|<>^]' -and
+    $customInstallCommand -notmatch '[\x00-\x1F\x7F\u2018-\u201B\u2028\u2029\uFEFF&|<>^]' -and
     $customInstallCommand -inotmatch '%(?:CD|__CD__|__APPDIR__|DATE|TIME|RANDOM|ERRORLEVEL|CMDEXTVERSION|CMDCMDLINE|HIGHESTNUMANODENUMBER)%|%[^%]*:[^%]*%' -and
     [string]::Equals(
         ($customInstallInvocation.Groups['file'].Value -replace '^\.[\\/]', ''),
@@ -2846,7 +2846,8 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                     # Build the execution line for a non-portable nested installer.
                     switch ($nestedInstallerTypeLower) {
                         { $_ -in 'msi', 'wix' } {
-                            $msiProperties = ($silentSwitchesEscaped -replace '(?i)(?<!\S)/(?:quiet|q[nbrfu]?)(?=\s|$)\s*', '').Trim()
+                            # Strip from the raw switches, then encode once, as for a top-level MSI.
+                            $msiProperties = ConvertTo-PSSingleQuotedContent (($effectiveSilentSwitches -replace '(?i)(?<!\S)/(?:quiet|q[nbrfu]?)(?=\s|$)\s*', '').Trim())
                             if ($msiProperties) {
                                 $nestedExecuteLine = "        Start-ADTMsiProcess -Action 'Install' -FilePath `$nestedInstallerPath -AdditionalArgumentList '$msiProperties'"
                             } else {

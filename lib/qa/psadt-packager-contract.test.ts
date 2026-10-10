@@ -4653,7 +4653,7 @@ $calls = @($install.FindAll({ param($node) $node -is [System.Management.Automati
 })
 ConvertTo-Json -InputObject $calls -Compress`;
   const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
-    '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { input: script, encoding: 'utf8' });
+    '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'], { input: script, encoding: 'utf8', timeout: 30_000 });
   if (result.status !== 0) {
     throw new Error(`Could not read the generated install calls:\n${result.stdout}\n${result.stderr}`);
   }

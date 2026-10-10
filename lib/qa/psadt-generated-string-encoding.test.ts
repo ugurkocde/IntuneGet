@@ -331,6 +331,24 @@ describe.runIf(canRunHostedPackager)('hosted PSADT generator string encoding', (
     );
   }, 120_000);
 
+  it('embeds the MSI properties of a nested ZIP installer exactly', () => {
+    expectExactEmbedding(
+      (v) => ({
+        installerType: 'zip',
+        installerFileName: 'archive.zip',
+        displayName: 'Contoso App',
+        publisher: 'Contoso',
+        version: '1.0.0',
+        wingetId: 'Contoso.App',
+        silentSwitches: `/qn ${v('PROPERTY=1', MULTILINE)}`,
+        nestedInstallerType: 'msi',
+        nestedInstallerPath: 'setup.msi',
+        uninstallCommand: 'REGISTRY_UNINSTALL:Contoso App',
+      }),
+      (variant) => [value(variant, 'PROPERTY=1', MULTILINE).trim()]
+    );
+  }, 120_000);
+
   it('embeds Inno Setup switches and portable names exactly', () => {
     expectExactEmbedding(
       (v) => ({

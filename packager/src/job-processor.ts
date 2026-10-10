@@ -900,7 +900,7 @@ catch
     if (
       !['exe', 'inno', 'nullsoft', 'burn'].includes(job.installer_type.toLowerCase()) ||
       ['.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.zip'].includes(path.extname(fileName).toLowerCase()) ||
-      /[\x00-\x1F\x7F\u2018-\u201B&|<>^]/.test(installOverride) ||
+      /[\x00-\x1F\x7F\u2018-\u201B\u2028\u2029\uFEFF&|<>^]/.test(installOverride) ||
       /%(?:CD|__CD__|__APPDIR__|DATE|TIME|RANDOM|ERRORLEVEL|CMDEXTVERSION|CMDCMDLINE|HIGHESTNUMANODENUMBER)%|%[^%]*:[^%]*%/i.test(installOverride)
     ) {
       return null;
