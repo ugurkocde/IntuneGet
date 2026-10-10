@@ -142,6 +142,14 @@ describe('local install command override', () => {
     expect(deployment).toContain("-ArgumentList '/s /c \"\"AutoDL.exe\" /s NAME=a^b\"'");
   });
 
+  it('keeps cmd.exe for variables only cmd.exe resolves', () => {
+    for (const override of ['"AutoDL.exe" /s /LOG="%CD%\\install.log"', '"AutoDL.exe" /s DRIVE=%SystemRoot:~0,2%']) {
+      const deployment = generator.generateDeployScript(packagingJob(override), 'installer.exe');
+
+      expect(deployment).toContain(`-ArgumentList '/s /c "${override}"'`);
+    }
+  });
+
   it.runIf(pwshAvailable)('expands %VAR% references in native override arguments as cmd.exe did', () => {
     const deployment = generator.generateDeployScript(
       packagingJob('"AutoDL.exe" /s INSTALLDIR="%ProgramFiles%\\Contoso\'s App"'),
