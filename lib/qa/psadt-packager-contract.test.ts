@@ -2426,7 +2426,7 @@ describe('PSADT registry uninstall identity contract', () => {
 
   it('parses and persists a manifest product code for multi-entry installers', () => {
     expect(packager).toContain(
-      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):(.+)$"
+      "^REGISTRY_UNINSTALL_PRODUCT:(\\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\}):([\\s\\S]+)\\z"
     );
     expect(packager).toContain(
       "throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'"

@@ -1231,7 +1231,11 @@ function Update-PowerShellDataSetting {
         )
     }
 
-    Set-Content -Path $Path -Value $lines -Encoding UTF8
+    # Invoke-AppDeployToolkit.exe can host Windows PowerShell 5.1, which reads a
+    # data file without a byte order mark in the ANSI code page and would garble
+    # non-ASCII branding text. pwsh Set-Content -Encoding UTF8 writes no BOM.
+    $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    [System.IO.File]::WriteAllLines($resolvedPath, [string[]]$lines, [System.Text.UTF8Encoding]::new($true))
 }
 
 function Use-PSADTBrandAsset {
@@ -1607,22 +1611,28 @@ $msixPackageName = ''
 if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) {
     $usePortableUninstall = $true
     Write-Host "Using portable uninstall (folder removal)"
-} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):(.+)$') {
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_PRODUCT:(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}):([\s\S]+)\z') {
+    # A display name can contain line terminators, which '.' and '$' treat
+    # specially. [\s\S]+\z keeps such a name on this exact identity path.
     $useRegistryUninstall = $true
     $registryUninstallProductCode = $Matches[1]
     $registryUninstallDisplayName = $Matches[2]
-} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_KEY:((?:[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}|\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}_[A-Za-z0-9._+-]{1,32})):(.+)$') {
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_KEY:((?:[A-Za-z0-9][A-Za-z0-9 ._{}()+-]{0,255}|\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\}_[A-Za-z0-9._+-]{1,32})):([\s\S]+)\z') {
     # Non-MSI WinGet manifests can expose a stable, edition-specific ARP key,
     # including keys with spaces or a version suffix. Reuse the existing exact
     # PSChildName lifecycle rather than broadening name matching.
     $useRegistryUninstall = $true
     $registryUninstallProductCode = $Matches[1]
     $registryUninstallDisplayName = $Matches[2]
-} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:(.+)$') {
+} elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL:([\s\S]+)\z') {
     $useRegistryUninstall = $true
     $registryUninstallDisplayName = $Matches[1]
 } elseif ($uninstallCmd -match '^REGISTRY_UNINSTALL_(PRODUCT|KEY):') {
     throw 'The exact vendor uninstall identity is malformed; refusing to interpret any embedded GUID as an MSI product code.'
+} elseif ($uninstallCmd -match '^\s*REGISTRY_UNINSTALL') {
+    # Any other registry uninstall marker is malformed. It names an application
+    # and is never a command line, so it must not reach the uninstall fallback.
+    throw 'The registry uninstall identity is malformed; refusing to run it as a command.'
 } elseif ($installerTypeLower -in @('msi', 'wix') -and $uninstallCmd -match '(\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\})') {
     # Deployment profiles commonly carry the concrete msiexec uninstall command
     # instead of the internal REGISTRY_UNINSTALL_PRODUCT marker. Treat its product

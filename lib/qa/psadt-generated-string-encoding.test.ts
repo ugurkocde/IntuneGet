@@ -16,6 +16,15 @@ const canRunHostedPackager =
   process.platform === 'win32' &&
   spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'], { timeout: 30_000 }).status === 0;
 
+// Windows PowerShell 5.1 (powershell.exe) runs Invoke-AppDeployToolkit.exe on
+// customer devices and reads files without a byte order mark as ANSI.
+const powershell51Available =
+  process.platform === 'win32' &&
+  spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  }).stdout?.trim() === '5';
+
 const quotes = [0x27, 0x2018, 0x2019, 0x201a, 0x201b, 0x22, 0x201c, 0x201d, 0x201e].map(char).join('');
 // One line with every quote variant, backtick escapes, subexpressions,
 // variables and block comment delimiters.
@@ -47,7 +56,11 @@ interface HostedOutput {
   script: string;
   config: string;
   strings: string;
+  /** The PSADT data files exactly as written to disk. */
+  dataFileBytes: { config: Buffer; strings: Buffer };
 }
+
+type HostedSourceFile = 'script' | 'config' | 'strings';
 
 const PSD1_FIXTURES = {
   config: "@{\r\n    Toolkit = @{\r\n        CompanyName = 'PSAppDeployToolkit'\r\n    }\r\n}\r\n",
@@ -116,6 +129,10 @@ function runHostedPackager(scenario: HostedScenario): HostedOutput {
       script: read('Invoke-AppDeployToolkit.ps1'),
       config: read('Config/Config.psd1'),
       strings: read('Strings/strings.psd1'),
+      dataFileBytes: {
+        config: readFileSync(join(fixtureRoot, 'package', 'Config/Config.psd1')),
+        strings: readFileSync(join(fixtureRoot, 'package', 'Strings/strings.psd1')),
+      },
     };
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -130,7 +147,7 @@ function runHostedPackager(scenario: HostedScenario): HostedOutput {
 function expectExactEmbedding(
   build: (value: (field: string, adversarial: string) => string, variant: Variant) => HostedScenario,
   expectedStrings: (variant: Variant) => string[],
-  files: Array<keyof HostedOutput> = ['script']
+  files: HostedSourceFile[] = ['script']
 ): void {
   const outputs = (['benign', 'adversarial'] as const).map((variant) =>
     runHostedPackager(build(
@@ -449,6 +466,97 @@ describe.runIf(canRunHostedPackager)('hosted PSADT generator string encoding', (
         customPrompts: [{ enabled: true, timing: 'pre-install', title: 'T', message: 'M', icon: 'None', timeout: '30; Write-Host x' }],
       },
     })).toThrow(/customPrompts\.timeout must be a whole number/);
+  }, 120_000);
+
+  const markerScenario = (uninstallCommand: string, psadtConfig?: Record<string, unknown>): HostedScenario => ({
+    installerType: 'exe',
+    installerFileName: 'setup.exe',
+    displayName: 'Contoso App',
+    publisher: 'Contoso',
+    version: '1.0.0',
+    wingetId: 'Contoso.App',
+    silentSwitches: '/S',
+    uninstallCommand,
+    psadtConfig,
+  });
+
+  it('keeps a registry uninstall display name with line terminators on the registry identity path', () => {
+    const terminators: Record<string, string> = {
+      LF: char(0x0a),
+      CRLF: char(0x0d) + char(0x0a),
+      NEL: char(0x85),
+      'LINE SEPARATOR': char(0x2028),
+      'PARAGRAPH SEPARATOR': char(0x2029),
+    };
+    const cases = [
+      ...Object.entries(terminators).map(([name, terminator]) => ({
+        name,
+        displayName: `Contoso${terminator}& whoami`,
+        marker: (displayName: string) => `REGISTRY_UNINSTALL:${displayName}`,
+      })),
+      {
+        name: 'LF with an exact product code',
+        displayName: `Contoso${char(0x0a)}& whoami`,
+        marker: (displayName: string) => `REGISTRY_UNINSTALL_PRODUCT:{12345678-1234-1234-1234-123456789ABC}:${displayName}`,
+      },
+    ];
+    const scripts = cases.map(({ displayName, marker }) => runHostedPackager(markerScenario(marker(displayName))).script);
+    const summaries = summarizePowerShell(scripts);
+    cases.forEach(({ name, displayName }, index) => {
+      expect(scripts[index], name).not.toMatch(/REGISTRY_UNINSTALL/i);
+      expect(scripts[index], name).not.toContain('# Execute uninstall command');
+      expect(summaries[index].errors, name).toEqual([]);
+      expect(summaries[index].strings, name).toContain(displayName);
+    });
+  }, 300_000);
+
+  it('refuses a malformed registry uninstall marker instead of running it', () => {
+    for (const marker of [
+      'REGISTRY_UNINSTALL:',
+      ' REGISTRY_UNINSTALL:Contoso & whoami',
+      'REGISTRY_UNINSTALL Contoso & whoami',
+    ]) {
+      expect(() => runHostedPackager(markerScenario(marker)), JSON.stringify(marker))
+        .toThrow(/registry uninstall identity is malformed/);
+    }
+  }, 300_000);
+
+  it('writes the PSADT data files with a UTF-8 byte order mark that Windows PowerShell 5.1 reads exactly', () => {
+    const companyName = `Contoso ${char(0xfc)}ber ${char(0x451)} ${char(0x2019)}quoted${char(0x2019)}`;
+    const welcomeMessage = `Willkommen ${char(0xe4)}${char(0xf6)}${char(0xfc)} ${char(0x451)}${char(0x452)}`;
+    const output = runHostedPackager(markerScenario('REGISTRY_UNINSTALL:Contoso App', {
+      brandingCompanyName: companyName,
+      brandingWelcomeMessage: welcomeMessage,
+    }));
+    const bom = [0xef, 0xbb, 0xbf];
+    expect([...output.dataFileBytes.config.subarray(0, 3)]).toEqual(bom);
+    expect([...output.dataFileBytes.strings.subarray(0, 3)]).toEqual(bom);
+    if (!powershell51Available) return;
+
+    const directory = mkdtempSync(join(tmpdir(), 'intuneget-psd1-ps51-'));
+    try {
+      writeFileSync(join(directory, 'Config.psd1'), output.dataFileBytes.config);
+      writeFileSync(join(directory, 'strings.psd1'), output.dataFileBytes.strings);
+      const check = join(directory, 'Check.ps1');
+      writeFileSync(check, [
+        "$ErrorActionPreference = 'Stop'",
+        `$config = Import-PowerShellDataFile -LiteralPath '${join(directory, 'Config.psd1')}'`,
+        `$strings = Import-PowerShellDataFile -LiteralPath '${join(directory, 'strings.psd1')}'`,
+        '$utf8 = [Text.UTF8Encoding]::new($false)',
+        "[Convert]::ToBase64String($utf8.GetBytes([string]$config.Toolkit.CompanyName)) + ' ' + [Convert]::ToBase64String($utf8.GetBytes([string]$strings.CloseAppsPrompt.CustomMessage))",
+      ].join('\r\n'), 'ascii');
+      const result = spawnSync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', check],
+        { encoding: 'utf8', timeout: 60_000 }
+      );
+      expect(result.status, result.stderr).toBe(0);
+      const [company, welcome] = result.stdout.trim().split(' ').map((encoded) => Buffer.from(encoded, 'base64').toString('utf8'));
+      expect(company).toBe(companyName);
+      expect(welcome).toBe(welcomeMessage);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   }, 120_000);
 });
 
