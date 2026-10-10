@@ -55,13 +55,15 @@ export async function GET(request: Request) {
     let candidate: {
       id: string;
       status: string;
+      phase: string | null;
+      github_run_id: string | null;
       failure_summary: string | null;
       package_profile_sha256: string | null;
     } | null = null;
     if (job.qa_candidate_id && !skipCustomerQa) {
       const { data, error: candidateError } = await supabase
         .from('qa_candidates')
-        .select('id, status, failure_summary, package_profile_sha256')
+        .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
         .eq('id', job.qa_candidate_id)
         .maybeSingle();
       if (candidateError) throw candidateError;
@@ -150,6 +152,27 @@ export async function GET(request: Request) {
       if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
       if (!relinkedJob) continue;
       observed = relinkedJob;
+      if (demand.state === 'waiting') {
+        // Demand can reuse a completed run awaiting publication. Read its
+        // actual state before continuity decides whether packaging may start.
+        if (!demand.candidateId) {
+          waiting++;
+          continue;
+        }
+        const { data, error: candidateError } = await supabase
+          .from('qa_candidates')
+          .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
+          .eq('id', demand.candidateId)
+          .maybeSingle();
+        if (candidateError) throw candidateError;
+        candidate = data;
+        if (!candidate) {
+          waiting++;
+          continue;
+        }
+        candidateStatus = candidate.status;
+        candidateFailureSummary = candidate.failure_summary;
+      }
     }
 
     // Waiting jobs may have been linked before this payload was quarantined.
@@ -210,6 +233,15 @@ export async function GET(request: Request) {
         failed++;
         await handleAutoUpdateJobCompletion(job.id, 'failed', PACKAGE_VERSION_UNAVAILABLE_MESSAGE);
       }
+      continue;
+    }
+
+    // A completed VM run may still be awaiting result publication. Keep its
+    // customer jobs waiting for normal QA reconciliation, including during
+    // continuity, without treating publication failure as installer failure.
+    if (!skipCustomerQa && candidateStatus === 'error' &&
+        candidate?.phase === 'publishing' && candidate.github_run_id) {
+      waiting++;
       continue;
     }
 

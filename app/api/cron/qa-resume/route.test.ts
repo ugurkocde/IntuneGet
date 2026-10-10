@@ -56,6 +56,34 @@ function chain(result: { data: unknown; error: unknown }) {
   return builder;
 }
 
+// Respect PostgREST projection and equality filters instead of returning fields
+// the route did not request. A missing candidate behaves like maybeSingle().
+function candidateQuery(rows: Record<string, unknown>[]) {
+  const builder = chain({ data: null, error: null });
+  let columns: string[] = [];
+  const filters: Array<[string, unknown]> = [];
+  builder.select = vi.fn((projection: string) => {
+    columns = projection.split(',').map((column) => column.trim());
+    return builder;
+  });
+  builder.eq = vi.fn((column: string, value: unknown) => {
+    filters.push([column, value]);
+    return builder;
+  });
+  builder.maybeSingle = vi.fn(async () => {
+    const matches = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
+    if (matches.length > 1) return { data: null, error: { code: 'PGRST116' } };
+    if (!matches.length) return { data: null, error: null };
+    const row = matches[0];
+    return {
+      data: columns.includes('*') ? structuredClone(row)
+        : Object.fromEntries(columns.map((column) => [column, row[column]])),
+      error: null,
+    };
+  });
+  return builder;
+}
+
 // Model conditional writes against a live row, not a predetermined response.
 // Each request's read snapshot is independent of later concurrent writes.
 function jobStore(initial: Record<string, unknown>) {
@@ -98,6 +126,87 @@ describe('GET /api/cron/qa-resume', () => {
       item,
       trustedInstallers: [],
     }));
+  });
+
+  it.each([1, 2, 3].flatMap((jobCount) => [true, false].flatMap((localPackager) =>
+    [true, false].flatMap((isAutoUpdate) => [true, false].map((continuity) =>
+      ({ jobCount, localPackager, isAutoUpdate, continuity }))))))(
+    'keeps pending publication waiting: %j',
+    async ({ jobCount, localPackager, isAutoUpdate, continuity }) => {
+    getFeatureFlagsMock.mockReturnValue({ localPackager });
+    if (continuity) process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(Date.now() + 60_000).toISOString();
+    const jobs = Array.from({ length: jobCount }, (_, index) => ({
+      id: `publication-job-${index}`,
+      status: 'awaiting_qa',
+      is_auto_update: isAutoUpdate,
+      qa_candidate_id: 'candidate-publication-pending',
+      execution_profile_sha256: 'A'.repeat(64),
+      installer_sha256: 'B'.repeat(64),
+      architecture: 'x64',
+      created_at: '2026-10-09T08:00:00Z',
+      package_config: { sourceType: 'winget', installerSha256: 'B'.repeat(64), architecture: 'x64' },
+    }));
+    const updates = chain({ data: { id: 'publication-job' }, error: null });
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') {
+        return ++reads === 1 ? chain({ data: jobs, error: null }) : updates;
+      }
+      if (table === 'qa_candidates') return candidateQuery([
+        { id: 'unrelated-candidate', status: 'failed', phase: 'installing', github_run_id: null },
+        {
+          id: 'candidate-publication-pending', status: 'error', phase: 'publishing',
+          github_run_id: '123456789',
+          failure_summary: 'The workflow finished but required result publication did not complete.',
+          package_profile_sha256: 'A'.repeat(64),
+        },
+      ]);
+      throw new Error(`Unexpected table ${table}`);
+    }) });
+
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    expect.soft(await response.json()).toEqual({ success: true, scanned: jobCount, resumed: 0, failed: 0, waiting: jobCount });
+    expect.soft(updates.update).not.toHaveBeenCalled();
+    expect.soft(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(assertCuratedLicenceAcceptedMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { status: 'error', phase: 'publishing', run: null, quarantined: false },
+    { status: 'error', phase: 'installing', run: '123456789', quarantined: false },
+    { status: 'error', phase: 'verifying', run: '123456789', quarantined: false },
+    { status: 'error', phase: null, run: '123456789', quarantined: false },
+    { status: 'failed', phase: 'publishing', run: '123456789', quarantined: false },
+    { status: 'error', phase: 'publishing', run: '123456789', quarantined: true },
+  ])('preserves actual failure and quarantine handling: %j', async ({ status, phase, run, quarantined }) => {
+    const job = {
+      id: 'failure-job', status: 'awaiting_qa', qa_candidate_id: 'failure-candidate',
+      installer_sha256: 'B'.repeat(64), architecture: 'x64',
+      package_config: { installerSha256: 'B'.repeat(64), architecture: 'x64' },
+    };
+    const updates = chain({ data: { id: job.id }, error: null });
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1 ? chain({ data: [job], error: null }) : updates;
+      if (table === 'qa_candidates') return chain({ data: {
+        id: 'failure-candidate', status, phase, github_run_id: run,
+        failure_summary: 'Required verification failed', package_profile_sha256: 'A'.repeat(64),
+      }, error: null });
+      throw new Error(`Unexpected table ${table}`);
+    }) });
+    if (quarantined) getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'failed_managed_lifecycle' });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    expect(await response.json()).toMatchObject({ resumed: 0, failed: 1, waiting: 0 });
+    expect(updates.update).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'qa_failed', error_code: quarantined ? 'QA_PACKAGE_COMPATIBILITY_BLOCKED' : 'QA_FAILED_EXECUTION_PROFILE',
+    }));
+    expect(handleAutoUpdateJobCompletionMock).toHaveBeenCalledTimes(1);
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
   it.each([true, false].flatMap((localPackager) => [
@@ -780,6 +889,9 @@ describe('GET /api/cron/qa-resume', () => {
     let packagingCall = 0;
     const client = {
       from: vi.fn((table: string) => {
+        if (table === 'qa_candidates') return candidateQuery([
+          { id: 'candidate-recovered', status: 'queued' },
+        ]);
         if (table !== 'packaging_jobs') throw new Error(`Unexpected table ${table}`);
         packagingCall++;
         if (packagingCall === 1) return chain({ data: [job], error: null });
@@ -805,7 +917,51 @@ describe('GET /api/cron/qa-resume', () => {
       execution_profile_sha256: 'B'.repeat(64),
       presentation_profile_sha256: 'D'.repeat(64),
     }));
-    expect(client.from).not.toHaveBeenCalledWith('qa_candidates');
+    expect(client.from).toHaveBeenCalledWith('qa_candidates');
+  });
+
+  it.each(['missing', 'superseded'].flatMap((prior) =>
+    ['publishing', 'queued', 'missing'].map((current) => ({ prior, current }))))(
+    'checks actual candidate after relinking during continuity: %j', async ({ prior, current }) => {
+    process.env.QA_DEFERRED_CUSTOMER_UPLOADS_UNTIL = new Date(Date.now() + 60_000).toISOString();
+    getFeatureFlagsMock.mockReturnValue({ localPackager: false });
+    const job = {
+      id: 'job-relinked-publication', status: 'awaiting_qa',
+      qa_candidate_id: prior === 'missing' ? null : 'old-candidate',
+      winget_id: 'Example.App', version: '1.0.0', architecture: 'x64',
+      installer_sha256: 'B'.repeat(64), is_auto_update: false,
+      installer_url: 'https://example.test/installer.exe', installer_type: 'exe',
+      package_config: { sourceType: 'custom', psadtConfig: {}, detectionRules: [] },
+    };
+    ensureQaDemandMock.mockResolvedValue({ state: 'waiting', candidateId: 'publication-candidate',
+      identity: { executionProfileSha256: 'A'.repeat(64), presentationProfileSha256: 'C'.repeat(64) } });
+    const store = jobStore(job);
+    let reads = 0;
+    createServerClientMock.mockReturnValue({ from: vi.fn((table: string) => {
+      if (table === 'packaging_jobs') return ++reads === 1
+        ? chain({ data: [structuredClone(job)], error: null }) : store.updateQuery();
+      if (table === 'qa_candidates') return candidateQuery([
+        { id: 'old-candidate', status: 'superseded' },
+        ...(current === 'missing' ? [] : [{ id: 'publication-candidate',
+          status: current === 'publishing' ? 'error' : 'queued',
+          phase: current === 'publishing' ? 'publishing' : null,
+          github_run_id: current === 'publishing' ? '123456789' : null,
+          package_profile_sha256: 'A'.repeat(64) }]),
+      ]);
+      throw new Error(`Unexpected table ${table}`);
+    }) });
+    const response = await GET(new Request('https://example.test/api/cron/qa-resume', {
+      headers: { authorization: 'Bearer secret' },
+    }));
+    const released = current === 'queued';
+    expect(await response.json()).toEqual({ success: true, scanned: 1,
+      resumed: released ? 1 : 0, failed: 0, waiting: released ? 0 : 1 });
+    expect(store.row.qa_candidate_id).toBe('publication-candidate');
+    expect(store.row.status).toBe(released ? 'packaging' : 'awaiting_qa');
+    expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(released ? 1 : 0);
+    expect(handleAutoUpdateJobCompletionMock).not.toHaveBeenCalled();
+    expect(assertCuratedLicenceAcceptedMock).not.toHaveBeenCalled();
+    expect(store.writes).toHaveLength(released ? 3 : 1);
   });
 
   it('releases an unlinked upload immediately when the app payload already passed QA', async () => {
