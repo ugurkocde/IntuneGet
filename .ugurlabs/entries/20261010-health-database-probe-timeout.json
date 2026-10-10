@@ -1,0 +1,5 @@
+{
+  "title": "Bound database health checks",
+  "summary": "Health checks report a database connection failure within five seconds instead of waiting for the hosting platform to time out.",
+  "type": "fixed"
+}
