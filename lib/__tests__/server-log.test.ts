@@ -8,8 +8,13 @@ describe('logValue', () => {
     );
   });
 
-  it('replaces C1 controls, Unicode line separators and bidirectional formatting', () => {
-    expect(logValue('a\u0085b\u2028c\u2029d\u202ee\u2066f\u009fg')).toBe('a b c d e f g');
+  it('replaces C1 controls and Unicode line separators', () => {
+    expect(logValue('a\u0085b\u2028c\u2029d\u009fe')).toBe('a b c d e');
+  });
+
+  it('removes bidirectional and zero width formatting so it cannot hide or split a secret', () => {
+    expect(logValue('a\u202eb\u2066c\u2069d')).toBe('abcd');
+    expect(logValue('pass\u200bword=S3cr3t sig=\u202eS3cr3t')).toBe('password=[redacted] sig=[redacted]');
   });
 
   it('redacts URLs and credential parameters', () => {
@@ -49,6 +54,14 @@ describe('logValue', () => {
     );
   });
 
+  it('keeps prose that mentions Basic authentication readable', () => {
+    expect(logValue('Basic authentication is not supported')).toBe('Basic authentication is not supported');
+  });
+
+  it('redacts spaced key value credentials', () => {
+    expect(logValue('password = S3cr3t; user=a')).toBe('password=[redacted]; user=a');
+  });
+
   it('redacts JSON shaped client secrets', () => {
     expect(logValue('{"client_secret": "s3cr et", "name": "app"}')).toBe(
       '{"client_secret": "[redacted]", "name": "app"}'
@@ -83,6 +96,21 @@ describe('logValue', () => {
     const value = logValue('Download failed: https://host/file?sig=\nsecret-value end');
     expect(value).toBe('Download failed: [redacted URL] end');
     expect(value).not.toContain('secret-value');
+  });
+
+  it('stays linear on long adversarial input', () => {
+    const inputs = [
+      'a-'.repeat(50_000),
+      '"' + 'a-'.repeat(50_000),
+      'key-'.repeat(25_000),
+      'eyJa-'.repeat(20_000),
+      '3f2b1c9e-1a2b-4c3d-8e9f-0a1b2c3d4e5f'.repeat(2_800),
+    ];
+    for (const input of inputs) {
+      const started = performance.now();
+      logValue(input);
+      expect(performance.now() - started).toBeLessThan(200);
+    }
   });
 
   it('bounds the length', () => {
