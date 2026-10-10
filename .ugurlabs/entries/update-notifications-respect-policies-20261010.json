@@ -1,0 +1,5 @@
+{
+  "title": "Update notifications respect ignore and pin policies",
+  "summary": "Email and webhook update notifications no longer include apps set to Ignore, or pinned apps whose new version is not the pinned one. If you later remove the policy, the pending update is still announced.",
+  "type": "fixed"
+}

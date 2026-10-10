@@ -312,7 +312,7 @@ export function canAutoUpdate(policy: AppUpdatePolicy | null | undefined): boole
  * Helper to check if update should be skipped based on policy
  */
 export function shouldSkipUpdate(
-  policy: AppUpdatePolicy | null | undefined,
+  policy: Pick<AppUpdatePolicy, 'policy_type' | 'pinned_version'> | null | undefined,
   latestVersion: string
 ): boolean {
   if (!policy) return false;
