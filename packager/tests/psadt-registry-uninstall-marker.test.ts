@@ -129,6 +129,48 @@ describe('local packager registry uninstall marker', () => {
     expect(script).not.toContain('uninstall identity is malformed');
   });
 
+  it('refuses a marker hidden behind invisible or lookalike characters', () => {
+    const c = (code: number) => String.fromCharCode(code);
+    // Full-width forms are the ASCII letters shifted by 0xFEE0.
+    const fullWidth = (text: string) => [...text].map((ch) => c(ch.charCodeAt(0) + 0xfee0)).join('');
+    for (const marker of [
+      `${c(0x200b)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${c(0x85)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${c(0xfeff)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `REGISTRY${c(0xad)}_UNINSTALL:Contoso & whoami`,
+      `${fullWidth('REGISTRY_UNINSTALL')}:Contoso & whoami`,
+      `${c(0x200b)}MSIX_UNINSTALL:Contoso & whoami`,
+      'echo & REGISTRY_UNINSTALL:Contoso',
+    ]) {
+      for (const installerType of ['exe', 'msi']) {
+        const script = generator.generateDeployScript(
+          job({
+            installer_type: installerType,
+            uninstall_command: `${marker} {12345678-1234-1234-1234-123456789ABC}`,
+          }),
+          installerType === 'msi' ? 'setup.msi' : 'setup.exe'
+        );
+        const name = `${installerType} ${JSON.stringify(marker)}`;
+        expect(cmdExeLines(script).filter((line) => line.includes("-ArgumentList '/c")), name).toEqual([]);
+        expect(script, name).not.toContain("-ProductCode '{12345678-1234-1234-1234-123456789ABC}'");
+        expect(script, name).not.toContain("$configuredUninstallProductCode = '{12345678-1234-1234-1234-123456789ABC}'");
+        expect(script, name).toContain('throw "The registry uninstall identity is malformed; refusing to run it as a command."');
+      }
+    }
+  });
+
+  it('lets a custom uninstall command replace a malformed marker', () => {
+    const script = generator.generateDeployScript(
+      job({
+        uninstall_command: `${String.fromCharCode(0x200b)}REGISTRY_UNINSTALL:Contoso`,
+        package_config: { psadtConfig: { uninstallCommand: '"C:\\Contoso\\remove.exe" /quiet' } },
+      }),
+      'setup.exe'
+    );
+    expect(script).toContain("-ArgumentList '/c \"C:\\Contoso\\remove.exe\" /quiet'");
+    expect(script).not.toContain('uninstall identity is malformed');
+  });
+
   it('still runs a plain vendor uninstall command through cmd.exe', () => {
     const script = generator.generateDeployScript(
       job({ uninstall_command: '"C:\\Program Files\\Contoso\\uninstall.exe" /S' }),

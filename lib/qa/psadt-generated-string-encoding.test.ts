@@ -58,6 +58,8 @@ interface HostedOutput {
   strings: string;
   /** The PSADT data files exactly as written to disk. */
   dataFileBytes: { config: Buffer; strings: Buffer };
+  /** Everything the packager wrote to the job log. */
+  log: string;
 }
 
 type HostedSourceFile = 'script' | 'config' | 'strings';
@@ -133,6 +135,7 @@ function runHostedPackager(scenario: HostedScenario): HostedOutput {
         config: readFileSync(join(fixtureRoot, 'package', 'Config/Config.psd1')),
         strings: readFileSync(join(fixtureRoot, 'package', 'Strings/strings.psd1')),
       },
+      log: `${result.stdout}${result.stderr}`,
     };
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -518,6 +521,52 @@ describe.runIf(canRunHostedPackager)('hosted PSADT generator string encoding', (
     ]) {
       expect(() => runHostedPackager(markerScenario(marker)), JSON.stringify(marker))
         .toThrow(/registry uninstall identity is malformed/);
+    }
+  }, 300_000);
+
+  it('refuses a marker hidden behind invisible or lookalike characters', () => {
+    // Full-width forms are the ASCII letters shifted by 0xFEE0.
+    const fullWidth = (text: string) => [...text].map((ch) => char(ch.charCodeAt(0) + 0xfee0)).join('');
+    for (const marker of [
+      `${char(0x200b)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${char(0x85)}REGISTRY_UNINSTALL:Contoso & whoami`,
+      `${fullWidth('REGISTRY_UNINSTALL')}:Contoso & whoami`,
+    ]) {
+      expect(() => runHostedPackager(markerScenario(marker)), JSON.stringify(marker))
+        .toThrow(/registry uninstall identity is malformed/);
+    }
+  }, 300_000);
+
+  it('lets a custom uninstall command replace a malformed marker', () => {
+    // The local packager already lets the custom command win over any marker.
+    for (const marker of [
+      'REGISTRY_UNINSTALL_PRODUCT:not-a-guid:Contoso',
+      ' REGISTRY_UNINSTALL:Contoso',
+      `${char(0x200b)}REGISTRY_UNINSTALL:Contoso`,
+    ]) {
+      const { script } = runHostedPackager(markerScenario(marker, {
+        uninstallCommand: '"C:\\Contoso\\remove.exe" /quiet',
+      }));
+      expect(script, JSON.stringify(marker)).toContain("-ArgumentList '/c \"C:\\Contoso\\remove.exe\" /quiet'");
+      expect(script, JSON.stringify(marker)).not.toMatch(/REGISTRY_UNINSTALL/i);
+    }
+  }, 300_000);
+
+  it('logs manifest values on one line without starting a workflow command', () => {
+    const names = [
+      `Contoso${char(0x0a)}::add-mask::x`,
+      `Contoso${char(0x0d)}${char(0x0a)}::stop-commands::x`,
+      `Contoso${char(0x2028)}::add-mask::x`,
+      `Contoso${char(0x85)}##[group]x`,
+    ];
+    for (const displayName of names) {
+      const { log } = runHostedPackager(markerScenario(`REGISTRY_UNINSTALL:${displayName}`));
+      const lines = log.split(/\r\n|\n|\r/);
+      expect(lines.filter((line) => /^\s*(?:::|##\[)/.test(line)), JSON.stringify(displayName)).toEqual([]);
+      expect(
+        lines.filter((line) => line.startsWith('Using registry-based uninstall for: Contoso ')),
+        JSON.stringify(displayName)
+      ).toHaveLength(1);
     }
   }, 300_000);
 
