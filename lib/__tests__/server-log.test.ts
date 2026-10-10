@@ -57,6 +57,9 @@ describe('logValue', () => {
   it('keeps prose that mentions Basic authentication readable', () => {
     expect(logValue('Basic authentication is not supported')).toBe('Basic authentication is not supported');
     expect(logValue('basic authentication is not supported')).toBe('basic authentication is not supported');
+    expect(logValue('Basic Authentication is required')).toBe('Basic Authentication is required');
+    expect(logValue('Basic HTTP auth')).toBe('Basic HTTP auth');
+    expect(logValue('WWW-Authenticate: Basic Realm="x"')).toBe('WWW-Authenticate: Basic Realm="x"');
   });
 
   it('redacts letters only base64 Basic credentials', () => {
@@ -67,10 +70,32 @@ describe('logValue', () => {
     expect(logValue('WWW-Authenticate: Basic realm="intune"')).toBe('WWW-Authenticate: Basic realm="intune"');
   });
 
-  it('keeps one marker for a JWT assigned to a credential key', () => {
-    expect(logValue('token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl end')).toBe(
-      'token=[redacted JWT] end'
-    );
+  it('redacts a JWT assigned to a credential key once', () => {
+    expect(logValue('token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl end')).toBe('token=[redacted] end');
+  });
+
+  describe('URLs that contain tokens are redacted as a whole', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const secret = 'S3cr3tV4lu3XyZ';
+    const githubToken = `ghp_${'A1b2'.repeat(9)}`;
+    it.each([
+      ['a JWT and code in the query', `GET https://login.example.com/cb?id_token=${jwt}&code=${secret}&state=x failed`, 'GET [redacted URL] failed'],
+      ['an access token in the fragment', `redirect https://app.example.com/#access_token=${jwt}&token_type=Bearer&code=${secret}`, 'redirect [redacted URL]'],
+      ['a JWT in the path', `https://dl.example.com/f/${jwt}/setup.msi?signature=${secret}`, '[redacted URL]'],
+      ['a jwt parameter', `https://dl.example.com/setup.msi?jwt=${jwt}&signature=${secret}`, '[redacted URL]'],
+      ['a GitHub token in the query', `https://x/?t=${githubToken}&signature=${secret}`, '[redacted URL]'],
+      ['a Bearer header joined by an invisible character', `https://x/?h=Bearer\u200bab&signature=${secret}`, '[redacted URL]'],
+    ])('%s', (_name, input, expected) => {
+      const output = logValue(input);
+      expect(output).toBe(expected);
+      expect(output).not.toContain(secret);
+    });
+
+    it('redacts every segment of a JWE', () => {
+      expect(logValue(`token=${jwt}.${secret}.${secret}2`)).toBe('token=[redacted]');
+      expect(logValue(`${jwt}.${secret}.${secret}2 end`)).toBe('[redacted JWT] end');
+      expect(logValue(`x-api-key: ${jwt}.${secret}`)).toBe('x-api-key: [redacted JWT]');
+    });
   });
 
   it('matches the Basic scheme in any case', () => {
