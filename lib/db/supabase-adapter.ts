@@ -4,7 +4,8 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, AnalyticsJob, AnalyticsJobScope } from './types';
+import { collectAnalyticsJobs } from '@/lib/analytics/complete-job-pages';
 import type {
   AppUpdatePolicy,
   AutoUpdateHistory,
@@ -188,6 +189,29 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
+    async getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]> {
+      const key = scope.tenantId === undefined ? 'user_id' : 'tenant_id';
+      const identity = scope.tenantId ?? scope.userId;
+      if (!identity) throw new Error('Statistics identity required');
+      const supabase = createServerClient();
+      let archiveSupported = true;
+      const deadline = AbortSignal.timeout(15000);
+      return collectAnalyticsJobs(async offset => {
+        const readPage = () => {
+          let query = supabase.from('packaging_jobs')
+            .select('id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url', { count: 'exact' })
+            .eq(key, identity);
+          if (archiveSupported) query = query.is('archived_at', null);
+          return query.order('created_at', { ascending: false }).order('id', { ascending: false })
+            .range(offset, offset + 999).abortSignal(deadline);
+        };
+        let result = await readPage();
+        if (isMissingArchiveColumn(result.error)) { archiveSupported = false; result = await readPage(); }
+        if (result.error) throw new Error('Statistics read failed');
+        return { data: (result.data ?? []) as AnalyticsJob[], count: result.count };
+      });
     },
 
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
