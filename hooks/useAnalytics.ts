@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useMicrosoftAuth } from './useMicrosoftAuth';
+import { useMspOptional } from './useMspOptional';
 
 export interface RecentActivityItem {
   id: string;
@@ -11,6 +12,7 @@ export interface RecentActivityItem {
   timestamp: string;
   status: 'success' | 'pending' | 'failed';
   intuneAppUrl?: string;
+  deployedBy?: string | null;
 }
 
 export interface FrequentlyDeployedApp {
@@ -26,6 +28,8 @@ export interface DashboardStats {
   failed: number;
   recentActivity: RecentActivityItem[];
   frequentlyDeployed?: FrequentlyDeployedApp[];
+  scope?: 'mine' | 'tenant';
+  perUser?: Array<{ userEmail: string; deployed: number; pending: number; failed: number }>;
 }
 
 export interface DailyDeployment {
@@ -69,20 +73,23 @@ export interface AnalyticsData {
   };
 }
 
-export function useDashboardStats() {
-  const { getAccessToken, isAuthenticated } = useMicrosoftAuth();
+export function useDashboardStats(scope: 'mine' | 'tenant' = 'mine') {
+  const { getAccessToken, isAuthenticated, user } = useMicrosoftAuth();
+  const { isMspUser, selectedTenantId } = useMspOptional();
+  const tenantKey = scope === 'mine' ? 'personal' : isMspUser ? selectedTenantId || 'primary' : user?.tenantId;
 
   const query = useQuery<DashboardStats>({
-    queryKey: ['analytics', 'stats'],
+    queryKey: ['analytics', 'stats', scope, tenantKey, user?.id],
     queryFn: async () => {
       const token = await getAccessToken();
       if (!token) {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch('/api/analytics/stats', {
+      const response = await fetch(`/api/analytics/stats?scope=${scope}`, {
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(scope === 'tenant' && isMspUser && selectedTenantId ? { 'X-MSP-Tenant-Id': selectedTenantId } : {}),
         },
       });
 
@@ -96,6 +103,7 @@ export function useDashboardStats() {
     staleTime: 5 * 1000, // 5 seconds when pending
     // Conditional polling: 5s when pending jobs exist, otherwise 60s
     refetchInterval: (query) => {
+      if (scope === 'tenant') return 60 * 1000;
       const data = query.state.data;
       if (data && data.pending > 0) {
         return 5 * 1000; // 5 seconds

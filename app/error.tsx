@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { reportPageError } from "@/lib/logging/report-page-error";
 import { Header } from "@/components/landing/Header";
 import { Footer } from "@/components/landing/sections/Footer";
 
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => { reportPageError('root', error.digest); }, [error]);
   return (
     <div className="min-h-screen bg-bg-deepest flex flex-col">
       <Header />
