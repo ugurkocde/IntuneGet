@@ -25,6 +25,12 @@ create table public.qa_sync_watermarks (id text,source_synced_at timestamptz,acc
     const sql = readFileSync('supabase/migrations/20261011142500_bounded_qa_publication_sync.sql', 'utf8')
       .replaceAll('becb40ddd30dcf9fc45551f1ff4e515ea1512cb9692d977f44f0323a216d0921', createHash('sha256').update(secret).digest('hex'));
     await db.exec(sql);
+    // The recipe-only regression must fail against the previously shipped RPC.
+    await expect(db.query('select sync_qa_results_incremental($1,$2::jsonb,$3::jsonb)',
+      [secret, '[]', JSON.stringify(recipe)])).rejects.toThrow(/bounds/);
+    const recipeSql = readFileSync('supabase/migrations/20261011184708_bounded_qa_recipe_sync.sql', 'utf8')
+      .replaceAll('becb40ddd30dcf9fc45551f1ff4e515ea1512cb9692d977f44f0323a216d0921', createHash('sha256').update(secret).digest('hex'));
+    await db.exec(recipeSql);
   });
   afterAll(async () => { await db?.close(); });
   const sync = (rows: unknown[], credential = secret) => db.query('select sync_qa_results_incremental($1,$2::jsonb,$3::jsonb) result', [credential, JSON.stringify(rows), JSON.stringify(recipe)]);
@@ -49,7 +55,7 @@ create table public.qa_sync_watermarks (id text,source_synced_at timestamptz,acc
     expect((await db.query('select outcome,virustotal_status,virustotal_malicious from qa_package_results')).rows).toEqual([{ outcome: 'Failed', virustotal_status: 'flagged', virustotal_malicious: 2 }]);
   });
   it('rejects empty, oversized and malformed batches before any write', async () => {
-    await expect(sync([])).rejects.toThrow(/bounds/);
+    await expect(db.query('select sync_qa_results_incremental($1,$2::jsonb,$3::jsonb)', [secret, '[]', '[]'])).rejects.toThrow(/At least one/);
     await expect(sync(Array.from({ length: 101 }, () => row()))).rejects.toThrow(/bounds/);
     await expect(sync([row({ changes: { text: 'x'.repeat(1_000_001) } })])).rejects.toThrow(/bounds/);
     await expect(db.query("select sync_qa_results_incremental($1,'{}'::jsonb,$2::jsonb)", [secret, JSON.stringify(recipe)])).rejects.toThrow();
@@ -78,5 +84,35 @@ create table public.qa_sync_watermarks (id text,source_synced_at timestamptz,acc
   it('rejects duplicate canonical identities after empty profile normalization', async () => {
     await expect(sync([row({ winget_id: 'Vendor.Duplicate', profile_kind: '' }), row({ winget_id: 'Vendor.Duplicate', profile_kind: 'catalog-default' })])).rejects.toThrow(/must be present and unique/);
     expect((await db.query("select winget_id from qa_results where winget_id='Vendor.Duplicate'")).rows).toEqual([]);
+  });
+  it('publishes recipes with no result rows without touching result evidence or watermarks', async () => {
+    const before = await db.query('select to_jsonb(r) value from qa_results r order by winget_id');
+    const packages = await db.query('select to_jsonb(r) value from qa_package_results r order by package_profile_sha256');
+    const watermark = await db.query('select to_jsonb(r) value from qa_sync_watermarks r');
+    const result = await sync([]);
+    expect(result.rows[0]).toEqual({ result: { files: 0, mirrored: 0, removed: 0, invalid: [], recipes: 1 } });
+    expect((await db.query('select to_jsonb(r) value from qa_results r order by winget_id')).rows).toEqual(before.rows);
+    expect((await db.query('select to_jsonb(r) value from qa_package_results r order by package_profile_sha256')).rows).toEqual(packages.rows);
+    expect((await db.query('select to_jsonb(r) value from qa_sync_watermarks r')).rows).toEqual(watermark.rows);
+    expect((await db.query("select active from qa_recipes where winget_id='Vendor.App'")).rows).toEqual([{ active: true }]);
+  });
+  it('authenticates recipe-only requests before branching and preserves helper permissions', async () => {
+    await expect(sync([], 'wrong')).rejects.toThrow(/credential/);
+    await expect(sync([], '')).rejects.toThrow(/credential/);
+    expect((await db.query("select has_function_privilege('anon','sync_qa_results_incremental_metadata(text,jsonb,jsonb,boolean)','execute') helper")).rows[0]).toEqual({ helper: false });
+    await db.exec('set role anon');
+    try { await expect(sync([], 'wrong')).rejects.toThrow(/credential/); }
+    finally { await db.exec('reset role'); }
+  });
+  it('rejects oversized recipes, invalid identities and missing paths without inserting them', async () => {
+    const send = (recipes: unknown[]) => db.query('select sync_qa_results_incremental($1,$2::jsonb,$3::jsonb)', [secret, '[]', JSON.stringify(recipes)]);
+    await expect(send(Array.from({ length: 101 }, () => recipe[0]))).rejects.toThrow(/bounded/);
+    await expect(send([{ ...recipe[0], definition_path: 'x'.repeat(1_000_001) }])).rejects.toThrow(/bounded/);
+    await expect(send([{ ...recipe[0], winget_id: 'invalid identity' }])).rejects.toThrow(/identity/);
+    await expect(send([{ ...recipe[0], definition_path: null }])).rejects.toThrow(/identity/);
+  });
+  it('accepts a bounded result batch with no recipes and keeps stale overwrite protection', async () => {
+    await db.query('select sync_qa_results_incremental($1,$2::jsonb,$3::jsonb)', [secret, JSON.stringify([row({ outcome: 'Passed', tested_at_utc: '2026-10-01T00:00:00Z' })]), '[]']);
+    expect((await db.query("select outcome from qa_results where winget_id='Vendor.App'")).rows).toEqual([{ outcome: 'Failed' }]);
   });
 });
