@@ -37,6 +37,27 @@ describe('Supabase QA deployment presentation', () => {
     expect(await new SupabaseCatalogSource().getQaStatuses(['Example.App', 'Other.App']))
       .toEqual([expect.objectContaining({ outcome: 'Failed' })]);
   });
+  it('retains failed rows but hides Passed when only the anon key is configured', async () => {
+    setup([]);
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+    const { SupabaseCatalogSource } = await import('./supabase-source');
+    expect(await new SupabaseCatalogSource().getQaStatuses(['Example.App', 'Other.App']))
+      .toEqual([expect.objectContaining({ outcome: 'Failed' })]);
+    expect(vi.mocked(fetch).mock.calls.every(([input]) =>
+      !new URL(String(input)).pathname.endsWith('/qa_package_blocks'))).toBe(true);
+  });
+  it.each([undefined, row.package_profile_sha256])(
+    'returns null if availability is lost while reading a single QA result (%s)', async profile => {
+      setup([]);
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+        return Response.json({ ...row, detection: {}, phase_results: {},
+          install_command: 'install', uninstall_command: 'uninstall' });
+      }));
+      const { SupabaseCatalogSource } = await import('./supabase-source');
+      expect(await new SupabaseCatalogSource().getQaResult(row.winget_id, profile)).toBeNull();
+    }
+  );
   it('finds an exact block after a full PostgREST page', async () => {
     const historical = Array.from({ length: 1000 }, (_, i) => ({ winget_id: row.winget_id,
       version: String(i + 2), architecture: 'x64', installer_sha256: 'C'.repeat(64) }));

@@ -69,7 +69,7 @@ export class SupabaseCatalogSource implements CatalogSource {
         console.warn('QA deployment availability is unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured.');
         warnedMissingQaServiceRole = true;
       }
-      return rows;
+      return rows.filter(row => row.outcome !== 'Passed');
     }
     const client = createServerClient();
     const blocks: QaBlockedTuple[] = [];
@@ -524,7 +524,7 @@ export class SupabaseCatalogSource implements CatalogSource {
         publisher: data.publisher || '',
         test_level: 'psadt-package',
       } as unknown as QaResultRow;
-      return (await this.withDeploymentBlocks([result]))[0];
+      return (await this.withDeploymentBlocks([result]))[0] ?? null;
     }
 
     const supabase = serviceOrAnonClient();
@@ -543,7 +543,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       throw new Error(`Failed to read QA result: ${error.message}`);
     }
 
-    return data ? (await this.withDeploymentBlocks([data as QaResultRow]))[0] : null;
+    return data ? ((await this.withDeploymentBlocks([data as QaResultRow]))[0] ?? null) : null;
   }
 
   async getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]> {
