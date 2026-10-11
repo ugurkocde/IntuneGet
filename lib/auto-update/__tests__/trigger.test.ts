@@ -17,6 +17,7 @@ const {
   getVersionInstallerInfoMock,
   ensureQaDemandMock,
   getApprovalFailuresMock,
+  defaultApprovalFailuresMock,
   curatedState,
 } = vi.hoisted(() => ({
   curatedState: { envelope: {} as Record<string, unknown>, acceptances: new Set<string>() },
@@ -25,6 +26,7 @@ const {
   getVersionInstallerInfoMock: vi.fn(),
   ensureQaDemandMock: vi.fn(),
   getApprovalFailuresMock: vi.fn().mockResolvedValue([]),
+  defaultApprovalFailuresMock: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/lib/catalog', () => ({
   getCatalogSource: () => ({
@@ -43,7 +45,7 @@ vi.mock('@/catalog/curated/catalog.json', async (importOriginal) => {
 });
 vi.mock('@/lib/db', () => ({
   getDatabase: () => ({
-    jobs: { getApprovalFailures: getApprovalFailuresMock },
+    jobs: { getApprovalFailures: defaultApprovalFailuresMock },
     curatedLicenceAttestations: {
       get: async (tenantId: string, id: string, version: string) => curatedState.acceptances.has(`${tenantId}|${id}|${version}`)
         ? { id: 'acceptance', tenant_id: tenantId, app_id: 'acrobat-reader', attestation_id: id, attestation_version: version,
@@ -51,6 +53,9 @@ vi.mock('@/lib/db', () => ({
         : null,
     },
   }),
+}));
+vi.mock('@/lib/db/supabase-adapter', () => ({
+  supabaseDb: { jobs: { getApprovalFailures: getApprovalFailuresMock } },
 }));
 
 interface TableHandlers {
@@ -161,25 +166,43 @@ function makeTrigger(supabaseMock: ReturnType<typeof createSupabaseMock>): AutoU
 }
 
 describe('AutoUpdateTrigger psadtConfig handling', () => {
-  it.each(['canonical', 'submitted'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
+  it.each(['canonical', 'submitted', 'historical'])('blocks a mixed case curated approval checkpoint stored under the %s ID', async storedCase => {
     const canonical = CURATED_APPS[0].packageId;
     const submitted = canonical.toUpperCase();
     expect(submitted).not.toBe(canonical);
-    const storedId = storedCase === 'canonical' ? canonical : submitted;
+    const storedId = storedCase === 'canonical' ? canonical : storedCase === 'submitted' ? submitted : canonical.toLowerCase();
     const insert = vi.fn();
     const trigger = makeTrigger(createSupabaseMock({ auto_update_history: { insertSpy: insert }, packaging_jobs: { insertSpy: insert } }));
     (trigger as unknown as { verifyTenantConsent: unknown }).verifyTenantConsent = vi.fn().mockResolvedValue(true);
-    getApprovalFailuresMock.mockImplementation(async (_tenant: string, id: string) => id === storedId ? [{
+    getApprovalFailuresMock.mockImplementation(async (_tenant: string, id: string) => typeof id === 'string' && id.toLowerCase() === storedId.toLowerCase() ? [{
       tenant_id: 'tenant-1', winget_id: storedId, status: 'failed',
       error_code: 'INTUNE_APPROVAL_REQUIRED', error_details: null,
     }] : []);
     const result = await trigger.triggerAutoUpdate({ ...makePolicy({ displayName: 'App', psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 },
       { ...UPDATE_INFO, wingetId: submitted, sourceType: 'curated' }, { skipRateLimits: true, skipPriorDeploymentCheck: true });
     expect(result).toMatchObject({ success: false, skipped: true, code: 'INTUNE_APPROVAL_PENDING' });
-    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', canonical, undefined);
-    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', submitted, undefined);
+    expect(getApprovalFailuresMock).toHaveBeenCalledExactlyOnceWith('tenant-1', canonical, undefined);
+    expect(defaultApprovalFailuresMock).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
+  });
+
+  it('reads Supabase checkpoints even when database mode selects SQLite', async () => {
+    vi.stubEnv('DATABASE_MODE', 'sqlite');
+    try {
+      const insert = vi.fn();
+      const trigger = makeTrigger(createSupabaseMock({ packaging_jobs: { insertSpy: insert } }));
+      (trigger as unknown as { verifyTenantConsent: unknown }).verifyTenantConsent = vi.fn().mockResolvedValue(true);
+      getApprovalFailuresMock.mockResolvedValue([{ tenant_id: 'tenant-1', winget_id: 'Test.App',
+        status: 'failed', error_category: 'approval', error_details: null }]);
+      const result = await trigger.triggerAutoUpdate({ ...makePolicy({ psadtConfig: DEFAULT_PSADT_CONFIG }), consecutive_failures: 0 },
+        UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+      expect(result.code).toBe('INTUNE_APPROVAL_PENDING');
+      expect(getApprovalFailuresMock).toHaveBeenCalledExactlyOnceWith('tenant-1', 'Test.App', undefined);
+      expect(defaultApprovalFailuresMock).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('checks curated rate limits before either approval ID', async () => {

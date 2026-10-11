@@ -4,6 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import path from 'path';
 import fs from 'fs';
 import type {
@@ -177,9 +178,13 @@ export const sqliteDb: DatabaseAdapter = {
     },
 
     async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
       const rows = getDb().prepare(`
         SELECT * FROM packaging_jobs
-        WHERE tenant_id = ? AND winget_id = ? AND status IN (${INTUNE_APPROVAL_CHECKPOINT_STATUSES.map(() => '?').join(',')})
+        WHERE tenant_id = ? AND winget_id = ? ${curated ? 'COLLATE NOCASE' : ''} AND status IN (${INTUNE_APPROVAL_CHECKPOINT_STATUSES.map(() => '?').join(',')})
           AND (error_category = 'approval' OR error_code = 'INTUNE_APPROVAL_REQUIRED')
           ${cursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
         ORDER BY created_at DESC, id DESC LIMIT 100

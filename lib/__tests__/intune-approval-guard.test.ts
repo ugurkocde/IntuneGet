@@ -20,6 +20,37 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(acquireGraphToken).mockResolved
 afterEach(() => vi.unstubAllGlobals());
 
 describe('pending Intune approval guard', () => {
+  it('matches historical curated casing and queries duplicate spellings once', async () => {
+    const query = vi.fn().mockResolvedValue([row({ winget_id: 'intuneget.curated.fixture' })]);
+    const blocks = await findPendingApprovalBlocks({ tenantId: 'tenant',
+      wingetIds: ['IntuneGet.Curated.Fixture', 'INTUNEGET.CURATED.FIXTURE'] }, {
+      db: dbFor(query), checkRetainedApp: vi.fn().mockResolvedValue('present'),
+    });
+    expect(blocks).toMatchObject([{ wingetId: 'IntuneGet.Curated.Fixture', reason: 'retained_app_present' }]);
+    expect(query).toHaveBeenCalledExactlyOnceWith('tenant', 'IntuneGet.Curated.Fixture', undefined);
+  });
+  it('retains exact non-curated matching and distinct queries', async () => {
+    const query = vi.fn().mockResolvedValue([row({ winget_id: 'vendor.app' })]);
+    const probe = vi.fn().mockResolvedValue('present');
+    const blocks = await findPendingApprovalBlocks({ tenantId: 'tenant', wingetIds: ['Vendor.App', 'vendor.app'] }, {
+      db: dbFor(query), checkRetainedApp: probe,
+    });
+    expect(blocks.map(b => b.reason)).toEqual(['release_check_failed', 'retained_app_present']);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+  it('finds a differently cased curated blocker on a later page', async () => {
+    const first = Array.from({ length: 100 }, () => row({ winget_id: 'intuneget.curated.fixture' }));
+    const query = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce([
+      row({ winget_id: 'INTUNEGET.CURATED.FIXTURE', error_details: null }),
+    ]);
+    expect(await findPendingApprovalBlocks({ tenantId: 'tenant', wingetIds: ['IntuneGet.Curated.Fixture'] }, {
+      db: dbFor(query), checkRetainedApp: vi.fn().mockResolvedValue('absent'),
+    })).toMatchObject([{ reason: 'retained_app_unverified' }]);
+    expect(query).toHaveBeenLastCalledWith('tenant', 'IntuneGet.Curated.Fixture', {
+      createdAt: first[99].created_at, id: first[99].id,
+    });
+  });
   it.each(['present', 'absent', 'unknown'] as const)('reconciles cancelled approval checkpoints with retained state %s', async state => {
     const probe = vi.fn().mockResolvedValue(state);
     const result = await findPendingApprovalBlocks(input, {

@@ -1,4 +1,5 @@
 import { getDatabase } from '@/lib/db';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import type { DatabaseAdapter } from '@/lib/db/types';
 import { acquireGraphToken } from '@/lib/graph-token';
 import { isIntuneApprovalFailure, INTUNE_APPROVAL_PENDING_MESSAGE, INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
@@ -38,14 +39,22 @@ export async function findPendingApprovalBlocks(
   const blocks: IntuneApprovalBlock[] = [];
   // Cache only within this request, including IDs repeated across version checkpoints.
   const checked = new Map<string, RetainedAppState>();
-  for (const wingetId of new Set(input.wingetIds)) {
+  const uniqueIds = new Map<string, string>();
+  for (const id of input.wingetIds) {
+    const key = isCuratedPackageId(id) ? id.toLowerCase() : id;
+    if (!uniqueIds.has(key)) uniqueIds.set(key, id);
+  }
+  for (const wingetId of uniqueIds.values()) {
     let reason: IntuneApprovalBlock['reason'] | undefined;
     try {
       let cursor: { createdAt: string; id: string } | undefined;
       for (let page = 0; page < 10; page++) {
         const jobs = await db.jobs.getApprovalFailures(input.tenantId, wingetId, cursor);
         for (const job of jobs) {
-          if (job.tenant_id !== input.tenantId || job.winget_id !== wingetId ||
+          const samePackage = isCuratedPackageId(wingetId)
+            ? job.winget_id.toLowerCase() === wingetId.toLowerCase()
+            : job.winget_id === wingetId;
+          if (job.tenant_id !== input.tenantId || !samePackage ||
               !INTUNE_APPROVAL_CHECKPOINT_STATUSES.some(status => status === job.status) || !isIntuneApprovalFailure(job)) {
             reason = 'release_check_failed'; break;
           }
