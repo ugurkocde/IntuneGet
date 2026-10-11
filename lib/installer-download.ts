@@ -4,7 +4,7 @@ import { lookup } from 'node:dns/promises';
 import * as http from 'node:http';
 import * as https from 'node:https';
 
-const DEFAULT_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const DEFAULT_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 240_000;
 const MAX_REDIRECTS = 5;

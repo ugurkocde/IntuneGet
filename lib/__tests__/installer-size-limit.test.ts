@@ -9,7 +9,11 @@ vi.mock('node:dns/promises', () => ({ lookup: vi.fn().mockResolvedValue([{ addre
 import { hashRemoteInstaller, InstallerDownloadSizeLimitError } from '@/lib/installer-download';
 
 describe('installer size refusals through the download paths', () => {
-  beforeEach(() => requestMock.mockReset());
+  beforeEach(() => {
+    requestMock.mockReset();
+    vi.unstubAllEnvs();
+    vi.stubEnv('INSTALLER_PREFLIGHT_MAX_BYTES', '');
+  });
 
   function respond(headers: Record<string, string>, body = Buffer.alloc(0), statusCode = 200) {
     requestMock.mockImplementation((_options, callback) => {
@@ -47,5 +51,24 @@ describe('installer size refusals through the download paths', () => {
     respond({ 'content-length': '100' }, Buffer.alloc(100));
     await expect(hashRemoteInstaller('https://example.test/setup.exe', { maxBytes: 100 }))
       .resolves.toMatchObject({ bytes: 100, verificationMethod: 'content-hash' });
+  });
+
+  it('allows metadata above 2 GiB under the new 5 GiB default', async () => {
+    respond({ 'content-length': String(3 * 1024 ** 3) }, Buffer.from('fixture'));
+    await expect(hashRemoteInstaller('https://example.test/setup.exe'))
+      .resolves.toMatchObject({ bytes: 7, verificationMethod: 'content-hash' });
+  });
+
+  it('refuses metadata above the 5 GiB default', async () => {
+    respond({ 'content-length': String(5 * 1024 ** 3 + 1) });
+    await expect(hashRemoteInstaller('https://example.test/setup.exe'))
+      .rejects.toMatchObject({ maxBytes: 5 * 1024 ** 3, observedBytes: 5 * 1024 ** 3 + 1 });
+  });
+
+  it('preserves an explicitly configured lower limit', async () => {
+    vi.stubEnv('INSTALLER_PREFLIGHT_MAX_BYTES', String(2 * 1024 ** 3));
+    respond({ 'content-length': String(3 * 1024 ** 3) });
+    await expect(hashRemoteInstaller('https://example.test/setup.exe'))
+      .rejects.toMatchObject({ maxBytes: 2 * 1024 ** 3 });
   });
 });
