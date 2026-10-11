@@ -31,6 +31,13 @@ export class InstallerDownloadSizeLimitError extends Error {
   }
 }
 
+export class InstallerRedirectUrlError extends Error {
+  constructor(public readonly sourceHost: string) {
+    super(`Installer source ${sourceHost} returned an invalid redirect URL.`);
+    this.name = 'InstallerRedirectUrlError';
+  }
+}
+
 export class InstallerDownloadDeadlineError extends Error {
   constructor(timeoutMs: number) {
     super(`Installer verification exceeded the ${timeoutMs}ms wall-clock deadline`);
@@ -153,6 +160,18 @@ function validateUrl(value: string): URL {
   return url;
 }
 
+function resolveRedirectUrl(location: string, source: URL): URL {
+  let redirect: URL;
+  try {
+    redirect = new URL(location, source);
+  } catch {
+    // Node's URL error includes the raw Location and source URL. Retain only
+    // the source hostname so signed URLs and embedded credentials stay private.
+    throw new InstallerRedirectUrlError(source.hostname);
+  }
+  return validateUrl(redirect.toString());
+}
+
 export function shouldUseRangedInstallerHash(installerUrl: string): boolean {
   try {
     const url = new URL(installerUrl);
@@ -259,7 +278,7 @@ async function readRangeMetadata(
 
         let redirectUrl: URL;
         try {
-          redirectUrl = validateUrl(new URL(location, url).toString());
+          redirectUrl = resolveRedirectUrl(location, url);
         } catch (error) {
           reject(error);
           return;
@@ -458,7 +477,7 @@ async function readPublisherChecksum(
 
         let redirectUrl: URL;
         try {
-          redirectUrl = validateUrl(new URL(location, url).toString());
+          redirectUrl = resolveRedirectUrl(location, url);
           if (
             redirectUrl.protocol !== 'https:' ||
             redirectUrl.hostname.toLowerCase() !== trustedHostname ||
@@ -682,7 +701,7 @@ async function hashUrl(
 
         let redirectUrl: URL;
         try {
-          redirectUrl = validateUrl(new URL(location, url).toString());
+          redirectUrl = resolveRedirectUrl(location, url);
         } catch (error) {
           reject(error);
           return;
