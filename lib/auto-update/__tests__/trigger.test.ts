@@ -462,7 +462,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     policy.original_upload_history_id = 'prior-upload';
     policy.consecutive_failures = 0;
     vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
     const createHistorySpy = vi.spyOn(trigger as never, 'createHistoryRecord' as never);
 
     const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true });
@@ -496,7 +496,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     policy.consecutive_failures = 0;
 
     vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
     vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'createHistoryRecord' as never)
       .mockResolvedValue({ id: 'history-camera-hub' } as never);
@@ -564,7 +564,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     policy.consecutive_failures = 0;
 
     vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
     vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'createHistoryRecord' as never)
       .mockResolvedValue({ id: 'history-claude' } as never);
@@ -620,7 +620,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     policy.consecutive_failures = 0;
 
     vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
     vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'createHistoryRecord' as never)
       .mockResolvedValue({ id: 'history-zalo' } as never);
@@ -669,7 +669,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
     policy.consecutive_failures = 0;
 
     vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
     vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'createHistoryRecord' as never)
       .mockResolvedValue({ id: 'history-notesnook' } as never);
@@ -699,6 +699,66 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
   });
 
   describe('ensurePsadtConfig', () => {
+    it.each(['history error', 'job error', 'history exception'])('skips safely on %s before QA or job creation', async (failure) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const readFailure = { message: 'Synthetic database failure' };
+      const supabase = createSupabaseMock({
+        upload_history: failure === 'history exception'
+          ? { maybeSingleSpy: vi.fn().mockRejectedValue(new Error('Synthetic read failure')) }
+          : { maybeSingleResult: { data: failure === 'history error' ? null : { packaging_job_id: 'job-1' }, error: failure === 'history error' ? readFailure : null } },
+        packaging_jobs: { maybeSingleResult: { data: null, error: readFailure } },
+      });
+      const trigger = makeTrigger(supabase);
+      vi.spyOn(trigger as never, 'verifyTenantConsent').mockResolvedValue(true as never);
+      const createJob = vi.spyOn(trigger as never, 'createPackagingJob');
+      const incrementFailure = vi.spyOn(trigger as never, 'incrementFailureCount');
+      const policy = makePolicy({ displayName: 'Test App' });
+      policy.consecutive_failures = 0;
+      const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+      expect(result).toMatchObject({ success: false, skipped: true, code: 'PSADT_BACKFILL_UNAVAILABLE' });
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(createJob).not.toHaveBeenCalled();
+      expect(incrementFailure).not.toHaveBeenCalled();
+      expect(policy.consecutive_failures).toBe(0);
+      expect(warn).toHaveBeenCalled();
+      if (failure !== 'history exception') {
+        expect(warn).toHaveBeenCalledWith(
+          failure === 'history error'
+            ? 'Could not load saved deployment settings: upload history read failed.'
+            : 'Could not load saved deployment settings: packaging job read failed.'
+        );
+      }
+      warn.mockRestore();
+    });
+
+    it('continues with an empty legacy history rather than treating absence as a failed read', async () => {
+      const supabase = createSupabaseMock({ upload_history: { maybeSingleResult: { data: null, error: null } } });
+      const trigger = makeTrigger(supabase);
+      vi.spyOn(trigger as never, 'verifyTenantConsent').mockResolvedValue(true as never);
+      const policy = makePolicy({ displayName: 'Test App', architecture: 'x64' });
+      policy.consecutive_failures = 0;
+      const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+      expect(result.code).not.toBe('PSADT_BACKFILL_UNAVAILABLE');
+      expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps recovered custom rules effective when saving the policy throws', async () => {
+      const supabase = createSupabaseMock({
+        upload_history: { maybeSingleResult: { data: { packaging_job_id: 'job-1' }, error: null } },
+        packaging_jobs: { maybeSingleResult: { data: { package_config: { psadtConfig: { ...DEFAULT_PSADT_CONFIG, customDetection: true } } }, error: null } },
+        app_update_policies: { updateSpy: vi.fn(() => { throw new Error('Synthetic save failure'); }) },
+      });
+      const trigger = makeTrigger(supabase);
+      vi.spyOn(trigger as never, 'verifyTenantConsent').mockResolvedValue(true as never);
+      const createJob = vi.spyOn(trigger as never, 'createPackagingJob');
+      const policy = makePolicy({ displayName: 'Test App' });
+      policy.consecutive_failures = 0;
+      const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+      expect(result).toEqual({ success: false, skipped: true, skipReason: 'Custom detection rules are fixed. Deploy 2.0.0 from the catalog with updated rules.' });
+      expect(ensureQaDemandMock).not.toHaveBeenCalled();
+      expect(createJob).not.toHaveBeenCalled();
+    });
+
     it('holds custom rules introduced by the legacy packaging job backfill before QA or dispatch', async () => {
       const updateSpy = vi.fn();
       const insertSpy = vi.fn();
@@ -739,7 +799,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       const policy = makePolicy({ displayName: 'Test App' });
 
       await (trigger as unknown as {
-        ensurePsadtConfig: (p: AppUpdatePolicy) => Promise<void>;
+        ensurePsadtConfig: (p: AppUpdatePolicy) => Promise<boolean>;
       }).ensurePsadtConfig(policy);
 
       const config = policy.deployment_config as DeploymentConfig;
@@ -756,7 +816,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       } as Partial<DeploymentConfig>);
 
       await (trigger as unknown as {
-        ensurePsadtConfig: (p: AppUpdatePolicy) => Promise<void>;
+        ensurePsadtConfig: (p: AppUpdatePolicy) => Promise<boolean>;
       }).ensurePsadtConfig(policy);
 
       expect(supabase.from).not.toHaveBeenCalled();
@@ -772,7 +832,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       const policy = makePolicy({ displayName: 'Test App' });
 
       await (trigger as unknown as {
-        ensurePsadtConfig: (p: AppUpdatePolicy) => Promise<void>;
+        ensurePsadtConfig: (p: AppUpdatePolicy) => Promise<boolean>;
       }).ensurePsadtConfig(policy);
 
       expect((policy.deployment_config as DeploymentConfig).psadtConfig).toBeUndefined();
@@ -875,7 +935,7 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       policy.original_upload_history_id = 'prior-upload';
       policy.consecutive_failures = 0;
       vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-      vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+      vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
 
       await trigger.triggerAutoUpdate(policy, {
         ...UPDATE_INFO,
@@ -1096,7 +1156,7 @@ describe('AutoUpdateTrigger curated licence attestation', () => {
     policy.original_upload_history_id = 'prior-upload';
     policy.consecutive_failures = 0;
     vi.spyOn(trigger as never, 'verifyTenantConsent' as never).mockResolvedValue(true as never);
-    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(undefined as never);
+    vi.spyOn(trigger as never, 'ensurePsadtConfig' as never).mockResolvedValue(true as never);
     vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults' as never).mockResolvedValue(undefined as never);
     vi.spyOn(trigger as never, 'createHistoryRecord' as never).mockResolvedValue({ id: 'history-1' } as never);
     const run = () => trigger.triggerAutoUpdate(policy, {

@@ -224,7 +224,8 @@ export interface TriggerUpdateResponse {
       | 'CURATED_LICENCE_NOT_ACCEPTED'
       | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
       | 'CURATED_CONFIG_VERIFICATION_FAILED'
-      | 'RATE_LIMIT_UNVERIFIED';
+      | 'RATE_LIMIT_UNVERIFIED'
+      | 'PSADT_BACKFILL_UNAVAILABLE';
     packaging_job_id?: string;
     error?: string;
   }[];

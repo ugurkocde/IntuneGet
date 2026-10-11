@@ -59,7 +59,8 @@ interface TriggerResult {
     | 'CURATED_LICENCE_NOT_ACCEPTED'
     | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
     | 'CURATED_CONFIG_VERIFICATION_FAILED'
-    | 'RATE_LIMIT_UNVERIFIED';
+    | 'RATE_LIMIT_UNVERIFIED'
+    | 'PSADT_BACKFILL_UNAVAILABLE';
 }
 
 export interface UpdateInfo {
@@ -273,7 +274,14 @@ export class AutoUpdateTrigger {
 
       // Backfill PSADT settings from the original deployment for policies
       // created before psadtConfig was stored on deployment_config
-      await this.ensurePsadtConfig(policy);
+      if (!(await this.ensurePsadtConfig(policy))) {
+        return {
+          success: false,
+          skipped: true,
+          code: 'PSADT_BACKFILL_UNAVAILABLE',
+          skipReason: 'IntuneGet could not load the original deployment settings for this policy. The update was not started. Try again shortly.',
+        };
+      }
       if (policy.deployment_config.psadtConfig?.customDetection) {
         return { success: false, skipped: true, skipReason: customDetectionUpdateHold(updateInfo.latestVersion) };
       }
@@ -683,17 +691,17 @@ export class AutoUpdateTrigger {
    * read it from the most recent packaging job for this app and store it
    * back on the policy so per-package settings (deploy mode, command
    * overrides, verifyInstall, removeExistingInstall, registryMarkerPath)
-   * survive updates. Mutates policy.deployment_config in place; failures
-   * are non-fatal (the update proceeds without PSADT settings, as before).
+   * survive updates. Mutates policy.deployment_config in place. A failed
+   * read stops the update rather than discarding the administrator's settings.
    */
-  private async ensurePsadtConfig(policy: AppUpdatePolicy): Promise<void> {
+  private async ensurePsadtConfig(policy: AppUpdatePolicy): Promise<boolean> {
     const config = policy.deployment_config as DeploymentConfig | null;
     if (!config || config.psadtConfig) {
-      return;
+      return true;
     }
 
     try {
-      const { data: uploadHistory } = await this.supabase
+      const { data: uploadHistory, error: historyError } = await this.supabase
         .from('upload_history')
         .select('packaging_job_id')
         .eq('user_id', policy.user_id)
@@ -704,42 +712,57 @@ export class AutoUpdateTrigger {
         .limit(1)
         .maybeSingle();
 
+      if (historyError) {
+        console.warn('Could not load saved deployment settings: upload history read failed.');
+        return false;
+      }
       if (!uploadHistory?.packaging_job_id) {
-        return;
+        return true;
       }
 
-      const { data: packagingJob } = await this.supabase
+      const { data: packagingJob, error: jobError } = await this.supabase
         .from('packaging_jobs')
         .select('package_config')
         .eq('id', uploadHistory.packaging_job_id)
         .maybeSingle();
 
+      if (jobError) {
+        console.warn('Could not load saved deployment settings: packaging job read failed.');
+        return false;
+      }
       const packageConfig = packagingJob?.package_config;
       if (
         !packageConfig ||
         typeof packageConfig !== 'object' ||
         Array.isArray(packageConfig)
       ) {
-        return;
+        return true;
       }
 
       const psadtConfig = (packageConfig as Record<string, unknown>).psadtConfig;
       if (!psadtConfig || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig)) {
-        return;
+        return true;
       }
 
       config.psadtConfig = psadtConfig as DeploymentConfig['psadtConfig'];
 
-      await this.supabase
-        .from('app_update_policies')
-        .update({ deployment_config: policy.deployment_config })
-        .eq('id', policy.id);
+      // The recovered settings already protect this run if persistence fails.
+      try {
+        await this.supabase
+          .from('app_update_policies')
+          .update({ deployment_config: policy.deployment_config })
+          .eq('id', policy.id);
+      } catch {
+        // A later update can retry persistence without losing this run's settings.
+      }
+      return true;
     } catch (error) {
       console.warn(
         `Could not backfill psadtConfig for policy ${policy.id}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
+      return false;
     }
   }
 
