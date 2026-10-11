@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "workflowCommit": "79698e1e2acc480f0a9194ba000795140403286c",
+    "runId": "37805117840",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "keepassxc",
+    "version": "2.7.12",
+    "installerUrl": "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.12/KeePassXC-2.7.12-Win64.msi",
+    "vendorSha256": "feee096c1d5d0d7bb7b36b18174818f7bac889be7668c550ff0e5ef9206ea9a5",
+    "releaseNotesUrl": "https://github.com/keepassxreboot/keepassxc/releases/tag/2.7.12",
+    "discoveredAt": "2026-10-08T13:29:05.468Z",
+    "id": "1cf81b5feab465f8d07bc9c8"
+  },
+  "previous": {
+    "appId": "keepassxc",
+    "version": "2.7.11",
+    "installerUrl": "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.11/KeePassXC-2.7.11-Win64.msi",
+    "vendorSha256": "74abea9e12282cc2b0feb51ebc6db65299eb4ef0086e89cfad8dcaafc94a6f67",
+    "releaseNotesUrl": "https://github.com/keepassxreboot/keepassxc/releases/tag/2.7.11",
+    "discoveredAt": "2026-10-08T13:29:26.486Z",
+    "id": "2d6a9dd31189e2f141e06b8f"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "1cf81b5feab465f8d07bc9c8",
+      "installerSha256": "feee096c1d5d0d7bb7b36b18174818f7bac889be7668c550ff0e5ef9206ea9a5",
+      "sourceUrl": "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.12/KeePassXC-2.7.12-Win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "DroidMonkey Apps, LLC"
+      },
+      "security": {
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0",
+        "status": "clean",
+        "scannedAt": "2026-10-08T16:04:52.7982899Z",
+        "suspicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "feee096c1d5d0d7bb7b36b18174818f7bac889be7668c550ff0e5ef9206ea9a5",
+        "malicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "2d6a9dd31189e2f141e06b8f",
+      "installerSha256": "74abea9e12282cc2b0feb51ebc6db65299eb4ef0086e89cfad8dcaafc94a6f67",
+      "sourceUrl": "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.11/KeePassXC-2.7.11-Win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "DroidMonkey Apps, LLC"
+      },
+      "security": {
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0",
+        "status": "clean",
+        "scannedAt": "2026-10-08T16:05:00.7061796Z",
+        "suspicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "installerSha256": "74abea9e12282cc2b0feb51ebc6db65299eb4ef0086e89cfad8dcaafc94a6f67",
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "1cf81b5feab465f8d07bc9c8",
+    "packageId": "IntuneGet.Curated.KeePassXC",
+    "installerUrl": "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.12/KeePassXC-2.7.12-Win64.msi",
+    "installerSha256": "feee096c1d5d0d7bb7b36b18174818f7bac889be7668c550ff0e5ef9206ea9a5",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.KeePassXC",
+      "displayName": "KeePassXC",
+      "publisher": "KeePassXC Team",
+      "version": "2.7.12",
+      "architecture": "x64",
+      "installerSha256": "feee096c1d5d0d7bb7b36b18174818f7bac889be7668c550ff0e5ef9206ea9a5",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:KeePassXC",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_KeePassXC\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.7.12\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_KeePassXC\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.7.12\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "87B7119A25DBC2B587D0463EBF017C250076E477CE4DBE0C3B78D0B6ADB4A7A6",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.KeePassXC\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.7.12\",\"wingetId\":\"IntuneGet.Curated.KeePassXC\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.7.12\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_KeePassXC\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"19D87F43AD0B00998DF66E0492C742D418C61650B064D2B745BCE83B9B37F7BA\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"FEEE096C1D5D0D7BB7B36B18174818F7BAC889BE7668C550FF0E5EF9206EA9A5\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:KeePassXC\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.7.12\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_KeePassXC\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"9AF1EE82FBE78E0BA8ACFB4437587A3B7096A18879075C9A39C6AF211FC91809\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "9af1ee82fbe78e0ba8acfb4437587a3b7096a18879075c9a39c6af211fc91809",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "testLevel": "psadt-package",
+    "installerVersion": "2.7.12",
+    "executionContext": "LocalSystem",
+    "previousInstallerSha256": "74abea9e12282cc2b0feb51ebc6db65299eb4ef0086e89cfad8dcaafc94a6f67",
+    "testedAt": "2026-10-08T16:06:35.3972495Z",
+    "executionProfileSha256": "87B7119A25DBC2B587D0463EBF017C250076E477CE4DBE0C3B78D0B6ADB4A7A6",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "upgradeFromVersion": "2.7.11",
+    "installerSha256": "feee096c1d5d0d7bb7b36b18174818f7bac889be7668c550ff0e5ef9206ea9a5",
+    "architecture": "x64",
+    "candidateId": "1cf81b5feab465f8d07bc9c8"
+  },
+  "verifiedAt": "2026-10-08T16:06:39.5535539Z",
+  "authenticatedArtifact": {
+    "id": 11562223557,
+    "sha256": "0f276e7d4c1edc57680e1a5ec7b5d26ce4641aa4e099a547484aa324bd8ed678"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

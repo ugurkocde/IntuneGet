@@ -281,6 +281,18 @@ describe('POST /api/updates/trigger', () => {
     ]);
   });
 
+  it('restores temporary manual policy settings and never dispatches when fixed rules hold the update', async () => {
+    const policy = {id:'policy-1',user_id:'user-1',tenant_id:'tenant-1',winget_id:'Microsoft.Edge',policy_type:'notify',is_enabled:false,consecutive_failures:0,deployment_config:{architecture:'x64',psadtConfig:{customDetection:true}},original_upload_history_id:null} as AppUpdatePolicy;
+    const {supabase,policyUpdatePayloads}=createTriggerSupabaseMocks(policy);
+    createServerClientMock.mockReturnValue(supabase);
+    getLatestInstallerInfoMock.mockResolvedValue({ok:true,info:{wingetId:'Microsoft.Edge',currentVersion:'',latestVersion:'2.0.0'}});
+    triggerAutoUpdateMock.mockResolvedValue({success:false,skipped:true,skipReason:'Custom detection rules are fixed. Deploy 2.0.0 from the catalog with updated rules.'});
+    const response=await POST(new NextRequest('http://localhost:3000/api/updates/trigger',{method:'POST',headers:{Authorization:'Bearer test-token','Content-Type':'application/json'},body:JSON.stringify({winget_id:'Microsoft.Edge',tenant_id:'tenant-1'})}));
+    expect((await response.json()).results[0]).toMatchObject({success:false,skipped:true});
+    expect(policyUpdatePayloads).toEqual([{policy_type:'auto_update',is_enabled:true},{policy_type:'notify',is_enabled:false}]);
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it('returns an explicit skipped result when auto-update is blocked by current QA', async () => {
     const policy: AppUpdatePolicy = {
       id: 'policy-1',
