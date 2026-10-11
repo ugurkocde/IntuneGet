@@ -3,11 +3,11 @@ import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
-import { QA_PSADT_TOOLCHAIN, validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
+import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
-import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
+import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
@@ -184,17 +184,14 @@ export async function GET(request: Request) {
   const supersededAt = new Date().toISOString();
 
   for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
-    let queueQuery = supabase
+    let queueQuery = orderQaQueue(supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts'
+        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts, next_retry_at'
       )
       .eq('test_level', 'psadt-package')
       .eq('status', 'queued')
-      .lte('next_retry_at', now.toISOString())
-      .order('priority', { ascending: false })
-      .order('enqueued_at', { ascending: true })
-      .order('id', { ascending: true })
+      .lte('next_retry_at', now.toISOString()))
       .limit(QUEUE_SCAN_PAGE_SIZE);
     if (cursor) {
       const enqueuedAt = postgrestQuoted(cursor.enqueuedAt);
@@ -217,23 +214,12 @@ export async function GET(request: Request) {
       invalidByReason.set(reason, ids);
     };
     for (const candidate of page) {
-      if (!queueCursor(candidate)) {
-        addInvalid('queue-metadata-invalid', candidate.id);
+      const reason = qaQueueCandidateReason(candidate, now);
+      if (reason) {
+        if (reason !== 'source-retry-pending') addInvalid(reason, candidate.id);
         continue;
       }
-      if (!isQaRunnerArchitectureSupported(candidate.architecture)) {
-        addInvalid('runner-architecture-unsupported', candidate.id);
-        continue;
-      }
-      const validation = validateCurrentQaPackageProfile({
-        testConfig: candidate.test_config,
-        candidatePackageProfileSha256: candidate.package_profile_sha256,
-        candidateWingetId: candidate.winget_id,
-        candidateVersion: candidate.version,
-        candidateArchitecture: candidate.architecture,
-        candidateInstallerSha256: candidate.installer_sha256,
-      });
-      if (validation.valid) {
+      {
         const compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
           wingetId: candidate.winget_id,
           version: candidate.version,
@@ -253,7 +239,6 @@ export async function GET(request: Request) {
         eligible.push(candidate);
         continue;
       }
-      addInvalid(validation.reason, candidate.id);
     }
 
     for (const [reason, ids] of invalidByReason) {

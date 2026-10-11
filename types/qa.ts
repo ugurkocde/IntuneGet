@@ -186,6 +186,7 @@ export interface QaLiveResponse {
   log: QaLiveLog | null;
   queue: {
     count: number;
+    waiting: Array<{ wingetId: string; displayName: string; version: string; architecture: QaArchitecture; reason: string; next_check_at: string | null }>;
     next: Array<{
       wingetId: string;
       displayName: string;
