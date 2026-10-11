@@ -6,6 +6,7 @@ const {
   getDatabaseMock,
   getByUserIdMock,
   getByIdMock,
+  getApprovalFailuresMock,
   updateMock,
   createMock,
   parseAccessTokenMock,
@@ -26,6 +27,7 @@ const {
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
   getByIdMock: vi.fn(),
+  getApprovalFailuresMock: vi.fn(),
   updateMock: vi.fn(),
   createMock: vi.fn(),
   parseAccessTokenMock: vi.fn(),
@@ -124,6 +126,8 @@ import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
 import { QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+
+beforeEach(() => getApprovalFailuresMock.mockResolvedValue([]));
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
@@ -305,6 +309,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       jobs: {
         create: createMock,
         update: updateMock,
+        getApprovalFailures: getApprovalFailuresMock,
       },
     });
     createMock.mockImplementation(async (data: Record<string, unknown>) => ({
@@ -432,6 +437,25 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
     expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }));
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('blocks approval checkpoints before creating or dispatching a forced job (%s)', async forceCreate => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const item = { ...makeWin32Item(), forceCreate };
+    getApprovalFailuresMock.mockResolvedValue([{ tenant_id: 'tenant-1', winget_id: item.wingetId,
+      user_id: 'another-user', version: 'older', status: 'failed', error_category: 'approval', error_details: null,
+      archived_at: new Date().toISOString() }]);
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [item], forceCreate }),
+    }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INTUNE_APPROVAL_PENDING', retryable: false });
+    expect(createMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(infoSpy.mock.calls.some(([message]) => String(message).startsWith('[Package] Deployment job'))).toBe(false);
+    infoSpy.mockRestore();
   });
 
   it('returns an actionable conflict for removed versions before creating or dispatching jobs', async () => {
@@ -1983,7 +2007,7 @@ describe('POST /api/package (curated licence attestation)', () => {
     acrobatItem = cart(0);
     chromeItem = cart(1, CURATED_APPS[0]);
     getDatabaseMock.mockReturnValue({
-      jobs: { create: createMock, update: updateMock },
+      jobs: { create: createMock, update: updateMock, getApprovalFailures: getApprovalFailuresMock },
       curatedLicenceAttestations: {
         get: vi.fn(async (tenantId: string, id: string, version: string) => acceptances.has(`${tenantId}|${id}|${version}`)
           ? { id: 'acceptance', tenant_id: tenantId, app_id: acrobat.id, attestation_id: id, attestation_version: version,
@@ -2015,6 +2039,19 @@ describe('POST /api/package (curated licence attestation)', () => {
     method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
     body: JSON.stringify({ items }),
   }));
+
+  it('checks the canonical curated package ID before any demand or job for mixed casing', async () => {
+    getApprovalFailuresMock.mockImplementation(async (_tenant: string, packageId: string) => packageId === acrobat.packageId
+      ? [{ tenant_id: 'tenant-1', winget_id: acrobat.packageId, status: 'failed', error_category: 'approval', error_details: null }]
+      : []);
+    const response = await post([{ ...acrobatItem, wingetId: acrobat.packageId.toUpperCase() }]);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INTUNE_APPROVAL_PENDING', package: { wingetId: acrobat.packageId } });
+    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', acrobat.packageId, undefined);
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
 
   it('blocks a curated app whose agreement the tenant has not accepted, before any job exists', async () => {
     const response = await post([acrobatItem]);

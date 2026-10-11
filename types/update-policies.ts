@@ -223,6 +223,7 @@ export interface TriggerUpdateResponse {
       | 'QA_PACKAGE_COMPATIBILITY_BLOCKED'
       | 'CURATED_LICENCE_NOT_ACCEPTED'
       | 'CURATED_CONFIG_VERIFICATION_REQUIRED'
+      | 'INTUNE_APPROVAL_PENDING'
       | 'CURATED_CONFIG_VERIFICATION_FAILED'
       | 'RATE_LIMIT_UNVERIFIED';
     packaging_job_id?: string;

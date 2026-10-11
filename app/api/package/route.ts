@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import { CuratedCatalogError, isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { reconcileCuratedCartItem } from '@/lib/curated-catalog/server';
+import { findCuratedApp } from '@/lib/curated-catalog/definitions';
 import { assertCuratedLicenceAccepted, CuratedLicenceError } from '@/lib/curated-catalog/licence';
 /**
  * Package API Route
@@ -28,6 +29,7 @@ import { extractSilentSwitches } from '@/lib/msp/silent-switches';
 import { buildIntuneAppDescription } from '@/lib/intune-description';
 import { sanitizeAssignmentsForDispatch } from '@/lib/assignment-intents';
 import { acquireGraphToken } from '@/lib/graph-token';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import { deployStoreApp } from '@/lib/store-app-deploy';
 import {
   STALE_JOB_TIMEOUT_MINUTES,
@@ -185,6 +187,22 @@ export async function POST(request: NextRequest) {
 
     // Get database adapter (SQLite or Supabase)
     const db = getDatabase();
+
+    // This checkpoint precedes every Store/Win32 insert and curated QA demand.
+    // Neither request-level nor item-level forceCreate bypasses approval safety.
+    // Check the stored canonical ID and any legacy submitted casing before demand.
+    const approvalBlocks = await findPendingApprovalBlocks({ tenantId,
+      wingetIds: items.flatMap(item => {
+        const curated = typeof item.wingetId === 'string' &&
+          (isCuratedPackageId(item.wingetId) || item.sourceType === 'curated')
+          ? findCuratedApp(item.wingetId) : undefined;
+        return curated ? [curated.packageId, item.wingetId] : [item.wingetId];
+      }) }, { db });
+    if (approvalBlocks.length) {
+      const block = approvalBlocks[0];
+      return NextResponse.json({ error: 'Intune approval unresolved', code: block.code,
+        message: block.message, package: { wingetId: block.wingetId }, retryable: false }, { status: 409 });
+    }
 
     // Partition items into store apps and win32 apps
     const storeItems: StoreCartItem[] = [];
