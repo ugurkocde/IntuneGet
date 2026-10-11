@@ -439,6 +439,32 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['null body', null],
+    ['string items', { items: 'abc' }],
+    ['object items', { items: {} }],
+    ['null item', { items: [null] }],
+    ['number item', { items: [5] }],
+    ['array item', { items: [[]] }],
+    ...['x', [], null, 7].map(psadtConfig => [
+      `invalid settings ${JSON.stringify(psadtConfig)}`,
+      { items: [makeWin32Item({ psadtConfig })] },
+    ]),
+    ['mixed batch', { items: [makeWin32Item(), makeWin32Item({ psadtConfig: 'x' })] }],
+  ])('rejects malformed package requests before side effects: %s', async (_name, body) => {
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }));
+    expect(response.status).toBe(400);
+    expect(getDatabaseMock).not.toHaveBeenCalled();
+    expect(getApprovalFailuresMock).not.toHaveBeenCalled();
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks approval checkpoints before creating or dispatching a forced job (%s)', async forceCreate => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const item = { ...makeWin32Item(), forceCreate };
@@ -456,6 +482,34 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
     expect(infoSpy.mock.calls.some(([message]) => String(message).startsWith('[Package] Deployment job'))).toBe(false);
     infoSpy.mockRestore();
+  });
+
+  it.each([[], [{type:'script',scriptContent:'exit 0'}], [{type:'file',path:'',fileOrFolderName:'app.exe',detectionType:'exists'}],
+    [{type:'file',path:'C:\\Example',fileOrFolderName:'app.exe',detectionType:'dateModified',operator:'equal',detectionValue:'2026-10-09'}],
+    [{type:'registry',keyPath:'HKEY_LOCAL_MACHINE\\Software\\Example',detectionType:'integer',operator:'equal',detectionValue:'abc'}],
+    [{type:'msi',productCode:'{11111111-2222-3333-4444-555555555555}',productVersionOperator:'equal',productVersion:'256.1.2'}],
+  ])('rejects invalid opted in detection before preflight and job creation', async rules => {
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({items:[makeWin32Item({psadtConfig:{customDetection:true},detectionRules:rules})]}),
+    }));
+    expect(response.status).toBe(400);
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves exact custom marker-shaped rules in both persisted rule stores', async () => {
+    const rules = [{type:'registry',keyPath:'HKEY_LOCAL_MACHINE\\SOFTWARE\\IntuneGet\\Apps\\Test_App',valueName:'Version',detectionType:'version',operator:'equal',detectionValue:'0.9.0'}];
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method:'POST',headers:{Authorization:'Bearer test-token','Content-Type':'application/json'},
+      body:JSON.stringify({items:[makeWin32Item({psadtConfig:{customDetection:true},detectionRules:rules})]}),
+    }));
+    expect(response.status).toBe(200);
+    const job = createMock.mock.calls[0][0];
+    expect(job.detection_rules).toEqual(rules);
+    expect(job.package_config.psadtConfig).toMatchObject({customDetection:true,detectionRules:rules});
   });
 
   it('returns an actionable conflict for removed versions before creating or dispatching jobs', async () => {
