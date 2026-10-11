@@ -228,6 +228,52 @@ describe('custom detection rules', () => {
     expect(item?.psadtConfig.customDetection).toBe(true);
   });
 
+  it('remembers reopened authored rules after switching through an unsupported installer', async () => {
+    const rules: DetectionRule[] = [{ type: 'msi', productCode: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}' }];
+    const props = {
+      deployedConfig: { ...deployed, detectionRules: rules, psadtConfig: { ...deployed.psadtConfig, customDetection: true, detectionRules: rules } },
+    };
+    await render(props);
+    await render({ ...props, installers: [{ ...installer, type: 'msix' }] });
+    expect(customToggle()).toBeUndefined();
+    await render(props);
+    expect(customToggle()?.getAttribute('aria-checked')).toBe('false');
+    await click(customToggle());
+    expect(field('Rule 1 product code').value).toBe('{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}');
+    const item = await save();
+    expect(item?.psadtConfig.customDetection).toBe(true);
+    expect(item?.detectionRules).toEqual(rules);
+    expect(item?.psadtConfig.detectionRules).toEqual(rules);
+  });
+
+  it('remembers reopened rules when a non-default version manifest arrives after mount', async () => {
+    const rules: DetectionRule[] = [{ type: 'msi', productCode: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}' }];
+    const props = {
+      deployedConfig: { ...deployed, version: '1.0', detectionRules: rules, psadtConfig: { ...deployed.psadtConfig, customDetection: true, detectionRules: rules } },
+    };
+    manifestState.isFetching = true;
+    await render(props);
+    expect(customToggle()).toBeUndefined();
+    manifestState.isFetching = false;
+    manifestState.data = { manifest: { version: '1.0' }, installers: [installer] };
+    await render(props);
+    expect(customToggle()?.getAttribute('aria-checked')).toBe('true');
+    expect(field('Rule 1 product code').value).toBe('{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}');
+    manifestState.data = { manifest: { version: '1.0' }, installers: [{ ...installer, type: 'msix' }] };
+    await render(props);
+    expect(customToggle()).toBeUndefined();
+    manifestState.data = { manifest: { version: '1.0' }, installers: [installer] };
+    await render(props);
+    expect(customToggle()?.getAttribute('aria-checked')).toBe('false');
+    await click(customToggle());
+    expect(field('Rule 1 product code').value).toBe('{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}');
+    const item = await save();
+    expect(item?.version).toBe('1.0');
+    expect(item?.psadtConfig.customDetection).toBe(true);
+    expect(item?.detectionRules).toEqual(rules);
+    expect(item?.psadtConfig.detectionRules).toEqual(rules);
+  });
+
   it('remembers authored rules after switching through an unsupported installer', async () => {
     await render();
     await click(customToggle());

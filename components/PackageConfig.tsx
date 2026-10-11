@@ -335,6 +335,9 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     });
   const customDetectionActive = config.customDetection === true && customDetectionSupported;
   const lastCustomRulesRef = useRef<DetectionRule[] | null>(null);
+  useEffect(() => {
+    if (customDetectionActive) lastCustomRulesRef.current = config.detectionRules;
+  }, [customDetectionActive, config.detectionRules]);
   const availableArchitectures = [...new Set(effectiveInstallers.map((i) => i.architecture))];
   const availableVersions = versions.length > 0 ? versions : (pkg.versions ?? []);
   const hasMultipleVersions = availableVersions.length > 1;
@@ -428,7 +431,6 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     );
     setConfig((prev) => {
       if (prev.customDetection !== true) return { ...prev, detectionRules: rules };
-      lastCustomRulesRef.current = prev.detectionRules;
       const { customDetection: _customDetection, ...rest } = prev;
       return { ...rest, detectionRules: rules };
     });
@@ -438,6 +440,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
     setCustomDetectionErrors([]);
     if (enabled) {
       const rules = lastCustomRulesRef.current ?? [createEmptyDetectionRule('registry')];
+      lastCustomRulesRef.current = rules;
       setConfig((prev) => ({ ...prev, customDetection: true, detectionRules: rules }));
     } else {
       lastCustomRulesRef.current = config.detectionRules;
@@ -1809,6 +1812,7 @@ export function PackageConfig({ package: pkg, installers, versions = [], onClose
                       rules={config.detectionRules}
                       onChange={(detectionRules) => {
                         setCustomDetectionErrors([]);
+                        lastCustomRulesRef.current = detectionRules;
                         updateConfig({ detectionRules });
                       }}
                       errors={customDetectionErrors}
