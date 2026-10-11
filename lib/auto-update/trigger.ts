@@ -4,6 +4,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabaseDb } from '@/lib/db/supabase-adapter';
 import {
   AppUpdatePolicy,
   AutoUpdateHistory,
@@ -272,7 +273,7 @@ export class AutoUpdateTrigger {
       const curated = isCuratedPackageId(updateInfo.wingetId) || updateInfo.sourceType === 'curated'
         ? findCuratedApp(updateInfo.wingetId) : undefined;
       const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
-        wingetIds: curated ? [curated.packageId, updateInfo.wingetId] : [updateInfo.wingetId] });
+        wingetIds: curated ? [curated.packageId, updateInfo.wingetId] : [updateInfo.wingetId] }, { db: supabaseDb });
       if (approvalBlocks.length) {
         return { success: false, skipped: true, code: approvalBlocks[0].code,
           skipReason: approvalBlocks[0].message };

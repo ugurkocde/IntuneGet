@@ -4,8 +4,10 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, AnalyticsJob, AnalyticsJobScope } from './types';
+import { collectAnalyticsJobs } from '@/lib/analytics/complete-job-pages';
 import type {
   AppUpdatePolicy,
   AutoUpdateHistory,
@@ -191,6 +193,29 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]> {
+      const key = scope.tenantId === undefined ? 'user_id' : 'tenant_id';
+      const identity = scope.tenantId ?? scope.userId;
+      if (!identity) throw new Error('Statistics identity required');
+      const supabase = createServerClient();
+      let archiveSupported = true;
+      const deadline = AbortSignal.timeout(15000);
+      return collectAnalyticsJobs(async offset => {
+        const readPage = () => {
+          let query = supabase.from('packaging_jobs')
+            .select('id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url', { count: 'exact' })
+            .eq(key, identity);
+          if (archiveSupported) query = query.is('archived_at', null);
+          return query.order('created_at', { ascending: false }).order('id', { ascending: false })
+            .range(offset, offset + 999).abortSignal(deadline);
+        };
+        let result = await readPage();
+        if (isMissingArchiveColumn(result.error)) { archiveSupported = false; result = await readPage(); }
+        if (result.error) throw new Error('Statistics read failed');
+        return { data: (result.data ?? []) as AnalyticsJob[], count: result.count };
+      });
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const supabase = createServerClient();
 
@@ -211,8 +236,14 @@ export const supabaseDb: DatabaseAdapter = {
     },
 
     async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
       let query = createServerClient().from('packaging_jobs').select('*')
-        .eq('tenant_id', tenantId).eq('winget_id', wingetId).in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
+        .eq('tenant_id', tenantId);
+      query = curated ? query.ilike('winget_id', wingetId) : query.eq('winget_id', wingetId);
+      query = query.in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
         .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
         .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
       if (cursor) {

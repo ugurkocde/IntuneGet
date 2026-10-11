@@ -129,6 +129,7 @@ export function RecentActivityList({ activities, loading }: RecentActivityListPr
               <p className="text-xs text-text-muted">
                 {formatRelativeTime(activity.timestamp)}
               </p>
+              {activity.deployedBy !== undefined && <p className="text-xs text-text-muted truncate">{activity.deployedBy || <T>Unknown user</T>}</p>}
             </div>
 
             {activity.intuneAppUrl && activity.status === 'success' && (

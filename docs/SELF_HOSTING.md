@@ -2,6 +2,18 @@
 
 This guide covers deploying IntuneGet on your own infrastructure.
 
+## Server diagnostics
+
+Set `INTUNEGET_LOG_LEVEL` to `debug`, `info` (default), `warn`, or `error`, then restart the server. The level applies to existing server `console.log`, `info`, `warn`, `error`, and `debug` calls. It does not add debug messages where none exist; `trace`, `dir`, and `table` remain unchanged. Terminal arguments and stack formatting are preserved.
+
+Set `INTUNEGET_LOG_DIR` to enable persistent server logs. Docker Compose defaults to `/data/logs` in the existing data volume. Other deployments have no file output unless this variable is set. The server creates the folder on its first accepted log line. Bind mounts must allow the container user (UID/GID 1001) to write there. Do not share a log directory between server processes.
+
+`intuneget.log` rotates at 5 MiB, retaining three backups (`.1` through `.3`), for up to 20 MiB per process directory. The asynchronous queue is bounded; excess lines are dropped with a count. A filesystem failure disables file logging until restart and emits one error code on stderr. Requests continue normally. Build workers never create log files. Vercel and explicit hosted mode keep their existing console behavior and never write these files.
+
+File lines redact credential patterns, URLs, email addresses and UUIDs and flatten line breaks. This is not a guarantee that arbitrary third party messages contain no personal information; restrict log access and treat logs as sensitive. Terminal output retains the existing call site redaction. POSIX folders/files use permissions 0750/0640 when created; Windows uses the directory ACL.
+
+Next server request errors record the route pattern and numeric error digest without request URLs, headers or error contents. Root, global and dashboard page error boundaries also send a fixed area and optional numeric digest to `/api/diagnostics/page-error`. This diagnostic makes no database or Graph calls. Reports are limited to three per page load and five per minute per server process, so some events can be suppressed. It covers errors caught by these page boundaries, rather than every browser exception or a failure before the reporting JavaScript can run.
+
 ## Deployment Modes
 
 IntuneGet supports two self-hosting modes:

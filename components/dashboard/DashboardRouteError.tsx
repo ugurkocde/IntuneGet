@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { T } from 'gt-next';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/dashboard/PageHeader';
+import { reportPageError } from '@/lib/logging/report-page-error';
 
 interface DashboardRouteErrorProps {
   error: Error & { digest?: string };
@@ -30,6 +31,7 @@ export function DashboardRouteError({
 }: DashboardRouteErrorProps) {
   useEffect(() => {
     console.error(`${logLabel} page error:`, error);
+    reportPageError('dashboard', error.digest);
   }, [error, logLabel]);
 
   const message = error.message || '';
