@@ -68,7 +68,7 @@ function getEnvVar(key: string, required: boolean = false): string | undefined {
   return value;
 }
 
-function determineDeploymentMode(): "hosted" | "self-hosted" {
+export function determineDeploymentMode(): "hosted" | "self-hosted" {
   // Check if running on Vercel (hosted)
   if (process.env.VERCEL === "1") {
     return "hosted";

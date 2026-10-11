@@ -1,0 +1,5 @@
+{
+  "type": "improved",
+  "title": "Configurable server logs and page error diagnostics",
+  "summary": "Self-hosted operators can select server log verbosity and persist bounded rotating logs. Page failures now report a minimal diagnostic without sending page URLs or error contents."
+}

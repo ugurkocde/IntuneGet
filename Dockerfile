@@ -41,7 +41,7 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Empty named volumes inherit this directory's ownership on container creation.
-RUN mkdir -p /data && chown nextjs:nodejs /data
+RUN mkdir -p /data/logs && chmod 0750 /data/logs && chown -R nextjs:nodejs /data
 
 # Copy built application
 COPY --from=builder /app/public ./public
