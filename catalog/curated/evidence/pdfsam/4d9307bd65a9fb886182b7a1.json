@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowCommit": "f9f181747391939dab678ace473c3a8313a9ad1c",
+    "runAttempt": "1",
+    "runId": "37814003171",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "pdfsam",
+    "version": "6.0.6",
+    "installerUrl": "https://github.com/torakiki/pdfsam/releases/download/v6.0.6/pdfsam-basic-6.0.6-windows-x64.msi",
+    "vendorSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+    "releaseNotesUrl": "https://github.com/torakiki/pdfsam/releases/tag/v6.0.6",
+    "discoveredAt": "2026-10-08T13:29:06.971Z",
+    "id": "4d9307bd65a9fb886182b7a1"
+  },
+  "previous": {
+    "appId": "pdfsam",
+    "version": "6.0.5",
+    "installerUrl": "https://github.com/torakiki/pdfsam/releases/download/v6.0.5/pdfsam-basic-6.0.5-windows-x64.msi",
+    "vendorSha256": "956c37e2bbb1ac8af73f6aa2bc1dc651d457274221522e27e512d725b703f002",
+    "releaseNotesUrl": "https://github.com/torakiki/pdfsam/releases/tag/v6.0.5",
+    "discoveredAt": "2026-10-08T13:29:32.405Z",
+    "id": "31d5cdc2e09fee743673cb0e"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "4d9307bd65a9fb886182b7a1",
+      "installerSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+      "sourceUrl": "https://github.com/torakiki/pdfsam/releases/download/v6.0.6/pdfsam-basic-6.0.6-windows-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Sober Lemur S.r.l.",
+        "status": "valid"
+      },
+      "security": {
+        "scannedAt": "2026-10-08T17:14:27.066759Z",
+        "installerSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+        "scanner": "defender",
+        "malicious": 0,
+        "suspicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "signatureVersion": "1.459.601.0"
+      }
+    },
+    "previous": {
+      "candidateId": "31d5cdc2e09fee743673cb0e",
+      "installerSha256": "956c37e2bbb1ac8af73f6aa2bc1dc651d457274221522e27e512d725b703f002",
+      "sourceUrl": "https://github.com/torakiki/pdfsam/releases/download/v6.0.5/pdfsam-basic-6.0.5-windows-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "Sober Lemur S.r.l.",
+        "status": "valid"
+      },
+      "security": {
+        "scannedAt": "2026-10-08T17:16:25.5584757Z",
+        "installerSha256": "956c37e2bbb1ac8af73f6aa2bc1dc651d457274221522e27e512d725b703f002",
+        "scanner": "defender",
+        "malicious": 0,
+        "suspicious": 0,
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "signatureVersion": "1.459.601.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "4d9307bd65a9fb886182b7a1",
+    "packageId": "IntuneGet.Curated.PDFsam",
+    "installerUrl": "https://github.com/torakiki/pdfsam/releases/download/v6.0.6/pdfsam-basic-6.0.6-windows-x64.msi",
+    "installerSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.PDFsam",
+      "displayName": "PDFsam Basic",
+      "publisher": "Sober Lemur S.r.l.",
+      "version": "6.0.6",
+      "architecture": "x64",
+      "installerSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart SKIPTHANKSPAGE=Yes ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:PDFsam Basic",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PDFsam\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.0.6\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PDFsam\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"6.0.6\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "AB56657BCBF223473FA115B6D94AFCF751851B3E21939B24004430C9DBF99AE0",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.PDFsam\",\"publisher\":\"IntuneGet QA\",\"version\":\"6.0.6\",\"wingetId\":\"IntuneGet.Curated.PDFsam\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.0.6\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PDFsam\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"155A14DFC6CC3890E31C8E23ED2136E307C158742160ECFA9CC223DEEA183BAA\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"210996DB06D202A30AC23E23ED3EFDF9C3396894481ABFBC97BC26945A6C6346\",\"silentArgs\":\"/qn /norestart SKIPTHANKSPAGE=Yes ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:PDFsam Basic\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"6.0.6\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_PDFsam\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"B54BBBC5874638C1370C30362139213B6BA63A708016E4BEA9798452E49A7087\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "b54bbbc5874638c1370c30362139213b6ba63a708016e4bea9798452e49a7087",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionContext": "LocalSystem",
+    "executionProfileSha256": "AB56657BCBF223473FA115B6D94AFCF751851B3E21939B24004430C9DBF99AE0",
+    "installerVersion": "6.0.6",
+    "testLevel": "psadt-package",
+    "upgradeFromVersion": "6.0.5",
+    "candidateId": "4d9307bd65a9fb886182b7a1",
+    "architecture": "x64",
+    "testedAt": "2026-10-08T17:17:53.9302543Z",
+    "installerSha256": "210996db06d202a30ac23e23ed3efdf9c3396894481abfbc97bc26945a6c6346",
+    "previousInstallerSha256": "956c37e2bbb1ac8af73f6aa2bc1dc651d457274221522e27e512d725b703f002",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    }
+  },
+  "verifiedAt": "2026-10-08T17:17:56.6190719Z",
+  "authenticatedArtifact": {
+    "id": 11566463174,
+    "sha256": "9625e03bf36547dc760867ab0cc353caf63a94f95b3300edbb803b2db3be1be6"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

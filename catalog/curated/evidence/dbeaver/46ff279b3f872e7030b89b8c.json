@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowCommit": "ce419be6b40088360c93ced62caedfb28b5a0186",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "runAttempt": "1",
+    "runId": "37801337864"
+  },
+  "candidate": {
+    "appId": "dbeaver",
+    "version": "26.2.2",
+    "installerUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.2/dbeaver-ce-26.2.2-windows-x86_64.exe",
+    "vendorSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79",
+    "releaseNotesUrl": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.2",
+    "discoveredAt": "2026-10-08T13:29:04.161Z",
+    "id": "46ff279b3f872e7030b89b8c"
+  },
+  "previous": {
+    "appId": "dbeaver",
+    "version": "26.2.1",
+    "installerUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.1/dbeaver-ce-26.2.1-windows-x86_64.exe",
+    "vendorSha256": "7c2e5b957f415335484ab23db2807b548eea49dbd02c844450d425de227cb455",
+    "releaseNotesUrl": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.1",
+    "discoveredAt": "2026-10-08T13:29:23.636Z",
+    "id": "9688f0522c259008404459a3"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "46ff279b3f872e7030b89b8c",
+      "installerSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79",
+      "sourceUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.2/dbeaver-ce-26.2.2-windows-x86_64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "DBeaver Corp"
+      },
+      "security": {
+        "suspicious": 0,
+        "signatureVersion": "1.459.601.0",
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "scannedAt": "2026-10-08T15:35:44.7438475Z",
+        "installerSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79",
+        "status": "clean",
+        "malicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "9688f0522c259008404459a3",
+      "installerSha256": "7c2e5b957f415335484ab23db2807b548eea49dbd02c844450d425de227cb455",
+      "sourceUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.1/dbeaver-ce-26.2.1-windows-x86_64.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "DBeaver Corp"
+      },
+      "security": {
+        "suspicious": 0,
+        "signatureVersion": "1.459.601.0",
+        "scanner": "defender",
+        "engineVersion": "1.1.26080.3",
+        "scannedAt": "2026-10-08T15:35:54.4451715Z",
+        "installerSha256": "7c2e5b957f415335484ab23db2807b548eea49dbd02c844450d425de227cb455",
+        "status": "clean",
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "46ff279b3f872e7030b89b8c",
+    "packageId": "IntuneGet.Curated.DBeaver",
+    "installerUrl": "https://github.com/dbeaver/dbeaver/releases/download/26.2.2/dbeaver-ce-26.2.2-windows-x86_64.exe",
+    "installerSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.DBeaver",
+      "displayName": "DBeaver Community",
+      "publisher": "DBeaver Corp",
+      "version": "26.2.2",
+      "architecture": "x64",
+      "installerSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79",
+      "installerType": "nullsoft",
+      "installScope": "machine",
+      "silentSwitches": "/S /allusers",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:DBeaver:DBeaver",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBeaver\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.2.2\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBeaver\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.2.2\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "58B9618AB3C1358E16B59017704E599CEAACF6AC879E99F48AFCBF7068E84A70",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.DBeaver\",\"publisher\":\"IntuneGet QA\",\"version\":\"26.2.2\",\"wingetId\":\"IntuneGet.Curated.DBeaver\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.2.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBeaver\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"595635F4C742A528A015E396D2B6BDDCDACB81F4639D01348A85E03410943B9F\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"6DE2427F0EA760424C1F34B9EC056B1F18878576BD5054850DAA0CEFBFB90A79\",\"silentArgs\":\"/S /allusers\",\"sourceType\":\"nullsoft\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:DBeaver:DBeaver\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.2.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBeaver\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"2DBB54817D23133D46CF4AE50D3804A20FCB02CD9D023BF28D65269951F1141C\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "2dbb54817d23133d46cf4ae50d3804a20fcb02cd9d023bf28d65269951f1141c",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "executionContext": "LocalSystem",
+    "previousInstallerSha256": "7c2e5b957f415335484ab23db2807b548eea49dbd02c844450d425de227cb455",
+    "testLevel": "psadt-package",
+    "executionProfileSha256": "58B9618AB3C1358E16B59017704E599CEAACF6AC879E99F48AFCBF7068E84A70",
+    "upgradeFromVersion": "26.2.1",
+    "architecture": "x64",
+    "candidateId": "46ff279b3f872e7030b89b8c",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerVersion": "26.2.2",
+    "testedAt": "2026-10-08T15:38:13.2652221Z",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "installerSha256": "6de2427f0ea760424c1f34b9ec056b1f18878576bd5054850daa0cefbfb90a79"
+  },
+  "verifiedAt": "2026-10-08T15:38:18.5010616Z",
+  "authenticatedArtifact": {
+    "id": 11561651792,
+    "sha256": "bd1cca3243ba3987f15879eb47e75217310ee4e0c903aa1950255fdc3c005ffb"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
