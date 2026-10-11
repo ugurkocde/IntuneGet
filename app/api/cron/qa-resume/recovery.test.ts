@@ -22,7 +22,7 @@ function fixture() {
     qa_candidate_id: 'candidate', status: 'qa_failed', error_code: 'QA_FAILED_EXECUTION_PROFILE',
     archived_at: null, cancelled_at: null, intune_app_id: null, is_auto_update: false,
     completed_at: '2026-10-01T10:00:00Z', qa_completed_at: '2026-10-01T10:00:00Z',
-    created_at: '2026-10-01T09:00:00Z', package_config: { description: 'Keep presentation', installerSha256: hash },
+    created_at: '2026-10-01T09:00:00Z', updated_at: '2026-10-01T10:00:00Z', package_config: { description: 'Keep presentation', installerSha256: hash },
     presentation_profile_sha256: 'C'.repeat(64), error_stage: 'validation', error_category: 'installer',
   };
   const candidate = { id: 'candidate', status: 'passed', winget_id: 'Example.App', version: '1.0', architecture: 'x64', installer_sha256: hash, package_profile_sha256: profile, finished_at: '2026-10-01T11:00:00Z' };
@@ -30,8 +30,8 @@ function fixture() {
   return { job, candidate, result };
 }
 
-function database(f: ReturnType<typeof fixture>, options: { history?: boolean; duplicate?: boolean; race?: (job: typeof f.job) => void; lookupError?: boolean } = {}) {
-  const rows = [f.job, ...(options.duplicate ? [{ ...f.job, id: 'other', status: 'packaging' }] : [])];
+function database(f: ReturnType<typeof fixture>, options: { history?: boolean; duplicate?: boolean; race?: (job: typeof f.job) => void; lookupError?: boolean; newerFailures?: number } = {}) {
+  const rows = [...Array.from({ length: options.newerFailures || 0 }, (_, n) => ({ ...f.job, id: 'newer-' + n, winget_id: 'Other.App' + n, qa_candidate_id: 'failed-' + n, created_at: '2026-10-02T09:00:00Z' })), f.job, ...(options.duplicate ? [{ ...f.job, id: 'other', status: 'packaging' }] : [])];
   const writes: Record<string, unknown>[] = [];
   let raced = false;
   return { writes, client: { from(table: string) {
@@ -41,7 +41,12 @@ function database(f: ReturnType<typeof fixture>, options: { history?: boolean; d
     const b = {
       select: () => b, order: () => b,
       limit: (n: number) => { count = n; return b; },
-      eq: (k: string, v: unknown) => { predicates.push(row => JSON.stringify(row[k]) === JSON.stringify(v)); return b; },
+      eq: (k: string, v: unknown) => {
+        if (v !== null && typeof v === 'object') throw new Error('PostgREST scalar filter required');
+        predicates.push(row => (k === 'qa_candidates.status'
+          ? row.qa_candidate_id === f.candidate.id ? f.candidate.status : 'failed' : row[k]) === v);
+        return b;
+      },
       neq: (k: string, v: unknown) => { predicates.push(row => row[k] !== v); return b; },
       is: (k: string, v: unknown) => { predicates.push(row => row[k] === v); return b; },
       in: (k: string, v: unknown[]) => { predicates.push(row => v.includes(row[k])); return b; },
@@ -99,15 +104,37 @@ describe('QA failure recovery in the existing resume cron', () => {
     expect(db.writes).toHaveLength(0); expect(f.job.status).toBe('qa_failed');
   });
 
-  it.each(['history', 'duplicate', 'lookupError', 'no consent', 'dismissal race', 'identity race'])('fails closed on %s', async reason => {
+  it.each(['history', 'duplicate', 'lookupError', 'no consent', 'dismissal race', 'identity race', 'configuration race'])('fails closed on %s', async reason => {
     const f = fixture();
     if (reason === 'no consent') mocks.consent.mockResolvedValue({ verified: false });
     const { db } = await run(f, {
       history: reason === 'history', duplicate: reason === 'duplicate', lookupError: reason === 'lookupError',
       race: reason === 'dismissal race' ? job => { Object.assign(job, { archived_at: '2026-10-01T12:00:00Z' }); }
-        : reason === 'identity race' ? job => { job.execution_profile_sha256 = 'D'.repeat(64); } : undefined,
+        : reason === 'identity race' ? job => { job.execution_profile_sha256 = 'D'.repeat(64); }
+        : reason === 'configuration race' ? job => { job.package_config.description = 'Edited'; job.updated_at = '2026-10-01T12:00:00Z'; } : undefined,
     });
     expect(db.writes).toHaveLength(0); expect(f.job.status).toBe('qa_failed');
+  });
+
+  it('finds the older passed candidate beyond ten newer genuine failures', async () => {
+    const f = fixture();
+    const { response } = await run(f, { newerFailures: 12 });
+    expect(response.reopened).toBe(1);
+    expect(f.job.status).toBe('awaiting_qa');
+  });
+
+  it('uses the server update time to date a legacy failure without completion times', async () => {
+    const f = fixture();
+    Object.assign(f.job, { completed_at: null, qa_completed_at: null });
+    const { response } = await run(f);
+    expect(response.reopened).toBe(1);
+  });
+
+  it('keeps an undated failure whose last server update follows the pass', async () => {
+    const f = fixture();
+    Object.assign(f.job, { completed_at: null, qa_completed_at: null, updated_at: '2026-10-01T12:00:00Z' });
+    const { db } = await run(f);
+    expect(db.writes).toHaveLength(0);
   });
 });
 

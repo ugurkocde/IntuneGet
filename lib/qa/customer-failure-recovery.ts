@@ -3,6 +3,7 @@ import type { Database } from '@/types/database';
 import { verifyTenantConsent } from '@/lib/msp/consent-verification';
 
 const RECOVERY_BATCH_SIZE = 10;
+const RECOVERY_SCAN_SIZE = 100;
 const LIVE_STATUSES = new Set([
   'awaiting_qa', 'queued', 'packaging', 'uploading', 'completed', 'deployed',
   'awaiting_approval', 'awaiting_intune_approval',
@@ -15,23 +16,29 @@ const equalHash = (left: string | null, right: string | null) =>
  * Candidate and result rows remain read only; dismissed jobs remain dismissed. */
 export async function reopenSupersededQaFailures(supabase: SupabaseClient<Database>): Promise<number> {
   const { data: jobs, error } = await supabase.from('packaging_jobs')
-    .select('*').eq('status', 'qa_failed').eq('error_code', 'QA_FAILED_EXECUTION_PROFILE')
+    .select('*, qa_candidates!inner(status)').eq('qa_candidates.status', 'passed')
+    .eq('status', 'qa_failed').eq('error_code', 'QA_FAILED_EXECUTION_PROFILE')
     .eq('is_auto_update', false).is('archived_at', null).is('cancelled_at', null)
-    .is('intune_app_id', null).order('created_at', { ascending: false }).limit(RECOVERY_BATCH_SIZE);
+    .is('intune_app_id', null).order('created_at', { ascending: true }).limit(RECOVERY_SCAN_SIZE);
   if (error) throw error;
   let reopened = 0;
+  let examined = 0;
   const seen = new Set<string>();
   for (const job of jobs || []) {
     if (job.status !== 'qa_failed' || job.error_code !== 'QA_FAILED_EXECUTION_PROFILE'
       || job.archived_at || job.cancelled_at || job.intune_app_id || job.is_auto_update
       || !job.tenant_id || !job.qa_candidate_id || !job.execution_profile_sha256
-      || !job.installer_sha256 || !job.architecture) continue;
+      || !job.installer_sha256 || !job.architecture || !job.updated_at) continue;
     const key = JSON.stringify([job.tenant_id, job.winget_id, job.version]);
     if (seen.has(key)) continue;
     seen.add(key);
     const failureTimes = [job.qa_completed_at, job.completed_at].filter(Boolean).map(value => Date.parse(value!));
-    if (!failureTimes.length || failureTimes.some(value => !Number.isFinite(value))) continue;
+    // Legacy failure rows lack completion times. Their server maintained update
+    // time still proves that the observed failure preceded the later pass.
+    if (!failureTimes.length) failureTimes.push(Date.parse(job.updated_at));
+    if (failureTimes.some(value => !Number.isFinite(value))) continue;
     const failureTime = Math.max(...failureTimes);
+    if (examined++ >= RECOVERY_BATCH_SIZE) break;
 
     const { data: candidate, error: candidateError } = await supabase.from('qa_candidates')
       .select('id, status, winget_id, version, architecture, installer_sha256, package_profile_sha256, finished_at')
@@ -80,7 +87,9 @@ export async function reopenSupersededQaFailures(supabase: SupabaseClient<Databa
       .eq('installer_sha256', job.installer_sha256).eq('architecture', job.architecture);
     update = job.qa_completed_at == null ? update.is('qa_completed_at', null) : update.eq('qa_completed_at', job.qa_completed_at);
     update = job.completed_at == null ? update.is('completed_at', null) : update.eq('completed_at', job.completed_at);
-    update = job.package_config == null ? update.is('package_config', null) : update.eq('package_config', job.package_config);
+    // The database update trigger advances this value for configuration and
+    // presentation edits too. JSON objects are not scalar PostgREST eq values.
+    update = update.eq('updated_at', job.updated_at);
     const { data: changed, error: updateError } = await update.select('id').maybeSingle();
     if (updateError) throw updateError;
     if (changed) reopened++;
