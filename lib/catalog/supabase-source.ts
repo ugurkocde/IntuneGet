@@ -71,20 +71,24 @@ export class SupabaseCatalogSource implements CatalogSource {
       }
       return rows.filter(row => row.outcome !== 'Passed');
     }
-    const client = createServerClient();
-    const blocks: QaBlockedTuple[] = [];
-    const pageSize = 1000;
-    for (let from = 0; ; from += pageSize) {
-      const { data, error } = await client.from('qa_package_blocks')
-        .select('winget_id, version, architecture, installer_sha256')
-        .in('winget_id', [...new Set(rows.map(row => row.winget_id))])
-        .order('winget_id').order('version').order('architecture').order('installer_sha256')
-        .range(from, from + pageSize - 1);
-      if (error) throw new Error(`Failed to verify QA deployment availability: ${error.message}`);
-      blocks.push(...(data || []));
-      if (!data || data.length < pageSize) break;
+    try {
+      const client = createServerClient();
+      const blocks: QaBlockedTuple[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await client.from('qa_package_blocks')
+          .select('winget_id, version, architecture, installer_sha256')
+          .in('winget_id', [...new Set(rows.map(row => row.winget_id))])
+          .order('winget_id').order('version').order('architecture').order('installer_sha256')
+          .range(from, from + pageSize - 1);
+        if (error) throw new Error(`Failed to verify QA deployment availability: ${error.message}`);
+        blocks.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+      }
+      return markBlockedQaResults(rows, blocks);
+    } catch {
+      return rows.filter(row => row.outcome !== 'Passed');
     }
-    return markBlockedQaResults(rows, blocks);
   }
   private async releaseHistoryPage(client: NonNullable<ReturnType<typeof serviceOrAnonClient>>, filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const { data, error } = await client.rpc('get_catalog_release_history_v2', {

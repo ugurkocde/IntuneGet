@@ -58,6 +58,26 @@ describe('Supabase QA deployment presentation', () => {
       expect(await new SupabaseCatalogSource().getQaResult(row.winget_id, profile)).toBeNull();
     }
   );
+  it.each([
+    [undefined, 'Failed'], [row.package_profile_sha256, 'Failed'],
+    [undefined, 'Passed'], [row.package_profile_sha256, 'Passed'],
+  ])('preserves only Failed detail evidence when block lookup fails (%s, %s)', async (profile, outcome) => {
+    setup([]);
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (new URL(input).pathname.endsWith('/qa_package_blocks')) {
+        return Response.json({ message: 'Unavailable' }, { status: 400 });
+      }
+      return Response.json({ ...row, outcome, detection: {}, phase_results: {},
+        install_command: 'install', uninstall_command: 'uninstall' });
+    }));
+    const { SupabaseCatalogSource } = await import('./supabase-source');
+    const result = await new SupabaseCatalogSource().getQaResult(row.winget_id, profile);
+    if (outcome === 'Passed') expect(result).toBeNull();
+    else {
+      expect(result).toMatchObject({ outcome: 'Failed' });
+      expect(result).not.toHaveProperty('deployment_blocked');
+    }
+  });
   it('finds an exact block after a full PostgREST page', async () => {
     const historical = Array.from({ length: 1000 }, (_, i) => ({ winget_id: row.winget_id,
       version: String(i + 2), architecture: 'x64', installer_sha256: 'C'.repeat(64) }));
