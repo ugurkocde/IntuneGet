@@ -57,6 +57,18 @@ create table public.qa_sync_watermarks (id text,source_synced_at timestamptz,acc
   it('does not expose private helpers to the public execution roles', async () => {
     expect((await db.query("select has_function_privilege('anon','sync_qa_results_incremental(text,jsonb,jsonb)','execute') api, has_function_privilege('anon','sync_qa_results_incremental_base(text,jsonb,boolean)','execute') helper")).rows[0]).toEqual({ api: true, helper: false });
   });
+  it('keeps package rows private while permitting bounded secret authenticated page reads', async () => {
+    expect((await db.query("select has_table_privilege('anon','qa_package_results','select') allowed")).rows[0]).toEqual({ allowed: false });
+    await db.exec('set role anon');
+    try {
+      await expect(db.query('select * from qa_package_results')).rejects.toThrow(/permission denied/);
+      await expect(db.query('select * from read_qa_package_results_page($1,$2,$3)', ['wrong', null, 500])).rejects.toThrow(/credential/);
+      await expect(db.query('select * from read_qa_package_results_page($1,$2,$3)', [secret, null, 501])).rejects.toThrow(/bounds/);
+      const first = await db.query<{ result: { package_profile_sha256: string } }>('select read_qa_package_results_page($1,$2,$3) result', [secret, null, 1]);
+      expect(first.rows[0].result.package_profile_sha256).toBe('A'.repeat(64));
+      expect((await db.query('select * from read_qa_package_results_page($1,$2,$3)', [secret, 'A'.repeat(64), 500])).rows).toEqual([]);
+    } finally { await db.exec('reset role'); }
+  });
   it('normalizes empty canonical profiles consistently with hashes and VirusTotal evidence', async () => {
     await sync([row({ winget_id: 'Vendor.Empty', installer_sha256: 'C'.repeat(64), outcome: 'Failed' })]);
     await sync([row({ winget_id: 'Vendor.Empty', profile_kind: '', test_level: 'psadt-package', package_profile_sha256: 'D'.repeat(64), installer_sha256: 'E'.repeat(64), tested_at_utc: '2026-10-11T15:00:00Z', display_name: 'Updated app', virustotal_status: 'clean', virustotal_malicious: 0 })]);

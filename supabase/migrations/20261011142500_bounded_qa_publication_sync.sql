@@ -372,3 +372,32 @@ revoke all on function public.sync_qa_results_incremental_base(text, jsonb, bool
 revoke all on function public.sync_qa_results_incremental_metadata(text, jsonb, jsonb, boolean) from public, anon, authenticated;
 revoke all on function public.sync_qa_results_incremental(text, jsonb, jsonb) from public, anon, authenticated;
 grant execute on function public.sync_qa_results_incremental(text, jsonb, jsonb) to anon;
+
+-- Exact package configuration remains private. Recovery compares it only
+-- through the existing synchronization credential, with bounded keyset pages.
+create or replace function public.read_qa_package_results_page(p_secret text, p_after text default null, p_limit integer default 500)
+returns setof jsonb
+language plpgsql
+security definer
+set search_path = ''
+set statement_timeout = '30s'
+as $function$
+begin
+  if pg_catalog.encode(extensions.digest(coalesce(p_secret, ''), 'sha256'), 'hex') <> 'becb40ddd30dcf9fc45551f1ff4e515ea1512cb9692d977f44f0323a216d0921' then
+    raise insufficient_privilege using message = 'Invalid QA synchronization credential';
+  end if;
+  if p_limit is null or p_limit not between 1 and 500 or (p_after is not null and p_after !~ '^[A-F0-9]{64}$') then
+    raise exception 'Invalid package read bounds';
+  end if;
+  return query
+    select pg_catalog.to_jsonb(result) from (
+      select winget_id,display_name,publisher,tested_version,architecture,outcome,tested_at_utc,overall_duration_seconds,installer_type,install_command,uninstall_command,detection,phase_results,changes,relevant_event_count,environment,qa_schema_version,installer_sha256,package_profile_sha256,psadt_version,psadt_template_sha256,psadt_config_sha256,detection_rules_sha256,packager_commit,package_content_sha256,effective_configuration,virustotal_status,virustotal_malicious,virustotal_suspicious,virustotal_total_engines,virustotal_scanned_at_utc,profile_kind,github_run_id,github_run_url
+      from public.qa_package_results
+      where p_after is null or package_profile_sha256 > p_after
+      order by package_profile_sha256
+      limit p_limit
+    ) result;
+end;
+$function$;
+revoke all on function public.read_qa_package_results_page(text, text, integer) from public, anon, authenticated;
+grant execute on function public.read_qa_package_results_page(text, text, integer) to anon;
