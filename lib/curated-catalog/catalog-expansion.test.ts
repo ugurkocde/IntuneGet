@@ -112,6 +112,40 @@ describe('curated catalog expansion to fifty applications', () => {
     expect(previous?.vendorSha256).toBeNull();
   });
 
+  it('skips the DB Browser release that misreports its version and proves the listed baseline without a redirecting HEAD', async () => {
+    const dbBrowser = app('db-browser-sqlite');
+    const msi = (tag: string, name: string) => ({ tag_name: tag, draft: false, prerelease: false, html_url: `https://github.com/r/${tag}`, assets: [{ name, browser_download_url: `https://github.com/sqlitebrowser/sqlitebrowser/releases/download/${tag}/${name}` }] });
+    const list = [
+      msi('v3.13.1', 'DB.Browser.for.SQLite-v3.13.1-win64.msi'),
+      { ...msi('v3.13.1-rc2', 'DB.Browser.for.SQLite-v3.13.1-rc2-win64.msi'), prerelease: true },
+      msi('v3.13.0', 'DB.Browser.for.SQLite-v3.13.0-win64.msi'),
+      msi('v3.12.2', 'DB.Browser.for.SQLite-3.12.2-win64.msi'),
+    ];
+    const fetcher = vi.fn(async (_url: string, options: RequestInit) => {
+      expect(options.method).not.toBe('HEAD');
+      return new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } });
+    });
+    const previous = await discoverPreviousCandidate(dbBrowser, { appId: dbBrowser.id, version: '3.13.1' } as never, fetcher);
+    expect(previous?.version).toBe('3.12.2');
+    expect(previous?.installerUrl).toBe(dbBrowser.initialUpgradeBaseline!.installerUrl);
+  });
+
+  it('rejects malformed or contradictory excluded upgrade baselines', () => {
+    const dbBrowser = app('db-browser-sqlite');
+    expect(() => validateDefinitions([{ ...dbBrowser, excludedUpgradeBaselines: [] }])).toThrow(/excluded upgrade baselines/);
+    expect(() => validateDefinitions([{ ...dbBrowser, excludedUpgradeBaselines: ['3.13.0', '3.13.0'] }])).toThrow(/excluded upgrade baselines/);
+    expect(() => validateDefinitions([{ ...dbBrowser, excludedUpgradeBaselines: ['3.12.2'] }])).toThrow(/excluded upgrade baselines/);
+  });
+
+  it('replaces apps whose installers the pipeline cannot verify with stable-upgrade MSIs', () => {
+    const ids = CURATED_APPS.map(value => value.id);
+    for (const removed of ['llvm', 'rustdesk', 'transmission']) expect(ids).not.toContain(removed);
+    const k6Release = { ...githubRelease('v2.3.0', []), assets: [{ name: 'k6-v2.3.0-windows-amd64.msi', digest: `sha256:${pin('d')}`, browser_download_url: 'https://github.com/grafana/k6/releases/download/v2.3.0/k6-v2.3.0-windows-amd64.msi' }] };
+    expect(candidateFromMetadata(app('k6'), JSON.stringify(k6Release)).version).toBe('2.3.0');
+    const funcRelease = { ...githubRelease('4.15.2', []), assets: ['x64', 'x86'].map(arch => ({ name: `func-cli-4.15.2-${arch}.msi`, digest: `sha256:${pin('d')}`, browser_download_url: `https://github.com/Azure/azure-functions-core-tools/releases/download/4.15.2/func-cli-4.15.2-${arch}.msi` })) };
+    expect(candidateFromMetadata(app('azure-functions-core-tools'), JSON.stringify(funcRelease)).installerUrl).toMatch(/-x64\.msi$/);
+  });
+
   it('confirms the constructed Go installer exists using HEAD only', async () => {
     const fetcher = vi.fn(async (_url: string, options: RequestInit) => options.method === 'HEAD' ? new Response(null, { status: 404 }) : new Response(goIndex, { headers: { 'content-type': 'application/json' } }));
     await expect(discoverCandidate(app('go'), fetcher)).rejects.toThrow(/no full installer/);
