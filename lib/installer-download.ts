@@ -52,6 +52,9 @@ export async function withInstallerDownloadDeadline<T>(
   try {
     return await operation(controller.signal);
   } catch (error) {
+    if (error instanceof InstallerDownloadSizeLimitError) {
+      throw error;
+    }
     if (controller.signal.aborted) {
       throw new InstallerDownloadDeadlineError(timeoutMs);
     }
