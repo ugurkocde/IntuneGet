@@ -72,7 +72,7 @@ docker exec "$container_id" node -e '
   if (row?.value !== "persisted") throw new Error("SQLite data did not survive container recreation");
   if (process.argv[1] === "upgrade") {
     const job = db.prepare("SELECT status FROM packaging_jobs WHERE id = ?").get("ci-release-fixture");
-    if (job?.status !== "completed" || db.pragma("user_version", {simple:true}) !== 4)
+    if (job?.status !== "completed" || db.pragma("user_version", {simple:true}) !== 5)
       throw new Error("SQLite upgrade did not preserve the fixture or complete migrations");
   }
   db.close();

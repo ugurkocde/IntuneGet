@@ -1,0 +1,5 @@
+{
+  "title": "Cancel running deployments in SQLite",
+  "summary": "Self hosted installations using SQLite can cancel queued and running deployments without configuring Supabase. A deployment that changes state during cancellation is reported instead of overwritten.",
+  "type": "fixed"
+}

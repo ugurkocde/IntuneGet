@@ -20,6 +20,7 @@ import type {
 } from '@/types/intune';
 import type { WingetInstallerType, WingetScope } from '@/types/winget';
 import type { PackageAssignment } from '@/types/upload';
+import { psAsciiStringExpression, psCommentContent } from '@/lib/powershell-encoding';
 
 export function buildCartItemRequirementRules(
   displayName: string,
@@ -89,12 +90,14 @@ function generateMsiRegistryRequirementRule(
 function generateUninstallRegistryScriptRule(
   displayName: string
 ): ScriptRequirementRule {
-  // Escape single quotes in display name for PowerShell string
-  const escapedName = displayName.replace(/'/g, "''");
+  // Encode the display name for PowerShell. The pattern source text is ASCII
+  // only, so it reads the same whether the script is decoded as UTF-8 or ANSI.
+  const namePattern = psAsciiStringExpression(`*${displayName}*`);
 
   const scriptLines = [
     '# Requirement rule: Check if app is already installed on this device',
-    `# App: ${displayName}`,
+    // The whole script stays ASCII; other characters in the comment become '?'.
+    `# App: ${psCommentContent(displayName).replace(/[^\x20-\x7E]/g, '?')}`,
     '$ErrorActionPreference = "SilentlyContinue"',
     '',
     '$uninstallPaths = @(',
@@ -105,7 +108,7 @@ function generateUninstallRegistryScriptRule(
     '',
     'foreach ($path in $uninstallPaths) {',
     '    $apps = Get-ItemProperty $path -ErrorAction SilentlyContinue |',
-    `        Where-Object { $_.DisplayName -like '*${escapedName}*' }`,
+    `        Where-Object { $_.DisplayName -like ${namePattern} }`,
     '    if ($apps) {',
     '        Write-Output "True"',
     '        exit 0',

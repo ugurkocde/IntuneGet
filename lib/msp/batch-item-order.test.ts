@@ -12,7 +12,7 @@ const otherBatch = '10000000-0000-4000-8000-000000000002';
 beforeAll(async () => {
   db = new PGlite();
   await db.exec('create table msp_batch_deployments(id uuid primary key); create table packaging_jobs(id uuid primary key);');
-  const migration = await readFile(new URL('../../supabase/migrations/015_msp_batch_and_webhooks.sql', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../../supabase/migrations/0151_msp_batch_and_webhooks.sql', import.meta.url), 'utf8');
   const definition = migration.match(/CREATE TABLE IF NOT EXISTS msp_batch_deployment_items \([\s\S]*?\n\);/)?.[0];
   expect(Boolean(definition)).toBe(true);
   await db.exec(definition!);

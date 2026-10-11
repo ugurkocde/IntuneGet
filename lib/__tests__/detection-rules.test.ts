@@ -1063,6 +1063,25 @@ describe('generateUninstallCommand', () => {
     ).toBe('REGISTRY_UNINSTALL:Unsafe App');
   });
 
+  it('keeps registry uninstall markers on one line for any manifest display name', () => {
+    const base: NormalizedInstaller = {
+      architecture: 'x64',
+      url: 'https://example.com/app.exe',
+      sha256: 'abc123',
+      type: 'exe',
+    };
+    for (const separator of ['\n', '\r', '\r\n', '\u0085', '\u2028', '\u2029', '\t', '\u0000']) {
+      const displayName = `Contoso${separator}${separator}& whoami${separator}`;
+      expect(generateUninstallCommand(base, displayName)).toBe('REGISTRY_UNINSTALL:Contoso & whoami');
+      expect(
+        generateUninstallCommand({ ...base, productCode: '{12345678-1234-1234-1234-123456789ABC}' }, displayName)
+      ).toBe('REGISTRY_UNINSTALL_PRODUCT:{12345678-1234-1234-1234-123456789ABC}:Contoso & whoami');
+      expect(generateUninstallCommand({ ...base, productCode: 'Contoso App' }, displayName))
+        .toBe('REGISTRY_UNINSTALL_KEY:Contoso App:Contoso & whoami');
+    }
+    expect(generateUninstallCommand(base, '\u2028\n\u0085')).toBe('# Manual uninstall required');
+  });
+
   it('should delegate Inno uninstall to registry lookup when display name is provided', () => {
     const installer: NormalizedInstaller = {
       architecture: 'x64',

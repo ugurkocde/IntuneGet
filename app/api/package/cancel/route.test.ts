@@ -21,7 +21,7 @@ vi.mock('@/lib/github-actions', () => ({
   UNSTARTED_WORKFLOW_RUN_STATUSES: ['queued', 'waiting', 'pending', 'requested'],
 }));
 vi.mock('@/lib/auto-update/cleanup', () => ({ handleAutoUpdateJobCompletion: async () => undefined }));
-vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: {
+vi.mock('@/lib/db', () => ({ isSqliteMode: () => false, getDatabase: () => ({ jobs: {
   getById: async () => { if (state.lookupError) throw new Error('Database unavailable'); return state.job; },
   deleteById: state.deleteById,
 } }) }));

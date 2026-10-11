@@ -19,6 +19,7 @@
  */
 
 import type { DatabaseAdapter, UploadHistoryRecord } from '@/lib/db/types';
+import { findPendingApprovalBlocks } from '@/lib/intune-approval-guard';
 import type { Json } from '@/types/database';
 import { getCatalogSource } from '@/lib/catalog';
 import { compareVersions } from '@/lib/version-compare';
@@ -60,7 +61,7 @@ export interface SqliteTriggerResult {
   success: boolean;
   skipped?: boolean;
   skipReason?: string;
-  code?: 'CURATED_LICENCE_NOT_ACCEPTED';
+  code?: 'CURATED_LICENCE_NOT_ACCEPTED' | 'INTUNE_APPROVAL_PENDING';
   error?: string;
   packagingJobId?: string;
   historyId?: string;
@@ -141,6 +142,7 @@ export async function triggerSqliteAutoUpdate(
       return { success: false, error: 'No deployment configuration saved for this policy' };
     }
     let curatedLicenceAcceptance: CuratedLicenceAcceptanceSnapshot | null = null;
+    let approvalIds = [updateInfo.wingetId];
     if (isCuratedPackageId(updateInfo.wingetId)) {
       const approved = assertCuratedInstaller({
         wingetId: updateInfo.wingetId, version: updateInfo.latestVersion,
@@ -148,6 +150,7 @@ export async function triggerSqliteAutoUpdate(
         installerUrl: updateInfo.installerUrl, installerSha256: updateInfo.installerSha256,
         installerType: updateInfo.installerType, curatedReleaseId: updateInfo.curatedReleaseId,
       });
+      approvalIds = [approved.app.packageId, updateInfo.wingetId];
       const item = buildCuratedCartItem(approved.app, approved.release);
       config = { ...config, ...item };
       updateInfo = { ...updateInfo, sourceType: 'curated', curatedReleaseId: approved.release.id,
@@ -175,6 +178,13 @@ export async function triggerSqliteAutoUpdate(
       if (!rateLimit.allowed) {
         return { success: false, skipped: true, skipReason: rateLimit.reason };
       }
+    }
+
+    const approvalBlocks = await findPendingApprovalBlocks({ tenantId: policy.tenant_id,
+      wingetIds: approvalIds }, { db });
+    if (approvalBlocks.length) {
+      return { success: false, skipped: true, code: approvalBlocks[0].code,
+        skipReason: approvalBlocks[0].message };
     }
 
     const updateType = classifyUpdateType(updateInfo.currentVersion, updateInfo.latestVersion);

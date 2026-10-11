@@ -42,11 +42,15 @@ export function ProgressStepper({
   qaHref,
 }: ProgressStepperProps) {
   const prefersReducedMotion = useReducedMotion();
-  const isQaCurrent = qaRequired && ['awaiting_qa', 'qa_failed'].includes(status);
-  const stages = qaRequired ? [QA_STAGE, ...PROGRESS_STAGES] : PROGRESS_STAGES;
+  // A validation block (QA gate, security verdict, licence) stops the job
+  // before any pipeline stage runs, so it fails at the installation check.
+  const isValidationFailure = status === 'failed' && errorStage === 'validation';
+  const showQaStage = qaRequired || isValidationFailure;
+  const isQaCurrent = isValidationFailure || (qaRequired && ['awaiting_qa', 'qa_failed'].includes(status));
+  const stages = showQaStage ? [QA_STAGE, ...PROGRESS_STAGES] : PROGRESS_STAGES;
   const currentStage = isQaCurrent ? QA_STAGE : getCurrentStage(progress, status, errorStage);
   const completedStages: string[] = [
-    ...(qaRequired && !isQaCurrent ? [QA_STAGE.id] : []),
+    ...(showQaStage && !isQaCurrent ? [QA_STAGE.id] : []),
     ...getCompletedStages(progress, status, errorStage),
   ];
   const { formattedTime } = useElapsedTime({

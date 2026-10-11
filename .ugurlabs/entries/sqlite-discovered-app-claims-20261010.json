@@ -1,0 +1,5 @@
+{
+  "title": "Claim discovered apps in SQLite",
+  "summary": "Self hosted installations using SQLite now record discovered app claims in their own database, so claiming an app adds it to the cart without reporting a server error.",
+  "type": "fixed"
+}

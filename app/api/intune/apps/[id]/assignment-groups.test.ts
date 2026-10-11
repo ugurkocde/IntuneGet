@@ -18,6 +18,10 @@ describe('app details assignment labels',()=>{
     const response=await GET(request(),params);expect(response.status).toBe(200);expect(await response.json()).toEqual({app:{id:'app',assignments:[assignment],assignmentGroupNames:{[id]:'Fixture Group'}}});
     expect(mock.mock.calls.filter(([url])=>url.includes('/groups/'))).toHaveLength(1);
   });
+  it('reports definitive lookup failures separately and only when present',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.includes('/groups/')?new Response(null,{status:404}):Response.json(url.endsWith('/assignments')?{value:[assignment]}:{id:'app'})));
+    expect(await(await GET(request(),params)).json()).toEqual({app:{id:'app',assignments:[assignment],assignmentGroupNames:{},assignmentGroupLookupFailures:{[id]:'not_found'}}});
+  });
   it('uses the resolved customer tenant token for every group lookup',async()=>{
     const chain={select:vi.fn().mockReturnThis(),eq:vi.fn().mockReturnThis(),single:vi.fn().mockResolvedValue({data:{is_active:true},error:null})};mocks.supabase.mockReturnValue({from:()=>chain});mocks.resolve.mockResolvedValue({tenantId:'customer'});mocks.token.mockResolvedValue('customer-token');
     const mock=vi.fn(async(url:string,options:RequestInit)=>{if(url.includes('/groups/'))expect(options.headers).toEqual({Authorization:'Bearer customer-token'});return Response.json(url.includes('/groups/')?{id,displayName:'Customer Group'}:url.endsWith('/assignments')?{value:[assignment]}:{id:'app'});});vi.stubGlobal('fetch',mock);

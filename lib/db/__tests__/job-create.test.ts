@@ -49,8 +49,8 @@ function readStoredJob(id: string): Record<string, unknown> {
   closeDb?.();
   const stored = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
-    // Version 4 adds licence attestations after the auto-update migrations.
-    expect(stored.pragma('user_version', { simple: true })).toBe(4);
+    // Version 5 adds claimed apps after the licence attestations.
+    expect(stored.pragma('user_version', { simple: true })).toBe(5);
     return stored.prepare('SELECT * FROM packaging_jobs WHERE id = ?').get(id) as Record<string, unknown>;
   } finally {
     stored.close();

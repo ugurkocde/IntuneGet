@@ -6,7 +6,7 @@
 import type { DatabaseAdapter } from './types';
 
 // Re-export types
-export type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, CuratedLicenceAttestationRecord } from './types';
+export type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, CuratedLicenceAttestationRecord, ClaimedAppRecord } from './types';
 
 // Singleton database instance
 let databaseInstance: DatabaseAdapter | null = null;

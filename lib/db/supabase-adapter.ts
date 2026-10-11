@@ -4,7 +4,10 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
-import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats } from './types';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
+import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, AnalyticsJob, AnalyticsJobScope } from './types';
+import { collectAnalyticsJobs } from '@/lib/analytics/complete-job-pages';
 import type {
   AppUpdatePolicy,
   AutoUpdateHistory,
@@ -12,6 +15,8 @@ import type {
   AutoUpdateStatus,
 } from '@/types/update-policies';
 import type {
+  ClaimedAppInput,
+  ClaimedAppRecord,
   CuratedLicenceAttestationInput,
   CuratedLicenceAttestationRecord,
   UpdateCheckQuery,
@@ -188,6 +193,29 @@ export const supabaseDb: DatabaseAdapter = {
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
     },
 
+    async getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]> {
+      const key = scope.tenantId === undefined ? 'user_id' : 'tenant_id';
+      const identity = scope.tenantId ?? scope.userId;
+      if (!identity) throw new Error('Statistics identity required');
+      const supabase = createServerClient();
+      let archiveSupported = true;
+      const deadline = AbortSignal.timeout(15000);
+      return collectAnalyticsJobs(async offset => {
+        const readPage = () => {
+          let query = supabase.from('packaging_jobs')
+            .select('id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url', { count: 'exact' })
+            .eq(key, identity);
+          if (archiveSupported) query = query.is('archived_at', null);
+          return query.order('created_at', { ascending: false }).order('id', { ascending: false })
+            .range(offset, offset + 999).abortSignal(deadline);
+        };
+        let result = await readPage();
+        if (isMissingArchiveColumn(result.error)) { archiveSupported = false; result = await readPage(); }
+        if (result.error) throw new Error('Statistics read failed');
+        return { data: (result.data ?? []) as AnalyticsJob[], count: result.count };
+      });
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const supabase = createServerClient();
 
@@ -205,6 +233,30 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
+      let query = createServerClient().from('packaging_jobs').select('*')
+        .eq('tenant_id', tenantId);
+      query = curated ? query.ilike('winget_id', wingetId) : query.eq('winget_id', wingetId);
+      query = query.in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
+        .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
+      if (cursor) {
+        // Cursor values come from database rows, but validate before using filter syntax.
+        if (!/^[0-9T:.+Z-]+$/.test(cursor.createdAt) ||
+            !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(cursor.id)) {
+          throw new Error('Invalid approval checkpoint cursor');
+        }
+        query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+      }
+      const { data, error } = await query;
+      if (error) throw new Error('Approval checkpoints unavailable');
+      return (data || []) as unknown as PackagingJob[];
     },
 
     /**
@@ -1001,6 +1053,79 @@ export const supabaseDb: DatabaseAdapter = {
       );
       if (!stored) throw new Error('Failed to record licence acceptance');
       return stored;
+    },
+  },
+
+  claimedApps: {
+    async upsert(claim: ClaimedAppInput): Promise<ClaimedAppRecord> {
+      const supabase = createServerClient();
+      const { data: existing, error: readError } = await supabase
+        .from('claimed_apps')
+        .select('id')
+        .eq('tenant_id', claim.tenant_id)
+        .eq('discovered_app_id', claim.discovered_app_id)
+        .maybeSingle();
+      if (isError(readError)) {
+        console.error('Error reading claim:', readError);
+        throw readError;
+      }
+      const result = existing
+        ? await supabase
+            .from('claimed_apps')
+            .update({
+              user_id: claim.user_id,
+              winget_package_id: claim.winget_package_id,
+              device_count_at_claim: claim.device_count_at_claim ?? 0,
+              status: 'pending',
+              claimed_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+            .select()
+            .single()
+        : await supabase
+            .from('claimed_apps')
+            .insert({ ...claim, device_count_at_claim: claim.device_count_at_claim ?? 0, status: 'pending' })
+            .select()
+            .single();
+      if (isError(result.error) || !result.data) {
+        console.error('Error recording claim:', result.error);
+        throw result.error ?? new Error('Failed to record claim');
+      }
+      return result.data as ClaimedAppRecord;
+    },
+
+    async listByTenant(tenantId: string): Promise<ClaimedAppRecord[]> {
+      const supabase = createServerClient();
+      const { data, error } = await supabase
+        .from('claimed_apps')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('claimed_at', { ascending: false });
+      if (isError(error)) {
+        console.error('Error listing claims:', error);
+        throw error;
+      }
+      return (data ?? []) as ClaimedAppRecord[];
+    },
+
+    async update(
+      id: string,
+      tenantId: string,
+      data: Partial<Pick<ClaimedAppRecord, 'status' | 'intune_app_id'>>
+    ): Promise<ClaimedAppRecord | null> {
+      const supabase = createServerClient();
+      const { data: updated, error } = await supabase
+        .from('claimed_apps')
+        .update(data)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select()
+        .maybeSingle();
+      if (isError(error)) {
+        console.error('Error updating claim:', error);
+        throw error;
+      }
+      return (updated as ClaimedAppRecord | null) ?? null;
     },
   },
 };

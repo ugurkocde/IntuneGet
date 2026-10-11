@@ -7,7 +7,7 @@ const state = vi.hoisted(() => {
   vi.stubEnv('DATABASE_MODE', 'sqlite');
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
-  return { authenticated: true, cancel: vi.fn(), readRun: vi.fn() };
+  return { authenticated: true, github: true, cancel: vi.fn(), readRun: vi.fn() };
 });
 vi.mock('@/lib/auth-utils', () => ({
   parseAccessToken: async () => state.authenticated
@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase', async () => {
   return { ...actual, createServerClient: vi.fn(actual.createServerClient) };
 });
 vi.mock('@/lib/github-actions', () => ({
-  isGitHubActionsConfigured: () => true,
+  isGitHubActionsConfigured: () => state.github,
   cancelWorkflowRun: state.cancel, getWorkflowRun: state.readRun,
   UNSTARTED_WORKFLOW_RUN_STATUSES: ['queued', 'waiting', 'pending', 'requested'],
 }));
@@ -42,7 +42,7 @@ const create = (status: string, userId = 'fixture-owner') => sqliteDb.jobs.creat
   installer_url: 'https://fixture.invalid/installer.msi', status,
 });
 
-describe('terminal dismissal with the SQLite adapter', () => {
+describe('dismissal and cancellation with the SQLite adapter', () => {
   beforeEach(() => { vi.clearAllMocks(); });
   afterAll(() => { closeSqliteDb(); vi.unstubAllEnvs(); });
 
@@ -99,17 +99,62 @@ describe('terminal dismissal with the SQLite adapter', () => {
     expect((await sqliteDb.uploadHistory.getByUserId('fixture-owner')).some(row =>
       row.id === history.id && row.packaging_job_id === job.id)).toBe(true);
   });
-  for (const status of ['queued', 'awaiting_qa']) {
-    it(`does not cancel or detach an active ${status} fixture before the unsupported client path fails`, async () => {
-      const job = await create(status);
-      if (status === 'queued') await sqliteDb.jobs.update(job.id, { github_run_id: '42' });
-      for (const dismiss of [false, true]) {
-        expect((await call({ jobId: job.id, dismiss })).status).toBe(500);
-        expect((await sqliteDb.jobs.getById(job.id))?.status).toBe(status);
-        expect((await sqliteDb.jobs.getById(job.id))?.archived_at).toBeNull();
+  for (const [status, message] of [
+    ['queued', 'Job cancelled by user'],
+    ['packaging', 'Job cancelled by user'],
+    ['uploading', 'Job cancelled by user'],
+    ['awaiting_qa', 'Job cancelled by user while waiting for QA'],
+  ] as const) {
+    it(`cancels an active ${status} local packager job without Supabase`, async () => {
+      state.github = false;
+      try {
+        const job = await create(status);
+        const response = await call({ jobId: job.id });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ success: true, jobId: job.id, githubCancelled: null });
+        expect(await sqliteDb.jobs.getById(job.id)).toMatchObject({
+          status: 'cancelled', cancelled_by: 'fixture@example.test', error_message: message, archived_at: null,
+        });
+        expect((await sqliteDb.jobs.getById(job.id))?.cancelled_at).toBeTruthy();
+        expect(createServerClient).not.toHaveBeenCalled();
         expect(state.cancel).not.toHaveBeenCalled();
-        expect(state.readRun).not.toHaveBeenCalled();
-      }
+      } finally { state.github = true; }
     });
   }
+  it('cancels the GitHub run before cancelling a queued SQLite job', async () => {
+    const job = await create('queued');
+    await sqliteDb.jobs.update(job.id, { github_run_id: '42' });
+    state.cancel.mockResolvedValue({ success: true, status: 'cancelled', message: 'Cancelled' });
+    const response = await call({ jobId: job.id });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, githubCancelled: true });
+    expect(state.cancel).toHaveBeenCalledWith('42');
+    expect((await sqliteDb.jobs.getById(job.id))?.status).toBe('cancelled');
+    expect(createServerClient).not.toHaveBeenCalled();
+  });
+  it('keeps a SQLite job unchanged when GitHub cannot confirm cancellation', async () => {
+    const job = await create('queued');
+    await sqliteDb.jobs.update(job.id, { github_run_id: '43' });
+    state.cancel.mockResolvedValue({ success: false, status: 'error', message: 'GitHub unavailable' });
+    expect((await call({ jobId: job.id })).status).toBe(502);
+    expect((await sqliteDb.jobs.getById(job.id))?.status).toBe('queued');
+  });
+  it('reports a job that changed status after it was read instead of overwriting it', async () => {
+    state.github = false;
+    try {
+      const job = await create('packaging');
+      const stale = vi.spyOn(sqliteDb.jobs, 'getById').mockResolvedValueOnce({ ...job, status: 'queued' });
+      const response = await call({ jobId: job.id });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ retryable: true });
+      stale.mockRestore();
+      expect((await sqliteDb.jobs.getById(job.id))?.status).toBe('packaging');
+    } finally { state.github = true; vi.restoreAllMocks(); }
+  });
+  it('still refuses to cancel a deployed SQLite job', async () => {
+    const job = await create('deployed');
+    expect((await call({ jobId: job.id })).status).toBe(400);
+    expect((await sqliteDb.jobs.getById(job.id))?.status).toBe('deployed');
+    expect(createServerClient).not.toHaveBeenCalled();
+  });
 });

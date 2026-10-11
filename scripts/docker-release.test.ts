@@ -79,7 +79,7 @@ describe('actual SQLite image probe with command adapters', () => {
     expect(result.log).toContain('--user 0 --entrypoint sh --mount type=volume,source=intuneget-ci-')
     expect(result.log).toContain('baseline-image -c chown 1001:1001 /data')
     expect(result.code).toContain('ci-release-fixture')
-    expect(result.code).toContain('db.pragma("user_version", {simple:true}) !== 4')
+    expect(result.code).toContain('db.pragma("user_version", {simple:true}) !== 5')
   })
   it.each(['health', 'owner', 'persistence', 'migration'])('fails truthfully on %s and cleans owned fixtures', scenario => {
     const result = probe(scenario, scenario === 'migration')
@@ -136,10 +136,10 @@ describe('release gates', () => {
     expect(jobs.publish.if).toContain("needs.secure.result == 'success'")
     expect(jobs.publish.if).toContain("needs.prepare.outputs.prerelease == 'true' && needs.promote.result == 'skipped'")
   })
-  it('keeps candidate package versions and maintained release notes consistent', () => {
+  it('keeps release package versions and maintained release notes consistent', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
     const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'))
-    expect(pkg.version).toBe('0.8.0-rc.1')
+    expect(pkg.version).toBe('0.8.1')
     expect(lock.version).toBe(pkg.version)
     expect(lock.packages[''].version).toBe(pkg.version)
     expect(readFileSync(`release-notes/v${pkg.version}.md`, 'utf8')).toContain('Windows Docker Desktop confirmation')

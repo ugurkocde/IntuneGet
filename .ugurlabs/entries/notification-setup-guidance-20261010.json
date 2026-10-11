@@ -1,0 +1,5 @@
+{
+  "title": "Notification settings explain missing server setup",
+  "summary": "Settings now tell self hosted administrators whether email notifications need Supabase or email delivery settings, and link to the setup guide. Webhook settings show the same guidance before you try to add a webhook.",
+  "type": "improved"
+}

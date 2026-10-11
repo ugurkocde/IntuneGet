@@ -4,8 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 import { parseAccessToken } from '@/lib/auth-utils';
+import { WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE } from '@/types/notifications';
 import { sendTestWebhook } from '@/lib/webhooks/service';
 import type { WebhookConfiguration } from '@/types/notifications';
 import type { Database } from '@/types/database';
@@ -32,6 +33,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json({ error: WEBHOOK_STORAGE_UNAVAILABLE_MESSAGE }, { status: 503 });
+    }
 
     const supabase = createServerClient();
 

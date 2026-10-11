@@ -120,6 +120,10 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   );
   const [installCommand, setInstallCommand] = useState(isWin32 ? item.installCommand : '');
   const [uninstallCommand, setUninstallCommand] = useState(isWin32 ? item.uninstallCommand : '');
+  // Editable Intune app description (#117, #162). An empty field keeps the
+  // description the item had when this dialog opened.
+  const initialDescription = item.description ?? '';
+  const [description, setDescription] = useState(initialDescription);
   const [updatePolicy, setUpdatePolicy] = useState<CartUpdatePolicyValue>(
     isWin32 ? item.updatePolicy : undefined
   );
@@ -141,7 +145,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const configSnapshot = JSON.stringify({
     storeInstallExperience, selectedScope, config, assignments, categories,
-    espProfiles, relationships, installCommand, uninstallCommand,
+    espProfiles, relationships, installCommand, uninstallCommand, description,
     updatePolicy: updatePolicy ?? null,
     carryOverAssignments,
     curatedSettingsMode,
@@ -198,6 +202,32 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
       processesToClose: prev.processesToClose.map((p, i) =>
         i === index ? { ...p, ...updates } : p
       ),
+    }));
+  };
+
+  // Post-install / post-uninstall command list editors (#118, #162)
+  const addCommand = (key: 'postInstallCommands' | 'postUninstallCommands') => {
+    setConfig((prev) => ({ ...prev, [key]: [...(prev[key] || []), ''] }));
+  };
+
+  const updateCommand = (
+    key: 'postInstallCommands' | 'postUninstallCommands',
+    index: number,
+    value: string
+  ) => {
+    setConfig((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).map((c, i) => (i === index ? value : c)),
+    }));
+  };
+
+  const removeCommand = (
+    key: 'postInstallCommands' | 'postUninstallCommands',
+    index: number
+  ) => {
+    setConfig((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).filter((_, i) => i !== index),
     }));
   };
 
@@ -283,6 +313,7 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
           requirementRules,
           installCommand,
           uninstallCommand,
+          description: description.trim() || item.description,
           updatePolicy,
           assignmentMigration:
             updatePolicy === 'auto_update'
@@ -1423,6 +1454,24 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                 onToggle={() => toggleSection('advanced')}
               >
                 <div className="space-y-4">
+                  {/* Custom Description */}
+                  <div>
+                    <label htmlFor="cart-description-override" className="block text-sm font-medium text-text-secondary mb-2">
+                      Description override
+                    </label>
+                    <textarea
+                      id="cart-description-override"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
+                      placeholder={initialDescription || 'Description shown in Intune and Company Portal'}
+                      className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm resize-y"
+                    />
+                    <p className="text-text-muted text-xs mt-1">
+                      Shown in Intune and the Company Portal. Leave empty to keep the current description.
+                    </p>
+                  </div>
+
                   {/* Custom Install Command */}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -1451,6 +1500,88 @@ export function CartItemConfig({ item, onClose }: CartItemConfigProps) {
                       className="w-full px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm font-mono"
                     />
                     <p className="text-text-muted text-xs mt-1">Override the auto-generated uninstall command</p>
+                  </div>
+
+                  {/* Post-install commands (#118) */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Post-install commands
+                    </label>
+                    <div className="space-y-2">
+                      {(config.postInstallCommands || []).map((cmd, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={cmd}
+                            onChange={(e) => updateCommand('postInstallCommands', index, e.target.value)}
+                            aria-label={`Post-install command ${index + 1}`}
+                            placeholder={'e.g. powershell.exe -NoProfile -Command "Remove-Item \'$env:Public\\Desktop\\App.lnk\' -Force"'}
+                            className="flex-1 px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeCommand('postInstallCommands', index)}
+                            className="flex-shrink-0 text-text-muted hover:text-red-400 transition-colors p-1"
+                            aria-label="Remove command"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addCommand('postInstallCommands')}
+                        aria-label="Add post-install command"
+                        className="flex items-center gap-1.5 text-xs font-medium text-accent-cyan hover:text-accent-cyan/80 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add command
+                      </button>
+                    </div>
+                    <p className="text-text-muted text-xs mt-1">
+                      Run after the app installs (in order), e.g. to remove a desktop shortcut. Each runs via cmd.exe; a failure fails the deployment.
+                    </p>
+                  </div>
+
+                  {/* Post-uninstall commands (#118) */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Post-uninstall commands
+                    </label>
+                    <div className="space-y-2">
+                      {(config.postUninstallCommands || []).map((cmd, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={cmd}
+                            onChange={(e) => updateCommand('postUninstallCommands', index, e.target.value)}
+                            aria-label={`Post-uninstall command ${index + 1}`}
+                            placeholder={'e.g. cmd.exe /c rmdir /s /q "C:\\ProgramData\\App"'}
+                            className="flex-1 px-3 py-2 bg-bg-elevated border border-overlay/15 rounded-lg text-text-primary text-sm font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeCommand('postUninstallCommands', index)}
+                            className="flex-shrink-0 text-text-muted hover:text-red-400 transition-colors p-1"
+                            aria-label="Remove command"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addCommand('postUninstallCommands')}
+                        aria-label="Add post-uninstall command"
+                        className="flex items-center gap-1.5 text-xs font-medium text-accent-cyan hover:text-accent-cyan/80 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add command
+                      </button>
+                    </div>
+                    <p className="text-text-muted text-xs mt-1">
+                      Run after the app uninstalls (in order), e.g. to clean up leftover files.
+                    </p>
                   </div>
                 </div>
               </ConfigSection>}

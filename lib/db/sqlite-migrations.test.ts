@@ -28,6 +28,7 @@ describe('sqlite migrations', () => {
         'auto_update_history',
         'update_check_results',
         'curated_licence_attestations',
+        'claimed_apps',
       ])
     );
     db.close();

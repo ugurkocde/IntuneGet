@@ -6,6 +6,7 @@ const {
   getDatabaseMock,
   getByUserIdMock,
   getByIdMock,
+  getApprovalFailuresMock,
   updateMock,
   createMock,
   parseAccessTokenMock,
@@ -26,6 +27,7 @@ const {
   getDatabaseMock: vi.fn(),
   getByUserIdMock: vi.fn(),
   getByIdMock: vi.fn(),
+  getApprovalFailuresMock: vi.fn(),
   updateMock: vi.fn(),
   createMock: vi.fn(),
   parseAccessTokenMock: vi.fn(),
@@ -122,7 +124,10 @@ vi.mock('@/lib/store-app-deploy', () => ({
 
 import { GET, POST } from '@/app/api/package/route';
 import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { QaGateNotPassedError, QaSecurityGateError } from '@/lib/qa/gate';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
+
+beforeEach(() => getApprovalFailuresMock.mockResolvedValue([]));
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture, signedFixture } from '@/lib/curated-catalog/test-fixtures';
@@ -304,6 +309,7 @@ describe('POST /api/package (workflow dispatch)', () => {
       jobs: {
         create: createMock,
         update: updateMock,
+        getApprovalFailures: getApprovalFailuresMock,
       },
     });
     createMock.mockImplementation(async (data: Record<string, unknown>) => ({
@@ -431,6 +437,25 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(ensureQaDemandMock).not.toHaveBeenCalled();
     expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'queued' }));
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('blocks approval checkpoints before creating or dispatching a forced job (%s)', async forceCreate => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const item = { ...makeWin32Item(), forceCreate };
+    getApprovalFailuresMock.mockResolvedValue([{ tenant_id: 'tenant-1', winget_id: item.wingetId,
+      user_id: 'another-user', version: 'older', status: 'failed', error_category: 'approval', error_details: null,
+      archived_at: new Date().toISOString() }]);
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [item], forceCreate }),
+    }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INTUNE_APPROVAL_PENDING', retryable: false });
+    expect(createMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+    expect(infoSpy.mock.calls.some(([message]) => String(message).startsWith('[Package] Deployment job'))).toBe(false);
+    infoSpy.mockRestore();
   });
 
   it('returns an actionable conflict for removed versions before creating or dispatching jobs', async () => {
@@ -654,6 +679,113 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(response.status).toBe(200);
     expect(triggerPackagingWorkflowMock).toHaveBeenCalledTimes(1);
     expect(triggerPackagingWorkflowMock.mock.calls[0][0].relationships).toBeUndefined();
+  });
+
+  function postSingleItem() {
+    return POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: [makeWin32Item()] }),
+    }));
+  }
+
+  it('records a security verdict at the dispatch gate as a validation block with its reason', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaSecurityGateError({
+      wingetId: 'Test.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      malicious: 3,
+      totalEngines: 71,
+    }));
+
+    const body = await (await postSingleItem()).json();
+
+    const reason = 'VirusTotal reported 3 malicious verdicts for the Test.App 1.0.0 (x64) installer. '
+      + 'Packaging is blocked for this version until the finding is reviewed. '
+      + 'Earlier versions with a clean verdict remain available.';
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'failed',
+      error_stage: 'validation',
+      error_category: null,
+      error_code: 'QA_SECURITY_FLAGGED_CURRENT_VERSION',
+      error_message: reason,
+    }));
+    expect(body.errors).toEqual([{ wingetId: 'Test.App', error: reason }]);
+  });
+
+  it('records a pending installation test at the dispatch gate with its own code', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(new QaGateNotPassedError({
+      wingetId: 'Test.App',
+      version: '1.0.0',
+      architecture: 'x64',
+      installerSha256: 'A'.repeat(64),
+      packageProfileSha256: 'B'.repeat(64),
+      reason: 'package_profile',
+    }));
+
+    await postSingleItem();
+
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      error_stage: 'validation',
+      error_code: 'QA_NOT_PASSED_CURRENT_VERSION',
+      error_message: expect.stringContaining('Installation testing has not passed yet for Test.App 1.0.0 (x64)'),
+    }));
+  });
+
+  it('keeps WORKFLOW_DISPATCH_FAILED for errors that prevent the workflow from starting', async () => {
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(
+      new Error('Failed to trigger GitHub Actions workflow: 502 Bad Gateway')
+    );
+
+    const body = await (await postSingleItem()).json();
+
+    expect(updateMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      status: 'failed',
+      error_stage: 'authenticate',
+      error_category: 'network',
+      error_code: 'WORKFLOW_DISPATCH_FAILED',
+      error_message: 'Failed to trigger GitHub Actions workflow: 502 Bad Gateway',
+    }));
+    expect(body.errors).toEqual([{
+      wingetId: 'Test.App',
+      error: 'Failed to trigger GitHub Actions workflow: 502 Bad Gateway',
+    }]);
+  });
+
+  it('logs a deployment that could not start to the server log', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    triggerPackagingWorkflowMock.mockRejectedValueOnce(
+      new Error('Failed to trigger GitHub Actions workflow: 502 Bad Gateway')
+    );
+
+    try {
+      await postSingleItem();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[Package] Deployment of Test.App failed: Failed to trigger GitHub Actions workflow: 502 Bad Gateway'
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('logs each created deployment job to the server log', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    getFeatureFlagsMock.mockReturnValue({ pipeline: true, localPackager: true });
+
+    try {
+      const body = await (await postSingleItem()).json();
+
+      expect(body.jobs).toHaveLength(1);
+      expect(infoSpy).toHaveBeenCalledWith(
+        `[Package] Deployment job ${body.jobs[0].id} created for Test.App 1.0.0 (status: queued)`
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
   });
 
   it('queues a customer deployment strictly above the shared auto_update/managed demand tier', async () => {
@@ -1875,7 +2007,7 @@ describe('POST /api/package (curated licence attestation)', () => {
     acrobatItem = cart(0);
     chromeItem = cart(1, CURATED_APPS[0]);
     getDatabaseMock.mockReturnValue({
-      jobs: { create: createMock, update: updateMock },
+      jobs: { create: createMock, update: updateMock, getApprovalFailures: getApprovalFailuresMock },
       curatedLicenceAttestations: {
         get: vi.fn(async (tenantId: string, id: string, version: string) => acceptances.has(`${tenantId}|${id}|${version}`)
           ? { id: 'acceptance', tenant_id: tenantId, app_id: acrobat.id, attestation_id: id, attestation_version: version,
@@ -1907,6 +2039,19 @@ describe('POST /api/package (curated licence attestation)', () => {
     method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
     body: JSON.stringify({ items }),
   }));
+
+  it('checks the canonical curated package ID before any demand or job for mixed casing', async () => {
+    getApprovalFailuresMock.mockImplementation(async (_tenant: string, packageId: string) => packageId === acrobat.packageId
+      ? [{ tenant_id: 'tenant-1', winget_id: acrobat.packageId, status: 'failed', error_category: 'approval', error_details: null }]
+      : []);
+    const response = await post([{ ...acrobatItem, wingetId: acrobat.packageId.toUpperCase() }]);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INTUNE_APPROVAL_PENDING', package: { wingetId: acrobat.packageId } });
+    expect(getApprovalFailuresMock).toHaveBeenCalledWith('tenant-1', acrobat.packageId, undefined);
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
 
   it('blocks a curated app whose agreement the tenant has not accepted, before any job exists', async () => {
     const response = await post([acrobatItem]);
