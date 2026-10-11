@@ -1,5 +1,8 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
+import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
+import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
+import { qaSourceKey, qaSourceRetryAt } from './source-backoff';
 
 import { createServerClient } from '@/lib/supabase';
 import { isQaFrameFresh } from '@/lib/qa/live-frame-freshness';
@@ -32,6 +35,10 @@ interface CandidateRow {
   live_log?: Json | null;
   log_updated_at?: string | null;
   test_config: Json;
+  installer_url: string;
+  installer_sha256: string;
+  package_profile_sha256: string | null;
+  next_retry_at: string | null;
 }
 
 interface FrameRow {
@@ -74,6 +81,7 @@ export interface QaLiveSnapshotInput {
   current: CandidateRow | null;
   queuedCount: number;
   queued: CandidateRow[];
+  waiting?: Array<{ candidate: CandidateRow; nextCheckAt: string | null; sourceRetry: boolean }>;
   poll: PollRow | null;
   consecutivePollFailures: number;
   recent: ResultRow[];
@@ -382,7 +390,13 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     log: currentLog,
     queue: {
       count: input.queuedCount,
-      next: input.queued.map((candidate) => ({
+      waiting: (input.waiting || []).slice(0, 10).map(({ candidate, nextCheckAt, sourceRetry }) => ({
+        wingetId: candidate.winget_id, displayName: appById.get(candidate.winget_id)?.name || candidate.winget_id,
+        version: candidate.version, architecture: architecture(candidate.architecture),
+        reason: sourceRetry ? "Installer source checks are deferred; another check is scheduled." : "This application is waiting for verification before testing.",
+        next_check_at: nextCheckAt,
+      })),
+      next: input.queued.slice(0, 10).map((candidate) => ({
         wingetId: candidate.winget_id,
         displayName: appById.get(candidate.winget_id)?.name || candidate.winget_id,
         version: candidate.version,
@@ -432,15 +446,16 @@ export function countConsecutiveFailedPolls(
 }
 
 export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
+  const now = new Date();
   if (isQaMaintenanceMode()) {
     return buildQaLiveResponse({
-      now: new Date(), current: null, queuedCount: 0, queued: [], poll: null,
+      now, current: null, queuedCount: 0, queued: [], poll: null,
       consecutivePollFailures: 0, recent: [], apps: [], frame: null,
     });
   }
   const supabase = createServerClient();
   const candidateColumns =
-    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config';
+    'id, winget_id, version, architecture, status, priority, enqueued_at, dispatched_at, started_at, phase, phase_started_at, phase_updated_at, live_activity, activity_updated_at, live_log, log_updated_at, test_config, installer_url, installer_sha256, package_profile_sha256, next_retry_at';
 
   const [activeResult, queueResult, countResult, pollResult, recentResult, control, curated] = await Promise.all([
     supabase
@@ -451,15 +466,12 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase
+    orderQaQueue(supabase
       .from('qa_candidates')
       .select(candidateColumns)
       .eq('test_level', 'psadt-package')
-      .eq('status', 'queued')
-      .order('priority', { ascending: false })
-      .order('enqueued_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(10),
+      .eq('status', 'queued'))
+      .limit(1000),
     supabase
       .from('qa_candidates')
       .select('id', { count: 'exact', head: true })
@@ -486,13 +498,40 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   }
 
   const current = (activeResult.data as CandidateRow | null) || null;
-  const queued = (queueResult.data || []) as CandidateRow[];
+  const queueRows = (queueResult.data || []) as CandidateRow[];
+  const queued: CandidateRow[] = [];
+  const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
+  for (const candidate of queueRows) {
+    let reason = qaQueueCandidateReason(candidate, now);
+    let nextCheckAt = candidate.next_retry_at;
+    if (!reason && queued.length >= 10) continue;
+    if (!reason) {
+      try {
+      const blocked = await getPackageCompatibilityBlock(supabase, {
+        wingetId: candidate.winget_id, version: candidate.version,
+        architecture: candidate.architecture, installerSha256: candidate.installer_sha256,
+      });
+      if (blocked) reason = 'package-compatibility-blocked';
+      else {
+        const retryAt = await qaSourceRetryAt(supabase, qaSourceKey(candidate));
+        if (retryAt) { reason = 'source-retry-pending'; nextCheckAt = retryAt; }
+      }
+      } catch {
+        // A lookup outage must never advertise an unverified candidate as next.
+        continue;
+      }
+    }
+    if (reason === 'source-retry-pending') waiting.push({ candidate, nextCheckAt, sourceRetry: true });
+    else if (!reason) queued.push(candidate);
+    if (queued.length >= 10 && waiting.length >= 10) break;
+  }
   const recent = (recentResult.data || []) as ResultRow[];
   const polls = (pollResult.data || []) as PollRow[];
   const consecutivePollFailures = countConsecutiveFailedPolls(polls);
   const ids = [
     ...(current ? [current.winget_id] : []),
     ...queued.map((row) => row.winget_id),
+    ...waiting.slice(0, 10).map(({ candidate }) => candidate.winget_id),
     ...recent.map((row) => row.winget_id),
   ];
   const uniqueIds = [...new Set(ids)];
@@ -521,6 +560,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     current,
     queuedCount: countResult.count || 0,
     queued,
+    waiting,
     poll: polls[0] || null,
     consecutivePollFailures,
     recent,
