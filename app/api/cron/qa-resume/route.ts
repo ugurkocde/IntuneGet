@@ -1,4 +1,5 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
@@ -402,5 +403,14 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting });
+  // Existing waiting jobs get the full batch first. Recovered failures enter the
+  // same guarded path on the next invocation, never a separate dispatch path.
+  let reopened = 0;
+  let recoveryDeferred = false;
+  try {
+    reopened = await reopenSupersededQaFailures(supabase);
+  } catch {
+    recoveryDeferred = true;
+  }
+  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting, reopened, recoveryDeferred });
 }

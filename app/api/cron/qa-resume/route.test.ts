@@ -32,6 +32,9 @@ vi.mock('@/lib/curated-catalog/licence', async (importOriginal) => ({
   assertCuratedLicenceAccepted: assertCuratedLicenceAcceptedMock,
 }));
 vi.mock('@/lib/qa/demand', () => ({ ensureQaDemand: ensureQaDemandMock }));
+// Recovery has its own real-route regression suite. Keep these existing
+// waiting-job tests focused on their original conditional writes.
+vi.mock('@/lib/qa/customer-failure-recovery', () => ({ reopenSupersededQaFailures: vi.fn(async () => 0) }));
 vi.mock('@/lib/package-eligibility', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/package-eligibility')>()),
   getPackageCompatibilityBlock: getPackageCompatibilityBlockMock,
