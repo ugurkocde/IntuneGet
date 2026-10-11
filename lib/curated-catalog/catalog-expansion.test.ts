@@ -146,6 +146,22 @@ describe('curated catalog expansion to fifty applications', () => {
     expect(candidateFromMetadata(app('azure-functions-core-tools'), JSON.stringify(funcRelease)).installerUrl).toMatch(/-x64\.msi$/);
   });
 
+  it('matches the replacement apps against the exact names their MSIs register and publish', () => {
+    // ProductName values and asset names read from the publisher MSIs.
+    const observed: Record<string, { registered: string; asset: string; lookalike: string }> = {
+      'azure-functions-core-tools': { registered: 'Azure Functions Core Tools - 4.15.2 (x64)', asset: 'func-cli-4.15.2-x64.msi', lookalike: 'func-cli-4.15.2-x64Xmsi' },
+      starship: { registered: 'starship', asset: 'starship-x86_64-pc-windows-msvc.msi', lookalike: 'starship-x86_64-pc-windows-msvcXmsi' },
+      k6: { registered: 'k6', asset: 'k6-v2.3.0-windows-amd64.msi', lookalike: 'k6-v2.3.0-windows-amd64Xmsi' },
+    };
+    for (const [id, names] of Object.entries(observed)) {
+      const definition = app(id);
+      expect(new RegExp(definition.installedIdentity.displayNamePattern).test(names.registered), id).toBe(true);
+      expect(new RegExp(definition.assetPattern!).test(names.asset), id).toBe(true);
+      expect(new RegExp(definition.assetPattern!).test(names.lookalike), id).toBe(false);
+    }
+    expect(new RegExp(app('azure-functions-core-tools').installedIdentity.displayNamePattern).test('Azure Functions Core Tools - 4.15.2 x64')).toBe(false);
+  });
+
   it('confirms the constructed Go installer exists using HEAD only', async () => {
     const fetcher = vi.fn(async (_url: string, options: RequestInit) => options.method === 'HEAD' ? new Response(null, { status: 404 }) : new Response(goIndex, { headers: { 'content-type': 'application/json' } }));
     await expect(discoverCandidate(app('go'), fetcher)).rejects.toThrow(/no full installer/);
