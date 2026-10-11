@@ -40,6 +40,12 @@ export function createFileSink(options: {
     const code = (error as NodeJS.ErrnoException)?.code;
     try { notice('[intuneget-log] file logging disabled (' + (/^[A-Z0-9_]{1,24}$/.test(code ?? '') ? code : 'IO_ERROR') + ')\n'); } catch { /* fail open even if stderr is unavailable */ }
   }
+  async function reportDropped() {
+    if (!dropped || disabled) return;
+    const count = dropped; dropped = 0;
+    try { await append('[intuneget-log] dropped ' + count + ' lines\n'); }
+    catch (error) { await fail(error); }
+  }
   return {
     write(line: string) {
       if (disabled) return;
@@ -50,13 +56,13 @@ export function createFileSink(options: {
         try {
           if (disabled) return;
           await append(line);
-          if (dropped) { const count = dropped; dropped = 0; await append('[intuneget-log] dropped ' + count + ' lines\n'); }
+          await reportDropped();
         } catch (error) { await fail(error); }
         finally { queued--; queuedBytes -= bytes; }
       });
     },
-    async flush() { await chain; },
-    async close() { await chain; await handle?.close(); handle = undefined; },
+    async flush() { chain = chain.then(reportDropped); await chain; },
+    async close() { chain = chain.then(async () => { await reportDropped(); await handle?.close(); handle = undefined; }); await chain; },
     get disabled() { return disabled; },
   };
 }

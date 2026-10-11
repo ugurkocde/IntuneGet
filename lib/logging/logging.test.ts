@@ -25,6 +25,21 @@ describe('server logging', () => {
     expect(formatLogLine('info', [obj])).not.toContain('private'); expect(run).not.toHaveBeenCalled();
   });
   it('bounds formatting', () => { expect(formatLogLine('info', ['x'.repeat(100_000)]).length).toBeLessThan(8300); });
+  it('redacts an incomplete email token without expensive rescanning', () => {
+    expect(formatLogLine('info', ['x'.repeat(100_000) + '@partial'])).not.toContain('@partial');
+  });
+  it.each(['a@example.invalid', '11111111-2222-3333-4444-555555555555'])('redacts a value crossing the truncation boundary: %s', value => {
+    const line = formatLogLine('info', ['x'.repeat(8188) + ' ' + value]);
+    expect(line).not.toContain(value.slice(0, 4));
+    expect(line).toContain('[re');
+  });
+  it.each(['flush', 'close'] as const)('reports an idle oversized drop during %s', async operation => {
+    const dir = await temp(); const sink = createFileSink({ dir, maxBytes: 100 });
+    sink.write('x'.repeat(101)); await sink[operation]();
+    expect(await readFile(path.join(dir, 'intuneget.log'), 'utf8')).toBe('[intuneget-log] dropped 1 lines\n');
+    await sink.close();
+    expect(await readFile(path.join(dir, 'intuneget.log'), 'utf8')).toBe('[intuneget-log] dropped 1 lines\n');
+  });
   it('creates the file lazily and rotates without losing accepted order', async () => {
     const dir = path.join(await temp(), 'logs'); const sink = createFileSink({ dir, maxBytes: 100, backups: 3 });
     await expect(readdir(dir)).rejects.toMatchObject({ code: 'ENOENT' });

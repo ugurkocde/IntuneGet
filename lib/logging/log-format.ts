@@ -12,12 +12,13 @@ export function levelAllows(minimum: LogLevel, level: LogLevel): boolean {
 export function formatLogLine(level: LogLevel, args: unknown[], now = new Date()): string {
   let text: string;
   try {
-    text = logValue(args.slice(0, 20).map(arg => typeof arg === 'string' ? arg : inspect(arg, {
+    const serialized = args.slice(0, 20).map(arg => typeof arg === 'string' ? arg : inspect(arg, {
       customInspect: false, getters: false, showProxy: false, depth: 3,
       maxArrayLength: 20, maxStringLength: 2000, breakLength: Infinity,
-    })).join(' '), 8192)
-      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted email]')
-      .replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, '[redacted id]')
+    })).join(' ');
+    text = logValue(serialized
+      .replace(/\S+/g, token => token.includes('@') ? '[redacted email]' : token)
+      .replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, '[redacted id]'), 8192)
       .replace(/[\r\n\u2028\u2029]/g, ' ');
   } catch { text = '[unformattable log arguments]'; }
   return now.toISOString() + ' ' + level.toUpperCase() + ' ' + text + '\n';
