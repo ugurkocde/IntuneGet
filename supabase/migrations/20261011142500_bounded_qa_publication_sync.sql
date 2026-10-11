@@ -135,7 +135,7 @@ begin
   select coalesce(jsonb_agg(item), '[]'::jsonb)
   into canonical_rows
   from jsonb_array_elements(p_rows) item
-  where coalesce(item->>'profile_kind', 'catalog-default') = 'catalog-default';
+  where coalesce(nullif(item->>'profile_kind', ''), 'catalog-default') = 'catalog-default';
 
   if jsonb_array_length(canonical_rows) > 0 then
     sync_result := public.sync_qa_results_incremental_base(p_secret, canonical_rows, p_allow_large_delete);
@@ -278,7 +278,8 @@ CREATE OR REPLACE FUNCTION public.sync_qa_results_incremental(p_secret text, p_r
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
- SET statement_timeout TO '30s'
+-- PostgREST hoists this timeout before RPC execution, matching the existing v2 setting.
+SET statement_timeout TO '30s'
 AS $function$
 declare
   sync_result jsonb;

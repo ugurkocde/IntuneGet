@@ -57,4 +57,14 @@ create table public.qa_sync_watermarks (id text,source_synced_at timestamptz,acc
   it('does not expose private helpers to the public execution roles', async () => {
     expect((await db.query("select has_function_privilege('anon','sync_qa_results_incremental(text,jsonb,jsonb)','execute') api, has_function_privilege('anon','sync_qa_results_incremental_base(text,jsonb,boolean)','execute') helper")).rows[0]).toEqual({ api: true, helper: false });
   });
+  it('normalizes empty canonical profiles consistently with hashes and VirusTotal evidence', async () => {
+    await sync([row({ winget_id: 'Vendor.Empty', installer_sha256: 'C'.repeat(64), outcome: 'Failed' })]);
+    await sync([row({ winget_id: 'Vendor.Empty', profile_kind: '', test_level: 'psadt-package', package_profile_sha256: 'D'.repeat(64), installer_sha256: 'E'.repeat(64), tested_at_utc: '2026-10-11T15:00:00Z', display_name: 'Updated app', virustotal_status: 'clean', virustotal_malicious: 0 })]);
+    expect((await db.query("select outcome,display_name,installer_sha256,tested_at_utc::text stamp,virustotal_status from qa_results where winget_id='Vendor.Empty'")).rows[0]).toEqual({ outcome: 'Passed', display_name: 'Updated app', installer_sha256: 'E'.repeat(64), stamp: '2026-10-11 15:00:00+00', virustotal_status: 'clean' });
+    expect((await db.query("select profile_kind from qa_package_results where winget_id='Vendor.Empty'")).rows[0]).toEqual({ profile_kind: 'catalog-default' });
+  });
+  it('rejects duplicate canonical identities after empty profile normalization', async () => {
+    await expect(sync([row({ winget_id: 'Vendor.Duplicate', profile_kind: '' }), row({ winget_id: 'Vendor.Duplicate', profile_kind: 'catalog-default' })])).rejects.toThrow(/must be present and unique/);
+    expect((await db.query("select winget_id from qa_results where winget_id='Vendor.Duplicate'")).rows).toEqual([]);
+  });
 });
