@@ -1,25 +1,23 @@
-import { NextRequest } from 'next/server';
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('@/lib/auth-utils', () => ({
-  parseAccessToken: vi.fn().mockResolvedValue({ userId: 'user-1', tenantId: 'tenant-1' }),
-}));
-vi.mock('@/lib/db', () => ({
-  getDatabase: () => ({ jobs: { getByUserId: vi.fn().mockResolvedValue([]) } }),
-}));
-
+import { NextRequest, NextResponse } from 'next/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), jobs: vi.fn(), client: vi.fn(), resolve: vi.fn() }));
+vi.mock('@/lib/auth-utils', () => ({ parseAccessToken: mocks.auth }));
+vi.mock('@/lib/db', () => ({ getDatabase: () => ({ jobs: { getAnalyticsJobs: mocks.jobs } }) }));
+vi.mock('@/lib/supabase', () => ({ getServerClientOrNull: mocks.client }));
+vi.mock('@/lib/msp/tenant-resolution', () => ({ resolveTargetTenantId: mocks.resolve }));
 import { GET } from './route';
-
-describe('GET /api/analytics/stats', () => {
-  it('returns a well-formed zero payload with no SQLite jobs', async () => {
-    const response = await GET(new NextRequest('http://localhost/api/analytics/stats'));
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      totalDeployed: 0,
-      thisMonth: 0,
-      pending: 0,
-      failed: 0,
-      recentActivity: [],
-    });
-  });
+const job = (id: string, user = 'caller', status = 'deployed') => ({ id, user_id: user, user_email: `${user}@example.invalid`, status, completed_at: '2026-10-01T00:00:00Z', created_at: '2026-10-01T00:00:00Z', winget_id: 'Example.App', display_name: 'Example', intune_app_url: null });
+const request = (query = '', tenant?: string) => new NextRequest('http://localhost/api/analytics/stats' + query, { headers: tenant ? { 'X-MSP-Tenant-Id': tenant } : {} });
+beforeEach(() => { vi.clearAllMocks(); mocks.auth.mockResolvedValue({ userId: 'caller', tenantId: 'token-tenant' }); mocks.jobs.mockResolvedValue([]); mocks.client.mockReturnValue(null); mocks.resolve.mockResolvedValue({ tenantId: 'token-tenant', errorResponse: null }); });
+describe('dashboard statistics authorization and complete counts', () => {
+  it('returns zero counts and prevents shared caching', async () => { const r = await GET(request()); expect(r.status).toBe(200); expect(r.headers.get('cache-control')).toBe('private, no-store'); expect(await r.json()).toEqual({ totalDeployed: 0, thisMonth: 0, pending: 0, failed: 0, recentActivity: [], scope: 'mine' }); });
+  it('rejects unauthenticated calls before reading jobs', async () => { mocks.auth.mockResolvedValue(null); expect((await GET(request())).status).toBe(401); expect(mocks.jobs).not.toHaveBeenCalled(); });
+  it('ignores caller supplied identities and keeps customer-only members personal', async () => { mocks.client.mockReturnValue({}); mocks.resolve.mockResolvedValue({ errorResponse: NextResponse.json({}, { status: 403 }) }); await GET(request('?tenantId=foreign&userId=other', 'foreign')); expect(mocks.resolve).not.toHaveBeenCalled(); expect(mocks.jobs).toHaveBeenCalledWith({ userId: 'caller' }); });
+  it('counts more than the uploads page limit', async () => { mocks.jobs.mockResolvedValue(Array.from({ length: 75 }, (_, i) => job(String(i)))); const r = await GET(request()); const v = await r.json(); expect(v.totalDeployed).toBe(75); expect(v.recentActivity).toHaveLength(5); expect(v).not.toHaveProperty('perUser'); expect(v.recentActivity[0]).not.toHaveProperty('deployedBy'); });
+  it('shows two colleagues with email attribution only in the token tenant', async () => { mocks.jobs.mockResolvedValue([job('a', 'anna'), job('b', 'bob')]); const v = await (await GET(request('?scope=tenant'))).json(); expect(mocks.jobs).toHaveBeenCalledWith({ tenantId: 'token-tenant' }); expect(v.totalDeployed).toBe(2); expect(v.perUser).toEqual([{ userEmail: 'anna@example.invalid', deployed: 1, pending: 0, failed: 0 }, { userEmail: 'bob@example.invalid', deployed: 1, pending: 0, failed: 0 }]); expect(v.recentActivity[0].deployedBy).toBe('anna@example.invalid'); expect(v.perUser[0]).not.toHaveProperty('userId'); });
+  it('returns the existing MSP denial before reading jobs', async () => { mocks.client.mockReturnValue({}); mocks.resolve.mockResolvedValue({ errorResponse: NextResponse.json({ error: 'denied' }, { status: 403 }) }); expect((await GET(request('?scope=tenant', 'foreign'))).status).toBe(403); expect(mocks.jobs).not.toHaveBeenCalled(); });
+  it('uses only the tenant accepted by the resolver', async () => { mocks.client.mockReturnValue({}); mocks.resolve.mockResolvedValue({ tenantId: 'accepted-customer', errorResponse: null }); await GET(request('?scope=tenant&tenantId=spoof', 'accepted-customer')); expect(mocks.jobs).toHaveBeenCalledWith({ tenantId: 'accepted-customer' }); expect(mocks.resolve).toHaveBeenCalledWith({ supabase: {}, userId: 'caller', tokenTenantId: 'token-tenant', requestedTenantId: 'accepted-customer' }); });
+  it('rejects an MSP override in SQLite mode', async () => { expect((await GET(request('?scope=tenant', 'foreign'))).status).toBe(400); expect(mocks.jobs).not.toHaveBeenCalled(); });
+  it('rejects an unknown scope', async () => { expect((await GET(request('?scope=global'))).status).toBe(400); expect(mocks.jobs).not.toHaveBeenCalled(); });
+  it('returns an unavailable response rather than partial numbers', async () => { mocks.jobs.mockRejectedValue(new Error('Incomplete page')); expect((await GET(request())).status).toBe(503); });
 });
