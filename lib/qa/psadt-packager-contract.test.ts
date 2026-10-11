@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyApplicationPackagingAdapter, resolveApplicationUninstallCommand } from '@/lib/packaging-adapters';
+import { APPLICATION_PACKAGING_ADAPTERS, applyApplicationPackagingAdapter, resolveApplicationUninstallCommand } from '@/lib/packaging-adapters';
 import { DEFAULT_PSADT_CONFIG } from '@/types/psadt';
 import { generateUninstallCommand } from '@/lib/detection-rules';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
@@ -56,6 +56,142 @@ const canRunWindowsPowerShellPackager =
     '-Command',
     '$PSVersionTable.PSVersion.ToString()',
   ]).status === 0;
+
+type ManagedWaitScenario = 'normal' | 'delayed' | 'hung' | 'exited' | 'fault';
+
+async function executeManagedWait(scenario: ManagedWaitScenario) {
+  const generated = generateRegistryUninstallPackage('exe', 'Google Updater', [], {
+    reviewedManagedInstallDirectory: '%ProgramFiles(x86)%\\Google\\GoogleUpdater',
+    reviewedManagedUninstall: {
+      executablePath: '%ProgramFiles(x86)%\\Google\\GoogleUpdater\\<VERSION>\\updater.exe',
+      arguments: ['--uninstall', '--system'], completionTimeoutMinutes: 1,
+    },
+  }, [], 'Google.GoogleUpdater');
+  const uninstall = generated.slice(generated.indexOf('function Uninstall-ADTDeployment'));
+  const start = uninstall.indexOf('    $managedInstallDirectory =');
+  const absent = uninstall.indexOf('Managed installation was already absent:', start);
+  const end = uninstall.indexOf('\n    }', absent) + '\n    }'.length;
+  if (start < 0 || absent < 0 || end <= start) throw new Error('Managed wait block missing');
+  const fixture = mkdtempSync(join(tmpdir(), 'managed-wait-PRIVATE_SENTINEL-'));
+  const target = join(fixture, 'Google', 'GoogleUpdater');
+  mkdirSync(join(target, '1.0.0'), { recursive: true });
+  writeFileSync(join(target, '1.0.0', 'updater.exe'), 'fixture');
+  writeFileSync(join(target, 'PRIVATE_SENTINEL.txt'), 'fixture');
+  const script = join(fixture, 'runtime.ps1');
+  const log = join(fixture, 'log.json');
+  const quote = (value: string) => value.replace(/'/g, "''");
+  writeFileSync(script, `$ErrorActionPreference = 'Stop'
+[Environment]::SetEnvironmentVariable('ProgramFiles(x86)', $env:WAIT_FIXTURE_ROOT, 'Process')
+$script:ManagedWaitCapturedLogs = [Collections.Generic.List[object]]::new()
+$script:launched = $null
+function Write-ADTLogEntry { param($Message, $Severity, $Source)
+  $script:ManagedWaitCapturedLogs.Add([pscustomobject]@{message=[string]$Message; severity=[string]$Severity; at=[DateTime]::UtcNow.ToString('o')})
+}
+function Get-CimInstance { param($ClassName, $OperationTimeoutSec, $ErrorAction)
+  if ($env:WAIT_SCENARIO -eq 'fault') { throw 'fixture CIM fault' }
+  [pscustomobject]@{ExecutablePath='${quote(join(target, '1.0.0', 'updater.exe'))}'}
+  [pscustomobject]@{ExecutablePath='C:\\unrelated\\PRIVATE_SENTINEL.exe'}
+}
+function Start-ADTProcess { param($FilePath, $ArgumentList, $WindowStyle, [switch]$NoWait, [switch]$PassThru)
+  $script:launched = [pscustomobject]@{at=[DateTime]::UtcNow.ToString('o'); file=$FilePath; args=$ArgumentList; window=$WindowStyle; noWait=[bool]$NoWait; passThru=[bool]$PassThru}
+  if ($env:WAIT_SCENARIO -eq 'normal') { Remove-Item -LiteralPath '${quote(target)}' -Recurse -Force }
+  if ($env:WAIT_SCENARIO -eq 'delayed') {
+    $null = Start-Job -ArgumentList '${quote(target)}' -ScriptBlock { param($path) Start-Sleep 35; Remove-Item -LiteralPath $path -Recurse -Force }
+  }
+  if ($env:WAIT_SCENARIO -eq 'hung') { return @{Task=[Threading.Tasks.TaskCompletionSource[object]]::new().Task} }
+  if ($env:WAIT_SCENARIO -eq 'fault') {
+    $task=[Threading.Tasks.TaskCompletionSource[object]]::new(); $task.SetException([Exception]::new('fixture task fault')); return @{Task=$task.Task}
+  }
+  return @{Task=[Threading.Tasks.Task]::FromResult([pscustomobject]@{ExitCode=0})}
+}
+$failure=$null
+try {
+${uninstall.slice(start, end)}
+} catch { $failure=$_.Exception.Message }
+[pscustomobject]@{entries=$script:ManagedWaitCapturedLogs.ToArray(); launched=$script:launched; failure=$failure; finished=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath '${quote(log)}'
+if ($failure) { exit 1 }
+`);
+  try {
+    let stderr = '';
+    const status = await new Promise<number | null>((done, reject) => {
+      const child = spawn('pwsh', ['-NoProfile', '-File', script], {
+        env: { ...process.env, WAIT_FIXTURE_ROOT: fixture, WAIT_SCENARIO: scenario },
+        stdio: ['ignore', 'ignore', 'pipe'], timeout: 100_000,
+      });
+      child.stderr.on('data', chunk => { stderr += String(chunk); });
+      child.on('error', reject); child.on('exit', done);
+    });
+    if (!existsSync(log)) throw new Error(`Runtime fixture exited ${status} without evidence: ${stderr}`);
+    const result = JSON.parse(readFileSync(log, 'utf8')) as {
+      entries: Array<{message: string; severity: string; at: string}>;
+      launched: {at: string; args: string[]; window: string; noWait: boolean; passThru: boolean};
+      failure: string | null; finished: string;
+    };
+    return { status, result, target };
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+}
+
+describe('managed uninstall bounded diagnostics', () => {
+  for (const scenario of ['normal', 'delayed', 'hung', 'exited', 'fault'] as const) {
+    it.runIf(canRunWindowsPowerShellPackager).concurrent(scenario, async () => {
+      const {status, result, target} = await executeManagedWait(scenario);
+      expect(result.launched, result.failure ?? 'launch missing').not.toBeNull();
+      const heartbeat = result.entries.filter(x => x.message.startsWith('Reviewed managed uninstall still waiting:'));
+      const diagnostics = result.entries.filter(x => x.message.startsWith('Reviewed managed uninstall deadline:'));
+      const elapsed = (Date.parse(result.finished) - Date.parse(result.launched.at)) / 1000;
+      expect(result.launched).toMatchObject({args: ['--uninstall', '--system'], window: 'Hidden', noWait: true, passThru: true});
+      if (scenario === 'normal' || scenario === 'delayed') {
+        expect(status).toBe(0); expect(result.failure).toBeNull(); expect(diagnostics).toHaveLength(0);
+        expect(result.entries.some(x => x.message === `Reviewed managed uninstall completed for [${target}].`)).toBe(true);
+        expect(heartbeat).toHaveLength(scenario === 'normal' ? 0 : 1);
+        if (scenario === 'normal') expect(elapsed).toBeLessThan(10);
+      } else {
+        expect(status).toBe(1);
+        expect(result.failure).toBe(`The reviewed managed uninstaller did not remove [${target}] before the completion deadline.`);
+        expect(elapsed).toBeGreaterThanOrEqual(60); expect(elapsed).toBeLessThan(80);
+        expect(heartbeat.length).toBeGreaterThanOrEqual(1); expect(heartbeat.length).toBeLessThanOrEqual(2);
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics[0].message).toContain('exe=True entries=2');
+        expect(diagnostics[0].message).toContain(scenario === 'fault' ? 'procs=unavailable' : 'procs=1');
+        expect(diagnostics[0].message).toContain(scenario === 'hung' ? 'launchedExited=False launchedExitCode=none' : scenario === 'fault' ? 'launchedExited=True launchedExitCode=unknown' : 'launchedExited=True launchedExitCode=0');
+      }
+      for (const line of heartbeat) {
+        const offset = (Date.parse(line.at) - Date.parse(result.launched.at)) / 1000;
+        expect(offset).toBeGreaterThanOrEqual(30); expect(offset).toBeLessThan(60);
+      }
+      for (const line of [...heartbeat, ...diagnostics]) {
+        expect(line.message).not.toMatch(/PRIVATE_SENTINEL|[A-Z]:\\/i);
+        expect(line.message.length).toBeLessThanOrEqual(160);
+      }
+      if (scenario === 'hung') {
+        const tail = [...heartbeat, ...diagnostics].slice(-8).map(x => `[Post-Uninstallation] :: ${x.message}`.slice(0, 180));
+        expect(tail.at(-1)).toContain('Reviewed managed uninstall deadline:');
+        console.log('managed-wait-hung-public-tail', JSON.stringify(tail));
+      }
+    }, 120_000);
+  }
+  it('keeps diagnostics intact in the public tail width', () => {
+    const messages = [...packager.matchAll(/Reviewed managed uninstall (?:still waiting|deadline):[^"'\r\n]+/g)].map(x => x[0]);
+    expect(messages).toHaveLength(2);
+    for (const message of messages) {
+      const values: Record<string, string> = {elapsedSec: '99999', remainingSec: '99999', launchedExited: 'False', launchedExitCode: '-2147483648', exe: 'unknown', entries: 'unknown', procs: 'unavailable'};
+      const worst = message.replace(/\$(\w+)/g, (_, key: string) => values[key]);
+      // Runtime interpolation uses bounded integers/booleans, never paths or names.
+      expect(worst.length).toBeLessThanOrEqual(160);
+      expect(`[Post-Uninstallation] :: ${worst}`.length).toBeLessThanOrEqual(179);
+    }
+  });
+  it('leaves five minutes below the dispatcher floor for every managed uninstall', () => {
+    const dispatch = readFileSync(resolve('lib/qa/dispatch.ts'), 'utf8');
+    const floor = Number(dispatch.match(/DEFAULT_QA_COMMAND_TIMEOUT_MINUTES = (\d+)/)?.[1]);
+    expect(floor).toBe(20);
+    for (const adapter of APPLICATION_PACKAGING_ADAPTERS) {
+      if (adapter.reviewedManagedUninstall) expect(adapter.reviewedManagedUninstall.completionTimeoutMinutes).toBeLessThanOrEqual(floor - 5);
+    }
+  });
+});
 
 function generateRegistryUninstallPackage(
   installerType: 'exe' | 'inno' | 'burn' | 'nullsoft' | 'msi' | 'zip',

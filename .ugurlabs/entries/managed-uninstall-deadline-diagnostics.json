@@ -1,0 +1,5 @@
+{
+  "title": "Clearer managed uninstall diagnostics",
+  "summary": "Managed uninstallers now report bounded progress and deadline details while preserving their existing removal checks.",
+  "type": "improved"
+}
