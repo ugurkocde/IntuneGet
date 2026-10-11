@@ -167,10 +167,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const body: PackageRequestBody = await request.json();
-    const { items, forceCreate } = body;
+    const body: unknown = await request.json();
+    const { items, forceCreate } = (body && typeof body === 'object' ? body : {}) as PackageRequestBody;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: 'No items provided for packaging' },
         { status: 400 }
@@ -187,6 +187,13 @@ export async function POST(request: NextRequest) {
 
     // Reject the entire invalid custom detection request before packaging side effects.
     for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return NextResponse.json({ error: 'Invalid package item' }, { status: 400 });
+      }
+      const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
+      if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
+        return NextResponse.json({ error: 'Invalid PSADT settings' }, { status: 400 });
+      }
       const flag = (item as unknown as { psadtConfig?: { customDetection?: unknown } }).psadtConfig?.customDetection;
       if (flag !== undefined && typeof flag !== 'boolean') {
         return NextResponse.json({ error: 'Invalid custom detection setting' }, { status: 400 });

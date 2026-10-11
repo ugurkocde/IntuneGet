@@ -761,20 +761,19 @@ export class AutoUpdateTrigger {
 
       // The recovered settings already protect this run if persistence fails.
       try {
-        await this.supabase
+        const { error: persistError } = await this.supabase
           .from('app_update_policies')
           .update({ deployment_config: policy.deployment_config })
           .eq('id', policy.id);
+        if (persistError) {
+          console.warn('Could not save recovered deployment settings; this update uses them and a later update retries saving.');
+        }
       } catch {
-        // A later update can retry persistence without losing this run's settings.
+        console.warn('Could not save recovered deployment settings; this update uses them and a later update retries saving.');
       }
       return true;
-    } catch (error) {
-      console.warn(
-        `Could not backfill psadtConfig for policy ${policy.id}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+    } catch {
+      console.warn('Could not load saved deployment settings: backfill read failed.');
       return false;
     }
   }

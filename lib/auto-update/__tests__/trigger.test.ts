@@ -842,11 +842,15 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps recovered custom rules effective when saving the policy throws', async () => {
+    it.each(['returned error', 'exception'])('keeps recovered custom rules effective and warns privately on save %s', async failure => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const updateSpy = failure === 'exception'
+        ? vi.fn(() => { throw new Error('Synthetic save failure for policy-1'); })
+        : vi.fn();
       const supabase = createSupabaseMock({
         upload_history: { maybeSingleResult: { data: { packaging_job_id: 'job-1' }, error: null } },
         packaging_jobs: { maybeSingleResult: { data: { package_config: { psadtConfig: { ...DEFAULT_PSADT_CONFIG, customDetection: true } } }, error: null } },
-        app_update_policies: { updateSpy: vi.fn(() => { throw new Error('Synthetic save failure'); }) },
+        app_update_policies: { updateSpy, terminalError: failure === 'returned error' ? { message: 'Synthetic save failure for policy-1' } : null },
       });
       const trigger = makeTrigger(supabase);
       vi.spyOn(trigger as never, 'verifyTenantConsent').mockResolvedValue(true as never);
@@ -857,6 +861,33 @@ describe('AutoUpdateTrigger psadtConfig handling', () => {
       expect(result).toEqual({ success: false, skipped: true, skipReason: 'Custom detection rules are fixed. Deploy 2.0.0 from the catalog with updated rules.' });
       expect(ensureQaDemandMock).not.toHaveBeenCalled();
       expect(createJob).not.toHaveBeenCalled();
+      expect(updateSpy).toHaveBeenCalled();
+      expect(policy.deployment_config.psadtConfig).toMatchObject({ customDetection: true });
+      expect(warn).toHaveBeenCalledWith('Could not save recovered deployment settings; this update uses them and a later update retries saving.');
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(/policy-1|Synthetic/);
+      warn.mockRestore();
+    });
+
+    it('continues a safe update with recovered settings when saving returns an error', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const supabase = createSupabaseMock({
+        upload_history: { maybeSingleResult: { data: { packaging_job_id: 'job-1' }, error: null } },
+        packaging_jobs: { maybeSingleResult: { data: { package_config: { psadtConfig: PSADT_CONFIG } }, error: null } },
+        app_update_policies: { terminalError: { message: 'Synthetic save failure for policy-1' } },
+      });
+      const trigger = makeTrigger(supabase);
+      vi.spyOn(trigger as never, 'verifyTenantConsent').mockResolvedValue(true as never);
+      // Isolate the recovery save from the separate legacy defaults migration.
+      vi.spyOn(trigger as never, 'ensureCurrentPackageDefaults').mockResolvedValue(undefined as never);
+      const policy = makePolicy({ displayName: 'Test App' });
+      policy.consecutive_failures = 0;
+      const result = await trigger.triggerAutoUpdate(policy, UPDATE_INFO, { skipRateLimits: true, skipPriorDeploymentCheck: true });
+      expect(result.code).not.toBe('PSADT_BACKFILL_UNAVAILABLE');
+      expect(policy.deployment_config.psadtConfig).toEqual(PSADT_CONFIG);
+      expect(ensureQaDemandMock).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith('Could not save recovered deployment settings; this update uses them and a later update retries saving.');
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(/policy-1|Synthetic/);
+      warn.mockRestore();
     });
 
     it('holds custom rules introduced by the legacy packaging job backfill before QA or dispatch', async () => {

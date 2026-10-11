@@ -439,6 +439,32 @@ describe('POST /api/package (workflow dispatch)', () => {
     expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['null body', null],
+    ['string items', { items: 'abc' }],
+    ['object items', { items: {} }],
+    ['null item', { items: [null] }],
+    ['number item', { items: [5] }],
+    ['array item', { items: [[]] }],
+    ...['x', [], null, 7].map(psadtConfig => [
+      `invalid settings ${JSON.stringify(psadtConfig)}`,
+      { items: [makeWin32Item({ psadtConfig })] },
+    ]),
+    ['mixed batch', { items: [makeWin32Item(), makeWin32Item({ psadtConfig: 'x' })] }],
+  ])('rejects malformed package requests before side effects: %s', async (_name, body) => {
+    const response = await POST(new NextRequest('http://localhost:3000/api/package', {
+      method: 'POST', headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }));
+    expect(response.status).toBe(400);
+    expect(getDatabaseMock).not.toHaveBeenCalled();
+    expect(getApprovalFailuresMock).not.toHaveBeenCalled();
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+    expect(ensureQaDemandMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(triggerPackagingWorkflowMock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('blocks approval checkpoints before creating or dispatching a forced job (%s)', async forceCreate => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const item = { ...makeWin32Item(), forceCreate };
