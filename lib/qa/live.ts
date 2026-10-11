@@ -503,9 +503,9 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
   let cursor = 0, rounds = 0, lookupsClosed = false;
-  while (cursor < queueRows.length) {
+  while (cursor < queueRows.length && !(lookupsClosed && waiting.length >= 10)) {
     const chunk: CandidateRow[] = [];
-    while (cursor < queueRows.length && chunk.length < 25) {
+    while (cursor < queueRows.length && chunk.length < 25 && !(lookupsClosed && waiting.length >= 10)) {
       const candidate = queueRows[cursor++];
       const reason = qaQueueCandidateReason(candidate, now);
       if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });

@@ -70,6 +70,24 @@ it('stops eligibility lookups after filling ten next rows', async () => {
   const f = fixture(); f.rows.splice(0, f.rows.length, ...Array.from({ length: 50 }, (_, i) => candidate(i + 20, 1))); mocks.client.mockReturnValue(f.client);
   expect((await getQaLiveSnapshot()).queue.next).toHaveLength(10); expect(f.compatibilityReads()).toBe(1); expect(f.sourceReads()).toBe(1);
 });
+it('stops parsing profiles once next and waiting are full', async () => {
+  const f = fixture();
+  const eligible = Array.from({ length: 25 }, (_, i) => candidate(i + 100, 3));
+  const deferred = Array.from({ length: 10 }, (_, i) => candidate(i + 200, 2, '2099-01-01T00:00:00Z'));
+  let trailingProfileReads = 0;
+  const trailing = Array.from({ length: 50 }, (_, i) => {
+    const row = candidate(i + 300, 1), profile = row.test_config;
+    Object.defineProperty(row, 'test_config', { get: () => { trailingProfileReads++; return profile; } });
+    return row;
+  });
+  f.rows.splice(0, f.rows.length, ...eligible, ...deferred, ...trailing);
+  mocks.client.mockReturnValue(f.client);
+  const live = await getQaLiveSnapshot();
+  expect(trailingProfileReads).toBe(0);
+  expect(live.queue.next.map(row => row.wingetId)).toEqual(eligible.slice(0, 10).map(row => row.winget_id));
+  expect(live.queue.waiting.map(row => row.wingetId)).toEqual(deferred.map(row => row.winget_id));
+  expect(f.compatibilityReads()).toBe(1); expect(f.sourceReads()).toBe(1);
+});
 
 for (const table of ['qa_package_blocks', 'qa_source_backoff']) it(`stops advertising next after ${table} fails`, async () => {
   const f = fixture(); f.errors.add(table); mocks.client.mockReturnValue(f.client);
