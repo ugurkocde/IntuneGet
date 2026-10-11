@@ -30,16 +30,18 @@ function fixture() {
   return { job, candidate, result };
 }
 
-function database(f: ReturnType<typeof fixture>, options: { history?: boolean; duplicate?: boolean; race?: (job: typeof f.job) => void; lookupError?: boolean; newerFailures?: number } = {}) {
+function database(f: ReturnType<typeof fixture>, options: { history?: boolean; duplicate?: boolean; race?: (job: typeof f.job) => void; lookupError?: boolean; newerFailures?: number; olderSibling?: boolean } = {}) {
   const rows = [...Array.from({ length: options.newerFailures || 0 }, (_, n) => ({ ...f.job, id: 'newer-' + n, winget_id: 'Other.App' + n, qa_candidate_id: 'failed-' + n, created_at: '2026-10-02T09:00:00Z' })), f.job, ...(options.duplicate ? [{ ...f.job, id: 'other', status: 'packaging' }] : [])];
   const writes: Record<string, unknown>[] = [];
+  if (options.olderSibling) rows.unshift({ ...f.job, id: 'older', created_at: '2026-10-01T08:00:00Z' });
   let raced = false;
   return { writes, client: { from(table: string) {
     const predicates: ((row: Record<string, unknown>) => boolean)[] = [];
     let patch: Record<string, unknown> | undefined;
     let count = Infinity;
+    let sorting: { key: string; ascending: boolean } | undefined;
     const b = {
-      select: () => b, order: () => b,
+      select: () => b, order: (key: string, options: { ascending: boolean }) => { sorting = { key, ascending: options.ascending }; return b; },
       limit: (n: number) => { count = n; return b; },
       eq: (k: string, v: unknown) => {
         if (v !== null && typeof v === 'object') throw new Error('PostgREST scalar filter required');
@@ -59,7 +61,9 @@ function database(f: ReturnType<typeof fixture>, options: { history?: boolean; d
       if (patch && !raced) { options.race?.(f.job); raced = true; }
       const source = table === 'packaging_jobs' ? rows : table === 'qa_candidates' ? [f.candidate]
         : table === 'qa_package_results' ? [f.result] : table === 'upload_history' ? (options.history ? [{ intune_tenant_id: f.job.tenant_id, winget_id: f.job.winget_id, version: f.job.version }] : []) : [];
-      const data = source.filter(row => predicates.every(test => test(row))).slice(0, count);
+      const filtered = source.filter(row => predicates.every(test => test(row)));
+      if (sorting) filtered.sort((a, b) => String((a as Record<string, unknown>)[sorting!.key]).localeCompare(String((b as Record<string, unknown>)[sorting!.key])) * (sorting!.ascending ? 1 : -1));
+      const data = filtered.slice(0, count);
       if (patch) for (const row of data) { writes.push(patch); Object.assign(row, patch); }
       return { data: structuredClone(data), error: null };
     }
@@ -121,6 +125,14 @@ describe('QA failure recovery in the existing resume cron', () => {
     const { response } = await run(f, { newerFailures: 12 });
     expect(response.reopened).toBe(1);
     expect(f.job.status).toBe('awaiting_qa');
+  });
+
+  it('recovers the newest eligible request despite an older failed sibling', async () => {
+    const f = fixture();
+    const { response, db } = await run(f, { olderSibling: true });
+    expect(response.reopened).toBe(1);
+    expect(f.job.status).toBe('awaiting_qa');
+    expect(db.writes).toHaveLength(1);
   });
 
   it('uses the server update time to date a legacy failure without completion times', async () => {

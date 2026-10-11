@@ -19,7 +19,7 @@ export async function reopenSupersededQaFailures(supabase: SupabaseClient<Databa
     .select('*, qa_candidates!inner(status)').eq('qa_candidates.status', 'passed')
     .eq('status', 'qa_failed').eq('error_code', 'QA_FAILED_EXECUTION_PROFILE')
     .eq('is_auto_update', false).is('archived_at', null).is('cancelled_at', null)
-    .is('intune_app_id', null).order('created_at', { ascending: true }).limit(RECOVERY_SCAN_SIZE);
+    .is('intune_app_id', null).order('created_at', { ascending: false }).limit(RECOVERY_SCAN_SIZE);
   if (error) throw error;
   let reopened = 0;
   let examined = 0;
