@@ -7,6 +7,7 @@ import {
   hashRemoteInstaller,
   hashesEqual,
   InstallerDownloadDeadlineError,
+  InstallerDownloadSizeLimitError,
   isLikelyMutableInstallerUrl,
 } from '@/lib/installer-download';
 import { normalizeQaInstallerType } from '@/lib/qa/candidate';
@@ -16,6 +17,7 @@ import type { NormalizedInstaller } from '@/types/winget';
 const HEALTHY_MUTABLE_TTL_MS = 5 * 60 * 1000;
 const HEALTHY_VERSIONED_TTL_MS = 6 * 60 * 60 * 1000;
 const ERROR_TTL_MS = 60 * 1000;
+const SIZE_LIMIT_TTL_MS = 24 * 60 * 60 * 1000;
 const MANIFEST_CHANGED_TTL_MS = 6 * 60 * 60 * 1000;
 const PREFLIGHT_CACHE_SCHEMA_VERSION = '4';
 const LEASE_SECONDS = 240;
@@ -154,7 +156,7 @@ function throwForRow(row: InstallerHealthRow): never {
   throw new InstallerPreflightError(
     row.reason_code || 'INSTALLER_QUARANTINED',
     row.reason_message || 'This installer tuple is quarantined and cannot be dispatched',
-    row.status === 'error' && !['MANIFEST_CHANGED', 'MANIFEST_UNAVAILABLE'].includes(row.reason_code || ''),
+    row.status === 'error' && !['MANIFEST_CHANGED', 'MANIFEST_UNAVAILABLE', 'INSTALLER_TOO_LARGE'].includes(row.reason_code || ''),
     row.actual_sha256 || undefined,
   );
 }
@@ -377,6 +379,15 @@ async function performLivePreflight(
       bytes: downloaded.bytes,
     };
   } catch (error) {
+    if (error instanceof InstallerDownloadSizeLimitError) {
+      const normalized = new InstallerPreflightError('INSTALLER_TOO_LARGE', error.message, false);
+      await writeHealth(buildHealthRow(cacheKey, input, 'error', {
+        reason_code: normalized.code,
+        reason_message: normalized.message,
+        expires_at: new Date(Date.now() + SIZE_LIMIT_TTL_MS).toISOString(),
+      }));
+      throw normalized;
+    }
     if (error instanceof InstallerPreflightError && !error.retryable) throw error;
 
     const normalized = error instanceof InstallerPreflightError

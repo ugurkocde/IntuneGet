@@ -2,6 +2,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem } from '@/lib/curated-catalog/package';
 import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
+import { createCuratedVerificationProfile, rebuildCuratedExecutionConfig } from '@/lib/curated-catalog/verification-profile';
+import { splitQaPsadtConfig } from '@/lib/qa/package-profile';
 
 type Store = typeof import('./curated-qa-store.mjs');
 let store: Store;
@@ -63,7 +65,7 @@ describe('custom configuration verification lifecycle', () => {
   const now = new Date('2026-10-05T09:00:00Z');
   const row = (overrides: Record<string, unknown>) => ({ id: '11111111-2222-4333-8444-555555555555', release_id: release.id, app_id: app.id, winget_id: app.packageId,
     psadt_config_sha256: 'c'.repeat(64), psadt_config: { deployMode: 'Silent' }, status: 'requested', github_run_id: null, failure_detail: null, updated_at: '2026-10-05T08:00:00Z', ...overrides });
-  const base = { releases: [release], apps: CURATED_APPS, now, authenticate: async () => {}, slots: 1 };
+  const base = { releases: [release], apps: CURATED_APPS, now, authenticate: async () => {}, rebuildConfig: rebuildCuratedExecutionConfig, slots: 1 };
 
   it('keeps a persisted request queued until the minute dispatcher actually starts it', async () => {
     responses = { 'curated_config_verifications?select': [row({})] };
@@ -127,6 +129,76 @@ describe('custom configuration verification lifecycle', () => {
     responses = { 'curated_config_verifications?select': [row({ status: 'passed' })] };
     await store.processConfigVerifications({ ...base, releases: [release, newer], runs: [], readEvidence: async () => { throw new Error('none'); }, dispatch: vi.fn() });
     const insert = calls.find(call => call.method === 'POST')!;
-    expect(insert.body).toEqual([expect.objectContaining({ release_id: newer.id, status: 'requested', psadt_config_sha256: 'c'.repeat(64) })]);
+    expect(insert.body).toEqual([expect.objectContaining({ release_id: newer.id, status: 'requested',
+      psadt_config_sha256: rebuildCuratedExecutionConfig(newer, row({}).psadt_config).psadtConfigSha256 })]);
+  });
+
+  it('carries 7-Zip settings using the signed new release detection identity', async () => {
+    const sevenZip = CURATED_APPS.find(item => item.id === '7zip')!;
+    const oldRelease = releaseFixture(sevenZip, '26.03');
+    const newRelease = releaseFixture(sevenZip, '26.04');
+    newRelease.approvedAt = new Date(Date.parse(oldRelease.approvedAt) + 1000).toISOString();
+    const oldProfile = createCuratedVerificationProfile(oldRelease.candidate, oldRelease.installerSha256, { deployMode: 'Silent' });
+    const oldConfig = splitQaPsadtConfig(JSON.parse(oldProfile.workflowInput.psadtConfig)).execution;
+    const newProfile = createCuratedVerificationProfile(newRelease.candidate, newRelease.installerSha256, oldConfig as unknown as Record<string, unknown>);
+    const expected = { psadtConfigSha256: newProfile.psadtConfigSha256,
+      executionConfig: JSON.parse(JSON.stringify(splitQaPsadtConfig(JSON.parse(newProfile.workflowInput.psadtConfig)).execution)) };
+    const original = row({ status: 'passed', app_id: sevenZip.id, winget_id: sevenZip.packageId,
+      release_id: oldRelease.id, psadt_config_sha256: oldProfile.psadtConfigSha256, psadt_config: oldConfig });
+    const snapshot = structuredClone(original);
+    responses = { 'curated_config_verifications?select': [original] };
+    await store.processConfigVerifications({ ...base, apps: [sevenZip], releases: [oldRelease, newRelease],
+      runs: [], readEvidence: vi.fn(), dispatch: vi.fn(), rebuildConfig: rebuildCuratedExecutionConfig });
+    const inserted = calls.find(call => call.method === 'POST')!.body as Record<string, unknown>[];
+    expect(inserted[0]).toMatchObject({ release_id: newRelease.id, psadt_config_sha256: expected.psadtConfigSha256,
+      psadt_config: expected.executionConfig, status: 'requested' });
+    expect(expected.psadtConfigSha256).not.toBe(oldProfile.psadtConfigSha256);
+    expect(original).toEqual(snapshot);
+    expect(calls.filter(call => call.method === 'PATCH')).toHaveLength(0);
+  });
+
+  it.each(['requested', 'verifying', 'passed', 'failed'])('does not duplicate a rebuilt configuration already %s', async (status) => {
+    const newer = releaseFixture(app, '1.141.0');
+    newer.approvedAt = new Date(Date.parse(release.approvedAt) + 1000).toISOString();
+    const rebuilt = rebuildCuratedExecutionConfig(newer, row({}).psadt_config);
+    const existing = row({ id: 'existing', release_id: newer.id, status,
+      psadt_config_sha256: rebuilt.psadtConfigSha256, psadt_config: rebuilt.executionConfig,
+      updated_at: now.toISOString() });
+    const snapshot = structuredClone(existing);
+    responses = { 'curated_config_verifications?select': [row({ status: 'passed' }), existing] };
+    const dispatch = vi.fn();
+    await store.processConfigVerifications({ ...base, slots: 0, releases: [release, newer],
+      runs: [], readEvidence: vi.fn(), dispatch });
+    expect(calls.some(call => call.method === 'POST' || call.method === 'PATCH')).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(existing).toEqual(snapshot);
+    expect(calls[0].path).toContain('failed');
+  });
+
+  it('coalesces older passed configurations that rebuild to the same identity', async () => {
+    const newer = releaseFixture(app, '1.141.0');
+    newer.approvedAt = new Date(Date.parse(release.approvedAt) + 1000).toISOString();
+    responses = { 'curated_config_verifications?select': [row({ status: 'passed' }),
+      row({ id: 'other-pass', release_id: 'older-release', status: 'passed' })] };
+    const dispatch = vi.fn();
+    await store.processConfigVerifications({ ...base, releases: [release, newer], runs: [], readEvidence: vi.fn(), dispatch });
+    expect(calls.filter(call => call.method === 'POST')).toHaveLength(1);
+    expect(calls.some(call => call.method === 'PATCH')).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the old pass and creates no request if normalization fails', async () => {
+    const newer = releaseFixture(app, '1.141.0');
+    newer.approvedAt = new Date(Date.parse(release.approvedAt) + 1000).toISOString();
+    const original = row({ status: 'passed' });
+    const snapshot = structuredClone(original);
+    responses = { 'curated_config_verifications?select': [original] };
+    const dispatch = vi.fn();
+    const result = await store.processConfigVerifications({ ...base, releases: [release, newer], runs: [],
+      readEvidence: vi.fn(), dispatch, rebuildConfig: () => { throw new Error('unsafe config'); } });
+    expect(calls.some(call => call.method !== 'GET')).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(original).toEqual(snapshot);
+    expect(result.states).toEqual([`${app.id} settings could not be carried to 1.141.0.`]);
   });
 });

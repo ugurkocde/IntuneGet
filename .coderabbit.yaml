@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration for IntuneGet.
+#
+# Review limits set by the repository owner (2026-10-11):
+# - PRs opened by the QA automation carry the qa-agent label and are not
+#   reviewed by CodeRabbit. They get a full independent review of their
+#   complete diff instead.
+# - CodeRabbit does not re-review on every push. A PR gets its first
+#   automatic review and later reviews only on request, at most 3 per PR.
+reviews:
+  auto_review:
+    drafts: false
+    auto_incremental_review: false
+    labels:
+      - "!qa-agent"

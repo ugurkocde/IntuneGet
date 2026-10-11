@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowCommit": "06ea82ae9fa8eed110a1a6877ae7789c2a3e883c",
+    "runAttempt": "1",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runId": "37821610231"
+  },
+  "candidate": {
+    "appId": "qbittorrent",
+    "version": "5.2.4",
+    "installerUrl": "https://github.com/qbittorrent/qBittorrent/releases/download/release-5.2.4/qbittorrent_5.2.4_x64_setup.exe",
+    "vendorSha256": "ef6efe581d80efeb0a77df281d93f93021fbdcc48e4d8f7b341dc864f53c30dd",
+    "releaseNotesUrl": "https://github.com/qbittorrent/qBittorrent/releases/tag/release-5.2.4",
+    "discoveredAt": "2026-10-08T13:29:08.323Z",
+    "id": "abf75f08799a1fe09118e3fd"
+  },
+  "previous": {
+    "appId": "qbittorrent",
+    "version": "5.2.3",
+    "installerUrl": "https://github.com/qbittorrent/qBittorrent/releases/download/release-5.2.3/qbittorrent_5.2.3_x64_setup.exe",
+    "vendorSha256": "ff508e2f912d59c9eabaf03633ebacfd45c2049f38dcac027b8a7d7ad867ab2f",
+    "releaseNotesUrl": "https://github.com/qbittorrent/qBittorrent/releases/tag/release-5.2.3",
+    "discoveredAt": "2026-10-08T13:29:36.578Z",
+    "id": "75dc495aa9d6af2b1bcf78cb"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "abf75f08799a1fe09118e3fd",
+      "installerSha256": "ef6efe581d80efeb0a77df281d93f93021fbdcc48e4d8f7b341dc864f53c30dd",
+      "sourceUrl": "https://github.com/qbittorrent/qBittorrent/releases/download/release-5.2.4/qbittorrent_5.2.4_x64_setup.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "status": "clean",
+        "installerSha256": "ef6efe581d80efeb0a77df281d93f93021fbdcc48e4d8f7b341dc864f53c30dd",
+        "suspicious": 0,
+        "scannedAt": "2026-10-08T18:11:01.7880439Z",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "75dc495aa9d6af2b1bcf78cb",
+      "installerSha256": "ff508e2f912d59c9eabaf03633ebacfd45c2049f38dcac027b8a7d7ad867ab2f",
+      "sourceUrl": "https://github.com/qbittorrent/qBittorrent/releases/download/release-5.2.3/qbittorrent_5.2.3_x64_setup.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "status": "clean",
+        "installerSha256": "ff508e2f912d59c9eabaf03633ebacfd45c2049f38dcac027b8a7d7ad867ab2f",
+        "suspicious": 0,
+        "scannedAt": "2026-10-08T18:11:07.8846129Z",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0",
+        "malicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "abf75f08799a1fe09118e3fd",
+    "packageId": "IntuneGet.Curated.qBittorrent",
+    "installerUrl": "https://github.com/qbittorrent/qBittorrent/releases/download/release-5.2.4/qbittorrent_5.2.4_x64_setup.exe",
+    "installerSha256": "ef6efe581d80efeb0a77df281d93f93021fbdcc48e4d8f7b341dc864f53c30dd",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.qBittorrent",
+      "displayName": "qBittorrent",
+      "publisher": "qBittorrent Project",
+      "version": "5.2.4",
+      "architecture": "x64",
+      "installerSha256": "ef6efe581d80efeb0a77df281d93f93021fbdcc48e4d8f7b341dc864f53c30dd",
+      "installerType": "nullsoft",
+      "installScope": "machine",
+      "silentSwitches": "/S",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:qBittorrent:qBittorrent",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_qBittorrent\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"5.2.4\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_qBittorrent\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"5.2.4\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "88E77DB314DA08CDD2448616F1F3A4CC7DA61D4E9ACF965EA435E3E91DBAB491",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.qBittorrent\",\"publisher\":\"IntuneGet QA\",\"version\":\"5.2.4\",\"wingetId\":\"IntuneGet.Curated.qBittorrent\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"5.2.4\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_qBittorrent\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"E1FAE1F5C791AE7C04A5EDE6A07E4E065335C1FD504642FE3A7291B75A3E7A09\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"EF6EFE581D80EFEB0A77DF281D93F93021FBDCC48E4D8F7B341DC864F53C30DD\",\"silentArgs\":\"/S\",\"sourceType\":\"nullsoft\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:qBittorrent:qBittorrent\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"5.2.4\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_qBittorrent\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"8DBEDB75A31333C009FE7E3064E409BAB99D5B039E72DD10788AE5EC5890FD67\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "8dbedb75a31333c009fe7e3064e409bab99d5b039e72dd10788ae5ec5890fd67",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testLevel": "psadt-package",
+    "testedAt": "2026-10-08T18:13:38.8866612Z",
+    "executionContext": "LocalSystem",
+    "candidateId": "abf75f08799a1fe09118e3fd",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "installerVersion": "5.2.4",
+    "executionProfileSha256": "88E77DB314DA08CDD2448616F1F3A4CC7DA61D4E9ACF965EA435E3E91DBAB491",
+    "upgradeFromVersion": "5.2.3",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "passed": true,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "architecture": "x64",
+    "previousInstallerSha256": "ff508e2f912d59c9eabaf03633ebacfd45c2049f38dcac027b8a7d7ad867ab2f",
+    "installerSha256": "ef6efe581d80efeb0a77df281d93f93021fbdcc48e4d8f7b341dc864f53c30dd"
+  },
+  "verifiedAt": "2026-10-08T18:13:43.9517887Z",
+  "authenticatedArtifact": {
+    "id": 11569657798,
+    "sha256": "b3f2a638f02242fb843f53a472fc708b58e6b1b4e3475b63dd9466cdb996d65d"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
