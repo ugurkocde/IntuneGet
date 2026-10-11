@@ -138,7 +138,7 @@ The authenticated operator profile endpoint remains available for diagnostics. `
 
 The physical QA host is the runner host. Never download, extract or execute vendor installers there, and never access the protected runner directory directly. Keep private signing keys, tenant credentials and raw host or guest logs out of the repository.
 
-If the isolated guest cannot update Defender signatures through Windows Update, the verifier can fall back to Microsoft's offline definition package. Persistent failures at `defenderStatus` require an operator to refresh the golden checkpoint on the runner host; the automation never changes the host.
+If the isolated guest cannot update Defender signatures through Windows Update, the verifier can fall back to Microsoft's offline definition package. Failures at `defenderStatus` in a completed guest result stay on the normal re-request and retry path. When a VM test is interrupted before its guest result and clean restoration must be confirmed, follow the read-only operator host verification in [`scripts/qa-automation/README.md`](../scripts/qa-automation/README.md#host-verification-after-an-interrupted-vm-test) before the normal guarded resume. The automation never changes the host.
 
 Run `npm test`, `npx tsc --noEmit`, `npm run lint`, and `npm run build:ci`. Tests exercise tampering, unknown keys, expiration, re-signing, source spoofing, evidence/hash mismatches, failed lifecycle phases, unsigned exceptions, packager compatibility, withdrawal, changed package inputs, local-worker validation, and operator endpoint access. They establish software behavior; they are not application installation evidence. Only a passing VM verification run can qualify a release.
 
