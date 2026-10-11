@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { COMPATIBILITY_BATCH_LIMIT } from '@/lib/package-eligibility';
 const mocks = vi.hoisted(() => ({ client: vi.fn(), dispatch: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase', () => ({ createServerClient: mocks.client }));
@@ -22,18 +23,22 @@ function fixture() {
   const deferred = candidate(1, 2000, '2099-01-01T00:00:00Z'), source = candidate(2, 1000), held = candidate(3, 900), arm = candidate(4, 800), missing = candidate(5, 700), first = candidate(6, 1), second = candidate(7, 1);
   arm.architecture = 'arm64'; missing.next_retry_at = null;
   const rows = [second, missing, arm, held, source, deferred, first], claimed: string[] = [];
-  let compatibilityReads = 0;
+  let compatibilityReads = 0, sourceReads = 0;
+  const errors = new Set<string>();
+  const blocks: Array<Record<string, unknown>> = [{ winget_id: held.winget_id, version: held.version, architecture: held.architecture, installer_sha256: held.installer_sha256, block_code: 'failed_managed_lifecycle', detail: 'reviewed tuple' }];
+  const retries = [{ source_key: qaSourceKey(source), next_retry_at: '2099-01-02T00:00:00Z' }];
   const client = {
     rpc: vi.fn(async (_name: string, args: { p_id: string }) => { claimed.push(args.p_id); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null }; }),
     from(table: string) {
       if (table === 'qa_package_blocks') compatibilityReads++;
+      if (table === 'qa_source_backoff') sourceReads++;
       let count = false, cap = Infinity;
       const filters: Array<(r: Record<string, unknown>) => boolean> = [], sort: Array<[string, boolean]> = [];
       const result = () => {
-        let data: Array<Record<string, unknown>> = table === 'qa_candidates' ? rows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? [{ source_key: qaSourceKey(source), next_retry_at: '2099-01-02T00:00:00Z' }] : table === 'qa_package_blocks' ? [{ winget_id: held.winget_id, version: held.version, architecture: held.architecture, installer_sha256: held.installer_sha256, block_code: 'failed_managed_lifecycle', detail: 'reviewed tuple' }] : [];
+        let data: Array<Record<string, unknown>> = table === 'qa_candidates' ? rows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
         data = data.filter(r => filters.every(f => f(r)));
         data.sort((a, b) => { for (const [key, ascending] of sort) { const x = a[key] as string | number, y = b[key] as string | number, cmp = x < y ? -1 : x > y ? 1 : 0; if (cmp) return ascending ? cmp : -cmp; } return 0; });
-        return { data: data.slice(0, cap), count: count ? data.length : undefined, error: null };
+        return { data: data.slice(0, cap), count: count ? data.length : undefined, error: errors.has(table) ? { message: 'lookup unavailable' } : null };
       };
       const builder = {
         select(_columns: string, options?: { count?: string }) { count = !!options?.count; return builder; },
@@ -48,7 +53,7 @@ function fixture() {
       return builder;
     },
   };
-  return { client, claimed, first, deferred, source, rows, compatibilityReads: () => compatibilityReads };
+  return { client, claimed, first, deferred, source, rows, errors, blocks, retries, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
 afterEach(() => { delete process.env.CRON_SECRET; vi.clearAllMocks(); });
 it('makes the first public ordinary next row equal the actual dispatch claim with both retry sources and exact compatibility blocks', async () => {
@@ -63,5 +68,31 @@ it('makes the first public ordinary next row equal the actual dispatch claim wit
 });
 it('stops eligibility lookups after filling ten next rows', async () => {
   const f = fixture(); f.rows.splice(0, f.rows.length, ...Array.from({ length: 50 }, (_, i) => candidate(i + 20, 1))); mocks.client.mockReturnValue(f.client);
-  expect((await getQaLiveSnapshot()).queue.next).toHaveLength(10); expect(f.compatibilityReads()).toBe(10);
+  expect((await getQaLiveSnapshot()).queue.next).toHaveLength(10); expect(f.compatibilityReads()).toBe(1); expect(f.sourceReads()).toBe(1);
+});
+
+for (const table of ['qa_package_blocks', 'qa_source_backoff']) it(`stops advertising next after ${table} fails`, async () => {
+  const f = fixture(); f.errors.add(table); mocks.client.mockReturnValue(f.client);
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const live = await getQaLiveSnapshot();
+  expect(live.queue.next).toEqual([]); expect(live.queue.waiting.map(x => x.wingetId)).toEqual([f.deferred.winget_id]);
+  expect(warn).toHaveBeenCalledWith('[qa-live] eligibility lookup failed', expect.objectContaining({ candidateIds: expect.any(Array) }));
+  expect(JSON.stringify(warn.mock.calls)).not.toContain(f.first.winget_id); expect(JSON.stringify(warn.mock.calls)).not.toContain('https://');
+  warn.mockRestore();
+});
+it('filters a cross-product block by its entire immutable tuple', async () => {
+  const f = fixture(); f.rows.splice(0, f.rows.length, candidate(30, 1), candidate(31, 1));
+  f.blocks.splice(0, f.blocks.length, { winget_id: f.rows[0].winget_id, version: f.rows[0].version, architecture: 'x64', installer_sha256: 'B'.repeat(64) });
+  mocks.client.mockReturnValue(f.client); expect((await getQaLiveSnapshot()).queue.next.map(x => x.wingetId)).toEqual(f.rows.map(x => x.winget_id));
+});
+it('bounds blocked queue lookups and does not advertise beyond the verified prefix', async () => {
+  const f = fixture(); f.rows.splice(0, f.rows.length, ...Array.from({ length: 1000 }, (_, i) => candidate(i + 100, 1)));
+  f.blocks.splice(0, f.blocks.length, ...f.rows.slice(0, 120).map(x => ({ winget_id: x.winget_id, version: x.version, architecture: x.architecture, installer_sha256: x.installer_sha256 })));
+  mocks.client.mockReturnValue(f.client); const live = await getQaLiveSnapshot();
+  expect(live.queue.next).toEqual([]); expect(live.queue.count).toBe(1000); expect(f.compatibilityReads()).toBe(4); expect(f.sourceReads()).toBe(4);
+});
+it('fails closed when the compatibility superset might be truncated', async () => {
+  const f = fixture(); f.rows.splice(0, f.rows.length, f.first); f.blocks.splice(0, f.blocks.length, ...Array.from({ length: COMPATIBILITY_BATCH_LIMIT }, () => ({ winget_id: f.first.winget_id, version: f.first.version, architecture: f.first.architecture, installer_sha256: f.first.installer_sha256 })));
+  mocks.client.mockReturnValue(f.client); const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  expect((await getQaLiveSnapshot()).queue.next).toEqual([]); warn.mockRestore();
 });

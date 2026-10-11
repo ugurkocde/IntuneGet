@@ -1,8 +1,8 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
 import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
-import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
-import { qaSourceKey, qaSourceRetryAt } from './source-backoff';
+import { getPackageCompatibilityBlocks, packageCompatibilityKey } from '@/lib/package-eligibility';
+import { qaSourceKey, qaSourceRetryAtMany } from './source-backoff';
 
 import { createServerClient } from '@/lib/supabase';
 import { isQaFrameFresh } from '@/lib/qa/live-frame-freshness';
@@ -501,29 +501,35 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const queueRows = (queueResult.data || []) as CandidateRow[];
   const queued: CandidateRow[] = [];
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
-  for (const candidate of queueRows) {
-    let reason = qaQueueCandidateReason(candidate, now);
-    let nextCheckAt = candidate.next_retry_at;
-    if (!reason && queued.length >= 10) continue;
-    if (!reason) {
-      try {
-      const blocked = await getPackageCompatibilityBlock(supabase, {
-        wingetId: candidate.winget_id, version: candidate.version,
-        architecture: candidate.architecture, installerSha256: candidate.installer_sha256,
-      });
-      if (blocked) reason = 'package-compatibility-blocked';
-      else {
-        const retryAt = await qaSourceRetryAt(supabase, qaSourceKey(candidate));
-        if (retryAt) { reason = 'source-retry-pending'; nextCheckAt = retryAt; }
-      }
-      } catch {
-        // A lookup outage must never advertise an unverified candidate as next.
-        continue;
-      }
+  const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
+  let cursor = 0, rounds = 0, lookupsClosed = false;
+  while (cursor < queueRows.length) {
+    const chunk: CandidateRow[] = [];
+    while (cursor < queueRows.length && chunk.length < 25) {
+      const candidate = queueRows[cursor++];
+      const reason = qaQueueCandidateReason(candidate, now);
+      if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
+      else if (!reason && !lookupsClosed && queued.length < 10) chunk.push(candidate);
     }
-    if (reason === 'source-retry-pending') waiting.push({ candidate, nextCheckAt, sourceRetry: true });
-    else if (!reason) queued.push(candidate);
-    if (queued.length >= 10 && waiting.length >= 10) break;
+    if (!chunk.length) continue;
+    try {
+      const [blocks, retries] = await Promise.all([
+        getPackageCompatibilityBlocks(supabase, chunk.map(input)),
+        qaSourceRetryAtMany(supabase, chunk.map(qaSourceKey)),
+      ]);
+      for (const candidate of chunk) {
+        if (blocks.has(packageCompatibilityKey(input(candidate)))) continue;
+        const retryAt = retries.get(qaSourceKey(candidate));
+        if (retryAt) { if (waiting.length < 10) waiting.push({ candidate, nextCheckAt: retryAt, sourceRetry: true }); }
+        else if (queued.length < 10) queued.push(candidate);
+      }
+      rounds++;
+      if (rounds >= 4 || queued.length >= 10) lookupsClosed = true;
+    } catch {
+      // Preserve the verified prefix: never advertise a row beyond an unknown one.
+      console.warn('[qa-live] eligibility lookup failed', { candidateIds: chunk.map(row => row.id), error: 'Eligibility batch could not be verified' });
+      lookupsClosed = true;
+    }
   }
   const recent = (recentResult.data || []) as ResultRow[];
   const polls = (pollResult.data || []) as PollRow[];
