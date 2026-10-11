@@ -23,7 +23,7 @@ import {
   InstallerPreflightError,
   resetInstallerPreflightStateForTests,
 } from '@/lib/installer-preflight';
-import { InstallerDownloadDeadlineError } from '@/lib/installer-download';
+import { InstallerDownloadDeadlineError, InstallerDownloadSizeLimitError } from '@/lib/installer-download';
 
 const expectedSha256 = 'a'.repeat(64).toUpperCase();
 const actualSha256 = 'b'.repeat(64).toUpperCase();
@@ -56,6 +56,28 @@ describe('installer dispatch preflight', () => {
       finalUrl: request.installerUrl,
     });
   });
+
+  it('caches the size refusal for one day without suggesting retries or hash quarantine', async () => {
+    const initial = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(initial);
+    try {
+      hashRemoteInstallerMock.mockRejectedValueOnce(new InstallerDownloadSizeLimitError(2048, 2049));
+      await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({ code: 'INSTALLER_TOO_LARGE', retryable: false });
+      clock.mockReturnValue(initial + 23 * 60 * 60 * 1000);
+      await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({ code: 'INSTALLER_TOO_LARGE', retryable: false });
+      expect(hashRemoteInstallerMock).toHaveBeenCalledOnce();
+      clock.mockReturnValue(initial + 24 * 60 * 60 * 1000 + 1);
+      await expect(enforceInstallerPreflight(request)).resolves.toMatchObject({ status: 'healthy', source: 'live' });
+      expect(hashRemoteInstallerMock).toHaveBeenCalledTimes(2);
+    } finally { clock.mockRestore(); }
+  });
+
+  it.each(['Installer download returned HTTP 403', 'Installer download returned HTTP 404', 'unable to verify the first certificate'])(
+    'keeps transport failures retryable: %s', async (message) => {
+      hashRemoteInstallerMock.mockRejectedValueOnce(new Error(message));
+      await expect(enforceInstallerPreflight(request)).rejects.toMatchObject({ code: 'PREFLIGHT_UNAVAILABLE', retryable: true });
+    },
+  );
 
   it('skips custom installers', async () => {
     await expect(enforceInstallerPreflight({

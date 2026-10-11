@@ -24,6 +24,13 @@ export interface InstallerHashResult {
   verificationMethod?: 'content-hash' | 'publisher-checksum';
 }
 
+export class InstallerDownloadSizeLimitError extends Error {
+  constructor(public readonly maxBytes: number, public readonly observedBytes?: number) {
+    super(`The installer is larger than the ${maxBytes} byte limit IntuneGet can verify before packaging.`);
+    this.name = 'InstallerDownloadSizeLimitError';
+  }
+}
+
 export class InstallerDownloadDeadlineError extends Error {
   constructor(timeoutMs: number) {
     super(`Installer verification exceeded the ${timeoutMs}ms wall-clock deadline`);
@@ -277,7 +284,7 @@ async function readRangeMetadata(
         : null;
       if (totalBytes !== null && totalBytes > maxBytes) {
         response.resume();
-        reject(new Error(`Installer exceeds the ${maxBytes}-byte preflight limit`));
+        reject(new InstallerDownloadSizeLimitError(maxBytes, totalBytes));
         return;
       }
 
@@ -697,7 +704,7 @@ async function hashUrl(
       const contentLength = Number(response.headers['content-length']);
       if (Number.isFinite(contentLength) && contentLength > maxBytes) {
         response.destroy();
-        reject(new Error(`Installer exceeds the ${maxBytes}-byte preflight limit`));
+        reject(new InstallerDownloadSizeLimitError(maxBytes, contentLength));
         return;
       }
 
@@ -706,7 +713,7 @@ async function hashUrl(
       response.on('data', (chunk: Buffer) => {
         bytes += chunk.length;
         if (bytes > maxBytes) {
-          response.destroy(new Error(`Installer exceeds the ${maxBytes}-byte preflight limit`));
+          response.destroy(new InstallerDownloadSizeLimitError(maxBytes, bytes));
           return;
         }
         hash.update(chunk);
