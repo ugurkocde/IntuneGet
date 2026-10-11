@@ -903,14 +903,14 @@
     "notes": "Publisher x64 machine MSI from the official GitHub release, with asset SHA-256. The 32-bit MSI is excluded. The bundled x64 Python runtime is the installed executable checked by QA."
   },
   {
-    "id": "llvm",
-    "packageId": "IntuneGet.Curated.LLVM",
-    "wingetId": "LLVM.LLVM",
-    "name": "LLVM",
-    "publisher": "LLVM",
-    "channel": "Stable",
+    "id": "azure-functions-core-tools",
+    "packageId": "IntuneGet.Curated.AzureFunctionsCoreTools",
+    "wingetId": "Microsoft.Azure.FunctionsCoreTools",
+    "name": "Azure Functions Core Tools",
+    "publisher": "Microsoft Corporation",
+    "channel": "v4",
     "category": "developer-tools",
-    "homepage": "https://llvm.org/",
+    "homepage": "https://learn.microsoft.com/azure/azure-functions/functions-run-local",
     "architecture": "x64",
     "scope": "machine",
     "allowUnsigned": false,
@@ -918,26 +918,25 @@
     "installerType": "msi",
     "silentArgs": "/qn /norestart",
     "signaturePublishers": [
-      "LLVM"
+      "Microsoft Corporation"
     ],
-    "releaseSource": "https://api.github.com/repos/llvm/llvm-project/releases/latest",
+    "releaseSource": "https://api.github.com/repos/Azure/azure-functions-core-tools/releases/latest",
     "discovery": "github",
-    "assetPattern": "^LLVM-[0-9.]+-win64\\.msi$",
+    "assetPattern": "^func-cli-[0-9.]+-x64.msi$",
     "allowedInstallerSources": [
       {
         "origin": "https://github.com",
-        "pathPrefix": "/llvm/llvm-project/releases/download/"
+        "pathPrefix": "/Azure/azure-functions-core-tools/releases/download/"
       }
     ],
-    "releaseTagPrefix": "llvmorg-",
     "installedIdentity": {
-      "displayNamePattern": "^LLVM$",
+      "displayNamePattern": "^Azure Functions Core Tools - [0-9.]+ (x64)$",
       "executablePaths": [
-        "LLVM/bin/clang.exe"
+        "Microsoft/Azure Functions Core Tools/func.exe"
       ]
     },
     "autoUpdate": "none",
-    "notes": "Publisher win64 machine MSI with GitHub asset SHA-256. Release candidates and Windows on ARM builds are excluded."
+    "notes": "Publisher x64 machine MSI from the official GitHub release, with asset SHA-256. The 32-bit MSI is excluded. Its upgrade table removes every earlier release, and func.exe is self-contained, so no .NET runtime is required."
   },
   {
     "id": "neovim",
@@ -1242,14 +1241,14 @@
     "notes": "Publisher x64 machine MSI with GitHub asset SHA-256. No server URL is preconfigured. The application updater remains enabled."
   },
   {
-    "id": "rustdesk",
-    "packageId": "IntuneGet.Curated.RustDesk",
-    "wingetId": "RustDesk.RustDesk",
-    "name": "RustDesk",
-    "publisher": "Purslane Tech Pte. Ltd.",
+    "id": "starship",
+    "packageId": "IntuneGet.Curated.Starship",
+    "wingetId": "Starship.Starship",
+    "name": "Starship",
+    "publisher": "Starship Contributors",
     "channel": "Stable",
-    "category": "utilities",
-    "homepage": "https://rustdesk.com/",
+    "category": "developer-tools",
+    "homepage": "https://starship.rs/",
     "architecture": "x64",
     "scope": "machine",
     "allowUnsigned": false,
@@ -1257,26 +1256,26 @@
     "installerType": "msi",
     "silentArgs": "/qn /norestart",
     "signaturePublishers": [
-      "Purslane Tech Pte. Ltd."
+      "SignPath Foundation"
     ],
-    "releaseSource": "https://api.github.com/repos/rustdesk/rustdesk/releases/latest",
+    "releaseSource": "https://api.github.com/repos/starship/starship/releases/latest",
     "discovery": "github",
-    "assetPattern": "^rustdesk-[0-9.]+-x86_64\\.msi$",
+    "assetPattern": "^starship-x86_64-pc-windows-msvc.msi$",
     "allowedInstallerSources": [
       {
         "origin": "https://github.com",
-        "pathPrefix": "/rustdesk/rustdesk/releases/download/"
+        "pathPrefix": "/starship/starship/releases/download/"
       }
     ],
+    "releaseTagPrefix": "v",
     "installedIdentity": {
-      "displayNamePattern": "^RustDesk$",
+      "displayNamePattern": "^starship$",
       "executablePaths": [
-        "RustDesk/RustDesk.exe"
-      ],
-      "versionComponents": 3
+        "starship/bin/starship.exe"
+      ]
     },
-    "autoUpdate": "vendor-managed",
-    "notes": "Publisher x86_64 machine MSI with GitHub asset SHA-256; nightly builds are excluded. The MSI appends a build number to the three-part public release; QA compares three components and binds the exact build by hash. No relay server or permanent password is preconfigured."
+    "autoUpdate": "none",
+    "notes": "Publisher x86_64 machine MSI with GitHub asset SHA-256; the i686 and ARM64 builds are excluded. The MSI performs a major upgrade under a stable upgrade code."
   },
   {
     "id": "obs-studio",
@@ -1670,14 +1669,14 @@
     "notes": "Publisher x64 setup from the official GitHub release with asset SHA-256; the libtorrent 2.0 variant is excluded. SourceForge mirrors are never used."
   },
   {
-    "id": "transmission",
-    "packageId": "IntuneGet.Curated.Transmission",
-    "wingetId": "Transmission.Transmission",
-    "name": "Transmission",
-    "publisher": "Transmission Project",
+    "id": "k6",
+    "packageId": "IntuneGet.Curated.K6",
+    "wingetId": "GrafanaLabs.k6",
+    "name": "k6",
+    "publisher": "Grafana Labs",
     "channel": "Stable",
-    "category": "utilities",
-    "homepage": "https://transmissionbt.com/",
+    "category": "developer-tools",
+    "homepage": "https://grafana.com/docs/k6/latest/",
     "architecture": "x64",
     "scope": "machine",
     "allowUnsigned": false,
@@ -1685,25 +1684,26 @@
     "installerType": "msi",
     "silentArgs": "/qn /norestart",
     "signaturePublishers": [
-      "Transmission Project"
+      "Grafana Labs"
     ],
-    "releaseSource": "https://api.github.com/repos/transmission/transmission/releases/latest",
+    "releaseSource": "https://api.github.com/repos/grafana/k6/releases/latest",
     "discovery": "github",
-    "assetPattern": "^transmission-[0-9.]+-x64\\.msi$",
+    "assetPattern": "^k6-v[0-9.]+-windows-amd64.msi$",
     "allowedInstallerSources": [
       {
         "origin": "https://github.com",
-        "pathPrefix": "/transmission/transmission/releases/download/"
+        "pathPrefix": "/grafana/k6/releases/download/"
       }
     ],
+    "releaseTagPrefix": "v",
     "installedIdentity": {
-      "displayNamePattern": "^Transmission [0-9.]+ \\([0-9a-f]+\\) \\(x64\\)$",
+      "displayNamePattern": "^k6$",
       "executablePaths": [
-        "Transmission/transmission-qt.exe"
+        "k6/k6.exe"
       ]
     },
     "autoUpdate": "none",
-    "notes": "Publisher Qt 6 x64 machine MSI with GitHub asset SHA-256; the Qt 5 and x86 builds are excluded."
+    "notes": "Publisher amd64 MSI with GitHub asset SHA-256. The MSI declares no ALLUSERS value, so the shared packager installs it for the machine. It performs a major upgrade under a stable upgrade code; maintenance releases of an older major line sort below the current release."
   },
   {
     "id": "imageglass",
@@ -1810,7 +1810,14 @@
         "DB Browser for SQLite/DB Browser for SQLite.exe"
       ]
     },
+    "excludedUpgradeBaselines": [
+      "3.13.0"
+    ],
+    "initialUpgradeBaseline": {
+      "version": "3.12.2",
+      "installerUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.12.2/DB.Browser.for.SQLite-3.12.2-win64.msi"
+    },
     "autoUpdate": "none",
-    "notes": "Publisher win64 machine MSI from the official GitHub release. The publisher asset has no GitHub digest, so the hash measured in the isolated VM is pinned."
+    "notes": "Publisher win64 machine MSI from the official GitHub release. The publisher asset has no GitHub digest, so the hash measured in the isolated VM is pinned. The 3.13.0 MSI registers itself as 3.13.99, so upgrade QA starts from 3.12.2, which shares the 3.13.1 upgrade code."
   }
 ]
