@@ -173,6 +173,9 @@ export interface UploadHistoryRecord {
 /**
  * Job statistics
  */
+export type AnalyticsJob = Pick<PackagingJob, 'id' | 'user_id' | 'user_email' | 'status' | 'completed_at' | 'created_at' | 'winget_id' | 'display_name' | 'intune_app_url'>;
+export type AnalyticsJobScope = { userId: string; tenantId?: never } | { tenantId: string; userId?: never };
+
 export interface JobStats {
   queued: number;
   packaging: number;
@@ -211,6 +214,9 @@ export interface DatabaseAdapter {
     /** Failed and cancelled approval checkpoints include dismissed jobs and every user/version in the tenant. */
     getApprovalFailures(tenantId: string, wingetId: string,
       cursor?: { createdAt: string; id: string }): Promise<PackagingJob[]>;
+
+    /** Complete summary input, independent of the uploads page limit. */
+    getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]>;
 
     /**
      * Create a new job
