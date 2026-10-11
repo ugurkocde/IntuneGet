@@ -17,7 +17,7 @@ import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-hist
 
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase';
-import { markBlockedQaResults } from '@/lib/qa/deployment-blocked';
+import { markBlockedQaResults, type QaBlockedTuple } from '@/lib/qa/deployment-blocked';
 import { getLocaleDisplay } from '@/lib/locale-utils';
 import {
   quotePostgrestLikePattern,
@@ -71,11 +71,20 @@ export class SupabaseCatalogSource implements CatalogSource {
       }
       return rows;
     }
-    const { data, error } = await createServerClient().from('qa_package_blocks')
-      .select('winget_id, version, architecture, installer_sha256')
-      .in('winget_id', [...new Set(rows.map(row => row.winget_id))]);
-    if (error) throw new Error(`Failed to verify QA deployment availability: ${error.message}`);
-    return markBlockedQaResults(rows, data || []);
+    const client = createServerClient();
+    const blocks: QaBlockedTuple[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await client.from('qa_package_blocks')
+        .select('winget_id, version, architecture, installer_sha256')
+        .in('winget_id', [...new Set(rows.map(row => row.winget_id))])
+        .order('winget_id').order('version').order('architecture').order('installer_sha256')
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(`Failed to verify QA deployment availability: ${error.message}`);
+      blocks.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    return markBlockedQaResults(rows, blocks);
   }
   private async releaseHistoryPage(client: NonNullable<ReturnType<typeof serviceOrAnonClient>>, filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const { data, error } = await client.rpc('get_catalog_release_history_v2', {
