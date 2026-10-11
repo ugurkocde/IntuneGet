@@ -1,0 +1,5 @@
+{
+  "title": "View deployment statistics across your tenant",
+  "summary": "Switch between your deployments and all activity in the selected tenant. Tenant statistics include an alphabetical breakdown by user and attribution in recent activity. Personal totals now count beyond the latest 50 jobs.",
+  "type": "fixed"
+}
