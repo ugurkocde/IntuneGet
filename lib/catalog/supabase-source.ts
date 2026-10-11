@@ -17,6 +17,7 @@ import type { ReleaseHistoryFilters, ReleaseHistoryResult } from './release-hist
 
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase';
+import { markBlockedQaResults } from '@/lib/qa/deployment-blocked';
 import { getLocaleDisplay } from '@/lib/locale-utils';
 import {
   quotePostgrestLikePattern,
@@ -61,6 +62,21 @@ function serviceOrAnonClient() {
 let warnedMissingQaServiceRole = false;
 
 export class SupabaseCatalogSource implements CatalogSource {
+  private async withDeploymentBlocks<T extends QaStatusRow>(rows: T[]): Promise<T[]> {
+    if (rows.length === 0) return rows;
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      if (!warnedMissingQaServiceRole) {
+        console.warn('QA deployment availability is unavailable because SUPABASE_SERVICE_ROLE_KEY is not configured.');
+        warnedMissingQaServiceRole = true;
+      }
+      return rows;
+    }
+    const { data, error } = await createServerClient().from('qa_package_blocks')
+      .select('winget_id, version, architecture, installer_sha256')
+      .in('winget_id', [...new Set(rows.map(row => row.winget_id))]);
+    if (error) throw new Error(`Failed to verify QA deployment availability: ${error.message}`);
+    return markBlockedQaResults(rows, data || []);
+  }
   private async releaseHistoryPage(client: NonNullable<ReturnType<typeof serviceOrAnonClient>>, filters: ReleaseHistoryFilters): Promise<ReleaseHistoryResult> {
     const { data, error } = await client.rpc('get_catalog_release_history_v2', {
       app_filter: filters.app ?? "", date_from: filters.from || null, date_to: filters.to || null, architecture_filter: filters.architecture ?? "",
@@ -456,7 +472,7 @@ export class SupabaseCatalogSource implements CatalogSource {
     const { data, error } = await supabase
       .from('qa_results')
       .select(
-        'winget_id, outcome, tested_version, architecture, tested_at_utc, test_level, package_profile_sha256'
+        'winget_id, outcome, tested_version, architecture, tested_at_utc, test_level, package_profile_sha256, installer_sha256'
       )
       .in('winget_id', ids)
       .eq('test_level', 'psadt-package');
@@ -466,7 +482,9 @@ export class SupabaseCatalogSource implements CatalogSource {
       return [];
     }
 
-    return (data || []) as QaStatusRow[];
+    const rows = (data || []) as QaStatusRow[];
+    try { return await this.withDeploymentBlocks(rows); }
+    catch { return rows.filter(row => row.outcome !== 'Passed'); }
   }
 
   async getQaResult(
@@ -491,12 +509,13 @@ export class SupabaseCatalogSource implements CatalogSource {
         return null;
       }
 
-      return {
+      const result = {
         ...data,
         display_name: data.display_name || wingetId,
         publisher: data.publisher || '',
         test_level: 'psadt-package',
       } as unknown as QaResultRow;
+      return (await this.withDeploymentBlocks([result]))[0];
     }
 
     const supabase = serviceOrAnonClient();
@@ -515,7 +534,7 @@ export class SupabaseCatalogSource implements CatalogSource {
       throw new Error(`Failed to read QA result: ${error.message}`);
     }
 
-    return (data as QaResultRow | null) || null;
+    return data ? (await this.withDeploymentBlocks([data as QaResultRow]))[0] : null;
   }
 
   async getQaCandidateStatuses(ids: string[]): Promise<QaCandidateStatusRow[]> {

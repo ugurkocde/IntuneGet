@@ -48,6 +48,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const response: QaDetailsResponse = {
+      deploymentBlocked: row.deployment_blocked === true,
       wingetId: row.winget_id,
       displayName: row.display_name,
       publisher: row.publisher,

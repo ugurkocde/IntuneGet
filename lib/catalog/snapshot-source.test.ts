@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { buildSqlite } from '../../scripts/build-catalog-snapshot.mjs';
+import { buildSqlite, markQaDeploymentBlocks } from '../../scripts/build-catalog-snapshot.mjs';
 import { hasCompatibleQaResultsTable, SnapshotCatalogSource } from './snapshot-source';
 import { _resetSnapshotStoreForTest } from './snapshot-store';
 
@@ -363,6 +363,23 @@ describe('SnapshotCatalogSource', () => {
 });
 
 describe('snapshot QA schema compatibility', () => {
+  it('preserves exact blocked availability and truthful outcome in the exported snapshot', async () => {
+    const file = path.join(tmpDir, 'blocked.sqlite');
+    const rows = markQaDeploymentBlocks(qaResults, [{ winget_id: 'Google.Chrome', version: '120.0',
+      architecture: 'x64', installer_sha256: 'a'.repeat(64) }]);
+    buildSqlite(file, { curatedApps, versionHistory, sccmMappings, qaResults: rows });
+    _resetSnapshotStoreForTest(); process.env.CATALOG_SNAPSHOT_FILE = file;
+    try {
+      const source = new SnapshotCatalogSource();
+      expect((await source.getQaStatuses(['Google.Chrome']))[0]).toMatchObject({ outcome: 'Passed', deployment_blocked: true });
+      expect(await source.getQaResult('Google.Chrome')).toMatchObject({ outcome: 'Passed', deployment_blocked: true });
+      _resetSnapshotStoreForTest();
+      const db = new Database(file); db.exec('ALTER TABLE qa_results DROP COLUMN deployment_blocked'); db.close();
+      expect((await source.getQaStatuses(['Google.Chrome']))[0].deployment_blocked).toBeUndefined();
+    } finally {
+      _resetSnapshotStoreForTest(); process.env.CATALOG_SNAPSHOT_FILE = dbPath;
+    }
+  });
   it('does not query PSADT fields from a legacy QA table', () => {
     const legacy = new Database(':memory:');
     legacy.exec('CREATE TABLE qa_results (winget_id TEXT PRIMARY KEY)');

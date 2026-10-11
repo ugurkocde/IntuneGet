@@ -2647,6 +2647,10 @@ export interface Database {
         Args: { p_kind: 'ordinary' | 'curated'; p_id: string; p_packager_commit: string };
         Returns: Json;
       };
+      qa_retest_grant_eligible: {
+        Args: { p_candidate_id: string };
+        Returns: boolean;
+      };
       qa_toolchain_backfill_page: {
         Args: { p_after?: string; p_limit?: number; p_terminal_retry_ids?: string[] };
         Returns: Json;

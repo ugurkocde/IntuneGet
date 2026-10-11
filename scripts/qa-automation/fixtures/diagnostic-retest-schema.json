@@ -1,0 +1,1232 @@
+[
+  {
+    "name": "public.packaging_jobs",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "user_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "user_email",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "display_name",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "publisher",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "architecture",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_type",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "install_command",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "uninstall_command",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "install_scope",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "detection_rules",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "package_config",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "pipeline_run_id",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "pipeline_run_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "intunewin_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "intunewin_size_bytes",
+        "data_type": "bigint",
+        "format": "int8"
+      },
+      {
+        "name": "unencrypted_content_size",
+        "data_type": "bigint",
+        "format": "int8"
+      },
+      {
+        "name": "encryption_info",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "intune_app_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "intune_app_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "status_message",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "progress_percent",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "error_message",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "created_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "packaging_started_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "packaging_completed_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "upload_started_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "completed_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "tenant_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "github_run_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "github_run_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "silent_switches",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "packager_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "packager_heartbeat_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "claimed_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "cancelled_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "cancelled_by",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "is_auto_update",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "auto_update_policy_id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "error_stage",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "error_category",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "error_code",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "error_details",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "app_source",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "archived_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "warnings",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "execution_profile_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "presentation_profile_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "qa_candidate_id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "qa_requested_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "qa_completed_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.curated_apps",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "chocolatey_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "name",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "publisher",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "latest_version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "description",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "homepage",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "license",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "chocolatey_downloads",
+        "data_type": "bigint",
+        "format": "int8"
+      },
+      {
+        "name": "popularity_rank",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "category",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "subcategory",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "tags",
+        "data_type": "ARRAY",
+        "format": "_text"
+      },
+      {
+        "name": "icon_path",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "has_icon",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "curation_notes",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "manually_mapped",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "is_verified",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "fts",
+        "data_type": "tsvector",
+        "format": "tsvector"
+      },
+      {
+        "name": "created_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "is_winget_verified",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "winget_verified_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "winget_last_update",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "icon_source",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "icon_extraction_attempts",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "icon_last_attempted_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "icon_failure_reason",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "parent_winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "locale_code",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "is_locale_variant",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "app_source",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "store_package_id",
+        "data_type": "text",
+        "format": "text"
+      }
+    ]
+  },
+  {
+    "name": "public.version_history",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_type",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_scope",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "silent_args",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installers",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "minimum_os_version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "platform",
+        "data_type": "ARRAY",
+        "format": "_text"
+      },
+      {
+        "name": "upgrade_behavior",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "release_date",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "release_notes",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "changes_from_previous",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "manifest_yaml",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "manifest_fetched_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "created_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "release_notes_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "release_notes_url_checked_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.curated_excluded_apps",
+    "columns": [
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "reason",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "source",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "excluded_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "excluded_by",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "notes",
+        "data_type": "text",
+        "format": "text"
+      }
+    ]
+  },
+  {
+    "name": "public.qa_candidates",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "definition_path",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "architecture",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_type",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_file_name",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "priority",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "attempts",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "enqueued_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "dispatched_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "started_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "finished_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "github_run_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "github_run_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "failure_summary",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "test_config",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "test_level",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "package_profile_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "phase",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "phase_started_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "phase_updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "catalog_version_at_enqueue",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "live_activity",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "activity_updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "live_log",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "log_updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "demand_source",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "next_retry_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "recovery_attempts",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "recovery_history",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      }
+    ]
+  },
+  {
+    "name": "public.qa_package_results",
+    "columns": [
+      {
+        "name": "package_profile_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "tested_version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "architecture",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "outcome",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "tested_at_utc",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "psadt_version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "psadt_template_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "psadt_config_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "detection_rules_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "packager_commit",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "package_content_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "github_run_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "github_run_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "synced_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "overall_duration_seconds",
+        "data_type": "numeric",
+        "format": "numeric"
+      },
+      {
+        "name": "display_name",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "publisher",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_type",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "install_command",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "uninstall_command",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "detection",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "phase_results",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "changes",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "relevant_event_count",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "environment",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "effective_configuration",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "qa_schema_version",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "profile_kind",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "virustotal_status",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "virustotal_malicious",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "virustotal_suspicious",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "virustotal_total_engines",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "virustotal_scanned_at_utc",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.qa_pipeline_control",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "paused",
+        "data_type": "boolean",
+        "format": "bool"
+      },
+      {
+        "name": "reason",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_by",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "required_packager_commit",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "scheduler_packager_commit",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "scheduler_seen_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.qa_package_blocks",
+    "columns": [
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "architecture",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "installer_sha256",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "block_code",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "detail",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "observed_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.package_eligibility_blocks",
+    "columns": [
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "block_code",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "detail",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "source_url",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "blocked_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.curated_verification_queue",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "verification_key",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "app_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "kind",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "inputs",
+        "data_type": "jsonb",
+        "format": "jsonb"
+      },
+      {
+        "name": "priority",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "enqueued_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "dispatched_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "finished_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "github_run_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  },
+  {
+    "name": "public.qa_repair_requests",
+    "columns": [
+      {
+        "name": "id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "candidate_id",
+        "data_type": "uuid",
+        "format": "uuid"
+      },
+      {
+        "name": "winget_id",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "version",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "architecture",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "failure_class",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "prior_requeues",
+        "data_type": "integer",
+        "format": "int4"
+      },
+      {
+        "name": "failure_summary",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "resolution",
+        "data_type": "text",
+        "format": "text"
+      },
+      {
+        "name": "created_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      },
+      {
+        "name": "updated_at",
+        "data_type": "timestamp with time zone",
+        "format": "timestamptz"
+      }
+    ]
+  }
+]
