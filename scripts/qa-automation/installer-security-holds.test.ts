@@ -37,6 +37,15 @@ it('prevents exact hash replay through claims and direct recovery, including wit
     await expect(pg.query("update public.qa_candidates set status='dispatched' where id=$1", [second])).rejects.toThrow('Installer security hold');
     await pg.query("update public.qa_candidates set status='queued',next_retry_at=now() where id=$1", [id]);
     expect((await pg.query<{held: boolean}>('select next_retry_at>now() as held from public.qa_candidates where id=$1',[id])).rows[0].held).toBe(true);
+    // A held curated head must not starve the next clean curated row or the
+    // ordinary queue. The selector and claimant use the same hash predicate.
+    await pg.query("insert into public.curated_verification_queue(id,status,priority,enqueued_at,inputs) values(gen_random_uuid(),'queued',2000,now()-interval '1 hour',$1)",[{candidate:JSON.stringify({vendorSha256:hash})}]);
+    const cleanCurated='33333333-3333-4333-8333-333333333333';
+    await pg.query("insert into public.curated_verification_queue(id,status,priority,enqueued_at,inputs) values($1,'queued',2000,now(),$2)",[cleanCurated,{candidate:JSON.stringify({vendorSha256:'B'.repeat(64)})}]);
+    expect((await pg.query<{r:{id:string}}>('select public.next_qa_curated_security_eligible() as r')).rows[0].r.id).toBe(cleanCurated);
+    expect((await pg.query<{r:{row:{id:string}}}>('select public.claim_qa_work(\'curated\',$1,$2) as r',[cleanCurated,pin])).rows[0].r.row.id).toBe(cleanCurated);
+    await pg.exec("update public.curated_verification_queue set status='completed' where status='dispatched'");
+    expect((await pg.query<{held:boolean}>("select public.qa_curated_installer_security_held('{\"candidate\":\"invalid json\"}') as held")).rows[0].held).toBe(true);
     expect((await pg.query<{allowed: boolean}>("select has_table_privilege('anon','public.qa_installer_security_holds','SELECT') as allowed")).rows[0].allowed).toBe(false);
     await pg.query('update public.qa_installer_security_holds set next_check_at=now()-interval \'1 second\'');
     expect((await pg.query<{n: number}>('select public.refresh_qa_installer_security_holds() as n')).rows[0].n).toBe(1);
@@ -46,6 +55,7 @@ it('prevents exact hash replay through claims and direct recovery, including wit
     await pg.query('update public.qa_installer_security_holds set next_check_at=now()-interval \'1 second\'');
     await pg.query('select public.refresh_qa_installer_security_holds()');
     expect((await pg.query<{released: boolean}>('select released_at is not null as released from public.qa_installer_security_holds')).rows[0].released).toBe(true);
+    await pg.exec("update public.curated_verification_queue set status='completed' where status='queued'");
     expect((await pg.query<{r: {row?: {status: string}}}>('select public.claim_qa_work(\'ordinary\',$1,$2) as r',[id,pin])).rows[0].r.row?.status).toBe('dispatched');
   } finally { await pg.close(); }
 }, 30000);

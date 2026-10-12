@@ -62,6 +62,26 @@ revoke all on function public.guard_curated_installer_security() from public, an
 create trigger qa_curated_security_guard before insert or update on public.curated_verification_queue
 for each row execute function public.guard_curated_installer_security();
 
+create function public.next_qa_curated_security_eligible() returns jsonb
+language sql security invoker set search_path = '' as $$
+  select to_jsonb(q) from public.curated_verification_queue q
+  where status = 'queued' and not public.qa_curated_installer_security_held(inputs)
+  order by priority desc, enqueued_at, id limit 1;
+$$;
+revoke all on function public.next_qa_curated_security_eligible() from public, anon, authenticated;
+grant execute on function public.next_qa_curated_security_eligible() to service_role;
+
+create function public.qa_installer_security_waiting_errors() returns jsonb
+language sql security invoker set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object('candidate', to_jsonb(s.candidate), 'nextCheckAt', s.next_check_at)), '[]')
+  from (select c as candidate, h.next_check_at from public.qa_candidates c
+    join public.qa_installer_security_holds h on h.sha256 = lower(c.installer_sha256) and h.released_at is null
+    where c.status = 'error' and c.test_level = 'psadt-package'
+    order by c.priority desc, c.enqueued_at, c.id limit 10) s;
+$$;
+revoke all on function public.qa_installer_security_waiting_errors() from public, anon, authenticated;
+grant execute on function public.qa_installer_security_waiting_errors() to service_role;
+
 create function public.guard_qa_installer_security() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare due timestamptz;
@@ -85,7 +105,10 @@ begin
     end if;
     if new.status in ('queued','error') then
       new.next_retry_at := greatest(new.next_retry_at, due);
-      new.failure_summary := 'VirusTotal refused execution for this installer hash.';
+      if new.status = 'queued' or new.failure_summary ~ '^VirusTotal flagged this exact installer hash '
+         or (new.phase = 'scanning_installer' and new.failure_summary = 'QA result publication did not complete; inspect the protected workflow run.') then
+        new.failure_summary := 'VirusTotal refused execution for this installer hash.';
+      end if;
     end if;
   end if;
   return new;

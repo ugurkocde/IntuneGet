@@ -472,7 +472,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .from('qa_candidates')
       .select(candidateColumns)
       .eq('test_level', 'psadt-package')
-      .in('status', ['queued', 'error']))
+      .eq('status', 'queued'))
       .limit(1000),
     supabase
       .from('qa_candidates')
@@ -504,6 +504,11 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
   const securityHolds = await loadInstallerSecurityHolds(supabase, queueRows.map(row => row.installer_sha256));
   const queued: CandidateRow[] = [];
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
+  const heldErrors = await supabase.rpc('qa_installer_security_waiting_errors', {});
+  if (heldErrors.error || !Array.isArray(heldErrors.data)) throw new Error('Installer security waiting queue is unavailable');
+  for (const held of heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string }>) {
+    waiting.push({ ...held, sourceRetry: false, securityHold: true });
+  }
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
   let cursor = 0, rounds = 0, lookupsClosed = false;
   while (cursor < queueRows.length && !(lookupsClosed && waiting.length >= 10)) {

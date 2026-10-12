@@ -2628,6 +2628,8 @@ export interface Database {
       };
     };
     Functions: {
+      next_qa_curated_security_eligible: { Args: Record<string, never>; Returns: Json };
+      qa_installer_security_waiting_errors: { Args: Record<string, never>; Returns: Json };
       qa_curated_installer_security_held: { Args: { p_inputs: Json }; Returns: boolean };
       refresh_qa_installer_security_holds: { Args: Record<string, never>; Returns: number };
       begin_qa_live_curated_session: {

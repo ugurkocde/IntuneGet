@@ -33,6 +33,7 @@ function fixture() {
     rpc: vi.fn(async (name: string, args: { p_id?: string; p_candidate_id?: string }) => {
       if (name === 'qa_retest_grant_eligible') return { data: grants.has(args.p_candidate_id!), error: errors.has(name) ? { message: 'grant unavailable' } : null };
       if (name === 'refresh_qa_installer_security_holds') return { data: 0, error: null };
+      if (name === 'qa_installer_security_waiting_errors') return { data: [], error: null };
       if (name !== 'claim_qa_work') throw new Error('Unexpected RPC');
       claimed.push(args.p_id!); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null };
     }),
@@ -74,6 +75,12 @@ it('shows a refused hash in waiting and never dispatches it again within one min
   expect(live.queue.waiting[0].next_check_at).toBe('2099-01-01T00:00:00Z');
   for (let retry = 0; retry < 2; retry++) await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
   expect(f.claimed).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
+});
+it('keeps queued next visible behind more than 1000 historical errors', async () => {
+  const f = fixture();
+  f.rows.splice(0,f.rows.length,...Array.from({length:1001},(_,i)=>({...candidate(i+100,2000),status:'error'})),f.first);
+  mocks.client.mockReturnValue(f.client);
+  expect((await getQaLiveSnapshot()).queue.next[0].wingetId).toBe(f.first.winget_id);
 });
 it('advertises the granted diagnostic candidate that dispatch actually claims', async () => {
   const f = fixture(); f.grants.add(f.held.id); mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
