@@ -57,6 +57,10 @@ foreach ($directory in @($env:ProgramFiles,$env:TEMP)) {
     $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($owner,'FullControl',$flags,'None','Allow'))
     if ($directory -eq $env:ProgramFiles) {
         $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($users,'${quote(usersRights)}',$flags,'None','Allow'))
+        foreach ($appSid in @('S-1-15-2-1','S-1-15-2-2')) {
+            $appIdentity = [System.Security.Principal.SecurityIdentifier]::new($appSid)
+            $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($appIdentity,'ReadAndExecute',$flags,'None','Allow'))
+        }
     }
     Set-Acl -LiteralPath $directory -AclObject $acl
 }
@@ -74,8 +78,8 @@ if (-not (Test-Path -LiteralPath (Join-Path $installPath 'portable.exe') -PathTy
 }
 ${verification}
 ${verifyPermissions ? `
-$rules = @((Get-Acl -LiteralPath (Join-Path $installPath 'portable.exe')).Access |
-    Where-Object { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq $users.Value -and $_.AccessControlType -eq 'Allow' })
+$rules = @((Get-Acl -LiteralPath (Join-Path $installPath 'portable.exe')).GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]) |
+    Where-Object { $_.IdentityReference.Value -eq $users.Value -and $_.AccessControlType -eq 'Allow' })
 $rights = [System.Security.AccessControl.FileSystemRights]0
 foreach ($rule in $rules) { $rights = $rights -bor $rule.FileSystemRights }
 $required = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute

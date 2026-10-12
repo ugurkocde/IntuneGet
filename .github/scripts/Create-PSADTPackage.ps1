@@ -3549,9 +3549,9 @@ if ($usePortableUninstall) {
         foreach ($portableItem in $portableItems) {
             $portableAcl = Get-Acl -LiteralPath $portableItem.FullName -ErrorAction Stop
             $portableUserRights = [System.Security.AccessControl.FileSystemRights]0
-            foreach ($portableRule in $portableAcl.Access) {
+            foreach ($portableRule in $portableAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
                 if (-not $portableRule.IsInherited) { throw 'Portable content must inherit destination permissions.' }
-                $portableRuleSid = $portableRule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+                $portableRuleSid = $portableRule.IdentityReference.Value
                 if ($portableRuleSid -in $portableBroadSids) {
                     if ($portableRule.AccessControlType -eq 'Allow' -and ($portableRule.FileSystemRights -band $portableWriteRights)) {
                         throw 'Portable destination must not grant standard users write access.'

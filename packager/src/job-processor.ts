@@ -1288,12 +1288,7 @@ ${steps}
 `;
   }
 
-  /**
-   * Generate PowerShell code to verify the application appears in Add/Remove
-   * Programs after install, failing the deployment before the detection
-   * marker is written when it does not
-   * Opt-in via package_config.psadtConfig.verifyInstall; returns '' when disabled
-   */
+  /** Verify portable file identity and inherited machine permissions without requiring ARP. */
   private getPortableVerificationBlock(job: PackagingJob, installerFileName?: string): string {
     const nested = this.getNestedInstaller(job);
     const declaredPath = nested.path
@@ -1340,9 +1335,9 @@ ${steps}
         foreach ($portableItem in $portableItems) {
             $portableAcl = Get-Acl -LiteralPath $portableItem.FullName -ErrorAction Stop
             $portableUserRights = [System.Security.AccessControl.FileSystemRights]0
-            foreach ($portableRule in $portableAcl.Access) {
+            foreach ($portableRule in $portableAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
                 if (-not $portableRule.IsInherited) { throw 'Portable content must inherit destination permissions.' }
-                $portableRuleSid = $portableRule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+                $portableRuleSid = $portableRule.IdentityReference.Value
                 if ($portableRuleSid -in $portableBroadSids) {
                     if ($portableRule.AccessControlType -eq 'Allow' -and ($portableRule.FileSystemRights -band $portableWriteRights)) {
                         throw 'Portable destination must not grant standard users write access.'
