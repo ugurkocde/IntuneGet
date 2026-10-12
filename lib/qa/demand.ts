@@ -25,7 +25,7 @@ import {
   PACKAGE_UNAVAILABLE_MESSAGE,
   PACKAGE_VERSION_UNAVAILABLE_MESSAGE,
 } from '@/lib/package-eligibility';
-import { shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
+import { AWAITING_DIAGNOSTIC_RETEST_GRANT, shouldReactivateSupersededCandidate } from '@/lib/qa/candidate-reactivation';
 import {
   buildQaCandidatePreflightRequest,
   type QaCandidatePreflightInput,
@@ -316,6 +316,12 @@ export async function ensureQaDemand(
       state: 'failed',
       failureSummary: existing.failure_summary || 'This app did not pass the isolated installation test.',
     };
+  }
+
+  // Adoption prepares a profile but never authorizes a lifecycle. Customer
+  // demand must not turn it into queued work without the separate grant.
+  if (existing.status === 'superseded' && existing.failure_summary === AWAITING_DIAGNOSTIC_RETEST_GRANT) {
+    return { identity, candidateId: existing.id, state: 'waiting' };
   }
 
   const quarantineRecheck =
