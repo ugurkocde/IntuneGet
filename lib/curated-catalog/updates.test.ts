@@ -21,7 +21,7 @@ describe('curated updates', () => {
     vi.stubEnv('CURATED_CATALOG_PUBLIC_KEYS', JSON.stringify(fixture.keys));
     const item = buildCuratedCartItem(CURATED_APPS[0], fixture.envelope.payload.releases[0]);
     const create = vi.fn(async () => ({ id: 'new-job' }));
-    const db = { jobs: { create }, autoUpdateHistory: { create: vi.fn(async () => ({ id: 'history' })), update: vi.fn() },
+    const db = { jobs: { create, getApprovalFailures: vi.fn().mockResolvedValue([]) }, autoUpdateHistory: { create: vi.fn(async () => ({ id: 'history' })), update: vi.fn() },
       updatePolicies: { update: vi.fn() } } as unknown as DatabaseAdapter;
     const policy = { id: 'policy', user_id: 'user', tenant_id: 'tenant', policy_type: 'auto_update',
       is_enabled: true, consecutive_failures: 0, original_upload_history_id: 'original',
@@ -79,7 +79,7 @@ describe('curated licence attestation for self-hosted automatic updates', () => 
         ? { id: 'acceptance', tenant_id: tenantId, app_id: acrobat.id, attestation_id: id, attestation_version: version,
             accepted_by_user_id: 'admin', accepted_by_email: 'admin@contoso.test', accepted_at: '2026-10-04T00:00:00.000Z' }
         : null);
-    const db = { jobs: { create }, autoUpdateHistory: { create: vi.fn(async () => ({ id: 'history' })), update: vi.fn() },
+    const db = { jobs: { create, getApprovalFailures: vi.fn().mockResolvedValue([]) }, autoUpdateHistory: { create: vi.fn(async () => ({ id: 'history' })), update: vi.fn() },
       updatePolicies: { update: vi.fn() }, curatedLicenceAttestations: { get } } as unknown as DatabaseAdapter;
     const policy = { id: 'policy', user_id: 'user', tenant_id: 'tenant', policy_type: 'auto_update',
       is_enabled: true, consecutive_failures: 0, original_upload_history_id: 'original',

@@ -4,10 +4,13 @@
  */
 
 import Database from 'better-sqlite3';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
 import path from 'path';
 import fs from 'fs';
 import type {
   DatabaseAdapter,
+  AnalyticsJob,
+  AnalyticsJobScope,
   PackagingJob,
   UploadHistoryRecord,
   AutoUpdateHistoryQuery,
@@ -25,6 +28,7 @@ import type {
   AutoUpdateStatus,
 } from '@/types/update-policies';
 import { runSqliteMigrations } from './sqlite-migrations';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 
 // Singleton database instance
 let db: Database.Database | null = null;
@@ -162,6 +166,19 @@ export const sqliteDb: DatabaseAdapter = {
       return rows.map(parseJobRow);
     },
 
+    async getAnalyticsJobs(scope: AnalyticsJobScope): Promise<AnalyticsJob[]> {
+      const key = scope.tenantId === undefined ? 'user_id' : 'tenant_id';
+      const identity = scope.tenantId ?? scope.userId;
+      if (!identity) throw new Error('Statistics identity required');
+      const rows = getDb().prepare(`
+        SELECT id, user_id, user_email, status, completed_at, created_at, winget_id, display_name, intune_app_url
+        FROM packaging_jobs WHERE ${key} = ? AND archived_at IS NULL
+        ORDER BY created_at DESC, id DESC LIMIT 100001
+      `).all(identity) as AnalyticsJob[];
+      if (rows.length > 100000) throw new Error('Statistics read limit exceeded');
+      return rows;
+    },
+
     async getByTenantId(tenantId: string, limit: number = 50): Promise<PackagingJob[]> {
       const database = getDb();
       // Every user's jobs in this tenant, most recent first, no age cutoff.
@@ -172,6 +189,22 @@ export const sqliteDb: DatabaseAdapter = {
         LIMIT ?
       `);
       const rows = stmt.all(tenantId, limit) as Record<string, unknown>[];
+      return rows.map(parseJobRow);
+    },
+
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
+      const rows = getDb().prepare(`
+        SELECT * FROM packaging_jobs
+        WHERE tenant_id = ? AND winget_id = ? ${curated ? 'COLLATE NOCASE' : ''} AND status IN (${INTUNE_APPROVAL_CHECKPOINT_STATUSES.map(() => '?').join(',')})
+          AND (error_category = 'approval' OR error_code = 'INTUNE_APPROVAL_REQUIRED')
+          ${cursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
+        ORDER BY created_at DESC, id DESC LIMIT 100
+      `).all(tenantId, wingetId, ...INTUNE_APPROVAL_CHECKPOINT_STATUSES,
+        ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : [])) as Record<string, unknown>[];
       return rows.map(parseJobRow);
     },
 

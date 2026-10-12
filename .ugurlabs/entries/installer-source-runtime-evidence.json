@@ -1,0 +1,5 @@
+{
+  "title": "Locate installer source request failures",
+  "summary": "Protected source diagnostics distinguish request construction from asynchronous failures and report a conservative caller category and Node version without exporting private stacks or changing installer verification.",
+  "type": "fixed"
+}
