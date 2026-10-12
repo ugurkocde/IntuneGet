@@ -15,7 +15,7 @@ import type { QaArchitecture, QaLiveActivity, QaLiveLog, QaLivePhase, QaLiveResp
 const RUNNER_STALE_MS = 10 * 60 * 1000;
 const POLL_STALE_MS = 5 * 60 * 1000;
 export const QA_LIVE_RECENT_RESULT_COLUMNS =
-  'winget_id, package_profile_sha256, tested_version, architecture, outcome, tested_at_utc, overall_duration_seconds, virustotal_status';
+  'winget_id, package_profile_sha256, tested_version, architecture, installer_sha256, outcome, tested_at_utc, overall_duration_seconds, virustotal_status';
 
 interface CandidateRow {
   id: string;
@@ -58,6 +58,7 @@ interface PollRow {
 }
 
 interface ResultRow {
+  installer_sha256?: string | null;
   winget_id: string;
   package_profile_sha256: string;
   display_name?: string | null;
@@ -518,7 +519,12 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
         qaSourceRetryAtMany(supabase, chunk.map(qaSourceKey)),
       ]);
       for (const candidate of chunk) {
-        if (blocks.has(packageCompatibilityKey(input(candidate)))) continue;
+        if (blocks.has(packageCompatibilityKey(input(candidate)))) {
+          // The same locked grant predicate used by dispatch preserves all holds.
+          const grant = await supabase.rpc('qa_retest_grant_eligible', { p_candidate_id: candidate.id });
+          if (grant.error) throw grant.error;
+          if (grant.data !== true) continue;
+        }
         const retryAt = retries.get(qaSourceKey(candidate));
         if (retryAt) { if (waiting.length < 10) waiting.push({ candidate, nextCheckAt: retryAt, sourceRetry: true }); }
         else if (queued.length < 10) queued.push(candidate);
@@ -531,7 +537,18 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       lookupsClosed = true;
     }
   }
-  const recent = (recentResult.data || []) as ResultRow[];
+  let recent = (recentResult.data || []) as ResultRow[];
+  const passed = recent.filter(row => row.outcome === 'Passed');
+  if (passed.length) {
+    try {
+      const resultInput = (row: ResultRow) => ({ wingetId: row.winget_id, version: row.tested_version, architecture: row.architecture, installerSha256: row.installer_sha256 || '' });
+      const blocks = await getPackageCompatibilityBlocks(supabase, passed.map(resultInput));
+      // A diagnostic pass does not lift deployment quarantine. Keep Failed evidence.
+      recent = recent.filter(row => row.outcome !== 'Passed' || (!!row.installer_sha256 && !blocks.has(packageCompatibilityKey(resultInput(row)))));
+    } catch {
+      recent = recent.filter(row => row.outcome !== 'Passed');
+    }
+  }
   const polls = (pollResult.data || []) as PollRow[];
   const consecutivePollFailures = countConsecutiveFailedPolls(polls);
   const ids = [

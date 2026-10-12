@@ -224,6 +224,8 @@ export interface QaVirusTotalSummary {
 
 /** Minimal database row used for card/list status badges. */
 export interface QaStatusRow {
+  installer_sha256?: string | null;
+  deployment_blocked?: boolean;
   winget_id: string;
   outcome: QaOutcome;
   tested_version: string;
@@ -277,6 +279,7 @@ export interface QaResultRow extends QaStatusRow {
 }
 
 export interface QaStatus {
+  deploymentBlocked?: boolean;
   outcome: QaOutcome | 'Queued' | 'Running';
   testedVersion: string;
   architecture: QaArchitecture;
@@ -287,6 +290,7 @@ export interface QaStatus {
 }
 
 export type QaBadgeState =
+  | 'blocked'
   | 'passed'
   | 'failed'
   | 'stale_passed'
@@ -313,6 +317,7 @@ export interface QaClassification {
 }
 
 export interface QaDetailsResponse {
+  deploymentBlocked?: boolean;
   wingetId: string;
   displayName: string;
   publisher: string;

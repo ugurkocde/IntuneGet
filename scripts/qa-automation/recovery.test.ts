@@ -176,6 +176,83 @@ describe('durable infrastructure recovery', () => {
     expect(d.github).not.toHaveBeenCalled();
     expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
   });
+  function grantedRecovery(extraTable?: string, candidate = { ...c, phase: 'publishing' }, grant = { id: 'grant' }) {
+    const d = deps(candidate);
+    d.rows.mockImplementation(async (table, params) => {
+      if (table === 'qa_candidates' && params.status === 'eq.error') return [candidate];
+      if (table === 'qa_retest_grants') return [grant] as never;
+      if (table === 'qa_package_blocks' || table === extraTable) return [{ winget_id: c.winget_id }] as never;
+      return [];
+    });
+    return d;
+  }
+  it.each(['open', 'expired', 'closed'])('settles %s grant history only through the publisher job', async state => {
+    const d = grantedRecovery(undefined, { ...c, phase: 'publishing' }, {
+      id: 'grant', ...(state === 'closed' ? { closed_at: '2026-09-21T00:00:00Z' } : {}),
+      ...(state === 'expired' ? { expires_at: '2026-09-21T00:00:00Z' } : {}),
+    });
+    expect(await recoverInfrastructure(d)).toMatchObject({ action: 'publication_retry_started' });
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.objectContaining({ phase: 'eq.publishing' }),
+      expect.objectContaining({ status: 'running', phase: 'publishing' }));
+    expect(d.patch.mock.calls[0][2]).not.toHaveProperty('attempts');
+    expect(d.github).toHaveBeenLastCalledWith('/actions/jobs/456/rerun', { method: 'POST', body: '{}' });
+  });
+  it('never requeues a granted lifecycle when a publisher-only retry is unavailable', async () => {
+    const d = grantedRecovery();
+    d.github.mockImplementation(async () => ({ id: 123, event: 'workflow_dispatch',
+      path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'completed' }));
+    // A complete run whose lifecycle failed cannot support a publisher-only rerun.
+    d.github.mockImplementation(async path => path.includes('/jobs?')
+      ? { total_count: 1, jobs: [{ name: 'qa', conclusion: 'failure' }] }
+      : { id: 123, event: 'workflow_dispatch', path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'completed' });
+    expect(await recoverInfrastructure(d)).toMatchObject({ action: 'no_recovery_due' });
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
+    expect(d.patch.mock.calls.some(call => call[2].status === 'queued')).toBe(false);
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/rerun'))).toBe(false);
+  });
+  it('makes no writes or GitHub calls for a granted publication dry run', async () => {
+    const d = grantedRecovery();
+    expect(await recoverInfrastructure({ ...d, dryRun: true })).toMatchObject({ action: 'would_recover_infrastructure' });
+    expect(d.patch).not.toHaveBeenCalled();
+    expect(d.github).not.toHaveBeenCalled();
+  });
+  it.each([0, 5])('settles a granted reputation refusal without replay at budget %s', async budget => {
+    const refused = preExecution(budget);
+    const d = grantedRecovery(undefined, { ...c, phase: 'publishing', recovery_attempts: budget });
+    d.github.mockImplementation(refused.github.getMockImplementation()!);
+    expect(await recoverInfrastructure(d)).toEqual({ action: 'no_recovery_due' });
+    expect(d.patch).toHaveBeenCalledTimes(1);
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', {
+      id: 'eq.a', status: 'eq.error', failure_summary: `eq.${PUBLICATION_FAILURE}`, github_run_id: 'eq.123',
+    }, { status: 'superseded', failure_summary: 'Installer reputation verification did not complete before application execution.',
+      updated_at: new Date(now).toISOString() });
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/rerun'))).toBe(false);
+    expect(d.patch.mock.calls.some(call => call[2].status === 'queued')).toBe(false);
+  });
+  it('leaves a granted publication alone while the publisher job is still waiting', async () => {
+    const d = grantedRecovery();
+    d.github.mockImplementation(async path => path.includes('/jobs?')
+      ? { total_count: 2, jobs: [{ name: 'qa', conclusion: 'success' },
+        { name: 'Publish compact app JSON', id: 456, status: 'waiting', conclusion: null }] }
+      : { id: 123, event: 'workflow_dispatch', path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'in_progress' });
+    expect(await recoverInfrastructure(d)).toMatchObject({ action: 'no_recovery_due' });
+    expect(d.patch).not.toHaveBeenCalled();
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/rerun'))).toBe(false);
+  });
+  it.each(['package_eligibility_blocks', 'curated_excluded_apps', 'qa_package_results'])('keeps granted publication blocked by %s', async table => {
+    const d = grantedRecovery(table);
+    expect(await recoverInfrastructure(d)).toMatchObject({ action: 'no_recovery_due' });
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
+    expect(d.github).not.toHaveBeenCalled();
+  });
+  it('refuses a granted candidate outside publishing and makes no writes in a dry run', async () => {
+    const d = grantedRecovery(undefined, { ...c, phase: 'installing' });
+    await recoverInfrastructure({ ...d, dryRun: true });
+    expect(d.patch).not.toHaveBeenCalled();
+    expect(d.github).not.toHaveBeenCalled();
+    await recoverInfrastructure(d);
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'superseded' }));
+  });
   it('never republishes stale catalog evidence over a newer result of the same version', async () => {
     const candidate = { ...c, test_config: { profileKind: 'catalog-default' } };
     const d = deps(candidate);

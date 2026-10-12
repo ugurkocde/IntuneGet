@@ -23,19 +23,24 @@ function fixture() {
   const deferred = candidate(1, 2000, '2099-01-01T00:00:00Z'), source = candidate(2, 1000), held = candidate(3, 900), arm = candidate(4, 800), missing = candidate(5, 700), first = candidate(6, 1), second = candidate(7, 1);
   arm.architecture = 'arm64'; missing.next_retry_at = null;
   const rows = [second, missing, arm, held, source, deferred, first], claimed: string[] = [];
+  const grants = new Set<string>(), recentRows: Array<Record<string, unknown>> = [];
   let compatibilityReads = 0, sourceReads = 0;
   const errors = new Set<string>();
   const blocks: Array<Record<string, unknown>> = [{ winget_id: held.winget_id, version: held.version, architecture: held.architecture, installer_sha256: held.installer_sha256, block_code: 'failed_managed_lifecycle', detail: 'reviewed tuple' }];
   const retries = [{ source_key: qaSourceKey(source), next_retry_at: '2099-01-02T00:00:00Z' }];
   const client = {
-    rpc: vi.fn(async (_name: string, args: { p_id: string }) => { claimed.push(args.p_id); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null }; }),
+    rpc: vi.fn(async (name: string, args: { p_id?: string; p_candidate_id?: string }) => {
+      if (name === 'qa_retest_grant_eligible') return { data: grants.has(args.p_candidate_id!), error: errors.has(name) ? { message: 'grant unavailable' } : null };
+      if (name !== 'claim_qa_work') throw new Error('Unexpected RPC');
+      claimed.push(args.p_id!); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null };
+    }),
     from(table: string) {
       if (table === 'qa_package_blocks') compatibilityReads++;
       if (table === 'qa_source_backoff') sourceReads++;
       let count = false, cap = Infinity;
       const filters: Array<(r: Record<string, unknown>) => boolean> = [], sort: Array<[string, boolean]> = [];
       const result = () => {
-        let data: Array<Record<string, unknown>> = table === 'qa_candidates' ? rows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
+        let data: Array<Record<string, unknown>> = table === 'qa_candidates' ? rows : table === 'qa_package_results' ? recentRows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
         data = data.filter(r => filters.every(f => f(r)));
         data.sort((a, b) => { for (const [key, ascending] of sort) { const x = a[key] as string | number, y = b[key] as string | number, cmp = x < y ? -1 : x > y ? 1 : 0; if (cmp) return ascending ? cmp : -cmp; } return 0; });
         return { data: data.slice(0, cap), count: count ? data.length : undefined, error: errors.has(table) ? { message: 'lookup unavailable' } : null };
@@ -53,8 +58,28 @@ function fixture() {
       return builder;
     },
   };
-  return { client, claimed, first, deferred, source, rows, errors, blocks, retries, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
+  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
+it('advertises the granted diagnostic candidate that dispatch actually claims', async () => {
+  const f = fixture(); f.grants.add(f.held.id); mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
+  const live = await getQaLiveSnapshot();
+  expect(live.queue.next[0].wingetId).toBe(f.held.winget_id);
+  const response = await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
+  expect((await response.json()).dispatched).toBe(true); expect(f.claimed).toEqual([f.held.id]);
+});
+it('stops advertising the unverified queue prefix when the grant lookup fails', async () => {
+  const f = fixture(); f.errors.add('qa_retest_grant_eligible'); mocks.client.mockReturnValue(f.client);
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  expect((await getQaLiveSnapshot()).queue.next).toEqual([]); warn.mockRestore();
+});
+for (const unavailable of [false, true]) it(`withholds quarantined Passed recent results with lookup unavailable=${unavailable}`, async () => {
+  const f = fixture();
+  f.recentRows.push({ winget_id: f.held.winget_id, tested_version: f.held.version, architecture: f.held.architecture, installer_sha256: f.held.installer_sha256, package_profile_sha256: f.held.package_profile_sha256, outcome: 'Passed', tested_at_utc: '2026-10-11T12:00:00Z' });
+  f.recentRows.push({ ...f.recentRows[0], outcome: 'Failed', tested_version: '1.2.2' });
+  if (unavailable) f.errors.add('qa_package_blocks');
+  mocks.client.mockReturnValue(f.client); const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  expect((await getQaLiveSnapshot()).recent.map(r => r.outcome)).toEqual(['Failed']); warn.mockRestore();
+});
 afterEach(() => { delete process.env.CRON_SECRET; vi.clearAllMocks(); });
 it('makes the first public ordinary next row equal the actual dispatch claim with both retry sources and exact compatibility blocks', async () => {
   const f = fixture(); mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
