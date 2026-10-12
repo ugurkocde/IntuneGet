@@ -673,13 +673,66 @@ async function hashUrlInRanges(
   };
 }
 
-async function hashUrl(
+export interface InstallerSourceHop {
+  hop: number;
+  status: number;
+  target: { scheme: string; host: string; pathSegments: number };
+  location?: ReturnType<typeof redirectLocationShape>;
+}
+export interface InstallerSourceDiagnostic {
+  outcome: 'reachable' | 'failed';
+  hops: InstallerSourceHop[];
+  errorCode?: string;
+}
+function sourceUrlShape(url: URL) {
+  // Even short path segments can contain credentials. Never return path text.
+  return { scheme: url.protocol.replace(':', ''), host: isIP(url.hostname.replace(/^\[|\]$/g, '')) ? '[address]' : url.hostname, pathSegments: Math.min(100, url.pathname.split('/').filter(Boolean).length) };
+}
+function redirectLocationShape(value: string) {
+  return {
+    form: /^[A-Za-z][A-Za-z0-9+.-]*:/.test(value) ? 'absolute' : value.startsWith('//') ? 'scheme-relative' : value.startsWith('/') ? 'path-absolute' : value ? 'path-relative' : 'empty',
+    length: Math.min(4096, value.length),
+    hasBracket: /[\[\]]/.test(value),
+    invalidPercentEscape: /%(?![a-fA-F0-9]{2})/.test(value),
+    hasWhitespace: /\s/.test(value),
+    hasControl: /[\x00-\x1f\x7f]/.test(value),
+    hasBackslash: value.includes('\\'),
+  };
+}
+function sourceProbeError(error: unknown): string {
+  if (error instanceof InstallerRedirectUrlError) return 'REDIRECT_URL_INVALID';
+  if (error instanceof InstallerDownloadDeadlineError) return 'DEADLINE';
+  const message = error instanceof Error ? error.message : '';
+  if (/private or reserved/.test(message)) return 'PRIVATE_ADDRESS';
+  if (/HTTP or HTTPS|credentials|disallowed port/.test(message)) return 'REDIRECT_DISALLOWED';
+  if (/redirect limit/.test(message)) return 'REDIRECT_LIMIT';
+  if (/timed out/.test(message)) return 'TIMEOUT';
+  return 'NETWORK';
+}
+/** Observe source HTTP headers only. This never hashes or accepts payload bytes. */
+export async function probeInstallerSource(installerUrl: string): Promise<InstallerSourceDiagnostic> {
+  const hops: InstallerSourceHop[] = [];
+  let url: URL;
+  try { url = validateUrl(installerUrl); } catch { return { outcome: 'failed', hops, errorCode: 'INITIAL_URL_INVALID' }; }
+  try {
+    return await withInstallerDownloadDeadline(30_000, async signal => {
+      const { response } = await openInstallerResponse(url, MAX_REDIRECTS, 15_000, signal, hops);
+      const status = response.statusCode ?? 0;
+      response.destroy();
+      return status >= 200 && status < 300
+        ? { outcome: 'reachable', hops }
+        : { outcome: 'failed', hops, errorCode: 'HTTP_STATUS' };
+    });
+  } catch (error) { return { outcome: 'failed', hops, errorCode: sourceProbeError(error) }; }
+}
+
+async function openInstallerResponse(
   url: URL,
   redirectsRemaining: number,
-  maxBytes: number,
   timeoutMs: number,
   signal: AbortSignal,
-): Promise<InstallerHashResult> {
+  trace?: InstallerSourceHop[],
+): Promise<{ response: http.IncomingMessage; url: URL }> {
   const resolved = await resolvePublicAddress(url.hostname);
   const headers = {
     Accept: 'application/octet-stream,*/*',
@@ -688,17 +741,20 @@ async function hashUrl(
     'User-Agent': 'IntuneGet-Installer-Preflight/1.0',
   };
 
-  return new Promise<InstallerHashResult>((resolve, reject) => {
+  return new Promise<{ response: http.IncomingMessage; url: URL }>((resolve, reject) => {
     const onResponse = (response: http.IncomingMessage) => {
       const status = response.statusCode ?? 0;
+      const hop = { hop: MAX_REDIRECTS - redirectsRemaining + 1, status, target: sourceUrlShape(url) } as InstallerSourceHop;
+      trace?.push(hop);
       if ([301, 302, 303, 307, 308].includes(status)) {
         const location = response.headers.location;
-        response.resume();
+        if (trace) response.destroy(); else response.resume();
         if (!location || redirectsRemaining <= 0) {
           reject(new Error('Installer download exceeded the redirect limit'));
           return;
         }
 
+        if (trace) hop.location = redirectLocationShape(location);
         let redirectUrl: URL;
         try {
           redirectUrl = resolveRedirectUrl(location, url);
@@ -707,16 +763,51 @@ async function hashUrl(
           return;
         }
 
-        hashUrl(
+        openInstallerResponse(
           redirectUrl,
           redirectsRemaining - 1,
-          maxBytes,
           timeoutMs,
           signal,
+          trace,
         ).then(resolve, reject);
         return;
       }
 
+      resolve({ response, url });
+
+    };
+
+    const commonOptions = {
+      protocol: url.protocol,
+      hostname: resolved.address,
+      family: resolved.family,
+      port: url.port || undefined,
+      path: `${url.pathname}${url.search}`,
+      method: 'GET',
+      headers,
+      signal,
+    };
+
+    const request = url.protocol === 'https:'
+      ? https.request({ ...commonOptions, servername: url.hostname }, onResponse)
+      : http.request(commonOptions, onResponse);
+
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error(`Installer download timed out after ${timeoutMs}ms`));
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function hashUrl(
+  url: URL, redirectsRemaining: number, maxBytes: number, timeoutMs: number, signal: AbortSignal,
+): Promise<InstallerHashResult> {
+  const opened = await openInstallerResponse(url, redirectsRemaining, timeoutMs, signal);
+  url = opened.url;
+  const response = opened.response;
+  const status = response.statusCode ?? 0;
+  return new Promise<InstallerHashResult>((resolve, reject) => {
       if (status < 200 || status >= 300) {
         response.resume();
         reject(new Error(`Installer download returned HTTP ${status}`));
@@ -749,28 +840,6 @@ async function hashUrl(
         });
       });
       response.on('error', reject);
-    };
-
-    const commonOptions = {
-      protocol: url.protocol,
-      hostname: resolved.address,
-      family: resolved.family,
-      port: url.port || undefined,
-      path: `${url.pathname}${url.search}`,
-      method: 'GET',
-      headers,
-      signal,
-    };
-
-    const request = url.protocol === 'https:'
-      ? https.request({ ...commonOptions, servername: url.hostname }, onResponse)
-      : http.request(commonOptions, onResponse);
-
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error(`Installer download timed out after ${timeoutMs}ms`));
-    });
-    request.on('error', reject);
-    request.end();
   });
 }
 
