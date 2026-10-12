@@ -24,7 +24,7 @@
   "dependencies": {
     "@azure/identity": "^4.13.3",
     "@azure/msal-browser": "^5.25.0",
-    "@azure/msal-node": "^5.4.0",
+    "@azure/msal-node": "^7.0.1",
     "@azure/msal-react": "^5.7.2",
     "@radix-ui/react-dialog": "^1.2.0",
     "@radix-ui/react-dropdown-menu": "^2.1.25",
