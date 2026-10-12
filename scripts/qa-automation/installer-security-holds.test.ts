@@ -14,13 +14,95 @@ async function historicalFixture() {
     if (table.name === 'public.qa_repair_requests') columns.push('unique(candidate_id)');
     await pg.exec(`create table ${table.name} (${columns.join(',')});`);
   }
-  await pg.exec('create table public.catalog_file_reputation(sha256 text primary key,status text,malicious integer,suspicious integer,total_engines integer,analyzed_at timestamptz,checked_at timestamptz); grant usage on schema public,extensions to service_role; grant all on all tables in schema public to service_role;');
+  await pg.exec('create table public.catalog_file_reputation(sha256 text primary key,status text,malicious integer,suspicious integer,total_engines integer,analyzed_at timestamptz,checked_at timestamptz,retry_after timestamptz,engine_count_version integer); grant usage on schema public,extensions to service_role; grant all on all tables in schema public to service_role;');
   const baseline = JSON.parse(read('./fixtures/diagnostic-retest-functions.json'));
   await pg.exec(baseline.claimant);
-  await pg.exec(baseline.reporter);
+  await pg.exec(baseline.reporter.replace(/expected_secret_hash constant text := '[a-f0-9]{64}'/, `expected_secret_hash constant text := '${crypto.createHash('sha256').update('local-fixture-only').digest('hex')}'`));
   await pg.exec(read('../../supabase/migrations/20261011075101_qa_guarded_diagnostic_retests.sql').replace(/\r\n/g, '\n'));
   return { pg, read };
 }
+
+it('holds one verdict, escalates on a newer cached verdict and releases without changing suspicious handling', async () => {
+  const { pg, read } = await historicalFixture();
+  try {
+    const hash = 'c'.repeat(64);
+    await pg.exec(read('../../supabase/migrations/20261012153307_qa_installer_security_holds.sql'));
+    await pg.query("insert into catalog_file_reputation(sha256,status,malicious,suspicious,total_engines,analyzed_at,checked_at) values($1,'found',1,0,60,now(),now())", [hash]);
+    expect((await pg.query<{ reason: string }>('select reason from qa_installer_security_holds')).rows[0].reason).toBe('VirusTotal: 1 engine flagged, rechecking daily');
+    await pg.query("update catalog_file_reputation set malicious=2,analyzed_at=now()+interval '1 minute',checked_at=now()+interval '1 minute'");
+    expect((await pg.query<{ malicious_verdicts: number }>('select malicious_verdicts from qa_installer_security_holds')).rows[0].malicious_verdicts).toBe(2);
+    await pg.query("update catalog_file_reputation set malicious=1,analyzed_at=now()-interval '1 minute'");
+    expect((await pg.query<{ malicious_verdicts: number }>('select malicious_verdicts from qa_installer_security_holds')).rows[0].malicious_verdicts).toBe(2);
+    await pg.query("update catalog_file_reputation set malicious=0,suspicious=1,analyzed_at=now()+interval '2 minutes',checked_at=now()+interval '2 minutes'");
+    expect((await pg.query<{ n: number }>('select refresh_qa_installer_security_holds() n')).rows[0].n).toBe(0);
+    await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second'");
+    expect((await pg.query<{ n: number }>('select refresh_qa_installer_security_holds() n')).rows[0].n).toBe(1);
+    expect((await pg.query<{ held: boolean }>('select released_at is null held from qa_installer_security_holds')).rows[0].held).toBe(false);
+    await pg.query("update catalog_file_reputation set malicious=1,analyzed_at=now()-interval '1 minute'");
+    expect((await pg.query<{ held: boolean }>('select released_at is null held from qa_installer_security_holds')).rows[0].held).toBe(false);
+    expect((await pg.query<{ n: number }>('select count(*)::int n from qa_installer_security_holds')).rows[0].n).toBe(1);
+  } finally { await pg.close(); }
+}, 30000);
+
+it('reserves a daily hash lookup once while keeping held candidates ineligible', async () => {
+  const { pg, read } = await historicalFixture();
+  try {
+    await pg.exec(read('../../supabase/migrations/20261012153307_qa_installer_security_holds.sql'));
+    const active = '33333333-3333-4333-8333-333333333333', heldId = '44444444-4444-4444-8444-444444444444', hash = 'd'.repeat(64);
+    await pg.query("insert into qa_candidates(id,status,test_level,installer_sha256,next_retry_at,attempts) values($1,'running','psadt-package',$2,now(),0),($3,'queued','psadt-package',$4,now(),2)", [active,'e'.repeat(64),heldId,hash]);
+    await pg.query("insert into catalog_file_reputation(sha256,status,malicious,suspicious,total_engines,analyzed_at,checked_at) values($1,'found',1,0,60,now()-interval '1 hour',now())", [hash]);
+    await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second'");
+    const before = (await pg.query<{ due: string }>('select next_check_at::text due from qa_installer_security_holds')).rows[0].due;
+    await pg.query('select refresh_qa_installer_security_holds()');
+    expect((await pg.query<{ due: string }>('select next_check_at::text due from qa_installer_security_holds')).rows[0].due).toBe(before);
+    const claim = (secret = 'local-fixture-only', id = active) => pg.query<{ r: Array<{ sha256: string; lease: string }> }>('select claim_qa_installer_security_rechecks($1,$2,5) r', [secret,id]);
+    await expect(claim('wrong')).rejects.toThrow(); await expect(claim('local-fixture-only',heldId)).rejects.toThrow();
+    await pg.exec('set role anon');
+    let item: { sha256: string; lease: string };
+    try { item = (await claim()).rows[0].r[0]; } finally { await pg.exec('reset role'); }
+    expect(item.sha256).toBe(hash); expect((await claim()).rows[0].r).toEqual([]);
+    await expect(pg.query("update qa_candidates set status='dispatched' where id=$1", [heldId])).rejects.toThrow('Installer security hold');
+    const complete = (lease: string, secret = 'local-fixture-only', malicious = 0, suspicious = 1) => pg.query('select complete_qa_installer_security_recheck($1,$2,$3,$4,$5,60,now())', [secret,hash,lease,malicious,suspicious]);
+    await expect(complete(item.lease,'wrong')).rejects.toThrow();
+    await expect(complete('55555555-5555-4555-8555-555555555555')).rejects.toThrow();
+    await pg.exec("update qa_installer_security_holds set recheck_lease_expires_at=now()-interval '1 second'");
+    await expect(complete(item.lease)).rejects.toThrow();
+    await pg.exec("update qa_installer_security_holds set recheck_lease_expires_at=now()+interval '1 minute'");
+    for (const values of [[null,0,60],[-1,0,60],[0,-1,60],[2,60,60],[0,0,0]]) {
+      await expect(pg.query('select complete_qa_installer_security_recheck($1,$2,$3,$4,$5,$6,now())', ['local-fixture-only',hash,item.lease,...values])).rejects.toThrow();
+    }
+    await complete(item.lease);
+    expect((await pg.query<{ held: boolean }>('select released_at is null held from qa_installer_security_holds')).rows[0].held).toBe(false);
+    await expect(complete(item.lease)).rejects.toThrow();
+    expect((await pg.query<{ attempts: number }>('select attempts from qa_candidates where id=$1',[heldId])).rows[0].attempts).toBe(2);
+    expect((await pg.query<{ n: number }>('select count(*)::int n from qa_repair_requests')).rows[0].n).toBe(0);
+  } finally { await pg.close(); }
+}, 30000);
+
+it('uses one-time leases for newer 1 to 2 to 1 to 0 verdicts and rejects stale completion', async () => {
+  const { pg, read } = await historicalFixture();
+  try {
+    await pg.exec(read('../../supabase/migrations/20261012153307_qa_installer_security_holds.sql'));
+    const active='33333333-3333-4333-8333-333333333333', hash='f'.repeat(64);
+    await pg.query("insert into qa_candidates(id,status,test_level,installer_sha256,next_retry_at,attempts) values($1,'running','psadt-package',$2,now(),0)",[active,hash]);
+    await pg.query("insert into catalog_file_reputation(sha256,status,malicious,suspicious,total_engines,analyzed_at,checked_at) values($1,'found',1,0,60,now()-interval '1 hour',now())",[hash]);
+    await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second'");
+    const staleLease=(await pg.query<{ r:Array<{lease:string}> }>('select claim_qa_installer_security_rechecks($1,$2,1) r',['local-fixture-only',active])).rows[0].r[0].lease;
+    expect((await pg.query<{ ok:boolean }>("select complete_qa_installer_security_recheck($1,$2,$3,0,0,60,now()-interval '2 hours') ok",['local-fixture-only',hash,staleLease])).rows[0].ok).toBe(false);
+    expect((await pg.query<{ held:boolean }>('select released_at is null held from qa_installer_security_holds')).rows[0].held).toBe(true);
+    for (const [malicious,minutes] of [[2,45],[1,30],[0,15]]) {
+      await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second'");
+      const lease=(await pg.query<{ r:Array<{lease:string}> }>('select claim_qa_installer_security_rechecks($1,$2,1) r',['local-fixture-only',active])).rows[0].r[0].lease;
+      const result=await pg.query<{ ok:boolean }>("select complete_qa_installer_security_recheck($1,$2,$3,$4,0,60,now()-$5::int*interval '1 minute') ok",['local-fixture-only',hash,lease,malicious,minutes]);
+      expect(result.rows[0].ok).toBe(true);
+      const held=(await pg.query<{ malicious_verdicts:number;reason:string;released_at:string|null }>('select malicious_verdicts,reason,released_at from qa_installer_security_holds')).rows[0];
+      if (malicious) { expect(held.malicious_verdicts).toBe(malicious); expect(held.released_at).toBeNull(); expect(held.reason).toBe(malicious===1?'VirusTotal: 1 engine flagged, rechecking daily':'VirusTotal refused execution for this installer hash.'); }
+      else expect(held.released_at).not.toBeNull();
+      await expect(pg.query('select complete_qa_installer_security_recheck($1,$2,$3,0,0,60,now())',['local-fixture-only',hash,lease])).rejects.toThrow();
+    }
+    expect((await pg.query<{ n:number }>('select count(*)::int n from qa_installer_security_holds')).rows[0].n).toBe(1);
+  } finally { await pg.close(); }
+},30000);
 
 it.each(['scanning_installer', 'publishing'])('adopts an uncached, run-bound historical refusal in phase %s', async (phase) => {
   const { pg, read } = await historicalFixture();
@@ -55,7 +137,7 @@ it.each(['scanning_installer', 'publishing'])('adopts an uncached, run-bound his
       await pg.exec('set role anon');
       try { await expect(adopt(valid)).rejects.toThrow('permission denied'); } finally { await pg.exec('reset role'); }
       expect((await pg.query<{ n: number }>('select count(*)::int n from qa_installer_security_holds')).rows[0].n).toBe(0);
-      await pg.query("insert into catalog_file_reputation values(lower($1),'error',null,null,null,null,now())", [hash]);
+      await pg.query("insert into catalog_file_reputation(sha256,status,malicious,suspicious,total_engines,analyzed_at,checked_at) values(lower($1),'error',null,null,null,null,now())", [hash]);
       expect((await pg.query<{ n: number }>('select count(*)::int n from qa_installer_security_holds')).rows[0].n).toBe(0);
       await pg.exec('set role service_role');
       try { await adopt(valid); await adopt(valid); } finally { await pg.exec('reset role'); }
@@ -73,7 +155,7 @@ it.each(['scanning_installer', 'publishing'])('adopts an uncached, run-bound his
     expect((await pg.query<{ held: boolean }>('select released_at is null held from qa_installer_security_holds')).rows[0].held).toBe(true);
     await pg.query("update catalog_file_reputation set analyzed_at=now()+interval '1 minute',checked_at=now()+interval '1 minute' where sha256=lower($1)", [hash]);
     expect((await pg.query<{ n: number }>('select refresh_qa_installer_security_holds() n')).rows[0].n).toBe(0);
-    await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second'");
+    await pg.exec("update qa_installer_security_holds set next_check_at=now()-interval '1 second',checked_at=null");
     expect((await pg.query<{ n: number }>('select refresh_qa_installer_security_holds() n')).rows[0].n).toBe(1);
     expect((await pg.query<{ status: string; attempts: number }>('select status,attempts from qa_candidates where id=$1', [id])).rows[0]).toEqual({ status: 'queued', attempts: 2 });
     await pg.query("update qa_candidates set status='error' where id=$1", [id]);
@@ -130,7 +212,7 @@ it.each([null, 'scanning_installer'])('prevents exact hash replay even when cosm
     expect((await pg.query<{n: number}>('select public.refresh_qa_installer_security_holds() as n')).rows[0].n).toBe(0);
     expect((await pg.query<{held: boolean}>('select released_at is null as held from public.qa_installer_security_holds')).rows[0].held).toBe(true);
     await pg.query("insert into public.catalog_file_reputation values(lower($1),'found',0,0,56,now()+interval '1 minute',now()+interval '1 minute')",[hash]);
-    await pg.query('update public.qa_installer_security_holds set next_check_at=now()-interval \'1 second\'');
+    await pg.query('update public.qa_installer_security_holds set next_check_at=now()-interval \'1 second\',checked_at=null');
     await pg.query('select public.refresh_qa_installer_security_holds()');
     expect((await pg.query<{released: boolean}>('select released_at is not null as released from public.qa_installer_security_holds')).rows[0].released).toBe(true);
     await pg.exec("update public.curated_verification_queue set status='completed' where status='queued'");

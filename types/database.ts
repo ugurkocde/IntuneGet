@@ -24,9 +24,9 @@ export interface Database {
   public: {
     Tables: {
       qa_installer_security_holds: {
-        Row: { sha256: string; reason: string; first_held_at: string; verdict_at: string; next_check_at: string; checked_at: string | null; released_at: string | null };
-        Insert: { sha256: string; reason?: string; first_held_at?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
-        Update: { reason?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
+        Row: { sha256: string; malicious_verdicts: number; reason: string; first_held_at: string; verdict_at: string; next_check_at: string; checked_at: string | null; released_at: string | null; recheck_lease: string | null; recheck_lease_expires_at: string | null };
+        Insert: { sha256: string; malicious_verdicts: number; first_held_at?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
+        Update: { malicious_verdicts?: number; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
         Relationships: GenericRelationship[];
       };
       qa_automation_state: {
@@ -2633,6 +2633,8 @@ export interface Database {
       qa_curated_installer_security_held: { Args: { p_inputs: Json }; Returns: boolean };
       refresh_qa_installer_security_holds: { Args: Record<string, never>; Returns: number };
       record_qa_installer_security_refusal: { Args: { p_candidate_id: string; p_run_id: string; p_sha256: string; p_malicious: number; p_observed_at: string }; Returns: undefined };
+      claim_qa_installer_security_rechecks: { Args: { p_secret: string; p_candidate_id: string; p_limit: number }; Returns: Json };
+      complete_qa_installer_security_recheck: { Args: { p_secret: string; p_sha256: string; p_lease: string; p_malicious: number; p_suspicious: number; p_total_engines: number; p_analyzed_at: string }; Returns: boolean };
       begin_qa_live_curated_session: {
         Args: { p_app_id: string; p_version: string; p_architecture: string; p_upgrade_planned: boolean; p_host_custom_config: boolean; p_run_id: number | string; p_run_attempt: number };
         Returns: Json;

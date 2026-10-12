@@ -64,14 +64,15 @@ function fixture() {
   };
   return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
-it('shows a refused hash in waiting and never dispatches it again within one minute', async () => {
+it.each([1, 2])('shows %s malicious verdicts in waiting and never dispatches twice within one minute', async (malicious) => {
   const f = fixture();
   // Every original row shares the refused hash, including other app identities.
-  f.securityHolds.push({ sha256: 'a'.repeat(64), next_check_at: '2099-01-01T00:00:00Z', released_at: null });
+  f.securityHolds.push({ sha256: 'a'.repeat(64), malicious_verdicts: malicious, reason: malicious === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.', next_check_at: '2099-01-01T00:00:00Z', released_at: null });
   f.rows.splice(0, f.rows.length, f.first);
   mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
   const live = await getQaLiveSnapshot();
-  expect(live.queue.next).toEqual([]); expect(live.queue.waiting[0].reason).toContain('security hold');
+  expect(live.queue.next).toEqual([]);
+  expect(live.queue.waiting[0].reason).toBe(malicious === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.');
   expect(live.queue.waiting[0].next_check_at).toBe('2099-01-01T00:00:00Z');
   for (let retry = 0; retry < 2; retry++) await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
   expect(f.claimed).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
