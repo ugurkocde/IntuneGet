@@ -73,6 +73,9 @@ export async function dispatchCuratedQueue(supabase: SupabaseClient<Database>, n
     .order('priority', { ascending: false }).order('enqueued_at', { ascending: true }).order('id', { ascending: true }).limit(1).maybeSingle();
   if (queueError) throw new Error('Could not inspect queued curated QA.');
   if (!next) return { handled: false, dispatched: false };
+  const security = await supabase.rpc('qa_curated_installer_security_held', { p_inputs: next.inputs });
+  if (security.error) throw new Error('Could not verify curated installer security eligibility.');
+  if (security.data === true) return { handled: false, dispatched: false, reason: 'installer_security_hold' };
   let inputs: Record<string, string>;
   try { inputs = curatedQueueInputs(next); } catch {
     const { error } = await supabase.from('curated_verification_queue').update({ status: 'superseded', finished_at: now.toISOString(), updated_at: now.toISOString() })

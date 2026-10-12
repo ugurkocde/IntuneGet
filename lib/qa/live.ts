@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
 import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
+import { loadInstallerSecurityHolds } from './installer-security-holds';
 import { getPackageCompatibilityBlocks, packageCompatibilityKey } from '@/lib/package-eligibility';
 import { qaSourceKey, qaSourceRetryAtMany } from './source-backoff';
 
@@ -82,7 +83,7 @@ export interface QaLiveSnapshotInput {
   current: CandidateRow | null;
   queuedCount: number;
   queued: CandidateRow[];
-  waiting?: Array<{ candidate: CandidateRow; nextCheckAt: string | null; sourceRetry: boolean }>;
+  waiting?: Array<{ candidate: CandidateRow; nextCheckAt: string | null; sourceRetry: boolean; securityHold?: boolean }>;
   poll: PollRow | null;
   consecutivePollFailures: number;
   recent: ResultRow[];
@@ -391,10 +392,10 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     log: currentLog,
     queue: {
       count: input.queuedCount,
-      waiting: (input.waiting || []).slice(0, 10).map(({ candidate, nextCheckAt, sourceRetry }) => ({
+      waiting: (input.waiting || []).slice(0, 10).map(({ candidate, nextCheckAt, sourceRetry, securityHold }) => ({
         wingetId: candidate.winget_id, displayName: appById.get(candidate.winget_id)?.name || candidate.winget_id,
         version: candidate.version, architecture: architecture(candidate.architecture),
-        reason: sourceRetry ? "Installer source checks are deferred; another check is scheduled." : "This application is waiting for verification before testing.",
+        reason: securityHold ? "This installer is on a security hold. Its reputation is checked at most once a day." : sourceRetry ? "Installer source checks are deferred; another check is scheduled." : "This application is waiting for verification before testing.",
         next_check_at: nextCheckAt,
       })),
       next: input.queued.slice(0, 10).map((candidate) => ({
@@ -471,7 +472,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       .from('qa_candidates')
       .select(candidateColumns)
       .eq('test_level', 'psadt-package')
-      .eq('status', 'queued'))
+      .in('status', ['queued', 'error']))
       .limit(1000),
     supabase
       .from('qa_candidates')
@@ -500,6 +501,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
 
   const current = (activeResult.data as CandidateRow | null) || null;
   const queueRows = (queueResult.data || []) as CandidateRow[];
+  const securityHolds = await loadInstallerSecurityHolds(supabase, queueRows.map(row => row.installer_sha256));
   const queued: CandidateRow[] = [];
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
@@ -508,8 +510,10 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
     const chunk: CandidateRow[] = [];
     while (cursor < queueRows.length && chunk.length < 25 && !(lookupsClosed && waiting.length >= 10)) {
       const candidate = queueRows[cursor++];
-      const reason = qaQueueCandidateReason(candidate, now);
-      if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
+      if (candidate.status !== 'queued' && !securityHolds.has(candidate.installer_sha256.toLowerCase())) continue;
+      const reason = qaQueueCandidateReason(candidate, now, securityHolds);
+      if (reason === 'installer-security-hold' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: securityHolds.get(candidate.installer_sha256.toLowerCase()) || null, sourceRetry: false, securityHold: true });
+      else if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
       else if (!reason && !lookupsClosed && queued.length < 10) chunk.push(candidate);
     }
     if (!chunk.length) continue;

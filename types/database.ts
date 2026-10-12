@@ -23,6 +23,12 @@ type GenericRelationship = {
 export interface Database {
   public: {
     Tables: {
+      qa_installer_security_holds: {
+        Row: { sha256: string; reason: string; first_held_at: string; verdict_at: string; next_check_at: string; checked_at: string | null; released_at: string | null };
+        Insert: { sha256: string; reason?: string; first_held_at?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
+        Update: { reason?: string; verdict_at?: string; next_check_at?: string; checked_at?: string | null; released_at?: string | null };
+        Relationships: GenericRelationship[];
+      };
       qa_automation_state: {
         Row: { id: string; value: Json; updated_at: string };
         Insert: { id: string; value: Json; updated_at?: string };
@@ -2622,6 +2628,8 @@ export interface Database {
       };
     };
     Functions: {
+      qa_curated_installer_security_held: { Args: { p_inputs: Json }; Returns: boolean };
+      refresh_qa_installer_security_holds: { Args: Record<string, never>; Returns: number };
       begin_qa_live_curated_session: {
         Args: { p_app_id: string; p_version: string; p_architecture: string; p_upgrade_planned: boolean; p_host_custom_config: boolean; p_run_id: number | string; p_run_attempt: number };
         Returns: Json;
