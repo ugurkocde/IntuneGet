@@ -678,11 +678,14 @@ export interface InstallerSourceHop {
   status: number;
   target: { scheme: string; host: string; pathSegments: number };
   location?: ReturnType<typeof redirectLocationShape>;
+  next?: ReturnType<typeof sourceUrlShape>;
 }
 export interface InstallerSourceDiagnostic {
   outcome: 'reachable' | 'failed';
   hops: InstallerSourceHop[];
   errorCode?: string;
+  networkCode?: string;
+  addressFamily?: 4 | 6;
 }
 function sourceUrlShape(url: URL) {
   // Even short path segments can contain credentials. Never return path text.
@@ -709,21 +712,44 @@ function sourceProbeError(error: unknown): string {
   if (/timed out/.test(message)) return 'TIMEOUT';
   return 'NETWORK';
 }
+const SOURCE_NETWORK_CODES = new Set([
+  'ENOTFOUND', 'EAI_AGAIN', 'ESERVFAIL', 'ECONNREFUSED', 'ECONNRESET',
+  'ENETUNREACH', 'EHOSTUNREACH', 'EADDRNOTAVAIL', 'ETIMEDOUT', 'EPIPE',
+  'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'SELF_SIGNED_CERT_IN_CHAIN', 'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'ERR_INVALID_URL', 'ERR_INVALID_PROTOCOL', 'ERR_INVALID_CHAR',
+]);
+function sourceNetworkCode(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (typeof code !== 'string') return 'OTHER';
+  if (SOURCE_NETWORK_CODES.has(code)) return code;
+  if (/^ERR_(SSL|TLS)_[A-Z0-9_]+$/.test(code)) return 'TLS_OTHER';
+  if (/^HPE_[A-Z0-9_]+$/.test(code)) return 'HTTP_PARSE';
+  return 'OTHER';
+}
 /** Observe source HTTP headers only. This never hashes or accepts payload bytes. */
 export async function probeInstallerSource(installerUrl: string): Promise<InstallerSourceDiagnostic> {
   const hops: InstallerSourceHop[] = [];
+  const attempted: { family?: 4 | 6 } = {};
   let url: URL;
   try { url = validateUrl(installerUrl); } catch { return { outcome: 'failed', hops, errorCode: 'INITIAL_URL_INVALID' }; }
   try {
     return await withInstallerDownloadDeadline(30_000, async signal => {
-      const { response } = await openInstallerResponse(url, MAX_REDIRECTS, 15_000, signal, hops);
+      const { response } = await openInstallerResponse(url, MAX_REDIRECTS, 15_000, signal, hops, attempted);
       const status = response.statusCode ?? 0;
       response.destroy();
       return status >= 200 && status < 300
         ? { outcome: 'reachable', hops }
         : { outcome: 'failed', hops, errorCode: 'HTTP_STATUS' };
     });
-  } catch (error) { return { outcome: 'failed', hops, errorCode: sourceProbeError(error) }; }
+  } catch (error) {
+    const errorCode = sourceProbeError(error);
+    return { outcome: 'failed', hops, errorCode, ...(errorCode === 'NETWORK' ? {
+      networkCode: sourceNetworkCode(error),
+      ...(attempted.family === undefined ? {} : { addressFamily: attempted.family }),
+    } : {}) };
+  }
 }
 
 async function openInstallerResponse(
@@ -732,8 +758,11 @@ async function openInstallerResponse(
   timeoutMs: number,
   signal: AbortSignal,
   trace?: InstallerSourceHop[],
+  attempted?: { family?: 4 | 6 },
 ): Promise<{ response: http.IncomingMessage; url: URL }> {
+  if (attempted) delete attempted.family;
   const resolved = await resolvePublicAddress(url.hostname);
+  if (attempted) attempted.family = resolved.family;
   const headers = {
     Accept: 'application/octet-stream,*/*',
     'Accept-Encoding': 'identity',
@@ -758,6 +787,7 @@ async function openInstallerResponse(
         let redirectUrl: URL;
         try {
           redirectUrl = resolveRedirectUrl(location, url);
+          if (trace) hop.next = sourceUrlShape(redirectUrl);
         } catch (error) {
           reject(error);
           return;
@@ -769,6 +799,7 @@ async function openInstallerResponse(
           timeoutMs,
           signal,
           trace,
+          attempted,
         ).then(resolve, reject);
         return;
       }
