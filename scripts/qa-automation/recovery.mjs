@@ -163,6 +163,7 @@ export async function recoverInfrastructure({ rows, patch, github, now = Date.no
       if (job.preExecutionRefusal) {
         await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error',
           failure_summary: `eq.${PUBLICATION_FAILURE}`, github_run_id: `eq.${c.github_run_id}` }, {
+          ...(granted ? { status: 'superseded' } : {}),
           failure_summary: 'Installer reputation verification did not complete before application execution.',
           updated_at: new Date(now).toISOString(),
         });

@@ -210,6 +210,25 @@ describe('durable infrastructure recovery', () => {
     expect(d.patch.mock.calls.some(call => call[2].status === 'queued')).toBe(false);
     expect(d.github.mock.calls.some(([path]) => path.endsWith('/rerun'))).toBe(false);
   });
+  it('makes no writes or GitHub calls for a granted publication dry run', async () => {
+    const d = grantedRecovery();
+    expect(await recoverInfrastructure({ ...d, dryRun: true })).toMatchObject({ action: 'would_recover_infrastructure' });
+    expect(d.patch).not.toHaveBeenCalled();
+    expect(d.github).not.toHaveBeenCalled();
+  });
+  it.each([0, 5])('settles a granted reputation refusal without replay at budget %s', async budget => {
+    const refused = preExecution(budget);
+    const d = grantedRecovery(undefined, { ...c, phase: 'publishing', recovery_attempts: budget });
+    d.github.mockImplementation(refused.github.getMockImplementation()!);
+    expect(await recoverInfrastructure(d)).toEqual({ action: 'no_recovery_due' });
+    expect(d.patch).toHaveBeenCalledTimes(1);
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', {
+      id: 'eq.a', status: 'eq.error', failure_summary: `eq.${PUBLICATION_FAILURE}`, github_run_id: 'eq.123',
+    }, { status: 'superseded', failure_summary: 'Installer reputation verification did not complete before application execution.',
+      updated_at: new Date(now).toISOString() });
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/rerun'))).toBe(false);
+    expect(d.patch.mock.calls.some(call => call[2].status === 'queued')).toBe(false);
+  });
   it('leaves a granted publication alone while the publisher job is still waiting', async () => {
     const d = grantedRecovery();
     d.github.mockImplementation(async path => path.includes('/jobs?')
