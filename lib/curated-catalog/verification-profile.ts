@@ -1,7 +1,8 @@
 import { CURATED_APPS } from './definitions';
 import { CuratedCatalogError, validateCandidate } from './core.mjs';
 import { buildCuratedCartItem, curatedWorkflowInput } from './package';
-import { normalizeQaWorkflowPackageInput, QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
+import { normalizeQaWorkflowPackageInput, QA_PSADT_TOOLCHAIN, splitQaPsadtConfig } from '@/lib/qa/package-profile';
+import type { PSADTConfig } from '@/types/psadt';
 import type { CuratedCandidate, CuratedRelease } from './types';
 
 // Shared by the operator endpoint and the standalone protected QA runtime.
@@ -31,6 +32,16 @@ export function createCuratedVerificationProfile(candidate: CuratedCandidate, in
     psadtConfigSha256: normalized.identity.psadtConfigSha256.toLowerCase(),
     packagerCommit: QA_PSADT_TOOLCHAIN.packagerCommit,
     approvalRequired: true as const,
+  };
+}
+
+/** Rebind carried settings to the new release's signed detection; this does not authorize deployment. */
+export function rebuildCuratedExecutionConfig(release: CuratedRelease, config: Record<string, unknown>) {
+  const profile = createCuratedVerificationProfile(release.candidate, release.installerSha256, config);
+  const normalizedConfig = JSON.parse(profile.workflowInput.psadtConfig) as PSADTConfig;
+  return {
+    psadtConfigSha256: profile.psadtConfigSha256,
+    executionConfig: splitQaPsadtConfig(normalizedConfig).execution as unknown as Record<string, unknown>,
   };
 }
 

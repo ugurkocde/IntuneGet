@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "runId": "37818142765",
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "workflowCommit": "dd2c2846c91150965bf5295e558cc07f479021dd"
+  },
+  "candidate": {
+    "appId": "windirstat",
+    "version": "2.9.2",
+    "installerUrl": "https://github.com/windirstat/windirstat/releases/download/release/v2.9.2/WinDirStat-x64.msi",
+    "vendorSha256": "21fb47b7262bcd094506a14977de8db54264bd7a93db9ad2863f1eed206ba2a3",
+    "releaseNotesUrl": "https://github.com/windirstat/windirstat/releases/tag/release/v2.9.2",
+    "discoveredAt": "2026-10-08T13:29:07.587Z",
+    "id": "76849257df7d0ecf65351ef3"
+  },
+  "previous": {
+    "appId": "windirstat",
+    "version": "2.9.0",
+    "installerUrl": "https://github.com/windirstat/windirstat/releases/download/release/v2.9.0/WinDirStat-x64.msi",
+    "vendorSha256": "0a7d214586bb7c7fd030b8f2295bc7caa7f88a0cec094b196c803e2dba0d134d",
+    "releaseNotesUrl": "https://github.com/windirstat/windirstat/releases/tag/release/v2.9.0",
+    "discoveredAt": "2026-10-08T13:29:34.429Z",
+    "id": "8e66c5fd53e94da4d888dfde"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "76849257df7d0ecf65351ef3",
+      "installerSha256": "21fb47b7262bcd094506a14977de8db54264bd7a93db9ad2863f1eed206ba2a3",
+      "sourceUrl": "https://github.com/windirstat/windirstat/releases/download/release/v2.9.2/WinDirStat-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Open Source Developer Bryan Berns"
+      },
+      "security": {
+        "malicious": 0,
+        "scannedAt": "2026-10-08T17:45:08.3213254Z",
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "suspicious": 0,
+        "installerSha256": "21fb47b7262bcd094506a14977de8db54264bd7a93db9ad2863f1eed206ba2a3",
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0"
+      }
+    },
+    "previous": {
+      "candidateId": "8e66c5fd53e94da4d888dfde",
+      "installerSha256": "0a7d214586bb7c7fd030b8f2295bc7caa7f88a0cec094b196c803e2dba0d134d",
+      "sourceUrl": "https://github.com/windirstat/windirstat/releases/download/release/v2.9.0/WinDirStat-x64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "Open Source Developer Bryan Berns"
+      },
+      "security": {
+        "malicious": 0,
+        "scannedAt": "2026-10-08T17:45:10.4246337Z",
+        "engineVersion": "1.1.26080.3",
+        "status": "clean",
+        "suspicious": 0,
+        "installerSha256": "0a7d214586bb7c7fd030b8f2295bc7caa7f88a0cec094b196c803e2dba0d134d",
+        "scanner": "defender",
+        "signatureVersion": "1.459.601.0"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "76849257df7d0ecf65351ef3",
+    "packageId": "IntuneGet.Curated.WinDirStat",
+    "installerUrl": "https://github.com/windirstat/windirstat/releases/download/release/v2.9.2/WinDirStat-x64.msi",
+    "installerSha256": "21fb47b7262bcd094506a14977de8db54264bd7a93db9ad2863f1eed206ba2a3",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.WinDirStat",
+      "displayName": "WinDirStat",
+      "publisher": "WinDirStat Team",
+      "version": "2.9.2",
+      "architecture": "x64",
+      "installerSha256": "21fb47b7262bcd094506a14977de8db54264bd7a93db9ad2863f1eed206ba2a3",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:WinDirStat",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinDirStat\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.9.2\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinDirStat\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"2.9.2\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "2B009D10E1C068904236492665793383B777401BC8D9741C0C5ED56D6418793C",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.WinDirStat\",\"publisher\":\"IntuneGet QA\",\"version\":\"2.9.2\",\"wingetId\":\"IntuneGet.Curated.WinDirStat\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.9.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinDirStat\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"E32CD639A110B88C147A0751D29868C29B996EF0DF986EF4384EECD1D8A7E5C5\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"21FB47B7262BCD094506A14977DE8DB54264BD7A93DB9AD2863F1EED206BA2A3\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:WinDirStat\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"2.9.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_WinDirStat\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"FE0BCA47B88AB2BDF7B0428C5393D103A05BDDE27165FC6011FE592F133A1988\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "fe0bca47b88ab2bdf7b0428c5393d103a05bdde27165fc6011fe592f133a1988",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "architecture": "x64",
+    "executionContext": "LocalSystem",
+    "executionProfileSha256": "2B009D10E1C068904236492665793383B777401BC8D9741C0C5ED56D6418793C",
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testedAt": "2026-10-08T17:46:51.3229683Z",
+    "installerSha256": "21fb47b7262bcd094506a14977de8db54264bd7a93db9ad2863f1eed206ba2a3",
+    "testLevel": "psadt-package",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "previousInstallerSha256": "0a7d214586bb7c7fd030b8f2295bc7caa7f88a0cec094b196c803e2dba0d134d",
+    "upgradeFromVersion": "2.9.0",
+    "installerVersion": "2.9.2",
+    "candidateId": "76849257df7d0ecf65351ef3"
+  },
+  "verifiedAt": "2026-10-08T17:46:54.2581386Z",
+  "authenticatedArtifact": {
+    "id": 11567834485,
+    "sha256": "9c7cbe96792c961111f14ac7ed5815f4dc3c844912b0df9176c884ca193a4e14"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
