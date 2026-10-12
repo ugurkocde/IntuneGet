@@ -228,8 +228,14 @@ export async function GET(request: Request) {
           installerSha256: candidate.installer_sha256,
         });
         if (compatibilityBlock) {
-          addInvalid('package-compatibility-blocked', candidate.id);
-          continue;
+          const grant = compatibilityBlock.code === 'failed_managed_lifecycle'
+            ? await supabase.rpc('qa_retest_grant_eligible', { p_candidate_id: candidate.id })
+            : { data: false, error: null };
+          if (grant.error) throw grant.error;
+          if (grant.data !== true) {
+            addInvalid('package-compatibility-blocked', candidate.id);
+            continue;
+          }
         }
         eligible.push(candidate);
         continue;
@@ -295,6 +301,18 @@ export async function GET(request: Request) {
         });
       }
       if (claimError) throw claimError;
+      // The grant can expire or gain a customer/security hold after preflight.
+      // The locked claim rechecks it without occupying the VM; keep the queue moving.
+      if (!claimed && claim?.reason === 'package_compatibility_blocked') {
+        const { data: updated, error } = await supabase.from('qa_candidates')
+          .update({ status: 'superseded', finished_at: supersededAt,
+            failure_summary: 'Superseded before dispatch: package-compatibility-blocked.',
+            updated_at: supersededAt })
+          .eq('id', candidate.id).eq('status', 'queued').select('id');
+        if (error) throw error;
+        superseded += updated?.length || 0;
+        continue;
+      }
       // A lost compare-and-set means another dispatcher is already making
       // progress. Do not move on to a second row and violate single-flight QA.
       if (!claimed) {

@@ -37,12 +37,13 @@ export function QaBadge({ wingetId, catalogVersion, status }: QaBadgeProps) {
   }
 
   const stale = state === 'stale_passed' || state === 'stale_failed';
+  const blocked = state === 'blocked';
   const failed = state === 'failed' || state === 'stale_failed';
-  const Icon = stale ? ShieldAlert : failed ? ShieldX : ShieldCheck;
-  const label = stale
+  const Icon = stale || blocked ? ShieldAlert : failed ? ShieldX : ShieldCheck;
+  const label = blocked ? 'QA Blocked' : stale
     ? `QA ${failed ? 'Failed' : 'Passed'} v${status.testedVersion}`
     : `QA ${failed ? 'Failed' : 'Passed'}`;
-  const ariaLabel = stale
+  const ariaLabel = blocked ? `Installer unavailable for deployment. Lifecycle passed on version ${status.testedVersion}. View test details.` : stale
     ? `QA result outdated. Tested version ${status.testedVersion}, catalog version ${catalogVersion}. View test details.`
     : `QA ${failed ? 'failed' : 'passed'} on version ${status.testedVersion}. View test details.`;
 
@@ -60,7 +61,7 @@ export function QaBadge({ wingetId, catalogVersion, status }: QaBadgeProps) {
         aria-label={ariaLabel}
         className={cn(
           'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated',
-          getStatusToneClasses(stale ? 'warning' : failed ? 'error' : 'success')
+          getStatusToneClasses(stale || blocked ? 'warning' : failed ? 'error' : 'success')
         )}
       >
         <Icon className="h-3 w-3" aria-hidden="true" />

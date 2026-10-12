@@ -110,6 +110,9 @@ function createSupabaseStub(
     paused?: boolean;
     requiredPackagerCommit?: string | null;
     claimNullIds?: string[];
+    grantEligibleIds?: string[];
+    grantError?: { message: string; code?: string };
+    claimBlockedIds?: string[];
     claimErrorById?: Record<string, { message: string; code?: string }>;
     supersedeError?: { message: string; code?: string };
     activeCandidates?: Array<Record<string, unknown>>;
@@ -130,10 +133,15 @@ function createSupabaseStub(
   let queuePageIndex = 0;
 
   const client = {
-    rpc: vi.fn(async (name: string, args: { p_id?: string }) => {
+    rpc: vi.fn(async (name: string, args: { p_id?: string; p_candidate_id?: string }) => {
+      if (name === 'qa_retest_grant_eligible') return {
+        data: options.grantEligibleIds?.includes(args.p_candidate_id!) === true,
+        error: options.grantError || null,
+      };
       if (name !== 'claim_qa_work') return { data: '2026-09-24T12:30:00.000Z', error: null };
       const id = args.p_id!;
       claimAttemptIds.push(id);
+      if (options.claimBlockedIds?.includes(id)) return { data: { reason: 'package_compatibility_blocked' }, error: null };
       const claimError = options.claimErrorById?.[id];
       if (claimError) return { data: null, error: claimError };
       if (options.claimNullIds?.includes(id)) return { data: null, error: null };
@@ -181,6 +189,10 @@ function createSupabaseStub(
             const builder = query({ data: [], error: null }) as Record<string, unknown>;
             builder.in = vi.fn((_column: string, value: string[]) => {
               ids = value;
+              return builder;
+            });
+            builder.eq = vi.fn((column: string, value: string) => {
+              if (column === 'id') ids = [value];
               return builder;
             });
             builder.select = vi.fn(() => {
@@ -309,6 +321,54 @@ describe('GET /api/cron/qa-dispatch', () => {
     await expect(GET(cronRequest())).rejects.toThrow('Compatibility gate unavailable');
     expect(claimedIds).toEqual([]);
     expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('dispatches a managed failure only with an exact eligible diagnostic grant', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds, supersededIds } = createSupabaseStub([row], [], { grantEligibleIds: [row.id] });
+    createServerClientMock.mockReturnValue(client);
+    getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'failed_managed_lifecycle' });
+    await GET(cronRequest());
+    expect(claimedIds).toEqual([row.id]);
+    expect(supersededIds).toEqual([]);
+    expect(client.rpc).toHaveBeenCalledWith('qa_retest_grant_eligible', { p_candidate_id: row.id });
+    expect(dispatchQaCandidateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('never uses a diagnostic grant for another compatibility block', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds, supersededIds } = createSupabaseStub([row], [], { grantEligibleIds: [row.id] });
+    createServerClientMock.mockReturnValue(client);
+    getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'unsupported_managed_uninstall' });
+    await GET(cronRequest());
+    expect(client.rpc).not.toHaveBeenCalledWith('qa_retest_grant_eligible', expect.anything());
+    expect(claimedIds).toEqual([]);
+    expect(supersededIds).toContain(row.id);
+  });
+
+  it('fails closed when diagnostic grant eligibility cannot be verified', async () => {
+    const row = candidate('catalog-default');
+    const { client, claimedIds } = createSupabaseStub([row], [], { grantError: { message: 'Grant gate unavailable' } });
+    createServerClientMock.mockReturnValue(client);
+    getPackageCompatibilityBlockMock.mockResolvedValue({ code: 'failed_managed_lifecycle' });
+    await expect(GET(cronRequest())).rejects.toEqual({ message: 'Grant gate unavailable' });
+    expect(claimedIds).toEqual([]);
+    expect(dispatchQaCandidateMock).not.toHaveBeenCalled();
+  });
+
+  it('advances the fair queue when the locked claim rejects a formerly eligible grant', async () => {
+    const held = candidate('deployment-config');
+    const next = candidate('catalog-default', 'B'.repeat(64));
+    const { client, claimedIds, supersededIds } = createSupabaseStub([held, next], [], {
+      grantEligibleIds: [held.id], claimBlockedIds: [held.id],
+    });
+    createServerClientMock.mockReturnValue(client);
+    getPackageCompatibilityBlockMock.mockImplementation(async (_client, tuple) =>
+      tuple.installerSha256 === held.installer_sha256 ? { code: 'failed_managed_lifecycle' } : null);
+    await GET(cronRequest());
+    expect(supersededIds).toContain(held.id);
+    expect(claimedIds).toEqual([next.id]);
+    expect(dispatchQaCandidateMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not reconcile or dispatch candidates while maintenance is paused', async () => {

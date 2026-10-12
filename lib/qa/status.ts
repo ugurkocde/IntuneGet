@@ -14,6 +14,7 @@ export function deriveQaBadgeState(
   if (qa.outcome === 'Queued' || qa.outcome === 'Running') {
     return qa.outcome.toLowerCase() as 'queued' | 'running';
   }
+  if (qa.deploymentBlocked && qa.outcome === 'Passed') return 'blocked';
 
   const stale = !catalogVersion || qa.testedVersion !== catalogVersion;
   if (stale) {
@@ -29,8 +30,10 @@ export function toQaStatus(row: {
   tested_at_utc: string;
   test_level: QaStatus['testLevel'];
   package_profile_sha256: string | null;
+  deployment_blocked?: boolean;
 }): QaStatus {
   return {
+    deploymentBlocked: row.deployment_blocked,
     outcome: row.outcome,
     testedVersion: row.tested_version,
     architecture: row.architecture,

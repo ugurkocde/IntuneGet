@@ -131,7 +131,8 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
         psadt_version TEXT, psadt_template_sha256 TEXT, psadt_config_sha256 TEXT,
         detection_rules_sha256 TEXT, packager_commit TEXT, package_content_sha256 TEXT,
         virustotal_status TEXT, virustotal_malicious INTEGER, virustotal_suspicious INTEGER,
-        virustotal_total_engines INTEGER, virustotal_scanned_at_utc TEXT
+        virustotal_total_engines INTEGER, virustotal_scanned_at_utc TEXT,
+        deployment_blocked INTEGER NOT NULL DEFAULT 0
       );
     `);
 
@@ -162,14 +163,14 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
        environment, effective_configuration, qa_schema_version, synced_at, test_level, package_profile_sha256,
        psadt_version, psadt_template_sha256, psadt_config_sha256, detection_rules_sha256,
        packager_commit, package_content_sha256, virustotal_status, virustotal_malicious,
-       virustotal_suspicious, virustotal_total_engines, virustotal_scanned_at_utc)
+       virustotal_suspicious, virustotal_total_engines, virustotal_scanned_at_utc, deployment_blocked)
       VALUES (@winget_id,@display_name,@publisher,@tested_version,@architecture,@outcome,@installer_sha256,
        @tested_at_utc,@overall_duration_seconds,@installer_type,@install_command,
        @uninstall_command,@detection,@phase_results,@changes,@relevant_event_count,
        @environment,@effective_configuration,@qa_schema_version,@synced_at,@test_level,@package_profile_sha256,
        @psadt_version,@psadt_template_sha256,@psadt_config_sha256,@detection_rules_sha256,
        @packager_commit,@package_content_sha256,@virustotal_status,@virustotal_malicious,
-       @virustotal_suspicious,@virustotal_total_engines,@virustotal_scanned_at_utc)`);
+       @virustotal_suspicious,@virustotal_total_engines,@virustotal_scanned_at_utc,@deployment_blocked)`);
 
     db.exec(`CREATE TABLE catalog_file_reputation (
       sha256 TEXT PRIMARY KEY, status TEXT, malicious INTEGER, suspicious INTEGER,
@@ -222,6 +223,7 @@ export function buildSqlite(dbPath, { curatedApps, versionHistory, sccmMappings,
           architecture: q.architecture,
           outcome: q.outcome,
           installer_sha256: q.installer_sha256 ?? null,
+          deployment_blocked: bool(q.deployment_blocked),
           tested_at_utc: q.tested_at_utc,
           overall_duration_seconds: q.overall_duration_seconds ?? null,
           installer_type: q.installer_type ?? null,
@@ -283,7 +285,7 @@ async function exportFromSupabase(outDir) {
 
   const supabase = createClient(url, key);
   console.log('Reading catalog from Supabase...');
-  const [curatedApps, versionHistory, sccmMappings, qaResults, fileReputations] = await Promise.all([
+  const [curatedApps, versionHistory, sccmMappings, qaResults, fileReputations, qaBlocks] = await Promise.all([
     fetchAll(supabase, 'curated_apps', CURATED_COLUMNS),
     fetchAll(supabase, 'version_history', VERSION_COLUMNS),
     // Only GLOBAL mappings (no tenant data) reach a public snapshot.
@@ -298,13 +300,25 @@ async function exportFromSupabase(outDir) {
       return [];
     }),
     fetchAll(supabase, 'catalog_file_reputation', ['sha256', 'status', 'malicious', 'suspicious', 'total_engines', 'analyzed_at']),
+    fetchAll(supabase, 'qa_package_blocks', ['winget_id', 'version', 'architecture', 'installer_sha256'])
+      .catch(() => null),
   ]);
   console.log(`  curated_apps: ${curatedApps.length}`);
   console.log(`  version_history: ${versionHistory.length}`);
   console.log(`  sccm_winget_mappings (global): ${sccmMappings.length}`);
   console.log(`  qa_results: ${qaResults.length}`);
 
-  return writeSnapshot(outDir, { curatedApps, versionHistory, sccmMappings, qaResults, fileReputations });
+  // A missing private availability read must not publish unverified Passed rows.
+  const verifiedQaResults = qaBlocks === null ? [] : markQaDeploymentBlocks(qaResults, qaBlocks);
+  if (qaBlocks === null) console.warn('QA results omitted because deployment availability could not be verified.');
+  return writeSnapshot(outDir, { curatedApps, versionHistory, sccmMappings, qaResults: verifiedQaResults, fileReputations });
+}
+
+export function markQaDeploymentBlocks(rows, blocks) {
+  const key = (id, version, architecture, sha) => JSON.stringify([id, version, architecture, sha.toUpperCase()]);
+  const blocked = new Set(blocks.map(b => key(b.winget_id, b.version, b.architecture, b.installer_sha256)));
+  return rows.map(row => ({ ...row, deployment_blocked: !!row.installer_sha256 &&
+    blocked.has(key(row.winget_id, row.tested_version, row.architecture, row.installer_sha256)) }));
 }
 
 async function writeSnapshot(outDir, rows, generatedAt = new Date().toISOString()) {

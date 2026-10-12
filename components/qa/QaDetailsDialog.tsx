@@ -349,6 +349,11 @@ export function QaDetailsDialog({
                 </TabsList>
               </div>
               <TabsContent value="overview" className="m-0 min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-6">
+                {data.deploymentBlocked && data.outcome === 'Passed' ? (
+                  <div role="status" className="rounded-xl border border-status-warning/20 bg-status-warning/10 p-4 text-sm text-status-warning">
+                    <T>This exact installer passed its lifecycle test but is not available for deployment.</T>
+                  </div>
+                ) : null}
                 <section className={cn('rounded-xl border p-4', data.outcome === 'Passed' ? 'border-status-success/20 bg-status-success/5' : 'border-status-error/20 bg-status-error/5')}>
                   <h3 className="text-base font-semibold text-text-primary"><T>{data.outcome === 'Passed' ? 'Test passed' : 'Test failed'}</T></h3>
                   <p className="mt-1 text-sm leading-6 text-text-secondary"><T>{getEvidenceSummary(data.outcome, data.phases)}</T></p>
