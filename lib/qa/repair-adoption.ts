@@ -5,7 +5,8 @@ import { normalizeInstallerSha256, normalizeQaInstallerType, qaInstallerFileName
 import { insertQaCandidate } from './candidate-insert';
 import { AWAITING_DIAGNOSTIC_RETEST_GRANT } from './candidate-reactivation';
 import { buildQaCatalogTestConfig } from './test-config';
-import { buildQaPackageIdentity } from './package-profile';
+import { buildQaPackageIdentity, validateRecordedQaPackageProfile, normalizeQaWorkflowPackageInput, canonicalQaJson } from './package-profile';
+import { buildQaDeploymentTestConfig, QA_DEPLOYMENT_TEST_PSADT_CONFIG } from './deployment-test-config';
 import { evaluatePackagingContract } from '@/lib/packaging-contract';
 import { isWingetDependencyCompatibilityError, resolveWingetPackageDependencies } from '@/lib/winget-dependencies';
 
@@ -36,7 +37,7 @@ export async function adoptRepairCurrentCandidate(
   if (!repair || !['pending','in_progress'].includes(repair.status) || repair.failure_class !== 'app_lifecycle' ||
     repair.prior_requeues == null || repair.prior_requeues >= 3 || isCuratedPackageId(repair.winget_id)) return denied('repair_ineligible');
   const oldResult = await supabase.from('qa_candidates')
-    .select('id,winget_id,version,architecture,installer_sha256,installer_url,test_config')
+    .select('id,winget_id,version,architecture,installer_sha256,installer_url,test_config,package_profile_sha256')
     .eq('id', repair.candidate_id).maybeSingle();
   if (oldResult.error) throw new Error('Could not read original candidate');
   const old = oldResult.data;
@@ -61,6 +62,43 @@ export async function adoptRepairCurrentCandidate(
   if (!appResult.data) return denied('catalog_ineligible');
   const app = appResult.data;
   if (recipeResult.data && recipeResult.data.architecture !== old.architecture) return denied('recipe_architecture_changed');
+  if (old.test_config?.profileKind === 'deployment-config') {
+    const validation = validateRecordedQaPackageProfile({testConfig:old.test_config,candidatePackageProfileSha256:old.package_profile_sha256,candidateWingetId:old.winget_id,candidateVersion:old.version,candidateArchitecture:old.architecture,candidateInstallerSha256:hash});
+    if (!validation.valid || !validation.canonicalJson) return denied('recorded_profile_invalid');
+    const recorded = JSON.parse(validation.canonicalJson);
+    const sameInstaller = matches.map(installer => buildQaCatalogTestConfig({app:{...app,wingetId:repair.winget_id,version:repair.version},manifest,installer})).filter(config =>
+      canonicalQaJson({installScope:config.scope,sourceType:config.sourceInstallerType,silentArgs:config.silentArgs,successCodes:config.successCodes,uninstallCommand:config.uninstallCommand,nestedInstallerType:config.nestedInstallerType,nestedInstallerFiles:config.nestedInstallerFiles}) ===
+      canonicalQaJson({installScope:recorded.installer.installScope,sourceType:recorded.installer.sourceType,silentArgs:recorded.installer.silentArgs,successCodes:recorded.installer.successCodes??[],uninstallCommand:recorded.installer.uninstallCommand,nestedInstallerType:recorded.installer.nestedInstallerType,nestedInstallerFiles:recorded.installer.nestedInstallerFiles}));
+    if (!sameInstaller.length) return denied('recorded_profile_unverifiable');
+    if (sameInstaller.length !== 1) return denied('installer_ambiguous');
+    const trusted = sameInstaller[0];
+    let dependencies;
+    try {
+      dependencies = await resolveWingetPackageDependencies({wingetId:repair.winget_id,version:repair.version,architecture:old.architecture,installerSha256:hash,installScope:trusted.scope});
+    } catch (error) {
+      if (isWingetDependencyCompatibilityError(error)) return denied('dependency_incompatible');
+      throw new Error('Could not resolve exact package dependencies');
+    }
+    // Every execution input is rebuilt from the selected manifest and server configuration.
+    // The historical canonical is used only for comparison, never copied to the new row.
+    const normalized = normalizeQaWorkflowPackageInput({wingetId:repair.winget_id,displayName:app.name,publisher:app.publisher,version:repair.version,architecture:old.architecture,installerSha256:hash,installerType:trusted.sourceInstallerType,silentSwitches:trusted.silentArgs,installerSuccessCodes:trusted.successCodes,uninstallCommand:trusted.uninstallCommand,installScope:trusted.scope,nestedInstallerType:trusted.nestedInstallerType,nestedInstallerPath:trusted.nestedInstallerFiles[0]??'',psadtConfig:JSON.stringify(QA_DEPLOYMENT_TEST_PSADT_CONFIG),detectionRules:'[]',packageDependencies:dependencies});
+    const config = buildQaDeploymentTestConfig(normalized, dependencies);
+    const current = JSON.parse(normalized.identity.canonicalJson);
+    const withoutPin = (profile: Record<string, unknown>) => {
+      const copy = structuredClone(profile);delete (copy.toolchain as Record<string,unknown>).packagerCommit;return canonicalQaJson(copy);
+    };
+    if (withoutPin(current) !== withoutPin(recorded) || canonicalQaJson(config.psadtConfig) !== canonicalQaJson(old.test_config.psadtConfig) || canonicalQaJson(config.detectionRules) !== canonicalQaJson(old.test_config.detectionRules)) return denied('execution_profile_changed');
+    const now = new Date().toISOString();
+    const inserted = await insertQaCandidate(supabase,{winget_id:repair.winget_id,definition_path:recipeResult.data?.definition_path??null,version:repair.version,architecture:old.architecture,installer_url:old.installer_url,installer_sha256:hash,installer_type:normalizeQaInstallerType(trusted.sourceInstallerType),installer_file_name:qaInstallerFileName(old.installer_url,trusted.sourceInstallerType),test_level:'psadt-package',package_profile_sha256:normalized.identity.packageProfileSha256,test_config:config as unknown as Json,catalog_version_at_enqueue:repair.version,status:'superseded',priority:10,demand_source:'operator',failure_summary:AWAITING_DIAGNOSTIC_RETEST_GRANT,finished_at:now,updated_at:now});
+    if (inserted.error) throw new Error('Could not prepare diagnostic candidate');
+    if (inserted.outcome === 'active_conflict') return denied('active_conflict');
+    const candidate = inserted.data ?? inserted.existing;
+    if (!candidate || candidate.status !== 'superseded' || candidate.failure_summary !== AWAITING_DIAGNOSTIC_RETEST_GRANT) return denied('exact_profile_exists');
+    const adopted = await supabase.rpc('adopt_qa_repair_current_candidate',{p_repair_id:repairId,p_candidate_id:candidate.id});
+    if (adopted.error) return denied('adoption_guard_rejected');
+    if (adopted.data !== candidate.id) throw new Error('Invalid adoption result');
+    return {outcome:'adopted',candidateId:candidate.id};
+  }
   const matchingScopes = matches.map(installer => buildQaCatalogTestConfig({
     app:{...app,wingetId:repair.winget_id,version:repair.version},manifest,installer,
   })).filter(config => config.scope === old.test_config?.scope && config.profileKind === 'catalog-default');

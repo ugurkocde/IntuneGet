@@ -1,0 +1,5 @@
+{
+  "title": "Preserve deployment profiles during QA repair preparation",
+  "summary": "QA repair preparation can rebuild a historical deployment profile from verified installer metadata while retaining its execution identity, retry history and security restrictions. Changed commands or detection settings are rejected.",
+  "type": "fixed"
+}
