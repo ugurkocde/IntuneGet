@@ -100,6 +100,29 @@ function demandInput(): QaDemandInput {
 }
 
 describe('ensureQaDemand app-version evidence reuse', () => {
+  it('keeps an awaiting diagnostic profile inert when the quarantine block is absent', async () => {
+    let candidateCall = 0;
+    const updates: unknown[] = [];
+    const client = {
+      from: vi.fn((table: string) => {
+        if (table === 'qa_package_results') return { select: vi.fn(() => query({ data: null, error: null })) };
+        if (table !== 'qa_candidates') throw new Error('Unexpected table');
+        candidateCall++;
+        if (candidateCall === 1 || candidateCall === 3) return query({ data: null, error: null });
+        if (candidateCall === 2) return { insert: vi.fn(() => query({ data: null, error: null })) };
+        if (candidateCall === 4) return { select: vi.fn(() => query({ data: {
+          id: 'awaiting-grant', status: 'superseded', priority: 10,
+          failure_summary: 'Awaiting diagnostic retest grant',
+        }, error: null })) };
+        return { update: vi.fn(values => { updates.push(values); return query({ data: null, error: null }); }) };
+      }),
+    };
+    await expect(ensureQaDemand(withCandidateRpc(client), demandInput())).resolves.toMatchObject({
+      state: 'waiting', candidateId: 'awaiting-grant',
+    });
+    expect(updates).toEqual([]);
+    expect(enforceInstallerPreflightMock).not.toHaveBeenCalled();
+  });
   it('retains a completed run while protected publication is pending', async () => {
     let candidateCall = 0;
     const updates: unknown[] = [];
