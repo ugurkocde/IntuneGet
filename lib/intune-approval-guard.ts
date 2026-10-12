@@ -8,7 +8,23 @@ type RetainedAppState = 'present' | 'absent' | 'unknown';
 type Dependencies = {
   db?: DatabaseAdapter;
   checkRetainedApp?: (tenantId: string, appId: string) => Promise<RetainedAppState>;
+  signal?: AbortSignal;
+  /** Shared across guard calls in one release cycle; consumed only by new probes. */
+  probeBudget?: { remaining: number };
 };
+
+// Legacy callers retain their existing behavior. On cancellation, outstanding
+// token/database reads may finish, but their results cannot start another probe.
+async function approvalRead<T>(read: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return read();
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason || new Error('Approval check cancelled'));
+    signal.addEventListener('abort', abort, { once: true });
+    Promise.resolve().then(() => { signal.throwIfAborted(); return read(); })
+      .then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+  });
+}
 export interface IntuneApprovalBlock {
   wingetId: string;
   code: 'INTUNE_APPROVAL_PENDING';
@@ -25,14 +41,16 @@ export async function findPendingApprovalBlocks(
   const db = deps.db || getDatabase();
   let accessToken: string | undefined;
   const checkRetainedApp = deps.checkRetainedApp || (async (tenantId, appId) => {
-    accessToken ||= (await acquireGraphToken(tenantId)).accessToken;
+    accessToken ||= (await approvalRead(() => acquireGraphToken(tenantId), deps.signal)).accessToken;
+    deps.signal?.throwIfAborted();
     const response = await fetch(
       `https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/${appId}?$select=id`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10_000) }
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: deps.signal
+        ? AbortSignal.any([deps.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000) }
     );
     if (response.status === 404) return 'absent';
     if (response.status !== 200) return 'unknown';
-    const body = await response.json();
+    const body = await approvalRead(() => response.json(), deps.signal);
     return typeof body?.id === 'string' && body.id.toLowerCase() === appId.toLowerCase()
       ? 'present' : 'unknown';
   });
@@ -49,7 +67,8 @@ export async function findPendingApprovalBlocks(
     try {
       let cursor: { createdAt: string; id: string } | undefined;
       for (let page = 0; page < 10; page++) {
-        const jobs = await db.jobs.getApprovalFailures(input.tenantId, wingetId, cursor);
+        const jobs = await approvalRead(() => db.jobs.getApprovalFailures(input.tenantId, wingetId, cursor), deps.signal);
+        deps.signal?.throwIfAborted();
         for (const job of jobs) {
           const samePackage = isCuratedPackageId(wingetId)
             ? job.winget_id.toLowerCase() === wingetId.toLowerCase()
@@ -67,7 +86,14 @@ export async function findPendingApprovalBlocks(
           const key = appId.toLowerCase();
           if (!checked.has(key)) {
             if (checked.size >= 20) { reason = 'release_check_failed'; break; }
-            checked.set(key, await checkRetainedApp(input.tenantId, appId));
+            if (deps.probeBudget) {
+              if (!Number.isInteger(deps.probeBudget.remaining) || deps.probeBudget.remaining <= 0) {
+                reason = 'release_check_failed'; break;
+              }
+              deps.probeBudget.remaining--;
+            }
+            checked.set(key, await approvalRead(() => checkRetainedApp(input.tenantId, appId), deps.signal));
+            deps.signal?.throwIfAborted();
           }
           const state = checked.get(key);
           if (state !== 'absent') {

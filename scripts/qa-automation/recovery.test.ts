@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { PUBLICATION_FAILURE, recoveryKind, retryDelayMs, rateLimitUntil, publicationJob, recoverInfrastructure, recoverStalledPublication } from './recovery.mjs';
 import { repairCompletion, runRepair } from './repair-process.mjs';
 
@@ -23,6 +24,69 @@ function deps(candidate = c) {
   return { rows, patch, github, now, requiredPin: 'f'.repeat(40) };
 }
 describe('durable infrastructure recovery', () => {
+  function preExecution(recovery_attempts = 0, qaConclusion = 'failure', reputationConclusion = 'failure') {
+    const canonical = JSON.stringify({ toolchain: { packagerCommit: 'f'.repeat(40) } });
+    const candidate = { ...c, recovery_attempts, test_config: { packageProfileCanonicalJson: canonical },
+      package_profile_sha256: createHash('sha256').update(canonical).digest('hex').toUpperCase() };
+    const d = deps(candidate);
+    d.github.mockImplementation(async path => path.includes('/jobs?') ? { total_count: 2, jobs: [
+      { id: 10, name: 'qa', status: 'completed', conclusion: qaConclusion, steps: [
+        { name: 'Set up job', conclusion: 'success' },
+        { name: 'Check out protected QA automation without marketplace actions', conclusion: 'success' },
+        { name: 'Materialize cached IntuneGet PSADT packager', conclusion: 'success' },
+        { name: 'Validate automated candidate payload', conclusion: 'success' },
+        { name: 'Mark automated candidate running', conclusion: 'success' },
+        { name: 'Check installer reputation on VirusTotal', conclusion: reputationConclusion },
+        { name: 'Publish package preparation phase', conclusion: reputationConclusion === 'success' ? 'success' : 'skipped' },
+        { name: 'Prepare package from repository definition', conclusion: 'skipped' },
+        { name: 'Prepare package from catalog candidate', conclusion: reputationConclusion === 'success' ? 'success' : 'skipped' },
+        { name: 'Download package artifact', conclusion: 'skipped' },
+        { name: 'Execute isolated QA test', conclusion: reputationConclusion === 'success' ? 'failure' : 'skipped' },
+        { name: 'Build compact repository result', conclusion: 'failure' },
+        { name: 'Remove downloaded package', conclusion: 'success' },
+        { name: 'Remove temporary local QA result', conclusion: 'success' },
+        { name: 'Set QA workflow outcome', conclusion: 'failure' },
+        { name: 'Complete job', conclusion: 'success' },
+      ] },
+      { id: 11, name: 'Publish compact app JSON', status: 'completed', conclusion: 'skipped' },
+    ] } : { id: 123, event: 'workflow_dispatch', path: '.github/workflows/intune-qa.yml', head_branch: 'main', status: 'completed' });
+    return d;
+  }
+  it.each([0, 5])('does not replay or exhaust a reputation refusal before execution at budget %s', async budget => {
+    const d = preExecution(budget);
+    expect(await recoverInfrastructure(d)).toEqual({ action: 'no_recovery_due' });
+    expect(d.patch).toHaveBeenCalledTimes(1);
+    expect(d.patch).toHaveBeenCalledWith('qa_candidates', {
+      id: 'eq.a', status: 'eq.error', failure_summary: `eq.${PUBLICATION_FAILURE}`, github_run_id: 'eq.123',
+    }, { failure_summary: 'Installer reputation verification did not complete before application execution.',
+      updated_at: new Date(now).toISOString() });
+    expect(d.github.mock.calls.some(([path]) => path.endsWith('/rerun'))).toBe(false);
+  });
+  it.each([['failure', 'success'], ['cancelled', 'failure'], ['timed_out', 'failure'], ['failure', 'cancelled']])(
+    'preserves infrastructure recovery for job %s and reputation %s', async (job, reputation) => {
+      const d = preExecution(0, job, reputation);
+      expect(await recoverInfrastructure(d)).toMatchObject({ action: 'infrastructure_retry_queued' });
+      expect(d.patch).toHaveBeenCalledWith('qa_candidates', expect.anything(), expect.objectContaining({ status: 'queued' }));
+    });
+  it('never changes a refusal row when its workflow identity differs', async () => {
+    const d = preExecution(); const original = d.github.getMockImplementation()!;
+    d.github.mockImplementation(async path => path.includes('/jobs?') ? original(path) : { id: 124 });
+    await expect(recoverInfrastructure(d)).rejects.toThrow('identity mismatch');
+    expect(d.patch).not.toHaveBeenCalled();
+  });
+  it.each(['executed', 'cancelled', 'missing'])('requires complete skipped execution evidence: %s', async mode => {
+    const d = preExecution(); const original = d.github.getMockImplementation()!;
+    d.github.mockImplementation(async path => {
+      const response = await original(path);
+      if (path.includes('/jobs?')) {
+        const steps = (response as { jobs: { steps: { name: string; conclusion: string }[] }[] }).jobs[0].steps;
+        if (mode === 'missing') steps.splice(steps.findIndex(s => s.name === 'Prepare package from catalog candidate'), 1);
+        else steps.find(s => s.name === 'Execute isolated QA test')!.conclusion = mode === 'cancelled' ? 'cancelled' : 'failure';
+      }
+      return response;
+    });
+    expect(await recoverInfrastructure(d)).toMatchObject({ action: 'infrastructure_retry_queued' });
+  });
   function strandedPublisher() {
     const candidate = { ...c, status: 'running', phase: 'publishing' };
     const run = { id: 123, status: 'queued', path: '.github/workflows/intune-qa.yml', head_branch: 'main', event: 'workflow_dispatch' };

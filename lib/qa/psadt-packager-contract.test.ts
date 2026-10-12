@@ -17,6 +17,8 @@ import { generateUninstallCommand } from '@/lib/detection-rules';
 import { CURATED_APPS } from '@/lib/curated-catalog/definitions';
 import { buildCuratedCartItem, curatedWorkflowInput } from '@/lib/curated-catalog/package';
 import { releaseFixture } from '@/lib/curated-catalog/test-fixtures';
+import { JobProcessor } from '@/packager/src/job-processor';
+import type { PackagingJob } from '@/packager/src/job-poller';
 
 const packager = readFileSync(
   resolve(process.cwd(), '.github/scripts/Create-PSADTPackage.ps1'),
@@ -421,6 +423,84 @@ describe('PSADT Inno packaging contract', () => {
 });
 
 describe('PSADT vendor argument contract', () => {
+  it.runIf(canRunWindowsPowerShellPackager).each([false, true])(
+    'does not verify an unused portable extraction path for custom commands, verifyInstall=%s',
+    (verifyInstall) => {
+      const psadtConfig = { verifyInstall, installCommand: 'cmd.exe /c echo synthetic-command' };
+      const generated = generateRegistryUninstallPackage(
+        'zip', 'Custom Portable Fixture', [], psadtConfig, [],
+        'Example.CustomPortable', 'Custom Portable Fixture', '1.0.0',
+        '', '', 'machine', 'portable', 'portable.exe'
+      );
+      const portableStart = generated.indexOf('    $portableRoot = Get-Item');
+      const portableEnd = generated.indexOf("    Write-ADTLogEntry -Message 'Verified portable installed files", portableStart);
+      const standaloneBlock = portableStart >= 0
+        ? generated.slice(portableStart, generated.indexOf('\n', portableEnd))
+        : generated.match(/    ## Verify the application actually installed[\s\S]*?Write-ADTLogEntry[^\r\n]+/)?.[0] ?? '';
+      const job = {
+        installer_type: 'zip', install_scope: 'machine', display_name: 'Custom Portable Fixture',
+        uninstall_command: '',
+        package_config: { nestedInstallerType: 'portable', nestedInstallerPath: 'portable.exe', psadtConfig },
+      } as PackagingJob;
+      const processor = JobProcessor.prototype as unknown as {
+        getPostInstallVerificationBlock(job: PackagingJob, name: string): string;
+      };
+      const results = [];
+      for (const block of [standaloneBlock, processor.getPostInstallVerificationBlock.call(processor, job, job.display_name)]) {
+        const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', `
+$ErrorActionPreference = 'Stop'
+$installPath = Join-Path $env:TEMP ('unused-custom-portable-' + [guid]::NewGuid().ToString())
+function Get-ADTApplication { throw 'Custom portable command must not invent ARP evidence' }
+function Write-ADTLogEntry { param($Message,$Source,$Severity) }
+${block}
+Write-Output 'CUSTOM_PORTABLE_PRESERVED'
+`], { encoding: 'utf8', timeout: 20_000 });
+        results.push(result);
+        expect(block).not.toContain('Get-ADTApplication');
+      }
+      expect(results.map(result => result.status), results.map(result => result.stderr).join('\n')).toEqual([0, 0]);
+      for (const result of results) expect(result.stdout).toContain('CUSTOM_PORTABLE_PRESERVED');
+    },
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager).each([false, true])(
+    'keeps nested EXE ZIP verification aligned across generators, verifyInstall=%s',
+    (verifyInstall) => {
+      const generated = generateRegistryUninstallPackage(
+        'zip', 'Nested Installer Fixture', [], { verifyInstall }, [],
+        'Example.NestedInstaller', 'Nested Installer Fixture', '1.0.0',
+        '', '/quiet', 'machine', 'exe', 'setup.exe'
+      );
+      const portableStart = generated.indexOf('    $portableRoot = Get-Item');
+      const portableEnd = generated.indexOf("    Write-ADTLogEntry -Message 'Verified portable installed files", portableStart);
+      const standaloneBlock = portableStart >= 0
+        ? generated.slice(portableStart, generated.indexOf('\n', portableEnd))
+        : generated.match(/    ## Verify the application actually installed[\s\S]*?Write-ADTLogEntry[^\r\n]+/)?.[0] ?? '';
+      const job = {
+        installer_type: 'zip', install_scope: 'machine', display_name: 'Nested Installer Fixture',
+        uninstall_command: '',
+        package_config: { nestedInstallerType: 'exe', nestedInstallerPath: 'setup.exe', psadtConfig: { verifyInstall } },
+      } as PackagingJob;
+      const processor = JobProcessor.prototype as unknown as {
+        getPostInstallVerificationBlock(job: PackagingJob, name: string): string;
+      };
+      const blocks = [standaloneBlock, processor.getPostInstallVerificationBlock.call(processor, job, job.display_name)];
+      for (const block of blocks) {
+        const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', `
+$ErrorActionPreference = 'Stop'
+$installPath = Join-Path $env:TEMP ('absent-portable-' + [guid]::NewGuid().ToString())
+function Get-ADTApplication { param($Name,$NameMatch,$ErrorAction) return @([pscustomobject]@{DisplayName='Nested Installer Fixture'}) }
+function Write-ADTLogEntry { param($Message,$Source,$Severity) }
+${block}
+Write-Output 'NESTED_INSTALLER_VERIFIED'
+`], { encoding: 'utf8', timeout: 20_000 });
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toContain('NESTED_INSTALLER_VERIFIED');
+        expect(block.includes('Get-ADTApplication')).toBe(verifyInstall);
+      }
+    },
+  );
+
   it.runIf(canRunWindowsPowerShellPackager)('adds Wacom silent removal only to its exact registered driver command', () => {
     const generated = generateRegistryUninstallPackage(
       'exe', 'Wacom Tablet', [1, 2], {}, [], 'Wacom.WacomTabletDriver',
