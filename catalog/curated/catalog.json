@@ -1,8 +1,8 @@
 {
   "payload": {
     "schemaVersion": 1,
-    "generatedAt": "2026-10-12T01:10:40.781Z",
-    "expiresAt": "2026-10-19T01:10:40.781Z",
+    "generatedAt": "2026-10-12T15:50:49.842Z",
+    "expiresAt": "2026-10-19T15:50:49.842Z",
     "definitionsSha256": "3c2649f1bcf25feb6ffa34ac024508114f905b9f63215573d9c415698348e1ff",
     "releases": [
       {
@@ -4886,10 +4886,98 @@
             "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/windirstat/cd8e5c49c933c7853f04e78b.json"
           }
         }
+      },
+      {
+        "id": "nextcloud:991e950e97a88d530c1c19ce",
+        "candidate": {
+          "appId": "nextcloud",
+          "version": "35.0.0",
+          "installerUrl": "https://github.com/nextcloud-releases/desktop/releases/download/v35.0.0/Nextcloud-35.0.0-x64.msi",
+          "vendorSha256": "7df0f2fe42519e454e14d45a34c4d8d601e98434710087cb1d6d96f315206cd7",
+          "releaseNotesUrl": "https://github.com/nextcloud-releases/desktop/releases/tag/v35.0.0",
+          "discoveredAt": "2026-10-12T12:50:31.816Z",
+          "id": "991e950e97a88d530c1c19ce"
+        },
+        "installerSha256": "7df0f2fe42519e454e14d45a34c4d8d601e98434710087cb1d6d96f315206cd7",
+        "executionProfileSha256": "966C141E104310CA7CA32B35359E412000FDEC0BF54D088C18D9DA50D7D9AFF0",
+        "preparedBy": "github-actions:ugurkocde/IntuneGet-Workflows/.github/workflows/curated-catalog-verification.yml",
+        "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+        "approvedAt": "2026-10-12T15:50:49.842Z",
+        "evidence": {
+          "verifiedAt": "2026-10-12T15:26:09.1036575Z",
+          "installerSha256": "7df0f2fe42519e454e14d45a34c4d8d601e98434710087cb1d6d96f315206cd7",
+          "installerVersion": "35.0.0",
+          "architecture": "x64",
+          "sourceReviewedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+          "sourceReportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/nextcloud/991e950e97a88d530c1c19ce.json",
+          "signature": {
+            "publisher": "Nextcloud GmbH",
+            "status": "valid"
+          },
+          "provenance": {
+            "repository": "ugurkocde/IntuneGet-Workflows",
+            "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+            "workflowCommit": "6f128036c5c448a1613a22668618ea9c89027f4c",
+            "websiteCommit": "5fb0d11455779f9392adf33342a8a2792dd0c132",
+            "runId": "38269034933",
+            "runAttempt": 1,
+            "artifactId": "11757145392",
+            "artifactSha256": "c70a19fc5fff475f7b1d454c7174daa939148252639650e1256d0dd8de1999ef"
+          },
+          "security": {
+            "status": "clean",
+            "signatureVersion": "1.459.684.0",
+            "suspicious": 0,
+            "engineVersion": "1.1.26080.3",
+            "malicious": 0,
+            "scannedAt": "2026-10-12T15:23:00.6478731Z",
+            "installerSha256": "7df0f2fe42519e454e14d45a34c4d8d601e98434710087cb1d6d96f315206cd7",
+            "scanner": "defender",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/nextcloud/991e950e97a88d530c1c19ce.json"
+          },
+          "qa": {
+            "candidateId": "991e950e97a88d530c1c19ce",
+            "installerSha256": "7df0f2fe42519e454e14d45a34c4d8d601e98434710087cb1d6d96f315206cd7",
+            "architecture": "x64",
+            "phases": {
+              "install": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterInstall": {
+                "passed": true
+              },
+              "upgrade": {
+                "passed": true,
+                "exitCode": 0
+              },
+              "detectionAfterUpgrade": {
+                "passed": true
+              },
+              "uninstall": {
+                "passed": true,
+                "cleanUninstallExitCode": 0,
+                "finalUninstallExitCode": 0
+              },
+              "detectionAfterUninstall": {
+                "passed": true
+              }
+            },
+            "upgradeFromVersion": "34.0.5",
+            "previousInstallerSha256": "ad048c193f9bbb577dc8b7bfde2f3f0a3be845bcd1585105ce62be0af4ab57ce",
+            "executionContext": "LocalSystem",
+            "testedAt": "2026-10-12T15:26:00.6250534Z",
+            "installerVersion": "35.0.0",
+            "testLevel": "psadt-package",
+            "packagerCommit": "665d6f4ec65d457edbd455605a54b4b223392457",
+            "executionProfileSha256": "966C141E104310CA7CA32B35359E412000FDEC0BF54D088C18D9DA50D7D9AFF0",
+            "reportUrl": "https://github.com/ugurkocde/IntuneGet/blob/main/catalog/curated/evidence/nextcloud/991e950e97a88d530c1c19ce.json"
+          }
+        }
       }
     ],
     "withdrawnReleaseIds": []
   },
   "keyId": "curated-2026-10-03-1791049821613",
-  "signature": "viQcSO6xRB9rstaOudFCZVeZhT48dNTulI8tfNU/ICOM/bMQDKmwh3V0gA9Xbq+wPfkFTGXyJH3kzk5K3y5/CA=="
+  "signature": "JPSenUHgwTkpnVGrJCsRsXC0JUkyDNZ8rMvCy3oHiKKKd5V1J1oX9/uRrtcXATEbtkNE5Ha/Bd9xcT865h/KCQ=="
 }
