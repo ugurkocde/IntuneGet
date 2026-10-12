@@ -89,7 +89,6 @@ begin
   -- This exact summary is emitted by the authenticated host reporter. A
   -- scanning crash, cancellation or lookup outage is not a security verdict.
   if tg_op = 'UPDATE' and old.status in ('dispatched','running') and new.status = 'error'
-     and old.phase = 'scanning_installer'
      and new.failure_summary ~ '^VirusTotal flagged this exact installer hash \([0-9]+ malicious verdicts\); QA execution refused\.$'
      and new.installer_sha256 ~ '^[A-Fa-f0-9]{64}$' then
     insert into public.qa_installer_security_holds(sha256)

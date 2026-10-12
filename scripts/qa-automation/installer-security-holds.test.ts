@@ -4,7 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { expect, it } from 'vitest';
 
-it('prevents exact hash replay through claims and direct recovery, including within one minute', async () => {
+it.each([null, 'scanning_installer'])('prevents exact hash replay even when cosmetic phase is %s', async (phase) => {
   const pg = new PGlite({ extensions: { pgcrypto } });
   const read = (path: string) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
   try {
@@ -27,7 +27,7 @@ it('prevents exact hash replay through claims and direct recovery, including wit
     await pg.query(`insert into public.qa_pipeline_control(id,paused,required_packager_commit,scheduler_packager_commit,scheduler_seen_at) values('global',false,$1,$1,now())`, [pin]);
     for (const candidateId of [id, second]) await pg.query(`insert into public.qa_candidates(id,winget_id,version,architecture,installer_sha256,test_level,package_profile_sha256,test_config,status,attempts,priority,enqueued_at,next_retry_at) values($1,$2,'1','x64',$3,'psadt-package',$4,$5,'queued',0,10,now(),now())`, [candidateId, candidateId === id ? 'Example.App' : 'Other.App', hash, profile, { packageProfileCanonicalJson: canonical, profileKind: 'catalog-default' }]);
     if (!process.env.QA_SECURITY_HOLD_BASELINE) await pg.exec(read('../../supabase/migrations/20261012153307_qa_installer_security_holds.sql'));
-    await pg.query("update public.qa_candidates set status='running',phase='scanning_installer' where id=$1", [id]);
+    await pg.query("update public.qa_candidates set status='running',phase=$2 where id=$1", [id,phase]);
     await pg.query("select public.report_qa_candidate_result($1,$2,'error',$3)", [secret,id,'VirusTotal flagged this exact installer hash (1 malicious verdicts); QA execution refused.']);
     // Same hash, other app/profile and immediate retry must never enter execution.
     for (let attempt = 0; attempt < 2; attempt++) {
