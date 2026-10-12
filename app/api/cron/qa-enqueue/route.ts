@@ -1,4 +1,5 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { adoptRepairCurrentCandidate, repairIdFromRequest } from '@/lib/qa/repair-adoption';
 import { insertQaCandidate } from '@/lib/qa/candidate-insert';
 import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
@@ -485,7 +486,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   let requestedPackageIds: string[];
+  let requestedRepairId: string | null;
   try {
+    requestedRepairId = repairIdFromRequest(request);
     requestedPackageIds = targetedPackageIds(request);
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
@@ -578,6 +581,11 @@ export async function GET(request: Request) {
         paused: true,
         reason: 'packager_release_pending',
       });
+    }
+    if (requestedRepairId) {
+      const result = await adoptRepairCurrentCandidate(supabase,
+        createWingetManifestClient({ token: process.env.GITHUB_PAT, maxRetries: 2 }), requestedRepairId);
+      return NextResponse.json(result, { status: result.outcome === 'adopted' ? 200 : 409 });
     }
     const { data: pollRun, error: pollRunError } = await supabase
       .from('qa_poll_runs')
