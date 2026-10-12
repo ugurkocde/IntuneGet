@@ -2632,6 +2632,7 @@ export interface Database {
       qa_installer_security_waiting_errors: { Args: Record<string, never>; Returns: Json };
       qa_curated_installer_security_held: { Args: { p_inputs: Json }; Returns: boolean };
       refresh_qa_installer_security_holds: { Args: Record<string, never>; Returns: number };
+      record_qa_installer_security_refusal: { Args: { p_candidate_id: string; p_run_id: string; p_sha256: string; p_malicious: number; p_observed_at: string }; Returns: undefined };
       begin_qa_live_curated_session: {
         Args: { p_app_id: string; p_version: string; p_architecture: string; p_upgrade_planned: boolean; p_host_custom_config: boolean; p_run_id: number | string; p_run_attempt: number };
         Returns: Json;

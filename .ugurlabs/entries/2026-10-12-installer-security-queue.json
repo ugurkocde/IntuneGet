@@ -1,0 +1,5 @@
+{
+  "title": "Avoid repeated testing of installers on a security hold",
+  "summary": "Application testing skips installers whose reputation has refused execution and shows when their next reputation check is due. Other eligible applications continue testing while the hold remains in place.",
+  "type": "fixed"
+}

@@ -140,6 +140,53 @@ from public.catalog_file_reputation where status = 'found' and malicious >= 1
   and sha256 ~ '^[A-Fa-f0-9]{64}$'
 on conflict do nothing;
 
+-- Adopt externally verified, pre-execution refusals without inventing cache
+-- verdicts. The caller must verify the trusted workflow's exact refusal log;
+-- this service-only path binds its evidence to the current terminal run.
+create function public.record_qa_installer_security_refusal(
+  p_candidate_id uuid, p_run_id text, p_sha256 text,
+  p_malicious integer, p_observed_at timestamptz
+) returns void
+language plpgsql security invoker set search_path = '' as $$
+declare candidate public.qa_candidates%rowtype; held public.qa_installer_security_holds%rowtype;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('intuneget-qa-dispatch', 0));
+  select * into candidate from public.qa_candidates where id = p_candidate_id for update;
+  if not found or candidate.status is distinct from 'error'
+     or candidate.test_level is distinct from 'psadt-package'
+     or p_run_id is null or p_run_id !~ '^[0-9]+$'
+     or candidate.github_run_id is distinct from p_run_id
+     or p_sha256 is null or lower(p_sha256) !~ '^[a-f0-9]{64}$'
+     or lower(p_sha256) = repeat('0',64)
+     or lower(candidate.installer_sha256) is distinct from lower(p_sha256)
+     or p_malicious is null or p_malicious < 1
+     or p_observed_at is null or coalesce(candidate.started_at, candidate.dispatched_at) is null
+     or p_observed_at < coalesce(candidate.started_at, candidate.dispatched_at)
+     or p_observed_at > least(coalesce(candidate.finished_at, now()), now()) then
+    raise exception 'Installer refusal evidence does not match the terminal QA run';
+  end if;
+  select * into held from public.qa_installer_security_holds where sha256 = lower(p_sha256) for update;
+  if found and held.released_at is not null and held.released_at >= p_observed_at then
+    raise exception 'Installer refusal evidence is superseded by a newer release';
+  end if;
+  insert into public.qa_installer_security_holds(sha256, verdict_at)
+  values(lower(p_sha256), p_observed_at)
+  on conflict(sha256) do update set
+    verdict_at = greatest(qa_installer_security_holds.verdict_at, excluded.verdict_at),
+    first_held_at = case when qa_installer_security_holds.released_at is null then qa_installer_security_holds.first_held_at else now() end,
+    next_check_at = case when qa_installer_security_holds.released_at is null then qa_installer_security_holds.next_check_at else now() + interval '24 hours' end,
+    checked_at = case when qa_installer_security_holds.released_at is null then qa_installer_security_holds.checked_at else null end,
+    released_at = null;
+  update public.qa_candidates set failure_summary = 'VirusTotal refused execution for this installer hash.'
+    where id = p_candidate_id;
+  update public.qa_candidates set next_retry_at = next_retry_at
+    where id <> p_candidate_id and status in ('queued','error')
+      and lower(installer_sha256) = lower(p_sha256);
+end;
+$$;
+revoke all on function public.record_qa_installer_security_refusal(uuid,text,text,integer,timestamptz) from public, anon, authenticated;
+grant execute on function public.record_qa_installer_security_refusal(uuid,text,text,integer,timestamptz) to service_role;
+
 -- Preserve the installed claimant and its existing pin, grant and VM guards.
 do $$
 declare definition text; original text; anchor text; curated_anchor text;
