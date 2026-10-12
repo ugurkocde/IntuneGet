@@ -80,6 +80,18 @@ export async function publicationJob(runId, github) {
   const latest = name => payload.jobs.filter(j => j.name === name).sort((a, b) => a.id - b.id).at(-1);
   const qa = latest('qa');
   const publisher = latest('Publish compact app JSON');
+  const steps = qa?.steps;
+  const reputationIndex = Array.isArray(steps) ? steps.findIndex(step => step.name === 'Check installer reputation on VirusTotal') : -1;
+  const executionSteps = ['Publish package preparation phase', 'Prepare package from repository definition',
+    'Prepare package from catalog candidate', 'Execute isolated QA test'];
+  if (qa?.status === 'completed' && qa.conclusion === 'failure' && reputationIndex >= 0 &&
+      steps[reputationIndex].conclusion === 'failure' &&
+      executionSteps.every(name => steps.filter(step => step.name === name).length === 1 &&
+        steps.findIndex(step => step.name === name) > reputationIndex &&
+        steps.find(step => step.name === name).conclusion === 'skipped') &&
+      !steps.slice(reputationIndex + 1).some(step => step.conclusion === 'cancelled')) {
+    return { preExecutionRefusal: true };
+  }
   const merged = publisher?.steps?.some(step => step.name === 'Merge result through protected branch' && step.conclusion === 'success');
   const replaySafe = publisher?.steps?.some(step => step.name === 'Commit or reuse the compact result');
   const legacyCommitFailed = publisher?.steps?.some(step => step.name === 'Commit the compact result' && step.conclusion === 'failure');
@@ -137,14 +149,21 @@ export async function recoverInfrastructure({ rows, patch, github, now = Date.no
       });
       continue;
     }
-    if (recoveryAttempts >= 5 && kind !== 'source') return { action: 'recovery_exhausted', candidateId: c.id, repairRequired: true };
-    if (dryRun) return { action: 'would_recover_infrastructure', candidateId: c.id, kind };
-
     let job = null;
-    if (kind === 'publication') {
+    if (kind === 'publication' && !dryRun) {
       job = await publicationJob(c.github_run_id, github);
       if (job.waiting) continue;
+      if (job.preExecutionRefusal) {
+        await patch('qa_candidates', { id: `eq.${c.id}`, status: 'eq.error',
+          failure_summary: `eq.${PUBLICATION_FAILURE}`, github_run_id: `eq.${c.github_run_id}` }, {
+          failure_summary: 'Installer reputation verification did not complete before application execution.',
+          updated_at: new Date(now).toISOString(),
+        });
+        continue;
+      }
     }
+    if (recoveryAttempts >= 5 && kind !== 'source') return { action: 'recovery_exhausted', candidateId: c.id, repairRequired: true };
+    if (dryRun) return { action: 'would_recover_infrastructure', candidateId: c.id, kind };
     if (!job?.jobId) {
       let profile;
       const canonical = c.test_config?.packageProfileCanonicalJson;

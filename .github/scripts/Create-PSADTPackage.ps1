@@ -2833,7 +2833,12 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                         ''
                         '    # Safely stage every portable archive entry before replacing the installed app'
                         $portableInstallPathLine
-                        '    $portableStageDir = [System.IO.Path]::Combine($env:TEMP, "IntuneGet_Portable_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
+                        '    $installParent = [System.IO.Path]::GetDirectoryName($installPath)'
+                        '    $null = New-Item -Path $installParent -ItemType Directory -Force'
+                        '    if ((Get-Item -LiteralPath $installParent).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {'
+                        '        throw "Portable install parent must not be a reparse point."'
+                        '    }'
+                        '    $portableStageDir = [System.IO.Path]::Combine($installParent, "IntuneGet_Portable_" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))'
                         '    $replacementStarted = $false'
                         '    try {'
                         '        $null = New-Item -Path $portableStageDir -ItemType Directory -Force'
@@ -2875,8 +2880,9 @@ if ($reviewedInstallShieldAdministrativeImageConfigured) {
                         )
                     }
                     $lines += @(
-                        '        $installParent = [System.IO.Path]::GetDirectoryName($installPath)'
-                        '        if ($installParent) { $null = New-Item -Path $installParent -ItemType Directory -Force }'
+                        '        if ((Test-Path -LiteralPath $installPath) -and ((Get-Item -LiteralPath $installPath).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {'
+                        '            throw "Portable install destination must not be a reparse point."'
+                        '        }'
                         '        $replacementStarted = $true'
                         '        if (Test-Path -LiteralPath $installPath) { Remove-Item -LiteralPath $installPath -Recurse -Force -ErrorAction Stop }'
                         '        Move-Item -LiteralPath $portableStageDir -Destination $installPath -Force'
@@ -3500,7 +3506,76 @@ if ($reviewedAppxInstallEvidenceConfigured) {
     )
 }
 
-if ($verifyInstall) {
+if (($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) -and
+    -not ($customInstallCommand -and -not $customInstallUsesPackagedInstaller)) {
+    $portableDeclaredPath = if ($isNestedPortable) { $NestedInstallerPath } elseif ($installerTypeLower -eq 'portable' -and $fileExtension -ne '.zip') { $installerFileName } else { '' }
+    $portableDeclaredPathEscaped = ConvertTo-PSSingleQuotedContent $portableDeclaredPath
+    $portableVerifyMachineLiteral = if ($IsUserScope) { '$false' } else { '$true' }
+    $lines += @($portableInstallPathLine,
+        "    `$portableDeclaredRelativePath = '$portableDeclaredPathEscaped'",
+        "    `$portableVerifyMachinePermissions = $portableVerifyMachineLiteral")
+    $lines += @'
+    $portableRoot = Get-Item -LiteralPath $installPath -ErrorAction Stop
+    if (-not $portableRoot.PSIsContainer -or ($portableRoot.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw 'Portable install directory must be a real directory.'
+    }
+    $portableItems = [System.Collections.Generic.List[System.IO.FileSystemInfo]]::new()
+    $portableItems.Add($portableRoot)
+    $portableDirectories = [System.Collections.Generic.Queue[string]]::new()
+    $portableDirectories.Enqueue($portableRoot.FullName)
+    while ($portableDirectories.Count -gt 0) {
+        foreach ($portableItem in @(Get-ChildItem -LiteralPath $portableDirectories.Dequeue() -Force -ErrorAction Stop)) {
+            if ($portableItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                throw 'Portable installed content must not contain reparse points.'
+            }
+            $portableItems.Add($portableItem)
+            if ($portableItem.PSIsContainer) { $portableDirectories.Enqueue($portableItem.FullName) }
+        }
+    }
+    if ($portableDeclaredRelativePath) {
+        $portableRootPrefix = $portableRoot.FullName.TrimEnd([char[]]@('\', '/')) + [System.IO.Path]::DirectorySeparatorChar
+        $portableDeclaredFile = [System.IO.Path]::GetFullPath((Join-Path $portableRoot.FullName $portableDeclaredRelativePath))
+        if (-not $portableDeclaredFile.StartsWith($portableRootPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath $portableDeclaredFile -PathType Leaf)) {
+            throw 'The declared portable executable was not installed inside its application directory.'
+        }
+    } elseif (@($portableItems | Where-Object { -not $_.PSIsContainer }).Count -eq 0) {
+        throw 'The portable archive did not install any files.'
+    }
+    if ($portableVerifyMachinePermissions) {
+        $portableUsersSid = 'S-1-5-32-545'
+        $portableBroadSids = @($portableUsersSid, 'S-1-5-11', 'S-1-1-0')
+        $portableRequiredRights = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+        $portableWriteRights = [System.Security.AccessControl.FileSystemRights]'Write,Delete,DeleteSubdirectoriesAndFiles,ChangePermissions,TakeOwnership'
+        foreach ($portableItem in $portableItems) {
+            $portableAcl = Get-Acl -LiteralPath $portableItem.FullName -ErrorAction Stop
+            $portableUserRights = [System.Security.AccessControl.FileSystemRights]0
+            foreach ($portableRule in $portableAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+                if (-not $portableRule.IsInherited) { throw 'Portable content must inherit destination permissions.' }
+                $portableRuleSid = $portableRule.IdentityReference.Value
+                if ($portableRuleSid -in $portableBroadSids) {
+                    if ($portableRule.AccessControlType -eq 'Allow' -and ($portableRule.FileSystemRights -band $portableWriteRights)) {
+                        throw 'Portable destination must not grant standard users write access.'
+                    }
+                    if ($portableRule.AccessControlType -eq 'Deny' -and ($portableRule.FileSystemRights -band $portableRequiredRights)) {
+                        throw 'Portable destination denies standard user read or execute access.'
+                    }
+                    if ($portableRuleSid -eq $portableUsersSid -and $portableRule.AccessControlType -eq 'Allow') {
+                        $portableUserRights = $portableUserRights -bor $portableRule.FileSystemRights
+                    }
+                }
+            }
+            if (($portableUserRights -band $portableRequiredRights) -ne $portableRequiredRights) {
+                throw 'Portable destination must allow standard users read and execute access.'
+            }
+        }
+    }
+    Write-ADTLogEntry -Message 'Verified portable installed files and destination permissions.' -Source 'Install-ADTDeployment'
+
+'@ -split "\r?\n"
+}
+
+if ($verifyInstall -and -not ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive)) {
     Write-Host "Post-install verification enabled"
     if ($reviewedAppxInstallEvidenceConfigured) {
         $lines += @(
