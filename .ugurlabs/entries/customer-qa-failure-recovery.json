@@ -1,0 +1,5 @@
+{
+  "title": "Resume deployments after installation tests recover",
+  "summary": "Active deployments held by an earlier installation test failure can resume after the exact package passes. Dismissed deployments stay dismissed, and duplicate, approval and package safety checks remain in place.",
+  "type": "fixed"
+}
