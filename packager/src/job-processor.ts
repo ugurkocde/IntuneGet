@@ -1360,7 +1360,13 @@ ${steps}
   }
 
   private getPostInstallVerificationBlock(job: PackagingJob, escapedAppName: string, installerFileName?: string): string {
-    if (this.isPortableInstaller(job)) return this.getPortableVerificationBlock(job, installerFileName);
+    if (this.isPortableInstaller(job)) {
+      const installOverride = this.getCommandOverride(job, 'installCommand');
+      if (installOverride && this.getPackagedInstallerOverrideArguments(job, installerFileName ?? '', installOverride) === null) {
+        return '';
+      }
+      return this.getPortableVerificationBlock(job, installerFileName);
+    }
     const identity = this.getRegistryUninstallIdentity(job);
     if (identity) {
       const escapedPublisher = psSingleQuotedContent(job.publisher);

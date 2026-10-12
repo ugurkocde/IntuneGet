@@ -288,6 +288,46 @@ describe('PSADT Inno packaging contract', () => {
 
 describe('PSADT vendor argument contract', () => {
   it.runIf(canRunWindowsPowerShellPackager).each([false, true])(
+    'does not verify an unused portable extraction path for custom commands, verifyInstall=%s',
+    (verifyInstall) => {
+      const psadtConfig = { verifyInstall, installCommand: 'cmd.exe /c echo synthetic-command' };
+      const generated = generateRegistryUninstallPackage(
+        'zip', 'Custom Portable Fixture', [], psadtConfig, [],
+        'Example.CustomPortable', 'Custom Portable Fixture', '1.0.0',
+        '', '', 'machine', 'portable', 'portable.exe'
+      );
+      const portableStart = generated.indexOf('    $portableRoot = Get-Item');
+      const portableEnd = generated.indexOf("    Write-ADTLogEntry -Message 'Verified portable installed files", portableStart);
+      const standaloneBlock = portableStart >= 0
+        ? generated.slice(portableStart, generated.indexOf('\n', portableEnd))
+        : generated.match(/    ## Verify the application actually installed[\s\S]*?Write-ADTLogEntry[^\r\n]+/)?.[0] ?? '';
+      const job = {
+        installer_type: 'zip', install_scope: 'machine', display_name: 'Custom Portable Fixture',
+        uninstall_command: '',
+        package_config: { nestedInstallerType: 'portable', nestedInstallerPath: 'portable.exe', psadtConfig },
+      } as PackagingJob;
+      const processor = JobProcessor.prototype as unknown as {
+        getPostInstallVerificationBlock(job: PackagingJob, name: string): string;
+      };
+      const results = [];
+      for (const block of [standaloneBlock, processor.getPostInstallVerificationBlock.call(processor, job, job.display_name)]) {
+        const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', `
+$ErrorActionPreference = 'Stop'
+$installPath = Join-Path $env:TEMP ('unused-custom-portable-' + [guid]::NewGuid().ToString())
+function Get-ADTApplication { throw 'Custom portable command must not invent ARP evidence' }
+function Write-ADTLogEntry { param($Message,$Source,$Severity) }
+${block}
+Write-Output 'CUSTOM_PORTABLE_PRESERVED'
+`], { encoding: 'utf8', timeout: 20_000 });
+        results.push(result);
+        expect(block).not.toContain('Get-ADTApplication');
+      }
+      expect(results.map(result => result.status), results.map(result => result.stderr).join('\n')).toEqual([0, 0]);
+      for (const result of results) expect(result.stdout).toContain('CUSTOM_PORTABLE_PRESERVED');
+    },
+  );
+
+  it.runIf(canRunWindowsPowerShellPackager).each([false, true])(
     'keeps nested EXE ZIP verification aligned across generators, verifyInstall=%s',
     (verifyInstall) => {
       const generated = generateRegistryUninstallPackage(

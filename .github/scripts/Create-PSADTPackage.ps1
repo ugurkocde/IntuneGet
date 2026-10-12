@@ -3506,7 +3506,8 @@ if ($reviewedAppxInstallEvidenceConfigured) {
     )
 }
 
-if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) {
+if (($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) -and
+    -not ($customInstallCommand -and -not $customInstallUsesPackagedInstaller)) {
     $portableDeclaredPath = if ($isNestedPortable) { $NestedInstallerPath } elseif ($installerTypeLower -eq 'portable' -and $fileExtension -ne '.zip') { $installerFileName } else { '' }
     $portableDeclaredPathEscaped = ConvertTo-PSSingleQuotedContent $portableDeclaredPath
     $portableVerifyMachineLiteral = if ($IsUserScope) { '$false' } else { '$true' }
