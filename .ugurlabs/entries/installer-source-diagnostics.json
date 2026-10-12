@@ -1,0 +1,5 @@
+{
+  "title": "Diagnose unavailable installer sources safely",
+  "summary": "Authorized source checks inspect HTTP redirects without accepting installer bytes or starting a package or application test.",
+  "type": "fixed"
+}

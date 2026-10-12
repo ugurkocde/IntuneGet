@@ -43,7 +43,7 @@ const root = resolve('output/curated/automation');
 
 const mode = process.argv[2];
 if (!['plan', 'publish'].includes(mode)) throw new Error('Choose plan or publish.');
-const { CURATED_APPS, releaseFromVerification, automatedApprovalExceptions, assertCuratedPackageProfile, AUTOMATED_APPROVER, buildCuratedCartItem } =
+const { CURATED_APPS, releaseFromVerification, automatedApprovalExceptions, assertCuratedPackageProfile, AUTOMATED_APPROVER, buildCuratedCartItem, rebuildCuratedExecutionConfig } =
   await import(pathToFileURL(resolve('output/curated/runtime/profile-runtime.mjs')).href);
 await mkdir(root, { recursive: true });
 
@@ -224,7 +224,7 @@ async function plan() {
     try {
       const configs = await processConfigVerifications({
         runs: allRuns, releases: payload.releases.filter(release => !payload.withdrawnReleaseIds.includes(release.id)), apps: CURATED_APPS,
-        readEvidence: runEvidence, authenticate: authenticateRun, dispatch: dispatchVerification,
+        readEvidence: runEvidence, authenticate: authenticateRun, dispatch: dispatchVerification, rebuildConfig: rebuildCuratedExecutionConfig,
         slots: 100, now,
       });
       configStates.push(...configs.states);

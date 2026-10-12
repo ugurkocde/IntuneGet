@@ -4,6 +4,8 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
+import { isCuratedPackageId } from '@/lib/curated-catalog/core.mjs';
+import { INTUNE_APPROVAL_CHECKPOINT_STATUSES } from '@/lib/intune-approval';
 import type { DatabaseAdapter, PackagingJob, UploadHistoryRecord, JobStats, AnalyticsJob, AnalyticsJobScope } from './types';
 import { collectAnalyticsJobs } from '@/lib/analytics/complete-job-pages';
 import type {
@@ -231,6 +233,30 @@ export const supabaseDb: DatabaseAdapter = {
       }
 
       return ((data as unknown as PackagingJob[]) || []).filter((job) => !job.archived_at);
+    },
+
+    async getApprovalFailures(tenantId, wingetId, cursor) {
+      const curated = isCuratedPackageId(wingetId);
+      if (curated && !/^[A-Za-z0-9.-]+$/.test(wingetId)) {
+        throw new Error('Invalid curated approval checkpoint ID');
+      }
+      let query = createServerClient().from('packaging_jobs').select('*')
+        .eq('tenant_id', tenantId);
+      query = curated ? query.ilike('winget_id', wingetId) : query.eq('winget_id', wingetId);
+      query = query.in('status', INTUNE_APPROVAL_CHECKPOINT_STATUSES)
+        .or('error_category.eq.approval,error_code.eq.INTUNE_APPROVAL_REQUIRED')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
+      if (cursor) {
+        // Cursor values come from database rows, but validate before using filter syntax.
+        if (!/^[0-9T:.+Z-]+$/.test(cursor.createdAt) ||
+            !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(cursor.id)) {
+          throw new Error('Invalid approval checkpoint cursor');
+        }
+        query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+      }
+      const { data, error } = await query;
+      if (error) throw new Error('Approval checkpoints unavailable');
+      return (data || []) as unknown as PackagingJob[];
     },
 
     /**

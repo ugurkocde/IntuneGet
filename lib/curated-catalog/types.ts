@@ -44,6 +44,8 @@ export interface CuratedAppDefinition {
   releaseVersionPattern?: string;
   /** Publisher baseline used only before the first approved release exists. */
   initialUpgradeBaseline?: { version: string; installerUrl: string };
+  /** Official releases never used as the upgrade baseline because their installer misreports its identity. */
+  excludedUpgradeBaselines?: string[];
   allowedInstallerSources: Array<{ origin: string; pathPrefix: string }>;
   /** Publisher checksum file fetched as text during discovery to pin vendorSha256. */
   checksumSource?: { urlTemplate: string; entryTemplate: string; format: 'sha256sums' | 'winscp-readme' | 'bsd-sha256' };

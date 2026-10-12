@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowCommit": "94ee3068a3d4969fea19a5ee692e63fca00d5651",
+    "websiteCommit": "956060019140c3321d3a11a355f7291cbba0b592",
+    "runId": "37810000602",
+    "runAttempt": "1"
+  },
+  "candidate": {
+    "appId": "obs-studio",
+    "version": "32.2.2",
+    "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64-Installer.exe",
+    "vendorSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+    "releaseNotesUrl": "https://github.com/obsproject/obs-studio/releases/tag/32.2.2",
+    "discoveredAt": "2026-10-08T13:29:06.352Z",
+    "id": "085203b0a53a0d14a1d5a34a"
+  },
+  "previous": {
+    "appId": "obs-studio",
+    "version": "32.2.1",
+    "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64-Installer.exe",
+    "vendorSha256": "bbb95e52b96ad9b7ccd5abd13121379d29774d6cc5fdbef82ffa249e8a24a289",
+    "releaseNotesUrl": "https://github.com/obsproject/obs-studio/releases/tag/32.2.1",
+    "discoveredAt": "2026-10-08T13:29:29.953Z",
+    "id": "af261c02b24aa18b2b3ccd9b"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "085203b0a53a0d14a1d5a34a",
+      "installerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+      "sourceUrl": "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64-Installer.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "OBS Project, LLC",
+        "status": "valid"
+      },
+      "security": {
+        "engineVersion": "1.1.26080.3",
+        "malicious": 0,
+        "status": "clean",
+        "scanner": "defender",
+        "scannedAt": "2026-10-08T16:41:30.5397093Z",
+        "installerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+        "signatureVersion": "1.459.601.0",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "af261c02b24aa18b2b3ccd9b",
+      "installerSha256": "bbb95e52b96ad9b7ccd5abd13121379d29774d6cc5fdbef82ffa249e8a24a289",
+      "sourceUrl": "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64-Installer.exe",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "OBS Project, LLC",
+        "status": "valid"
+      },
+      "security": {
+        "engineVersion": "1.1.26080.3",
+        "malicious": 0,
+        "status": "clean",
+        "scanner": "defender",
+        "scannedAt": "2026-10-08T16:41:47.9961005Z",
+        "installerSha256": "bbb95e52b96ad9b7ccd5abd13121379d29774d6cc5fdbef82ffa249e8a24a289",
+        "signatureVersion": "1.459.601.0",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "085203b0a53a0d14a1d5a34a",
+    "packageId": "IntuneGet.Curated.OBSStudio",
+    "installerUrl": "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64-Installer.exe",
+    "installerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.OBSStudio",
+      "displayName": "OBS Studio",
+      "publisher": "OBS Project",
+      "version": "32.2.2",
+      "architecture": "x64",
+      "installerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+      "installerType": "nullsoft",
+      "installScope": "machine",
+      "silentSwitches": "/S",
+      "uninstallCommand": "REGISTRY_UNINSTALL_KEY:OBS Studio:OBS Studio",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_OBSStudio\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"32.2.2\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_OBSStudio\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"32.2.2\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "FA1A9858C57005818178EE3D364941E9E61109FD44B6CC1B9A906A05B67AF1F1",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.OBSStudio\",\"publisher\":\"IntuneGet QA\",\"version\":\"32.2.2\",\"wingetId\":\"IntuneGet.Curated.OBSStudio\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"32.2.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_OBSStudio\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"81259A450295288EFA8781D9C322C306508C0453FF7E894E35F57CC42ACBC206\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"C3A0B880ADBE64DC4BCB68F93016916AB5B55AE43FD227115287BF80257D92DC\",\"silentArgs\":\"/S\",\"sourceType\":\"nullsoft\",\"uninstallCommand\":\"REGISTRY_UNINSTALL_KEY:OBS Studio:OBS Studio\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"32.2.2\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_OBSStudio\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"A2700A6F94A7D5BC1CDC91424A237165BB5827F6045A9353C0CF1881C90DAB2A\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "a2700a6f94a7d5bc1cdc91424a237165bb5827f6045a9353c0cf1881c90dab2a",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "upgradeFromVersion": "32.2.1",
+    "candidateId": "085203b0a53a0d14a1d5a34a",
+    "installerVersion": "32.2.2",
+    "executionProfileSha256": "FA1A9858C57005818178EE3D364941E9E61109FD44B6CC1B9A906A05B67AF1F1",
+    "architecture": "x64",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "testLevel": "psadt-package",
+    "executionContext": "LocalSystem",
+    "installerSha256": "c3a0b880adbe64dc4bcb68f93016916ab5b55ae43fd227115287bf80257d92dc",
+    "previousInstallerSha256": "bbb95e52b96ad9b7ccd5abd13121379d29774d6cc5fdbef82ffa249e8a24a289",
+    "testedAt": "2026-10-08T16:44:29.6339069Z",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    }
+  },
+  "verifiedAt": "2026-10-08T16:44:35.9196498Z",
+  "authenticatedArtifact": {
+    "id": 11565425861,
+    "sha256": "e1e044209319a48ee0dd3aef1c233b6d3c09fbbf7394e4fd864cbb68b9b0d153"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-09T22:26:06.662Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
