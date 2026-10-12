@@ -686,6 +686,39 @@ export interface InstallerSourceDiagnostic {
   errorCode?: string;
   networkCode?: string;
   addressFamily?: 4 | 6;
+  networkPhase?: 'request_throw' | 'request_error' | 'response_callback';
+  networkOrigin?: 'node_internal' | 'app' | 'other';
+  runtimeNode?: string;
+}
+type SourceNetworkPhase = NonNullable<InstallerSourceDiagnostic['networkPhase']>;
+type SourceNetworkOrigin = NonNullable<InstallerSourceDiagnostic['networkOrigin']>;
+type SourceNetworkEvidence = { networkPhase: SourceNetworkPhase; networkOrigin: SourceNetworkOrigin };
+type SourceAttempt = { family?: 4 | 6; networkFailures?: WeakMap<object, SourceNetworkEvidence> };
+function stackFramePath(frame: string): string | undefined {
+  return frame.match(/\(?((?:file:\/\/\/|[A-Za-z]:[\\/]|\/)[^()]+):\d+:\d+\)?$/)?.[1]
+    ?.replace(/^file:\/\/\/(?=[A-Za-z]:)/, '').replace(/^file:\/\//, '').replace(/\\/g, '/');
+}
+// Only retain the module's own runtime path in memory. Bundled filenames vary.
+function ownSourceModulePath(): string | undefined {
+  try { return stackFramePath(new Error().stack?.split(/\r?\n/)[1] ?? ''); }
+  catch { return undefined; }
+}
+const sourceModulePath = ownSourceModulePath();
+function sourceNetworkOrigin(error: unknown, phase: SourceNetworkPhase): SourceNetworkOrigin {
+  if (phase === 'request_error' || !sourceModulePath) return 'other';
+  try {
+    const stack = error && typeof error === 'object' && 'stack' in error ? error.stack : undefined;
+    if (typeof stack !== 'string') return 'other';
+    const frames = stack.split(/\r?\n/).slice(1).filter(frame => /^\s*at\s/.test(frame));
+    const appIndex = frames.findIndex(frame => stackFramePath(frame) === sourceModulePath);
+    if (appIndex < 0) return 'other'; // Missing/truncated caller stacks prove no origin.
+    if (appIndex === 0) return 'app';
+    return frames.slice(0, appIndex).every(frame => /(?:\(|\s)(?:node:|internal\/)/.test(frame)) ? 'node_internal' : 'other';
+  } catch { return 'other'; }
+}
+function recordSourceNetworkError(error: unknown, phase: SourceNetworkPhase, failures?: WeakMap<object, SourceNetworkEvidence>): unknown {
+  if (error && typeof error === 'object') failures?.set(error, { networkPhase: phase, networkOrigin: sourceNetworkOrigin(error, phase) });
+  return error;
 }
 function sourceUrlShape(url: URL) {
   // Even short path segments can contain credentials. Never return path text.
@@ -731,7 +764,7 @@ function sourceNetworkCode(error: unknown): string {
 /** Observe source HTTP headers only. This never hashes or accepts payload bytes. */
 export async function probeInstallerSource(installerUrl: string): Promise<InstallerSourceDiagnostic> {
   const hops: InstallerSourceHop[] = [];
-  const attempted: { family?: 4 | 6 } = {};
+  const attempted: SourceAttempt = { networkFailures: new WeakMap() };
   let url: URL;
   try { url = validateUrl(installerUrl); } catch { return { outcome: 'failed', hops, errorCode: 'INITIAL_URL_INVALID' }; }
   try {
@@ -747,6 +780,8 @@ export async function probeInstallerSource(installerUrl: string): Promise<Instal
     const errorCode = sourceProbeError(error);
     return { outcome: 'failed', hops, errorCode, ...(errorCode === 'NETWORK' ? {
       networkCode: sourceNetworkCode(error),
+      runtimeNode: /^\d+\.\d+\.\d+$/.test(process.versions.node) ? process.versions.node : 'unknown',
+      ...(error && typeof error === 'object' ? attempted.networkFailures?.get(error) : undefined),
       ...(attempted.family === undefined ? {} : { addressFamily: attempted.family }),
     } : {}) };
   }
@@ -758,7 +793,7 @@ async function openInstallerResponse(
   timeoutMs: number,
   signal: AbortSignal,
   trace?: InstallerSourceHop[],
-  attempted?: { family?: 4 | 6 },
+  attempted?: SourceAttempt,
 ): Promise<{ response: http.IncomingMessage; url: URL }> {
   if (attempted) delete attempted.family;
   const resolved = await resolvePublicAddress(url.hostname);
@@ -819,15 +854,23 @@ async function openInstallerResponse(
       signal,
     };
 
-    const request = url.protocol === 'https:'
-      ? https.request({ ...commonOptions, servername: url.hostname }, onResponse)
-      : http.request(commonOptions, onResponse);
-
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error(`Installer download timed out after ${timeoutMs}ms`));
-    });
-    request.on('error', reject);
-    request.end();
+    const callback = trace ? (response: http.IncomingMessage) => {
+      try { onResponse(response); }
+      catch (error) { response.destroy(); reject(recordSourceNetworkError(error, 'response_callback', attempted?.networkFailures)); }
+    } : onResponse;
+    try {
+      const request = url.protocol === 'https:'
+        ? https.request({ ...commonOptions, servername: url.hostname }, callback)
+        : http.request(commonOptions, callback);
+      request.setTimeout(timeoutMs, () => {
+        request.destroy(new Error(`Installer download timed out after ${timeoutMs}ms`));
+      });
+      request.on('error', trace ? error => reject(recordSourceNetworkError(error, 'request_error', attempted?.networkFailures)) : reject);
+      request.end();
+    } catch (error) {
+      if (!trace) throw error;
+      reject(recordSourceNetworkError(error, 'request_throw', attempted?.networkFailures));
+    }
   });
 }
 
