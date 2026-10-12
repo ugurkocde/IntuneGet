@@ -3506,7 +3506,7 @@ if ($reviewedAppxInstallEvidenceConfigured) {
     )
 }
 
-if ($usePortableUninstall) {
+if ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive) {
     $portableDeclaredPath = if ($isNestedPortable) { $NestedInstallerPath } elseif ($installerTypeLower -eq 'portable' -and $fileExtension -ne '.zip') { $installerFileName } else { '' }
     $portableDeclaredPathEscaped = ConvertTo-PSSingleQuotedContent $portableDeclaredPath
     $portableVerifyMachineLiteral = if ($IsUserScope) { '$false' } else { '$true' }
@@ -3574,7 +3574,7 @@ if ($usePortableUninstall) {
 '@ -split "\r?\n"
 }
 
-if ($verifyInstall -and -not $usePortableUninstall) {
+if ($verifyInstall -and -not ($installerTypeLower -eq 'portable' -or $isNestedPortable -or $isPlainPortableArchive)) {
     Write-Host "Post-install verification enabled"
     if ($reviewedAppxInstallEvidenceConfigured) {
         $lines += @(
