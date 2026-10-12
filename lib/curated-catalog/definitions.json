@@ -922,7 +922,7 @@
     ],
     "releaseSource": "https://api.github.com/repos/Azure/azure-functions-core-tools/releases/latest",
     "discovery": "github",
-    "assetPattern": "^func-cli-[0-9.]+-x64.msi$",
+    "assetPattern": "^func-cli-[0-9.]+-x64\\.msi$",
     "allowedInstallerSources": [
       {
         "origin": "https://github.com",
@@ -930,7 +930,7 @@
       }
     ],
     "installedIdentity": {
-      "displayNamePattern": "^Azure Functions Core Tools - [0-9.]+ (x64)$",
+      "displayNamePattern": "^Azure Functions Core Tools - [0-9.]+ \\(x64\\)$",
       "executablePaths": [
         "Microsoft/Azure Functions Core Tools/func.exe"
       ]
@@ -1260,7 +1260,7 @@
     ],
     "releaseSource": "https://api.github.com/repos/starship/starship/releases/latest",
     "discovery": "github",
-    "assetPattern": "^starship-x86_64-pc-windows-msvc.msi$",
+    "assetPattern": "^starship-x86_64-pc-windows-msvc\\.msi$",
     "allowedInstallerSources": [
       {
         "origin": "https://github.com",
@@ -1688,7 +1688,7 @@
     ],
     "releaseSource": "https://api.github.com/repos/grafana/k6/releases/latest",
     "discovery": "github",
-    "assetPattern": "^k6-v[0-9.]+-windows-amd64.msi$",
+    "assetPattern": "^k6-v[0-9.]+-windows-amd64\\.msi$",
     "allowedInstallerSources": [
       {
         "origin": "https://github.com",

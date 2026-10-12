@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "fa077c82f1040da517e805c81f736d79555f994c",
+    "workflowCommit": "d0c4205599957763c98e86becc74339c7d952ce5",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "38169916542",
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows"
+  },
+  "candidate": {
+    "appId": "libreoffice",
+    "version": "26.8.1",
+    "installerUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.1/win/x86_64/LibreOffice_26.8.1_Win_x86-64.msi",
+    "vendorSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+    "releaseNotesUrl": "https://www.libreoffice.org/download/release-notes/",
+    "discoveredAt": "2026-10-11T19:50:36.737Z",
+    "id": "a40289a0667c839d1900cab3"
+  },
+  "previous": {
+    "appId": "libreoffice",
+    "version": "26.8.0",
+    "installerUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.0/win/x86_64/LibreOffice_26.8.0_Win_x86-64.msi",
+    "vendorSha256": "4aa6c6e1895f4055104effcb556bd3362d20c6ad707c149543304f395ef9db95",
+    "releaseNotesUrl": "https://www.libreoffice.org/download/release-notes/",
+    "discoveredAt": "2026-10-11T19:50:50.411Z",
+    "id": "ffdd4d4b206e83a3f67a8256"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "a40289a0667c839d1900cab3",
+      "installerSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+      "sourceUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.1/win/x86_64/LibreOffice_26.8.1_Win_x86-64.msi",
+      "finalOrigin": "https://mirror.clarkson.edu",
+      "signature": {
+        "status": "valid",
+        "publisher": "The Document Foundation"
+      },
+      "security": {
+        "signatureVersion": "1.459.675.0",
+        "scanner": "defender",
+        "malicious": 0,
+        "scannedAt": "2026-10-11T20:27:25.0682578Z",
+        "status": "clean",
+        "installerSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+        "engineVersion": "1.1.26080.3",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "ffdd4d4b206e83a3f67a8256",
+      "installerSha256": "4aa6c6e1895f4055104effcb556bd3362d20c6ad707c149543304f395ef9db95",
+      "sourceUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.0/win/x86_64/LibreOffice_26.8.0_Win_x86-64.msi",
+      "finalOrigin": "https://mirror.clarkson.edu",
+      "signature": {
+        "status": "valid",
+        "publisher": "The Document Foundation"
+      },
+      "security": {
+        "signatureVersion": "1.459.675.0",
+        "scanner": "defender",
+        "malicious": 0,
+        "scannedAt": "2026-10-11T20:36:42.0171069Z",
+        "status": "clean",
+        "installerSha256": "4aa6c6e1895f4055104effcb556bd3362d20c6ad707c149543304f395ef9db95",
+        "engineVersion": "1.1.26080.3",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "a40289a0667c839d1900cab3",
+    "packageId": "IntuneGet.Curated.LibreOffice",
+    "installerUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.1/win/x86_64/LibreOffice_26.8.1_Win_x86-64.msi",
+    "installerSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.LibreOffice",
+      "displayName": "LibreOffice",
+      "publisher": "The Document Foundation",
+      "version": "26.8.1",
+      "architecture": "x64",
+      "installerSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:LibreOffice",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_LibreOffice\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.8.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_LibreOffice\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"26.8.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "953CEA4F9741C3EDF238798C4FFC2222773B56A680EB03592747E1F6F89129FA",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.LibreOffice\",\"publisher\":\"IntuneGet QA\",\"version\":\"26.8.1\",\"wingetId\":\"IntuneGet.Curated.LibreOffice\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.8.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_LibreOffice\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"D6E9EAC289066B5CBC4F26FE031C878CCA371209D55627BA7516B3474D5317F2\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"C6298B10CFA1748BCBEDAD94C62CE771E240E5021BFD6D7A967CD571B04B5312\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:LibreOffice\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"26.8.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_LibreOffice\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"A0CA84BFA730A304CD9E09EF51CD29FAF420AA864AF69A9E1F258C8E426BB134\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "a0ca84bfa730a304cd9e09ef51cd29faf420aa864af69a9e1f258c8e426bb134",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "testLevel": "psadt-package",
+    "architecture": "x64",
+    "previousInstallerSha256": "4aa6c6e1895f4055104effcb556bd3362d20c6ad707c149543304f395ef9db95",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "passed": true,
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "testedAt": "2026-10-11T20:47:33.1626648Z",
+    "installerVersion": "26.8.1",
+    "executionContext": "LocalSystem",
+    "installerSha256": "c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312",
+    "upgradeFromVersion": "26.8.0",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionProfileSha256": "953CEA4F9741C3EDF238798C4FFC2222773B56A680EB03592747E1F6F89129FA",
+    "candidateId": "a40289a0667c839d1900cab3"
+  },
+  "verifiedAt": "2026-10-11T20:47:40.7119525Z",
+  "authenticatedArtifact": {
+    "id": 11715331106,
+    "sha256": "547bfe98b5f0016c04c3ebdc2a780ec2e95ec4bec8897232272d55189e410c27"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-11T23:22:56.969Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
