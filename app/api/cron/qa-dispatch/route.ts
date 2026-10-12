@@ -9,6 +9,7 @@ import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
 import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
 import { diagnoseInstallerSource, InstallerPreflightError } from '@/lib/installer-preflight';
 import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
+import { loadInstallerSecurityHolds } from '@/lib/qa/installer-security-holds';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
@@ -171,6 +172,8 @@ export async function GET(request: Request) {
   }
 
   let cursor: { priority: number; enqueuedAt: string; id: string } | null = null;
+  const refreshedHolds = await supabase.rpc('refresh_qa_installer_security_holds', {});
+  if (refreshedHolds.error) throw new Error('Installer security checks could not be refreshed');
   const curated = await dispatchCuratedQueue(supabase, now);
   if (curated.handled) return NextResponse.json({ success: true, ...curated, reconciled });
   let scanned = 0;
@@ -208,6 +211,7 @@ export async function GET(request: Request) {
     scanned += page.length;
 
     const eligible = [];
+    const securityHolds = await loadInstallerSecurityHolds(supabase, page.map(row => row.installer_sha256));
     const invalidByReason = new Map<string, string[]>();
     const addInvalid = (reason: string, id: string) => {
       const ids = invalidByReason.get(reason) || [];
@@ -215,9 +219,9 @@ export async function GET(request: Request) {
       invalidByReason.set(reason, ids);
     };
     for (const candidate of page) {
-      const reason = qaQueueCandidateReason(candidate, now);
+      const reason = qaQueueCandidateReason(candidate, now, securityHolds);
       if (reason) {
-        if (reason !== 'source-retry-pending') addInvalid(reason, candidate.id);
+        if (reason !== 'source-retry-pending' && reason !== 'installer-security-hold') addInvalid(reason, candidate.id);
         continue;
       }
       {

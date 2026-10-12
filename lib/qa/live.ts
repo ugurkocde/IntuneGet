@@ -1,6 +1,7 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
 import 'server-only';
 import { orderQaQueue, qaQueueCandidateReason } from './queue-selection';
+import { loadInstallerSecurityHolds, installerSecurityReason } from './installer-security-holds';
 import { getPackageCompatibilityBlocks, packageCompatibilityKey } from '@/lib/package-eligibility';
 import { qaSourceKey, qaSourceRetryAtMany } from './source-backoff';
 
@@ -82,7 +83,7 @@ export interface QaLiveSnapshotInput {
   current: CandidateRow | null;
   queuedCount: number;
   queued: CandidateRow[];
-  waiting?: Array<{ candidate: CandidateRow; nextCheckAt: string | null; sourceRetry: boolean }>;
+  waiting?: Array<{ candidate: CandidateRow; nextCheckAt: string | null; sourceRetry: boolean; securityHold?: boolean; securityReason?: string }>;
   poll: PollRow | null;
   consecutivePollFailures: number;
   recent: ResultRow[];
@@ -391,10 +392,10 @@ export function buildQaLiveResponse(input: QaLiveSnapshotInput): QaLiveResponse 
     log: currentLog,
     queue: {
       count: input.queuedCount,
-      waiting: (input.waiting || []).slice(0, 10).map(({ candidate, nextCheckAt, sourceRetry }) => ({
+      waiting: (input.waiting || []).slice(0, 10).map(({ candidate, nextCheckAt, sourceRetry, securityHold, securityReason }) => ({
         wingetId: candidate.winget_id, displayName: appById.get(candidate.winget_id)?.name || candidate.winget_id,
         version: candidate.version, architecture: architecture(candidate.architecture),
-        reason: sourceRetry ? "Installer source checks are deferred; another check is scheduled." : "This application is waiting for verification before testing.",
+        reason: securityHold ? securityReason || 'VirusTotal refused execution for this installer hash.' : sourceRetry ? "Installer source checks are deferred; another check is scheduled." : "This application is waiting for verification before testing.",
         next_check_at: nextCheckAt,
       })),
       next: input.queued.slice(0, 10).map((candidate) => ({
@@ -500,16 +501,28 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
 
   const current = (activeResult.data as CandidateRow | null) || null;
   const queueRows = (queueResult.data || []) as CandidateRow[];
+  const securityHolds = await loadInstallerSecurityHolds(supabase, queueRows.map(row => row.installer_sha256));
   const queued: CandidateRow[] = [];
   const waiting: NonNullable<QaLiveSnapshotInput['waiting']> = [];
+  const heldErrors = await supabase.rpc('qa_installer_security_waiting_errors', {});
+  if (heldErrors.error || !Array.isArray(heldErrors.data)) throw new Error('Installer security waiting queue is unavailable');
+  for (const held of heldErrors.data as unknown as Array<{ candidate: CandidateRow; nextCheckAt: string; malicious: number }>) {
+    if (!Number.isInteger(held.malicious) || held.malicious < 1) throw new Error('Installer security waiting queue is invalid');
+    waiting.push({ ...held, sourceRetry: false, securityHold: true, securityReason: installerSecurityReason(held.malicious) });
+  }
   const input = (candidate: CandidateRow) => ({ wingetId: candidate.winget_id, version: candidate.version, architecture: candidate.architecture, installerSha256: candidate.installer_sha256 });
   let cursor = 0, rounds = 0, lookupsClosed = false;
   while (cursor < queueRows.length && !(lookupsClosed && waiting.length >= 10)) {
     const chunk: CandidateRow[] = [];
     while (cursor < queueRows.length && chunk.length < 25 && !(lookupsClosed && waiting.length >= 10)) {
       const candidate = queueRows[cursor++];
-      const reason = qaQueueCandidateReason(candidate, now);
-      if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
+      if (candidate.status !== 'queued' && !securityHolds.has(candidate.installer_sha256.toLowerCase())) continue;
+      const reason = qaQueueCandidateReason(candidate, now, securityHolds);
+      if (reason === 'installer-security-hold' && waiting.length < 10) {
+        const hold = securityHolds.get(candidate.installer_sha256.toLowerCase())!;
+        waiting.push({ candidate, nextCheckAt: hold.nextCheckAt, sourceRetry: false, securityHold: true, securityReason: hold.reason });
+      }
+      else if (reason === 'source-retry-pending' && waiting.length < 10) waiting.push({ candidate, nextCheckAt: candidate.next_retry_at, sourceRetry: true });
       else if (!reason && !lookupsClosed && queued.length < 10) chunk.push(candidate);
     }
     if (!chunk.length) continue;
@@ -537,6 +550,7 @@ export async function getQaLiveSnapshot(): Promise<QaLiveResponse> {
       lookupsClosed = true;
     }
   }
+  waiting.sort((a, b) => b.candidate.priority - a.candidate.priority || Date.parse(a.candidate.enqueued_at) - Date.parse(b.candidate.enqueued_at) || a.candidate.id.localeCompare(b.candidate.id));
   let recent = (recentResult.data || []) as ResultRow[];
   const passed = recent.filter(row => row.outcome === 'Passed');
   if (passed.length) {

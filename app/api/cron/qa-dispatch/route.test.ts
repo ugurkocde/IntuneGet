@@ -51,7 +51,7 @@ function testUuid(index: number): string {
 
 function query(result: QueryResult) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['eq', 'in', 'order', 'limit', 'or', 'select', 'lte', 'delete']) {
+  for (const method of ['eq', 'in', 'is', 'order', 'limit', 'or', 'select', 'lte', 'delete']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -150,6 +150,7 @@ function createSupabaseStub(
       return { data: row ? { row: { ...row, status: 'dispatched', attempts: row.attempts + 1, dispatched_at: new Date().toISOString() } } : null, error: null };
     }),
     from: vi.fn((table: string) => {
+      if (table === 'qa_installer_security_holds') return query({ data: [], error: null });
       if (table === 'qa_source_backoff') return query({ data: null, error: null });
       if (table === 'qa_pipeline_control') {
         return query({

@@ -26,11 +26,14 @@ function fixture() {
   const grants = new Set<string>(), recentRows: Array<Record<string, unknown>> = [];
   let compatibilityReads = 0, sourceReads = 0;
   const errors = new Set<string>();
+  const securityHolds: Array<Record<string, unknown>> = [];
   const blocks: Array<Record<string, unknown>> = [{ winget_id: held.winget_id, version: held.version, architecture: held.architecture, installer_sha256: held.installer_sha256, block_code: 'failed_managed_lifecycle', detail: 'reviewed tuple' }];
   const retries = [{ source_key: qaSourceKey(source), next_retry_at: '2099-01-02T00:00:00Z' }];
   const client = {
     rpc: vi.fn(async (name: string, args: { p_id?: string; p_candidate_id?: string }) => {
       if (name === 'qa_retest_grant_eligible') return { data: grants.has(args.p_candidate_id!), error: errors.has(name) ? { message: 'grant unavailable' } : null };
+      if (name === 'refresh_qa_installer_security_holds') return { data: 0, error: null };
+      if (name === 'qa_installer_security_waiting_errors') return { data: [], error: null };
       if (name !== 'claim_qa_work') throw new Error('Unexpected RPC');
       claimed.push(args.p_id!); return { data: { row: rows.find(r => r.id === args.p_id) }, error: null };
     }),
@@ -40,7 +43,7 @@ function fixture() {
       let count = false, cap = Infinity;
       const filters: Array<(r: Record<string, unknown>) => boolean> = [], sort: Array<[string, boolean]> = [];
       const result = () => {
-        let data: Array<Record<string, unknown>> = table === 'qa_candidates' ? rows : table === 'qa_package_results' ? recentRows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
+        let data: Array<Record<string, unknown>> = table === 'qa_installer_security_holds' ? securityHolds : table === 'qa_candidates' ? rows : table === 'qa_package_results' ? recentRows : table === 'qa_pipeline_control' ? [{ id: 'global', paused: false }] : table === 'qa_source_backoff' ? retries : table === 'qa_package_blocks' ? blocks : [];
         data = data.filter(r => filters.every(f => f(r)));
         data.sort((a, b) => { for (const [key, ascending] of sort) { const x = a[key] as string | number, y = b[key] as string | number, cmp = x < y ? -1 : x > y ? 1 : 0; if (cmp) return ascending ? cmp : -cmp; } return 0; });
         return { data: data.slice(0, cap), count: count ? data.length : undefined, error: errors.has(table) ? { message: 'lookup unavailable' } : null };
@@ -48,6 +51,7 @@ function fixture() {
       const builder = {
         select(_columns: string, options?: { count?: string }) { count = !!options?.count; return builder; },
         eq(key: string, value: unknown) { filters.push(r => r[key] === value); return builder; },
+        is(key: string, value: unknown) { filters.push(r => r[key] === value); return builder; },
         in(key: string, values: unknown[]) { filters.push(r => values.includes(r[key])); return builder; },
         lte(key: string, value: string) { filters.push(r => r[key] === '-infinity' || (typeof r[key] === 'string' && Date.parse(r[key] as string) <= Date.parse(value))); return builder; },
         order(key: string, options: { ascending: boolean }) { sort.push([key, options.ascending]); return builder; },
@@ -58,8 +62,27 @@ function fixture() {
       return builder;
     },
   };
-  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
+  return { client, claimed, first, deferred, source, held, rows, errors, blocks, retries, grants, recentRows, securityHolds, compatibilityReads: () => compatibilityReads, sourceReads: () => sourceReads };
 }
+it.each([1, 2])('shows %s malicious verdicts in waiting and never dispatches twice within one minute', async (malicious) => {
+  const f = fixture();
+  // Every original row shares the refused hash, including other app identities.
+  f.securityHolds.push({ sha256: 'a'.repeat(64), malicious_verdicts: malicious, reason: malicious === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.', next_check_at: '2099-01-01T00:00:00Z', released_at: null });
+  f.rows.splice(0, f.rows.length, f.first);
+  mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
+  const live = await getQaLiveSnapshot();
+  expect(live.queue.next).toEqual([]);
+  expect(live.queue.waiting[0].reason).toBe(malicious === 1 ? 'VirusTotal: 1 engine flagged, rechecking daily' : 'VirusTotal refused execution for this installer hash.');
+  expect(live.queue.waiting[0].next_check_at).toBe('2099-01-01T00:00:00Z');
+  for (let retry = 0; retry < 2; retry++) await GET(new Request('https://example.com/api/cron/qa-dispatch', { headers: { authorization: 'Bearer test-secret' } }));
+  expect(f.claimed).toEqual([]); expect(mocks.dispatch).not.toHaveBeenCalled();
+});
+it('keeps queued next visible behind more than 1000 historical errors', async () => {
+  const f = fixture();
+  f.rows.splice(0,f.rows.length,...Array.from({length:1001},(_,i)=>({...candidate(i+100,2000),status:'error'})),f.first);
+  mocks.client.mockReturnValue(f.client);
+  expect((await getQaLiveSnapshot()).queue.next[0].wingetId).toBe(f.first.winget_id);
+});
 it('advertises the granted diagnostic candidate that dispatch actually claims', async () => {
   const f = fixture(); f.grants.add(f.held.id); mocks.client.mockReturnValue(f.client); mocks.dispatch.mockResolvedValue(undefined); process.env.CRON_SECRET = 'test-secret';
   const live = await getQaLiveSnapshot();
