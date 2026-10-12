@@ -1,0 +1,5 @@
+{
+  "title": "Keep deployments waiting for installation test publication",
+  "summary": "Deployments now keep waiting while a completed installation test is awaiting publication, instead of reporting an installer failure. Existing security and installation failure checks continue to apply.",
+  "type": "fixed"
+}

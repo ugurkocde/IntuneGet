@@ -96,6 +96,7 @@ function candidate(profileKind: 'catalog-default' | 'deployment-config', install
     },
     priority: profileKind === 'deployment-config' ? 1000 : 0,
     enqueued_at: '2026-08-08T12:00:00.000Z',
+    next_retry_at: '-infinity',
     attempts: 0,
     status: 'queued',
     test_level: 'psadt-package',

@@ -167,10 +167,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const body: PackageRequestBody = await request.json();
-    const { items, forceCreate } = body;
+    const body: unknown = await request.json();
+    const { items, forceCreate } = (body && typeof body === 'object' ? body : {}) as PackageRequestBody;
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: 'No items provided for packaging' },
         { status: 400 }
@@ -183,6 +183,29 @@ export async function POST(request: NextRequest) {
         { error: 'Maximum 10 items per batch' },
         { status: 400 }
       );
+    }
+
+    // Reject the entire invalid custom detection request before packaging side effects.
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return NextResponse.json({ error: 'Invalid package item' }, { status: 400 });
+      }
+      const psadtConfig = (item as unknown as { psadtConfig?: unknown }).psadtConfig;
+      if (psadtConfig !== undefined && (psadtConfig === null || typeof psadtConfig !== 'object' || Array.isArray(psadtConfig))) {
+        return NextResponse.json({ error: 'Invalid PSADT settings' }, { status: 400 });
+      }
+      const flag = (item as unknown as { psadtConfig?: { customDetection?: unknown } }).psadtConfig?.customDetection;
+      if (flag !== undefined && typeof flag !== 'boolean') {
+        return NextResponse.json({ error: 'Invalid custom detection setting' }, { status: 400 });
+      }
+      if (!isStoreCartItem(item) && item.psadtConfig?.customDetection) {
+        const validation = validateCustomDetectionRules(item.detectionRules);
+        if (!canUseCustomDetection(item) || !validation.valid) {
+          return NextResponse.json({ error: 'Invalid custom detection rules', message: validation.errors.join(' ') || 'Custom detection is supported only for ordinary catalog Win32 apps.' }, { status: 400 });
+        }
+      } else if (isStoreCartItem(item) && (item as unknown as { psadtConfig?: { customDetection?: boolean } }).psadtConfig?.customDetection) {
+        return NextResponse.json({ error: 'Custom detection is not supported for Store apps' }, { status: 400 });
+      }
     }
 
     // Get database adapter (SQLite or Supabase)
@@ -398,6 +421,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Trusted manifest reconciliation can change the effective installer type.
+    for (const item of win32Items) {
+      if (item.psadtConfig?.customDetection && !canUseCustomDetection(item)) {
+        return NextResponse.json({ error: 'Custom detection is not supported for this resolved installer' }, { status: 400 });
+      }
+    }
+
     // Enforce installer health before creating job rows. Work in pairs to
     // bound outbound bandwidth for a ten-app cart while keeping normal
     // batches responsive.
@@ -601,7 +631,7 @@ export async function POST(request: NextRequest) {
           try {
             if (item.sourceType !== 'custom') {
               const requestedPsadtConfig = item.psadtConfig || DEFAULT_PSADT_CONFIG;
-              let detectionRules = normalizeCatalogDetectionRules({
+              let detectionRules = requestedPsadtConfig.customDetection ? item.detectionRules : normalizeCatalogDetectionRules({
                 detectionRules: item.detectionRules,
                 fallbackDetectionRules: requestedPsadtConfig.detectionRules,
                 wingetId: item.wingetId,
@@ -610,7 +640,7 @@ export async function POST(request: NextRequest) {
                 markerPath: requestedPsadtConfig.registryMarkerPath,
                 installerType: item.nestedInstallerType || item.installerType,
               });
-              const inferredMarkerPath = requestedPsadtConfig.registryMarkerPath
+              const inferredMarkerPath = requestedPsadtConfig.customDetection || requestedPsadtConfig.registryMarkerPath
                 ? null
                 : inferSavedCustomMarkerPath({
                     detectionRules,
@@ -1075,3 +1105,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+import { canUseCustomDetection, validateCustomDetectionRules } from '@/lib/custom-detection';

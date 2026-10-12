@@ -1,0 +1,5 @@
+{
+  "title": "Clarify invalid installer redirects",
+  "summary": "Installer verification identifies malformed redirects without exposing download URLs or embedded credentials.",
+  "type": "fixed"
+}

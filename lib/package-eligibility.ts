@@ -31,6 +31,26 @@ export const PACKAGE_UNAVAILABLE_MESSAGE =
 export const PACKAGE_VERSION_UNAVAILABLE_MESSAGE =
   'This app version is not available for automated deployment.';
 
+type CompatibilityInput = { wingetId: string; version: string; architecture: string; installerSha256: string };
+export function packageCompatibilityKey(input: CompatibilityInput): string {
+  return JSON.stringify([input.wingetId.trim(), input.version.trim(), input.architecture.trim().toLowerCase(), input.installerSha256.trim().toUpperCase()]);
+}
+export const COMPATIBILITY_BATCH_LIMIT = 1000;
+export async function getPackageCompatibilityBlocks(supabase: SupabaseClient<Database>, inputs: CompatibilityInput[]): Promise<Set<string>> {
+  if (!inputs.length) return new Set();
+  const wanted = new Set(inputs.map(packageCompatibilityKey));
+  const unique = (values: string[]) => [...new Set(values)];
+  const { data, error } = await supabase.from('qa_package_blocks')
+    .select('winget_id, version, architecture, installer_sha256')
+    .in('winget_id', unique(inputs.map(x => x.wingetId.trim())))
+    .in('version', unique(inputs.map(x => x.version.trim())))
+    .in('architecture', unique(inputs.map(x => x.architecture.trim().toLowerCase())) as Array<'x64' | 'x86' | 'arm64'>)
+    .in('installer_sha256', unique(inputs.map(x => x.installerSha256.trim().toUpperCase())))
+    .limit(COMPATIBILITY_BATCH_LIMIT);
+  if (error || (data?.length ?? 0) >= COMPATIBILITY_BATCH_LIMIT) throw new Error('Could not verify complete package compatibility batch');
+  return new Set((data || []).map(row => packageCompatibilityKey({ wingetId: row.winget_id, version: row.version, architecture: row.architecture, installerSha256: row.installer_sha256 })).filter(key => wanted.has(key)));
+}
+
 export interface CatalogExclusion {
   wingetId: string;
   reason: string;

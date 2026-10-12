@@ -1,0 +1,5 @@
+{
+  "title": "Identify installer source connection failures",
+  "summary": "Protected diagnostics report the redirect host, address family and safe network error category while keeping private URL and error details hidden.",
+  "type": "fixed"
+}
