@@ -1,0 +1,5 @@
+{
+  "title": "Avoid repeated testing of installers on a security hold",
+  "summary": "Application testing holds installers flagged by one security engine and refuses those flagged by two or more. Held installers are checked daily without executing them, while other eligible applications continue testing.",
+  "type": "fixed"
+}

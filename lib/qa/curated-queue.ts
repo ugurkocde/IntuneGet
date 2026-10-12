@@ -69,8 +69,8 @@ export async function dispatchCuratedQueue(supabase: SupabaseClient<Database>, n
       dispatched_at: run ? active.dispatched_at : null, updated_at: now.toISOString() }).eq('id', active.id).eq('status', 'dispatched');
     if (error) throw new Error('Could not reconcile the curated QA claim.');
   }
-  const { data: next, error: queueError } = await supabase.from('curated_verification_queue').select('*').eq('status', 'queued')
-    .order('priority', { ascending: false }).order('enqueued_at', { ascending: true }).order('id', { ascending: true }).limit(1).maybeSingle();
+  const { data: nextData, error: queueError } = await supabase.rpc('next_qa_curated_security_eligible', {});
+  const next = nextData as QueueRow | null;
   if (queueError) throw new Error('Could not inspect queued curated QA.');
   if (!next) return { handled: false, dispatched: false };
   let inputs: Record<string, string>;

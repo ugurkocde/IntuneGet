@@ -18,7 +18,7 @@ const row = (patch: Partial<Row> = {}): Row => ({
 function client(active: Row | null, next: Row | null, claim: unknown = { row: next }) {
   const updates: unknown[] = [];
   let reads = 0;
-  const stub = { rpc: vi.fn(async () => ({ data: claim, error: null })), from: vi.fn(() => ({
+  const stub = { rpc: vi.fn(async (name: string) => ({ data: name === 'next_qa_curated_security_eligible' ? next : claim, error: null })), from: vi.fn(() => ({
     select: () => {
       const data = reads++ === 0 ? active : next;
       const query = { eq: () => query, order: () => query, limit: () => query, maybeSingle: async () => ({ data, error: null }) };
@@ -74,7 +74,7 @@ describe('curated priority dispatch', () => {
       display_title: `Curated verification - Chrome [${candidate.id}]`, status: 'in_progress', created_at: now.toISOString(),
       event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/curated-catalog-verification.yml' }] }));
     expect(await dispatchCuratedQueue(mock.supabase, now, fetchMock)).toMatchObject({ dispatched: false, reason: 'qa_active' });
-    expect(mock.rpc).not.toHaveBeenCalled();
+    expect(mock.rpc).not.toHaveBeenCalledWith('claim_qa_work', expect.anything());
     expect(mock.updates).toEqual([]);
   });
   it('releases a completed claim without treating workflow success as release approval', async () => {
@@ -84,7 +84,7 @@ describe('curated priority dispatch', () => {
       event: 'workflow_dispatch', head_branch: 'main', path: '.github/workflows/curated-catalog-verification.yml' }] }));
     expect(await dispatchCuratedQueue(mock.supabase, now, fetchMock)).toMatchObject({ handled: false, dispatched: false });
     expect(mock.updates).toEqual([expect.objectContaining({ status: 'completed', github_run_id: '42' })]);
-    expect(mock.rpc).not.toHaveBeenCalled();
+    expect(mock.rpc).not.toHaveBeenCalledWith('claim_qa_work', expect.anything());
   });
   it('keeps a lost claim when the workflow inventory does not cover its dispatch window', async () => {
     const old = new Date(now.getTime() - 4 * 60 * 60 * 1000).toISOString();

@@ -1,6 +1,7 @@
 import { isQaRunnerArchitectureSupported } from './candidate';
 import { validateCurrentQaPackageProfile } from './package-profile';
 import type { Json } from '@/types/database';
+import type { InstallerSecurityHolds } from './installer-security-holds';
 
 export interface QaQueueCandidate {
   id: string; winget_id: string; version: string; architecture: string;
@@ -15,7 +16,8 @@ export function orderQaQueue<T extends { order(column: string, options: { ascend
 }
 
 // Shared by the dispatcher and public queue. Reasons remain private.
-export function qaQueueCandidateReason(candidate: QaQueueCandidate, now: Date): string | null {
+export function qaQueueCandidateReason(candidate: QaQueueCandidate, now: Date, holds: InstallerSecurityHolds = new Map()): string | null {
+  if (holds.has(candidate.installer_sha256.toLowerCase())) return 'installer-security-hold';
   if (!Number.isInteger(candidate.priority) ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate.id) ||
       !Number.isFinite(Date.parse(candidate.enqueued_at))) return 'queue-metadata-invalid';
