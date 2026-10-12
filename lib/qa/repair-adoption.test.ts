@@ -8,8 +8,8 @@ vi.mock('@/lib/winget-dependencies', async importOriginal => ({
   resolveWingetPackageDependencies: dependencies,
 }));
 const hash = 'A'.repeat(64), repairId = '22222222-2222-4222-8222-222222222222';
-function fixture(change: Record<string, unknown> = {}, outcome = 'inserted') {
-  const old = { id:'old',winget_id:'Example.App',version:'1',architecture:'x64',installer_sha256:hash,installer_url:'https://example.test/setup.exe',test_config:{scope:'machine'} };
+function fixture(change: Record<string, unknown> = {}, outcome = 'inserted', scope = 'machine') {
+  const old = { id:'old',winget_id:'Example.App',version:'1',architecture:'x64',installer_sha256:hash,installer_url:'https://example.test/setup.exe',test_config:{scope} };
   const repair = { id:repairId,candidate_id:'old',winget_id:'Example.App',version:'1',architecture:'x64',status:'in_progress',failure_class:'app_lifecycle',prior_requeues:2 };
   const from = vi.fn((table: string) => {
     const rows: Record<string, unknown> = { qa_repair_requests:repair,qa_candidates:old,curated_apps:{winget_id:'Example.App',name:'Example',publisher:'Example',latest_version:'2'},qa_recipes:null };
@@ -49,4 +49,16 @@ it('dependency errors never overwrite the existing failure quarantine',async()=>
 });
 it('denies an active insert conflict',async()=>{
   const f=fixture({},'active_conflict');expect(await adoptRepairCurrentCandidate(f.db,f.client,repairId)).toMatchObject({reason:'active_conflict'});expect(f.rpc).toHaveBeenCalledTimes(1);
+});
+it.each(['machine','user'])('adopts the exact %s scope when identical bytes offer two scopes',async scope=>{
+  const f=fixture({},'inserted',scope);
+  f.client.fetchInstallerManifest.mockResolvedValue({PackageIdentifier:'Example.App',PackageVersion:'1',InstallerType:'nullsoft',Installers:['machine','user'].map(s=>({Architecture:'x64',InstallerSha256:hash,InstallerUrl:'https://example.test/setup.exe',Scope:s,InstallerSwitches:{Silent:'/S',Custom:'/InstallationType='+ (s==='machine'?'AllUsers':'JustMe')}}))});
+  expect(await adoptRepairCurrentCandidate(f.db,f.client,repairId)).toMatchObject({outcome:'adopted'});
+  const config=(f.rpc.mock.calls[0][1].p_candidate as Record<string,unknown>).test_config as Record<string,unknown>;
+  expect(config.scope).toBe(scope);expect(config.silentArgs).toContain(scope==='machine'?'AllUsers':'JustMe');
+});
+it('denies two identical byte matches with the same effective scope',async()=>{
+  const f=fixture();const manifest=await f.client.fetchInstallerManifest();manifest.Installers.push({...manifest.Installers[0]});
+  f.client.fetchInstallerManifest.mockResolvedValue(manifest);
+  expect(await adoptRepairCurrentCandidate(f.db,f.client,repairId)).toMatchObject({reason:'installer_ambiguous'});expect(f.rpc).not.toHaveBeenCalled();
 });

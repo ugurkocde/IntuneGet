@@ -52,7 +52,6 @@ export async function adoptRepairCurrentCandidate(
     normalizeInstallerSha256(typeof entry.InstallerSha256 === 'string' ? entry.InstallerSha256 : null) === hash &&
     entry.InstallerUrl === old.installer_url);
   if (!matches.length) return denied('installer_hash_changed');
-  if (matches.length !== 1) return denied('installer_ambiguous');
   const [appResult, recipeResult] = await Promise.all([
     supabase.from('curated_apps').select('winget_id,name,publisher,latest_version').eq('winget_id', repair.winget_id)
       .eq('is_verified', true).eq('is_winget_verified', true).eq('app_source','win32').eq('is_locale_variant',false).maybeSingle(),
@@ -60,9 +59,14 @@ export async function adoptRepairCurrentCandidate(
   ]);
   if (appResult.error || recipeResult.error) throw new Error('Could not read exact catalog configuration');
   if (!appResult.data) return denied('catalog_ineligible');
+  const app = appResult.data;
   if (recipeResult.data && recipeResult.data.architecture !== old.architecture) return denied('recipe_architecture_changed');
-  const config = buildQaCatalogTestConfig({ app:{...appResult.data,wingetId:repair.winget_id,version:repair.version},manifest,installer:matches[0] });
-  if (config.scope !== old.test_config?.scope || config.profileKind !== 'catalog-default') return denied('scope_changed');
+  const matchingScopes = matches.map(installer => buildQaCatalogTestConfig({
+    app:{...app,wingetId:repair.winget_id,version:repair.version},manifest,installer,
+  })).filter(config => config.scope === old.test_config?.scope && config.profileKind === 'catalog-default');
+  if (!matchingScopes.length) return denied('scope_changed');
+  if (matchingScopes.length !== 1) return denied('installer_ambiguous');
+  const config = matchingScopes[0];
   let dependencies;
   try {
     dependencies = await resolveWingetPackageDependencies({wingetId:repair.winget_id,version:repair.version,architecture:old.architecture,installerSha256:hash,installScope:config.scope});
