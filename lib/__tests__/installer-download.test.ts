@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildByteRanges,
   hashesEqual,
+  InstallerDownloadSizeLimitError,
   isLikelyMutableInstallerUrl,
   isPublicIpAddress,
   parseByteContentRange,
@@ -16,6 +17,19 @@ afterEach(() => {
 });
 
 describe('installer download safety helpers', () => {
+  it('preserves an identified size refusal when the deadline aborts', async () => {
+    vi.useFakeTimers();
+    const refusal = new InstallerDownloadSizeLimitError(100, 101);
+    const result = withInstallerDownloadDeadline(25, (signal) =>
+      new Promise<never>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(refusal), { once: true });
+      })
+    );
+    const assertion = expect(result).rejects.toBe(refusal);
+    await vi.advanceTimersByTimeAsync(25);
+    await assertion;
+  });
+
   it('enforces a wall-clock deadline even while an operation remains active', async () => {
     vi.useFakeTimers();
     const result = withInstallerDownloadDeadline(25, (signal) =>

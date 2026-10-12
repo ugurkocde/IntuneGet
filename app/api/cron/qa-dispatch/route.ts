@@ -3,11 +3,12 @@ import { getPackageCompatibilityBlock } from '@/lib/package-eligibility';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { dispatchQaCandidate } from '@/lib/qa/dispatch';
-import { QA_PSADT_TOOLCHAIN, validateCurrentQaPackageProfile } from '@/lib/qa/package-profile';
+import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
-import { InstallerPreflightError } from '@/lib/installer-preflight';
-import { isQaRunnerArchitectureSupported } from '@/lib/qa/candidate';
+import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
+import { diagnoseInstallerSource, InstallerPreflightError } from '@/lib/installer-preflight';
+import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
 import { isQaWorkflowRunCompleted } from '@/lib/qa/github-actions-run-status';
@@ -184,17 +185,14 @@ export async function GET(request: Request) {
   const supersededAt = new Date().toISOString();
 
   for (let pageIndex = 0; pageIndex < MAX_QUEUE_SCAN_PAGES; pageIndex++) {
-    let queueQuery = supabase
+    let queueQuery = orderQaQueue(supabase
       .from('qa_candidates')
       .select(
-        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts'
+        'id, winget_id, version, architecture, installer_url, installer_sha256, package_profile_sha256, test_config, priority, enqueued_at, attempts, next_retry_at'
       )
       .eq('test_level', 'psadt-package')
       .eq('status', 'queued')
-      .lte('next_retry_at', now.toISOString())
-      .order('priority', { ascending: false })
-      .order('enqueued_at', { ascending: true })
-      .order('id', { ascending: true })
+      .lte('next_retry_at', now.toISOString()))
       .limit(QUEUE_SCAN_PAGE_SIZE);
     if (cursor) {
       const enqueuedAt = postgrestQuoted(cursor.enqueuedAt);
@@ -217,23 +215,12 @@ export async function GET(request: Request) {
       invalidByReason.set(reason, ids);
     };
     for (const candidate of page) {
-      if (!queueCursor(candidate)) {
-        addInvalid('queue-metadata-invalid', candidate.id);
+      const reason = qaQueueCandidateReason(candidate, now);
+      if (reason) {
+        if (reason !== 'source-retry-pending') addInvalid(reason, candidate.id);
         continue;
       }
-      if (!isQaRunnerArchitectureSupported(candidate.architecture)) {
-        addInvalid('runner-architecture-unsupported', candidate.id);
-        continue;
-      }
-      const validation = validateCurrentQaPackageProfile({
-        testConfig: candidate.test_config,
-        candidatePackageProfileSha256: candidate.package_profile_sha256,
-        candidateWingetId: candidate.winget_id,
-        candidateVersion: candidate.version,
-        candidateArchitecture: candidate.architecture,
-        candidateInstallerSha256: candidate.installer_sha256,
-      });
-      if (validation.valid) {
+      {
         const compatibilityBlock = await getPackageCompatibilityBlock(supabase, {
           wingetId: candidate.winget_id,
           version: candidate.version,
@@ -247,7 +234,6 @@ export async function GET(request: Request) {
         eligible.push(candidate);
         continue;
       }
-      addInvalid(validation.reason, candidate.id);
     }
 
     for (const [reason, ids] of invalidByReason) {
@@ -464,12 +450,25 @@ export async function POST(request: Request) {
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = (await request.json().catch(() => null)) as { candidateId?: string } | null;
+  const body = (await request.json().catch(() => null)) as { candidateId?: string; mode?: string } | null;
   if (!body?.candidateId || !/^[0-9a-fA-F-]{36}$/.test(body.candidateId)) {
     return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
   }
 
+  if (body.mode !== undefined && body.mode !== 'source-diagnostic') {
+    return NextResponse.json({ error: 'Unknown operation mode' }, { status: 400 });
+  }
   const supabase = createServerClient();
+  if (body.mode === 'source-diagnostic') {
+    if (!UUID_PATTERN.test(body.candidateId)) return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
+    const { data, error } = await supabase.from('qa_candidates')
+      .select('winget_id,version,architecture,installer_url,installer_sha256,installer_type,test_config,test_level')
+      .eq('id', body.candidateId).eq('test_level', 'psadt-package').maybeSingle();
+    if (error) return NextResponse.json({ error: 'Candidate state unavailable' }, { status: 503 });
+    if (!data) return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+    const result = await diagnoseInstallerSource(buildQaCandidatePreflightRequest(data));
+    return NextResponse.json({ success: true, mode: body.mode, candidateId: body.candidateId, ...result });
+  }
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from('qa_candidates')

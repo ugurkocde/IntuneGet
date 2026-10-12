@@ -1,0 +1,5 @@
+{
+  "title": "Custom detection rules for catalog deployments",
+  "summary": "Administrators can replace generated detection with registry, file or MSI rules for catalog Win32 apps. Custom rules stay fixed, so deploying a newer version requires explicitly reviewing and editing them.",
+  "type": "new"
+}

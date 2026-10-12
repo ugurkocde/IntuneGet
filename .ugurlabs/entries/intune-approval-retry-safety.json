@@ -1,0 +1,5 @@
+{
+  "title": "Safer deployment handling for Intune approval policies",
+  "summary": "Deployments with unresolved administrator approval retain their checkpoint and stop another upload from creating a duplicate app. The deployment view explains that approving a request alone does not resume the upload.",
+  "type": "fixed"
+}

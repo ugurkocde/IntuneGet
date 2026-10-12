@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "runAttempt": "1",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "websiteCommit": "e090f507750dd9262079eace432cfb96697edd71",
+    "workflowCommit": "9dcde91dd37495a51afbc706694b03db478b69e4",
+    "runId": "38174570046"
+  },
+  "candidate": {
+    "appId": "starship",
+    "version": "1.26.0",
+    "installerUrl": "https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-pc-windows-msvc.msi",
+    "vendorSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+    "releaseNotesUrl": "https://github.com/starship/starship/releases/tag/v1.26.0",
+    "discoveredAt": "2026-10-11T19:50:41.176Z",
+    "id": "242c432b0123dfe6e28a59da"
+  },
+  "previous": {
+    "appId": "starship",
+    "version": "1.25.1",
+    "installerUrl": "https://github.com/starship/starship/releases/download/v1.25.1/starship-x86_64-pc-windows-msvc.msi",
+    "vendorSha256": "23c73c0a7272055527107ca7de133b36a94653394f3ea0faea3111713bbc1130",
+    "releaseNotesUrl": "https://github.com/starship/starship/releases/tag/v1.25.1",
+    "discoveredAt": "2026-10-11T19:50:52.884Z",
+    "id": "0998564081573bd9866f2e60"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "242c432b0123dfe6e28a59da",
+      "installerSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+      "sourceUrl": "https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-pc-windows-msvc.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "SignPath Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "signatureVersion": "1.459.675.0",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "scannedAt": "2026-10-11T21:09:23.0213015Z",
+        "status": "clean",
+        "installerSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+        "suspicious": 0
+      }
+    },
+    "previous": {
+      "candidateId": "0998564081573bd9866f2e60",
+      "installerSha256": "23c73c0a7272055527107ca7de133b36a94653394f3ea0faea3111713bbc1130",
+      "sourceUrl": "https://github.com/starship/starship/releases/download/v1.25.1/starship-x86_64-pc-windows-msvc.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "publisher": "SignPath Foundation",
+        "status": "valid"
+      },
+      "security": {
+        "malicious": 0,
+        "signatureVersion": "1.459.675.0",
+        "engineVersion": "1.1.26080.3",
+        "scanner": "defender",
+        "scannedAt": "2026-10-11T21:09:24.8587149Z",
+        "status": "clean",
+        "installerSha256": "23c73c0a7272055527107ca7de133b36a94653394f3ea0faea3111713bbc1130",
+        "suspicious": 0
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "242c432b0123dfe6e28a59da",
+    "packageId": "IntuneGet.Curated.Starship",
+    "installerUrl": "https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-pc-windows-msvc.msi",
+    "installerSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.Starship",
+      "displayName": "Starship",
+      "publisher": "Starship Contributors",
+      "version": "1.26.0",
+      "architecture": "x64",
+      "installerSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:Starship",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Starship\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.26.0\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Starship\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"1.26.0\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "6DF2828A00B158DF8D53BE0200F072B2295A177D3CA76485E82E94AD02193B1C",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.Starship\",\"publisher\":\"IntuneGet QA\",\"version\":\"1.26.0\",\"wingetId\":\"IntuneGet.Curated.Starship\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.26.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Starship\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"DDE07C73D54A515AE493154EBFCF7AD895CEBA347B1924DBAAF38394D1BF0CBA\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"C6D66E4455C6B50C207F37DFE5B32CE7B033A401E344AC59ED43D7B451731B7F\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:Starship\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"1.26.0\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_Starship\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"043053BDE76553AF08EF92A95EF7D07ABD259219031B940EAF76D0702D2262C5\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "043053bde76553af08ef92a95ef7d07abd259219031b940eaf76d0702d2262c5",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "phases": {
+      "install": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "exitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "finalUninstallExitCode": 0,
+        "cleanUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    },
+    "installerSha256": "c6d66e4455c6b50c207f37dfe5b32ce7b033a401e344ac59ed43d7b451731b7f",
+    "executionProfileSha256": "6DF2828A00B158DF8D53BE0200F072B2295A177D3CA76485E82E94AD02193B1C",
+    "previousInstallerSha256": "23c73c0a7272055527107ca7de133b36a94653394f3ea0faea3111713bbc1130",
+    "installerVersion": "1.26.0",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "testLevel": "psadt-package",
+    "upgradeFromVersion": "1.25.1",
+    "candidateId": "242c432b0123dfe6e28a59da",
+    "executionContext": "LocalSystem",
+    "architecture": "x64",
+    "testedAt": "2026-10-11T21:11:01.5226654Z"
+  },
+  "verifiedAt": "2026-10-11T21:11:06.5737846Z",
+  "authenticatedArtifact": {
+    "id": 11715696501,
+    "sha256": "251dfdb3b81377da1fd08456885f8a86dd67b420a1279246d1725e6e567716f5"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-11T23:22:56.969Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}

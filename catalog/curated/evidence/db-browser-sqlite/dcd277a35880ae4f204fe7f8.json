@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "failedPhase": null,
+  "vmRestored": true,
+  "provenance": {
+    "websiteCommit": "3764855ff8a0978f45c61d83188fc945530f0c2a",
+    "repository": "ugurkocde/IntuneGet-Workflows",
+    "runAttempt": "1",
+    "workflowPath": ".github/workflows/curated-catalog-verification.yml",
+    "runId": "38183346650",
+    "workflowCommit": "cf026dfa3a619ec68bac3fb0af50ab9f3efe1c30"
+  },
+  "candidate": {
+    "appId": "db-browser-sqlite",
+    "version": "3.13.1",
+    "installerUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.13.1/DB.Browser.for.SQLite-v3.13.1-win64.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/tag/v3.13.1",
+    "discoveredAt": "2026-10-11T22:23:01.631Z",
+    "id": "dcd277a35880ae4f204fe7f8"
+  },
+  "previous": {
+    "appId": "db-browser-sqlite",
+    "version": "3.12.2",
+    "installerUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.12.2/DB.Browser.for.SQLite-3.12.2-win64.msi",
+    "vendorSha256": null,
+    "releaseNotesUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/tag/v3.12.2",
+    "discoveredAt": "2026-10-11T22:23:15.035Z",
+    "id": "05f9a03aa339504c3e059d99"
+  },
+  "inspection": {
+    "current": {
+      "candidateId": "dcd277a35880ae4f204fe7f8",
+      "installerSha256": "d023d54b3a5db10c7e896089bb3dbe6e7f4bc4eaa9bbecb34ca414be5970f688",
+      "sourceUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.13.1/DB.Browser.for.SQLite-v3.13.1-win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "valid",
+        "publisher": "SignPath Foundation"
+      },
+      "security": {
+        "suspicious": 0,
+        "status": "clean",
+        "scanner": "defender",
+        "installerSha256": "d023d54b3a5db10c7e896089bb3dbe6e7f4bc4eaa9bbecb34ca414be5970f688",
+        "scannedAt": "2026-10-11T23:17:03.2805361Z",
+        "malicious": 0,
+        "signatureVersion": "1.459.676.0",
+        "engineVersion": "1.1.26080.3"
+      }
+    },
+    "previous": {
+      "candidateId": "05f9a03aa339504c3e059d99",
+      "installerSha256": "723d601f125b0d2402d9ea191e4b310345ec52f76b61e117bf49004a2ff9b8ae",
+      "sourceUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.12.2/DB.Browser.for.SQLite-3.12.2-win64.msi",
+      "finalOrigin": "https://release-assets.githubusercontent.com",
+      "signature": {
+        "status": "unsigned",
+        "publisher": null
+      },
+      "security": {
+        "suspicious": 0,
+        "status": "clean",
+        "scanner": "defender",
+        "installerSha256": "723d601f125b0d2402d9ea191e4b310345ec52f76b61e117bf49004a2ff9b8ae",
+        "scannedAt": "2026-10-11T23:17:07.3631544Z",
+        "malicious": 0,
+        "signatureVersion": "1.459.676.0",
+        "engineVersion": "1.1.26080.3"
+      }
+    }
+  },
+  "profile": {
+    "candidateId": "dcd277a35880ae4f204fe7f8",
+    "packageId": "IntuneGet.Curated.DBBrowserForSQLite",
+    "installerUrl": "https://github.com/sqlitebrowser/sqlitebrowser/releases/download/v3.13.1/DB.Browser.for.SQLite-v3.13.1-win64.msi",
+    "installerSha256": "d023d54b3a5db10c7e896089bb3dbe6e7f4bc4eaa9bbecb34ca414be5970f688",
+    "workflowInput": {
+      "wingetId": "IntuneGet.Curated.DBBrowserForSQLite",
+      "displayName": "DB Browser for SQLite",
+      "publisher": "DB Browser for SQLite Team",
+      "version": "3.13.1",
+      "architecture": "x64",
+      "installerSha256": "d023d54b3a5db10c7e896089bb3dbe6e7f4bc4eaa9bbecb34ca414be5970f688",
+      "installerType": "msi",
+      "installScope": "machine",
+      "silentSwitches": "/qn /norestart ALLUSERS=1",
+      "uninstallCommand": "REGISTRY_UNINSTALL:DB Browser for SQLite",
+      "psadtConfig": "{\"processesToClose\":[],\"showClosePrompt\":false,\"closeCountdown\":60,\"blockExecution\":false,\"promptToSave\":false,\"persistPrompt\":false,\"minimizeWindows\":false,\"windowLocation\":\"Default\",\"allowDefer\":false,\"deferTimes\":3,\"checkDiskSpace\":false,\"restartBehavior\":\"Suppress\",\"deployMode\":\"Silent\",\"removeExistingInstall\":false,\"progressDialog\":{\"enabled\":false},\"customPrompts\":[],\"restartPrompt\":{\"enabled\":false,\"countdownSeconds\":600,\"countdownNoHideSeconds\":60},\"balloonTips\":[],\"detectionRules\":[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBBrowserForSQLite\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"3.13.1\"}],\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"postInstallCommands\":[],\"postUninstallCommands\":[]}",
+      "detectionRules": "[{\"type\":\"registry\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBBrowserForSQLite\",\"valueName\":\"Version\",\"check32BitOn64System\":false,\"detectionType\":\"version\",\"operator\":\"greaterThanOrEqual\",\"detectionValue\":\"3.13.1\"}]",
+      "packageDependencies": []
+    },
+    "executionProfileSha256": "9E31F4132EB427983D24C5F1009C4BCC130E4852976A6689AD55F056FA6D753D",
+    "packageProfileCanonicalJson": "{\"app\":{\"architecture\":\"x64\",\"displayName\":\"IntuneGet.Curated.DBBrowserForSQLite\",\"publisher\":\"IntuneGet QA\",\"version\":\"3.13.1\",\"wingetId\":\"IntuneGet.Curated.DBBrowserForSQLite\"},\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"3.13.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBBrowserForSQLite\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"detectionRulesSha256\":\"1697569461EA9971BC4EF6253DA2C2E44A6196D205C90136C078DED03450AAA9\",\"installer\":{\"installScope\":\"machine\",\"nestedInstallerFiles\":[],\"nestedInstallerType\":\"\",\"sha256\":\"D023D54B3A5DB10C7E896089BB3DBE6E7F4BC4EAA9BBECB34CA414BE5970F688\",\"silentArgs\":\"/qn /norestart ALLUSERS=1\",\"sourceType\":\"msi\",\"uninstallCommand\":\"REGISTRY_UNINSTALL:DB Browser for SQLite\"},\"profileKind\":\"deployment-config\",\"psadtConfig\":{\"allowDefer\":false,\"balloonTips\":[],\"blockExecution\":false,\"checkDiskSpace\":false,\"closeCountdown\":60,\"customPrompts\":[],\"deferTimes\":3,\"deployMode\":\"Silent\",\"detectionRules\":[{\"check32BitOn64System\":false,\"detectionType\":\"version\",\"detectionValue\":\"3.13.1\",\"keyPath\":\"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\IntuneGet\\\\Apps\\\\IntuneGet_Curated_DBBrowserForSQLite\",\"operator\":\"greaterThanOrEqual\",\"type\":\"registry\",\"valueName\":\"Version\"}],\"minimizeWindows\":false,\"persistPrompt\":false,\"postInstallCommands\":[],\"postUninstallCommands\":[],\"processesToClose\":[],\"progressDialog\":{\"enabled\":false},\"promptToSave\":false,\"removeExistingInstall\":false,\"restartBehavior\":\"Suppress\",\"restartPrompt\":{\"countdownNoHideSeconds\":60,\"countdownSeconds\":600,\"enabled\":false},\"reviewedInstallArguments\":[],\"reviewedUninstallArguments\":[],\"showClosePrompt\":false,\"windowLocation\":\"Default\"},\"psadtConfigSha256\":\"019998D1ECF1EEDD6B95A190270519AC5108761FBD6709578138FC3EDBB6DBB3\",\"schemaVersion\":4,\"testLevel\":\"psadt-package\",\"toolchain\":{\"packagerCommit\":\"25849ac512c211e616c135149ef1e059db367ebc\",\"packagerRepository\":\"ugurkocde/IntuneGet\",\"packagerScriptPath\":\".github/scripts/Create-PSADTPackage.ps1\",\"psadtVersion\":\"4.1.8\",\"templateSha256\":\"50CB8D32973FC7648060A48CAD63912ECB5CACA5A70754F37E83AA06BD380283\",\"templateUrl\":\"https://github.com/PSAppDeployToolkit/PSAppDeployToolkit/releases/download/4.1.8/PSAppDeployToolkit_Template_v4.zip\"}}",
+    "psadtConfigSha256": "019998d1ecf1eedd6b95a190270519ac5108761fbd6709578138fc3edbb6dbb3",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "approvalRequired": true
+  },
+  "qa": {
+    "installerVersion": "3.13.1",
+    "upgradeFromVersion": "3.12.2",
+    "installerSha256": "d023d54b3a5db10c7e896089bb3dbe6e7f4bc4eaa9bbecb34ca414be5970f688",
+    "candidateId": "dcd277a35880ae4f204fe7f8",
+    "executionContext": "LocalSystem",
+    "packagerCommit": "25849ac512c211e616c135149ef1e059db367ebc",
+    "executionProfileSha256": "9E31F4132EB427983D24C5F1009C4BCC130E4852976A6689AD55F056FA6D753D",
+    "testLevel": "psadt-package",
+    "architecture": "x64",
+    "testedAt": "2026-10-11T23:18:51.2372182Z",
+    "previousInstallerSha256": "723d601f125b0d2402d9ea191e4b310345ec52f76b61e117bf49004a2ff9b8ae",
+    "phases": {
+      "install": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterInstall": {
+        "passed": true
+      },
+      "upgrade": {
+        "passed": true,
+        "exitCode": 0
+      },
+      "detectionAfterUpgrade": {
+        "passed": true
+      },
+      "uninstall": {
+        "cleanUninstallExitCode": 0,
+        "finalUninstallExitCode": 0,
+        "passed": true
+      },
+      "detectionAfterUninstall": {
+        "passed": true
+      }
+    }
+  },
+  "verifiedAt": "2026-10-11T23:18:58.0190410Z",
+  "authenticatedArtifact": {
+    "id": 11719040926,
+    "sha256": "5a2003e788c66fd67c12a427934e0cdd6f942c83eac88d32ad7fd1f6612c873e"
+  },
+  "automatedApproval": {
+    "approvedBy": "github-actions:ugurkocde/IntuneGet/.github/workflows/curated-catalog-automation.yml",
+    "approvedAt": "2026-10-11T23:22:56.969Z",
+    "unsignedException": null,
+    "upgradeException": null
+  }
+}
