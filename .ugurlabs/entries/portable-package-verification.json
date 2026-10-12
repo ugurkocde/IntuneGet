@@ -1,0 +1,5 @@
+{
+  "title": "Correct verification and access for portable packages",
+  "summary": "Portable packages verify their installed files and inherit destination permissions so standard users can run machine-wide tools without gaining write access.",
+  "type": "fixed"
+}
