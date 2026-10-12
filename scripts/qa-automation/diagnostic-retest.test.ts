@@ -21,7 +21,7 @@ await sql(baseline.claimant);
 // Synthetic test credential only; the deployed authorization predicate is preserved.
 const testSecret='local-fixture-only',digest=crypto.createHash('sha256').update(testSecret).digest('hex');
 await sql(baseline.reporter.replace(/expected_secret_hash constant text := '[a-f0-9]{64}'/,`expected_secret_hash constant text := '${digest}'`));
-await sql(read('../../supabase/migrations/20261011075101_qa_guarded_diagnostic_retests.sql'));
+await sql(read('../../supabase/migrations/20261011075101_qa_guarded_diagnostic_retests.sql').replace(/\r\n/g,'\n'));
 const id='11111111-1111-4111-8111-111111111111',repair='22222222-2222-4222-8222-222222222222',sha='A'.repeat(64),pin='b'.repeat(40),canonical=JSON.stringify({toolchain:{packagerCommit:pin}}),profile=crypto.createHash('sha256').update(canonical).digest('hex').toUpperCase();
 async function seed(){
  await query(`insert into public.qa_pipeline_control(id,paused,required_packager_commit,scheduler_packager_commit,scheduler_seen_at) values('global',false,$1,$1,now())`,[pin]);
