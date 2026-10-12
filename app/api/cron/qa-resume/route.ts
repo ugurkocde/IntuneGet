@@ -1,4 +1,5 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/db';
 import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
@@ -502,5 +503,15 @@ export async function GET(request: Request) {
     }).in('id', waitingIds).eq('status', 'awaiting_qa');
     if (waitError) throw new Error('Could not schedule waiting QA jobs');
   }
-  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting, held, deferred, budgetExhausted });
+  // Existing waiting jobs get the full batch first. Recovered failures enter the
+  // same guarded path on the next invocation, never a separate dispatch path.
+  let reopened = 0;
+  let recoveryDeferred = false;
+  try {
+    reopened = await reopenSupersededQaFailures(supabase);
+  } catch {
+    recoveryDeferred = true;
+  }
+  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting,
+    held, deferred, budgetExhausted, reopened, recoveryDeferred });
 }
