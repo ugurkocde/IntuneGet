@@ -1,0 +1,5 @@
+{
+  "title": "Reconcile QA publications in bounded batches",
+  "summary": "QA publication recovery can update changed result records without deleting omitted applications or advancing the full catalog synchronization watermark. Requests are bounded by row count and payload size, and older results cannot overwrite newer evidence.",
+  "type": "fixed"
+}
