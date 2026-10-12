@@ -673,14 +673,131 @@ async function hashUrlInRanges(
   };
 }
 
-async function hashUrl(
+export interface InstallerSourceHop {
+  hop: number;
+  status: number;
+  target: { scheme: string; host: string; pathSegments: number };
+  location?: ReturnType<typeof redirectLocationShape>;
+  next?: ReturnType<typeof sourceUrlShape>;
+}
+export interface InstallerSourceDiagnostic {
+  outcome: 'reachable' | 'failed';
+  hops: InstallerSourceHop[];
+  errorCode?: string;
+  networkCode?: string;
+  addressFamily?: 4 | 6;
+  networkPhase?: 'request_throw' | 'request_error' | 'response_callback';
+  networkOrigin?: 'node_internal' | 'app' | 'other';
+  runtimeNode?: string;
+}
+type SourceNetworkPhase = NonNullable<InstallerSourceDiagnostic['networkPhase']>;
+type SourceNetworkOrigin = NonNullable<InstallerSourceDiagnostic['networkOrigin']>;
+type SourceNetworkEvidence = { networkPhase: SourceNetworkPhase; networkOrigin: SourceNetworkOrigin };
+type SourceAttempt = { family?: 4 | 6; networkFailures?: WeakMap<object, SourceNetworkEvidence> };
+function stackFramePath(frame: string): string | undefined {
+  return frame.match(/\(?((?:file:\/\/\/|[A-Za-z]:[\\/]|\/)[^()]+):\d+:\d+\)?$/)?.[1]
+    ?.replace(/^file:\/\/\/(?=[A-Za-z]:)/, '').replace(/^file:\/\//, '').replace(/\\/g, '/');
+}
+// Only retain the module's own runtime path in memory. Bundled filenames vary.
+function ownSourceModulePath(): string | undefined {
+  try { return stackFramePath(new Error().stack?.split(/\r?\n/)[1] ?? ''); }
+  catch { return undefined; }
+}
+const sourceModulePath = ownSourceModulePath();
+function sourceNetworkOrigin(error: unknown, phase: SourceNetworkPhase): SourceNetworkOrigin {
+  if (phase === 'request_error' || !sourceModulePath) return 'other';
+  try {
+    const stack = error && typeof error === 'object' && 'stack' in error ? error.stack : undefined;
+    if (typeof stack !== 'string') return 'other';
+    const frames = stack.split(/\r?\n/).slice(1).filter(frame => /^\s*at\s/.test(frame));
+    const appIndex = frames.findIndex(frame => stackFramePath(frame) === sourceModulePath);
+    if (appIndex < 0) return 'other'; // Missing/truncated caller stacks prove no origin.
+    if (appIndex === 0) return 'app';
+    return frames.slice(0, appIndex).every(frame => /(?:\(|\s)(?:node:|internal\/)/.test(frame)) ? 'node_internal' : 'other';
+  } catch { return 'other'; }
+}
+function recordSourceNetworkError(error: unknown, phase: SourceNetworkPhase, failures?: WeakMap<object, SourceNetworkEvidence>): unknown {
+  if (error && typeof error === 'object') failures?.set(error, { networkPhase: phase, networkOrigin: sourceNetworkOrigin(error, phase) });
+  return error;
+}
+function sourceUrlShape(url: URL) {
+  // Even short path segments can contain credentials. Never return path text.
+  return { scheme: url.protocol.replace(':', ''), host: isIP(url.hostname.replace(/^\[|\]$/g, '')) ? '[address]' : url.hostname, pathSegments: Math.min(100, url.pathname.split('/').filter(Boolean).length) };
+}
+function redirectLocationShape(value: string) {
+  return {
+    form: /^[A-Za-z][A-Za-z0-9+.-]*:/.test(value) ? 'absolute' : value.startsWith('//') ? 'scheme-relative' : value.startsWith('/') ? 'path-absolute' : value ? 'path-relative' : 'empty',
+    length: Math.min(4096, value.length),
+    hasBracket: /[\[\]]/.test(value),
+    invalidPercentEscape: /%(?![a-fA-F0-9]{2})/.test(value),
+    hasWhitespace: /\s/.test(value),
+    hasControl: /[\x00-\x1f\x7f]/.test(value),
+    hasBackslash: value.includes('\\'),
+  };
+}
+function sourceProbeError(error: unknown): string {
+  if (error instanceof InstallerRedirectUrlError) return 'REDIRECT_URL_INVALID';
+  if (error instanceof InstallerDownloadDeadlineError) return 'DEADLINE';
+  const message = error instanceof Error ? error.message : '';
+  if (/private or reserved/.test(message)) return 'PRIVATE_ADDRESS';
+  if (/HTTP or HTTPS|credentials|disallowed port/.test(message)) return 'REDIRECT_DISALLOWED';
+  if (/redirect limit/.test(message)) return 'REDIRECT_LIMIT';
+  if (/timed out/.test(message)) return 'TIMEOUT';
+  return 'NETWORK';
+}
+const SOURCE_NETWORK_CODES = new Set([
+  'ENOTFOUND', 'EAI_AGAIN', 'ESERVFAIL', 'ECONNREFUSED', 'ECONNRESET',
+  'ENETUNREACH', 'EHOSTUNREACH', 'EADDRNOTAVAIL', 'ETIMEDOUT', 'EPIPE',
+  'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'SELF_SIGNED_CERT_IN_CHAIN', 'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'ERR_INVALID_URL', 'ERR_INVALID_PROTOCOL', 'ERR_INVALID_CHAR',
+]);
+function sourceNetworkCode(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (typeof code !== 'string') return 'OTHER';
+  if (SOURCE_NETWORK_CODES.has(code)) return code;
+  if (/^ERR_(SSL|TLS)_[A-Z0-9_]+$/.test(code)) return 'TLS_OTHER';
+  if (/^HPE_[A-Z0-9_]+$/.test(code)) return 'HTTP_PARSE';
+  return 'OTHER';
+}
+/** Observe source HTTP headers only. This never hashes or accepts payload bytes. */
+export async function probeInstallerSource(installerUrl: string): Promise<InstallerSourceDiagnostic> {
+  const hops: InstallerSourceHop[] = [];
+  const attempted: SourceAttempt = { networkFailures: new WeakMap() };
+  let url: URL;
+  try { url = validateUrl(installerUrl); } catch { return { outcome: 'failed', hops, errorCode: 'INITIAL_URL_INVALID' }; }
+  try {
+    return await withInstallerDownloadDeadline(30_000, async signal => {
+      const { response } = await openInstallerResponse(url, MAX_REDIRECTS, 15_000, signal, hops, attempted);
+      const status = response.statusCode ?? 0;
+      response.destroy();
+      return status >= 200 && status < 300
+        ? { outcome: 'reachable', hops }
+        : { outcome: 'failed', hops, errorCode: 'HTTP_STATUS' };
+    });
+  } catch (error) {
+    const errorCode = sourceProbeError(error);
+    return { outcome: 'failed', hops, errorCode, ...(errorCode === 'NETWORK' ? {
+      networkCode: sourceNetworkCode(error),
+      runtimeNode: /^\d+\.\d+\.\d+$/.test(process.versions.node) ? process.versions.node : 'unknown',
+      ...(error && typeof error === 'object' ? attempted.networkFailures?.get(error) : undefined),
+      ...(attempted.family === undefined ? {} : { addressFamily: attempted.family }),
+    } : {}) };
+  }
+}
+
+async function openInstallerResponse(
   url: URL,
   redirectsRemaining: number,
-  maxBytes: number,
   timeoutMs: number,
   signal: AbortSignal,
-): Promise<InstallerHashResult> {
+  trace?: InstallerSourceHop[],
+  attempted?: SourceAttempt,
+): Promise<{ response: http.IncomingMessage; url: URL }> {
+  if (attempted) delete attempted.family;
   const resolved = await resolvePublicAddress(url.hostname);
+  if (attempted) attempted.family = resolved.family;
   const headers = {
     Accept: 'application/octet-stream,*/*',
     'Accept-Encoding': 'identity',
@@ -688,35 +805,83 @@ async function hashUrl(
     'User-Agent': 'IntuneGet-Installer-Preflight/1.0',
   };
 
-  return new Promise<InstallerHashResult>((resolve, reject) => {
+  return new Promise<{ response: http.IncomingMessage; url: URL }>((resolve, reject) => {
     const onResponse = (response: http.IncomingMessage) => {
       const status = response.statusCode ?? 0;
+      const hop = { hop: MAX_REDIRECTS - redirectsRemaining + 1, status, target: sourceUrlShape(url) } as InstallerSourceHop;
+      trace?.push(hop);
       if ([301, 302, 303, 307, 308].includes(status)) {
         const location = response.headers.location;
-        response.resume();
+        if (trace) response.destroy(); else response.resume();
         if (!location || redirectsRemaining <= 0) {
           reject(new Error('Installer download exceeded the redirect limit'));
           return;
         }
 
+        if (trace) hop.location = redirectLocationShape(location);
         let redirectUrl: URL;
         try {
           redirectUrl = resolveRedirectUrl(location, url);
+          if (trace) hop.next = sourceUrlShape(redirectUrl);
         } catch (error) {
           reject(error);
           return;
         }
 
-        hashUrl(
+        openInstallerResponse(
           redirectUrl,
           redirectsRemaining - 1,
-          maxBytes,
           timeoutMs,
           signal,
+          trace,
+          attempted,
         ).then(resolve, reject);
         return;
       }
 
+      resolve({ response, url });
+
+    };
+
+    const commonOptions = {
+      protocol: url.protocol,
+      hostname: resolved.address,
+      family: resolved.family,
+      port: url.port || undefined,
+      path: `${url.pathname}${url.search}`,
+      method: 'GET',
+      headers,
+      signal,
+    };
+
+    const callback = trace ? (response: http.IncomingMessage) => {
+      try { onResponse(response); }
+      catch (error) { response.destroy(); reject(recordSourceNetworkError(error, 'response_callback', attempted?.networkFailures)); }
+    } : onResponse;
+    try {
+      const request = url.protocol === 'https:'
+        ? https.request({ ...commonOptions, servername: url.hostname }, callback)
+        : http.request(commonOptions, callback);
+      request.setTimeout(timeoutMs, () => {
+        request.destroy(new Error(`Installer download timed out after ${timeoutMs}ms`));
+      });
+      request.on('error', trace ? error => reject(recordSourceNetworkError(error, 'request_error', attempted?.networkFailures)) : reject);
+      request.end();
+    } catch (error) {
+      if (!trace) throw error;
+      reject(recordSourceNetworkError(error, 'request_throw', attempted?.networkFailures));
+    }
+  });
+}
+
+async function hashUrl(
+  url: URL, redirectsRemaining: number, maxBytes: number, timeoutMs: number, signal: AbortSignal,
+): Promise<InstallerHashResult> {
+  const opened = await openInstallerResponse(url, redirectsRemaining, timeoutMs, signal);
+  url = opened.url;
+  const response = opened.response;
+  const status = response.statusCode ?? 0;
+  return new Promise<InstallerHashResult>((resolve, reject) => {
       if (status < 200 || status >= 300) {
         response.resume();
         reject(new Error(`Installer download returned HTTP ${status}`));
@@ -749,28 +914,6 @@ async function hashUrl(
         });
       });
       response.on('error', reject);
-    };
-
-    const commonOptions = {
-      protocol: url.protocol,
-      hostname: resolved.address,
-      family: resolved.family,
-      port: url.port || undefined,
-      path: `${url.pathname}${url.search}`,
-      method: 'GET',
-      headers,
-      signal,
-    };
-
-    const request = url.protocol === 'https:'
-      ? https.request({ ...commonOptions, servername: url.hostname }, onResponse)
-      : http.request(commonOptions, onResponse);
-
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error(`Installer download timed out after ${timeoutMs}ms`));
-    });
-    request.on('error', reject);
-    request.end();
   });
 }
 

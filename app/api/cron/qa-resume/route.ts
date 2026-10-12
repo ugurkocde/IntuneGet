@@ -1,5 +1,8 @@
 import { isQaMaintenanceMode } from '@/lib/qa/maintenance';
+import { reopenSupersededQaFailures } from '@/lib/qa/customer-failure-recovery';
 import { NextResponse } from 'next/server';
+import { getDatabase } from '@/lib/db';
+import { findPendingApprovalBlocks, type IntuneApprovalBlock } from '@/lib/intune-approval-guard';
 import { createServerClient } from '@/lib/supabase';
 import { getFeatureFlags } from '@/lib/features';
 import { getAppConfig } from '@/lib/config';
@@ -17,6 +20,7 @@ import type { Win32CartItem } from '@/types/upload';
 import type { Json } from '@/types/database';
 
 const RESUME_BATCH_SIZE = 25;
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -24,12 +28,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const startedAt = Date.now();
+  const approvalSignal = AbortSignal.timeout(40_000);
+  const probeBudget = { remaining: 20 };
+  const approvalCache = new Map<string, IntuneApprovalBlock[]>();
+  const waitingIds: string[] = [];
   const supabase = createServerClient();
   const { data: jobs, error: jobsError } = await supabase
     .from('packaging_jobs')
     .select('*')
     .eq('status', 'awaiting_qa')
-    .order('created_at', { ascending: true })
+    .lte('qa_resume_due_at', new Date(startedAt).toISOString())
+    .order('qa_resume_due_at', { ascending: true })
+    .order('id', { ascending: true })
     .limit(RESUME_BATCH_SIZE);
   if (jobsError) throw new Error(`Could not read QA-waiting jobs: ${jobsError.message}`);
 
@@ -42,8 +53,18 @@ export async function GET(request: Request) {
   let resumed = 0;
   let failed = 0;
   let waiting = 0;
+  let held = 0;
+  let deferred = 0;
+  let budgetExhausted = false;
+  let visited = 0;
 
   for (const job of jobs || []) {
+    if (Date.now() - startedAt >= 45_000) {
+      budgetExhausted = true;
+      deferred += (jobs?.length || 0) - visited;
+      break;
+    }
+    visited++;
     const skipCustomerQa = !job.is_auto_update && isQaMaintenanceMode();
     let item = job.package_config as unknown as Win32CartItem;
     let observed = {
@@ -55,13 +76,15 @@ export async function GET(request: Request) {
     let candidate: {
       id: string;
       status: string;
+      phase: string | null;
+      github_run_id: string | null;
       failure_summary: string | null;
       package_profile_sha256: string | null;
     } | null = null;
     if (job.qa_candidate_id && !skipCustomerQa) {
       const { data, error: candidateError } = await supabase
         .from('qa_candidates')
-        .select('id, status, failure_summary, package_profile_sha256')
+        .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
         .eq('id', job.qa_candidate_id)
         .maybeSingle();
       if (candidateError) throw candidateError;
@@ -150,6 +173,29 @@ export async function GET(request: Request) {
       if (relinkError) throw new Error(`Could not relink superseded QA demand: ${relinkError.message}`);
       if (!relinkedJob) continue;
       observed = relinkedJob;
+      if (demand.state === 'waiting') {
+        // Demand can reuse a completed run awaiting publication. Read its
+        // actual state before continuity decides whether packaging may start.
+        if (!demand.candidateId) {
+          waitingIds.push(job.id);
+          waiting++;
+          continue;
+        }
+        const { data, error: candidateError } = await supabase
+          .from('qa_candidates')
+          .select('id, status, phase, github_run_id, failure_summary, package_profile_sha256')
+          .eq('id', demand.candidateId)
+          .maybeSingle();
+        if (candidateError) throw candidateError;
+        candidate = data;
+        if (!candidate) {
+          waitingIds.push(job.id);
+          waiting++;
+          continue;
+        }
+        candidateStatus = candidate.status;
+        candidateFailureSummary = candidate.failure_summary;
+      }
     }
 
     // Waiting jobs may have been linked before this payload was quarantined.
@@ -171,6 +217,7 @@ export async function GET(request: Request) {
     } catch {
       // An unavailable lookup is not evidence of eligibility. Keep this job
       // waiting while allowing unrelated verified jobs in the batch to proceed.
+      waitingIds.push(job.id);
       waiting++;
       continue;
     }
@@ -213,6 +260,16 @@ export async function GET(request: Request) {
       continue;
     }
 
+    // A completed VM run may still be awaiting result publication. Keep its
+    // customer jobs waiting for normal QA reconciliation, including during
+    // continuity, without treating publication failure as installer failure.
+    if (!skipCustomerQa && candidateStatus === 'error' &&
+        candidate?.phase === 'publishing' && candidate.github_run_id) {
+      waitingIds.push(job.id);
+      waiting++;
+      continue;
+    }
+
     if (!skipCustomerQa && (!candidateStatus || ['failed', 'error'].includes(candidateStatus))) {
       const now = new Date().toISOString();
       const { data: updated } = await supabase
@@ -245,6 +302,7 @@ export async function GET(request: Request) {
       Boolean(candidateStatus && ['queued', 'dispatched', 'running'].includes(candidateStatus))
     );
     if (candidateStatus !== 'passed' && !qaDeferred) {
+      waitingIds.push(job.id);
       waiting++;
       continue;
     }
@@ -259,6 +317,7 @@ export async function GET(request: Request) {
         : { data: null, error: null };
       if (resultError) throw resultError;
       if (result?.outcome !== 'Passed') {
+        waitingIds.push(job.id);
         waiting++;
         continue;
       }
@@ -271,6 +330,7 @@ export async function GET(request: Request) {
         await assertCuratedLicenceAccepted(job.tenant_id, job.winget_id);
       } catch (error) {
         if (!(error instanceof CuratedLicenceError)) {
+          waitingIds.push(job.id);
           waiting++;
           continue;
         }
@@ -293,6 +353,41 @@ export async function GET(request: Request) {
         failed++;
         continue;
       }
+    }
+
+    // Recheck existing jobs too: an earlier upload can fail approval while
+    // this job is waiting on QA. This narrows, but does not serialize, that race.
+    const cacheKey = JSON.stringify([job.tenant_id, job.winget_id]);
+    let blocks = approvalCache.get(cacheKey);
+    if (!blocks && job.tenant_id) {
+      if (Date.now() - startedAt >= 30_000 || probeBudget.remaining <= 0 || approvalSignal.aborted) {
+        budgetExhausted = true;
+        deferred += (jobs?.length || 0) - visited + 1;
+        break; // Unreached jobs retain their due time and lead the next cycle.
+      }
+      try {
+        blocks = await findPendingApprovalBlocks({
+          tenantId: job.tenant_id, wingetIds: [job.winget_id],
+        }, { db: getDatabase(), signal: approvalSignal, probeBudget });
+      } catch {
+        blocks = [{ wingetId: job.winget_id, code: 'INTUNE_APPROVAL_PENDING',
+          reason: 'release_check_failed',
+          message: 'The earlier deployment approval could not be verified. No new deployment was started.' }];
+      }
+      if (approvalSignal.aborted || probeBudget.remaining <= 0) budgetExhausted = true;
+      approvalCache.set(cacheKey, blocks);
+    }
+    // Even a cached clean check must never release after cancellation.
+    const block = blocks?.[0];
+    if (!job.tenant_id || block || approvalSignal.aborted) {
+      const present = block?.reason === 'retained_app_present';
+      const { error: holdError } = await supabase.from('packaging_jobs').update({
+        status_message: block?.message || 'The earlier deployment approval could not be verified. No new deployment was started.',
+        qa_resume_due_at: new Date(Date.now() + (present ? 600_000 : 300_000)).toISOString(),
+      }).eq('id', job.id).eq('status', 'awaiting_qa');
+      if (holdError) throw new Error('Could not schedule approval verification retry');
+      held++;
+      continue;
     }
 
     const now = new Date().toISOString();
@@ -402,5 +497,21 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting });
+  if (waitingIds.length) {
+    const { error: waitError } = await supabase.from('packaging_jobs').update({
+      qa_resume_due_at: new Date(Date.now() + 60_000).toISOString(),
+    }).in('id', waitingIds).eq('status', 'awaiting_qa');
+    if (waitError) throw new Error('Could not schedule waiting QA jobs');
+  }
+  // Existing waiting jobs get the full batch first. Recovered failures enter the
+  // same guarded path on the next invocation, never a separate dispatch path.
+  let reopened = 0;
+  let recoveryDeferred = false;
+  try {
+    reopened = await reopenSupersededQaFailures(supabase);
+  } catch {
+    recoveryDeferred = true;
+  }
+  return NextResponse.json({ success: true, scanned: jobs?.length || 0, resumed, failed, waiting,
+    held, deferred, budgetExhausted, reopened, recoveryDeferred });
 }

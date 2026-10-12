@@ -6,7 +6,8 @@ import { dispatchQaCandidate } from '@/lib/qa/dispatch';
 import { QA_PSADT_TOOLCHAIN } from '@/lib/qa/package-profile';
 import { getQaPipelineControl, isQaPackagerReleaseReady } from '@/lib/qa/pipeline-control';
 import { qaTimeoutRecoveryUpdate } from '@/lib/qa/recovery';
-import { InstallerPreflightError } from '@/lib/installer-preflight';
+import { buildQaCandidatePreflightRequest } from '@/lib/qa/candidate-preflight';
+import { diagnoseInstallerSource, InstallerPreflightError } from '@/lib/installer-preflight';
 import { orderQaQueue, qaQueueCandidateReason } from '@/lib/qa/queue-selection';
 import { getGitHubActionsHealth } from '@/lib/qa/github-actions-health';
 import { cancelStaleWaitingQaRuns } from '@/lib/qa/github-actions-waiting-runs';
@@ -449,12 +450,25 @@ export async function POST(request: Request) {
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = (await request.json().catch(() => null)) as { candidateId?: string } | null;
+  const body = (await request.json().catch(() => null)) as { candidateId?: string; mode?: string } | null;
   if (!body?.candidateId || !/^[0-9a-fA-F-]{36}$/.test(body.candidateId)) {
     return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
   }
 
+  if (body.mode !== undefined && body.mode !== 'source-diagnostic') {
+    return NextResponse.json({ error: 'Unknown operation mode' }, { status: 400 });
+  }
   const supabase = createServerClient();
+  if (body.mode === 'source-diagnostic') {
+    if (!UUID_PATTERN.test(body.candidateId)) return NextResponse.json({ error: 'A candidate UUID is required' }, { status: 400 });
+    const { data, error } = await supabase.from('qa_candidates')
+      .select('winget_id,version,architecture,installer_url,installer_sha256,installer_type,test_config,test_level')
+      .eq('id', body.candidateId).eq('test_level', 'psadt-package').maybeSingle();
+    if (error) return NextResponse.json({ error: 'Candidate state unavailable' }, { status: 503 });
+    if (!data) return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+    const result = await diagnoseInstallerSource(buildQaCandidatePreflightRequest(data));
+    return NextResponse.json({ success: true, mode: body.mode, candidateId: body.candidateId, ...result });
+  }
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from('qa_candidates')
